@@ -8,47 +8,47 @@ import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {ILZBridgeAndDelegateConfig} from "src/policies/interfaces/ILZBridgeAndDelegateConfig.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
+import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 
 // Contracts
 import {LZBridgeAndDelegateConfig} from "src/policies/bridge/LZBridgeAndDelegateConfig.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-/// @dev Queue-time validation for every `queue*` entry point on `LZBridgeAndDelegateConfig`:
-///      proposer-role gates, payload shape, and the target-side `validate*` mirrors. Each
-///      function gets a per-role positive test for every role accepted by its gate, plus a
-///      `testFuzz_*_revertsIfNot*` fuzz check that any other caller is rejected.
+/// @dev Queue-time validation for the `queue` batch entry point on
+///      `LZBridgeAndDelegateConfig`: every gateway, delegate, and facilitator sub-action is
+///      submitted as a length-1 batch and exercises its proposer-role gate, payload shape,
+///      and the target-side `validate*` mirror. Each sub-action gets a positive test per
+///      accepted role, a `testFuzz_*_revertsIfNot*` rejection check, and (where applicable)
+///      a payload-invariant revert. Multi-action atomic batching and the self-target
+///      rejection are covered up top. Self-config (`queueSetTarget*`,
+///      `queueSetTimelockDelay`) is covered in dedicated per-function test files.
 contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBase {
     // ========== HELPERS ========== //
 
-    /// @dev Builds a single-entry outbound/inbound rate-limit configuration array.
-    function _rateConfigs()
-        internal
-        view
-        returns (IOffsettingRateLimiter.RateLimitConfig[] memory cfg)
-    {
-        cfg = new IOffsettingRateLimiter.RateLimitConfig[](1);
-        cfg[0] = IOffsettingRateLimiter.RateLimitConfig({
-            eid: NONCANONICAL_EID,
-            limit: 1e9,
-            window: 3600
-        });
+    /// @dev Single-action batch targeting the gateway.
+    function _gw(
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal view returns (ITimelockBatchQueue.BatchAction[] memory) {
+        return _singleAction(address(gateway), selector_, payload_);
     }
 
-    /// @dev Builds a single-entry endpoint-id list for the in-flight-clear helpers.
-    function _eidList() internal pure returns (uint32[] memory eids) {
-        eids = new uint32[](1);
-        eids[0] = NONCANONICAL_EID;
+    /// @dev Single-action batch targeting the delegate.
+    function _dg(
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal view returns (ITimelockBatchQueue.BatchAction[] memory) {
+        return _singleAction(address(lzDelegate), selector_, payload_);
     }
 
-    /// @dev Builds an empty `SetConfigParam` list for endpoint-config helpers.
-    function _emptyConfigParams() internal pure returns (SetConfigParam[] memory params) {
-        params = new SetConfigParam[](0);
+    /// @dev Single-action batch targeting the facilitator.
+    function _fac(
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal view returns (ITimelockBatchQueue.BatchAction[] memory) {
+        return _singleAction(address(facilitator), selector_, payload_);
     }
 
     /// @dev Deploys a fresh config policy whose ERC-165 advertises
@@ -63,49 +63,184 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
-    /// @dev Asserts the standard `IPolicyAdmin.NotAuthorised` revert returned by both the
-    ///      `bridge_admin`-or-`admin` and the rate-limiter-class proposer gates.
-    function _expectNotAuthorized() internal {
-        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-    }
-
-    /// @dev Asserts the strict `ROLES_RequireRole(admin)` revert returned by the admin-only
-    ///      proposer gate.
-    function _expectAdminRole() internal {
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-    }
-
-    /// @dev Seeds the gateway with bridged supply so that a positive
-    ///      `queueDecreaseBridgedSupply` payload does not trip the queue-time underflow guard
-    ///      before the role check is exercised.
+    /// @dev Seeds the gateway with bridged supply so that a positive decrease payload does
+    ///      not trip the queue-time underflow guard before the role check is exercised.
     function _seedBridgedSupply(uint256 amount_) internal {
         vm.prank(address(config));
         gateway.increaseBridgedSupply(amount_);
     }
 
-    // ========== queueSetEndpointDelegate (gateway setDelegate) ========== //
+    /// @dev Builds a single-entry outbound/inbound rate-limit configuration array.
+    function _rateConfigs()
+        internal
+        view
+        returns (IOffsettingRateLimiter.RateLimitConfig[] memory cfg)
+    {
+        cfg = _rateConfig(1e9, 3600);
+    }
 
-    function test_queueSetEndpointDelegate_admin() external {
+    function _rateConfig(
+        uint256 limit_,
+        uint32 window_
+    ) internal view returns (IOffsettingRateLimiter.RateLimitConfig[] memory cfg) {
+        cfg = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        cfg[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: NONCANONICAL_EID,
+            limit: limit_,
+            window: window_
+        });
+    }
+
+    function _gatewayRateBatch(
+        uint256 limit_,
+        uint32 window_
+    ) internal view returns (ITimelockBatchQueue.BatchAction[] memory batch) {
+        batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.setOutRateLimits.selector,
+            payload: abi.encode(_rateConfig(limit_, window_))
+        });
+        batch[1] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.setInRateLimits.selector,
+            payload: abi.encode(_rateConfig(limit_, window_))
+        });
+    }
+
+    /// @dev Builds a single-entry endpoint-id list for the in-flight-clear helpers.
+    function _eidList() internal pure returns (uint32[] memory eids) {
+        eids = new uint32[](1);
+        eids[0] = NONCANONICAL_EID;
+    }
+
+    /// @dev Builds an empty `SetConfigParam` list for endpoint-config helpers.
+    function _emptyConfigParams() internal pure returns (SetConfigParam[] memory params) {
+        params = new SetConfigParam[](0);
+    }
+
+    function _clearOrigin() internal pure returns (Origin memory origin) {
+        origin = Origin({srcEid: NONCANONICAL_EID, sender: bytes32(uint256(1)), nonce: 1});
+    }
+
+    // ========== BATCH SEMANTICS ========== //
+
+    function test_queue_appliesAllSubActions() external {
+        uint256 limit = 9_000e9;
+        uint32 window = 4 hours;
+
+        vm.prank(bridgeRateLimiter);
+        uint64 actionId = config.queue(_gatewayRateBatch(limit, window));
+
+        _warpPastTimelock();
+        config.executeQueuedAction(actionId);
+
+        (, uint256 outLimit, uint32 outWindow, ) = gateway.outRateLimits(NONCANONICAL_EID);
+        (, uint256 inLimit, uint32 inWindow, ) = gateway.inRateLimits(NONCANONICAL_EID);
+        assertEq(outLimit, limit, "Outbound limit applied");
+        assertEq(outWindow, window, "Outbound window applied");
+        assertEq(inLimit, limit, "Inbound limit applied");
+        assertEq(inWindow, window, "Inbound window applied");
+    }
+
+    function test_queue_revertsIfAnySubActionLacksProposerRole() external {
+        // A batch with a rate-limit sub-action AND a bridge-admin sub-action requires the
+        // proposer to satisfy the strictest role: bridgeAdmin or admin. A proposer that
+        // only holds bridge_rate_limiter must be rejected.
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.setOutRateLimits.selector,
+            payload: abi.encode(_rateConfig(1e9, 60))
+        });
+        batch[1] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.increaseBridgedSupply.selector,
+            payload: abi.encode(uint256(1))
+        });
+
+        _expectNotAuthorized();
+        vm.prank(bridgeRateLimiter);
+        config.queue(batch);
+    }
+
+    function test_queue_revertsIfSubActionTargetIsUnknown() external {
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](1);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: makeAddr("strangerContract"),
+            selector: ILZBridgeGateway.increaseBridgedSupply.selector,
+            payload: abi.encode(uint256(1))
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                batch[0].target,
+                batch[0].selector
+            )
+        );
         vm.prank(admin);
-        config.queueSetEndpointDelegate(makeAddr("delegateCandidate"));
+        config.queue(batch);
     }
 
-    function test_queueSetEndpointDelegate_bridgeAdmin() external {
+    function test_queue_revertsIfSubActionTargetsSelf() external {
+        // Self-config must go through the typed `queueSetTarget*` helpers; `queue` rejects
+        // any sub-action aimed at the policy itself before it reaches the timelock.
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](1);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(config),
+            selector: config.queueSetTargetGateway.selector,
+            payload: abi.encode(makeAddr("newGateway"))
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                batch[0].target,
+                batch[0].selector
+            )
+        );
+        vm.prank(admin);
+        config.queue(batch);
+    }
+
+    function test_queue_revertsIfBatchEmpty() external {
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](0);
+
+        vm.expectRevert(ITimelockBatchQueue.ITimelockBatchQueue_BatchEmpty.selector);
+        vm.prank(admin);
+        config.queue(batch);
+    }
+
+    // ========== gateway: setDelegate ========== //
+
+    function test_queue_gatewaySetDelegate_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _gw(ILZBridgeGateway.setDelegate.selector, abi.encode(makeAddr("delegateCandidate")))
+        );
+    }
+
+    function test_queue_gatewaySetDelegate_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetEndpointDelegate(makeAddr("delegateCandidate"));
+        config.queue(
+            _gw(ILZBridgeGateway.setDelegate.selector, abi.encode(makeAddr("delegateCandidate")))
+        );
     }
 
-    function testFuzz_queueSetEndpointDelegate_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_gatewaySetDelegate_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetEndpointDelegate(makeAddr("delegateCandidate"));
+        config.queue(
+            _gw(ILZBridgeGateway.setDelegate.selector, abi.encode(makeAddr("delegateCandidate")))
+        );
     }
 
-    function test_queueSetEndpointDelegate_revertsIfZeroAddress() external {
+    function test_queue_gatewaySetDelegate_revertsIfZeroAddress() external {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILZBridgeGateway.LZBridgeGateway_InvalidAddress.selector,
@@ -113,70 +248,70 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             )
         );
         vm.prank(bridgeAdmin);
-        config.queueSetEndpointDelegate(address(0));
+        config.queue(_gw(ILZBridgeGateway.setDelegate.selector, abi.encode(address(0))));
     }
 
-    // ========== queueIncreaseBridgedSupply ========== //
+    // ========== gateway: increaseBridgedSupply ========== //
 
-    function test_queueIncreaseBridgedSupply_admin() external {
+    function test_queue_gatewayIncreaseBridgedSupply_admin() external {
         vm.prank(admin);
-        config.queueIncreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.increaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function test_queueIncreaseBridgedSupply_bridgeAdmin() external {
+    function test_queue_gatewayIncreaseBridgedSupply_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueIncreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.increaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function testFuzz_queueIncreaseBridgedSupply_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_gatewayIncreaseBridgedSupply_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueIncreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.increaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function test_queueIncreaseBridgedSupply_revertsIfZeroAmount() external {
+    function test_queue_gatewayIncreaseBridgedSupply_revertsIfZeroAmount() external {
         vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_ZeroAmount.selector);
         vm.prank(bridgeAdmin);
-        config.queueIncreaseBridgedSupply(0);
+        config.queue(_gw(ILZBridgeGateway.increaseBridgedSupply.selector, abi.encode(uint256(0))));
     }
 
-    // ========== queueDecreaseBridgedSupply ========== //
+    // ========== gateway: decreaseBridgedSupply ========== //
 
-    function test_queueDecreaseBridgedSupply_admin() external {
+    function test_queue_gatewayDecreaseBridgedSupply_admin() external {
         _seedBridgedSupply(100);
 
         vm.prank(admin);
-        config.queueDecreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function test_queueDecreaseBridgedSupply_bridgeAdmin() external {
+    function test_queue_gatewayDecreaseBridgedSupply_bridgeAdmin() external {
         _seedBridgedSupply(100);
 
         vm.prank(bridgeAdmin);
-        config.queueDecreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function testFuzz_queueDecreaseBridgedSupply_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_gatewayDecreaseBridgedSupply_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueDecreaseBridgedSupply(1);
+        config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(1))));
     }
 
-    function test_queueDecreaseBridgedSupply_revertsIfZeroAmount() external {
+    function test_queue_gatewayDecreaseBridgedSupply_revertsIfZeroAmount() external {
         vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_ZeroAmount.selector);
         vm.prank(bridgeAdmin);
-        config.queueDecreaseBridgedSupply(0);
+        config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(0))));
     }
 
-    function test_queueDecreaseBridgedSupply_revertsIfUnderflow() external {
+    function test_queue_gatewayDecreaseBridgedSupply_revertsIfUnderflow() external {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILZBridgeGateway.LZBridgeGateway_BridgedSupplyUnderflow.selector,
@@ -185,334 +320,464 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             )
         );
         vm.prank(bridgeAdmin);
-        config.queueDecreaseBridgedSupply(5);
+        config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(5))));
     }
 
-    // ========== queueSetGatewayGracePeriod ========== //
+    // ========== gateway: setGracePeriod ========== //
 
-    function test_queueSetGatewayGracePeriod_admin() external {
+    function test_queue_gatewaySetGracePeriod_admin() external {
         vm.prank(admin);
-        config.queueSetGatewayGracePeriod(1);
+        config.queue(_gw(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function test_queueSetGatewayGracePeriod_bridgeAdmin() external {
+    function test_queue_gatewaySetGracePeriod_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetGatewayGracePeriod(1);
+        config.queue(_gw(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function testFuzz_queueSetGatewayGracePeriod_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_gatewaySetGracePeriod_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetGatewayGracePeriod(1);
+        config.queue(_gw(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function test_queueSetGatewayGracePeriod_revertsIfZero() external {
+    function test_queue_gatewaySetGracePeriod_revertsIfZero() external {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
         vm.prank(bridgeAdmin);
-        config.queueSetGatewayGracePeriod(0);
+        config.queue(_gw(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(0))));
     }
 
-    // ========== queueSetOutRateLimits ========== //
+    // ========== gateway: setOutRateLimits ========== //
 
-    function test_queueSetOutRateLimits_admin() external {
+    function test_queue_gatewaySetOutRateLimits_admin() external {
         vm.prank(admin);
-        config.queueSetOutRateLimits(_rateConfigs());
+        config.queue(_gw(ILZBridgeGateway.setOutRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function test_queueSetOutRateLimits_bridgeAdmin() external {
+    function test_queue_gatewaySetOutRateLimits_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetOutRateLimits(_rateConfigs());
+        config.queue(_gw(ILZBridgeGateway.setOutRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function test_queueSetOutRateLimits_bridgeRateLimiter() external {
+    function test_queue_gatewaySetOutRateLimits_bridgeRateLimiter() external {
         vm.prank(bridgeRateLimiter);
-        config.queueSetOutRateLimits(_rateConfigs());
+        config.queue(_gw(ILZBridgeGateway.setOutRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function testFuzz_queueSetOutRateLimits_revertsIfNotRateLimiterClass(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueSetOutRateLimits(_rateConfigs());
-    }
-
-    // ========== queueSetInRateLimits ========== //
-
-    function test_queueSetInRateLimits_admin() external {
-        vm.prank(admin);
-        config.queueSetInRateLimits(_rateConfigs());
-    }
-
-    function test_queueSetInRateLimits_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueSetInRateLimits(_rateConfigs());
-    }
-
-    function test_queueSetInRateLimits_bridgeRateLimiter() external {
-        vm.prank(bridgeRateLimiter);
-        config.queueSetInRateLimits(_rateConfigs());
-    }
-
-    function testFuzz_queueSetInRateLimits_revertsIfNotRateLimiterClass(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueSetInRateLimits(_rateConfigs());
-    }
-
-    // ========== queueClearOutboundInFlight ========== //
-
-    function test_queueClearOutboundInFlight_admin() external {
-        vm.prank(admin);
-        config.queueClearOutboundInFlight(_eidList());
-    }
-
-    function test_queueClearOutboundInFlight_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueClearOutboundInFlight(_eidList());
-    }
-
-    function test_queueClearOutboundInFlight_bridgeRateLimiter() external {
-        vm.prank(bridgeRateLimiter);
-        config.queueClearOutboundInFlight(_eidList());
-    }
-
-    function testFuzz_queueClearOutboundInFlight_revertsIfNotRateLimiterClass(
+    function testFuzz_queue_gatewaySetOutRateLimits_revertsIfNotRateLimiterClass(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueClearOutboundInFlight(_eidList());
+        config.queue(_gw(ILZBridgeGateway.setOutRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    // ========== queueClearInboundInFlight ========== //
+    // ========== gateway: setInRateLimits ========== //
 
-    function test_queueClearInboundInFlight_admin() external {
+    function test_queue_gatewaySetInRateLimits_admin() external {
         vm.prank(admin);
-        config.queueClearInboundInFlight(_eidList());
+        config.queue(_gw(ILZBridgeGateway.setInRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function test_queueClearInboundInFlight_bridgeAdmin() external {
+    function test_queue_gatewaySetInRateLimits_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueClearInboundInFlight(_eidList());
+        config.queue(_gw(ILZBridgeGateway.setInRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function test_queueClearInboundInFlight_bridgeRateLimiter() external {
+    function test_queue_gatewaySetInRateLimits_bridgeRateLimiter() external {
         vm.prank(bridgeRateLimiter);
-        config.queueClearInboundInFlight(_eidList());
+        config.queue(_gw(ILZBridgeGateway.setInRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    function testFuzz_queueClearInboundInFlight_revertsIfNotRateLimiterClass(
+    function testFuzz_queue_gatewaySetInRateLimits_revertsIfNotRateLimiterClass(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueClearInboundInFlight(_eidList());
+        config.queue(_gw(ILZBridgeGateway.setInRateLimits.selector, abi.encode(_rateConfigs())));
     }
 
-    // ========== queueSetSendLibrary ========== //
+    // ========== gateway: clearOutboundInFlight ========== //
 
-    function test_queueSetSendLibrary_admin() external {
+    function test_queue_gatewayClearOutboundInFlight_admin() external {
         vm.prank(admin);
-        config.queueSetSendLibrary(NONCANONICAL_EID, makeAddr("sendLib"));
+        config.queue(_gw(ILZBridgeGateway.clearOutboundInFlight.selector, abi.encode(_eidList())));
     }
 
-    function test_queueSetSendLibrary_bridgeAdmin() external {
+    function test_queue_gatewayClearOutboundInFlight_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetSendLibrary(NONCANONICAL_EID, makeAddr("sendLib"));
+        config.queue(_gw(ILZBridgeGateway.clearOutboundInFlight.selector, abi.encode(_eidList())));
     }
 
-    function testFuzz_queueSetSendLibrary_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+    function test_queue_gatewayClearOutboundInFlight_bridgeRateLimiter() external {
+        vm.prank(bridgeRateLimiter);
+        config.queue(_gw(ILZBridgeGateway.clearOutboundInFlight.selector, abi.encode(_eidList())));
+    }
+
+    function testFuzz_queue_gatewayClearOutboundInFlight_revertsIfNotRateLimiterClass(
+        address caller_
+    ) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetSendLibrary(NONCANONICAL_EID, makeAddr("sendLib"));
+        config.queue(_gw(ILZBridgeGateway.clearOutboundInFlight.selector, abi.encode(_eidList())));
     }
 
-    // ========== queueSetReceiveLibrary ========== //
+    // ========== gateway: clearInboundInFlight ========== //
 
-    function test_queueSetReceiveLibrary_admin() external {
+    function test_queue_gatewayClearInboundInFlight_admin() external {
         vm.prank(admin);
-        config.queueSetReceiveLibrary(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(_gw(ILZBridgeGateway.clearInboundInFlight.selector, abi.encode(_eidList())));
     }
 
-    function test_queueSetReceiveLibrary_bridgeAdmin() external {
+    function test_queue_gatewayClearInboundInFlight_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetReceiveLibrary(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(_gw(ILZBridgeGateway.clearInboundInFlight.selector, abi.encode(_eidList())));
     }
 
-    function testFuzz_queueSetReceiveLibrary_revertsIfNotBridgeAdminOrAdmin(
+    function test_queue_gatewayClearInboundInFlight_bridgeRateLimiter() external {
+        vm.prank(bridgeRateLimiter);
+        config.queue(_gw(ILZBridgeGateway.clearInboundInFlight.selector, abi.encode(_eidList())));
+    }
+
+    function testFuzz_queue_gatewayClearInboundInFlight_revertsIfNotRateLimiterClass(
+        address caller_
+    ) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(_gw(ILZBridgeGateway.clearInboundInFlight.selector, abi.encode(_eidList())));
+    }
+
+    // ========== delegate: setSendLibrary ========== //
+
+    function test_queue_delegateSetSendLibrary_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setSendLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("sendLib"))
+            )
+        );
+    }
+
+    function test_queue_delegateSetSendLibrary_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setSendLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("sendLib"))
+            )
+        );
+    }
+
+    function testFuzz_queue_delegateSetSendLibrary_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetReceiveLibrary(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setSendLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("sendLib"))
+            )
+        );
     }
 
-    // ========== queueSetReceiveLibraryTimeout ========== //
+    // ========== delegate: setReceiveLibrary ========== //
 
-    function test_queueSetReceiveLibraryTimeout_admin() external {
+    function test_queue_delegateSetReceiveLibrary_admin() external {
         vm.prank(admin);
-        config.queueSetReceiveLibraryTimeout(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    function test_queueSetReceiveLibraryTimeout_bridgeAdmin() external {
+    function test_queue_delegateSetReceiveLibrary_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetReceiveLibraryTimeout(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    function testFuzz_queueSetReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_delegateSetReceiveLibrary_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetReceiveLibraryTimeout(NONCANONICAL_EID, makeAddr("recvLib"), 0);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibrary.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    // ========== queueSetEndpointConfig ========== //
+    // ========== delegate: setReceiveLibraryTimeout ========== //
 
-    function test_queueSetEndpointConfig_admin() external {
+    function test_queue_delegateSetReceiveLibraryTimeout_admin() external {
         vm.prank(admin);
-        config.queueSetEndpointConfig(makeAddr("lib"), _emptyConfigParams());
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    function test_queueSetEndpointConfig_bridgeAdmin() external {
+    function test_queue_delegateSetReceiveLibraryTimeout_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetEndpointConfig(makeAddr("lib"), _emptyConfigParams());
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    function testFuzz_queueSetEndpointConfig_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_delegateSetReceiveLibraryTimeout_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetEndpointConfig(makeAddr("lib"), _emptyConfigParams());
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector,
+                abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
+            )
+        );
     }
 
-    // ========== queueSkip ========== //
+    // ========== delegate: setEndpointConfig ========== //
 
-    function test_queueSkip_admin() external {
+    function test_queue_delegateSetEndpointConfig_admin() external {
         vm.prank(admin);
-        config.queueSkip(NONCANONICAL_EID, bytes32(uint256(1)), 1);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setEndpointConfig.selector,
+                abi.encode(makeAddr("lib"), _emptyConfigParams())
+            )
+        );
     }
 
-    function test_queueSkip_bridgeAdmin() external {
+    function test_queue_delegateSetEndpointConfig_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSkip(NONCANONICAL_EID, bytes32(uint256(1)), 1);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setEndpointConfig.selector,
+                abi.encode(makeAddr("lib"), _emptyConfigParams())
+            )
+        );
     }
 
-    function testFuzz_queueSkip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueSkip(NONCANONICAL_EID, bytes32(uint256(1)), 1);
-    }
-
-    // ========== queueNilify ========== //
-
-    function test_queueNilify_admin() external {
-        vm.prank(admin);
-        config.queueNilify(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    function test_queueNilify_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueNilify(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    function testFuzz_queueNilify_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueNilify(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    // ========== queueBurn ========== //
-
-    function test_queueBurn_admin() external {
-        vm.prank(admin);
-        config.queueBurn(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    function test_queueBurn_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueBurn(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    function testFuzz_queueBurn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueBurn(NONCANONICAL_EID, bytes32(uint256(1)), 1, bytes32(uint256(2)));
-    }
-
-    // ========== queueClear ========== //
-
-    function _clearOrigin() internal pure returns (Origin memory origin) {
-        origin = Origin({srcEid: NONCANONICAL_EID, sender: bytes32(uint256(1)), nonce: 1});
-    }
-
-    function test_queueClear_admin() external {
-        vm.prank(admin);
-        config.queueClear(_clearOrigin(), bytes32(uint256(2)), bytes(""));
-    }
-
-    function test_queueClear_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueClear(_clearOrigin(), bytes32(uint256(2)), bytes(""));
-    }
-
-    function testFuzz_queueClear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queueClear(_clearOrigin(), bytes32(uint256(2)), bytes(""));
-    }
-
-    // ========== queueSetFacilitatorGateway ========== //
-
-    function test_queueSetFacilitatorGateway_admin() external {
-        vm.prank(admin);
-        config.queueSetFacilitatorGateway(makeAddr("gatewayCandidate"));
-    }
-
-    function test_queueSetFacilitatorGateway_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queueSetFacilitatorGateway(makeAddr("gatewayCandidate"));
-    }
-
-    function testFuzz_queueSetFacilitatorGateway_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_delegateSetEndpointConfig_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetFacilitatorGateway(makeAddr("gatewayCandidate"));
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setEndpointConfig.selector,
+                abi.encode(makeAddr("lib"), _emptyConfigParams())
+            )
+        );
     }
 
-    function test_queueSetFacilitatorGateway_revertsIfZeroAddress() external {
+    // ========== delegate: skip ========== //
+
+    function test_queue_delegateSkip_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.skip.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
+            )
+        );
+    }
+
+    function test_queue_delegateSkip_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.skip.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
+            )
+        );
+    }
+
+    function testFuzz_queue_delegateSkip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.skip.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
+            )
+        );
+    }
+
+    // ========== delegate: nilify ========== //
+
+    function test_queue_delegateNilify_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.nilify.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    function test_queue_delegateNilify_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.nilify.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    function testFuzz_queue_delegateNilify_revertsIfNotBridgeAdminOrAdmin(
+        address caller_
+    ) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.nilify.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    // ========== delegate: burn ========== //
+
+    function test_queue_delegateBurn_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.burn.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    function test_queue_delegateBurn_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.burn.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    function testFuzz_queue_delegateBurn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.burn.selector,
+                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
+            )
+        );
+    }
+
+    // ========== delegate: clear ========== //
+
+    function test_queue_delegateClear_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.clear.selector,
+                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
+            )
+        );
+    }
+
+    function test_queue_delegateClear_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.clear.selector,
+                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
+            )
+        );
+    }
+
+    function testFuzz_queue_delegateClear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.clear.selector,
+                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
+            )
+        );
+    }
+
+    // ========== facilitator: setGateway ========== //
+
+    function test_queue_facilitatorSetGateway_admin() external {
+        vm.prank(admin);
+        config.queue(
+            _fac(ILZCrossChainBridge.setGateway.selector, abi.encode(makeAddr("gatewayCandidate")))
+        );
+    }
+
+    function test_queue_facilitatorSetGateway_bridgeAdmin() external {
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _fac(ILZCrossChainBridge.setGateway.selector, abi.encode(makeAddr("gatewayCandidate")))
+        );
+    }
+
+    function testFuzz_queue_facilitatorSetGateway_revertsIfNotBridgeAdminOrAdmin(
+        address caller_
+    ) external {
+        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
+
+        _expectNotAuthorized();
+        vm.prank(caller_);
+        config.queue(
+            _fac(ILZCrossChainBridge.setGateway.selector, abi.encode(makeAddr("gatewayCandidate")))
+        );
+    }
+
+    function test_queue_facilitatorSetGateway_revertsIfZeroAddress() external {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
@@ -520,78 +785,97 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             )
         );
         vm.prank(bridgeAdmin);
-        config.queueSetFacilitatorGateway(address(0));
+        config.queue(_fac(ILZCrossChainBridge.setGateway.selector, abi.encode(address(0))));
     }
 
-    // ========== queueSetFacilitatorReEnabler ========== //
+    // ========== facilitator: setReEnabler ========== //
 
-    function test_queueSetFacilitatorReEnabler_admin() external {
+    function test_queue_facilitatorSetReEnabler_admin() external {
         vm.prank(admin);
-        config.queueSetFacilitatorReEnabler(makeAddr("reEnablerCandidate"));
+        config.queue(
+            _fac(
+                ILZCrossChainBridge.setReEnabler.selector,
+                abi.encode(makeAddr("reEnablerCandidate"))
+            )
+        );
     }
 
-    function test_queueSetFacilitatorReEnabler_bridgeAdmin() external {
+    function test_queue_facilitatorSetReEnabler_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetFacilitatorReEnabler(makeAddr("reEnablerCandidate"));
+        config.queue(
+            _fac(
+                ILZCrossChainBridge.setReEnabler.selector,
+                abi.encode(makeAddr("reEnablerCandidate"))
+            )
+        );
     }
 
-    function testFuzz_queueSetFacilitatorReEnabler_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_facilitatorSetReEnabler_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetFacilitatorReEnabler(makeAddr("reEnablerCandidate"));
+        config.queue(
+            _fac(
+                ILZCrossChainBridge.setReEnabler.selector,
+                abi.encode(makeAddr("reEnablerCandidate"))
+            )
+        );
     }
 
-    // ========== queueSetFacilitatorGracePeriod ========== //
+    // ========== facilitator: setGracePeriod ========== //
 
-    function test_queueSetFacilitatorGracePeriod_admin() external {
+    function test_queue_facilitatorSetGracePeriod_admin() external {
         vm.prank(admin);
-        config.queueSetFacilitatorGracePeriod(1);
+        config.queue(_fac(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function test_queueSetFacilitatorGracePeriod_bridgeAdmin() external {
+    function test_queue_facilitatorSetGracePeriod_bridgeAdmin() external {
         vm.prank(bridgeAdmin);
-        config.queueSetFacilitatorGracePeriod(1);
+        config.queue(_fac(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function testFuzz_queueSetFacilitatorGracePeriod_revertsIfNotBridgeAdminOrAdmin(
+    function testFuzz_queue_facilitatorSetGracePeriod_revertsIfNotBridgeAdminOrAdmin(
         address caller_
     ) external {
         vm.assume(caller_ != admin && caller_ != bridgeAdmin);
 
         _expectNotAuthorized();
         vm.prank(caller_);
-        config.queueSetFacilitatorGracePeriod(1);
+        config.queue(_fac(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(1))));
     }
 
-    function test_queueSetFacilitatorGracePeriod_revertsIfZero() external {
+    function test_queue_facilitatorSetGracePeriod_revertsIfZero() external {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
         vm.prank(bridgeAdmin);
-        config.queueSetFacilitatorGracePeriod(0);
+        config.queue(_fac(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(0))));
     }
 
-    // ========== queueSetFacilitatorConfigurator ========== //
+    // ========== facilitator: setConfigurator ========== //
 
-    function test_queueSetFacilitatorConfigurator_admin() external {
+    function test_queue_facilitatorSetConfigurator_admin() external {
         LZBridgeAndDelegateConfig secondary = _deploySecondaryConfig();
 
         vm.prank(admin);
-        config.queueSetFacilitatorConfigurator(address(secondary));
+        config.queue(
+            _fac(ILZCrossChainBridge.setConfigurator.selector, abi.encode(address(secondary)))
+        );
     }
 
-    function testFuzz_queueSetFacilitatorConfigurator_revertsIfNotAdmin(address caller_) external {
+    function testFuzz_queue_facilitatorSetConfigurator_revertsIfNotAdmin(address caller_) external {
         vm.assume(caller_ != admin);
         LZBridgeAndDelegateConfig secondary = _deploySecondaryConfig();
 
         _expectAdminRole();
         vm.prank(caller_);
-        config.queueSetFacilitatorConfigurator(address(secondary));
+        config.queue(
+            _fac(ILZCrossChainBridge.setConfigurator.selector, abi.encode(address(secondary)))
+        );
     }
 
-    function test_queueSetFacilitatorConfigurator_revertsIfZeroAddress() external {
+    function test_queue_facilitatorSetConfigurator_revertsIfZeroAddress() external {
         vm.expectRevert(
             abi.encodeWithSelector(
                 ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
@@ -599,10 +883,10 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             )
         );
         vm.prank(admin);
-        config.queueSetFacilitatorConfigurator(address(0));
+        config.queue(_fac(ILZCrossChainBridge.setConfigurator.selector, abi.encode(address(0))));
     }
 
-    function test_queueSetFacilitatorConfigurator_revertsIfErc165Rejects() external {
+    function test_queue_facilitatorSetConfigurator_revertsIfErc165Rejects() external {
         // The gateway is not an `ILZBridgeAndDelegateConfig`; its ERC-165 will return false
         // for that interface ID, so the configurator validator must reject it.
         vm.expectRevert(
@@ -612,127 +896,8 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             )
         );
         vm.prank(admin);
-        config.queueSetFacilitatorConfigurator(address(gateway));
-    }
-
-    // ========== queueSetTargetGateway ========== //
-
-    function test_queueSetTargetGateway_admin() external {
-        vm.prank(admin);
-        config.queueSetTargetGateway(makeAddr("newGateway"));
-    }
-
-    function testFuzz_queueSetTargetGateway_revertsIfNotAdmin(address caller_) external {
-        vm.assume(caller_ != admin);
-
-        _expectAdminRole();
-        vm.prank(caller_);
-        config.queueSetTargetGateway(makeAddr("newGateway"));
-    }
-
-    function test_queueSetTargetGateway_revertsIfZeroAddress() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeAndDelegateConfig.LZBridgeAndDelegateConfig_InvalidAddress.selector,
-                "gateway"
-            )
+        config.queue(
+            _fac(ILZCrossChainBridge.setConfigurator.selector, abi.encode(address(gateway)))
         );
-        vm.prank(admin);
-        config.queueSetTargetGateway(address(0));
-    }
-
-    // ========== queueSetTargetDelegate ========== //
-
-    function test_queueSetTargetDelegate_admin() external {
-        vm.prank(admin);
-        config.queueSetTargetDelegate(makeAddr("newDelegate"));
-    }
-
-    function testFuzz_queueSetTargetDelegate_revertsIfNotAdmin(address caller_) external {
-        vm.assume(caller_ != admin);
-
-        _expectAdminRole();
-        vm.prank(caller_);
-        config.queueSetTargetDelegate(makeAddr("newDelegate"));
-    }
-
-    function test_queueSetTargetDelegate_revertsIfZeroAddress() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeAndDelegateConfig.LZBridgeAndDelegateConfig_InvalidAddress.selector,
-                "delegate"
-            )
-        );
-        vm.prank(admin);
-        config.queueSetTargetDelegate(address(0));
-    }
-
-    // ========== queueSetTargetFacilitator ========== //
-
-    function test_queueSetTargetFacilitator_admin() external {
-        vm.prank(admin);
-        config.queueSetTargetFacilitator(makeAddr("newFacilitator"));
-    }
-
-    function testFuzz_queueSetTargetFacilitator_revertsIfNotAdmin(address caller_) external {
-        vm.assume(caller_ != admin);
-
-        _expectAdminRole();
-        vm.prank(caller_);
-        config.queueSetTargetFacilitator(makeAddr("newFacilitator"));
-    }
-
-    function test_queueSetTargetFacilitator_revertsIfZeroAddress() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ILZBridgeAndDelegateConfig.LZBridgeAndDelegateConfig_InvalidAddress.selector,
-                "facilitator"
-            )
-        );
-        vm.prank(admin);
-        config.queueSetTargetFacilitator(address(0));
-    }
-
-    // ========== queueSetTimelockDelay ========== //
-
-    function test_queueSetTimelockDelay_admin() external {
-        vm.prank(admin);
-        config.queueSetTimelockDelay(INITIAL_TIMELOCK_DELAY);
-    }
-
-    function testFuzz_queueSetTimelockDelay_revertsIfNotAdmin(address caller_) external {
-        vm.assume(caller_ != admin);
-
-        _expectAdminRole();
-        vm.prank(caller_);
-        config.queueSetTimelockDelay(INITIAL_TIMELOCK_DELAY);
-    }
-
-    function test_queueSetTimelockDelay_revertsIfDelayBelowMin() external {
-        uint48 belowMin = uint48(config.MIN_TIMELOCK_DELAY()) - 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_TimelockDelayInvalid.selector,
-                belowMin,
-                config.MIN_TIMELOCK_DELAY(),
-                config.MAX_TIMELOCK_DELAY()
-            )
-        );
-        vm.prank(admin);
-        config.queueSetTimelockDelay(belowMin);
-    }
-
-    function test_queueSetTimelockDelay_revertsIfDelayAboveMax() external {
-        uint48 aboveMax = uint48(config.MAX_TIMELOCK_DELAY()) + 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_TimelockDelayInvalid.selector,
-                aboveMax,
-                config.MIN_TIMELOCK_DELAY(),
-                config.MAX_TIMELOCK_DELAY()
-            )
-        );
-        vm.prank(admin);
-        config.queueSetTimelockDelay(aboveMax);
     }
 }

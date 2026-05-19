@@ -4,6 +4,8 @@ pragma solidity >=0.8.30;
 // Interfaces
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
@@ -13,6 +15,7 @@ import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
@@ -218,5 +221,32 @@ contract LZBridgeAndDelegateConfigTestBase is TestHelperOz5 {
     /// @dev Warps past the configured timelock delay so a queued action is executable.
     function _warpPastTimelock() internal {
         vm.warp(vm.getBlockTimestamp() + INITIAL_TIMELOCK_DELAY + 1);
+    }
+
+    /// @dev Wraps a single (target, selector, payload) triple as a length-1 batch so a
+    ///      single gateway/delegate/facilitator sub-action can be queued through `queue`.
+    function _singleAction(
+        address target_,
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal pure returns (ITimelockBatchQueue.BatchAction[] memory batch) {
+        batch = new ITimelockBatchQueue.BatchAction[](1);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: target_,
+            selector: selector_,
+            payload: payload_
+        });
+    }
+
+    /// @dev Asserts the standard `IPolicyAdmin.NotAuthorised` revert returned by both the
+    ///      `bridge_admin`-or-`admin` and the rate-limiter-class proposer gates.
+    function _expectNotAuthorized() internal {
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+    }
+
+    /// @dev Asserts the strict `ROLES_RequireRole(admin)` revert returned by the admin-only
+    ///      proposer gate.
+    function _expectAdminRole() internal {
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
     }
 }

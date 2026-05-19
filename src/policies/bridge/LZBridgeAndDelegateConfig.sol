@@ -26,13 +26,16 @@ import {ADMIN_ROLE, EMERGENCY_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE}
 /// @notice Timelock policy that owns LayerZero bridge configuration on behalf of an
 ///         LZBridgeGateway, LZEndpointDelegate, and periphery LZCrossChainBridge triple.
 /// @dev The policy is intended to hold the `bridge_configurator` role on the
-///      gateway/delegate and to be pinned as the periphery bridge's `configurator`. Every
-///      queue helper validates the proposer's role and the payload at queue time and
-///      dispatches at execution time via a typed call against the configured target. The
-///      `queueBatch` entry point lets related sub-actions be packed into a single atomic
-///      timelock entry. Cancellation is gated to the emergency role only, so the proposer
-///      cannot rescind its own queued action; the emergency role is intended for a
-///      multisig veto independent of the proposer roles.
+///      gateway/delegate and to be pinned as the periphery bridge's `configurator`. The
+///      `queue` entry point packs one or more gateway/delegate/facilitator sub-actions into
+///      a single atomic timelock entry; each sub-action's proposer role and payload shape is
+///      validated at queue time and dispatched at execution time via a typed call against
+///      the configured target. The policy's own configuration (target slots, timelock delay)
+///      is managed through the typed `queueSetTarget*` and `queueSetTimelockDelay` helpers;
+///      `queue` deliberately rejects self-targeted sub-actions so that these privileged
+///      rotations cannot be smuggled into an arbitrary batch. Cancellation is gated to the
+///      emergency role only, so the proposer cannot rescind its own queued action; the
+///      emergency role is intended for a multisig veto independent of the proposer roles.
 contract LZBridgeAndDelegateConfig is
     Policy,
     PolicyEnablerV2,
@@ -117,305 +120,6 @@ contract LZBridgeAndDelegateConfig is
         return (1, 0);
     }
 
-    // ========== QUEUE: GATEWAY ========== //
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetEndpointDelegate(
-        address delegate_
-    ) external override returns (uint64 actionId_) {
-        return _queueAction(gateway, ILZBridgeGateway.setDelegate.selector, abi.encode(delegate_));
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueIncreaseBridgedSupply(
-        uint256 amount_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                gateway,
-                ILZBridgeGateway.increaseBridgedSupply.selector,
-                abi.encode(amount_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueDecreaseBridgedSupply(
-        uint256 amount_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                gateway,
-                ILZBridgeGateway.decreaseBridgedSupply.selector,
-                abi.encode(amount_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has none of `bridge_rate_limiter`, `bridge_admin`, or `admin`
-    function queueSetOutRateLimits(
-        IOffsettingRateLimiter.RateLimitConfig[] calldata configs_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(gateway, ILZBridgeGateway.setOutRateLimits.selector, abi.encode(configs_));
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has none of `bridge_rate_limiter`, `bridge_admin`, or `admin`
-    function queueSetInRateLimits(
-        IOffsettingRateLimiter.RateLimitConfig[] calldata configs_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(gateway, ILZBridgeGateway.setInRateLimits.selector, abi.encode(configs_));
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has none of `bridge_rate_limiter`, `bridge_admin`, or `admin`
-    function queueClearOutboundInFlight(
-        uint32[] calldata eids_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                gateway,
-                ILZBridgeGateway.clearOutboundInFlight.selector,
-                abi.encode(eids_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has none of `bridge_rate_limiter`, `bridge_admin`, or `admin`
-    function queueClearInboundInFlight(
-        uint32[] calldata eids_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                gateway,
-                ILZBridgeGateway.clearInboundInFlight.selector,
-                abi.encode(eids_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetGatewayGracePeriod(
-        uint32 period_
-    ) external override returns (uint64 actionId_) {
-        return _queueAction(gateway, IGracePeriod.setGracePeriod.selector, abi.encode(period_));
-    }
-
-    // ========== QUEUE: DELEGATE ========== //
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetSendLibrary(
-        uint32 eid_,
-        address lib_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.setSendLibrary.selector,
-                abi.encode(eid_, lib_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetReceiveLibrary(
-        uint32 eid_,
-        address lib_,
-        uint256 gracePeriod_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.setReceiveLibrary.selector,
-                abi.encode(eid_, lib_, gracePeriod_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetReceiveLibraryTimeout(
-        uint32 eid_,
-        address lib_,
-        uint256 expiry_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector,
-                abi.encode(eid_, lib_, expiry_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetEndpointConfig(
-        address lib_,
-        SetConfigParam[] calldata params_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.setEndpointConfig.selector,
-                abi.encode(lib_, params_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSkip(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.skip.selector,
-                abi.encode(srcEid_, sender_, nonce_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueNilify(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.nilify.selector,
-                abi.encode(srcEid_, sender_, nonce_, payloadHash_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueBurn(
-        uint32 srcEid_,
-        bytes32 sender_,
-        uint64 nonce_,
-        bytes32 payloadHash_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.burn.selector,
-                abi.encode(srcEid_, sender_, nonce_, payloadHash_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueClear(
-        Origin calldata origin_,
-        bytes32 guid_,
-        bytes calldata message_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                delegate,
-                ILZEndpointV2Authorized.clear.selector,
-                abi.encode(origin_, guid_, message_)
-            );
-    }
-
-    // ========== QUEUE: FACILITATOR ========== //
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetFacilitatorGateway(
-        address gateway_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                facilitator,
-                ILZCrossChainBridge.setGateway.selector,
-                abi.encode(gateway_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetFacilitatorReEnabler(
-        address reEnabler_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                facilitator,
-                ILZCrossChainBridge.setReEnabler.selector,
-                abi.encode(reEnabler_)
-            );
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller has neither the `bridge_admin` nor the `admin` role
-    function queueSetFacilitatorGracePeriod(
-        uint32 period_
-    ) external override returns (uint64 actionId_) {
-        return _queueAction(facilitator, IGracePeriod.setGracePeriod.selector, abi.encode(period_));
-    }
-
-    /// @inheritdoc ILZBridgeAndDelegateConfig
-    /// @dev Reverts if:
-    ///      - The policy is disabled
-    ///      - The caller does not have the `admin` role
-    function queueSetFacilitatorConfigurator(
-        address newConfigurator_
-    ) external override returns (uint64 actionId_) {
-        return
-            _queueAction(
-                facilitator,
-                ILZCrossChainBridge.setConfigurator.selector,
-                abi.encode(newConfigurator_)
-            );
-    }
-
     // ========== QUEUE: SELF ========== //
 
     /// @inheritdoc ILZBridgeAndDelegateConfig
@@ -482,12 +186,24 @@ contract LZBridgeAndDelegateConfig is
     ///      - The policy is disabled
     ///      - The batch is empty
     ///      - The batch exceeds the maximum batch size
-    ///      - Any sub-action target is not the gateway, delegate, facilitator, or this policy
+    ///      - Any sub-action targets this policy (self-actions must use the typed
+    ///        `queueSetTarget*` / `queueSetTimelockDelay` helpers)
+    ///      - Any sub-action target is not the gateway, delegate, or facilitator
     ///      - The caller does not hold the proposer role required by any sub-action
     ///      - Any sub-action payload cannot be decoded into the expected types
-    function queueBatch(
+    function queue(
         ITimelockBatchQueue.BatchAction[] memory actions_
     ) external override returns (uint64 actionId_) {
+        uint256 len = actions_.length;
+        // `_queueAction` re-checks these, but the size bounds are duplicated here so the
+        // self-target rejection below cannot mask an empty or oversize batch: the revert
+        // ordering stays deterministic (empty -> too large -> self-target -> per-sub).
+        if (len == 0) revert ITimelockBatchQueue_BatchEmpty();
+        if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
+        for (uint256 i; i < len; ++i) {
+            if (actions_[i].target == address(this))
+                revert ITimelockBatchQueue_ActionInvalid(actions_[i].target, actions_[i].selector);
+        }
         return _queueAction(actions_);
     }
 

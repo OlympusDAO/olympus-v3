@@ -47,7 +47,7 @@ Branch: `lz-bridge-upgrade`
         - [bridge/](../../src/policies/bridge/)
             - [LZBridgeGateway.sol](../../src/policies/bridge/LZBridgeGateway.sol) — Gateway infrastructure policy
             - [LZEndpointDelegate.sol](../../src/policies/bridge/LZEndpointDelegate.sol) — Stateless policy assigned as the gateway's LZ V2 endpoint delegate. Every external function forwards the call to the LayerZero endpoint with `LZEndpointDelegate.GATEWAY` as the OApp argument; the endpoint accepts these calls only while this policy is the gateway's endpoint delegate
-            - [LZBridgeAndDelegateConfig.sol](../../src/policies/bridge/LZBridgeAndDelegateConfig.sol) — Timelock policy expected to hold `bridge_configurator` on the gateway and the LZ endpoint delegate and to be pinned as the periphery bridge's `configurator`, so that every `bridge_configurator`-gated or `configurator`-gated mutator on those three contracts is reached only through its timelock queue. Exposes typed `queue*` helpers and `queueBatch`; execution is permissionless after the timelock and emergency-cancellable
+            - [LZBridgeAndDelegateConfig.sol](../../src/policies/bridge/LZBridgeAndDelegateConfig.sol) — Timelock policy expected to hold `bridge_configurator` on the gateway and the LZ endpoint delegate and to be pinned as the periphery bridge's `configurator`, so that every `bridge_configurator`-gated or `configurator`-gated mutator on those three contracts is reached only through its timelock queue. Exposes a `queue([...])` batch entry point for gateway / delegate / facilitator sub-actions plus typed `queueSetTarget*` / `queueSetTimelockDelay` self-config helpers; execution is permissionless after the timelock and emergency-cancellable
         - [interfaces/](../../src/policies/interfaces/)
             - [ILZBridgeGateway.sol](../../src/policies/interfaces/ILZBridgeGateway.sol) — Gateway interface
             - [ILZEndpointDelegate.sol](../../src/policies/interfaces/ILZEndpointDelegate.sol) — Delegate policy interface (immutables, view accessors)
@@ -117,7 +117,7 @@ You can review previous audits here:
     Two functions are intentionally outside the `bridge_configurator` / `configurator` gates: the one-shot `LZBridgeGateway.initializeBridgedSupply`, which is called under `bridge_admin` / `admin` immediately after the OCG proposal to bootstrap the canonical bridged supply, and the bootstrap call to `LZCrossChainBridge.setConfigurator`, which is used once after deployment to seed the configurator variable. After both bootstrap calls and the corresponding role / configurator grants, the policy's timelock queue is the only path to those mutators. The remaining non-`bridge_configurator` surface on the gateway covers operational responses that must be immediate: `setPeer`, `setEnforcedOptions`, `setIsReceiveEnabled`, `enable` / `disable` / `reEnable`, and `rescue`.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint bidirectional rate limiting**: Mandatory rate limiting via `OffsettingRateLimiter` inheritance. Each peer EID has independent outbound and inbound rate limits with a sliding-window decay; both directions revert with `RateLimitExceeded` once the configured limit is exhausted. Activity in one direction offsets the in-flight amount of the counterpart (with a floor at zero), so balanced round trips free capacity faster than purely additive accounting. Limits are applied at activation time (24-hour window throughout): on canonical Ethereum, 100,000 OHM outbound and 55,000 OHM inbound per remote; on each non-canonical chain, outbound is 50,000 OHM towards Ethereum and 100,000 OHM towards every other non-canonical peer, while inbound is 110,000 OHM per remote regardless of source.
-10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated by `bridge_configurator`, so in the intended deployment they are reached only through the `LZBridgeAndDelegateConfig` timelock queue (`queueSkip` / `queueNilify` / `queueBurn` / `queueClear`).
+10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated by `bridge_configurator`, so in the intended deployment they are reached only as delegate sub-actions of the `LZBridgeAndDelegateConfig.queue` timelock batch.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
 12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescueable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native asset, identified via the EIP-7528 sentinel `ERC7528Constants`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
@@ -137,7 +137,7 @@ On the canonical chain (Ethereum, `IS_CANONICAL == true`):
 
 On non-canonical chains: supply tracking is skipped entirely.
 
-`initializeBridgedSupply` is the one-shot bootstrap, gated by `bridge_admin` or `admin`, used immediately after the OCG proposal so the DAO MS can write the canonical chain's initial bridged supply without going through the `bridge_configurator` role (and therefore without paying the `LZBridgeAndDelegateConfig` timelock). It reverts on a second call, on a non-zero current bridged supply, and on a zero amount; after the bootstrap the `bridge_configurator`-gated `increaseBridgedSupply` and `decreaseBridgedSupply` (expected to be reached only via `LZBridgeAndDelegateConfig.queueIncreaseBridgedSupply` / `queueDecreaseBridgedSupply`) are the only path for error recovery.
+`initializeBridgedSupply` is the one-shot bootstrap, gated by `bridge_admin` or `admin`, used immediately after the OCG proposal so the DAO MS can write the canonical chain's initial bridged supply without going through the `bridge_configurator` role (and therefore without paying the `LZBridgeAndDelegateConfig` timelock). It reverts on a second call, on a non-zero current bridged supply, and on a zero amount; after the bootstrap the `bridge_configurator`-gated `increaseBridgedSupply` and `decreaseBridgedSupply` (expected to be reached only via a `LZBridgeAndDelegateConfig.queue` batch carrying a `gateway.increaseBridgedSupply` / `gateway.decreaseBridgedSupply` sub-action) are the only path for error recovery.
 
 ### Message Flow
 
@@ -198,7 +198,7 @@ sequenceDiagram
 | `reEnable`                | `manager`                                      | inside `gracePeriod` since `lastTransitionAt` |
 | `initializeBridgedSupply` | `bridge_admin` / `admin`                       | one-shot bootstrap; canonical chain only |
 | `setGracePeriod`          | `bridge_configurator`                          | expected to be timelocked |
-| `setDelegate`             | `bridge_configurator`                          | expected to be timelocked (`queueSetEndpointDelegate`) |
+| `setDelegate`             | `bridge_configurator`                          | expected to be timelocked (`queue` with a `gateway.setDelegate` sub-action) |
 | `increaseBridgedSupply`   | `bridge_configurator`                          | expected to be timelocked; canonical chain only |
 | `decreaseBridgedSupply`   | `bridge_configurator`                          | expected to be timelocked; canonical chain only |
 | `setOutRateLimits`        | `bridge_configurator`                          | expected to be timelocked |
@@ -207,7 +207,7 @@ sequenceDiagram
 | `clearInboundInFlight`    | `bridge_configurator`                          | expected to be timelocked |
 | `rescue`                  | `manager` / `admin`                            |  |
 
-`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured via the `bridge_configurator`-gated `setGracePeriod`, expected to be reached only through `LZBridgeAndDelegateConfig.queueSetGatewayGracePeriod`.
+`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured via the `bridge_configurator`-gated `setGracePeriod`, expected to be reached only through a `LZBridgeAndDelegateConfig.queue` batch carrying a `gateway.setGracePeriod` sub-action.
 
 `setDelegate` points the gateway's LayerZero endpoint delegate at the `LZEndpointDelegate` policy, whose surface is listed below.
 
@@ -224,7 +224,7 @@ sequenceDiagram
 | `burn`                     | `bridge_configurator` |
 | `clear`                    | `bridge_configurator` |
 
-Every entry is reachable only through the matching `queue*` helper on `LZBridgeAndDelegateConfig` (proposer role: `bridge_admin` / `admin`).
+Every entry is reachable only as a delegate sub-action of `LZBridgeAndDelegateConfig.queue` (proposer role: `bridge_admin` / `admin`).
 
 #### LZCrossChainBridge
 
@@ -245,27 +245,31 @@ The `configurator` variable is the address that gates every configurator-gated s
 
 #### LZBridgeAndDelegateConfig
 
-| Function                                  | Proposer role                                | Target |
-| ----------------------------------------- | -------------------------------------------- | ------ |
-| `queueSetEndpointDelegate`                | `bridge_admin` / `admin`                     | gateway |
-| `queueIncreaseBridgedSupply`              | `bridge_admin` / `admin`                     | gateway |
-| `queueDecreaseBridgedSupply`              | `bridge_admin` / `admin`                     | gateway |
-| `queueSetOutRateLimits`                   | `bridge_rate_limiter` / `bridge_admin` / `admin` | gateway |
-| `queueSetInRateLimits`                    | `bridge_rate_limiter` / `bridge_admin` / `admin` | gateway |
-| `queueClearOutboundInFlight`              | `bridge_rate_limiter` / `bridge_admin` / `admin` | gateway |
-| `queueClearInboundInFlight`               | `bridge_rate_limiter` / `bridge_admin` / `admin` | gateway |
-| `queueSetGatewayGracePeriod`              | `bridge_admin` / `admin`                     | gateway |
-| `queueSetSendLibrary`                     | `bridge_admin` / `admin`                     | delegate |
-| `queueSetReceiveLibrary`                  | `bridge_admin` / `admin`                     | delegate |
-| `queueSetReceiveLibraryTimeout`           | `bridge_admin` / `admin`                     | delegate |
-| `queueSetEndpointConfig`                  | `bridge_admin` / `admin`                     | delegate |
-| `queueSkip` / `queueNilify` / `queueBurn` / `queueClear` | `bridge_admin` / `admin`          | delegate |
-| `queueSetFacilitatorGateway`              | `bridge_admin` / `admin`                     | facilitator |
-| `queueSetFacilitatorReEnabler`            | `bridge_admin` / `admin`                     | facilitator |
-| `queueSetFacilitatorGracePeriod`          | `bridge_admin` / `admin`                     | facilitator |
-| `queueSetFacilitatorConfigurator`         | `admin`                                      | facilitator |
-| `queueSetTargetGateway` / `queueSetTargetDelegate` / `queueSetTargetFacilitator` | `admin` | self |
-| `queueSetTimelockDelay`                   | `admin`                                      | self |
-| `queueBatch`                              | strictest proposer role implied by the sub-actions | mixed |
-| `executeQueuedAction`                     | permissionless once the timelock has elapsed |  |
-| `cancelQueuedAction`                      | `emergency`                                  |  |
+Gateway, delegate, and facilitator mutators are submitted as sub-actions of the single
+`queue([...])` batch entry point. Each sub-action is validated independently at queue time;
+the caller must hold the proposer role required by **every** sub-action in the batch. The
+proposer role for each supported (target, selector) sub-action:
+
+| Sub-action (target.selector)                                                       | Proposer role                                |
+| ---------------------------------------------------------------------------------- | -------------------------------------------- |
+| `gateway.setDelegate`                                                              | `bridge_admin` / `admin`                     |
+| `gateway.increaseBridgedSupply` / `gateway.decreaseBridgedSupply`                  | `bridge_admin` / `admin`                     |
+| `gateway.setGracePeriod`                                                           | `bridge_admin` / `admin`                     |
+| `gateway.setOutRateLimits` / `gateway.setInRateLimits`                             | `bridge_rate_limiter` / `bridge_admin` / `admin` |
+| `gateway.clearOutboundInFlight` / `gateway.clearInboundInFlight`                   | `bridge_rate_limiter` / `bridge_admin` / `admin` |
+| `delegate.setSendLibrary` / `delegate.setReceiveLibrary` / `delegate.setReceiveLibraryTimeout` | `bridge_admin` / `admin`           |
+| `delegate.setEndpointConfig`                                                       | `bridge_admin` / `admin`                     |
+| `delegate.skip` / `delegate.nilify` / `delegate.burn` / `delegate.clear`           | `bridge_admin` / `admin`                     |
+| `facilitator.setGateway` / `facilitator.setReEnabler` / `facilitator.setGracePeriod` | `bridge_admin` / `admin`                   |
+| `facilitator.setConfigurator`                                                      | `admin`                                      |
+
+The policy's own configuration is rotated through typed self helpers, which reject
+self-targeted sub-actions inside `queue`:
+
+| Function                                                                          | Proposer role                                |
+| --------------------------------------------------------------------------------- | -------------------------------------------- |
+| `queue`                                                                           | proposer role(s) implied by every sub-action; self-targeted sub-actions rejected |
+| `queueSetTargetGateway` / `queueSetTargetDelegate` / `queueSetTargetFacilitator`  | `admin`                                      |
+| `queueSetTimelockDelay`                                                           | `admin`                                      |
+| `executeQueuedAction`                                                             | permissionless once the timelock has elapsed |
+| `cancelQueuedAction`                                                              | `emergency`                                  |

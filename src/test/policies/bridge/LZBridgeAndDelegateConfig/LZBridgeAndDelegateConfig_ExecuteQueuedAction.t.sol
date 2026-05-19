@@ -8,6 +8,7 @@ import {Errors as LZErrors} from "@lz-evm-protocol-v2-3.0.162/libs/Errors.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
+import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -19,7 +20,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         uint256 amount = 100e9;
 
         vm.prank(bridgeAdmin);
-        uint64 actionId = config.queueIncreaseBridgedSupply(amount);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.increaseBridgedSupply.selector,
+                abi.encode(amount)
+            )
+        );
 
         _warpPastTimelock();
 
@@ -41,7 +48,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         });
 
         vm.prank(bridgeRateLimiter);
-        uint64 actionId = config.queueSetOutRateLimits(cfg);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.setOutRateLimits.selector,
+                abi.encode(cfg)
+            )
+        );
 
         _warpPastTimelock();
         config.executeQueuedAction(actionId);
@@ -55,7 +68,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         address lib = makeAddr("sendLib");
 
         vm.prank(admin);
-        uint64 actionId = config.queueSetSendLibrary(NONCANONICAL_EID, lib);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(lzDelegate),
+                ILZEndpointV2Authorized.setSendLibrary.selector,
+                abi.encode(NONCANONICAL_EID, lib)
+            )
+        );
 
         _warpPastTimelock();
 
@@ -70,7 +89,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         address newGateway = makeAddr("newPeripheryGateway");
 
         vm.prank(bridgeAdmin);
-        uint64 actionId = config.queueSetFacilitatorGateway(newGateway);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(facilitator),
+                ILZCrossChainBridge.setGateway.selector,
+                abi.encode(newGateway)
+            )
+        );
 
         _warpPastTimelock();
 
@@ -115,7 +140,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         uint48 executableAt = uint48(vm.getBlockTimestamp()) + INITIAL_TIMELOCK_DELAY;
 
         vm.prank(bridgeAdmin);
-        uint64 actionId = config.queueIncreaseBridgedSupply(1);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.increaseBridgedSupply.selector,
+                abi.encode(uint256(1))
+            )
+        );
 
         // Without warping the action is still timelocked
         vm.expectRevert(
@@ -134,7 +165,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
             uint48(config.EXECUTION_WINDOW());
 
         vm.prank(bridgeAdmin);
-        uint64 actionId = config.queueIncreaseBridgedSupply(1);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.increaseBridgedSupply.selector,
+                abi.encode(uint256(1))
+            )
+        );
 
         // Warp past timelock + execution window
         vm.warp(vm.getBlockTimestamp() + INITIAL_TIMELOCK_DELAY + config.EXECUTION_WINDOW() + 1);
@@ -151,7 +188,13 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
 
     function test_execute_revertsIfDisabled() external {
         vm.prank(bridgeAdmin);
-        uint64 actionId = config.queueIncreaseBridgedSupply(1);
+        uint64 actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.increaseBridgedSupply.selector,
+                abi.encode(uint256(1))
+            )
+        );
 
         // Disable the config policy; execution should fail until re-enabled
         vm.prank(admin);

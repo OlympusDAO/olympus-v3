@@ -5,6 +5,7 @@ import {LZBridgeAndDelegateConfigTestBase} from "src/test/policies/bridge/LZBrid
 
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -13,7 +14,13 @@ import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 contract LZBridgeAndDelegateConfigTests_CancelQueuedAction is LZBridgeAndDelegateConfigTestBase {
     function _queueAny() internal returns (uint64 actionId) {
         vm.prank(bridgeAdmin);
-        actionId = config.queueIncreaseBridgedSupply(1);
+        actionId = config.queue(
+            _singleAction(
+                address(gateway),
+                ILZBridgeGateway.increaseBridgedSupply.selector,
+                abi.encode(uint256(1))
+            )
+        );
     }
 
     function test_cancel_emergencyCanCancel() external {
