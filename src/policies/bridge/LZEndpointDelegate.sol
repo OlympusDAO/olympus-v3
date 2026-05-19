@@ -53,7 +53,10 @@ contract LZEndpointDelegate is
     ///      `LZBridgeAndDelegateConfig` (the timelock policy), in which case calls are
     ///      dispatched through that policy's timelock queue. Any holder that does not
     ///      itself enforce a timelock on these mutators should only be granted the role
-    ///      temporarily for bootstrap.
+    ///      temporarily for bootstrap. This contract does not enforce a timelock itself;
+    ///      it is enforced only by the `LZBridgeAndDelegateConfig` role holder. Granting
+    ///      `bridge_configurator` to any other address bypasses the timelock for these
+    ///      mutators.
     modifier onlyBridgeConfigurator() {
         _requireBridgeConfigurator();
         _;
