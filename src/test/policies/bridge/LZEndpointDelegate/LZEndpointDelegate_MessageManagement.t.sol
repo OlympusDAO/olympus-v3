@@ -11,10 +11,8 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 ///      Mock-based verification of the proxy: each external call must land on the LZ endpoint
 ///      with the gateway as the OApp argument and the caller-supplied recovery parameters,
 ///      plus role-gated access control. These inbound-channel management primitives are gated
-///      directly to `bridge_admin` / `admin` and are intentionally NOT routed through the
-///      `LZBridgeAndDelegateConfig` timelock, so an operator can react promptly. For
-///      end-to-end recovery scenarios against the real mock EndpointV2 see the
-///      gateway-level recovery tests.
+///      directly to `bridge_admin` / `admin`. For end-to-end recovery scenarios against
+///      the real mock EndpointV2 see the gateway-level recovery tests.
 contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase {
     bytes32 constant SENDER = bytes32(uint256(0x1234));
     uint64 constant NONCE = 7;

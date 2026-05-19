@@ -67,9 +67,7 @@ contract LZEndpointDelegate is
     }
 
     /// @notice Reverts if the caller has neither the `bridge_admin` nor the `admin` role.
-    /// @dev Gates the inbound-channel management primitives (`skip`, `nilify`, `burn`,
-    ///      `clear`). These are intentionally NOT routed through the timelock policy so an
-    ///      operator can react promptly to an undeliverable or malicious inbound message.
+    /// @dev Gates the inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`).
     modifier onlyBridgeAdminOrAdmin() {
         _requireBridgeAdminOrAdmin();
         _;

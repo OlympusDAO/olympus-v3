@@ -43,9 +43,6 @@ contract LZBridgeAndDelegateConfigTests_Constructor is LZBridgeAndDelegateConfig
     }
 
     function test_constructor_emitsTimelockDelaySetAndTargetEvents() external {
-        // The constructor emits `TimelockDelaySet` from the base and a `TargetXxxSet` event for
-        // each of the three target slots seeded via the private `_setTarget*` helpers; the
-        // policy starts disabled, so the `Enabled` event is emitted later by the OCG proposal.
         vm.expectEmit(false, false, false, true);
         emit ITimelockBatchQueue.TimelockDelaySet(INITIAL_TIMELOCK_DELAY);
         vm.expectEmit(false, false, false, true);
