@@ -148,7 +148,7 @@ contract LZBridgeAndDelegateConfig is
     ///      - `newGateway_` is the zero address
     function queueSetTargetGateway(
         address newGateway_
-    ) external override returns (uint64 actionId_) {
+    ) external override returns (uint64 actionId) {
         return
             _queueAction(
                 address(this),
@@ -164,7 +164,7 @@ contract LZBridgeAndDelegateConfig is
     ///      - `newDelegate_` is the zero address
     function queueSetTargetDelegate(
         address newDelegate_
-    ) external override returns (uint64 actionId_) {
+    ) external override returns (uint64 actionId) {
         return
             _queueAction(
                 address(this),
@@ -180,7 +180,7 @@ contract LZBridgeAndDelegateConfig is
     ///      - `newFacilitator_` is the zero address
     function queueSetTargetFacilitator(
         address newFacilitator_
-    ) external override returns (uint64 actionId_) {
+    ) external override returns (uint64 actionId) {
         return
             _queueAction(
                 address(this),
@@ -194,7 +194,7 @@ contract LZBridgeAndDelegateConfig is
     ///      - The policy is disabled
     ///      - The caller does not have the `admin` role
     ///      - `delay_` is outside `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`
-    function queueSetTimelockDelay(uint48 delay_) external override returns (uint64 actionId_) {
+    function queueSetTimelockDelay(uint48 delay_) external override returns (uint64 actionId) {
         return _queueAction(address(this), this.queueSetTimelockDelay.selector, abi.encode(delay_));
     }
 
@@ -212,7 +212,7 @@ contract LZBridgeAndDelegateConfig is
     ///      - Any sub-action payload cannot be decoded into the expected types
     function queue(
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) external override returns (uint64 actionId_) {
+    ) external override returns (uint64 actionId) {
         uint256 len = actions_.length;
         // `_queueAction` re-checks these, but the size bounds are duplicated here so the
         // self-target rejection below cannot mask an empty or oversize batch: the revert

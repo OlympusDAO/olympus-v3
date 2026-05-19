@@ -71,26 +71,26 @@ interface ILZBridgeAndDelegateConfig is ITimelockBatchQueue {
     /// @notice Queues a self-call updating the policy's `gateway` target slot.
     /// @dev Proposer access: `admin` only.
     /// @param newGateway_ The new gateway address.
-    /// @return actionId_ The queued action ID.
-    function queueSetTargetGateway(address newGateway_) external returns (uint64 actionId_);
+    /// @return actionId The queued action ID.
+    function queueSetTargetGateway(address newGateway_) external returns (uint64 actionId);
 
     /// @notice Queues a self-call updating the policy's `delegate` target slot.
     /// @dev Proposer access: `admin` only.
     /// @param newDelegate_ The new delegate address.
-    /// @return actionId_ The queued action ID.
-    function queueSetTargetDelegate(address newDelegate_) external returns (uint64 actionId_);
+    /// @return actionId The queued action ID.
+    function queueSetTargetDelegate(address newDelegate_) external returns (uint64 actionId);
 
     /// @notice Queues a self-call updating the policy's `facilitator` target slot.
     /// @dev Proposer access: `admin` only.
     /// @param newFacilitator_ The new facilitator address.
-    /// @return actionId_ The queued action ID.
-    function queueSetTargetFacilitator(address newFacilitator_) external returns (uint64 actionId_);
+    /// @return actionId The queued action ID.
+    function queueSetTargetFacilitator(address newFacilitator_) external returns (uint64 actionId);
 
     /// @notice Queues a self-call updating the configured timelock delay.
     /// @dev Proposer access: `admin` only.
     /// @param delay_ The new timelock delay in seconds.
-    /// @return actionId_ The queued action ID.
-    function queueSetTimelockDelay(uint48 delay_) external returns (uint64 actionId_);
+    /// @return actionId The queued action ID.
+    function queueSetTimelockDelay(uint48 delay_) external returns (uint64 actionId);
 
     // ========== QUEUE: BATCH ========== //
 
@@ -102,8 +102,8 @@ interface ILZBridgeAndDelegateConfig is ITimelockBatchQueue {
     ///      managed only through the typed `queueSetTarget*` / `queueSetTimelockDelay`
     ///      helpers.
     /// @param actions_ The sub-actions to queue.
-    /// @return actionId_ The queued action ID.
+    /// @return actionId The queued action ID.
     function queue(
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) external returns (uint64 actionId_);
+    ) external returns (uint64 actionId);
 }
