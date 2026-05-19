@@ -4,7 +4,6 @@ pragma solidity >=0.8.30;
 import {LZBridgeAndDelegateConfigTestBase} from "src/test/policies/bridge/LZBridgeAndDelegateConfig/LZBridgeAndDelegateConfigTestBase.sol";
 
 // Interfaces
-import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
@@ -117,10 +116,6 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
     /// @dev Builds an empty `SetConfigParam` list for endpoint-config helpers.
     function _emptyConfigParams() internal pure returns (SetConfigParam[] memory params) {
         params = new SetConfigParam[](0);
-    }
-
-    function _clearOrigin() internal pure returns (Origin memory origin) {
-        origin = Origin({srcEid: NONCANONICAL_EID, sender: bytes32(uint256(1)), nonce: 1});
     }
 
     // ========== BATCH SEMANTICS ========== //
@@ -603,148 +598,6 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
             _dg(
                 ILZEndpointV2Authorized.setEndpointConfig.selector,
                 abi.encode(makeAddr("lib"), _emptyConfigParams())
-            )
-        );
-    }
-
-    // ========== delegate: skip ========== //
-
-    function test_queue_delegateSkip_admin() external {
-        vm.prank(admin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.skip.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
-            )
-        );
-    }
-
-    function test_queue_delegateSkip_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.skip.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
-            )
-        );
-    }
-
-    function testFuzz_queue_delegateSkip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.skip.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1))
-            )
-        );
-    }
-
-    // ========== delegate: nilify ========== //
-
-    function test_queue_delegateNilify_admin() external {
-        vm.prank(admin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.nilify.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    function test_queue_delegateNilify_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.nilify.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    function testFuzz_queue_delegateNilify_revertsIfNotBridgeAdminOrAdmin(
-        address caller_
-    ) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.nilify.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    // ========== delegate: burn ========== //
-
-    function test_queue_delegateBurn_admin() external {
-        vm.prank(admin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.burn.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    function test_queue_delegateBurn_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.burn.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    function testFuzz_queue_delegateBurn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.burn.selector,
-                abi.encode(NONCANONICAL_EID, bytes32(uint256(1)), uint64(1), bytes32(uint256(2)))
-            )
-        );
-    }
-
-    // ========== delegate: clear ========== //
-
-    function test_queue_delegateClear_admin() external {
-        vm.prank(admin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.clear.selector,
-                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
-            )
-        );
-    }
-
-    function test_queue_delegateClear_bridgeAdmin() external {
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.clear.selector,
-                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
-            )
-        );
-    }
-
-    function testFuzz_queue_delegateClear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin);
-
-        _expectNotAuthorized();
-        vm.prank(caller_);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.clear.selector,
-                abi.encode(_clearOrigin(), bytes32(uint256(2)), bytes(""))
             )
         );
     }

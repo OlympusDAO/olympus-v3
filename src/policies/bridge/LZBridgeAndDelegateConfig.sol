@@ -2,7 +2,6 @@
 pragma solidity >=0.8.30;
 
 // Interfaces
-import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
@@ -200,7 +199,7 @@ contract LZBridgeAndDelegateConfig is
         // ordering stays deterministic (empty -> too large -> self-target -> per-sub).
         if (len == 0) revert ITimelockBatchQueue_BatchEmpty();
         if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             if (actions_[i].target == address(this))
                 revert ITimelockBatchQueue_ActionInvalid(actions_[i].target, actions_[i].selector);
         }
@@ -390,11 +389,7 @@ contract LZBridgeAndDelegateConfig is
             sel == ILZEndpointV2Authorized.setSendLibrary.selector ||
             sel == ILZEndpointV2Authorized.setReceiveLibrary.selector ||
             sel == ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector ||
-            sel == ILZEndpointV2Authorized.setEndpointConfig.selector ||
-            sel == ILZEndpointV2Authorized.skip.selector ||
-            sel == ILZEndpointV2Authorized.nilify.selector ||
-            sel == ILZEndpointV2Authorized.burn.selector ||
-            sel == ILZEndpointV2Authorized.clear.selector
+            sel == ILZEndpointV2Authorized.setEndpointConfig.selector
         ) {
             _requireBridgeAdminProposer(caller_);
             _decodeDelegatePayload(sel, action_.payload);
@@ -498,18 +493,9 @@ contract LZBridgeAndDelegateConfig is
             sel_ == ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector
         ) {
             abi.decode(payload_, (uint32, address, uint256));
-        } else if (sel_ == ILZEndpointV2Authorized.setEndpointConfig.selector) {
-            abi.decode(payload_, (address, SetConfigParam[]));
-        } else if (sel_ == ILZEndpointV2Authorized.skip.selector) {
-            abi.decode(payload_, (uint32, bytes32, uint64));
-        } else if (
-            sel_ == ILZEndpointV2Authorized.nilify.selector ||
-            sel_ == ILZEndpointV2Authorized.burn.selector
-        ) {
-            abi.decode(payload_, (uint32, bytes32, uint64, bytes32));
         } else {
-            // clear
-            abi.decode(payload_, (Origin, bytes32, bytes));
+            // setEndpointConfig
+            abi.decode(payload_, (address, SetConfigParam[]));
         }
     }
 
@@ -583,30 +569,6 @@ contract LZBridgeAndDelegateConfig is
                 (address, SetConfigParam[])
             );
             dg.setEndpointConfig(lib, params);
-        } else if (sel == ILZEndpointV2Authorized.skip.selector) {
-            (uint32 srcEid, bytes32 sender, uint64 nonce) = abi.decode(
-                action_.payload,
-                (uint32, bytes32, uint64)
-            );
-            dg.skip(srcEid, sender, nonce);
-        } else if (sel == ILZEndpointV2Authorized.nilify.selector) {
-            (uint32 srcEid, bytes32 sender, uint64 nonce, bytes32 payloadHash) = abi.decode(
-                action_.payload,
-                (uint32, bytes32, uint64, bytes32)
-            );
-            dg.nilify(srcEid, sender, nonce, payloadHash);
-        } else if (sel == ILZEndpointV2Authorized.burn.selector) {
-            (uint32 srcEid, bytes32 sender, uint64 nonce, bytes32 payloadHash) = abi.decode(
-                action_.payload,
-                (uint32, bytes32, uint64, bytes32)
-            );
-            dg.burn(srcEid, sender, nonce, payloadHash);
-        } else if (sel == ILZEndpointV2Authorized.clear.selector) {
-            (Origin memory origin, bytes32 guid, bytes memory message) = abi.decode(
-                action_.payload,
-                (Origin, bytes32, bytes)
-            );
-            dg.clear(origin, guid, message);
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
         }

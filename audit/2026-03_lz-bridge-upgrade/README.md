@@ -108,7 +108,7 @@ You can review previous audits here:
 ### Key Security Improvements Over CrossChainBridge
 
 1. **Bridged supply tracking** (canonical chain only): Tracks outbound OHM (`bridgedSupply`) with an underflow check on inbound receives, preventing unlimited mints from non-canonical chains.
-2. **`onlyEnabled` on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway checks `onlyEnabled`, meaning disabling the bridge blocks both inbound and outbound transfers. Note: disabling the bridge does **not** block the inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`); these live on `LZEndpointDelegate` and are gated by `bridge_configurator`, expected to be reached through `LZBridgeAndDelegateConfig`'s timelock queue.
+2. **`onlyEnabled` on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway checks `onlyEnabled`, meaning disabling the bridge blocks both inbound and outbound transfers. Note: disabling the bridge does **not** block the inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`); these live on `LZEndpointDelegate` and are gated directly to `bridge_admin` / `admin` (not timelocked) so an operator can react promptly.
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
@@ -117,7 +117,7 @@ You can review previous audits here:
     Two functions are intentionally outside the `bridge_configurator` / `configurator` gates: the one-shot `LZBridgeGateway.initializeBridgedSupply`, which is called under `bridge_admin` / `admin` immediately after the OCG proposal to bootstrap the canonical bridged supply, and the bootstrap call to `LZCrossChainBridge.setConfigurator`, which is used once after deployment to seed the configurator variable. After both bootstrap calls and the corresponding role / configurator grants, the policy's timelock queue is the only path to those mutators. The remaining non-`bridge_configurator` surface on the gateway covers operational responses that must be immediate: `setPeer`, `setEnforcedOptions`, `setIsReceiveEnabled`, `enable` / `disable` / `reEnable`, and `rescue`.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint bidirectional rate limiting**: Mandatory rate limiting via `OffsettingRateLimiter` inheritance. Each peer EID has independent outbound and inbound rate limits with a sliding-window decay; both directions revert with `RateLimitExceeded` once the configured limit is exhausted. Activity in one direction offsets the in-flight amount of the counterpart (with a floor at zero), so balanced round trips free capacity faster than purely additive accounting. Limits are applied at activation time (24-hour window throughout): on canonical Ethereum, 100,000 OHM outbound and 55,000 OHM inbound per remote; on each non-canonical chain, outbound is 50,000 OHM towards Ethereum and 100,000 OHM towards every other non-canonical peer, while inbound is 110,000 OHM per remote regardless of source.
-10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated by `bridge_configurator`, so in the intended deployment they are reached only as delegate sub-actions of the `LZBridgeAndDelegateConfig.queue` timelock batch.
+10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated directly to `bridge_admin` / `admin`. They are intentionally NOT routed through the `LZBridgeAndDelegateConfig` timelock, so an operator can react promptly to an undeliverable or malicious inbound message.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
 12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescueable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native asset, identified via the EIP-7528 sentinel `ERC7528Constants`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
@@ -213,18 +213,23 @@ sequenceDiagram
 
 #### LZEndpointDelegate
 
-| Function                   | Direct caller         |
-| -------------------------- | --------------------- |
-| `setSendLibrary`           | `bridge_configurator` |
-| `setReceiveLibrary`        | `bridge_configurator` |
-| `setReceiveLibraryTimeout` | `bridge_configurator` |
-| `setEndpointConfig`        | `bridge_configurator` |
-| `skip`                     | `bridge_configurator` |
-| `nilify`                   | `bridge_configurator` |
-| `burn`                     | `bridge_configurator` |
-| `clear`                    | `bridge_configurator` |
+| Function                   | Direct caller            | Notes |
+| -------------------------- | ------------------------ | ----- |
+| `setSendLibrary`           | `bridge_configurator`    | timelocked |
+| `setReceiveLibrary`        | `bridge_configurator`    | timelocked |
+| `setReceiveLibraryTimeout` | `bridge_configurator`    | timelocked |
+| `setEndpointConfig`        | `bridge_configurator`    | timelocked |
+| `skip`                     | `bridge_admin` / `admin` | not timelocked |
+| `nilify`                   | `bridge_admin` / `admin` | not timelocked |
+| `burn`                     | `bridge_admin` / `admin` | not timelocked |
+| `clear`                    | `bridge_admin` / `admin` | not timelocked |
 
-Every entry is reachable only as a delegate sub-action of `LZBridgeAndDelegateConfig.queue` (proposer role: `bridge_admin` / `admin`).
+The library / endpoint-config setters are gated by `bridge_configurator` and are reached
+only as delegate sub-actions of `LZBridgeAndDelegateConfig.queue` (proposer role:
+`bridge_admin` / `admin`). The inbound-channel management primitives (`skip`, `nilify`,
+`burn`, `clear`) are gated directly to `bridge_admin` / `admin` and are intentionally NOT
+routed through the timelock, so an operator can react promptly to an undeliverable or
+malicious inbound message.
 
 #### LZCrossChainBridge
 
@@ -248,7 +253,10 @@ The `configurator` variable is the address that gates every configurator-gated s
 Gateway, delegate, and facilitator mutators are submitted as sub-actions of the single
 `queue([...])` batch entry point. Each sub-action is validated independently at queue time;
 the caller must hold the proposer role required by **every** sub-action in the batch. The
-proposer role for each supported (target, selector) sub-action:
+delegate inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`) are the
+exception: they are gated directly on `LZEndpointDelegate` (`bridge_admin` / `admin`, not
+timelocked) and are not queueable here. The proposer role for each supported (target,
+selector) sub-action:
 
 | Sub-action (target.selector)                                                       | Proposer role                                |
 | ---------------------------------------------------------------------------------- | -------------------------------------------- |
@@ -259,7 +267,6 @@ proposer role for each supported (target, selector) sub-action:
 | `gateway.clearOutboundInFlight` / `gateway.clearInboundInFlight`                   | `bridge_rate_limiter` / `bridge_admin` / `admin` |
 | `delegate.setSendLibrary` / `delegate.setReceiveLibrary` / `delegate.setReceiveLibraryTimeout` | `bridge_admin` / `admin`           |
 | `delegate.setEndpointConfig`                                                       | `bridge_admin` / `admin`                     |
-| `delegate.skip` / `delegate.nilify` / `delegate.burn` / `delegate.clear`           | `bridge_admin` / `admin`                     |
 | `facilitator.setGateway` / `facilitator.setReEnabler` / `facilitator.setGracePeriod` | `bridge_admin` / `admin`                   |
 | `facilitator.setConfigurator`                                                      | `admin`                                      |
 

@@ -105,7 +105,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         // 3. Admin cannot call clear() because the real payload is unknown.
         //    Admin nilifies the fake hash instead via the LZEndpointDelegate policy, which is the
         //    gateway's endpoint delegate.
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
 
         assertEq(
@@ -117,11 +117,11 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         // 4. Advance lazyInboundNonce past nonce 1 (required for burn).
         //    inboundNonce() returns 1 (NIL hash counts as "verified" for nonce tracking).
         //    skip() requires nonce == inboundNonce + 1, so we skip nonce 2.
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate.skip(NONCANONICAL_EID, peer, 2);
 
         // 5. Burn the nilified nonce permanently (pass NIL hash as payloadHash)
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate.burn(NONCANONICAL_EID, peer, 1, bytes32(type(uint256).max));
 
         assertEq(
@@ -190,7 +190,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate2.clear(origin, guid, message);
 
         IMessagingChannel ep = _nonCanonicalEndpoint();
@@ -252,7 +252,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate2.clear(origin, guid, message);
 
         // 6. Verify clear outcome: hash deleted, nonce advanced, no OHM minted

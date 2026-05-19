@@ -384,7 +384,7 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
 
         // 3. Admin detects the compromise and nilifies the fake hash via the LZEndpointDelegate
         //    policy, which is the gateway's endpoint delegate.
-        vm.prank(bridgeConfigurator);
+        vm.prank(bridgeAdmin);
         lzDelegate.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
 
         bytes32 nilValue = ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1);
