@@ -400,7 +400,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     /// @dev    Does not revert.
     ///
     /// @param  interfaceId_ The interface identifier, as specified in ERC-165.
-    /// @return              True if the contract implements `interfaceId_`.
+    /// @return bool         True if the contract implements `interfaceId_`.
     function supportsInterface(bytes4 interfaceId_) public view virtual override returns (bool) {
         return
             interfaceId_ == type(ITimelockBatchQueue).interfaceId ||
