@@ -117,7 +117,7 @@ contract OracleProposal is GovernorBravoProposal {
                 "\n",
                 "- [Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-05_Olympus_Price_Feed_Updates_Report.pdf)\n",
                 "- [Implementation PR](https://github.com/OlympusDAO/olympus-v3/pull/187)\n",
-                "- [PRICE Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/price.md)\n"
+                "- [PRICE Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/price.md)\n",
                 "- [Oracle Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/oracle_factories.md)\n"
             );
     }
