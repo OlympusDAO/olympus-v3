@@ -225,6 +225,34 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
+    /// @dev Queues a 2-sub-action batch whose first sub-action a `bridge_rate_limiter`
+    ///      proposer clears (gateway.setOutRateLimits) and whose second is the
+    ///      bridge-admin-gated `(failingTarget_, failingSelector_)`. Queued as
+    ///      `bridgeRateLimiter`, the per-sub-action role loop must reject the whole batch
+    ///      with `NotAuthorised` on the second sub-action. The failing sub-action carries an
+    ///      empty payload because the bridge-admin gate is checked before payload decoding,
+    ///      so the role revert fires first.
+    function _assertBridgeAdminSubActionRejectedInBatch(
+        address failingTarget_,
+        bytes4 failingSelector_
+    ) internal {
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.setOutRateLimits.selector,
+            payload: abi.encode(_rateConfig(1e9, 3600))
+        });
+        batch[1] = ITimelockBatchQueue.BatchAction({
+            target: failingTarget_,
+            selector: failingSelector_,
+            payload: bytes("")
+        });
+
+        _expectNotAuthorized();
+        vm.prank(bridgeRateLimiter);
+        config.queue(batch);
+    }
+
     // ========== BATCH SEMANTICS ========== //
 
     function test_queue_appliesAllSubActions() external {
@@ -411,6 +439,25 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         config.queue(_gw(ILZBridgeGateway.setDelegate.selector, abi.encode(address(0))));
     }
 
+    function test_queue_revertsIfGatewaySetDelegatePayloadHasTrailingBytes() external {
+        // Static single-word guard (_LEN_SINGLE_WORD).
+        _expectActionInvalid(address(gateway), ILZBridgeGateway.setDelegate.selector);
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _gw(
+                ILZBridgeGateway.setDelegate.selector,
+                _withTrailingWord(abi.encode(makeAddr("delegateCandidate")))
+            )
+        );
+    }
+
+    function test_queue_revertsIfBatchSubActionGatewaySetDelegateLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(gateway),
+            ILZBridgeGateway.setDelegate.selector
+        );
+    }
+
     // ========== gateway: increaseBridgedSupply ========== //
 
     function test_queue_acceptsGatewayIncreaseBridgedSupplyByAdmin() external {
@@ -467,6 +514,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         vm.expectRevert(ILZBridgeGateway.LZBridgeGateway_ZeroAmount.selector);
         vm.prank(bridgeAdmin);
         config.queue(_gw(ILZBridgeGateway.increaseBridgedSupply.selector, abi.encode(uint256(0))));
+    }
+
+    function test_queue_revertsIfBatchSubActionGatewayIncreaseBridgedSupplyLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(gateway),
+            ILZBridgeGateway.increaseBridgedSupply.selector
+        );
     }
 
     // ========== gateway: decreaseBridgedSupply ========== //
@@ -543,6 +597,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         config.queue(_gw(ILZBridgeGateway.decreaseBridgedSupply.selector, abi.encode(uint256(5))));
     }
 
+    function test_queue_revertsIfBatchSubActionGatewayDecreaseBridgedSupplyLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(gateway),
+            ILZBridgeGateway.decreaseBridgedSupply.selector
+        );
+    }
+
     // ========== gateway: setGracePeriod ========== //
 
     function test_queue_acceptsGatewaySetGracePeriodByAdmin() external {
@@ -596,6 +657,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
         vm.prank(bridgeAdmin);
         config.queue(_gw(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(0))));
+    }
+
+    function test_queue_revertsIfBatchSubActionGatewaySetGracePeriodLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(gateway),
+            IGracePeriod.setGracePeriod.selector
+        );
     }
 
     // ========== gateway: setOutRateLimits ========== //
@@ -670,6 +738,18 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         _expectNotAuthorized();
         vm.prank(caller_);
         config.queue(_gw(ILZBridgeGateway.setOutRateLimits.selector, abi.encode(_rateConfigs())));
+    }
+
+    function test_queue_revertsIfGatewaySetOutRateLimitsPayloadHasTrailingBytes() external {
+        // Dynamic array canonical round-trip guard (RateLimitConfig[]).
+        _expectActionInvalid(address(gateway), ILZBridgeGateway.setOutRateLimits.selector);
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _gw(
+                ILZBridgeGateway.setOutRateLimits.selector,
+                _withTrailingWord(_emptyRateConfigsEncoded())
+            )
+        );
     }
 
     // ========== gateway: setInRateLimits ========== //
@@ -817,6 +897,18 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         config.queue(_gw(ILZBridgeGateway.clearOutboundInFlight.selector, abi.encode(_eidList())));
     }
 
+    function test_queue_revertsIfGatewayClearOutboundInFlightPayloadHasTrailingBytes() external {
+        // Dynamic array canonical round-trip guard (uint32[]).
+        _expectActionInvalid(address(gateway), ILZBridgeGateway.clearOutboundInFlight.selector);
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _gw(
+                ILZBridgeGateway.clearOutboundInFlight.selector,
+                _withTrailingWord(_emptyEidsEncoded())
+            )
+        );
+    }
+
     // ========== gateway: clearInboundInFlight ========== //
 
     function test_queue_acceptsGatewayClearInboundInFlightByAdmin() external {
@@ -945,6 +1037,25 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
+    function test_queue_revertsIfDelegateSetSendLibraryPayloadHasTrailingBytes() external {
+        // Static two-word guard (_LEN_SEND_LIBRARY).
+        _expectActionInvalid(address(lzDelegate), ILZEndpointV2Authorized.setSendLibrary.selector);
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setSendLibrary.selector,
+                _withTrailingWord(abi.encode(NONCANONICAL_EID, makeAddr("sendLib")))
+            )
+        );
+    }
+
+    function test_queue_revertsIfBatchSubActionDelegateSetSendLibraryLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setSendLibrary.selector
+        );
+    }
+
     // ========== delegate: setReceiveLibrary ========== //
 
     function test_queue_acceptsDelegateSetReceiveLibraryByAdmin() external {
@@ -1008,6 +1119,28 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
+    function test_queue_revertsIfDelegateSetReceiveLibraryPayloadHasTrailingBytes() external {
+        // Static three-word guard (_LEN_RECEIVE_LIBRARY).
+        _expectActionInvalid(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setReceiveLibrary.selector
+        );
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setReceiveLibrary.selector,
+                _withTrailingWord(abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0)))
+            )
+        );
+    }
+
+    function test_queue_revertsIfBatchSubActionDelegateSetReceiveLibraryLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setReceiveLibrary.selector
+        );
+    }
+
     // ========== delegate: setReceiveLibraryTimeout ========== //
 
     function test_queue_acceptsDelegateSetReceiveLibraryTimeoutByAdmin() external {
@@ -1068,6 +1201,15 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
                 ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector,
                 abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0))
             )
+        );
+    }
+
+    function test_queue_revertsIfBatchSubActionDelegateSetReceiveLibraryTimeoutLacksRole()
+        external
+    {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector
         );
     }
 
@@ -1145,6 +1287,28 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
+    function test_queue_revertsIfDelegateSetEndpointConfigPayloadHasTrailingBytes() external {
+        // Dynamic tuple canonical round-trip guard ((address, SetConfigParam[])).
+        _expectActionInvalid(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setEndpointConfig.selector
+        );
+        vm.prank(bridgeAdmin);
+        config.queue(
+            _dg(
+                ILZEndpointV2Authorized.setEndpointConfig.selector,
+                _withTrailingWord(_emptyEndpointConfigEncoded())
+            )
+        );
+    }
+
+    function test_queue_revertsIfBatchSubActionDelegateSetEndpointConfigLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(lzDelegate),
+            ILZEndpointV2Authorized.setEndpointConfig.selector
+        );
+    }
+
     // ========== facilitator: setGateway ========== //
 
     function test_queue_acceptsFacilitatorSetGatewayByAdmin() external {
@@ -1210,6 +1374,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         config.queue(_fac(ILZCrossChainBridge.setGateway.selector, abi.encode(address(0))));
     }
 
+    function test_queue_revertsIfBatchSubActionFacilitatorSetGatewayLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(facilitator),
+            ILZCrossChainBridge.setGateway.selector
+        );
+    }
+
     // ========== facilitator: setReEnabler ========== //
 
     function test_queue_acceptsFacilitatorSetReEnablerByAdmin() external {
@@ -1267,6 +1438,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         );
     }
 
+    function test_queue_revertsIfBatchSubActionFacilitatorSetReEnablerLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(facilitator),
+            ILZCrossChainBridge.setReEnabler.selector
+        );
+    }
+
     // ========== facilitator: setGracePeriod ========== //
 
     function test_queue_acceptsFacilitatorSetGracePeriodByAdmin() external {
@@ -1320,6 +1498,13 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
         vm.prank(bridgeAdmin);
         config.queue(_fac(IGracePeriod.setGracePeriod.selector, abi.encode(uint32(0))));
+    }
+
+    function test_queue_revertsIfBatchSubActionFacilitatorSetGracePeriodLacksRole() external {
+        _assertBridgeAdminSubActionRejectedInBatch(
+            address(facilitator),
+            IGracePeriod.setGracePeriod.selector
+        );
     }
 
     // ========== facilitator: setConfigurator ========== //
@@ -1389,92 +1574,6 @@ contract LZBridgeAndDelegateConfigTests_Queue is LZBridgeAndDelegateConfigTestBa
         vm.prank(admin);
         config.queue(
             _fac(ILZCrossChainBridge.setConfigurator.selector, abi.encode(address(gateway)))
-        );
-    }
-
-    // ========== payload canonicalization: trailing bytes ========== //
-
-    // A canonical payload with an extra trailing word appended. For static-shape sub-actions
-    // this overshoots the exact length guard; for dynamic-shape sub-actions it decodes fine
-    // but no longer round-trips to the canonical encoding. Both must be rejected with
-    // `ITimelockBatchQueue_ActionInvalid` at queue time. One representative selector is
-    // exercised per distinct guard branch.
-
-    function test_queue_revertsIfGatewaySetDelegatePayloadHasTrailingBytes() external {
-        // Static single-word guard (_LEN_SINGLE_WORD).
-        _expectActionInvalid(address(gateway), ILZBridgeGateway.setDelegate.selector);
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _gw(
-                ILZBridgeGateway.setDelegate.selector,
-                _withTrailingWord(abi.encode(makeAddr("delegateCandidate")))
-            )
-        );
-    }
-
-    function test_queue_revertsIfDelegateSetSendLibraryPayloadHasTrailingBytes() external {
-        // Static two-word guard (_LEN_SEND_LIBRARY).
-        _expectActionInvalid(address(lzDelegate), ILZEndpointV2Authorized.setSendLibrary.selector);
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.setSendLibrary.selector,
-                _withTrailingWord(abi.encode(NONCANONICAL_EID, makeAddr("sendLib")))
-            )
-        );
-    }
-
-    function test_queue_revertsIfDelegateSetReceiveLibraryPayloadHasTrailingBytes() external {
-        // Static three-word guard (_LEN_RECEIVE_LIBRARY).
-        _expectActionInvalid(
-            address(lzDelegate),
-            ILZEndpointV2Authorized.setReceiveLibrary.selector
-        );
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.setReceiveLibrary.selector,
-                _withTrailingWord(abi.encode(NONCANONICAL_EID, makeAddr("recvLib"), uint256(0)))
-            )
-        );
-    }
-
-    function test_queue_revertsIfGatewaySetOutRateLimitsPayloadHasTrailingBytes() external {
-        // Dynamic array canonical round-trip guard (RateLimitConfig[]).
-        _expectActionInvalid(address(gateway), ILZBridgeGateway.setOutRateLimits.selector);
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _gw(
-                ILZBridgeGateway.setOutRateLimits.selector,
-                _withTrailingWord(_emptyRateConfigsEncoded())
-            )
-        );
-    }
-
-    function test_queue_revertsIfGatewayClearOutboundInFlightPayloadHasTrailingBytes() external {
-        // Dynamic array canonical round-trip guard (uint32[]).
-        _expectActionInvalid(address(gateway), ILZBridgeGateway.clearOutboundInFlight.selector);
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _gw(
-                ILZBridgeGateway.clearOutboundInFlight.selector,
-                _withTrailingWord(_emptyEidsEncoded())
-            )
-        );
-    }
-
-    function test_queue_revertsIfDelegateSetEndpointConfigPayloadHasTrailingBytes() external {
-        // Dynamic tuple canonical round-trip guard ((address, SetConfigParam[])).
-        _expectActionInvalid(
-            address(lzDelegate),
-            ILZEndpointV2Authorized.setEndpointConfig.selector
-        );
-        vm.prank(bridgeAdmin);
-        config.queue(
-            _dg(
-                ILZEndpointV2Authorized.setEndpointConfig.selector,
-                _withTrailingWord(_emptyEndpointConfigEncoded())
-            )
         );
     }
 
