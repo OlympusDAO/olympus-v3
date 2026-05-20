@@ -64,7 +64,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // Recovery: correct bridgedSupply (OHM was burned but never minted on destination)
         uint256 currentSupply = gateway.bridgedSupply();
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(currentSupply);
 
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply should be corrected");
@@ -208,7 +208,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // Recovery step 3: correct bridgedSupply on canonical (the send increased it,
         // but the inbound never landed).
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(amount);
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
 
@@ -277,7 +277,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // 7. Correct bridgedSupply on canonical (send increased it, but receive never happened)
         assertEq(gateway.bridgedSupply(), amount, "bridgedSupply was increased by the send");
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(amount);
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
 

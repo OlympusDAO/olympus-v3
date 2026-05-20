@@ -17,6 +17,11 @@ interface ILZCrossChainBridge {
     /// @notice Thrown when the send amount is zero.
     error LZCrossChainBridge_InsufficientAmount();
 
+    /// @notice Thrown when `setConfigurator` is supplied a contract that does not implement the
+    ///         `ILZBridgeAndDelegateConfig` interface via ERC-165.
+    /// @param newConfigurator The unsupported new configurator address.
+    error LZCrossChainBridge_InvalidConfigurator(address newConfigurator);
+
     /// @notice Emitted when OHM is sent to another chain.
     /// @param sender The address that initiated the bridge transfer.
     /// @param amount The amount of OHM bridged.
@@ -43,6 +48,10 @@ interface ILZCrossChainBridge {
     /// @param reEnabler The new re-enabler address, or `address(0)` to clear.
     event ReEnablerSet(address indexed reEnabler);
 
+    /// @notice Emitted when the configurator address is updated.
+    /// @param configurator The new configurator address.
+    event ConfiguratorSet(address indexed configurator);
+
     /// @notice Sends OHM to a destination chain via the gateway.
     /// @dev The user must approve this contract for the OHM amount before calling.
     ///      OHM is transferred from the user to the gateway, then the gateway burns and
@@ -56,16 +65,43 @@ interface ILZCrossChainBridge {
     function sendOhm(uint32 dstEid_, address to_, uint256 amount_) external payable;
 
     /// @notice Sets the gateway address.
-    /// @dev Only callable by the owner.
+    /// @dev Only callable by the address pinned in `configurator`, which is expected to be
+    ///      an `LZBridgeAndDelegateConfig` instance (the timelock policy).
     ///
     /// @param gateway_ The new gateway address.
     function setGateway(address gateway_) external;
 
     /// @notice Sets the address authorized to call `reEnable()`.
-    /// @dev Only callable by the owner. The zero address is permitted and effectively
-    ///      disables the `reEnable()` entry point until a non-zero address is set.
+    /// @dev Only callable by the address pinned in `configurator`, which is expected to be
+    ///      an `LZBridgeAndDelegateConfig` instance (the timelock policy). The zero address
+    ///      is permitted and effectively disables the `reEnable()` entry point until a
+    ///      non-zero address is set.
     /// @param reEnabler_ The new re-enabler address, or `address(0)` to clear.
     function setReEnabler(address reEnabler_) external;
+
+    /// @notice Sets the configurator address.
+    /// @dev Bootstrap: when `configurator` is the zero address, only the owner may set the
+    ///      first non-zero configurator. After bootstrap, rotation is only allowed by the
+    ///      current configurator. The configurator is expected to be an
+    ///      `LZBridgeAndDelegateConfig` instance (the timelock policy).
+    ///
+    ///      In both cases the new configurator must implement `ILZBridgeAndDelegateConfig`
+    ///      via ERC-165 to prevent the bridge from being bricked by an incompatible address.
+    /// @param newConfigurator_ The new configurator address.
+    function setConfigurator(address newConfigurator_) external;
+
+    /// @notice Validates the payload that would be passed to `setGateway`.
+    /// @dev Mirrors the input invariants enforced by `setGateway` so that callers (for
+    ///      instance, a timelock policy) can fail early at queue time rather than at
+    ///      execution time.
+    /// @param gateway_ The candidate gateway address.
+    function validateSetGateway(address gateway_) external pure;
+
+    /// @notice Validates the payload that would be passed to `setConfigurator`.
+    /// @dev Mirrors the payload invariants enforced by `setConfigurator`: the zero-address
+    ///      check and the ERC-165 `ILZBridgeAndDelegateConfig` guard.
+    /// @param newConfigurator_ The candidate configurator address.
+    function validateSetConfigurator(address newConfigurator_) external view;
 
     /// @notice Returns the LZBridgeGateway address.
     function gateway() external view returns (address);
@@ -73,6 +109,10 @@ interface ILZCrossChainBridge {
     /// @notice Returns the address authorized to call `reEnable()`.
     /// @dev Returns `address(0)` when no re-enabler has been configured.
     function reEnabler() external view returns (address);
+
+    /// @notice Returns the configurator address (an `LZBridgeAndDelegateConfig` instance).
+    /// @dev Returns `address(0)` before the owner has performed the bootstrap call.
+    function configurator() external view returns (address);
 
     /// @notice Returns the OHM token address.
     // solhint-disable-next-line func-name-mixedcase

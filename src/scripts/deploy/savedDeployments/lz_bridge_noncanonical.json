@@ -12,6 +12,12 @@
             "args": {
                 "graceSeconds": 86400
             }
+        },
+        {
+            "name": "LZBridgeAndDelegateConfig",
+            "args": {
+                "initialTimelockDelay": 86400
+            }
         }
     ]
 }

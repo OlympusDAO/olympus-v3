@@ -297,6 +297,11 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
+        "name": "olympus-policy-lz-bridge-and-delegate-config"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
         "name": "olympus-lz-bridge-activator"
     }
 ]

@@ -134,7 +134,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         addToBatch(
             gatewayAddr,
             abi.encodeWithSelector(
-                LZBridgeGateway.increaseBridgedSupply.selector,
+                LZBridgeGateway.initializeBridgedSupply.selector,
                 initialBridgedSupply
             )
         );
@@ -182,7 +182,12 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
         console2.log("\nValidating initBridgedSupply post-batch state");
 
-        // 1. Validate bridgedSupply is non-zero and matches expected value
+        // 1. Validate the bootstrap flag was set so future calls cannot re-initialise.
+        if (!gateway.bridgedSupplyInitialized()) {
+            revert("bridgedSupplyInitialized flag should be true after initBridgedSupply");
+        }
+
+        // 2. Validate bridgedSupply is non-zero and matches expected value
         uint256 actualSupply = gateway.bridgedSupply();
         if (actualSupply == 0) {
             revert("bridgedSupply is 0 after initBridgedSupply");

@@ -7,45 +7,45 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @dev Tests for `LZBridgeGateway.setGracePeriod`. The setter is restricted to the
-///      admin role and rejects a zero window through the parent's `_setGracePeriod`
-///      helper.
+/// @dev Tests for `LZBridgeGateway.setGracePeriod`. The setter is gated to the
+///      `bridge_configurator` role and rejects a zero window through the parent's
+///      `_setGracePeriod` helper.
 contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     // ========== SUCCESS ========== //
 
     function test_setGracePeriod_succeedsWhileEnabled() external {
-        // The gateway is enabled by the test base. The setter must not require a
-        // particular lifecycle state.
+        // The gateway is enabled by the test base. The setter must not require a particular
+        // lifecycle state.
         assertTrue(gateway.isEnabled(), "Gateway should start enabled in the test base");
 
         uint32 newPeriod = GRACE_SECONDS * 2;
 
         vm.expectEmit(false, false, false, true);
         emit IGracePeriod.GracePeriodSet(newPeriod);
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(newPeriod);
 
         assertEq(
             gateway.gracePeriod(),
             newPeriod,
-            "gracePeriod should reflect the value set by the admin"
+            "gracePeriod should reflect the value set by the configurator"
         );
     }
 
     function test_setGracePeriod_acceptsMinNonZeroPeriod() external {
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(1);
 
         assertEq(gateway.gracePeriod(), 1, "gracePeriod should accept one second");
     }
 
     function test_setGracePeriod_acceptsMaxPeriod() external {
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(type(uint32).max);
 
         assertEq(
@@ -56,7 +56,7 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     }
 
     function test_setGracePeriod_overwritesPreviousValue() external {
-        vm.startPrank(admin);
+        vm.startPrank(bridgeConfigurator);
         gateway.setGracePeriod(GRACE_SECONDS * 2);
         gateway.setGracePeriod(GRACE_SECONDS * 3);
         vm.stopPrank();
@@ -73,7 +73,7 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
         gateway.disable(bytes(""));
         assertFalse(gateway.isEnabled(), "Gateway should be disabled before the setter call");
 
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(GRACE_SECONDS * 2);
 
         assertEq(
@@ -84,16 +84,15 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     }
 
     /// @dev An increase in the grace period extends the deadline measured from
-    ///      `lastTransitionAt`, so a re-enable that would have expired under the
-    ///      original window succeeds after the increase.
+    ///      `lastTransitionAt`, so a re-enable that would have expired under the original
+    ///      window succeeds after the increase.
     function test_setGracePeriod_extendedWindowAllowsLateReEnable() external {
         vm.prank(admin);
         gateway.disable(bytes(""));
         uint48 disabledAt = gateway.lastTransitionAt();
 
-        // Double the grace window before the original deadline.
         uint32 newPeriod = GRACE_SECONDS * 2;
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(newPeriod);
 
         // Warp past the original deadline but inside the new one. Without the increase,
@@ -107,19 +106,17 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     }
 
     /// @dev A decrease in the grace period shortens the deadline measured from
-    ///      `lastTransitionAt`, so a re-enable that would have succeeded under the
-    ///      original window reverts after the decrease.
+    ///      `lastTransitionAt`, so a re-enable that would have succeeded under the original
+    ///      window reverts after the decrease.
     function test_setGracePeriod_shortenedWindowRejectsLateReEnable() external {
         vm.prank(admin);
         gateway.disable(bytes(""));
         uint48 disabledAt = gateway.lastTransitionAt();
 
-        // Halve the grace window.
         uint32 newPeriod = GRACE_SECONDS / 2;
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(newPeriod);
 
-        // Warp past the new deadline but still inside the original one.
         uint48 newDeadline = disabledAt + newPeriod;
         vm.warp(uint256(newDeadline) + 1);
 
@@ -134,30 +131,40 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
 
     function test_setGracePeriod_revertsIfZeroPeriod() external {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
-        vm.prank(admin);
+        vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(0);
     }
 
-    function testFuzz_setGracePeriod_revertsIfNotAdmin(address caller_) external {
-        vm.assume(caller_ != admin);
+    function testFuzz_setGracePeriod_revertsIfNotBridgeConfigurator(address caller_) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         gateway.setGracePeriod(GRACE_SECONDS * 2);
     }
 
+    function test_setGracePeriod_isNotCallableByAdmin() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
+        vm.prank(admin);
+        gateway.setGracePeriod(GRACE_SECONDS * 2);
+    }
+
     function test_setGracePeriod_isNotCallableByBridgeAdmin() external {
-        // The bridge_admin role is intentionally not authorised for setGracePeriod —
-        // only the admin role is.
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(bridgeAdmin);
         gateway.setGracePeriod(GRACE_SECONDS * 2);
     }
 
     function test_setGracePeriod_isNotCallableByManager() external {
-        // The manager role authorises `reEnable` but is intentionally not authorised
-        // for setGracePeriod — only the admin role is.
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(manager);
         gateway.setGracePeriod(GRACE_SECONDS * 2);
     }

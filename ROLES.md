@@ -14,16 +14,20 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
-| admin | LZEndpointDelegate | LZ endpoint config, messaging channel control. Acts on behalf of LZBridgeGateway as the gateway's LZ endpoint delegate |
-| admin | LZBridgeGateway | Set peers, set enforced options, enable/disable, set the grace window, rescue accidentally-sent assets, and all bridge_admin functions |
+| admin | LZBridgeAndDelegateConfig | Enable / disable the policy, queue timelocked actions on the bridge stack, rotate the policy's gateway / delegate / facilitator target variables, and change the timelock delay |
+| admin | LZBridgeGateway | Set peers, set enforced options, set whether receiving is enabled, enable / disable the gateway, rescue accidentally-sent assets, and the one-shot `initializeBridgedSupply` bootstrap |
+| admin | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint; intentionally not timelocked |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
-| bridge_admin | LZEndpointDelegate | LZ endpoint config (set send/receive libraries, library timeout, endpoint config) and messaging channel control (skip, nilify, burn, clear). Forwards each call to the LZ endpoint with LZBridgeGateway as the OApp, while LZEndpointDelegate is the gateway's endpoint delegate |
-| bridge_admin | LZBridgeGateway | Set the LZ endpoint delegate, set bridged supply, configure and clear rate limits. OApp-authorized endpoint operations (libraries, ULN/Executor config, messaging channel control) are exposed through the separate LZEndpointDelegate policy |
+| bridge_admin | LZBridgeGateway | Call the one-shot `initializeBridgedSupply` bootstrap |
+| bridge_admin | LZBridgeAndDelegateConfig | Queue most timelocked actions (gateway delegate/supply, delegate libraries/configs, periphery setGateway/setReEnabler/setGracePeriod) on the config policy |
+| bridge_admin | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint; intentionally not timelocked |
+| bridge_configurator | LZBridgeGateway | Set the LZ endpoint delegate, increase / decrease the bridged supply, set inbound / outbound rate limits, clear inbound / outbound in-flight amounts, and set the grace period. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
+| bridge_configurator | LZEndpointDelegate | Set send / receive libraries and the receive-library timeout, and set ULN / Executor endpoint config on the LayerZero endpoint. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
-| bridge_rate_limiter | LZBridgeGateway | Configure and clear per-EID rate limits |
+| bridge_rate_limiter | LZBridgeAndDelegateConfig | Queue rate-limit and in-flight-clear sub-actions on the config policy |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |

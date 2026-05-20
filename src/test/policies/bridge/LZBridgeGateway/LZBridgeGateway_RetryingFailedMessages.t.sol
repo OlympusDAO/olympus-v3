@@ -77,7 +77,7 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         assertFalse(delivered, "Delivery should fail (underflow)");
 
         // Recovery: increase bridgedSupply (should have been 1000e9 or more)
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.increaseBridgedSupply(1000e9);
 
         // Retry: succeeds now that bridgedSupply can absorb the decrement
@@ -116,7 +116,7 @@ contract LZBridgeGatewayTests_RetryingFailedMessages is LZBridgeGatewayTestBase_
         // Recovery: re-sync mintApproval via decrease+increase.
         // Decrease to 0 (clears approval), then increase back to force re-sync.
         uint256 currentSupply = gateway.bridgedSupply();
-        vm.startPrank(bridgeAdmin);
+        vm.startPrank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(currentSupply);
         gateway.increaseBridgedSupply(currentSupply);
         vm.stopPrank();

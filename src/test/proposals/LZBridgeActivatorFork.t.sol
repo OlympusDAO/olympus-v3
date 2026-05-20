@@ -14,7 +14,7 @@ import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 
 // Constants
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -34,9 +34,6 @@ contract LZBridgeActivatorForkTest is Test {
 
     // Grace window passed to the gateway constructor
     uint32 internal constant GRACE_SECONDS = 1 days;
-
-    // Role constants
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
 
     // Remote chain count
     uint256 internal constant _REMOTE_CHAIN_COUNT = 4;
@@ -92,7 +89,8 @@ contract LZBridgeActivatorForkTest is Test {
     function _grantRequiredRoles() internal {
         vm.startPrank(TIMELOCK);
         rolesAdmin.grantRole(ADMIN_ROLE, address(activator));
-        rolesAdmin.grantRole(_BRIDGE_ADMIN_ROLE, address(activator));
+        rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, address(activator));
+        rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, address(activator));
         vm.stopPrank();
     }
 

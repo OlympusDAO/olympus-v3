@@ -8,7 +8,7 @@ import {ILayerZeroEndpointV2} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILaye
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
 
-import {ADMIN_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IUlnConfigState} from "src/interfaces/layerzero/IUlnConfigState.sol";
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
@@ -33,28 +33,30 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///         can be run by the correct caller:
 ///
 ///         Entry points (run in order):
-///         1. `activateGateway`    as Kernel executor               deactivates the old bridge and activates the new
-///                                                                  gateway and delegate policies.
-///         2. `grantRoles`         as RolesAdmin admin              grants bridge_admin & admin roles to DAO MS.
-///         3. `configureAndEnable` as DAO MS (bridge_admin & admin) sets the LZEndpointDelegate policy as the gateway's
-///                                                                  LZ endpoint delegate, configures LZ
-///                                                                  libraries/config via the delegate, sets
-///                                                                  peers/enforced options, configures bidirectional
-///                                                                  rate limits, and enables.
-///         4. `revokeSetupRoles`   as RolesAdmin admin              (optional) revokes admin role granted in step 2.
+///         1. `activateGateway`    as Kernel executor  deactivates the old bridge and activates the new
+///                                                     gateway, delegate, and config policies.
+///         2. `grantRoles`         as RolesAdmin admin grants bridge_admin, bridge_rate_limiter, manager,
+///                                                     admin (conditional), bridge_facilitator, and a
+///                                                     temporary bridge_configurator to the DAO MS.
+///         3. `configureAndEnable` as DAO MS           sets the LZEndpointDelegate policy as the gateway's
+///                                                     LZ endpoint delegate, configures LZ
+///                                                     libraries/config via the delegate, sets
+///                                                     peers/enforced options, configures bidirectional
+///                                                     rate limits, and enables.
+///         4. `wireConfig`         as RolesAdmin admin revokes the temporary bridge_configurator role
+///                                                     from the DAO MS and grants the permanent
+///                                                     bridge_configurator role to the
+///                                                     LZBridgeAndDelegateConfig policy. After this step
+///                                                     every `bridge_configurator`-gated mutator on the
+///                                                     gateway and the LZ endpoint delegate is reached
+///                                                     only through the config's timelock queue.
+///         5. `revokeSetupRoles`   as RolesAdmin admin (optional) revokes admin role granted in step 2.
 contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== ERRORS =========== //
 
     error LZBridgeGatewayL2Batch_CanonicalChain();
     error LZBridgeGatewayL2Batch_UnsupportedChain();
     error LZBridgeGatewayL2Batch_EndpointMismatch(address expected, address actual);
-
-    // =========== CONSTANTS =========== //
-
-    /// @dev Role constants.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-    bytes32 internal constant _BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
-    bytes32 internal constant _BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 
     // =========== ENTRY POINTS =========== //
 
@@ -80,14 +82,15 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address configAddr = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
 
         console2.log(
-            "\n=== [L2] [Step 1] Deactivate Old Gateway & Activate New Gateway + Delegate:",
+            "\n=== [L2] [Step 1] Deactivate Old Gateway & Activate New Gateway + Delegate + Config:",
             chain,
             "==="
         );
 
-        // Pre-flight invariants (step 3 repeats them as defence in depth):
+        // Pre-flight invariants (step 3 repeats them as defense in depth):
         // - The LZEndpointDelegate policy must point at this gateway.
         // - The gateway's `LZ_ENDPOINT` must match env.json for this chain.
         // solhint-disable-next-line custom-errors,gas-custom-errors
@@ -128,6 +131,19 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             )
         );
 
+        // 1.4. Activate the LZBridgeAndDelegateConfig policy. Step 4 (`wireConfig`) grants it
+        //      the permanent bridge_configurator role so it becomes the only caller accepted
+        //      by the `bridge_configurator`-gated setters on the gateway and the LZ endpoint
+        //      delegate, routing the calls through its timelock queue.
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(
+                Kernel.executeAction.selector,
+                Actions.ActivatePolicy,
+                configAddr
+            )
+        );
+
         _setPostBatchValidateSelector(this._validateActivateGateway.selector);
 
         proposeBatch();
@@ -159,20 +175,20 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         console2.log("\n=== [L2] [Step 2] Grant Roles:", chain, "===");
 
         // 2.1. Grant bridge_admin role to the DAO MS
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, _BRIDGE_ADMIN_ROLE, daoMS)
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, daoMS)
             );
         }
 
         // 2.1b. Grant bridge_rate_limiter role to the DAO MS
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_RATE_LIMITER_ROLE,
+                    BRIDGE_RATE_LIMITER_ROLE,
                     daoMS
                 )
             );
@@ -199,13 +215,29 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
 
         // 2.3. Grant bridge_facilitator role to LZCrossChainBridge
-        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+        if (!rolesModule.hasRole(bridgeAddr, BRIDGE_FACILITATOR_ROLE)) {
             addToBatch(
                 rolesAdminAddr,
                 abi.encodeWithSelector(
                     RolesAdmin.grantRole.selector,
-                    _BRIDGE_FACILITATOR_ROLE,
+                    BRIDGE_FACILITATOR_ROLE,
                     bridgeAddr
+                )
+            );
+        }
+
+        // 2.4. Grant a temporary bridge_configurator role to the DAO MS so step 3 can drive
+        //      the `bridge_configurator`-gated setters on the gateway and the LZ endpoint
+        //      delegate directly, without routing the calls through the
+        //      LZBridgeAndDelegateConfig timelock. Step 4 (`wireConfig`) revokes this and
+        //      grants the permanent role to the LZBridgeAndDelegateConfig policy.
+        if (!rolesModule.hasRole(daoMS, BRIDGE_CONFIGURATOR_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    BRIDGE_CONFIGURATOR_ROLE,
+                    daoMS
                 )
             );
         }
@@ -302,7 +334,70 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         addToBatch(gatewayAddr_, abi.encodeCall(ILZBridgeGateway.setDelegate, (delegateAddr_)));
     }
 
-    /// @notice Step 4 (optional). Revoke the admin role from the DAO MS.
+    /// @notice Step 4. RolesAdmin admin actions: revoke the temporary bridge_configurator
+    ///         role from the DAO MS and grant the permanent bridge_configurator role to the
+    ///         LZBridgeAndDelegateConfig policy. After this step the
+    ///         `bridge_configurator`-gated setters on the gateway and the LZ endpoint
+    ///         delegate only accept the policy, so the calls go through its timelock queue.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function wireConfig(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _requireNonCanonical();
+        _skipHeartbeatValidation = true;
+
+        address rolesAdminAddr = _envAddressNotZero("olympus.policies.RolesAdmin");
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address configAddr = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
+        ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
+
+        console2.log("\n=== [L2] [Step 4] Wire Config:", chain, "===");
+
+        // 4.1. Revoke the temporary bridge_configurator role from the DAO MS.
+        if (rolesModule.hasRole(daoMS, BRIDGE_CONFIGURATOR_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.revokeRole.selector,
+                    BRIDGE_CONFIGURATOR_ROLE,
+                    daoMS
+                )
+            );
+        }
+
+        // 4.2. Grant the permanent bridge_configurator role to the config policy.
+        if (!rolesModule.hasRole(configAddr, BRIDGE_CONFIGURATOR_ROLE)) {
+            addToBatch(
+                rolesAdminAddr,
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    BRIDGE_CONFIGURATOR_ROLE,
+                    configAddr
+                )
+            );
+        }
+
+        // 4.3. Enable the config policy so `queue*` and `executeQueuedAction` are accepted.
+        //      Skipped if already enabled (`enable` reverts on a repeat call).
+        if (!IEnabler(configAddr).isEnabled()) {
+            addToBatch(configAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+        }
+
+        _setPostBatchValidateSelector(this._validateWireConfig.selector);
+
+        proposeBatch();
+    }
+
+    /// @notice Step 5 (optional). Revoke the admin role from the DAO MS.
     ///         Only run on chains where `grantRoles` (step 2) reported that the admin role
     ///         was granted. Skip on chains where the DAO MS already had the role.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
@@ -325,7 +420,7 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
         ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
 
-        console2.log("\n=== [L2] [Step 4] Revoke Setup Roles:", chain, "===");
+        console2.log("\n=== [L2] [Step 5] Revoke Setup Roles:", chain, "===");
 
         if (!rolesModule.hasRole(daoMS, ADMIN_ROLE)) {
             revert("DAO MS does not have admin role - nothing to revoke");
@@ -344,11 +439,13 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
     // =========== VALIDATION =========== //
 
     /// @notice Validate activateGateway state after batch execution.
-    /// @dev Checks that the old bridge is deactivated and the new gateway and delegate are active.
+    /// @dev Checks that the old bridge is deactivated and the new gateway, delegate, and
+    ///      config policies are active.
     function _validateActivateGateway() external view {
         address oldBridge = _envAddressNotZero("olympus.policies.CrossChainBridge");
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address configAddr = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
 
         console2.log("\nValidating activateGateway post-batch state");
 
@@ -366,6 +463,11 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             revert("LZEndpointDelegate is not active in the Kernel");
         }
         console2.log("  LZEndpointDelegate is active in the Kernel");
+
+        if (!Policy(configAddr).isActive()) {
+            revert("LZBridgeAndDelegateConfig is not active in the Kernel");
+        }
+        console2.log("  LZBridgeAndDelegateConfig is active in the Kernel");
 
         // Re-check the gateway's LZ_ENDPOINT against env.json so the post-batch validator is
         // independently checkable (the same gate also runs in the pre-flight).
@@ -385,12 +487,12 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
         console2.log("\nValidating grantRoles post-batch state");
 
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_ADMIN_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
             revert("DAO MS does not have bridge_admin role");
         }
         console2.log("  DAO MS has bridge_admin role");
 
-        if (!rolesModule.hasRole(daoMS, _BRIDGE_RATE_LIMITER_ROLE)) {
+        if (!rolesModule.hasRole(daoMS, BRIDGE_RATE_LIMITER_ROLE)) {
             revert("DAO MS does not have bridge_rate_limiter role");
         }
         console2.log("  DAO MS has bridge_rate_limiter role");
@@ -405,12 +507,45 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
         console2.log("  DAO MS has admin role");
 
-        if (!rolesModule.hasRole(bridgeAddr, _BRIDGE_FACILITATOR_ROLE)) {
+        if (!rolesModule.hasRole(bridgeAddr, BRIDGE_FACILITATOR_ROLE)) {
             revert("LZCrossChainBridge does not have bridge_facilitator role");
         }
         console2.log("  LZCrossChainBridge has bridge_facilitator role");
 
+        if (!rolesModule.hasRole(daoMS, BRIDGE_CONFIGURATOR_ROLE)) {
+            revert("DAO MS does not have temporary bridge_configurator role");
+        }
+        console2.log("  DAO MS has temporary bridge_configurator role");
+
         console2.log("grantRoles post-batch validation passed");
+    }
+
+    /// @notice Validate wireConfig state after batch execution.
+    /// @dev Asserts the temporary bridge_configurator has been revoked from the DAO MS and
+    ///      that the permanent bridge_configurator role lives on the config policy.
+    function _validateWireConfig() external view {
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+        address configAddr = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
+        ROLESv1 rolesModule = ROLESv1(_envAddressNotZero("olympus.modules.OlympusRoles"));
+
+        console2.log("\nValidating wireConfig post-batch state");
+
+        if (rolesModule.hasRole(daoMS, BRIDGE_CONFIGURATOR_ROLE)) {
+            revert("DAO MS should no longer hold bridge_configurator role");
+        }
+        console2.log("  DAO MS no longer has bridge_configurator role");
+
+        if (!rolesModule.hasRole(configAddr, BRIDGE_CONFIGURATOR_ROLE)) {
+            revert("LZBridgeAndDelegateConfig should hold bridge_configurator role");
+        }
+        console2.log("  LZBridgeAndDelegateConfig holds bridge_configurator role");
+
+        if (!IEnabler(configAddr).isEnabled()) {
+            revert("LZBridgeAndDelegateConfig is not enabled");
+        }
+        console2.log("  LZBridgeAndDelegateConfig is enabled");
+
+        console2.log("wireConfig post-batch validation passed");
     }
 
     /// @notice Validate configureAndEnable state after batch execution.

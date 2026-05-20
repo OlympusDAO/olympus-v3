@@ -17,6 +17,7 @@ import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
 import {Kernel, Keycode, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title LZEndpointDelegate
 /// @notice Thin policy that proxies LayerZero V2 OApp-authorized endpoint calls on behalf of a single
@@ -33,9 +34,6 @@ contract LZEndpointDelegate is
 {
     // ========= CONSTANTS ========= //
 
-    /// @notice Role allowed to forward OApp-authorized endpoint calls. Mirrors the gateway's role name.
-    bytes32 internal constant _BRIDGE_ADMIN_ROLE = "bridge_admin";
-
     /// @notice Pre-computed keycode for the ROLES module dependency.
     /// @dev Avoids the runtime cost of `toKeycode("ROLES")` at the call site.
     Keycode internal constant _KEYCODE_ROLES = Keycode.wrap(0x524F4C4553); // toKeycode("ROLES")
@@ -50,16 +48,38 @@ contract LZEndpointDelegate is
 
     // ========= MODIFIERS ========= //
 
+    /// @notice Reverts if the caller does not hold the `bridge_configurator` role.
+    /// @dev Gated solely by the role; the role is expected to be granted exclusively to
+    ///      `LZBridgeAndDelegateConfig` (the timelock policy), in which case calls are
+    ///      dispatched through that policy's timelock queue. Any holder that does not
+    ///      itself enforce a timelock on these mutators should only be granted the role
+    ///      temporarily for bootstrap. This contract does not enforce a timelock itself;
+    ///      it is enforced only by the `LZBridgeAndDelegateConfig` role holder. Granting
+    ///      `bridge_configurator` to any other address bypasses the timelock for these
+    ///      mutators.
+    modifier onlyBridgeConfigurator() {
+        _requireBridgeConfigurator();
+        _;
+    }
+
+    /// @notice Reverts with `ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE)` if
+    ///         `msg.sender` does not hold the `bridge_configurator` role.
+    function _requireBridgeConfigurator() private view {
+        if (!ROLES.hasRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE))
+            revert ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE);
+    }
+
     /// @notice Reverts if the caller has neither the `bridge_admin` nor the `admin` role.
+    /// @dev Gates the inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`).
     modifier onlyBridgeAdminOrAdmin() {
         _requireBridgeAdminOrAdmin();
         _;
     }
 
     /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
-    ///         `bridge_admin` nor the admin role.
+    ///         `bridge_admin` nor the `admin` role.
     function _requireBridgeAdminOrAdmin() private view {
-        if (!ROLES.hasRole(msg.sender, _BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
+        if (!ROLES.hasRole(msg.sender, BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
             revert PolicyAdmin.NotAuthorised();
     }
 
@@ -105,48 +125,48 @@ contract LZEndpointDelegate is
 
     /// @inheritdoc ILZEndpointV2Authorized
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `setSendLibrary` function reverts.
-    function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeAdminOrAdmin {
+    function setSendLibrary(uint32 eid_, address lib_) external override onlyBridgeConfigurator {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setSendLibrary(GATEWAY, eid_, lib_);
     }
 
     /// @inheritdoc ILZEndpointV2Authorized
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `setReceiveLibrary` function reverts.
     function setReceiveLibrary(
         uint32 eid_,
         address lib_,
         uint256 gracePeriod_
-    ) external override onlyBridgeAdminOrAdmin {
+    ) external override onlyBridgeConfigurator {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibrary(GATEWAY, eid_, lib_, gracePeriod_);
     }
 
     /// @inheritdoc ILZEndpointV2Authorized
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `setReceiveLibraryTimeout` function reverts.
     function setReceiveLibraryTimeout(
         uint32 eid_,
         address lib_,
         uint256 expiry_
-    ) external override onlyBridgeAdminOrAdmin {
+    ) external override onlyBridgeConfigurator {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setReceiveLibraryTimeout(GATEWAY, eid_, lib_, expiry_);
     }
 
     /// @inheritdoc ILZEndpointV2Authorized
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller does not have the bridge_configurator role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `setConfig` function reverts.
     function setEndpointConfig(
         address lib_,
         SetConfigParam[] calldata params_
-    ) external override onlyBridgeAdminOrAdmin {
+    ) external override onlyBridgeConfigurator {
         ILayerZeroEndpointV2(LZ_ENDPOINT).setConfig(GATEWAY, lib_, params_);
     }
 
@@ -160,7 +180,7 @@ contract LZEndpointDelegate is
     ///      governance proposal may also be required to restore the OHM owed to the affected user.
     ///
     ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller has neither the `bridge_admin` nor the `admin` role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `skip` function reverts.
     function skip(
@@ -173,7 +193,7 @@ contract LZEndpointDelegate is
 
     /// @inheritdoc ILZEndpointV2Authorized
     /// @dev Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller has neither the `bridge_admin` nor the `admin` role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `nilify` function reverts.
     function nilify(
@@ -193,7 +213,7 @@ contract LZEndpointDelegate is
     ///      governance proposal may also be required to restore the OHM owed to the affected user.
     ///
     ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller has neither the `bridge_admin` nor the `admin` role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `burn` function reverts.
     function burn(
@@ -214,7 +234,7 @@ contract LZEndpointDelegate is
     ///      required to restore the OHM owed to the affected user.
     ///
     ///      Reverts if:
-    ///      - The caller does not have the bridge_admin or admin role.
+    ///      - The caller has neither the `bridge_admin` nor the `admin` role.
     ///      - The gateway has not set this contract as its endpoint delegate.
     ///      - The LZ endpoint's `clear` function reverts.
     function clear(

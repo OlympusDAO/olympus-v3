@@ -40,7 +40,7 @@ contract LZCrossChainBridgeTests_Receivable is LZCrossChainBridgeTestBase {
             limit: newLimit,
             window: DEFAULT_RATE_WINDOW
         });
-        vm.prank(admin);
+        vm.prank(bridgeConfiguratorRole);
         gateway.setInRateLimits(configs);
 
         (, uint256 available) = bridge.receivable(NONCANONICAL_EID);

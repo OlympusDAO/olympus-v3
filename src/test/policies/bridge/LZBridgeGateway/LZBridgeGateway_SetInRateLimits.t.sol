@@ -5,9 +5,14 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
-/// @dev Setting inbound rate limits.
+// Constants
+import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+
+/// @dev Setting inbound rate limits. Gated to the `bridge_configurator` role.
 contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
     function _buildConfigs(
         uint32 eid_,
@@ -32,7 +37,7 @@ contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
         vm.expectEmit(true, true, true, true);
         emit IOffsettingRateLimiter.InRateLimitsSet(configs);
 
-        vm.prank(bridgeRateLimiter);
+        vm.prank(bridgeConfigurator);
         gateway.setInRateLimits(configs);
 
         (uint256 inFlight, uint256 limit, uint32 window, ) = gateway.inRateLimits(NONCANONICAL_EID);
@@ -51,7 +56,7 @@ contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
             5_000e9,
             1800
         );
-        vm.prank(bridgeRateLimiter);
+        vm.prank(bridgeConfigurator);
         gateway.setInRateLimits(configs);
 
         (, uint256 outLimitAfter, uint32 outWindowAfter, ) = gateway.outRateLimits(
@@ -75,7 +80,7 @@ contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
             window: 3600
         });
 
-        vm.prank(bridgeRateLimiter);
+        vm.prank(bridgeConfigurator);
         gateway.setInRateLimits(configs);
 
         (, uint256 limit, uint32 window, ) = gateway.inRateLimits(NONCANONICAL_EID);
@@ -83,34 +88,8 @@ contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
         assertEq(window, 3600, "Last entry should dominate the final window");
     }
 
-    function _runSetInRateLimitsBy(address caller_) internal {
-        IOffsettingRateLimiter.RateLimitConfig[] memory configs = _buildConfigs(
-            NONCANONICAL_EID,
-            5_000e9,
-            1800
-        );
-        vm.prank(caller_);
-        gateway.setInRateLimits(configs);
-
-        (, uint256 limit, , ) = gateway.inRateLimits(NONCANONICAL_EID);
-        assertEq(limit, 5_000e9, "Authorized caller should set the limit");
-    }
-
-    function test_setInRateLimits_adminCanCall() external {
-        _runSetInRateLimitsBy(admin);
-    }
-
-    function test_setInRateLimits_bridgeAdminCanCall() external {
-        _runSetInRateLimitsBy(bridgeAdmin);
-    }
-
-    function test_setInRateLimits_bridgeRateLimiterCanCall() external {
-        _runSetInRateLimitsBy(bridgeRateLimiter);
-    }
-
     /// @notice Inbound limits store any (limit, window) pair as configured.
     function testFuzz_setInRateLimits(uint256 limit_, uint32 window_) external {
-        // Bound window to non-zero so the standard decay path is exercised
         window_ = uint32(bound(uint256(window_), 1, type(uint32).max));
         _setInRateLimit(gateway, NONCANONICAL_EID, limit_, window_);
 
@@ -119,15 +98,17 @@ contract LZBridgeGatewayTests_SetInRateLimits is LZBridgeGatewayTestBase {
         assertEq(storedWindow, window_, "Inbound window should be stored as configured");
     }
 
-    function testFuzz_setInRateLimits_revertsIfNotAuthorised(address caller_) external {
-        vm.assume(caller_ != admin && caller_ != bridgeAdmin && caller_ != bridgeRateLimiter);
+    function testFuzz_setInRateLimits_revertsIfNotBridgeConfigurator(address caller_) external {
+        vm.assume(caller_ != bridgeConfigurator);
 
         IOffsettingRateLimiter.RateLimitConfig[] memory configs = _buildConfigs(
             NONCANONICAL_EID,
             5_000e9,
             1800
         );
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
+        );
         vm.prank(caller_);
         gateway.setInRateLimits(configs);
     }
