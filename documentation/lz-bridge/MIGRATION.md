@@ -54,9 +54,11 @@ Execute `LZBridgeSecurityUpgradeProposal`:
 7. Enable the `LZBridgeAndDelegateConfig` policy so subsequent `queue` / `queueSet*` and `executeQueuedAction` calls are accepted.
 8. Grant the permanent `bridge_configurator` role to the `LZBridgeAndDelegateConfig` policy. From this point on, every `bridge_configurator`-gated mutator on the gateway and the LZ endpoint delegate is reached only through the policy's timelock queue.
 
-After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains — no user traffic flows through the new bridge yet. Old bridges continue operating normally. The DAO MS additionally calls `LZCrossChainBridgeBatch.initializeConfigurator()` to bootstrap the periphery bridge's `configurator` variable with the `LZBridgeAndDelegateConfig` policy address.
+After execution the Ethereum gateway is fully configured and enabled, but the periphery `LZCrossChainBridge` is still disabled on all chains — no user traffic flows through the new bridge yet. Old bridges continue operating normally.
 
 ### 4\. Stop old bridge traffic
+
+> Note: this guide documents the full migration flow including stopping the old bridge. The old `CrossChainBridge` is already disabled, so this step is a no-op in the current rollout and is kept here for completeness.
 
 **`LZCrossChainBridgeBatch.disableOldBridge()`** on Ethereum. **`LZCrossChainBridgeL2Batch.disableOldBridge()`** on each non-canonical chain.
 
@@ -72,7 +74,7 @@ At this point: users cannot bridge via old bridges (send blocked) and cannot bri
 
 1. **`shell/calc_bridged_supply.sh`** — verifies all old bridges are disabled, checks for in-flight LZ V1 messages and unretried failed messages, cross-checks via LayerZero Scan API, and computes the initial bridged supply (sum of OHM totalSupply across non-canonical chains). Fill the output value into the `LZBridgeGatewayBatch` args file.
 2. If the script reports unretried failed messages: **`shell/retry_failed_messages.sh \--account \<name\>`** — retries failed LZ V1 messages by calling `retryMessage()` on each destination bridge. Reads `shell/failed_messages.json` generated in step 1 (payloads are auto-fetched where possible; fill in missing ones from LayerZero Scan or `MessageFailed` event logs). `retryMessage()` is permissionless. After retrying, re-run `calc_bridged_supply.sh` to confirm a clean state.
-3. **`LZBridgeGatewayBatch.initBridgedSupply()`** — writes the bridged supply to the new gateway via `increaseBridgedSupply()`. Must be done before non-canonical bridges go live.
+3. **`LZBridgeGatewayBatch.initBridgedSupply()`** — writes the bridged supply to the new gateway via the one-shot `initializeBridgedSupply()` bootstrap. Must be done before non-canonical bridges go live.
 
 ### 6\. Configure and activate non-canonical bridges
 
