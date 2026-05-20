@@ -7,6 +7,7 @@ import {IPyth} from "src/interfaces/IPyth.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {Module} from "src/Kernel.sol";
@@ -307,20 +308,15 @@ contract PythPriceFeeds is PriceSubmodule {
 
         // Convert maxConfidence from output decimals scale to Pyth feed scale (10^expo)
         // Formula: maxConfidenceInPythScale = maxConfidence * 10^|expo| / 10^outputDecimals
-        // Note: The result is clamped to uint64 max because priceData.conf is uint64, so any
-        // threshold above uint64 max permits all possible feed confidence values.
+        // Reject thresholds that permit all possible raw confidence values.
         uint256 maxConfidenceInPythScaleUint = maxConfidence_.mulDiv(
             10 ** uint256(uint32(-priceData.expo)),
             10 ** uint256(outputDecimals_)
         );
-        uint64 maxConfidenceInPythScale;
-        if (maxConfidenceInPythScaleUint > type(uint64).max) {
-            maxConfidenceInPythScale = type(uint64).max;
-        } else {
-            // Casting to uint64 is safe because the branch above handles values above uint64 max.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            maxConfidenceInPythScale = uint64(maxConfidenceInPythScaleUint);
+        if (maxConfidenceInPythScaleUint >= type(uint64).max) {
+            revert SafeCast.Overflow(maxConfidenceInPythScaleUint);
         }
+        uint64 maxConfidenceInPythScale = SafeCast.encodeUInt64(maxConfidenceInPythScaleUint);
 
         // Validate raw values from the price feed
         _validatePriceFeedResult(

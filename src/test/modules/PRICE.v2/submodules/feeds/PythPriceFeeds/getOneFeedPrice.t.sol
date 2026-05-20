@@ -9,6 +9,9 @@ import {MockPyth} from "src/test/mocks/MockPyth.sol";
 // Interfaces
 import {IPyth} from "src/interfaces/IPyth.sol";
 
+// Libraries
+import {SafeCast} from "src/libraries/SafeCast.sol";
+
 // Bophades
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 
@@ -495,6 +498,25 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
         );
     }
 
+    // given expo equals negative outputDecimals (expo = -18, outputDecimals = 18)
+    //  given the converted max confidence equals uint64 max
+    //   [X] it reverts
+    function test_expoEqualsNegativeOutputDecimals_maxConfidenceEqualsUint64Max_reverts() public {
+        // maxConfidenceInPythScale = type(uint64).max * 1e18 / 1e18 = type(uint64).max
+        int32 expo = -18;
+        pyth.setPrice(PRICE_ID_1, PRICE_1, 1, expo, block.timestamp);
+
+        bytes memory params = encodeOneFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            type(uint64).max
+        );
+        vm.expectRevert(abi.encodeWithSelector(SafeCast.Overflow.selector, type(uint64).max));
+
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+    }
+
     // given expo is very negative (expo = -20, outputDecimals = 18)
     //  given the confidence interval is above the maximum
     //   [X] it reverts with Pyth_FeedConfidenceExcessive
@@ -596,8 +618,8 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
     }
 
     // given expo is -22 and the converted max confidence exceeds uint64
-    //  [X] it clamps the maximum confidence and correctly converts the price
-    function test_expoNegativeTwentyTwo_maxConfidenceClamps() public {
+    //  [X] it reverts
+    function test_expoNegativeTwentyTwo_maxConfidenceExceedsUint64_reverts() public {
         // maxConfidence = 1e16 (18 decimals)
         // expo = -22
         // maxConfidenceInPythScale = 1e16 * 1e22 / 1e18 = 1e20, which exceeds uint64
@@ -611,11 +633,9 @@ contract PythPriceFeedsGetOneFeedPriceTest is PythPriceFeedsTest {
             UPDATE_THRESHOLD,
             1e16
         );
-        uint256 priceInt = pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
+        vm.expectRevert(abi.encodeWithSelector(SafeCast.Overflow.selector, 1e20));
 
-        // price = 100000000 (22 decimals)
-        // Expected: 100000000 * 1e18 / 1e22 = 10000
-        assertEq(priceInt, 10000, "Price should match expected value for expo -22");
+        pythSubmodule.getOneFeedPrice(address(0), PRICE_DECIMALS, params);
     }
 
     // given the confidence interval is at the maximum (boundary case)

@@ -17,7 +17,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
-| admin | PriceConfig v2 | Add/remove asset configuration, update asset price feed/strategy/moving average configuration, install/upgrade submodules, exec on submodules, enable/disable contract |
+| admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, queue timelock delay changes, install submodules, store observations, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
@@ -41,7 +41,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | Heart | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
-| emergency | PriceConfig v2 | Disable contract |
+| emergency | PriceConfig v2 | Disable contract, cancel queued timelock actions |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
@@ -63,10 +63,16 @@ This document describes the roles that are used in the Olympus protocol.
 | oracle_manager | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | oracle_manager | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation |
 | poly_admin | pOLY | Allows migrating pOLY terms to another contract |
-| price_admin | PriceConfig v2 | Add/remove asset configuration, update asset price feed/strategy/moving average configuration, exec on submodules, install/upgrade submodules |
+| price_admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, install submodules, store observations |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
 
 ## Role Allocations
 
 The current role allocations can be determined by viewing the [Protocol Visualizer](https://olympus-protocol-visualizer.up.railway.app) tool.
+
+## PriceConfig v2 Timelock Notes
+
+The `admin` and `price_admin` roles can queue protected PriceConfig v2 changes, but they cannot bypass the timelock. Queued actions can be executed by any address after the configured delay and before expiry while the policy is enabled.
+
+The `emergency` role is the independent veto path for PriceConfig v2 queued actions. It can cancel queued actions, including while the policy is disabled.

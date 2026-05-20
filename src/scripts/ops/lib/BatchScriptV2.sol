@@ -24,8 +24,6 @@ import {Kernel, toKeycode} from "src/Kernel.sol";
 import {SubKeycode, toSubKeycode} from "src/Submodules.sol";
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
-import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 
@@ -35,10 +33,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
     using Safe for *;
     using stdJson for string;
     using Surl for *;
-
-    /// @dev Static, high expected price used only for snapshot threshold rewrites.
-    ///      With 100% tolerance this avoids live PRICE reads while accepting normal feed prices.
-    uint256 internal constant _SNAPSHOT_PRICE_EXPECTATION = type(uint128).max;
 
     /// @notice Address of the owner
     /// @dev    This could be a Safe Multisig or an EOA
@@ -634,10 +628,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @notice Update price feed thresholds for all assets to at least 2 days
     /// @dev    Iterates over all assets and their feeds, updating thresholds as needed
     /// @param priceModule_ PRICE module to get assets from
-    /// @param priceConfig_ PriceConfig policy to call updateAsset on
+    /// @param priceConfig_ PriceConfig policy with permission to call PRICE.updateAsset
     function _updatePriceFeedThresholds(IPRICEv2 priceModule_, address priceConfig_) internal {
         uint48 twoDays = uint48(2 days);
-        address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
         address[] memory assets = priceModule_.getAssets();
         console2.log("Updating price feed thresholds for", assets.length, "assets");
@@ -663,10 +656,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
             // Update the asset if any feeds were modified
             if (needsUpdate) {
                 console2.log("  Updating thresholds for asset:", asset);
-                // Snapshot-only threshold rewrites cannot rely on PRICE.getPrice(), since stale feeds
-                // may be the reason thresholds are being widened.
-                IPriceConfigv2.PriceFeedExpectation[]
-                    memory feedExpectations = _makeWidePriceFeedExpectations(feeds.length);
                 IPRICEv2.UpdateAssetParams memory params = IPRICEv2.UpdateAssetParams({
                     updateFeeds: true,
                     updateStrategy: false,
@@ -680,29 +669,11 @@ abstract contract BatchScriptV2 is WithEnvironment {
                     observations: new uint256[](0)
                 });
 
-                vm.prank(daoMS);
-                PriceConfigv2(priceConfig_).updateAsset(asset, params, feedExpectations);
+                // This helper runs inside a validation snapshot only. Queueing through PriceConfig
+                // would not apply the threshold rewrite before the heartbeat time warp.
+                vm.prank(priceConfig_);
+                priceModule_.updateAsset(asset, params);
             }
-        }
-    }
-
-    /// @notice Build permissive feed expectations for snapshot-only threshold rewrites
-    /// @dev    This intentionally avoids live PRICE reads. The heartbeat validation path widens
-    ///         update thresholds inside a snapshot before time-warping, and stale feeds can cause
-    ///         PRICE.getPrice() to revert before the rewrite has a chance to fix those thresholds.
-    ///         The sentinel price with 100% tolerance keeps PriceConfig's feed callability check
-    ///         active without depending on the current aggregate asset price.
-    /// @param length_ Number of feeds being rewritten
-    /// @return expectations_ Wide expected price/tolerance entries for each feed
-    function _makeWidePriceFeedExpectations(
-        uint256 length_
-    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
-        expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
-        for (uint256 i; i < length_; i++) {
-            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
-                expectedPrice: _SNAPSHOT_PRICE_EXPECTATION,
-                toleranceBps: 10_000
-            });
         }
     }
 
@@ -719,17 +690,17 @@ abstract contract BatchScriptV2 is WithEnvironment {
         bytes20 targetBytes = SubKeycode.unwrap(feed_.target);
 
         // Skip UniswapV3 - uses observationWindowSeconds, not updateThreshold
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.UNIV3"))) {
+        if (targetBytes == bytes20("PRICE.UNIV3")) {
             return new bytes(0);
         }
 
         // Handle Chainlink feeds
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.CHAINLINK"))) {
+        if (targetBytes == bytes20("PRICE.CHAINLINK")) {
             return _updateChainlinkThreshold(feed_.params, feed_.selector, minThreshold_);
         }
 
         // Handle Pyth feeds
-        if (targetBytes == SubKeycode.unwrap(toSubKeycode("PRICE.PYTH"))) {
+        if (targetBytes == bytes20("PRICE.PYTH")) {
             return _updatePythThreshold(feed_.params, feed_.selector, minThreshold_);
         }
 

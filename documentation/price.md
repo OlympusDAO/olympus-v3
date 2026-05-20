@@ -16,6 +16,28 @@ Re-configure price resolution in the protocol to utilise multiple price feeds wh
     - The Operator, YieldRepurchaseFacility and EmissionManager policies rely on the PRICE v1 module interface in order to determine the price of OHM. The v1.2 module maintains backwards-compatibility with the v1 interface, so that existing policies do not need to be updated.
 - The upgrade will allow assets to be configured with multiple price feeds, and strategies to resolve the price from the multiple price feeds. This will increase resilience in adverse conditions.
 
+## Timelock Behaviour
+
+PRICE configuration is split between immediate operational actions and queued configuration actions. The timelock is intended to give governance and emergency operators time to review material changes to live price resolution before they can affect protocol behaviour.
+
+The following actions are queued through `PriceConfigv2` and can only be executed after the current `timelockDelay`:
+
+- `queueRemoveAsset`: removes an approved asset from PRICE.
+- `queueUpdateAsset`: updates an approved asset's feeds, strategy or moving-average configuration.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation, in order to allow for re-configuration when the last observation is stale or out of consensus. If the stored value is stale or out of consensus, call `storeObservation(asset)` after updating the asset before consumers rely on CURRENT price reads.
+- `queueUpgradeSubmodule`: upgrades an already-installed PRICE submodule.
+- `queueExecOnSubmodule`: performs a call on an installed PRICE submodule.
+- `queueTimelockDelay`: changes the delay used for newly queued actions.
+
+Queued actions store their action type, proposer, queue timestamp, executable timestamp, expiry timestamp and encoded payload. They are executable by any address after the delay has elapsed and before expiry. This keeps execution permissionless while the delay and emergency cancellation are the authorization boundaries. The emergency role can cancel queued actions before execution; this role is expected to be independent from the roles that can queue PRICE changes.
+
+The following actions are not timelocked:
+
+- `addAsset`: Adding a new asset will not affect existing price resolution paths, so this does not require a timelock.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation. If the stored value is out of consensus, call `storeObservation(asset)` after adding the asset before consumers rely on CURRENT price reads.
+- `installSubmodule`: used to install new submodule keycodes. Installing a submodule does not replace an existing live submodule path; replacement is handled by `queueUpgradeSubmodule`.
+- `storeObservation` and `storeObservations`: operational maintenance for moving-average data.
+
 ## Non-Contract Assets and ERC-7726
 
 The `PriceCache` policy supports non-contract assets in addition to normal ERC-20 addresses. This is relevant for standards such as ERC-7726, which explicitly allows special asset identifiers such as:

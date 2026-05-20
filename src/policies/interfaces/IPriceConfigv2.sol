@@ -3,7 +3,6 @@
 pragma solidity >=0.8.15;
 
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {SubKeycode} from "src/Submodules.sol";
 
 /// @notice     Interface for PriceConfigv2 policy
 /// @dev        Policy to configure PRICEv2
@@ -61,6 +60,17 @@ interface IPriceConfigv2 {
         uint256 upperBound_
     );
 
+    /// @notice Thrown when a queued submodule action targets a submodule implementation that has changed since queueing
+    ///
+    /// @param subKeycode The bytes20 keycode of the queued submodule action
+    /// @param expected   The submodule implementation installed when the action was queued
+    /// @param actual     The submodule implementation installed when the action was executed
+    error IPriceConfigv2_SubmoduleImplementationChanged(
+        bytes20 subKeycode,
+        address expected,
+        address actual
+    );
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice                     Expected price and tolerance for a configured feed
@@ -74,6 +84,17 @@ interface IPriceConfigv2 {
         uint256 expectedPrice;
         uint16 toleranceBps;
     }
+
+    // ========================= //
+    // TIMELOCK MANAGEMENT       //
+    // ========================= //
+
+    /// @notice Queue a timelocked change to the timelock delay
+    /// @dev    The delay update is not applied until the queued action is executed. Intended to be callable only by `admin`.
+    ///
+    /// @param  delay_    The new timelock delay in seconds
+    /// @return actionId_ The queued action ID
+    function queueTimelockDelay(uint48 delay_) external returns (uint64 actionId_);
 
     // ========================= //
     // PRICE MANAGEMENT          //
@@ -115,24 +136,26 @@ interface IPriceConfigv2 {
     /// @param  asset_  The non-contract asset address to deregister
     function unregisterNonContractAsset(address asset_) external;
 
-    /// @notice Remove an asset from the PRICE module
-    /// @dev    After removal, calls to PRICEv2 for the asset's price will revert
+    /// @notice Queue removal of an asset from the PRICE module
+    /// @dev    After execution, calls to PRICEv2 for the asset's price will revert.
     ///
-    /// @param  asset_  The address of the asset to remove
-    function removeAssetPrice(address asset_) external;
+    /// @param  asset_    The address of the asset to remove
+    /// @return actionId_ The queued action ID
+    function queueRemoveAsset(address asset_) external returns (uint64 actionId_);
 
-    /// @notice Update an asset configuration atomically
-    /// @dev    Only updates components flagged in params_
+    /// @notice Queue an atomic asset configuration update
+    /// @dev    Only updates components flagged in params_ after the queued action is executed.
     /// @dev    See PRICEv2 for more details on the UpdateAssetParams struct
     ///
     /// @param  asset_            The address of the asset to update
     /// @param  params_           Update parameters with flags indicating which components to update
     /// @param  feedExpectations_ Expected price and tolerance for each feed when `params_.updateFeeds` is true. Must be empty otherwise.
-    function updateAsset(
+    /// @return actionId_         The queued action ID
+    function queueUpdateAsset(
         address asset_,
         IPRICEv2.UpdateAssetParams memory params_,
         PriceFeedExpectation[] memory feedExpectations_
-    ) external;
+    ) external returns (uint64 actionId_);
 
     /// @notice Store a price observation for an asset
     /// @dev    Calls PRICE.storeObservation(asset_) to calculate and store current price
@@ -153,18 +176,25 @@ interface IPriceConfigv2 {
     /// @param  submodule_  The address of the submodule to install
     function installSubmodule(address submodule_) external;
 
-    /// @notice Upgrade a submodule on the PRICE module
-    /// @dev    The upgraded submodule must have the same SubKeycode as an existing submodule that it is replacing, otherwise use installSubmodule
+    /// @notice Queue an upgrade of a submodule on the PRICE module
+    /// @dev    The upgraded submodule must have the same keycode as an existing submodule that it is replacing, otherwise use installSubmodule.
     ///
     /// @param  submodule_  The address of the submodule to upgrade to
-    function upgradeSubmodule(address submodule_) external;
+    /// @return actionId_   The queued action ID
+    function queueUpgradeSubmodule(address submodule_) external returns (uint64 actionId_);
 
-    /// @notice Perform an action on a submodule
+    /// @notice Queue an action on a PRICE submodule
+    /// @dev    The action is not performed until the queued action is executed. This is timelocked
+    ///         because PRICE.execOnSubmodule() can call mutable submodule functions.
     /// @dev    This function reverts if:
-    /// @dev    - PRICE.execOnSubmodule() reverts
+    /// @dev    - The submodule is not installed
     ///
-    /// @param  subKeycode_ The SubKeycode of the submodule to call
+    /// @param  subKeycode_ The bytes20 keycode of the submodule to call
     /// @param  data_       The calldata to send to the submodule
-    function execOnSubmodule(SubKeycode subKeycode_, bytes calldata data_) external;
+    /// @return actionId_   The queued action ID
+    function queueExecOnSubmodule(
+        bytes20 subKeycode_,
+        bytes calldata data_
+    ) external returns (uint64 actionId_);
 }
 /// forge-lint: disable-end(mixed-case-function)

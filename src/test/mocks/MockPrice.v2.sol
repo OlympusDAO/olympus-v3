@@ -205,7 +205,10 @@ contract MockPrice is PRICEv2 {
     }
 
     function registerNonContractAsset(address asset_) external override {
-        _registerNonContractAsset(asset_);
+        if (asset_ == address(0) || asset_.code.length != 0 || isNonContractAsset[asset_])
+            revert PRICE_InvalidAsset(asset_);
+
+        isNonContractAsset[asset_] = true;
     }
 
     function unregisterNonContractAsset(address asset_) external override {
@@ -322,6 +325,27 @@ contract MockPrice is PRICEv2 {
                 : cumulativeObs / params_.observations.length;
         }
     }
+
+    function validateAddAsset(
+        address,
+        bool,
+        bool,
+        uint32,
+        uint48,
+        uint256[] memory,
+        Component memory,
+        Component[] memory
+    ) external pure override {}
+
+    function validateRemoveAsset(address) external pure override {}
+
+    function validateUpdateAsset(address, UpdateAssetParams memory) external pure override {}
+
+    function validateInstallSubmodule(address) external pure override {}
+
+    function validateUpgradeSubmodule(address) external pure override {}
+
+    function validateExecOnSubmodule(bytes20) external pure override {}
 
     function storeObservations() external virtual override {
         // Iterate over all assets
