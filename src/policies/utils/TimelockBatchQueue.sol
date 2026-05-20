@@ -113,7 +113,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action has expired
     ///             - `_validateExecution` reverts
     ///             - `_executeSubAction` reverts for any sub-action
-    /// @dev        In both `_queueAction` and execution the per-sub-action events precede the
+    ///
+    ///             In both `_queueAction` and execution the per-sub-action events precede the
     ///             single action-level event that closes the batch. At execution time each
     ///             `TimelockSubActionExecuted` is emitted *inside* the loop, immediately after
     ///             the corresponding `_executeSubAction` call, so it interleaves with any
@@ -166,7 +167,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     /// @dev    Calls `_onSubActionQueued` per sub-action and `_onBatchQueued` once after, so
     ///         derived contracts cannot use this helper without passing their implementation
     ///         specific authorization and payload checks.
-    /// @dev    Reverts if:
+    ///
+    ///         Reverts if:
     ///         - The batch is empty
     ///         - The batch exceeds `_maxBatchSize()`
     ///         - `_onSubActionQueued` reverts for any sub-action
@@ -182,6 +184,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
 
         actionId = nextActionId;
+        nextActionId = actionId + 1;
 
         for (uint256 i = 0; i < len; ++i) {
             _onSubActionQueued(msg.sender, actionId, i, actions_[i]);
@@ -191,8 +194,6 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         uint48 queuedAt = uint48(block.timestamp);
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
-
-        nextActionId = actionId + 1;
 
         // The legacy pipeline cannot copy a memory array of structs containing nested dynamic
         // types (`BatchAction[] memory` -> storage) in a single assignment, so push one
