@@ -41,4 +41,3 @@ src/scripts/ops/batches/LZBridgeGatewayBatch.sol
 src/scripts/ops/batches/LZBridgeGatewayL2Batch.sol
 src/scripts/ops/batches/LZCrossChainBridgeBatch.sol
 src/scripts/ops/batches/LZCrossChainBridgeL2Batch.sol
-src/scripts/ops/batches/LZBridgeAndDelegateConfigBatch.sol
