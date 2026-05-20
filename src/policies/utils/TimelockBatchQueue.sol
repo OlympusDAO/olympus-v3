@@ -14,7 +14,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///
 ///         Lifecycle:
 ///         - `_queueAction` enforces the configured batch size bounds, calls
-///           `_validateSubAction` per sub-action and `_validateBatch` once for cross-sub
+///           `_onSubActionQueued` per sub-action and `_onBatchQueued` once for cross-sub
 ///           invariants, stores the batch metadata and sub-actions, emits one
 ///           `TimelockSubActionQueued` per sub-action, then emits `TimelockActionQueued`
 ///           to close the batch.
@@ -163,14 +163,14 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     }
 
     /// @notice Queue a batched timelocked action.
-    /// @dev    Calls `_validateSubAction` per sub-action and `_validateBatch` once after, so
+    /// @dev    Calls `_onSubActionQueued` per sub-action and `_onBatchQueued` once after, so
     ///         derived contracts cannot use this helper without passing their implementation
     ///         specific authorization and payload checks.
     /// @dev    Reverts if:
     ///         - The batch is empty
     ///         - The batch exceeds `_maxBatchSize()`
-    ///         - `_validateSubAction` reverts for any sub-action
-    ///         - `_validateBatch` reverts
+    ///         - `_onSubActionQueued` reverts for any sub-action
+    ///         - `_onBatchQueued` reverts
     ///
     /// @param  actions_  The sub-actions of the batch.
     /// @return actionId The queued action ID.
@@ -181,16 +181,17 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         if (len == 0) revert ITimelockBatchQueue_BatchEmpty();
         if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
 
+        actionId = nextActionId;
+
         for (uint256 i = 0; i < len; ++i) {
-            _validateSubAction(msg.sender, actions_[i]);
+            _onSubActionQueued(msg.sender, actionId, i, actions_[i]);
         }
-        _validateBatch(msg.sender, actions_);
+        _onBatchQueued(msg.sender, actionId, actions_);
 
         uint48 queuedAt = uint48(block.timestamp);
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
 
-        actionId = nextActionId;
         nextActionId = actionId + 1;
 
         // The legacy pipeline cannot copy a memory array of structs containing nested dynamic
@@ -225,7 +226,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     /// @notice Queue a single timelocked action.
     /// @dev    Convenience wrapper that forwards a single (target, selector, payload) triple as
     ///         a length-1 batch and delegates to the batch overload. The derived contract's
-    ///         `_validateSubAction` hook is invoked once and `_validateBatch` is invoked once
+    ///         `_onSubActionQueued` hook is invoked once and `_onBatchQueued` is invoked once
     ///         with a length-1 array.
     ///
     /// @param  target_   The contract expected to receive the queued action.
@@ -303,30 +304,33 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         if (action_.cancelled) revert ITimelockBatchQueue_ActionCancelled(actionId_);
     }
 
-    /// @notice Validate a single sub-action at queue time.
-    /// @dev    Derived contracts must revert on failure. Called once per sub-action by the base
-    ///         contract before the batch is stored; implementations are expected to validate
-    ///         the target, selector, and payload of the sub-action in isolation. Cross
-    ///         sub-action invariants belong in `_validateBatch`. The caller is passed
-    ///         explicitly for clarity and to support derived contracts that centralize
-    ///         authorization around actor params.
+    /// @notice Hook invoked once per sub-action at queue time, before the batch is stored.
+    /// @dev    Derived contracts must revert on failure. Implementations are expected to
+    ///         validate the target, selector, and payload of the sub-action in isolation, and
+    ///         may record per-sub-action state. Cross sub-action invariants belong in
+    ///         `_onBatchQueued`. The caller is passed explicitly for clarity and to support
+    ///         derived contracts that centralize authorization around actor params.
     ///
-    /// @param  caller_ The account queueing the action.
-    /// @param  action_ The sub-action being queued.
-    function _validateSubAction(
+    /// @param  caller_   The account queueing the action.
+    /// @param  actionId_ The id the batch will be stored under.
+    /// @param  index_    The position of the sub-action within the batch.
+    /// @param  action_   The sub-action being queued.
+    function _onSubActionQueued(
         address caller_,
+        uint64 actionId_,
+        uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
-    ) internal view virtual;
+    ) internal virtual;
 
-    /// @notice Validate cross-sub-action invariants at queue time.
-    /// @dev    Default implementation is a no-op. Derived contracts override only when invariants
-    ///         spanning multiple sub-actions are required (e.g. forbidding duplicate or
-    ///         conflicting sub-actions inside one batch). Called once per queued batch after
-    ///         every `_validateSubAction` has returned successfully.
-    function _validateBatch(
+    /// @notice Hook invoked once per batch at queue time, after every `_onSubActionQueued`.
+    /// @dev    Default implementation is a no-op. Derived contracts override only when
+    ///         invariants spanning multiple sub-actions are required (e.g. forbidding
+    ///         duplicate or conflicting sub-actions inside one batch).
+    function _onBatchQueued(
         address /* caller_ */,
+        uint64 /* actionId_ */,
         ITimelockBatchQueue.BatchAction[] memory /* actions_ */
-    ) internal view virtual {}
+    ) internal virtual {}
 
     /// @notice Validate implementation-specific execution rules for the entire batch.
     /// @dev    Derived contracts must revert on failure. Standard queued-action state and

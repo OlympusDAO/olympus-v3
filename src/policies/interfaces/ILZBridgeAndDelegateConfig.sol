@@ -22,11 +22,38 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///      and error surface; the inherited interface is exposed by also implementing
 ///      `ITimelockBatchQueue`.
 interface ILZBridgeAndDelegateConfig is ITimelockBatchQueue {
+    // ========== TYPES ========== //
+
+    /// @notice Which target slot a queued sub-action was validated against at queue time.
+    /// @dev `NONE` is the zero value, meaning "no sub-action recorded".
+    enum TargetKind {
+        NONE,
+        GATEWAY,
+        DELEGATE,
+        FACILITATOR,
+        SELF
+    }
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a constructor argument or proposed target slot is the zero address.
     /// @param parameter The name of the invalid parameter.
     error LZBridgeAndDelegateConfig_InvalidAddress(string parameter);
+
+    /// @notice Thrown at execution when the target slot for a sub-action's queue-time
+    ///         `TargetKind` no longer holds the address the action was queued against (the
+    ///         slot was rotated between queue and execution). The action can be cleared via
+    ///         emergency cancellation and re-queued against the new target.
+    /// @param actionId The queued action ID.
+    /// @param index The sub-action position within the batch.
+    /// @param queuedTarget The address the sub-action was validated against at queue time.
+    /// @param currentTarget The address the slot currently holds.
+    error LZBridgeAndDelegateConfig_SubActionTargetStale(
+        uint64 actionId,
+        uint256 index,
+        address queuedTarget,
+        address currentTarget
+    );
 
     // ========== EVENTS ========== //
 

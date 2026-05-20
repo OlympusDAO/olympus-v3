@@ -135,10 +135,12 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
 
     // ---------- hooks ----------
 
-    function _validateSubAction(
+    function _onSubActionQueued(
         address caller_,
+        uint64 /* actionId_ */,
+        uint256 /* index_ */,
         ITimelockBatchQueue.BatchAction memory action_
-    ) internal view override {
+    ) internal override {
         if (rejectSubAction) revert MockTimelockBatchQueue_SubActionRejected();
         if (queueCaller != address(0) && caller_ != queueCaller)
             revert MockTimelockBatchQueue_SubActionRejected();
@@ -149,10 +151,11 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         }
     }
 
-    function _validateBatch(
+    function _onBatchQueued(
         address /* caller_ */,
+        uint64 /* actionId_ */,
         ITimelockBatchQueue.BatchAction[] memory /* actions_ */
-    ) internal view override {
+    ) internal override {
         if (rejectBatch) revert MockTimelockBatchQueue_BatchRejected();
     }
 
@@ -287,7 +290,7 @@ contract TimelockBatchQueueTest is Test {
         view
         returns (ITimelockBatchQueue.BatchAction[] memory actions_)
     {
-        // Payload encodes the sub-action's index. The mock's `_validateSubAction` decodes it
+        // Payload encodes the sub-action's index. The mock's `_onSubActionQueued` decodes it
         // when `rejectSubActionAtIndex` is set, so this gives every batch a uniform "reject at
         // index N" mechanism without writing state from a view hook.
         actions_ = new ITimelockBatchQueue.BatchAction[](3);
@@ -490,7 +493,7 @@ contract TimelockBatchQueueTest is Test {
     // QUEUE - SINGLE ACTION OVERLOAD
     // =================================================================================
 
-    // given _validateSubAction rejects via the general flag
+    // given _onSubActionQueued rejects via the general flag
     //  [X] queueAction reverts
     //  [X] nextActionId is unchanged
     function test_queueAction_givenValidateSubActionRejects_reverts() public {
@@ -500,7 +503,7 @@ contract TimelockBatchQueueTest is Test {
         assertEq(queue.nextActionId(), 1, "nextActionId unchanged");
     }
 
-    // given _validateSubAction has a queueCaller restriction
+    // given _onSubActionQueued has a queueCaller restriction
     //  given the caller is not the allowed address
     //   [X] queueAction reverts
     //  given the caller is the allowed address
@@ -642,9 +645,9 @@ contract TimelockBatchQueueTest is Test {
         assertEq(queue.getQueuedActionLength(actionId), 3, "Stored length");
     }
 
-    // given _validateSubAction rejects at index i
+    // given _onSubActionQueued rejects at index i
     //  [X] reverts at that index (verified via the index encoded in the mock error)
-    //  [X] _validateBatch is not called (revert error is from _validateSubAction)
+    //  [X] _onBatchQueued is not called (revert error is from _onSubActionQueued)
     //  [X] no state stored (action does not exist, nextActionId unchanged)
     function test_queueBatchAction_givenValidateSubActionRejectsAtIndex_reverts() public {
         uint256 rejectIndex = 1;
@@ -671,7 +674,7 @@ contract TimelockBatchQueueTest is Test {
         queue.getQueuedAction(expectedId);
     }
 
-    // given _validateBatch rejects after all _validateSubAction calls succeeded
+    // given _onBatchQueued rejects after all _onSubActionQueued calls succeeded
     //  [X] reverts BatchRejected
     //  [X] no state stored
     function test_queueBatchAction_givenValidateBatchRejects_reverts() public {

@@ -88,6 +88,10 @@ contract LZBridgeAndDelegateConfig is
     /// @inheritdoc ILZBridgeAndDelegateConfig
     address public override facilitator;
 
+    /// @notice Records, per queued sub-action, the `TargetKind` it was validated against at
+    ///         queue time: `_subActionTargetKind[actionId][index]`.
+    mapping(uint64 => mapping(uint256 => TargetKind)) private _subActionTargetKind;
+
     // ========== INITIALIZATION ========== //
 
     /// @dev Reverts if any address argument is zero or the initial delay is outside
@@ -230,40 +234,48 @@ contract LZBridgeAndDelegateConfig is
 
     /// @inheritdoc TimelockBatchQueue
     /// @dev Validates the proposer's role and the (target, selector, payload) triple against
-    ///      the supported action table.
+    ///      the supported action table, then records the resolved `TargetKind`.
     ///
     ///      Reverts if:
     ///      - The policy is disabled
     ///      - The action's target is unknown
     ///      - The proposer lacks the role required by the action
     ///      - The payload cannot be decoded into the expected types for the action
-    function _validateSubAction(
+    function _onSubActionQueued(
         address caller_,
+        uint64 actionId_,
+        uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
-    ) internal view override {
+    ) internal override {
         _requireEnabled();
 
+        TargetKind kind;
         if (action_.target == gateway) {
             _validateGatewaySubAction(caller_, action_);
+            kind = TargetKind.GATEWAY;
         } else if (action_.target == delegate) {
             _validateDelegateSubAction(caller_, action_);
+            kind = TargetKind.DELEGATE;
         } else if (action_.target == facilitator) {
             _validateFacilitatorSubAction(caller_, action_);
+            kind = TargetKind.FACILITATOR;
         } else if (action_.target == address(this)) {
             _validateSelfSubAction(caller_, action_);
+            kind = TargetKind.SELF;
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
         }
+
+        _subActionTargetKind[actionId_][index_] = kind;
     }
 
     /// @inheritdoc TimelockBatchQueue
     /// @dev Execution is permissionless once the timelock elapses; this hook only enforces
-    ///      enabled status. The proposer was authorized at queue time by `_validateSubAction`,
+    ///      enabled status. The proposer was authorized at queue time by `_onSubActionQueued`,
     ///      and requiring an execution role would let an unavailable or compromised executor
-    ///      block already-approved changes. Target/selector validity is not re-checked: targets
-    ///      are fixed storage slots rotated only through their own timelocked actions, and a
-    ///      queued sub-action stays bound to the address the timelock originally approved.
-    ///      Undesirable queued actions are cleared via emergency cancellation.
+    ///      block already-approved changes. The queue-to-execution target binding is enforced
+    ///      per sub-action in `_executeSubAction`: dispatch is by the `TargetKind` recorded at
+    ///      queue time.
     ///
     ///      Reverts if:
     ///      - The policy is disabled
@@ -291,27 +303,52 @@ contract LZBridgeAndDelegateConfig is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev The payload-shape checks performed at queue time are deliberately not re-run here,
+    /// @dev Dispatches by the `TargetKind` recorded at queue time, and asserts the slot for
+    ///      that kind still holds the queued address before forwarding the call.
+    ///      The payload-shape checks performed at queue time are deliberately not re-run here,
     ///      since storage already holds the queued action and ABI decoding will revert on mismatch.
     ///
     ///      Reverts if:
-    ///      - The (target, selector) pair is not supported.
+    ///      - The recorded kind's target slot no longer holds the queued address
+    ///      - No kind was recorded for the sub-action
     function _executeSubAction(
-        uint64,
-        uint256,
+        uint64 actionId_,
+        uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
-        if (action_.target == gateway) {
+        TargetKind kind = _subActionTargetKind[actionId_][index_];
+        if (kind == TargetKind.GATEWAY) {
+            _requireTargetUnchanged(actionId_, index_, action_.target, gateway);
             _executeGatewaySubAction(action_);
-        } else if (action_.target == delegate) {
+        } else if (kind == TargetKind.DELEGATE) {
+            _requireTargetUnchanged(actionId_, index_, action_.target, delegate);
             _executeDelegateSubAction(action_);
-        } else if (action_.target == facilitator) {
+        } else if (kind == TargetKind.FACILITATOR) {
+            _requireTargetUnchanged(actionId_, index_, action_.target, facilitator);
             _executeFacilitatorSubAction(action_);
-        } else if (action_.target == address(this)) {
+        } else if (kind == TargetKind.SELF) {
+            _requireTargetUnchanged(actionId_, index_, action_.target, address(this));
             _executeSelfSubAction(action_);
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
         }
+    }
+
+    /// @notice Reverts if the slot for a sub-action's recorded `TargetKind` no longer holds
+    ///         the address the action was queued against.
+    function _requireTargetUnchanged(
+        uint64 actionId_,
+        uint256 index_,
+        address queued_,
+        address current_
+    ) private pure {
+        if (queued_ != current_)
+            revert LZBridgeAndDelegateConfig_SubActionTargetStale(
+                actionId_,
+                index_,
+                queued_,
+                current_
+            );
     }
 
     /// @inheritdoc TimelockBatchQueue
@@ -598,7 +635,8 @@ contract LZBridgeAndDelegateConfig is
 
     function _executeGatewaySubAction(ITimelockBatchQueue.BatchAction memory action_) private {
         bytes4 sel = action_.selector;
-        ILZBridgeGateway gw = ILZBridgeGateway(gateway);
+        // `action_.target` is asserted to equal the `gateway` slot by `_executeSubAction`
+        ILZBridgeGateway gw = ILZBridgeGateway(action_.target);
         if (sel == ILZBridgeGateway.setDelegate.selector) {
             gw.setDelegate(abi.decode(action_.payload, (address)));
         } else if (sel == ILZBridgeGateway.increaseBridgedSupply.selector) {
@@ -626,7 +664,8 @@ contract LZBridgeAndDelegateConfig is
 
     function _executeDelegateSubAction(ITimelockBatchQueue.BatchAction memory action_) private {
         bytes4 sel = action_.selector;
-        ILZEndpointV2Authorized dg = ILZEndpointV2Authorized(delegate);
+        // `action_.target` is asserted to equal the `delegate` slot by `_executeSubAction`
+        ILZEndpointV2Authorized dg = ILZEndpointV2Authorized(action_.target);
         if (sel == ILZEndpointV2Authorized.setSendLibrary.selector) {
             (uint32 eid, address lib) = abi.decode(action_.payload, (uint32, address));
             dg.setSendLibrary(eid, lib);
@@ -655,7 +694,8 @@ contract LZBridgeAndDelegateConfig is
 
     function _executeFacilitatorSubAction(ITimelockBatchQueue.BatchAction memory action_) private {
         bytes4 sel = action_.selector;
-        ILZCrossChainBridge fac = ILZCrossChainBridge(facilitator);
+        // `action_.target` is asserted to equal the `facilitator` slot by `_executeSubAction`
+        ILZCrossChainBridge fac = ILZCrossChainBridge(action_.target);
         if (sel == ILZCrossChainBridge.setGateway.selector) {
             fac.setGateway(abi.decode(action_.payload, (address)));
         } else if (sel == ILZCrossChainBridge.setReEnabler.selector) {
