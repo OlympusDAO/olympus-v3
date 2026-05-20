@@ -24,6 +24,7 @@ The following actions are queued through `PriceConfigv2` and can only be execute
 
 - `queueRemoveAsset`: removes an approved asset from PRICE.
 - `queueUpdateAsset`: updates an approved asset's feeds, strategy or moving-average configuration.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation, in order to allow for re-configuration when the last observation is stale or out of consensus. If the stored value is stale or out of consensus, call `storeObservation(asset)` after updating the asset before consumers rely on CURRENT price reads.
 - `queueUpgradeSubmodule`: upgrades an already-installed PRICE submodule.
 - `queueExecOnSubmodule`: performs a call on an installed PRICE submodule.
 - `queueTimelockDelay`: changes the delay used for newly queued actions.
@@ -33,6 +34,7 @@ Queued actions store their action type, proposer, queue timestamp, executable ti
 The following actions are not timelocked:
 
 - `addAsset`: Adding a new asset will not affect existing price resolution paths, so this does not require a timelock.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation. If the stored value is out of consensus, call `storeObservation(asset)` after adding the asset before consumers rely on CURRENT price reads.
 - `installSubmodule`: used to install new submodule keycodes. Installing a submodule does not replace an existing live submodule path; replacement is handled by `queueUpgradeSubmodule`.
 - `storeObservation` and `storeObservations`: operational maintenance for moving-average data.
 

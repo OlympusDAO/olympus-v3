@@ -8,6 +8,7 @@ import {MockPyth} from "src/test/mocks/MockPyth.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 // Bophades
 import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
@@ -737,6 +738,31 @@ contract PythPriceFeedsGetTwoFeedPriceMulTest is PythPriceFeedsTest {
             UPDATE_THRESHOLD,
             MAX_CONFIDENCE
         );
+        pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
+    }
+
+    // given the first feed expo is -22 and the converted max confidence exceeds uint64
+    //  [X] it reverts
+    function test_givenFirstFeedExpoNegativeTwentyTwo_maxConfidenceExceedsUint64_reverts() public {
+        // maxConfidence = 1e16 (18 decimals)
+        // expo = -22
+        // maxConfidenceInPythScale = 1e16 * 1e22 / 1e18 = 1e20, which exceeds uint64
+        int64 price = 100000000;
+        int32 expo = -22;
+        pyth.setPrice(PRICE_ID_1, price, type(uint64).max, expo, block.timestamp);
+
+        bytes memory params = encodeTwoFeedParams(
+            address(pyth),
+            PRICE_ID_1,
+            UPDATE_THRESHOLD,
+            1e16,
+            address(pyth),
+            PRICE_ID_3,
+            UPDATE_THRESHOLD,
+            MAX_CONFIDENCE
+        );
+        vm.expectRevert(abi.encodeWithSelector(SafeCast.Overflow.selector, 1e20));
+
         pythSubmodule.getTwoFeedPriceMul(address(0), PRICE_DECIMALS, params);
     }
 
