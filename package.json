@@ -9,8 +9,10 @@
         "url": "git+https://github.com/OlympusDAO/olympus-v3.git"
     },
     "engines": {
+        "node": ">=24",
         "npm": "use-pnpm",
-        "yarn": "use-pnpm"
+        "yarn": "use-pnpm",
+        "pnpm": ">=10.33.0"
     },
     "scripts": {
         "postinstall": "./shell/postinstall.sh",
@@ -61,5 +63,6 @@
             "prettier-plugin-toml"
         ],
         "jsonRecursiveSort": true
-    }
+    },
+    "packageManager": "pnpm@10.33.0"
 }

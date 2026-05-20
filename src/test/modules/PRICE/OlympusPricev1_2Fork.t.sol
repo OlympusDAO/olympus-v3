@@ -370,7 +370,7 @@ contract OlympusPricev1_2ForkTest is Test {
                 ISimplePriceFeedStrategy.DeviationParams({
                     /// forge-lint: disable-next-line(unsafe-typecast)
                     deviationBps: uint16(WETH_DEVIATION_BPS),
-                    revertOnInsufficientCount: true // wethStrictMode from production
+                    revertOnInsufficientCount: true // wethRevertOnInsufficientPriceFeeds from production
                 })
             )
         });

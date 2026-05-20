@@ -20,32 +20,22 @@ on:
 
     workflow_dispatch:
 
+permissions:
+    contents: read
+
 jobs:
     validate:
         name: Validate Emergency Config
         runs-on: ubuntu-latest
 
         steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Setup Node.js
-              uses: actions/setup-node@v4
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
-                  node-version: 20
+                  persist-credentials: false
 
-            - name: Install pnpm
-              uses: pnpm/action-setup@v4
-              with:
-                  version: 9
-
-            - name: Install Foundry
-              uses: foundry-rs/foundry-toolchain@v1
-              with:
-                  version: 1.5.1
-
-            - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
 
             - name: Run validation script
               run: node shell/validate-emergency-config.js
@@ -67,7 +57,7 @@ jobs:
     #
     #   steps:
     #     - name: Trigger frontend repository_dispatch
-    #       uses: peter-evans/repository-dispatch@v3
+    #       uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4.0.1
     #       with:
     #         token: ${{ secrets.FRONTEND_TRIGGER_TOKEN }}
     #         repository: OlympusDAO/olympus-frontend

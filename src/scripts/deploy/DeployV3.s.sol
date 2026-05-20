@@ -964,12 +964,13 @@ contract DeployV3 is WithEnvironment {
         console2.log("  unitOfAccountSymbol", unitOfAccountSymbol);
 
         // Deploy
-        vm.broadcast();
+        vm.startBroadcast();
         PriceCache cache = new PriceCache(
             Kernel(kernel),
             unitOfAccountDecimals,
             unitOfAccountSymbol
         );
+        vm.stopBroadcast();
 
         return (address(cache), "olympus.policies");
     }

@@ -47,9 +47,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
     address internal _pyth;
 
     /// @notice Configuration parameters (loaded from args)
-    uint32 internal _ohmWethObservationWindow;
-    uint32 internal _ohmSusdsObservationWindow;
+    uint32 internal _uniswapOhmWethObservationWindow;
+    uint32 internal _uniswapOhmSusdsObservationWindow;
     uint256 internal _preUpgradeOhmTargetPrice;
+
+    uint256 internal constant PRICE_SCALE = 1e18;
 
     // ========== CONFIGURATION FUNCTIONS ========== //
 
@@ -80,15 +82,24 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Load Pyth contract address from args file (shared by all Pyth feeds)
         _pyth = _readBatchArgAddress("configurePriceV1_2", "pyth");
 
+        vm.label(kernel, "Kernel");
+        vm.label(priceModule, "PRICE v1.2");
+        vm.label(priceConfig, "PriceConfig v2");
+        vm.label(_usds, "USDS");
+        vm.label(_susds, "sUSDS");
+        vm.label(_weth, "WETH");
+        vm.label(_ohm, "OHM");
+        vm.label(_pyth, "Pyth");
+
         // Load configuration parameters from args file
-        _ohmWethObservationWindow = _readBatchArgUint256(
+        _uniswapOhmWethObservationWindow = _readBatchArgUint256(
             "configurePriceV1_2",
-            "ohmWethObservationWindow"
+            "uniswapOhmWethObservationWindow"
         ).encodeUInt32();
 
-        _ohmSusdsObservationWindow = _readBatchArgUint256(
+        _uniswapOhmSusdsObservationWindow = _readBatchArgUint256(
             "configurePriceV1_2",
-            "ohmSusdsObservationWindow"
+            "uniswapOhmSusdsObservationWindow"
         ).encodeUInt32();
 
         console2.log("Kernel:", kernel);
@@ -109,6 +120,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         }
 
         PRICEv1 oldPrice = PRICEv1(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+        vm.label(address(oldPrice), "PRICE v1 current module");
         _preUpgradeOhmTargetPrice = oldPrice.getTargetPrice();
         if (IPRICEv1(priceModule).observationFrequency() != oldPrice.observationFrequency()) {
             revert("PRICE observation frequency mismatch");
@@ -145,6 +157,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         _configureWeth(priceConfig);
         _configureOhm(priceConfig, oldPrice);
 
+        _setPostBatchValidateSelector(this._validateConfigurePriceV1_2PostBatch.selector);
+
         console2.log("PRICE v1.2 configuration batch prepared");
         proposeBatch();
     }
@@ -164,6 +178,12 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address simpleStrategy = _envAddressNotZero(
             "olympus.submodules.PRICE.SimplePriceFeedStrategy"
         );
+
+        vm.label(chainlinkFeeds, "PRICE.ChainlinkPriceFeeds");
+        vm.label(pythFeeds, "PRICE.PythPriceFeeds");
+        vm.label(uniswapV3Price, "PRICE.UniswapV3Price");
+        vm.label(erc4626Price, "PRICE.ERC4626Price");
+        vm.label(simpleStrategy, "PRICE.SimplePriceFeedStrategy");
 
         // Install ChainlinkPriceFeeds
         console2.log("1. Installing ChainlinkPriceFeeds submodule");
@@ -213,14 +233,23 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         address chainlinkDaiUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkDaiUsd");
 
         // Read deviation parameters from args file
-        uint16 usdsDeviationBps = SafeCast.encodeUInt16(
-            _readBatchArgUint256("configurePriceV1_2", "usdsDeviationBps")
+        uint16 usdsPriceFeedDeviationBps = SafeCast.encodeUInt16(
+            _readBatchArgUint256("configurePriceV1_2", "usdsPriceFeedDeviationBps")
         );
-        bool usdsStrictMode = _readBatchArgBool("configurePriceV1_2", "usdsStrictMode");
+        bool usdsRevertOnInsufficientPriceFeeds = _readBatchArgBool(
+            "configurePriceV1_2",
+            "usdsRevertOnInsufficientPriceFeeds"
+        );
 
-        // Read update threshold from args file
-        uint48 usdsUpdateThreshold = SafeCast.encodeUInt48(
-            _readBatchArgUint256("configurePriceV1_2", "usdsUpdateThreshold")
+        // Read update thresholds from args file
+        uint48 chainlinkUsdsUsdUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "chainlinkUsdsUsdUpdateThreshold")
+        );
+        uint48 chainlinkDaiUsdUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "chainlinkDaiUsdUpdateThreshold")
+        );
+        uint48 pythUsdsUsdUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "pythUsdsUsdUpdateThreshold")
         );
 
         // Read Pyth feed parameters from args file
@@ -229,6 +258,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             "configurePriceV1_2",
             "pythUsdsUsdMaxConfidence"
         );
+
+        vm.label(chainlinkUsdsUsd, "Chainlink USDS/USD");
+        vm.label(chainlinkDaiUsd, "Chainlink DAI/USD");
 
         console2.log("Chainlink USDS/USD:", chainlinkUsdsUsd);
         console2.log("Chainlink DAI/USD:", chainlinkDaiUsd);
@@ -239,8 +271,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // Create strategy component: getAveragePriceExcludingDeviations
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
-            usdsDeviationBps,
-            usdsStrictMode
+            usdsPriceFeedDeviationBps,
+            usdsRevertOnInsufficientPriceFeeds
         );
 
         // Create feed components using getOneFeedPrice
@@ -251,7 +283,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams({
                     feed: AggregatorV2V3Interface(chainlinkUsdsUsd),
-                    updateThreshold: usdsUpdateThreshold
+                    updateThreshold: chainlinkUsdsUsdUpdateThreshold
                 })
             )
         );
@@ -261,7 +293,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams({
                     feed: AggregatorV2V3Interface(chainlinkDaiUsd),
-                    updateThreshold: usdsUpdateThreshold
+                    updateThreshold: chainlinkDaiUsdUpdateThreshold
                 })
             )
         );
@@ -272,7 +304,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 PythPriceFeeds.OneFeedParams({
                     pyth: _pyth,
                     priceFeedId: pythUsdsUsdId,
-                    updateThreshold: usdsUpdateThreshold,
+                    updateThreshold: pythUsdsUsdUpdateThreshold,
                     maxConfidence: pythUsdsUsdMaxConfidence
                 })
             )
@@ -341,15 +373,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         // Read deviation parameters from args file
-        uint16 wethDeviationBps = SafeCast.encodeUInt16(
-            _readBatchArgUint256("configurePriceV1_2", "wethDeviationBps")
+        uint16 wethPriceFeedDeviationBps = SafeCast.encodeUInt16(
+            _readBatchArgUint256("configurePriceV1_2", "wethPriceFeedDeviationBps")
         );
-        bool wethStrictMode = _readBatchArgBool("configurePriceV1_2", "wethStrictMode");
+        bool wethRevertOnInsufficientPriceFeeds = _readBatchArgBool(
+            "configurePriceV1_2",
+            "wethRevertOnInsufficientPriceFeeds"
+        );
 
-        // Read update threshold from args file
-        uint48 wethUpdateThreshold = SafeCast.encodeUInt48(
-            _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
-        );
+        vm.label(chainlinkEthUsd, "Chainlink ETH/USD");
+        vm.label(redstoneEthUsd, "RedStone ETH/USD");
+        vm.label(chainlinkBtcUsd, "Chainlink BTC/USD");
+        vm.label(chainlinkEthBtc, "Chainlink ETH/BTC");
 
         console2.log("Chainlink ETH/USD:", chainlinkEthUsd);
         console2.log("RedStone ETH/USD:", redstoneEthUsd);
@@ -358,7 +393,18 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.logBytes32(pythEthUsdId);
         console2.log("Chainlink BTC/USD:", chainlinkBtcUsd);
         console2.log("Chainlink ETH/BTC:", chainlinkEthBtc);
-        console2.log("wETH update threshold:", wethUpdateThreshold);
+        console2.log(
+            "Chainlink ETH/USD update threshold:",
+            _readBatchArgUint256("configurePriceV1_2", "chainlinkEthUsdUpdateThreshold")
+        );
+        console2.log(
+            "RedStone ETH/USD update threshold:",
+            _readBatchArgUint256("configurePriceV1_2", "redstoneEthUsdUpdateThreshold")
+        );
+        console2.log(
+            "Pyth ETH/USD update threshold:",
+            _readBatchArgUint256("configurePriceV1_2", "pythEthUsdUpdateThreshold")
+        );
 
         // Create strategy component: getAveragePriceExcludingDeviations
         // When exactly two WETH feeds survive, the strategy benchmarks each price against
@@ -366,8 +412,8 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         // around a $2,000 average, i.e. a 10% spread between the two surviving feeds.
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
-            wethDeviationBps,
-            wethStrictMode
+            wethPriceFeedDeviationBps,
+            wethRevertOnInsufficientPriceFeeds
         );
 
         // Create feed components using getOneFeedPrice for first 3 feeds
@@ -378,7 +424,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams({
                     feed: AggregatorV2V3Interface(chainlinkEthUsd),
-                    updateThreshold: wethUpdateThreshold
+                    updateThreshold: SafeCast.encodeUInt48(
+                        _readBatchArgUint256("configurePriceV1_2", "chainlinkEthUsdUpdateThreshold")
+                    )
                 })
             )
         );
@@ -388,7 +436,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 ChainlinkPriceFeeds.OneFeedParams({
                     feed: AggregatorV2V3Interface(redstoneEthUsd),
-                    updateThreshold: wethUpdateThreshold
+                    updateThreshold: SafeCast.encodeUInt48(
+                        _readBatchArgUint256("configurePriceV1_2", "redstoneEthUsdUpdateThreshold")
+                    )
                 })
             )
         );
@@ -399,13 +449,15 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 PythPriceFeeds.OneFeedParams({
                     pyth: _pyth,
                     priceFeedId: pythEthUsdId,
-                    updateThreshold: wethUpdateThreshold,
+                    updateThreshold: SafeCast.encodeUInt48(
+                        _readBatchArgUint256("configurePriceV1_2", "pythEthUsdUpdateThreshold")
+                    ),
                     maxConfidence: pythEthUsdMaxConfidence
                 })
             )
         );
         // 4th feed: Derived ETH-USD from ETH-BTC × BTC-USD. ETH/BTC has a 24-hour
-        // heartbeat, while BTC/USD uses the standard 1-hour WETH feed threshold.
+        // heartbeat, while BTC/USD uses the standard 1-hour Chainlink feed threshold.
         feeds[3] = _encodeFeed(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
@@ -413,11 +465,11 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
                 ChainlinkPriceFeeds.TwoFeedParams({
                     firstFeed: AggregatorV2V3Interface(chainlinkEthBtc),
                     firstUpdateThreshold: SafeCast.encodeUInt48(
-                        _readBatchArgUint256("configurePriceV1_2", "wethEthBtcUpdateThreshold")
+                        _readBatchArgUint256("configurePriceV1_2", "chainlinkEthBtcUpdateThreshold")
                     ),
                     secondFeed: AggregatorV2V3Interface(chainlinkBtcUsd),
                     secondUpdateThreshold: SafeCast.encodeUInt48(
-                        _readBatchArgUint256("configurePriceV1_2", "wethBtcUsdUpdateThreshold")
+                        _readBatchArgUint256("configurePriceV1_2", "chainlinkBtcUsdUpdateThreshold")
                     )
                 })
             )
@@ -448,7 +500,10 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         uint16 ohmDeviationBps = SafeCast.encodeUInt16(
             _readBatchArgUint256("configurePriceV1_2", "ohmDeviationBps")
         );
-        bool ohmStrictMode = _readBatchArgBool("configurePriceV1_2", "ohmStrictMode");
+        bool ohmRevertOnInsufficientPriceFeeds = _readBatchArgBool(
+            "configurePriceV1_2",
+            "ohmRevertOnInsufficientPriceFeeds"
+        );
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
@@ -457,7 +512,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         IPRICEv2.Component memory strategy = _encodeDeviationStrategy(
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
             ohmDeviationBps,
-            ohmStrictMode
+            ohmRevertOnInsufficientPriceFeeds
         );
         IPRICEv2.Component[] memory feeds = _getOhmFeeds();
 
@@ -465,8 +520,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             feeds.length,
             "ohm"
         );
-        uint256 ohmInitialPrice = feedExpectations[0].expectedPrice;
-        console2.log("OHM initial price:", ohmInitialPrice);
+        console2.log("OHM initial price:", feedExpectations[0].expectedPrice);
 
         // Set last observation time to current time
         (
@@ -492,19 +546,36 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         console2.log("OHM asset configured with migrated 30-day moving average");
     }
 
-    function _getOhmFeeds() internal view returns (IPRICEv2.Component[] memory feeds_) {
+    /// @notice Validate configured asset prices after the batch simulation
+    function _validateConfigurePriceV1_2PostBatch() external view {
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        IPRICEv2 price = IPRICEv2(address(Kernel(kernel).getModuleForKeycode(toKeycode("PRICE"))));
+
+        console2.log("\n Validating PRICE v1.2 Post-Batch Prices ");
+        _logExpectedAndActualPrice(price, "wETH", _weth, "weth");
+        _logExpectedAndActualPrice(price, "sUSDS", _susds, "susds");
+        _logExpectedAndActualPrice(price, "OHM", _ohm, "ohm");
+        _logExpectedAndActualPrice(price, "USDS", _usds, "usds");
+    }
+
+    function _getOhmFeeds() internal returns (IPRICEv2.Component[] memory feeds_) {
         // Read Uniswap pool addresses from args file
         address uniswapOhmWeth = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmWeth");
         address uniswapOhmSusds = _readBatchArgAddress("configurePriceV1_2", "uniswapOhmSusds");
         address chainlinkOhmEth = _envAddressNotZero("external.chainlink.ohmEthPriceFeed");
         address chainlinkEthUsd = _readBatchArgAddress("configurePriceV1_2", "chainlinkEthUsd");
 
-        uint48 ohmUpdateThreshold = SafeCast.encodeUInt48(
-            _readBatchArgUint256("configurePriceV1_2", "ohmUpdateThreshold")
+        uint48 chainlinkOhmEthUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "chainlinkOhmEthUpdateThreshold")
         );
-        uint48 wethUpdateThreshold = SafeCast.encodeUInt48(
-            _readBatchArgUint256("configurePriceV1_2", "wethUpdateThreshold")
+        uint48 chainlinkEthUsdUpdateThreshold = SafeCast.encodeUInt48(
+            _readBatchArgUint256("configurePriceV1_2", "chainlinkEthUsdUpdateThreshold")
         );
+
+        vm.label(uniswapOhmWeth, "Uniswap OHM/WETH");
+        vm.label(uniswapOhmSusds, "Uniswap OHM/sUSDS");
+        vm.label(chainlinkOhmEth, "Chainlink OHM/ETH");
+        vm.label(chainlinkEthUsd, "Chainlink ETH/USD");
 
         console2.log("Uniswap OHM/WETH:", uniswapOhmWeth);
         console2.log("Uniswap OHM/sUSDS:", uniswapOhmSusds);
@@ -519,7 +590,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmWeth),
-                    observationWindowSeconds: _ohmWethObservationWindow
+                    observationWindowSeconds: _uniswapOhmWethObservationWindow
                 })
             )
         );
@@ -529,7 +600,7 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 UniswapV3Price.UniswapV3Params({
                     pool: IUniswapV3Pool(uniswapOhmSusds),
-                    observationWindowSeconds: _ohmSusdsObservationWindow
+                    observationWindowSeconds: _uniswapOhmSusdsObservationWindow
                 })
             )
         );
@@ -539,9 +610,9 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
             abi.encode(
                 ChainlinkPriceFeeds.TwoFeedParams({
                     firstFeed: AggregatorV2V3Interface(chainlinkOhmEth),
-                    firstUpdateThreshold: ohmUpdateThreshold,
+                    firstUpdateThreshold: chainlinkOhmEthUpdateThreshold,
                     secondFeed: AggregatorV2V3Interface(chainlinkEthUsd),
-                    secondUpdateThreshold: wethUpdateThreshold
+                    secondUpdateThreshold: chainlinkEthUsdUpdateThreshold
                 })
             )
         );
@@ -670,6 +741,43 @@ contract ConfigurePriceV1_2 is BatchScriptV2 {
         );
 
         expectations_ = _makeFeedExpectations(length_, expectedPrice, toleranceBps);
+    }
+
+    function _logExpectedAndActualPrice(
+        IPRICEv2 price_,
+        string memory symbol_,
+        address asset_,
+        string memory assetPrefix_
+    ) internal view {
+        uint256 expectedPrice = _readBatchArgUint256(
+            "configurePriceV1_2",
+            string.concat(assetPrefix_, "ExpectedPrice")
+        );
+        uint256 actualPrice = price_.getPrice(asset_);
+
+        console2.log(string.concat(symbol_, " expected price: ", _format18Decimals(expectedPrice)));
+        console2.log(string.concat(symbol_, " getPrice(): ", _format18Decimals(actualPrice)));
+    }
+
+    function _format18Decimals(uint256 value_) internal pure returns (string memory) {
+        return
+            string.concat(vm.toString(value_ / PRICE_SCALE), ".", _leftPad18(value_ % PRICE_SCALE));
+    }
+
+    function _leftPad18(uint256 value_) internal pure returns (string memory) {
+        bytes memory valueBytes = bytes(vm.toString(value_));
+        if (valueBytes.length >= 18) return string(valueBytes);
+
+        bytes memory padded = new bytes(18);
+        uint256 paddingLength = 18 - valueBytes.length;
+        for (uint256 i; i < paddingLength; i++) {
+            padded[i] = "0";
+        }
+        for (uint256 i; i < valueBytes.length; i++) {
+            padded[paddingLength + i] = valueBytes[i];
+        }
+
+        return string(padded);
     }
 
     /// @notice Create a price feed expectation array for feeds that should share a price envelope

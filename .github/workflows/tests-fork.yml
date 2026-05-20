@@ -5,8 +5,11 @@ on:
             - master
     pull_request:
 
+permissions:
+    contents: read
+
 jobs:
-    run-ci:
+    fork-tests:
         name: Fork tests - ${{ matrix.shard.name }}
         runs-on: ubuntu-latest
         strategy:
@@ -23,25 +26,13 @@ jobs:
                       script: test:fork:misc
 
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
               with:
-                  submodules: recursive
+                  persist-credentials: false
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 20
-
-            - uses: pnpm/action-setup@v2
-              with:
-                  version: 9
-
-            - name: Install Foundry
-              uses: foundry-rs/foundry-toolchain@v1
-              with:
-                  version: 1.5.1
-
-            - name: Install dependencies
-              run: pnpm install --frozen-lockfile
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
 
             - name: Build
               run: pnpm run build
