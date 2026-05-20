@@ -16,25 +16,68 @@ Re-configure price resolution in the protocol to utilise multiple price feeds wh
     - The Operator, YieldRepurchaseFacility and EmissionManager policies rely on the PRICE v1 module interface in order to determine the price of OHM. The v1.2 module maintains backwards-compatibility with the v1 interface, so that existing policies do not need to be updated.
 - The upgrade will allow assets to be configured with multiple price feeds, and strategies to resolve the price from the multiple price feeds. This will increase resilience in adverse conditions.
 
+## Timelock Behaviour
+
+PRICE configuration is split between immediate operational actions and queued configuration actions. The timelock is intended to give governance and emergency operators time to review material changes to live price resolution before they can affect protocol behaviour.
+
+The following actions are queued through `PriceConfigv2` and can only be executed after the current `timelockDelay`:
+
+- `queueRemoveAsset`: removes an approved asset from PRICE.
+- `queueUpdateAsset`: updates an approved asset's feeds, strategy or moving-average configuration.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation, in order to allow for re-configuration when the last observation is stale or out of consensus. If the stored value is stale or out of consensus, call `storeObservation(asset)` after updating the asset before consumers rely on CURRENT price reads.
+- `queueUpgradeSubmodule`: upgrades an already-installed PRICE submodule.
+- `queueExecOnSubmodule`: performs a call on an installed PRICE submodule.
+- `queueTimelockDelay`: changes the delay used for newly queued actions.
+
+Queued actions store their action type, proposer, queue timestamp, executable timestamp, expiry timestamp and encoded payload. They are executable by any address after the delay has elapsed and before expiry. This keeps execution permissionless while the delay and emergency cancellation are the authorization boundaries. The emergency role can cancel queued actions before execution; this role is expected to be independent from the roles that can queue PRICE changes.
+
+The following actions are not timelocked:
+
+- `addAsset`: Adding a new asset will not affect existing price resolution paths, so this does not require a timelock.
+    - When the final configuration uses the moving average, validation uses a synthetic moving-average value derived from the current raw feed observation. If the stored value is out of consensus, call `storeObservation(asset)` after adding the asset before consumers rely on CURRENT price reads.
+- `installSubmodule`: used to install new submodule keycodes. Installing a submodule does not replace an existing live submodule path; replacement is handled by `queueUpgradeSubmodule`.
+- `storeObservation` and `storeObservations`: operational maintenance for moving-average data.
+
+## Non-Contract Assets and ERC-7726
+
+The `PriceCache` policy supports non-contract assets in addition to normal ERC-20 addresses. This is relevant for standards such as ERC-7726, which explicitly allows special asset identifiers such as:
+
+- the ERC-7528 ETH sentinel `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
+- ISO-4217 code addresses such as `address(840)` for USD
+
+For contract assets, oracle adapters and factories can read decimals and symbols directly from the token contract. For non-contract assets, that metadata must instead be configured in `PriceCache` via `setNonContractAssetMetadata(asset_, decimals_, symbol_)`.
+
+Unlike ERC-20 metadata, a non-contract asset does not have an intrinsic decimal scale. Its decimal scale is the value currently configured in `PriceCache`. Integrations that use non-contract assets should confirm the active value with `PriceCache.assetDecimals(asset_)`, especially after metadata updates. Morpho-compatible oracles recalculate their scale factor from the active cache decimals when read, so a non-contract asset decimal update changes the scale used by `scaleFactor()` and `price()`.
+
+The required conditions for non-contract asset support are:
+
+1. the asset must be registered in `PRICE` as a non-contract asset, unless it is the configured unit of account
+2. the asset must be configured in `PRICE` with a price source
+3. the asset must have metadata configured in `PriceCache`
+
+This allows `ERC7726OracleCloneable`, `MorphoOracleFactory`, and `ChainlinkOracleFactory` to support non-contract assets without assuming that the asset implements ERC-20 metadata methods such as `decimals()` or `symbol()`.
+
 ## Assets
 
 | Asset | Address | Price Feeds | Strategy | Store MA | Use MA | MA Duration |
 | ----- | ------- | ----------- | -------- | -------- | ------ | ----------- |
 | USDS | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [Chainlink DAI-USD](https://etherscan.io/address/0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9), [Pyth USDS-USD](https://insights.pyth.network/price-feeds/Crypto.USDS%2FUSD) | `getAveragePriceExcludingDeviations()` with 1% deviation from median on strict mode | No | No | 0 |
 | sUSDS | [0xa39...fbD](https://etherscan.io/address/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | ERC4626 Submodule | None | No | No | 0 |
-| wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD), [ETH-BTC](https://etherscan.io/address/0xAc559F25B1619171CbC396a50854A3240b6A4e99)x[BTC-USD](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | `getAveragePriceExcludingDeviations()` with 2% deviation from median on strict mode | No | No | 0 |
-| OHM | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755) | `getAveragePrice()` on strict mode | Yes | No | 604800 (7 days) |
+| wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD), [ETH-BTC](https://etherscan.io/address/0xAc559F25B1619171CbC396a50854A3240b6A4e99)x[BTC-USD](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | `getAveragePriceExcludingDeviations()` with 5% deviation from median on strict mode | No | No | 0 |
+| OHM | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755), [Chainlink OHM-ETH](https://etherscan.io/address/0x9a72298ae3886221820B1c878d12D872087D3a23)x[Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419) | `getAveragePrice()` on strict mode | Yes | No | 2592000 (30 days) |
 
 - Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, RedStone, Pyth and Chainlink-derived (ETH-BTC × BTC-USD) oracles.
 - The price of USDS will be determined as the average of the price feeds from 3 sources: 2 Chainlink feeds (USDS-USD and DAI-USD) and 1 Pyth feed (USDS-USD).
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
-- The price of ETH will be determined as the average of the price feeds from 4 different sources.
-    - After any zero value or deviating values (> 2% from the median) have been excluded, the average is taken.
+- The price of wETH will be determined as the average of the price feeds from 4 different sources.
+    - After any zero value or deviating values (> 5% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
-- The price of OHM will be determined by completely separate paths - USDS and wETH, to reduce the impact from the manipulation of price feeds.
+    - If exactly two WETH feeds remain, the strategy uses their average as the deviation benchmark. With a 5% threshold, a $1,900 and $2,100 pair is exactly at the boundary around a $2,000 average, allowing a 10% spread between the two surviving feeds.
+- The price of OHM will be determined by three separate paths: OHM/sUSDS (via USDS through `ERC4626.getPriceFromUnderlying(sUSDS)`), wETH and the Chainlink OHM-ETH × ETH-USD derived feed. Strict mode remains enabled, so OHM requires two valid prices and can tolerate one failed OHM path.
+- OHM's 30-day moving average state is migrated from the live PRICE v1 module during the upgrade. The moving average is stored for backwards-compatible target-price reads and is not used as an input to OHM spot price resolution.
 
 ### Price Feed Configuration Parameters
 
@@ -50,7 +93,10 @@ The **update threshold** is the maximum number of seconds that can elapse since 
 | wETH | Chainlink ETH-USD | 3,600 sec (1 hour) |
 | wETH | RedStone ETH-USD | 3,600 sec (1 hour) |
 | wETH | Pyth ETH-USD | 3,600 sec (1 hour) |
-| wETH | Chainlink ETH-BTC × BTC-USD | 3,600 sec (1 hour) |
+| wETH | Chainlink ETH-BTC leg | 86,400 sec (24 hours) |
+| wETH | Chainlink BTC-USD leg | 3,600 sec (1 hour) |
+| OHM | Chainlink OHM-ETH | 86,400 sec (24 hours) |
+| OHM | Chainlink OHM-ETH × ETH-USD | 3,600 sec (1 hour) for ETH-USD |
 
 > **IMPORTANT:** Pyth price feeds require regular price updates to remain valid. If the feed is not updated within the `updateThreshold` period, the price resolution will fail. Use the [pyth-price-pusher](https://github.com/OlympusDAO/pyth-price-pusher) tool to manage automated price updates for all Pyth feeds.
 
@@ -84,8 +130,13 @@ The **max confidence interval** is a Pyth-specific parameter that sets the maxim
 
 1. Pyth returns both a `price` and a `conf` (confidence) value
 2. The contract converts `maxConfidence` from 18-decimal scale to Pyth's native scale (based on the feed's exponent)
-3. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
-4. This prevents using prices with high uncertainty
+3. If the converted value exceeds `uint64`, it is clamped to `type(uint64).max`
+4. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
+5. For Pyth two-feed reads, the contract validates each feed independently, derives a conservative confidence interval for the output product or ratio, and compares it against `outputMaxConfidence`
+6. If the derived output confidence exceeds `outputMaxConfidence`, the feed reverts with `Pyth_DerivedFeedConfidenceExcessive`
+7. For division, if the denominator confidence is greater than or equal to the denominator price, the feed reverts with `Pyth_DerivedFeedConfidenceInvalid`
+
+Pyth two-feed parameters include `firstMaxConfidence`, `secondMaxConfidence`, and `outputMaxConfidence`, all in output decimals. The first two thresholds cap each input feed independently. `outputMaxConfidence` caps the uncertainty of the derived price that callers actually consume.
 
 ### wETH Price Resolution
 
@@ -101,7 +152,7 @@ sequenceDiagram
 
     User->>WETH: getPrice(wETH)
 
-    Note over WETH: Strategy: getAveragePriceExcludingDeviations()<br/>Deviation: 2% from median, Strict Mode: 2+ values required
+    Note over WETH: Strategy: getAveragePriceExcludingDeviations()<br/>Deviation: 5% from median, Strict Mode: 2+ values required
 
     par Chainlink ETH-USD Path
         WETH->>CL_ETH: latestRoundData()
@@ -120,7 +171,7 @@ sequenceDiagram
         Note over WETH: Calculate: ETH-BTC × BTC-USD = ETH-USD
     end
 
-    Note over WETH: Filter: Exclude zero and values deviating >2% from median<br/>Average: Sum of valid values / count
+    Note over WETH: Filter: Exclude zero and values deviating >5% from median<br/>Average: Sum of valid values / count
     WETH-->>User: wETH price
 ```
 
@@ -161,6 +212,7 @@ sequenceDiagram
     participant OHM
     participant OHM_WETH_Pool as OHM/wETH Pool
     participant OHM_SUSDS_Pool as OHM/sUSDS Pool
+    participant CL_OHMETH as Chainlink OHM-ETH
     participant WETH
     participant CL_ETH as Chainlink ETH-USD
     participant RS_ETH as RedStone ETH-USD
@@ -182,7 +234,7 @@ sequenceDiagram
         OHM->>OHM_WETH_Pool: getPrice(OHM/wETH)
         OHM_WETH_Pool->>WETH: getPrice(wETH)
 
-        Note over WETH: Strategy: getAveragePriceExcludingDeviations()<br/>Deviation: 2% from median, Strict Mode: 2+ values required
+        Note over WETH: Strategy: getAveragePriceExcludingDeviations()<br/>Deviation: 5% from median, Strict Mode: 2+ values required
 
         par Chainlink ETH-USD Path
             WETH->>CL_ETH: latestRoundData()
@@ -201,10 +253,10 @@ sequenceDiagram
             Note over WETH: Calculate: ETH-BTC × BTC-USD = ETH-USD
         end
 
-        Note over WETH: Filter: Exclude zero and values deviating >2% from median<br/>Average: Sum of valid values / count
+        Note over WETH: Filter: Exclude zero and values deviating >5% from median<br/>Average: Sum of valid values / count
         WETH-->>OHM_WETH_Pool: wETH price
         OHM_WETH_Pool-->>OHM: OHM/wETH price
-    and OHM/sUSDS Path
+    and OHM/sUSDS (via USDS) Path
         OHM->>OHM_SUSDS_Pool: getPrice(OHM/sUSDS)
         OHM_SUSDS_Pool->>SUSDS: getPrice(sUSDS)
 
@@ -232,8 +284,14 @@ sequenceDiagram
         ERC4626-->>SUSDS: sUSDS price
         SUSDS-->>OHM_SUSDS_Pool: sUSDS price
         OHM_SUSDS_Pool-->>OHM: OHM/sUSDS price
+    and Chainlink OHM/ETH Path
+        OHM->>CL_OHMETH: latestRoundData()
+        CL_OHMETH-->>OHM: OHM-ETH price
+        OHM->>CL_ETH: latestRoundData()
+        CL_ETH-->>OHM: ETH-USD price
+        Note over OHM: Calculate: OHM-ETH × ETH-USD = OHM-USD
     end
 
-    Note over OHM: Average: (OHM/wETH + OHM/sUSDS) / 2
+    Note over OHM: Strict average: at least 2 valid OHM prices required
     OHM-->>User: OHM price
 ```

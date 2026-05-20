@@ -13,6 +13,7 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 import {MockUniV3Pair} from "test/mocks/MockUniV3Pair.sol";
 
 // Interfaces
+import {IUniswapV3Factory} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
@@ -38,12 +39,15 @@ contract UniswapV3PriceTest is Test {
     address internal UNI = 0x1d42064Fc4Beb5F8aAF85F4617AE8b3b5B8Bd801;
     address internal USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address internal WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+    uint24 internal constant UNISWAP_V3_FEE = 500;
 
     uint8 internal PRICE_DECIMALS = 18;
 
     uint256 internal USDC_PRICE = 10 ** PRICE_DECIMALS;
 
     uint32 internal OBSERVATION_SECONDS = 600;
+    uint32 internal constant AVERAGE_BLOCK_TIME_SECONDS = 12;
 
     // Live value taken from https://etherscan.io/address/0x4e0924d3a751be199c426d52fb1f2337fa96f736#readContract
     uint160 internal uniSqrtPrice = 79406181270273404968401;
@@ -68,7 +72,11 @@ contract UniswapV3PriceTest is Test {
             mockPrice = new MockPrice(kernel, uint8(18), uint32(8 hours));
             mockPrice.setTimestamp(uint48(block.timestamp));
             mockPrice.setPriceDecimals(PRICE_DECIMALS);
-            uniSubmodule = new UniswapV3Price(mockPrice);
+            uniSubmodule = new UniswapV3Price(
+                mockPrice,
+                AVERAGE_BLOCK_TIME_SECONDS,
+                UNISWAP_V3_FACTORY
+            );
         }
 
         // Set up the mock UniV3 pool
@@ -76,8 +84,11 @@ contract UniswapV3PriceTest is Test {
             mockUniPair = new MockUniV3Pair();
             mockUniPair.setToken0(LUSD);
             mockUniPair.setToken1(USDC);
+            mockUniPair.setFactory(UNISWAP_V3_FACTORY);
+            mockUniPair.setFee(UNISWAP_V3_FEE);
             mockUniPair.setSqrtPrice(uniSqrtPrice);
             mockUniPair.setTickCumulatives(uniTickCumulatives);
+            mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, address(mockUniPair));
         }
 
         // Mock prices from PRICE
@@ -116,6 +127,19 @@ contract UniswapV3PriceTest is Test {
         vm.mockCall(asset_, abi.encodeWithSignature("decimals()"), abi.encode(decimals_));
     }
 
+    function mockCanonicalPool(
+        address token0_,
+        address token1_,
+        uint24 fee_,
+        address pool_
+    ) internal {
+        vm.mockCall(
+            UNISWAP_V3_FACTORY,
+            abi.encodeWithSelector(IUniswapV3Factory.getPool.selector, token0_, token1_, fee_),
+            abi.encode(pool_)
+        );
+    }
+
     function expectRevert_PriceZero(address asset_) internal {
         bytes memory err = abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, asset_);
         vm.expectRevert(err);
@@ -132,6 +156,30 @@ contract UniswapV3PriceTest is Test {
     }
 
     // ========= TESTS ========= //
+
+    function test_constructor_givenAverageBlockTimeZero_reverts() public {
+        Kernel kernel = new Kernel();
+        MockPrice mockPriceLocal = new MockPrice(kernel, uint8(18), uint32(8 hours));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_AverageBlockTimeInvalid.selector,
+            uint32(0)
+        );
+        vm.expectRevert(err);
+        new UniswapV3Price(mockPriceLocal, uint32(0), UNISWAP_V3_FACTORY);
+    }
+
+    function test_constructor_givenFactoryZero_reverts() public {
+        Kernel kernel = new Kernel();
+        MockPrice mockPriceLocal = new MockPrice(kernel, uint8(18), uint32(8 hours));
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_FactoryInvalid.selector,
+            address(0)
+        );
+        vm.expectRevert(err);
+        new UniswapV3Price(mockPriceLocal, AVERAGE_BLOCK_TIME_SECONDS, address(0));
+    }
 
     // ========= PARAMS LENGTH VALIDATION ========= //
 
@@ -308,6 +356,22 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenTWAP(WETH, PRICE_DECIMALS, params);
     }
 
+    function test_getTokenTWAP_givenPoolNotReturnedByCanonicalFactory_reverts() public {
+        address canonicalPool = address(0xBEEF);
+        mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, canonicalPool);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolFactoryInvalid.selector,
+            address(mockUniPair),
+            canonicalPool,
+            UNISWAP_V3_FACTORY
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, OBSERVATION_SECONDS);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
     function test_getTokenTWAP_usesPrice() public {
         // Mock USDC as $1.01
         mockAssetPrice(USDC, 1.01 * 1e18);
@@ -357,6 +421,7 @@ contract UniswapV3PriceTest is Test {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
+        mockCanonicalPool(UNI, WETH, UNISWAP_V3_FEE, address(mockUniPair));
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = -30809700251260;
         tickCumulatives[1] = -30809733307660;
@@ -425,6 +490,52 @@ contract UniswapV3PriceTest is Test {
             address(mockUniPair),
             observationWindow,
             MIN_OBSERVATION_SECONDS
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function test_getTokenTWAP_givenObservationCardinalityBelowMinimum_reverts() public {
+        uint32 observationWindow = 1800;
+        uint16 observationCardinality = 149;
+        uint16 minimumCardinality = 150;
+        mockUniPair.setObservationCardinality(observationCardinality, observationCardinality);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ObservationCardinalityInsufficient.selector,
+            address(mockUniPair),
+            observationCardinality,
+            observationWindow,
+            minimumCardinality
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodeParams(mockUniPair, observationWindow);
+        uniSubmodule.getTokenTWAP(LUSD, PRICE_DECIMALS, params);
+    }
+
+    function testFuzz_getTokenTWAP_givenObservationWindowRequiresPartialAdditionalObservation_reverts(
+        uint32 observationWindow_
+    ) public {
+        // Bound to keep expected minimum cardinality within uint16.
+        uint32 maxWindow = uint32(type(uint16).max) * AVERAGE_BLOCK_TIME_SECONDS - 1;
+        uint32 observationWindow = uint32(
+            bound(observationWindow_, MIN_OBSERVATION_SECONDS + 1, maxWindow)
+        );
+        vm.assume(observationWindow % AVERAGE_BLOCK_TIME_SECONDS != 0);
+
+        uint16 observationCardinality = uint16(observationWindow / AVERAGE_BLOCK_TIME_SECONDS);
+        uint32 minimumCardinality = uint32(observationCardinality) + 1;
+        mockUniPair.setObservationCardinality(observationCardinality, observationCardinality);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_ObservationCardinalityInsufficient.selector,
+            address(mockUniPair),
+            observationCardinality,
+            observationWindow,
+            minimumCardinality
         );
         vm.expectRevert(err);
 
@@ -681,6 +792,22 @@ contract UniswapV3PriceTest is Test {
         uniSubmodule.getTokenPrice(WETH, PRICE_DECIMALS, params);
     }
 
+    function test_getTokenPrice_givenPoolNotReturnedByCanonicalFactory_reverts() public {
+        address canonicalPool = address(0xBEEF);
+        mockCanonicalPool(LUSD, USDC, UNISWAP_V3_FEE, canonicalPool);
+
+        bytes memory err = abi.encodeWithSelector(
+            UniswapV3Price.UniswapV3_PoolFactoryInvalid.selector,
+            address(mockUniPair),
+            canonicalPool,
+            UNISWAP_V3_FACTORY
+        );
+        vm.expectRevert(err);
+
+        bytes memory params = encodePoolParams(mockUniPair);
+        uniSubmodule.getTokenPrice(LUSD, PRICE_DECIMALS, params);
+    }
+
     function test_getTokenPrice_priceDecimalsMaximum_reverts() public {
         uint8 priceDecimals = MAX_DECIMALS + 1;
         mockAssetPrice(USDC, USDC_PRICE.mulDiv(10 ** MAX_DECIMALS, 10 ** PRICE_DECIMALS));
@@ -844,6 +971,7 @@ contract UniswapV3PriceTest is Test {
         // Mock the UNI-wETH pool
         mockUniPair.setToken0(UNI);
         mockUniPair.setToken1(WETH);
+        mockCanonicalPool(UNI, WETH, UNISWAP_V3_FEE, address(mockUniPair));
         int56[] memory tickCumulatives = new int56[](2);
         tickCumulatives[0] = -30809700251260;
         tickCumulatives[1] = -30809733307660;

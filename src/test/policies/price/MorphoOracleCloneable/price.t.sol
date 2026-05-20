@@ -3,11 +3,11 @@
 pragma solidity >=0.8.15;
 
 import {Actions} from "src/Kernel.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {MorphoOracleCloneableTest} from "./MorphoOracleCloneableTest.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
     // The SwapMock contract is used as inspiration for how to validate that the
@@ -26,6 +26,13 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         oracle.price();
     }
 
+    function test_whenFactoryPolicyIsDeactivated_reverts() public {
+        kernel.executeAction(Actions.DeactivatePolicy, address(factory));
+
+        vm.expectRevert(IOracleFactory.OracleFactory_PolicyNotActive.selector);
+        oracle.price();
+    }
+
     // when oracle is not enabled
     //  [X] it reverts with MorphoOracle_NotEnabled
 
@@ -35,50 +42,76 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         oracle.price();
     }
 
-    // when collateral token price is zero
-    //  [X] it reverts with PRICE_PriceZero
+    // when collateral token cache is stale
+    //  [X] it reverts with MorphoOracle_Stale
 
-    function test_whenCollateralTokenPriceIsZero_reverts() public {
+    function test_whenCollateralTokenCacheIsStale_reverts() public {
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+
         // Force stale state; cached-only semantics should revert stale before using live prices.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
-
-        // Set collateral token price to zero
-        _setPRICEPrices(address(collateralToken), 0);
+        vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
-                DEFAULT_MAX_AGE
+                cachedAt,
+                latestPermissibleTimestamp
             )
         );
         oracle.price();
     }
 
-    // when loan token price is zero
-    //  [X] it reverts with PRICE_PriceZero
+    // when loan token cache is stale
+    //  [X] it reverts with MorphoOracle_Stale
 
-    function test_whenLoanTokenPriceIsZero_reverts() public {
+    function test_whenLoanTokenCacheIsStale_reverts() public {
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
+
         // Force stale state; cached-only semantics should revert stale before using live prices.
-        vm.warp(block.timestamp + DEFAULT_MAX_AGE + 1);
-
-        // Set loan token price to zero
-        _setPRICEPrices(address(loanToken), 0);
+        vm.warp(uint256(cachedAt) + DEFAULT_MAX_AGE + 1);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
-                uint48(1),
-                DEFAULT_MAX_AGE
+                cachedAt,
+                latestPermissibleTimestamp
             )
         );
+        oracle.price();
+    }
+
+    // when collateral token cached price is zero
+    //  [X] it reverts with MorphoOracle_InvalidPrice
+
+    function test_whenCollateralTokenCachedPriceIsZero_revertsInvalidPrice() public {
+        _setCachePrice(address(collateralToken), 0);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+
+        vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
+        oracle.price();
+    }
+
+    // when loan token cached price is zero
+    //  [X] it reverts with MorphoOracle_InvalidPrice
+
+    function test_whenLoanTokenCachedPriceIsZero_revertsInvalidPrice() public {
+        _setCachePrice(address(loanToken), 0);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+
+        vm.expectRevert(IMorphoOracle.MorphoOracle_InvalidPrice.selector);
         oracle.price();
     }
 
     // [X] it calculates price correctly
     // [X] it returns price with correct scale (36 decimals + 18 - 18)
 
-    function test_success() public view {
+    function test_whenCacheIsFresh_returnsCorrectScaledPrice() public view {
         // oracle.price() returns the price of 1 collateral token quoted in loan tokens, scaled by 1e36
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
@@ -129,7 +162,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newCollateralToken = new MockERC20("New Collateral Token", "NEWCOL", 9);
 
         // Set collateral token price to 2e18
-        _setPRICEPrices(address(newCollateralToken), 2e18);
+        _setCachePrice(address(newCollateralToken), 2e18);
 
         // Create the oracle with the new collateral token
         vm.prank(admin);
@@ -183,7 +216,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         MockERC20 newLoanToken = new MockERC20("New Loan Token", "NEWLOAN", 9);
 
         // Set loan token price to 1e18
-        _setPRICEPrices(address(newLoanToken), 1e18);
+        _setCachePrice(address(newLoanToken), 1e18);
 
         // Create the oracle with the new loan token
         vm.prank(admin);
@@ -229,6 +262,41 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         );
     }
 
+    // when collateral has 0 decimals and loan has 18 decimals
+    //  [X] it returns the correctly scaled non-zero price for a 1:3 ratio
+    function test_whenZeroDecimalCollateralAndOneToThreeRatio_returnsNonZeroPrice() public {
+        // Create a new collateral token with 0 decimals.
+        MockERC20 newCollateralToken = new MockERC20("Zero Dec Collateral", "ZCOL", 0);
+
+        // Set prices to collateral=1e18 USD and loan=3e18 USD.
+        _setCachePrice(address(newCollateralToken), 1e18);
+        _setCachePrice(address(loanToken), 3e18);
+
+        // Create oracle for the new pair.
+        vm.prank(admin);
+        address newOracle = factory.createOracle(
+            address(newCollateralToken),
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        // scaleFactor = 1e54 (36 + 18 - 0)
+        // price = (1e18 * 1e54) / 3e18 = 1e54 / 3
+        uint256 expectedPrice = 333333333333333333333333333333333333333333333333333333;
+        uint256 actualPrice = IMorphoOracle(newOracle).price();
+        assertEq(actualPrice, expectedPrice, "Price should preserve non-zero precision");
+
+        // loan tokens per collateral token = 1 * price / 1e36 = 333333333333333333
+        uint256 expectedLoanTokensPerCollateralToken = 333333333333333333;
+        uint256 actualLoanTokensPerCollateralToken = actualPrice / 1e36;
+        assertEq(
+            actualLoanTokensPerCollateralToken,
+            expectedLoanTokensPerCollateralToken,
+            "Loan tokens per collateral token should be correctly scaled"
+        );
+    }
+
     // when collateral live price changes
     //  [X] it keeps returning cached price until cache refresh
     //  [X] it reflects new price after cache refresh
@@ -239,7 +307,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
         // Change live collateral price only (do not cache yet)
-        priceModule.setPrice(address(collateralToken), 3e18);
+        _setCachePrice(address(collateralToken), 3e18);
 
         // Cached-only semantics: value should remain unchanged before cache refresh
         uint256 staleCachedPrice = oracle.price();
@@ -247,8 +315,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Refresh both caches to pull in new live values
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         // New price: 3e18 / 1e18 * 1e36 = 3e36
         uint256 newPrice = oracle.price();
@@ -265,7 +332,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
         // Change live loan price only (do not cache yet)
-        priceModule.setPrice(address(loanToken), 2e18);
+        _setCachePrice(address(loanToken), 2e18);
 
         // Cached-only semantics: value should remain unchanged before cache refresh
         uint256 staleCachedPrice = oracle.price();
@@ -273,65 +340,204 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
         // Refresh both caches to pull in new live values
         vm.warp(block.timestamp + 1);
-        priceModule.cachePrice(address(collateralToken));
-        priceModule.cachePrice(address(loanToken));
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
 
         // New price: 2e18 / 2e18 * 1e36 = 1e36
         uint256 newPrice = oracle.price();
         assertEq(newPrice, 1e36, "Price should reflect new loan price");
     }
 
-    function test_whenCollateralAndLoanTimestampsDiffer_reverts() public {
-        // Move to a new block and change live prices.
+    function test_whenOnlyCollateralUsdCacheChanges_returnsCachedPairPrice() public {
+        // Move to a new block and change only live collateral/USD price.
         vm.warp(block.timestamp + 1);
-        uint256 liveCollateral = 8e18;
-        uint256 liveLoan = 4e18;
-        _setPRICEPrices(address(collateralToken), liveCollateral);
-        _setPRICEPrices(address(loanToken), liveLoan);
+        _setCachePrice(address(collateralToken), 8e18);
 
-        // Refresh only collateral cache so LAST timestamps diverge.
-        priceModule.cachePrice(address(collateralToken));
+        // Refresh only collateral/USD cache. The direct collateral/loan pair cache should be unchanged.
+        priceCache.cachePrice(address(collateralToken), UNIT_OF_ACCOUNT);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IMorphoOracle.MorphoOracle_InconsistentTimestamps.selector,
-                uint48(block.timestamp),
-                uint48(block.timestamp - 1)
-            )
-        );
-        oracle.price();
+        assertEq(oracle.price(), 2e36, "Oracle should continue using the cached pair price");
     }
 
-    // when PRICE module is updated in factory
-    //  [X] it uses new PRICE module
+    function test_whenOnlyLoanUsdCacheChanges_returnsCachedPairPrice() public {
+        // Move to a new block and change only live loan/USD price.
+        vm.warp(block.timestamp + 1);
+        _setCachePrice(address(loanToken), 4e18);
 
-    function test_whenPRICEModuleIsUpdatedInFactory() public {
-        // Deploy new PRICE module
-        MockPrice newPriceModule = new MockPrice(kernel, PRICE_DECIMALS, OBSERVATION_FREQUENCY);
+        // Refresh only loan/USD cache. The direct collateral/loan pair cache should be unchanged.
+        priceCache.cachePrice(address(loanToken), UNIT_OF_ACCOUNT);
 
-        // Upgrade PRICE module (replace existing one)
-        kernel.executeAction(Actions.UpgradeModule, address(newPriceModule));
+        assertEq(oracle.price(), 2e36, "Oracle should continue using the cached pair price");
+    }
 
-        // Set different prices in new PRICE module
-        newPriceModule.setPrice(address(collateralToken), 4e18);
-        newPriceModule.setPrice(address(loanToken), 1e18);
-        newPriceModule.cachePrice(address(collateralToken));
-        newPriceModule.cachePrice(address(loanToken));
+    // when price cache is updated in factory
+    //  [X] it uses the updated cache policy
 
-        // Update factory dependencies to use new PRICE module
-        factory.configureDependencies();
+    function test_whenPriceCacheIsUpdatedInFactory_usesUpdatedPolicy() public {
+        MockPriceCache newPriceCache = new MockPriceCache(address(kernel));
+        newPriceCache.setUsdPrice(address(collateralToken), 4e18);
+        newPriceCache.setUsdPrice(address(loanToken), 1e18);
+        newPriceCache.cachePrice(address(collateralToken), address(loanToken));
 
-        // Oracle should now use the new PRICE module
+        vm.prank(admin);
+        factory.setPriceCache(address(newPriceCache));
+
+        // Oracle should now reflect the updated cache policy values.
         // Expected: 4e18 / 1e18 * 1e36 = 4e36
         uint256 newPrice = oracle.price();
-        assertEq(newPrice, 4e36, "Oracle should use new PRICE module");
+        assertEq(newPrice, 4e36, "Oracle should use updated cache policy prices");
     }
 
-    // when PRICE module decimals are changed
+    function test_givenLoanNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsPriceWithCurrentDecimals()
+        public
+    {
+        address nonContractLoan = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractLoan, 18, "NCA");
+        _setCachePrice(nonContractLoan, 1e18);
+
+        address newOracle = _createOracle(
+            address(collateralToken),
+            nonContractLoan,
+            DEFAULT_MAX_AGE
+        );
+
+        // collateral = 18 decimals, loan = 18 decimals
+        // scaleFactor = 1e36 (36 + 18 - 18)
+        // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e36,
+            "Initial scale factor should use 18 decimals"
+        );
+        assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
+
+        _setNonContractAssetMetadata(nonContractLoan, 6, "NCA");
+        priceCache.cachePrice(address(collateralToken), nonContractLoan);
+
+        // collateral = 18 decimals, loan = 6 decimals
+        // scaleFactor = 1e24 (36 + 6 - 18)
+        // price = 2e18 * 1e24 / 1e18 = 2e24
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e24,
+            "Scale factor should use current loan decimals"
+        );
+        assertEq(
+            IMorphoOracle(newOracle).price(),
+            2e24,
+            "Price should use current loan asset decimals after metadata change"
+        );
+    }
+
+    function test_givenCollateralNonContractAssetDecimalsChange_whenPairCacheIsRefreshed_returnsPriceWithCurrentDecimals()
+        public
+    {
+        address nonContractCollateral = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractCollateral, 18, "NCA");
+        _setCachePrice(nonContractCollateral, 2e18);
+
+        address newOracle = _createOracle(
+            nonContractCollateral,
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        // collateral = 18 decimals, loan = 18 decimals
+        // scaleFactor = 1e36 (36 + 18 - 18)
+        // price = 2e18 * 1e36 / 1e18 = 2e36
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e36,
+            "Initial scale factor should use 18 decimals"
+        );
+        assertEq(IMorphoOracle(newOracle).price(), 2e36, "Initial price should use 18 decimals");
+
+        _setNonContractAssetMetadata(nonContractCollateral, 6, "NCA");
+        priceCache.cachePrice(nonContractCollateral, address(loanToken));
+
+        // collateral = 6 decimals, loan = 18 decimals
+        // scaleFactor = 1e48 (36 + 18 - 6)
+        // price = 2e18 * 1e48 / 1e18 = 2e48
+        assertEq(
+            IMorphoOracle(newOracle).scaleFactor(),
+            1e48,
+            "Scale factor should use current collateral decimals"
+        );
+        assertEq(
+            IMorphoOracle(newOracle).price(),
+            2e48,
+            "Price should use current collateral asset decimals after metadata change"
+        );
+    }
+
+    function test_givenLoanNonContractAssetDecimalsChangeBeyondMax_whenScaleFactorIsRead_reverts()
+        public
+    {
+        address nonContractLoan = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractLoan, 18, "NCA");
+        _setCachePrice(nonContractLoan, 1e18);
+
+        address newOracle = _createOracle(
+            address(collateralToken),
+            nonContractLoan,
+            DEFAULT_MAX_AGE
+        );
+
+        _setNonContractAssetMetadata(nonContractLoan, 60, "NCA");
+        priceCache.cachePrice(address(collateralToken), nonContractLoan);
+
+        // collateral = 18 decimals, loan = 60 decimals
+        // exponent = 36 + 60 - 18 = 78 > 77
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_TokenDecimalsOutOfBounds.selector,
+                address(collateralToken),
+                nonContractLoan,
+                18,
+                60
+            )
+        );
+        IMorphoOracle(newOracle).scaleFactor();
+    }
+
+    function test_givenCollateralNonContractAssetDecimalsChangeBeyondLoan_whenScaleFactorIsRead_reverts()
+        public
+    {
+        address nonContractCollateral = registeredNonContractAsset;
+
+        _setNonContractAssetMetadata(nonContractCollateral, 18, "NCA");
+        _setCachePrice(nonContractCollateral, 2e18);
+
+        address newOracle = _createOracle(
+            nonContractCollateral,
+            address(loanToken),
+            DEFAULT_MAX_AGE
+        );
+
+        _setNonContractAssetMetadata(nonContractCollateral, 60, "NCA");
+        priceCache.cachePrice(nonContractCollateral, address(loanToken));
+
+        // collateral = 60 decimals, loan = 18 decimals
+        // exponent = 36 + 18 - 60 = -6
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMorphoOracle.MorphoOracle_TokenDecimalsOutOfBounds.selector,
+                nonContractCollateral,
+                address(loanToken),
+                60,
+                18
+            )
+        );
+        IMorphoOracle(newOracle).scaleFactor();
+    }
+
+    // when cache decimals are changed
     //  [X] it calculates price correctly
 
-    function test_whenPRICEDecimalsAreChanged() public {
-        // Initial setup: PRICE_DECIMALS = 18
+    function test_whenPriceCacheDecimalsAreChanged_calculatesPriceCorrectly() public {
+        // Initial setup: cache decimals = 18
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
         // scaleFactor = 1e36 (36 + 18 - 18)
@@ -339,30 +545,24 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         uint256 initialPrice = oracle.price();
         assertEq(initialPrice, 2e36, "Initial price should be 2e36");
 
-        // Change PRICE module decimals from 18 to 9
-        priceModule.setPriceDecimals(9);
+        // Change cache decimals from 18 to 9
+        priceCache.setPriceDecimals(9);
 
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(collateralToken), 2e9);
-        _setPRICEPrices(address(loanToken), 1e9);
-
-        // Update factory dependencies to refresh PRICE_DECIMALS
-        factory.configureDependencies();
-
-        // Verify factory has updated PRICE_DECIMALS
-        assertEq(factory.PRICE_DECIMALS(), 9, "Factory PRICE_DECIMALS should be updated to 9");
+        _setCachePrice(address(collateralToken), 2e9);
+        _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 18 - 18 = 36)
+        // The scaleFactor is based on token decimals (36 + 18 - 18 = 36)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e36 (unchanged, based on token decimals)
+        // scaleFactor = 1e36 (based on token decimals)
         // Price calculation: 1e36 * 2e9 / 1e9 = 2e36
         // The result is still 2e36 because the ratio is preserved
         uint256 newPrice = oracle.price();
-        assertEq(newPrice, 2e36, "Price should remain 2e36 after PRICE decimals change");
+        assertEq(newPrice, 2e36, "Price should remain 2e36 after cache decimals change");
 
         // Verify the calculation is still accurate by checking loan tokens per collateral token
         // loan tokens per collateral token = 1 collateral token (native decimals) * price / 1e36
@@ -373,7 +573,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualLoanTokensPerCollateralToken,
             expectedLoanTokensPerCollateralToken,
-            "Loan tokens per collateral token should be calculated correctly after PRICE decimals change"
+            "Loan tokens per collateral token should be calculated correctly after cache decimals change"
         );
 
         // Verify collateral tokens per loan token
@@ -385,22 +585,22 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualCollateralTokensPerLoanToken,
             expectedCollateralTokensPerLoanToken,
-            "Collateral tokens per loan token should be calculated correctly after PRICE decimals change"
+            "Collateral tokens per loan token should be calculated correctly after cache decimals change"
         );
     }
 
     // given the collateral token decimals are smaller than the loan token decimals
-    //  when the PRICE module decimals are changed
+    //  when cache decimals are changed
     //   [X] it calculates price correctly
 
-    function test_whenCollateralTokenDecimalsAreSmallerThanLoanTokenDecimals_whenPRICEDecimalsAreChanged()
+    function test_whenCollateralTokenDecimalsAreSmallerThanLoanTokenDecimals_whenPriceCacheDecimalsAreChanged()
         public
     {
         // Create a new collateral token with 9 decimals
         MockERC20 newCollateralToken = new MockERC20("New Collateral Token", "NEWCOL", 9);
 
         // Set collateral token price to 2e18
-        _setPRICEPrices(address(newCollateralToken), 2e18);
+        _setCachePrice(address(newCollateralToken), 2e18);
 
         // Create the oracle with the new collateral token
         vm.prank(admin);
@@ -411,7 +611,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             bytes("")
         );
 
-        // Initial setup: PRICE_DECIMALS = 18
+        // Initial setup: cache decimals = 18
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
         // scaleFactor = 1e45 (36 + 18 - 9)
@@ -420,30 +620,24 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         uint256 initialPrice = IMorphoOracle(newOracle).price();
         assertEq(initialPrice, expectedPrice, "Initial price should be 2e45");
 
-        // Change PRICE module decimals from 18 to 9
-        priceModule.setPriceDecimals(9);
+        // Change cache decimals from 18 to 9
+        priceCache.setPriceDecimals(9);
 
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(newCollateralToken), 2e9);
-        _setPRICEPrices(address(loanToken), 1e9);
-
-        // Update factory dependencies to refresh PRICE_DECIMALS
-        factory.configureDependencies();
-
-        // Verify factory has updated PRICE_DECIMALS
-        assertEq(factory.PRICE_DECIMALS(), 9, "Factory PRICE_DECIMALS should be updated to 9");
+        _setCachePrice(address(newCollateralToken), 2e9);
+        _setCachePrice(address(loanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 18 - 9 = 45)
+        // The scaleFactor is based on token decimals (36 + 18 - 9 = 45)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e45 (unchanged, based on token decimals)
+        // scaleFactor = 1e45 (based on token decimals)
         // Price calculation: 1e45 * 2e9 / 1e9 = 2e45
         // The result is still 2e45 because the ratio is preserved
         uint256 newPrice = IMorphoOracle(newOracle).price();
-        assertEq(newPrice, expectedPrice, "Price should remain 2e45 after PRICE decimals change");
+        assertEq(newPrice, expectedPrice, "Price should remain 2e45 after cache decimals change");
 
         // Verify the calculation is still accurate by checking loan tokens per collateral token
         // loan tokens per collateral token = 1 collateral token (native decimals) * price / 1e36
@@ -454,7 +648,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualLoanTokensPerCollateralToken,
             expectedLoanTokensPerCollateralToken,
-            "Loan tokens per collateral token should be calculated correctly after PRICE decimals change"
+            "Loan tokens per collateral token should be calculated correctly after cache decimals change"
         );
 
         // Verify collateral tokens per loan token
@@ -466,22 +660,22 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualCollateralTokensPerLoanToken,
             expectedCollateralTokensPerLoanToken,
-            "Collateral tokens per loan token should be calculated correctly after PRICE decimals change"
+            "Collateral tokens per loan token should be calculated correctly after cache decimals change"
         );
     }
 
     // given the loan token decimals are smaller than the collateral token decimals
-    //  when the PRICE module decimals are changed
+    //  when cache decimals are changed
     //   [X] it calculates price correctly
 
-    function test_whenLoanTokenDecimalsAreSmallerThanCollateralTokenDecimals_whenPRICEDecimalsAreChanged()
+    function test_whenLoanTokenDecimalsAreSmallerThanCollateralTokenDecimals_whenPriceCacheDecimalsAreChanged()
         public
     {
         // Create a new loan token with 9 decimals
         MockERC20 newLoanToken = new MockERC20("New Loan Token", "NEWLOAN", 9);
 
         // Set loan token price to 1e18
-        _setPRICEPrices(address(newLoanToken), 1e18);
+        _setCachePrice(address(newLoanToken), 1e18);
 
         // Create the oracle with the new loan token
         vm.prank(admin);
@@ -492,7 +686,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
             bytes("")
         );
 
-        // Initial setup: PRICE_DECIMALS = 18
+        // Initial setup: cache decimals = 18
         // collateralPriceUsd = 2e18 (2 USD, 18 decimals)
         // loanPriceUsd = 1e18 (1 USD, 18 decimals)
         // scaleFactor = 1e27 (36 + loanDecimals - collateralDecimals = 36 + 9 - 18)
@@ -501,30 +695,24 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         uint256 initialPrice = IMorphoOracle(newOracle).price();
         assertEq(initialPrice, expectedPrice, "Initial price should be 2e27");
 
-        // Change PRICE module decimals from 18 to 9
-        priceModule.setPriceDecimals(9);
+        // Change cache decimals from 18 to 9
+        priceCache.setPriceDecimals(9);
 
         // Update prices to maintain same USD values with new decimals
         // 2e18 (18 decimals) -> 2e9 (9 decimals) for $2
         // 1e18 (18 decimals) -> 1e9 (9 decimals) for $1
-        _setPRICEPrices(address(collateralToken), 2e9);
-        _setPRICEPrices(address(newLoanToken), 1e9);
-
-        // Update factory dependencies to refresh PRICE_DECIMALS
-        factory.configureDependencies();
-
-        // Verify factory has updated PRICE_DECIMALS
-        assertEq(factory.PRICE_DECIMALS(), 9, "Factory PRICE_DECIMALS should be updated to 9");
+        _setCachePrice(address(collateralToken), 2e9);
+        _setCachePrice(address(newLoanToken), 1e9);
 
         // Oracle should still return correct price
-        // The scaleFactor is immutable and based on token decimals (36 + 9 - 18 = 27)
+        // The scaleFactor is based on token decimals (36 + 9 - 18 = 27)
         // collateralPriceUsd = 2e9 (2 USD, 9 decimals)
         // loanPriceUsd = 1e9 (1 USD, 9 decimals)
-        // scaleFactor = 1e27 (unchanged, based on token decimals)
+        // scaleFactor = 1e27 (based on token decimals)
         // Price calculation: 1e27 * 2e9 / 1e9 = 2e27
         // The result is still 2e27 because the ratio is preserved
         uint256 newPrice = IMorphoOracle(newOracle).price();
-        assertEq(newPrice, expectedPrice, "Price should remain 2e27 after PRICE decimals change");
+        assertEq(newPrice, expectedPrice, "Price should remain 2e27 after cache decimals change");
 
         // Verify the calculation is still accurate by checking loan tokens per collateral token
         // loan tokens per collateral token = 1 collateral token (native decimals) * price / 1e36
@@ -535,7 +723,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualLoanTokensPerCollateralToken,
             expectedLoanTokensPerCollateralToken,
-            "Loan tokens per collateral token should be calculated correctly after PRICE decimals change"
+            "Loan tokens per collateral token should be calculated correctly after cache decimals change"
         );
 
         // Verify collateral tokens per loan token
@@ -547,7 +735,7 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
         assertEq(
             actualCollateralTokensPerLoanToken,
             expectedCollateralTokensPerLoanToken,
-            "Collateral tokens per loan token should be calculated correctly after PRICE decimals change"
+            "Collateral tokens per loan token should be calculated correctly after cache decimals change"
         );
     }
 
@@ -556,13 +744,14 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
     function test_whenCachedPricesAreFresh_returnsCachedPrices(uint48 warpDelta_) public {
         // Cache initial prices
-        priceModule.storeObservation(address(collateralToken));
-        priceModule.storeObservation(address(loanToken));
-        uint48 cachedAt = uint48(block.timestamp);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         // Change live prices without storing
-        _setPRICEPrices(address(collateralToken), 3e18);
-        _setPRICEPrices(address(loanToken), 1e18);
+        _setCachePrice(address(collateralToken), 3e18);
+        _setCachePrice(address(loanToken), 1e18);
 
         // Fuzz warp to a time strictly within maxAge so cache remains fresh
         uint48 warpDelta = uint48(bound(uint256(warpDelta_), 1, DEFAULT_MAX_AGE - 1));
@@ -577,13 +766,14 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
     function test_whenCachedAgeEqualsMaxAge_returnsCachedPrices() public {
         // Cache initial prices
-        priceModule.storeObservation(address(collateralToken));
-        priceModule.storeObservation(address(loanToken));
-        uint48 cachedAt = uint48(block.timestamp);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         // Change live prices without storing so cache-vs-live behavior is observable
-        _setPRICEPrices(address(collateralToken), 3e18);
-        _setPRICEPrices(address(loanToken), 1e18);
+        _setCachePrice(address(collateralToken), 3e18);
+        _setCachePrice(address(loanToken), 1e18);
 
         // Border case: cached age is exactly maxAge and should still be treated as fresh
         vm.warp(cachedAt + DEFAULT_MAX_AGE);
@@ -600,21 +790,23 @@ contract MorphoOracleCloneablePriceTest is MorphoOracleCloneableTest {
 
     function test_whenCachedPricesAreStale_reverts(uint48 warpDelta_) public {
         // Cache initial prices
-        priceModule.storeObservation(address(collateralToken));
-        priceModule.storeObservation(address(loanToken));
-        uint48 cachedAt = uint48(block.timestamp);
+        priceCache.cachePrice(address(collateralToken), address(loanToken));
+        uint48 cachedAt = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
         // Fuzz warp to a time strictly beyond maxAge so cache is stale
         uint48 warpDelta = uint48(
             bound(uint256(warpDelta_), DEFAULT_MAX_AGE + 1, DEFAULT_MAX_AGE * 30)
         );
         vm.warp(cachedAt + warpDelta);
+        uint256 latestPermissibleTimestamp = block.timestamp - DEFAULT_MAX_AGE;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMorphoOracle.MorphoOracle_Stale.selector,
                 cachedAt,
-                DEFAULT_MAX_AGE
+                latestPermissibleTimestamp
             )
         );
         oracle.price();

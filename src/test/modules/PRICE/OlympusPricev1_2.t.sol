@@ -31,6 +31,8 @@ import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/Simpl
 contract OlympusPricev1_2Test is Test {
     using ModuleTestFixtureGenerator for OlympusPricev1_2;
 
+    address internal constant UNIT_OF_ACCOUNT = address(840); // 840 = USD (ISO-4217)
+
     // Mock contracts
     MockERC20 internal ohm;
     MockERC20 internal reserveA;
@@ -379,6 +381,16 @@ contract OlympusPricev1_2Test is Test {
         // Verify decimals returns 18
         assertEq(price.decimals(), 18, "Decimals should return 18");
 
+        // Verify unit of account is set correctly
+        assertEq(price.unitOfAccount(), UNIT_OF_ACCOUNT, "Unit of account should be set correctly");
+
+        // Verify unit of account is registered as a non-contract asset
+        assertEq(
+            price.isNonContractAsset(UNIT_OF_ACCOUNT),
+            true,
+            "Unit of account should be registered"
+        );
+
         // Verify event is emitted on deployment
         Kernel testKernel = new Kernel();
         vm.expectEmit(true, false, false, true);
@@ -409,18 +421,18 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getLastPrice
-    //  given OHM has had the price stored since being added
-    //   [X] it returns the last cached price
+    //  given OHM has a stored observation in current block
+    //   [X] it returns the last stored observation price
     //   [X] it returns price in 18 decimals
-    function test_getLastPrice_givenCachedInCurrentBlock()
+    function test_getLastPrice_givenStoredObservationInCurrentBlock()
         public
-        givenOhmIsConfigured
+        givenOhmIsConfiguredWithMovingAverage
         givenObservationFrequencyHasElapsed
     {
-        // Cache $11 and then change the live feed to $10; getLastPrice should return cached $11.
+        // Store $11 and then change the live feed to $10; getLastPrice should return stored $11.
         ohmUsdPriceFeed.setLatestAnswer(11e8);
         vm.prank(priceWriterV2);
-        price.cachePrice(address(ohm));
+        price.storeObservation(address(ohm));
         ohmUsdPriceFeed.setLatestAnswer(10e8);
 
         uint256 lastPrice = price.getLastPrice();
@@ -430,11 +442,11 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getLastPrice
-    //  given OHM has not had the price stored since being added
-    //   [X] it returns the previous price
-    function test_getLastPrice_givenCachedInPreviousBlock()
+    //  given OHM uses moving average and no new observation is stored
+    //   [X] it returns the previous stored observation
+    function test_getLastPrice_givenStoredObservationInPreviousBlock()
         public
-        givenOhmIsConfigured
+        givenOhmIsConfiguredWithMovingAverage
         givenObservationFrequencyHasElapsed
         givenOhmPrice(11e8) // $11
     {
@@ -471,6 +483,32 @@ contract OlympusPricev1_2Test is Test {
 
         // Price should be in 18 decimals (12e18 = $12)
         assertEq(movingAverage, 12e18, "Moving average should be in 18 decimals (12e18)");
+    }
+
+    // getMovingAverage
+    //  given OHM has moving average configured
+    //   given moving average is stale
+    //    [X] it returns the stored moving average
+    function test_getMovingAverage_givenMovingAverageIsStale_returnsStoredValue()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        uint256 movingAverage = price.getMovingAverage();
+        assertEq(
+            movingAverage,
+            OHM_PRICE,
+            "Moving average should return the stored value when stale"
+        );
+        assertEq(
+            price.lastObservationTime(),
+            lastObsTime,
+            "Last observation time should remain unchanged when stale"
+        );
     }
 
     // getMovingAverage
@@ -561,6 +599,28 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // getTargetPrice
+    //  given moving average is stale
+    //   [X] it reverts with PRICE_MovingAverageStale
+    function test_getTargetPrice_givenMovingAverageIsStale_reverts()
+        public
+        givenOhmIsConfiguredWithMovingAverage
+    {
+        uint48 lastObsTime = uint48(block.timestamp);
+
+        // Move exactly one observation period forward so the moving average is stale.
+        vm.warp(block.timestamp + OBSERVATION_FREQUENCY);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPRICEv2.PRICE_MovingAverageStale.selector,
+                address(ohm),
+                lastObsTime
+            )
+        );
+        price.getTargetPrice();
+    }
+
+    // getTargetPrice
     //  given OHM does not have moving average configured
     //   [X] it reverts with PRICE_MovingAverageNotStored
     function test_getTargetPrice_givenOhmDoesNotHaveMovingAverageConfigured_reverts()
@@ -603,21 +663,16 @@ contract OlympusPricev1_2Test is Test {
     }
 
     // lastObservationTime
-    //  given OHM has not had the price stored since being added
-    //   [X] it returns the initial timestamp
-    function test_lastObservationTime_givenOhmHasNoObservations() public givenOhmIsConfigured {
-        // Grab the initial timestamp
-        uint48 initialTimestamp = uint48(block.timestamp);
-
-        // Warp
-        vm.warp(initialTimestamp + OBSERVATION_FREQUENCY);
-
-        uint48 lastObsTime = price.lastObservationTime();
-        assertEq(
-            lastObsTime,
-            initialTimestamp,
-            "Last observation time should be the initial timestamp"
+    //  given OHM has no moving-average observations configured
+    //   [X] it reverts with PRICE_MovingAverageNotStored
+    function test_lastObservationTime_givenOhmHasNoObservations_reverts()
+        public
+        givenOhmIsConfigured
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(IPRICEv2.PRICE_MovingAverageNotStored.selector, address(ohm))
         );
+        price.lastObservationTime();
     }
 
     // decimals
@@ -769,6 +824,7 @@ contract OlympusPricev1_2Test is Test {
     {
         IPRICEv2.Asset memory reserveADataBefore = price.getAssetData(address(reserveA));
 
+        vm.warp(block.timestamp + 1);
         vm.prank(priceWriterV1_2);
         price.updateMovingAverage();
 

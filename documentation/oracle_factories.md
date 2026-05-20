@@ -66,8 +66,9 @@ Deploys Morpho-compatible oracles implementing `IMorphoOracle`.
 
 **Special Logic**:
 
-- Calculates scale factor: `10^(loanDecimals - collateralDecimals + 36)`
+- Calculates scale factor from current `PriceCache.assetDecimals()` values: `10^(loanDecimals - collateralDecimals + 36)`
 - Validates decimals bounds to prevent overflow
+- If collateral or loan is a non-contract asset, its decimal scale is PriceCache metadata rather than ERC-20 metadata. Confirm the active value with `PriceCache.assetDecimals(asset)` before configuring or relying on a Morpho market.
 
 ### 3. ERC7726Oracle
 
@@ -214,7 +215,7 @@ Use the pre-built batch script for oracle deployment.
 
 **Batch script**: `src/scripts/ops/batches/DeployOracles.sol`
 
-Create an args file (`oracle_args.json`) with the token addresses and expected price bounds:
+Create an args file (`oracle_args.json`) with the token addresses and expected base/quote pair-price bounds:
 
 ```json
 {
@@ -265,14 +266,14 @@ Create an args file (`oracle_args.json`) with the token addresses and expected p
 
 - `baseToken` - The base token address
 - `quoteToken` - The quote token address
-- `minPrice` - Minimum expected price (18 decimals, for validation)
-- `maxPrice` - Maximum expected price (18 decimals, for validation)
+- `minPrice` - Minimum expected base/quote pair price, normalized to 18 decimals, for validation
+- `maxPrice` - Maximum expected base/quote pair price, normalized to 18 decimals, for validation
 
 **Post-batch validation**: The batch script automatically validates:
 
 - Oracle was deployed (via `getOracle()`)
 - Oracle is enabled (via `isOracleEnabled()`)
-- Oracle price is within specified bounds (via PRICE module)
+- Oracle pair price is within specified bounds, read from the deployed oracle and normalized to 18 decimals
 
 ## Architecture Benefits
 

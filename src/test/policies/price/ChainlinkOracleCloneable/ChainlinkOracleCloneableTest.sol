@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {ChainlinkOracleFactoryTest} from "../ChainlinkOracleFactory/ChainlinkOracleFactoryTest.sol";
 import {IChainlinkOracle} from "src/policies/interfaces/price/IChainlinkOracle.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 
 /// @notice Parent test contract for ChainlinkOracleCloneable tests
 /// @dev    Provides setup, helper functions, and modifiers for all cloneable oracle test files
@@ -11,8 +12,11 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     // ========== STATE ========== //
 
     IChainlinkOracle public oracle;
+    bytes4 internal constant PRICE_ASSET_NOT_APPROVED_SELECTOR =
+        bytes4(keccak256("PRICE_AssetNotApproved(address)"));
 
     uint48 public lastStoredTimestamp;
+    uint80 public lastStoredRoundId;
 
     // ========== SETUP ========== //
 
@@ -31,9 +35,13 @@ contract ChainlinkOracleCloneableTest is ChainlinkOracleFactoryTest {
     }
 
     function _storePrices() internal {
-        priceModule.storeObservation(address(baseToken));
-        priceModule.storeObservation(address(quoteToken));
-        lastStoredTimestamp = uint48(block.timestamp);
+        priceCache.cachePrice(address(baseToken), address(quoteToken));
+        IPriceCache.CachedPrice memory cachedPrice = priceCache.getCachedPrice(
+            address(baseToken),
+            address(quoteToken)
+        );
+        lastStoredTimestamp = cachedPrice.updatedAt;
+        lastStoredRoundId = cachedPrice.roundId;
     }
 
     function _warp() internal {

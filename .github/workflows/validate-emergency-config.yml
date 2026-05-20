@@ -41,6 +41,8 @@ jobs:
 
             - name: Install Foundry
               uses: foundry-rs/foundry-toolchain@v1
+              with:
+                  version: 1.5.1
 
             - name: Install dependencies
               run: pnpm install --frozen-lockfile

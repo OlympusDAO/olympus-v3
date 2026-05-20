@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IMorphoOracle} from "src/policies/interfaces/price/IMorphoOracle.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
@@ -81,18 +82,20 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         factory.createOracle(address(0), address(loanToken), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when collateral token is not a contract
-    //  [X] it reverts with InvalidToken
+    // when collateral token is unit of account
+    //  [X] it creates the oracle
 
-    function test_whenCollateralTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
+    function test_whenCollateralTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            UNIT_OF_ACCOUNT,
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
         );
 
-        vm.prank(admin);
-        factory.createOracle(nonContract, address(loanToken), DEFAULT_MAX_AGE, bytes(""));
+        _assertOracleConfigured(oracle, UNIT_OF_ACCOUNT, address(loanToken), DEFAULT_MAX_AGE, 1e36);
+        assertEq(IMorphoOracle(oracle).price(), 1e36, "Oracle price should use unit collateral");
     }
 
     // when loan token is zero address
@@ -107,18 +110,144 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         factory.createOracle(address(collateralToken), address(0), DEFAULT_MAX_AGE, bytes(""));
     }
 
-    // when loan token is not a contract
+    // when both tokens are zero addresses
     //  [X] it reverts with InvalidToken
 
-    function test_whenLoanTokenIsNotAContract_reverts() public givenFactoryIsEnabled {
-        address nonContract = makeAddr("NON_CONTRACT");
-
+    function test_whenBothTokensAreZeroAddress_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
-            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, nonContract)
+            abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidToken.selector, address(0))
         );
 
         vm.prank(admin);
-        factory.createOracle(address(collateralToken), nonContract, DEFAULT_MAX_AGE, bytes(""));
+        factory.createOracle(address(0), address(0), DEFAULT_MAX_AGE, bytes(""));
+    }
+
+    // when loan token is unit of account
+    //  [X] it creates the oracle
+
+    function test_whenLoanTokenIsUnitOfAccount_createsOracle() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            UNIT_OF_ACCOUNT,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        _assertOracleConfigured(
+            oracle,
+            address(collateralToken),
+            UNIT_OF_ACCOUNT,
+            DEFAULT_MAX_AGE,
+            1e36
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e36, "Oracle price should use unit loan");
+    }
+
+    // when collateral token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
+
+    function test_whenCollateralTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setCachePrice(registeredNonContractAsset, 2e18);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            registeredNonContractAsset,
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenCollateralTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setCachePrice(registeredNonContractAsset, 2e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            registeredNonContractAsset,
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        _assertOracleConfigured(
+            oracle,
+            registeredNonContractAsset,
+            address(loanToken),
+            DEFAULT_MAX_AGE,
+            1e46
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e46, "Oracle price should use NCA collateral");
+    }
+
+    // when loan token is a registered non-contract asset
+    //  given metadata is not registered
+    //   [X] it reverts
+    //  given metadata is registered
+    //   [X] it creates the oracle
+
+    function test_whenLoanTokenIsRegisteredNonContractAsset_givenMetadataIsNotRegistered_reverts()
+        public
+        givenFactoryIsEnabled
+    {
+        _setCachePrice(registeredNonContractAsset, 1e18);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IPriceCache.PriceCache_NonContractAssetDecimalsNotRegistered.selector,
+                registeredNonContractAsset
+            )
+        );
+
+        vm.prank(admin);
+        factory.createOracle(
+            address(collateralToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+    }
+
+    function test_whenLoanTokenIsRegisteredNonContractAsset_givenMetadataIsRegistered_createsOracle()
+        public
+        givenFactoryIsEnabled
+    {
+        _setCachePrice(registeredNonContractAsset, 1e18);
+        _setNonContractAssetMetadata(registeredNonContractAsset, 8, "RNCA");
+
+        vm.prank(admin);
+        address oracle = factory.createOracle(
+            address(collateralToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            bytes("")
+        );
+
+        _assertOracleConfigured(
+            oracle,
+            address(collateralToken),
+            registeredNonContractAsset,
+            DEFAULT_MAX_AGE,
+            1e26
+        );
+        assertEq(IMorphoOracle(oracle).price(), 2e26, "Oracle price should use NCA loan");
     }
 
     // when collateral token equals loan token
@@ -257,8 +386,8 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         MockERC20 highDecimalsToken = new MockERC20("High Decimals", "HIGH", 42);
         MockERC20 lowDecimalsToken = new MockERC20("Low Decimals", "LOW", 0);
 
-        _setPRICEPrices(address(highDecimalsToken), 1e18);
-        _setPRICEPrices(address(lowDecimalsToken), 1e18);
+        _setCachePrice(address(highDecimalsToken), 1e18);
+        _setCachePrice(address(lowDecimalsToken), 1e18);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -287,7 +416,7 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
     //  [X] it emits OracleEnabled event
     //  [X] it calculates scale factor correctly
 
-    function test_success() public givenFactoryIsEnabled {
+    function test_whenAllConditionsAreMet_createsOracle() public givenFactoryIsEnabled {
         vm.expectEmit(false, false, false, false);
         emit IOracleFactory.OracleCreated(
             address(0), // Will be set to actual oracle address
@@ -378,23 +507,20 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             bytes("")
         );
 
-        (, uint48 collateralTimestamp) = priceModule.getPrice(
-            address(collateralToken),
-            IPRICEv2.Variant.LAST
-        );
-        (, uint48 loanTimestamp) = priceModule.getPrice(address(loanToken), IPRICEv2.Variant.LAST);
+        uint48 timestamp = priceCache
+            .getCachedPrice(address(collateralToken), address(loanToken))
+            .updatedAt;
 
-        assertGt(collateralTimestamp, 0, "Collateral token price should be cached");
-        assertGt(loanTimestamp, 0, "Loan token price should be cached");
+        assertGt(timestamp, 0, "Token price should be cached");
     }
 
-    function test_whenCacheOraclePricesCalledByNonOracle_reverts() public givenFactoryIsEnabled {
+    function test_whenCachePriceCalledByNonOracle_reverts() public givenFactoryIsEnabled {
         vm.expectRevert(
             abi.encodeWithSelector(IOracleFactory.OracleFactory_InvalidOracle.selector, admin)
         );
 
         vm.prank(admin);
-        factory.cacheOraclePrices();
+        factory.cachePrice(address(collateralToken), address(loanToken));
     }
 
     function test_whenTokenDecimalsAreValid_calculatesScaleFactorWithDifferentDecimals()
@@ -405,8 +531,8 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
         MockERC20 col6 = new MockERC20("Collateral 6", "COL6", 6);
         MockERC20 loan18 = new MockERC20("Loan 18", "LOAN18", 18);
 
-        _setPRICEPrices(address(col6), 2e18);
-        _setPRICEPrices(address(loan18), 1e18);
+        _setCachePrice(address(col6), 2e18);
+        _setCachePrice(address(loan18), 1e18);
 
         vm.prank(admin);
         address oracle = factory.createOracle(
@@ -468,6 +594,22 @@ contract MorphoOracleFactoryCreateOracleTest is MorphoOracleFactoryTest {
             oracle,
             "Oracle should be stored for maxAge=0"
         );
+    }
+
+    function _assertOracleConfigured(
+        address oracle_,
+        address collateralToken_,
+        address loanToken_,
+        uint48 maxAge_,
+        uint256 scaleFactor_
+    ) internal view {
+        IMorphoOracle oracle = IMorphoOracle(oracle_);
+
+        assertNotEq(oracle_, address(0), "Oracle should be created");
+        assertEq(oracle.collateralToken(), collateralToken_, "Collateral token should match");
+        assertEq(oracle.loanToken(), loanToken_, "Loan token should match");
+        assertEq(oracle.maxAge(), maxAge_, "Max age should match");
+        assertEq(oracle.scaleFactor(), scaleFactor_, "Scale factor should match");
     }
 
     // when the caller has the manager role

@@ -25,8 +25,8 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @notice     The expected length of the encoded one feed parameters (address + bytes32 + uint48 + uint256 = 128 bytes)
     uint256 internal constant ONE_FEED_PARAMS_LENGTH = 128;
 
-    /// @notice     The expected length of the encoded two feed parameters (2x address + 2x bytes32 + 2x uint48 + 2x uint256 = 256 bytes)
-    uint256 internal constant TWO_FEED_PARAMS_LENGTH = 256;
+    /// @notice     The expected length of the encoded two feed parameters (2x address + 2x bytes32 + 2x uint48 + 3x uint256 = 288 bytes)
+    uint256 internal constant TWO_FEED_PARAMS_LENGTH = 288;
 
     /// @notice                 Parameters for a single Pyth price feed
     ///
@@ -51,6 +51,7 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @param secondPriceFeedId        Second: The Pyth price feed ID
     /// @param secondUpdateThreshold    Second: The maximum number of seconds elapsed since the last price feed update
     /// @param secondMaxConfidence      Second: The maximum confidence interval allowed (in output decimals scale)
+    /// @param outputMaxConfidence      The maximum confidence interval allowed for the derived output (in output decimals scale)
     struct TwoFeedParams {
         address firstPyth;
         bytes32 firstPriceFeedId;
@@ -60,6 +61,16 @@ contract PythPriceFeeds is PriceSubmodule {
         bytes32 secondPriceFeedId;
         uint48 secondUpdateThreshold;
         uint256 secondMaxConfidence;
+        uint256 outputMaxConfidence;
+    }
+
+    /// @notice                         Price feed result in output decimals scale
+    ///
+    /// @param price                    The price returned by the feed
+    /// @param confidence               The confidence interval returned by the feed
+    struct FeedResult {
+        uint256 price;
+        uint256 confidence;
     }
 
     // ========== ERRORS ========== //
@@ -138,6 +149,22 @@ contract PythPriceFeeds is PriceSubmodule {
         bytes32 priceFeedId_,
         uint64 confidence_,
         uint64 maxConfidence_
+    );
+
+    /// @notice                     The derived confidence interval exceeds the maximum allowed
+    ///
+    /// @param confidence_          The derived confidence interval (in output decimals scale)
+    /// @param maxConfidence_       The maximum derived confidence interval allowed (in output decimals scale)
+    error Pyth_DerivedFeedConfidenceExcessive(uint256 confidence_, uint256 maxConfidence_);
+
+    /// @notice                     The derived confidence interval is invalid
+    /// @dev                        This occurs if the denominator confidence interval reaches or exceeds the denominator price.
+    ///
+    /// @param denominatorPrice_     The denominator price (in output decimals scale)
+    /// @param denominatorConfidence_ The denominator confidence interval (in output decimals scale)
+    error Pyth_DerivedFeedConfidenceInvalid(
+        uint256 denominatorPrice_,
+        uint256 denominatorConfidence_
     );
 
     /// @notice                 The exponent from the price feed is positive, which results in loss of precision
@@ -228,14 +255,14 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @param updateThreshold_         The maximum number of seconds elapsed since the last price feed update
     /// @param maxConfidence_           The maximum confidence interval allowed (in output decimals scale)
     /// @param outputDecimals_          The number of decimals to return the price in
-    /// @return uint256                 The validated price in the scale of `outputDecimals_`
+    /// @return FeedResult             The validated price and confidence in the scale of `outputDecimals_`
     function _getFeedPrice(
         address pyth_,
         bytes32 priceFeedId_,
         uint48 updateThreshold_,
         uint256 maxConfidence_,
         uint8 outputDecimals_
-    ) internal view returns (uint256) {
+    ) internal view returns (FeedResult memory) {
         IPyth.Price memory priceData;
         {
             // Encode function call: getPriceNoOlderThan(bytes32,uint256)
@@ -280,15 +307,16 @@ contract PythPriceFeeds is PriceSubmodule {
         }
 
         // Convert maxConfidence from output decimals scale to Pyth feed scale (10^expo)
-        // Formula: maxConfidenceInPythScale = maxConfidence * 10^expo / 10^outputDecimals
-        //         = maxConfidence * 10^(expo - outputDecimals)
-        // Note: Result is cast to uint64 since it's compared against priceData.conf (uint64)
-        uint64 maxConfidenceInPythScale = SafeCast.encodeUInt64(
-            maxConfidence_.mulDiv(
-                10 ** uint256(uint32(-priceData.expo)),
-                10 ** uint256(outputDecimals_)
-            )
+        // Formula: maxConfidenceInPythScale = maxConfidence * 10^|expo| / 10^outputDecimals
+        // Reject thresholds that permit all possible raw confidence values.
+        uint256 maxConfidenceInPythScaleUint = maxConfidence_.mulDiv(
+            10 ** uint256(uint32(-priceData.expo)),
+            10 ** uint256(outputDecimals_)
         );
+        if (maxConfidenceInPythScaleUint >= type(uint64).max) {
+            revert SafeCast.Overflow(maxConfidenceInPythScaleUint);
+        }
+        uint64 maxConfidenceInPythScale = SafeCast.encodeUInt64(maxConfidenceInPythScaleUint);
 
         // Validate raw values from the price feed
         _validatePriceFeedResult(
@@ -301,10 +329,71 @@ contract PythPriceFeeds is PriceSubmodule {
         );
 
         uint256 price = uint256(int256(priceData.price));
+        uint256 scale = 10 ** uint256(outputDecimals_);
+        uint256 feedScale = 10 ** uint256(uint32(-priceData.expo));
 
         // Convert price to output decimals
         // The PRICE module will handle the zero value
-        return price.mulDiv(10 ** uint256(outputDecimals_), 10 ** uint256(uint32(-priceData.expo)));
+        return
+            FeedResult({
+                price: price.mulDiv(scale, feedScale),
+                confidence: uint256(priceData.conf).mulDivUp(scale, feedScale)
+            });
+    }
+
+    /// @notice                 Validates a derived confidence interval
+    ///
+    /// @param confidence_      The derived confidence interval (in output decimals scale)
+    /// @param maxConfidence_   The maximum confidence interval allowed (in output decimals scale)
+    function _validateDerivedConfidence(uint256 confidence_, uint256 maxConfidence_) internal pure {
+        if (confidence_ > maxConfidence_)
+            revert Pyth_DerivedFeedConfidenceExcessive(confidence_, maxConfidence_);
+    }
+
+    /// @notice                         Derives the confidence interval for a multiplication result
+    ///
+    /// @param first                    First feed result in output decimals scale
+    /// @param second                   Second feed result in output decimals scale
+    /// @param outputDecimals_          The number of output decimals
+    /// @return uint256                 The derived confidence interval in output decimals scale
+    function _deriveMulConfidence(
+        FeedResult memory first,
+        FeedResult memory second,
+        uint8 outputDecimals_
+    ) internal pure returns (uint256) {
+        uint256 scale = 10 ** uint256(outputDecimals_);
+
+        // Product confidence: (A + cA)(B + cB) - AB = A*cB + B*cA + cA*cB
+        // A, B, cA, cB all have outputDecimals_ decimals, so each product is divided by scale.
+        return
+            first.price.mulDivUp(second.confidence, scale) +
+            second.price.mulDivUp(first.confidence, scale) +
+            first.confidence.mulDivUp(second.confidence, scale);
+    }
+
+    /// @notice                         Derives the confidence interval for a division result
+    ///
+    /// @param numerator                Numerator feed result in output decimals scale
+    /// @param denominator              Denominator feed result in output decimals scale
+    /// @param outputDecimals_          The number of output decimals
+    /// @param priceResult_             The derived division price in output decimals scale
+    /// @return uint256                 The derived confidence interval in output decimals scale
+    function _deriveDivConfidence(
+        FeedResult memory numerator,
+        FeedResult memory denominator,
+        uint8 outputDecimals_,
+        uint256 priceResult_
+    ) internal pure returns (uint256) {
+        if (denominator.confidence >= denominator.price)
+            revert Pyth_DerivedFeedConfidenceInvalid(denominator.price, denominator.confidence);
+
+        uint256 scale = 10 ** uint256(outputDecimals_);
+        uint256 upperPrice = (numerator.price + numerator.confidence).mulDivUp(
+            scale,
+            denominator.price - denominator.confidence
+        );
+
+        return upperPrice - priceResult_;
     }
 
     /// @notice                 Returns the price from a single Pyth feed, as specified in `params_`.
@@ -334,7 +423,7 @@ contract PythPriceFeeds is PriceSubmodule {
         if (params.maxConfidence == 0)
             revert Pyth_ParamsMaxConfidenceInvalid(3, params.maxConfidence);
 
-        uint256 feedPrice = _getFeedPrice(
+        FeedResult memory feedResult = _getFeedPrice(
             params.pyth,
             params.priceFeedId,
             params.updateThreshold,
@@ -342,7 +431,7 @@ contract PythPriceFeeds is PriceSubmodule {
             outputDecimals_
         );
 
-        return feedPrice;
+        return feedResult.price;
     }
 
     /// @notice                 Returns the result of dividing the price from the first Pyth feed by the price from the second.
@@ -352,6 +441,8 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @dev                    - Any parameter is invalid
     /// @dev                    - The exponent calculation would result in an overflow
     /// @dev                    - Any of the price feeds' results are invalid
+    /// @dev                    - The denominator confidence interval is greater than or equal to the denominator price
+    /// @dev                    - The derived output confidence interval exceeds `outputMaxConfidence`
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pyth feed parameters of type `TwoFeedParams`
@@ -380,16 +471,18 @@ contract PythPriceFeeds is PriceSubmodule {
             revert Pyth_ParamsUpdateThresholdInvalid(6, params.secondUpdateThreshold);
         if (params.secondMaxConfidence == 0)
             revert Pyth_ParamsMaxConfidenceInvalid(7, params.secondMaxConfidence);
+        if (params.outputMaxConfidence == 0)
+            revert Pyth_ParamsMaxConfidenceInvalid(8, params.outputMaxConfidence);
 
-        // Get prices from feeds (both already converted to outputDecimals scale)
-        uint256 numeratorPrice = _getFeedPrice(
+        // Get prices and confidence intervals from feeds (already converted to outputDecimals scale)
+        FeedResult memory numerator = _getFeedPrice(
             params.firstPyth,
             params.firstPriceFeedId,
             params.firstUpdateThreshold,
             params.firstMaxConfidence,
             outputDecimals_
         );
-        uint256 denominatorPrice = _getFeedPrice(
+        FeedResult memory denominator = _getFeedPrice(
             params.secondPyth,
             params.secondPriceFeedId,
             params.secondUpdateThreshold,
@@ -399,10 +492,14 @@ contract PythPriceFeeds is PriceSubmodule {
 
         // If denominatorPrice is zero, do an early exit
         // The PRICE module will handle the zero value
-        if (denominatorPrice == 0) return 0;
+        if (denominator.price == 0) return 0;
 
         // Convert to numerator/denominator price and return
-        uint256 priceResult = numeratorPrice.mulDiv(10 ** outputDecimals_, denominatorPrice);
+        uint256 priceResult = numerator.price.mulDiv(10 ** outputDecimals_, denominator.price);
+        _validateDerivedConfidence(
+            _deriveDivConfidence(numerator, denominator, outputDecimals_, priceResult),
+            params.outputMaxConfidence
+        );
 
         return priceResult;
     }
@@ -414,6 +511,7 @@ contract PythPriceFeeds is PriceSubmodule {
     /// @dev                    - Any parameter is invalid
     /// @dev                    - The exponent calculation would result in an overflow
     /// @dev                    - Any of the price feeds' results are invalid
+    /// @dev                    - The derived output confidence interval exceeds `outputMaxConfidence`
     ///
     /// @param outputDecimals_  The number of output decimals (assumed to be the same as PRICE decimals)
     /// @param params_          Pyth feed parameters of type `TwoFeedParams`
@@ -442,16 +540,18 @@ contract PythPriceFeeds is PriceSubmodule {
             revert Pyth_ParamsUpdateThresholdInvalid(6, params.secondUpdateThreshold);
         if (params.secondMaxConfidence == 0)
             revert Pyth_ParamsMaxConfidenceInvalid(7, params.secondMaxConfidence);
+        if (params.outputMaxConfidence == 0)
+            revert Pyth_ParamsMaxConfidenceInvalid(8, params.outputMaxConfidence);
 
-        // Get prices from feeds (both already converted to outputDecimals scale)
-        uint256 firstPrice = _getFeedPrice(
+        // Get prices and confidence intervals from feeds (already converted to outputDecimals scale)
+        FeedResult memory first = _getFeedPrice(
             params.firstPyth,
             params.firstPriceFeedId,
             params.firstUpdateThreshold,
             params.firstMaxConfidence,
             outputDecimals_
         );
-        uint256 secondPrice = _getFeedPrice(
+        FeedResult memory second = _getFeedPrice(
             params.secondPyth,
             params.secondPriceFeedId,
             params.secondUpdateThreshold,
@@ -460,7 +560,11 @@ contract PythPriceFeeds is PriceSubmodule {
         );
 
         // Convert to first * second price and return
-        uint256 priceResult = firstPrice.mulDiv(secondPrice, 10 ** outputDecimals_);
+        uint256 priceResult = first.price.mulDiv(second.price, 10 ** outputDecimals_);
+        _validateDerivedConfidence(
+            _deriveMulConfidence(first, second, outputDecimals_),
+            params.outputMaxConfidence
+        );
 
         return priceResult;
     }
