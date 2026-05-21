@@ -2,13 +2,13 @@
 pragma solidity >=0.8.24;
 
 import {Kernel, Keycode, Policy, toKeycode} from "src/Kernel.sol";
-import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {PolicyAdminOptimized} from "src/policies/utils/PolicyAdminOptimized.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-import {IMockPolicyAdmin} from "./IMockPolicyAdmin.sol";
+import {IMockPolicyAdmin} from "../PolicyAdmin/IMockPolicyAdmin.sol";
 
-/// @notice Test harness that exposes the `PolicyAdmin` mix-in modifiers as gated functions.
-contract MockPolicyAdmin is Policy, PolicyAdmin, IMockPolicyAdmin {
+/// @notice Test harness that exposes the `PolicyAdminOptimized` mix-in modifiers as gated functions.
+contract MockPolicyAdminOptimized is Policy, PolicyAdminOptimized, IMockPolicyAdmin {
     constructor(Kernel kernel_) Policy(kernel_) {}
 
     function configureDependencies() external override returns (Keycode[] memory dependencies) {

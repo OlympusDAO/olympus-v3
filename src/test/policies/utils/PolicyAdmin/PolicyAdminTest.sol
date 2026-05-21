@@ -1,5 +1,5 @@
-// SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+// SPDX-License-Identifier: AGPL-3.0-only
+pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -7,25 +7,39 @@ import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 
-import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {MockPolicyAdmin} from "./MockPolicyAdmin.sol";
+import {IMockPolicyAdmin} from "./IMockPolicyAdmin.sol";
 
-contract PolicyAdminTest is Test {
-    address public constant EMERGENCY = address(0xAAAA);
-    address public constant ADMIN = address(0xBBBB);
+/// @notice Shared setup for the `PolicyAdmin` and `PolicyAdminOptimized` mix-in tests.
+/// @dev    Concrete test contracts implement `_deployPolicyAdmin()` to select the mix-in
+///         under test, so a single copy of the test logic runs against both mix-ins.
+abstract contract PolicyAdminTest is Test {
+    address public emergency;
+    address public admin;
+    address public manager;
 
     Kernel public kernel;
     OlympusRoles public roles;
     RolesAdmin public rolesAdmin;
-    MockPolicyAdmin public policyAdmin;
+    IMockPolicyAdmin public policyAdmin;
 
     function setUp() public {
-        kernel = new Kernel();
-        roles = new OlympusRoles(kernel);
-        rolesAdmin = new RolesAdmin(kernel);
+        emergency = makeAddr("emergency");
+        admin = makeAddr("admin");
+        manager = makeAddr("manager");
 
-        policyAdmin = new MockPolicyAdmin(kernel);
+        kernel = new Kernel();
+        vm.label(address(kernel), "Kernel");
+
+        roles = new OlympusRoles(kernel);
+        vm.label(address(roles), "OlympusRoles");
+
+        rolesAdmin = new RolesAdmin(kernel);
+        vm.label(address(rolesAdmin), "RolesAdmin");
+
+        policyAdmin = _deployPolicyAdmin(kernel);
+        vm.label(address(policyAdmin), "policyAdmin");
 
         // Install
         kernel.executeAction(Actions.InstallModule, address(roles));
@@ -33,7 +47,14 @@ contract PolicyAdminTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(policyAdmin));
 
         // Grant roles
-        rolesAdmin.grantRole(ADMIN_ROLE, ADMIN);
-        rolesAdmin.grantRole(EMERGENCY_ROLE, EMERGENCY);
+        rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin.grantRole(MANAGER_ROLE, manager);
     }
+
+    /// @notice Deploys the harness contract that exercises the mix-in under test.
+    ///
+    /// @param  kernel_ The kernel that the harness is registered against.
+    /// @return The deployed harness, accessed through the common `IMockPolicyAdmin` surface.
+    function _deployPolicyAdmin(Kernel kernel_) internal virtual returns (IMockPolicyAdmin);
 }

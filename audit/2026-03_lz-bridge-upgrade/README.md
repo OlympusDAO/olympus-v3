@@ -55,6 +55,7 @@ Branch: `lz-bridge-upgrade`
             - [ILZBridgeAndDelegateConfig.sol](../../src/policies/interfaces/ILZBridgeAndDelegateConfig.sol) — config policy interface (queue helpers, target slots, timelock constants). The configured timelock delay is bounded by `MIN_TIMELOCK_DELAY` (1 day) and `MAX_TIMELOCK_DELAY` (30 days); the default at deployment is 1 day. The execution window is `EXECUTION_WINDOW` (3 days): a queued action expires `executableAt + 3 days` if not executed.
         - [utils/](../../src/policies/utils/)
             - [TimelockBatchQueue.sol](../../src/policies/utils/TimelockBatchQueue.sol) — Reusable abstract base for atomic batched timelocked actions; inherited by `LZBridgeAndDelegateConfig`
+            - [PolicyAdminOptimized.sol](../../src/policies/utils/PolicyAdminOptimized.sol) — Bytecode-optimized copy of the `PolicyAdmin` role-gate mix-in with identical behaviour
         - [interfaces/utils/](../../src/policies/interfaces/utils/)
             - [ITimelockBatchQueue.sol](../../src/policies/interfaces/utils/ITimelockBatchQueue.sol) — Reusable timelock queue interface (events, errors, data structures, lifecycle methods)
     - [bases/](../../src/bases/)

@@ -12,7 +12,7 @@ import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {RejectingReceiver} from "src/test/bases/Rescueable/RejectingReceiver.sol";
 
 /// @dev Tests for the unified rescue function on LZBridgeGateway.
@@ -102,7 +102,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         vm.assume(caller_ != manager && caller_ != admin);
         randomToken.mint(address(gateway), 100e18);
 
-        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
         gateway.rescue(address(randomToken), payable(recoveryRecipient));
     }
@@ -166,7 +166,7 @@ contract LZBridgeGatewayTests_Rescue is LZBridgeGatewayTestBase {
         vm.assume(caller_ != manager && caller_ != admin);
         vm.deal(address(gateway), 1 ether);
 
-        vm.expectRevert(abi.encodeWithSelector(PolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(caller_);
         gateway.rescue(nativeToken, payable(recoveryRecipient));
     }
