@@ -63,6 +63,52 @@ contract LZCrossChainBridgeTests_SetGracePeriod is LZCrossChainBridgeTestBase {
         );
     }
 
+    /// @dev An increase in the grace period extends the deadline measured from
+    ///      `lastTransitionAt`, so a re-enable that would have expired under the original
+    ///      window succeeds after the increase. The window is set while the bridge is
+    ///      enabled and then carried into the disabled state by the subsequent `disable`.
+    function test_setGracePeriod_extendedWindowAllowsLateReEnable() external {
+        uint32 newPeriod = GRACE_SECONDS * 2;
+        vm.prank(bridgeConfiguratorContract);
+        bridge.setGracePeriod(newPeriod);
+
+        vm.prank(owner);
+        bridge.disable(bytes(""));
+        uint48 disabledAt = bridge.lastTransitionAt();
+
+        // Warp past the original deadline but inside the new one. Without the increase,
+        // `reEnable` would revert with `GracePeriod_Expired`.
+        vm.warp(uint256(disabledAt) + uint256(GRACE_SECONDS) + 1);
+
+        vm.prank(reEnablerAddr);
+        bridge.reEnable();
+
+        assertTrue(bridge.isEnabled(), "Bridge should re-enable inside the extended window");
+    }
+
+    /// @dev A decrease in the grace period shortens the deadline measured from
+    ///      `lastTransitionAt`, so a re-enable that would have succeeded under the original
+    ///      window reverts after the decrease. The window is set while the bridge is
+    ///      enabled and then carried into the disabled state by the subsequent `disable`.
+    function test_setGracePeriod_shortenedWindowRejectsLateReEnable() external {
+        uint32 newPeriod = GRACE_SECONDS / 2;
+        vm.prank(bridgeConfiguratorContract);
+        bridge.setGracePeriod(newPeriod);
+
+        vm.prank(owner);
+        bridge.disable(bytes(""));
+        uint48 disabledAt = bridge.lastTransitionAt();
+
+        uint48 newDeadline = disabledAt + newPeriod;
+        vm.warp(uint256(newDeadline) + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, newDeadline)
+        );
+        vm.prank(reEnablerAddr);
+        bridge.reEnable();
+    }
+
     // ========== REVERTS ========== //
 
     function test_setGracePeriod_revertsIfZeroPeriod() external {
