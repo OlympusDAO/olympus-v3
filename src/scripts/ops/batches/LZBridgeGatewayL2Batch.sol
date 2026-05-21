@@ -247,9 +247,14 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Step 3. DAO MS actions (requires bridge_admin & admin roles):
+    /// @notice Step 3. DAO MS actions (requires bridge_admin, admin & bridge_configurator roles):
     ///         enable the LZEndpointDelegate, configure LZ, set peers / enforced options /
     ///         rate limits, and enable the gateway.
+    /// @dev Endpoint configuration is routed through LZEndpointDelegate, whose setters are gated
+    ///      by `onlyBridgeConfigurator`. The DAO MS must therefore temporarily hold the
+    ///      `bridge_configurator` role (in addition to `bridge_admin` and `admin`) before calling
+    ///      this entry point (`grantRoles` in step 2 grants it); otherwise the call reverts. The
+    ///      temporary `bridge_configurator` grant is revoked afterward by `wireConfig` in step 4.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
