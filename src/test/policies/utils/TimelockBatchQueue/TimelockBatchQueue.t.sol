@@ -162,7 +162,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
     function _validateExecution(
         address caller_,
         uint64 /* actionId_ */,
-        ITimelockBatchQueue.QueuedAction memory /* action_ */
+        ITimelockBatchQueue.QueuedAction storage /* action_ */
     ) internal view override {
         if (rejectExecution) revert MockTimelockBatchQueue_ExecutionRejected();
         if (executionCaller != address(0) && caller_ != executionCaller)
@@ -172,7 +172,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
     function _validateCancellation(
         address caller_,
         uint64 /* actionId_ */,
-        ITimelockBatchQueue.QueuedAction memory /* action_ */
+        ITimelockBatchQueue.QueuedAction storage /* action_ */
     ) internal view override {
         if (rejectCancellation) revert MockTimelockBatchQueue_CancellationRejected();
         if (cancellationCaller != address(0) && caller_ != cancellationCaller)

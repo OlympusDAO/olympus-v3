@@ -127,14 +127,13 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _validateExecutableState(actionId_, action);
 
-        ITimelockBatchQueue.QueuedAction memory actionCopy = action;
-        _validateExecution(msg.sender, actionId_, actionCopy);
+        _validateExecution(msg.sender, actionId_, action);
 
         action.executed = true;
 
-        uint256 len = actionCopy.actions.length;
+        uint256 len = action.actions.length;
         for (uint256 i = 0; i < len; ++i) {
-            ITimelockBatchQueue.BatchAction memory subAction = actionCopy.actions[i];
+            ITimelockBatchQueue.BatchAction memory subAction = action.actions[i];
             _executeSubAction(actionId_, i, subAction);
             emit TimelockSubActionExecuted(actionId_, subAction.target, subAction.selector, i);
         }
@@ -154,8 +153,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _validateCancellableState(actionId_, action);
 
-        ITimelockBatchQueue.QueuedAction memory actionCopy = action;
-        _validateCancellation(msg.sender, actionId_, actionCopy);
+        _validateCancellation(msg.sender, actionId_, action);
 
         action.cancelled = true;
         delete action.actions;
@@ -342,11 +340,11 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///
     /// @param  caller_   The account executing the action.
     /// @param  actionId_ The queued action ID.
-    /// @param  action_   A memory copy of the queued action, including the sub-actions.
+    /// @param  action_   The queued action storage reference, including the sub-actions.
     function _validateExecution(
         address caller_,
         uint64 actionId_,
-        ITimelockBatchQueue.QueuedAction memory action_
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view virtual;
 
     /// @notice Validate implementation-specific cancellation rules.
@@ -355,11 +353,11 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///
     /// @param  caller_   The account cancelling the action.
     /// @param  actionId_ The queued action ID.
-    /// @param  action_   A memory copy of the queued action, including the sub-actions.
+    /// @param  action_   The queued action storage reference, including the sub-actions.
     function _validateCancellation(
         address caller_,
         uint64 actionId_,
-        ITimelockBatchQueue.QueuedAction memory action_
+        ITimelockBatchQueue.QueuedAction storage action_
     ) internal view virtual;
 
     /// @notice Execute a single sub-action of a batched queued action.

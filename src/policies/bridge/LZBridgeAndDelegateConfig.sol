@@ -225,7 +225,7 @@ contract LZBridgeAndDelegateConfig is
         if (len > _maxBatchSize()) revert ITimelockBatchQueue_BatchTooLarge(len, _maxBatchSize());
         for (uint256 i = 0; i < len; ++i) {
             if (actions_[i].target == address(this))
-                revert ITimelockBatchQueue_ActionInvalid(actions_[i].target, actions_[i].selector);
+                _revertActionInvalid(actions_[i].target, actions_[i].selector);
         }
         return _queueAction(actions_);
     }
@@ -263,7 +263,7 @@ contract LZBridgeAndDelegateConfig is
             _validateSelfSubAction(caller_, action_);
             kind = TargetKind.SELF;
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+            _revertActionInvalid(action_.target, action_.selector);
         }
 
         _subActionTargetKind[actionId_][index_] = kind;
@@ -282,7 +282,7 @@ contract LZBridgeAndDelegateConfig is
     function _validateExecution(
         address,
         uint64,
-        ITimelockBatchQueue.QueuedAction memory
+        ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireEnabled();
     }
@@ -297,7 +297,7 @@ contract LZBridgeAndDelegateConfig is
     function _validateCancellation(
         address caller_,
         uint64,
-        ITimelockBatchQueue.QueuedAction memory
+        ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireRole(caller_, EMERGENCY_ROLE);
     }
@@ -330,7 +330,7 @@ contract LZBridgeAndDelegateConfig is
             _requireTargetUnchanged(actionId_, index_, action_.target, address(this));
             _executeSelfSubAction(action_);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+            _revertActionInvalid(action_.target, action_.selector);
         }
     }
 
@@ -428,7 +428,7 @@ contract LZBridgeAndDelegateConfig is
             _decodeGatewayAdminPayload(action_.target, sel, action_.payload);
             return;
         }
-        revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+        _revertActionInvalid(action_.target, sel);
     }
 
     function _validateDelegateSubAction(
@@ -446,7 +446,7 @@ contract LZBridgeAndDelegateConfig is
             _decodeDelegatePayload(action_.target, sel, action_.payload);
             return;
         }
-        revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+        _revertActionInvalid(action_.target, sel);
     }
 
     function _validateFacilitatorSubAction(
@@ -457,7 +457,7 @@ contract LZBridgeAndDelegateConfig is
         if (sel == ILZCrossChainBridge.setConfigurator.selector) {
             _requireAdminProposer(caller_);
             if (action_.payload.length != _LEN_SINGLE_WORD)
-                revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+                _revertActionInvalid(action_.target, sel);
             address candidate = abi.decode(action_.payload, (address));
             ILZCrossChainBridge(facilitator).validateSetConfigurator(candidate);
             return;
@@ -471,7 +471,7 @@ contract LZBridgeAndDelegateConfig is
             _decodeFacilitatorPayload(action_.target, sel, action_.payload);
             return;
         }
-        revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+        _revertActionInvalid(action_.target, sel);
     }
 
     function _validateSelfSubAction(
@@ -502,7 +502,7 @@ contract LZBridgeAndDelegateConfig is
             _validateTimelockDelay(delay);
             return;
         }
-        revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+        _revertActionInvalid(action_.target, sel);
     }
 
     /// @notice Decodes the payload of a rate-limit-related gateway sub-action.
@@ -515,8 +515,7 @@ contract LZBridgeAndDelegateConfig is
         bytes4 sel_,
         bytes memory payload_
     ) private pure {
-        if (payload_.length < _MIN_LEN_DYNAMIC_ARRAY)
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+        if (payload_.length < _MIN_LEN_DYNAMIC_ARRAY) _revertActionInvalid(target_, sel_);
         if (
             sel_ == ILZBridgeGateway.setOutRateLimits.selector ||
             sel_ == ILZBridgeGateway.setInRateLimits.selector
@@ -526,16 +525,16 @@ contract LZBridgeAndDelegateConfig is
                 (IOffsettingRateLimiter.RateLimitConfig[])
             );
             if (keccak256(payload_) != keccak256(abi.encode(cfg)))
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+                _revertActionInvalid(target_, sel_);
         } else if (
             sel_ == ILZBridgeGateway.clearOutboundInFlight.selector ||
             sel_ == ILZBridgeGateway.clearInboundInFlight.selector
         ) {
             uint32[] memory eids = abi.decode(payload_, (uint32[]));
             if (keccak256(payload_) != keccak256(abi.encode(eids)))
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+                _revertActionInvalid(target_, sel_);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            _revertActionInvalid(target_, sel_);
         }
     }
 
@@ -547,8 +546,7 @@ contract LZBridgeAndDelegateConfig is
         bytes4 sel_,
         bytes memory payload_
     ) private view {
-        if (payload_.length != _LEN_SINGLE_WORD)
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+        if (payload_.length != _LEN_SINGLE_WORD) _revertActionInvalid(target_, sel_);
         if (sel_ == ILZBridgeGateway.setDelegate.selector) {
             address delegateCandidate = abi.decode(payload_, (address));
             ILZBridgeGateway(gateway).validateSetDelegate(delegateCandidate);
@@ -562,7 +560,7 @@ contract LZBridgeAndDelegateConfig is
             uint32 period = abi.decode(payload_, (uint32));
             _validateGracePeriod(period);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            _revertActionInvalid(target_, sel_);
         }
     }
 
@@ -577,27 +575,24 @@ contract LZBridgeAndDelegateConfig is
         bytes memory payload_
     ) private pure {
         if (sel_ == ILZEndpointV2Authorized.setSendLibrary.selector) {
-            if (payload_.length != _LEN_SEND_LIBRARY)
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            if (payload_.length != _LEN_SEND_LIBRARY) _revertActionInvalid(target_, sel_);
             abi.decode(payload_, (uint32, address));
         } else if (
             sel_ == ILZEndpointV2Authorized.setReceiveLibrary.selector ||
             sel_ == ILZEndpointV2Authorized.setReceiveLibraryTimeout.selector
         ) {
-            if (payload_.length != _LEN_RECEIVE_LIBRARY)
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            if (payload_.length != _LEN_RECEIVE_LIBRARY) _revertActionInvalid(target_, sel_);
             abi.decode(payload_, (uint32, address, uint256));
         } else if (sel_ == ILZEndpointV2Authorized.setEndpointConfig.selector) {
-            if (payload_.length < _MIN_LEN_ENDPOINT_CONFIG)
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            if (payload_.length < _MIN_LEN_ENDPOINT_CONFIG) _revertActionInvalid(target_, sel_);
             (address lib, SetConfigParam[] memory params) = abi.decode(
                 payload_,
                 (address, SetConfigParam[])
             );
             if (keccak256(payload_) != keccak256(abi.encode(lib, params)))
-                revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+                _revertActionInvalid(target_, sel_);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            _revertActionInvalid(target_, sel_);
         }
     }
 
@@ -610,8 +605,7 @@ contract LZBridgeAndDelegateConfig is
         bytes4 sel_,
         bytes memory payload_
     ) private view {
-        if (payload_.length != _LEN_SINGLE_WORD)
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+        if (payload_.length != _LEN_SINGLE_WORD) _revertActionInvalid(target_, sel_);
         if (sel_ == ILZCrossChainBridge.setGateway.selector) {
             address candidate = abi.decode(payload_, (address));
             ILZCrossChainBridge(facilitator).validateSetGateway(candidate);
@@ -621,7 +615,7 @@ contract LZBridgeAndDelegateConfig is
             uint32 period = abi.decode(payload_, (uint32));
             _validateGracePeriod(period);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(target_, sel_);
+            _revertActionInvalid(target_, sel_);
         }
     }
 
@@ -652,7 +646,7 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel == IGracePeriod.setGracePeriod.selector) {
             IGracePeriod(address(gw)).setGracePeriod(abi.decode(action_.payload, (uint32)));
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+            _revertActionInvalid(action_.target, sel);
         }
     }
 
@@ -682,7 +676,7 @@ contract LZBridgeAndDelegateConfig is
             );
             dg.setEndpointConfig(lib, params);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+            _revertActionInvalid(action_.target, sel);
         }
     }
 
@@ -699,7 +693,7 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel == ILZCrossChainBridge.setConfigurator.selector) {
             fac.setConfigurator(abi.decode(action_.payload, (address)));
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+            _revertActionInvalid(action_.target, sel);
         }
     }
 
@@ -720,7 +714,7 @@ contract LZBridgeAndDelegateConfig is
         } else if (sel == this.queueSetTargetFacilitator.selector) {
             _setTargetFacilitator(candidate);
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, sel);
+            _revertActionInvalid(action_.target, sel);
         }
     }
 
@@ -756,5 +750,12 @@ contract LZBridgeAndDelegateConfig is
 
     function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
         if (address_ == address(0)) revert LZBridgeAndDelegateConfig_InvalidAddress(parameter_);
+    }
+
+    /// @notice Reverts with `ITimelockBatchQueue_ActionInvalid` for an unsupported sub-action.
+    /// @dev    Centralizes the revert so the error encoding is emitted once instead of being
+    ///         inlined at every dispatch and payload-validation branch.
+    function _revertActionInvalid(address target_, bytes4 selector_) private pure {
+        revert ITimelockBatchQueue_ActionInvalid(target_, selector_);
     }
 }
