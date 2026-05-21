@@ -299,7 +299,7 @@ contract LZBridgeAndDelegateConfig is
         uint64,
         ITimelockBatchQueue.QueuedAction memory
     ) internal view override {
-        if (!_isEmergency(caller_)) revert ROLESv1.ROLES_RequireRole(EMERGENCY_ROLE);
+        _requireRole(caller_, EMERGENCY_ROLE);
     }
 
     /// @inheritdoc TimelockBatchQueue
@@ -384,27 +384,21 @@ contract LZBridgeAndDelegateConfig is
 
     /// @notice Requires the caller to hold `bridge_admin` or `admin`.
     function _requireBridgeAdminProposer(address caller_) private view {
-        if (!_hasRole(caller_, BRIDGE_ADMIN_ROLE) && !_isAdmin(caller_))
-            revert IPolicyAdmin.NotAuthorised();
+        _requireAuthorized(!_hasRole(caller_, BRIDGE_ADMIN_ROLE) && !_isAdmin(caller_));
     }
 
     /// @notice Requires the caller to hold `bridge_rate_limiter`, `bridge_admin`, or `admin`.
     function _requireRateLimiterProposer(address caller_) private view {
-        if (
+        _requireAuthorized(
             !_hasRole(caller_, BRIDGE_RATE_LIMITER_ROLE) &&
-            !_hasRole(caller_, BRIDGE_ADMIN_ROLE) &&
-            !_isAdmin(caller_)
-        ) revert IPolicyAdmin.NotAuthorised();
+                !_hasRole(caller_, BRIDGE_ADMIN_ROLE) &&
+                !_isAdmin(caller_)
+        );
     }
 
     /// @notice Requires the caller to hold `admin`.
     function _requireAdminProposer(address caller_) private view {
-        if (!_isAdmin(caller_)) revert ROLESv1.ROLES_RequireRole(ADMIN_ROLE);
-    }
-
-    /// @notice Returns whether `account_` holds `role_` on the `ROLES` module.
-    function _hasRole(address account_, bytes32 role_) private view returns (bool) {
-        return ROLES.hasRole(account_, role_);
+        _requireRole(caller_, ADMIN_ROLE);
     }
 
     // ========== SUB-ACTION VALIDATORS ========== //

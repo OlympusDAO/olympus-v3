@@ -8,7 +8,6 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {ILZEndpointDelegate} from "src/policies/interfaces/ILZEndpointDelegate.sol";
 import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
@@ -67,8 +66,7 @@ contract LZEndpointDelegate is
     /// @notice Reverts with `ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE)` if
     ///         `msg.sender` does not hold the `bridge_configurator` role.
     function _requireBridgeConfigurator() private view {
-        if (!ROLES.hasRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE))
-            revert ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE);
+        _requireRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE);
     }
 
     /// @notice Reverts if the caller holds none of the `bridge_channel_manager`,
@@ -85,11 +83,11 @@ contract LZEndpointDelegate is
     /// @notice Reverts with `IPolicyAdmin.NotAuthorised` if `msg.sender` holds none of the
     ///         `bridge_channel_manager`, `bridge_admin`, or `admin` roles.
     function _requireChannelManager() private view {
-        if (
-            !ROLES.hasRole(msg.sender, BRIDGE_CHANNEL_MANAGER_ROLE) &&
-            !ROLES.hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
-            !_isAdmin(msg.sender)
-        ) revert IPolicyAdmin.NotAuthorised();
+        _requireAuthorized(
+            !_hasRole(msg.sender, BRIDGE_CHANNEL_MANAGER_ROLE) &&
+                !_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
+                !_isAdmin(msg.sender)
+        );
     }
 
     // ========= INITIALIZATION & POLICY SETUP ========= //

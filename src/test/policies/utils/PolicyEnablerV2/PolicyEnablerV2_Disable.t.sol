@@ -6,7 +6,7 @@ import {MockPolicyEnablerV2} from "src/test/policies/utils/PolicyEnablerV2/MockP
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 /// @dev Tests for `PolicyEnablerV2.disable`. The role gate is the
 ///      `onlyEmergencyOrAdminRole` modifier, which permits both the admin
@@ -64,7 +64,7 @@ contract PolicyEnablerV2Tests_Disable is PolicyEnablerV2TestBase {
     }
 
     function test_disable_revertsIfCallerIsManager() external givenEnabled {
-        vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(manager);
         policy.disable(SAMPLE_DATA);
     }
@@ -85,7 +85,7 @@ contract PolicyEnablerV2Tests_Disable is PolicyEnablerV2TestBase {
     function testFuzz_disable_revertsIfNotAdminOrEmergency(address caller_) external givenEnabled {
         vm.assume(caller_ != admin && caller_ != emergency);
 
-        vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         policy.disable(SAMPLE_DATA);
     }

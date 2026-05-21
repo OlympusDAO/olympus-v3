@@ -43,7 +43,6 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
 import {Rescueable} from "src/bases/Rescueable.sol";
-import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 import {BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title LZBridgeGateway
@@ -95,11 +94,10 @@ contract LZBridgeGateway is
         _;
     }
 
-    /// @notice Reverts with `PolicyAdmin.NotAuthorised` if `msg.sender` has neither the
+    /// @notice Reverts with `IPolicyAdmin.NotAuthorised` if `msg.sender` has neither the
     ///         `bridge_admin` nor the `admin` role.
     function _requireBridgeAdminOrAdmin() private view {
-        if (!_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender))
-            revert PolicyAdmin.NotAuthorised();
+        _requireAuthorized(!_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) && !_isAdmin(msg.sender));
     }
 
     /// @notice Modifier that reverts if the caller does not have the `bridge_configurator` role.
@@ -116,18 +114,10 @@ contract LZBridgeGateway is
         _;
     }
 
-    /// @notice Reverts if `msg.sender` does not hold the `bridge_configurator` role.
+    /// @notice Reverts with `ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE)` if
+    ///         `msg.sender` does not hold the `bridge_configurator` role.
     function _requireBridgeConfigurator() private view {
-        if (!_hasRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE))
-            revert ROLESv1.ROLES_RequireRole(BRIDGE_CONFIGURATOR_ROLE);
-    }
-
-    /// @notice Returns whether `account_` holds `role_` on the linked `ROLES` module.
-    /// @param account_ The address whose role membership is being checked.
-    /// @param role_ The role identifier to test.
-    /// @return True if `account_` holds `role_`, false otherwise.
-    function _hasRole(address account_, bytes32 role_) private view returns (bool) {
-        return ROLES.hasRole(account_, role_);
+        _requireRole(msg.sender, BRIDGE_CONFIGURATOR_ROLE);
     }
 
     // ========= IMMUTABLES ========= //
