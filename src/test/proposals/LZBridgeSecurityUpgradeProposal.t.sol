@@ -490,6 +490,7 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
         // 11. LZEndpointDelegate is the LZ endpoint delegate for the gateway
         assertTrue(Policy(address(lzDelegate)).isActive(), "LZEndpointDelegate should be active");
+        assertTrue(lzDelegate.isEnabled(), "LZEndpointDelegate should be enabled");
         assertEq(
             IEndpointV2State(address(ep)).delegates(address(gateway)),
             address(lzDelegate),

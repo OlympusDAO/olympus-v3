@@ -107,7 +107,7 @@ You can review previous audits here:
 ### Key Security Improvements Over CrossChainBridge
 
 1. **Bridged supply tracking** (canonical chain only): Tracks outbound OHM (`bridgedSupply`) with an underflow check on inbound receives, preventing unlimited mints from non-canonical chains.
-2. **Receive gating on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway gates `lzReceive` on an `isReceiveEnabled` flag that is automatically set on `enable` and cleared on `disable` (and can additionally be toggled by `admin` / `emergency` via `setIsReceiveEnabled` while the gateway is disabled), so disabling the bridge blocks both inbound and outbound transfers. Note: disabling the gateway does **not** block the inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`), which live on `LZEndpointDelegate` (a separate policy with no enabled/disabled state).
+2. **Receive gating on `lzReceive`**: The original `CrossChainBridge` does not check `bridgeActive` on inbound messages. The new gateway gates `lzReceive` on an `isReceiveEnabled` flag that is automatically set on `enable` and cleared on `disable` (and can additionally be toggled by `admin` / `emergency` via `setIsReceiveEnabled` while the gateway is disabled), so disabling the bridge blocks both inbound and outbound transfers. Note: disabling the gateway does **not** block the inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`), which live on `LZEndpointDelegate` (a separate policy).
 3. **Elimination of custom retry mechanism**: The original `CrossChainBridge` stores failed message hashes in `failedMessages` and exposes a `retryMessage` function that does not re-validate the trusted remote. The new gateway removes this entirely in favour of native LayerZero V2 message delivery, which enforces peer validation on retry and eliminates the risk of replaying messages from removed peers.
 4. **Separation of concerns**: The facilitator (`LZCrossChainBridge`) has no MINTR permissions and is authorized via the `bridge_facilitator` role. It merely transfers OHM to the gateway and calls `burnAndSend`.
 5. **Typed message encoding**: Payload format changed from `abi.encode(to, amount)` to `abi.encode(uint8 msgType, bytes data)` to support future message types.
@@ -214,14 +214,16 @@ sequenceDiagram
 
 | Function                   | Direct caller            | Notes |
 | -------------------------- | ------------------------ | ----- |
-| `setSendLibrary`           | `bridge_configurator`    | expected to be timelocked |
-| `setReceiveLibrary`        | `bridge_configurator`    | expected to be timelocked |
-| `setReceiveLibraryTimeout` | `bridge_configurator`    | expected to be timelocked |
-| `setEndpointConfig`        | `bridge_configurator`    | expected to be timelocked |
-| `skip`                     | `bridge_admin` / `admin` |  |
-| `nilify`                   | `bridge_admin` / `admin` |  |
-| `burn`                     | `bridge_admin` / `admin` |  |
-| `clear`                    | `bridge_admin` / `admin` |  |
+| `setSendLibrary`           | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
+| `setReceiveLibrary`        | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
+| `setReceiveLibraryTimeout` | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
+| `setEndpointConfig`        | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
+| `skip`                     | `bridge_admin` / `admin` | `givenEnabled` |
+| `nilify`                   | `bridge_admin` / `admin` | `givenEnabled` |
+| `burn`                     | `bridge_admin` / `admin` | `givenEnabled` |
+| `clear`                    | `bridge_admin` / `admin` | `givenEnabled` |
+| `enable`                   | `admin`                  | `givenDisabled` |
+| `disable`                  | `admin` / `emergency`    | `givenEnabled` |
 
 The library / endpoint-config setters are gated by `bridge_configurator` and are reached only as delegate sub-actions of `LZBridgeAndDelegateConfig.queue`.
 The inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`) are gated directly to `bridge_admin` / `admin`.

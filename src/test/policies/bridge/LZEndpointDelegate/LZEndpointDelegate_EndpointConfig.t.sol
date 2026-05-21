@@ -5,6 +5,7 @@ import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDel
 
 // Interfaces
 import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Constants
 import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -53,6 +54,14 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
         lzDelegate.setSendLibrary(NONCANONICAL_EID, address(1));
     }
 
+    function test_setSendLibrary_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeConfigurator);
+        lzDelegate.setSendLibrary(NONCANONICAL_EID, address(1));
+    }
+
     function test_setReceiveLibrary_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
         uint256 gracePeriod = 100;
@@ -89,6 +98,14 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
         );
         vm.prank(caller_);
+        lzDelegate.setReceiveLibrary(NONCANONICAL_EID, address(1), 0);
+    }
+
+    function test_setReceiveLibrary_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setReceiveLibrary(NONCANONICAL_EID, address(1), 0);
     }
 
@@ -133,6 +150,14 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
         lzDelegate.setReceiveLibraryTimeout(NONCANONICAL_EID, address(1), 0);
     }
 
+    function test_setReceiveLibraryTimeout_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeConfigurator);
+        lzDelegate.setReceiveLibraryTimeout(NONCANONICAL_EID, address(1), 0);
+    }
+
     function test_setEndpointConfig_bridgeConfiguratorCanCall() external {
         address lib = address(0xBEEF);
         SetConfigParam[] memory params = new SetConfigParam[](0);
@@ -168,6 +193,15 @@ contract LZEndpointDelegateTests_EndpointConfig is LZEndpointDelegateTestBase {
             abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BRIDGE_CONFIGURATOR_ROLE)
         );
         vm.prank(caller_);
+        lzDelegate.setEndpointConfig(address(1), params);
+    }
+
+    function test_setEndpointConfig_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        SetConfigParam[] memory params = new SetConfigParam[](0);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeConfigurator);
         lzDelegate.setEndpointConfig(address(1), params);
     }
 }

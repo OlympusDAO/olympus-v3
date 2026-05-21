@@ -68,6 +68,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
 
     // solhint-disable quotes
     function description() public pure override returns (string memory) {
+        return string.concat(_descriptionPreamble(), _descriptionSteps());
+    }
+
+    function _descriptionPreamble() private pure returns (string memory) {
         return
             string.concat(
                 "# LayerZero Bridge Security Upgrade\n",
@@ -99,7 +103,13 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "- LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, LZBridgeAndDelegateConfig, LZBridgeActivator have been deployed on Ethereum.\n",
                 "- Remote LZBridgeGateway, LZEndpointDelegate, LZCrossChainBridge, and LZBridgeAndDelegateConfig instances have been deployed on Arbitrum, Optimism, Base, and Berachain.\n",
                 "- The DAO MS has already activated LZBridgeGateway, LZEndpointDelegate, and LZBridgeAndDelegateConfig in the Kernel.\n",
-                "- The OCG timelock already has the `admin` and `bridge_admin` roles (required for endpoint configuration, peer setup, and enabling).\n",
+                "- The OCG timelock already has the `admin` and `bridge_admin` roles (required for endpoint configuration, peer setup, and enabling).\n"
+            );
+    }
+
+    function _descriptionSteps() private pure returns (string memory) {
+        return
+            string.concat(
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
@@ -107,16 +117,17 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "2. Grant the `manager` role to the DAO MS, authorizing it to call `reEnable()` on the LZBridgeGateway within the grace window after a disable.\n",
                 "3. Grant the `bridge_facilitator` role to the LZCrossChainBridge periphery contract.\n",
                 "4. Grant temporary `admin`, `bridge_admin`, and `bridge_configurator` roles to the LZBridgeActivator contract.\n",
-                "5. Execute LZBridgeActivator.activate() which:\n",
+                "5. Enable the LZEndpointDelegate policy so the OApp-authorized endpoint setters reached by the activator pass the enabled condition.\n",
+                "6. Execute LZBridgeActivator.activate() which:\n",
                 "   - Sets the LZEndpointDelegate policy as the gateway's LayerZero endpoint delegate. This is the steady-state configuration: subsequent OApp-authorized endpoint operations are driven through LZEndpointDelegate.\n",
                 "   - Pins SendUln302/ReceiveUln302 libraries and sets ULN/Executor config for all remote chains (Arbitrum, Optimism, Base, Berachain) via the LZEndpointDelegate policy. Four required DVNs on every route: LayerZero Labs, Canary, Nethermind, plus Google Cloud for non-Berachain routes or Horizen for routes that touch Berachain (where Google Cloud is unavailable). No optional DVNs (explicit NIL sentinel, so not inherited from LayerZero's default).\n",
                 "   - Sets peers for all remote chains.\n",
                 "   - Sets enforced options: 200,000 gas minimum for lzReceive on each destination.\n",
                 "   - Sets per-endpoint bidirectional rate limits (outbound and inbound) on each remote chain.\n",
                 "   - Enables the LZBridgeGateway policy.\n",
-                "6. Revoke the temporary `admin`, `bridge_admin`, and `bridge_configurator` roles from the LZBridgeActivator contract.\n",
-                "7. Enable the LZBridgeAndDelegateConfig policy so subsequent queue / execute calls are accepted.\n",
-                "8. Grant the permanent `bridge_configurator` role to the LZBridgeAndDelegateConfig policy, which routes calls through the timelock queue.\n",
+                "7. Revoke the temporary `admin`, `bridge_admin`, and `bridge_configurator` roles from the LZBridgeActivator contract.\n",
+                "8. Enable the LZBridgeAndDelegateConfig policy so subsequent queue / execute calls are accepted.\n",
+                "9. Grant the permanent `bridge_configurator` role to the LZBridgeAndDelegateConfig policy, which routes calls through the timelock queue.\n",
                 "\n",
                 "At the completion of this proposal, the DAO MS will deactivate the old CrossChainBridge, bootstrap the periphery LZCrossChainBridge's configurator with the LZBridgeAndDelegateConfig policy, enable the periphery LZCrossChainBridge, and write the initial bridged supply via the gateway's `initializeBridgedSupply`.\n"
             );
@@ -137,6 +148,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         address lzCrossChainBridge = addresses.getAddress(
             "olympus-periphery-lz-cross-chain-bridge"
         );
+        address lzDelegate = addresses.getAddress("olympus-policy-lz-endpoint-delegate");
         address lzConfig = addresses.getAddress("olympus-policy-lz-bridge-and-delegate-config");
         address activator = addresses.getAddress("olympus-lz-bridge-activator");
 
@@ -144,6 +156,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
         _requireNonZeroAddress(rolesAdmin, "olympus-policy-roles-admin");
         _requireNonZeroAddress(daoMS, "olympus-multisig-dao");
         _requireNonZeroAddress(lzCrossChainBridge, "olympus-periphery-lz-cross-chain-bridge");
+        _requireNonZeroAddress(lzDelegate, "olympus-policy-lz-endpoint-delegate");
         _requireNonZeroAddress(lzConfig, "olympus-policy-lz-bridge-and-delegate-config");
         _requireNonZeroAddress(activator, "olympus-lz-bridge-activator");
 
@@ -218,14 +231,23 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Grant bridge_configurator role to temporary activator contract"
         );
 
-        // 5. Execute activator (single action: LZ config + peers + options + enable)
+        // 5. Enable the LZEndpointDelegate policy so the OApp-authorized endpoint setters
+        //    reached by the activator (`setSendLibrary`, `setReceiveLibrary`,
+        //    `setEndpointConfig`) pass the `givenEnabled` gate.
+        _pushAction(
+            lzDelegate,
+            abi.encodeWithSelector(IEnabler.enable.selector, ""),
+            "Enable LZEndpointDelegate policy"
+        );
+
+        // 6. Execute activator (single action: LZ config + peers + options + enable)
         _pushAction(
             activator,
             abi.encodeWithSelector(LZBridgeActivator.activate.selector),
             "Execute LZBridgeActivator"
         );
 
-        // 6. Revoke temporary roles from the activator
+        // 7. Revoke temporary roles from the activator
         _pushAction(
             rolesAdmin,
             abi.encodeWithSelector(RolesAdmin.revokeRole.selector, ADMIN_ROLE, activator),
@@ -246,14 +268,14 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "Revoke bridge_configurator role from temporary activator contract"
         );
 
-        // 7. Enable the LZBridgeAndDelegateConfig policy
+        // 8. Enable the LZBridgeAndDelegateConfig policy
         _pushAction(
             lzConfig,
             abi.encodeWithSelector(IEnabler.enable.selector, ""),
             "Enable LZBridgeAndDelegateConfig policy"
         );
 
-        // 8. Grant the permanent `bridge_configurator` role to the LZBridgeAndDelegateConfig
+        // 9. Grant the permanent `bridge_configurator` role to the LZBridgeAndDelegateConfig
         //    policy so that subsequent `bridge_configurator`-gated calls on the gateway and
         //    the LZ endpoint delegate are accepted only from the policy and thus routed
         //    through its timelock queue.
@@ -303,8 +325,9 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
             "LZBridgeAndDelegateConfig policy is not active"
         );
 
-        // 2. Validate LZBridgeGateway is enabled and the config policy is enabled
+        // 2. Validate LZBridgeGateway, LZEndpointDelegate, and the config policy are enabled
         require(IEnabler(address(gw)).isEnabled(), "LZBridgeGateway is not enabled");
+        require(IEnabler(address(lzDelegate)).isEnabled(), "LZEndpointDelegate is not enabled");
         require(
             IEnabler(addresses.getAddress("olympus-policy-lz-bridge-and-delegate-config"))
                 .isEnabled(),

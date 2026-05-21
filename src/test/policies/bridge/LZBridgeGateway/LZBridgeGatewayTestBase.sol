@@ -159,6 +159,11 @@ contract LZBridgeGatewayTestBase is TestHelperOz5 {
         gateway2.enable(bytes(""));
         vm.stopPrank();
 
+        vm.startPrank(admin);
+        lzDelegate.enable(bytes(""));
+        lzDelegate2.enable(bytes(""));
+        vm.stopPrank();
+
         vm.startPrank(bridgeConfigurator);
         gateway.setDelegate(address(lzDelegate));
         gateway2.setDelegate(address(lzDelegate2));

@@ -5,6 +5,7 @@ import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDel
 
 // Interfaces
 import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 /// @dev LZ V2 message management (skip, nilify, burn, clear) forwarded via LZEndpointDelegate.
@@ -52,6 +53,14 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
     }
 
+    function test_skip_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
+        lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
+    }
+
     // ========== NILIFY ========== //
 
     function _mockAndExpectNilify() private {
@@ -87,6 +96,14 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
+    function test_nilify_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
+        lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
     // ========== BURN ========== //
 
     function _mockAndExpectBurn() private {
@@ -119,6 +136,14 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
+    function test_burn_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
@@ -166,6 +191,15 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         Origin memory origin = _buildOrigin();
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.clear(origin, bytes32(0), bytes(""));
+    }
+
+    function test_clear_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        Origin memory origin = _buildOrigin();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.clear(origin, bytes32(0), bytes(""));
     }
 }

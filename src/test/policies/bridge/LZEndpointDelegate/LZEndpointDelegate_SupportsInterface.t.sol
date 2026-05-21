@@ -5,6 +5,8 @@ import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDel
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZEndpointDelegate} from "src/policies/interfaces/ILZEndpointDelegate.sol";
 import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -36,6 +38,20 @@ contract LZEndpointDelegateTests_SupportsInterface is LZEndpointDelegateTestBase
         assertTrue(
             lzDelegate.supportsInterface(type(IVersioned).interfaceId),
             "Should support IVersioned"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIEnablerV2() external view {
+        assertTrue(
+            lzDelegate.supportsInterface(type(IEnablerV2).interfaceId),
+            "Should support IEnablerV2"
+        );
+    }
+
+    function test_supportsInterface_returnsTrueForIEnabler() external view {
+        assertTrue(
+            lzDelegate.supportsInterface(type(IEnabler).interfaceId),
+            "Should support IEnabler"
         );
     }
 
