@@ -121,9 +121,13 @@ contract LZBridgeAndDelegateConfigTestBase is TestHelperOz5 {
         // gateway/delegate.
         rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, address(config));
 
-        // Enable the config policy so `queue*` and `executeQueuedAction` are accepted.
-        vm.prank(admin);
+        // Enable the delegate and the config policy. The delegate must be enabled before any
+        // queued sub-action lands on it; the config policy must be enabled before `queue*` and
+        // `executeQueuedAction` are accepted.
+        vm.startPrank(admin);
+        lzDelegate.enable("");
         config.enable("");
+        vm.stopPrank();
 
         // Non-canonical destination stack (only the gateway, just enough to deliver packets).
         kernel2 = new Kernel();

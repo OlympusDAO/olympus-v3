@@ -149,8 +149,10 @@ contract LZCrossChainBridgeTestBase is TestHelperOz5 {
         );
         bridgeConfiguratorContract = address(lzConfig);
 
-        // Configure gateways: peers, enforced options, and lifecycle stay under admin
+        // Configure gateways: peers, enforced options, and lifecycle stay under admin.
+        // Also, enable the delegate.
         vm.startPrank(admin);
+        lzDelegate.enable(bytes(""));
         gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
         gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
 

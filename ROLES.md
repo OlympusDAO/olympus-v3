@@ -16,7 +16,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
 | admin | LZBridgeAndDelegateConfig | Enable / disable the policy, queue timelocked actions on the bridge stack, rotate the policy's gateway / delegate / facilitator target variables, and change the timelock delay |
 | admin | LZBridgeGateway | Set peers, set enforced options, set whether receiving is enabled, enable / disable the gateway, rescue accidentally-sent assets, and the one-shot `initializeBridgedSupply` bootstrap |
-| admin | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint; intentionally not timelocked |
+| admin | LZEndpointDelegate | Enable / disable the policy and call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint |
 | admin | MonoCooler | Allows setting parameters on the MonoCooler |
 | admin | ReserveWrapper | Enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
@@ -24,6 +24,7 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_admin | LZBridgeGateway | Call the one-shot `initializeBridgedSupply` bootstrap |
 | bridge_admin | LZBridgeAndDelegateConfig | Queue most timelocked actions (gateway delegate/supply, delegate libraries/configs, periphery setGateway/setReEnabler/setGracePeriod) on the config policy |
 | bridge_admin | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint; intentionally not timelocked |
+| bridge_channel_manager | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint |
 | bridge_configurator | LZBridgeGateway | Set the LZ endpoint delegate, increase / decrease the bridged supply, set inbound / outbound rate limits, clear inbound / outbound in-flight amounts, and set the grace period. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_configurator | LZEndpointDelegate | Set send / receive libraries and the receive-library timeout, and set ULN / Executor endpoint config on the LayerZero endpoint. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
@@ -46,6 +47,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | DepositRedemptionVault | Deauthorize facilities, disable contract |
 | emergency | EmissionManager | Disable the contract |
 | emergency | Heart | Disable the contract |
+| emergency | LZEndpointDelegate | Disable the contract |
 | emergency | MonoCooler | Allows enable/disable on the MonoCooler |
 | emergency | ReserveWrapper | Disable contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |

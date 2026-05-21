@@ -247,8 +247,14 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         proposeBatch();
     }
 
-    /// @notice Step 3. DAO MS actions (requires bridge_admin & admin roles):
-    ///         LZ config, peers, enforced options, rate limits, and enable.
+    /// @notice Step 3. DAO MS actions (requires bridge_admin, admin & bridge_configurator roles):
+    ///         enable the LZEndpointDelegate, configure LZ, set peers / enforced options /
+    ///         rate limits, and enable the gateway.
+    /// @dev Endpoint configuration is routed through LZEndpointDelegate, whose setters are gated
+    ///      by `onlyBridgeConfigurator`. The DAO MS must therefore temporarily hold the
+    ///      `bridge_configurator` role (in addition to `bridge_admin` and `admin`) before calling
+    ///      this entry point (`grantRoles` in step 2 grants it); otherwise the call reverts. The
+    ///      temporary `bridge_configurator` grant is revoked afterward by `wireConfig` in step 4.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -284,23 +290,32 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
             _assertGatewayEndpointMatchesEnv(gatewayAddr)
         );
 
-        // 3.1. Point the gateway's LZ endpoint delegate at the LZEndpointDelegate policy; the
-        //      subsequent OApp-authorized calls in step 3.2 are forwarded through it.
+        // 3.1. Enable the LZEndpointDelegate so the OApp-authorized setters reached in
+        //      step 3.3 pass the `givenEnabled` gate. Skipped if already enabled (`enable`
+        //      reverts on a repeat call).
+        if (IEnabler(delegateAddr).isEnabled()) {
+            console2.log("  Delegate already enabled. Skipping enable.");
+        } else {
+            addToBatch(delegateAddr, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+        }
+
+        // 3.2. Point the gateway's LZ endpoint delegate at the LZEndpointDelegate policy; the
+        //      subsequent OApp-authorized calls in step 3.3 are forwarded through it.
         _setDelegateIfNeeded(endpoint, gatewayAddr, delegateAddr);
 
-        // 3.2. Configure LZ libraries and ULN/Executor config via LZEndpointDelegate.
+        // 3.3. Configure LZ libraries and ULN/Executor config via LZEndpointDelegate.
         _configureLZ(delegateAddr, endpoint, gatewayAddr);
 
-        // 3.3. Set peers on the gateway
+        // 3.4. Set peers on the gateway
         _setPeers(gateway);
 
-        // 3.4. Set enforced options on the gateway
+        // 3.5. Set enforced options on the gateway
         _setEnforcedOptions(gateway);
 
-        // 3.5. Set bidirectional rate limits on the gateway
+        // 3.6. Set bidirectional rate limits on the gateway
         _setRateLimits(gateway);
 
-        // 3.6. Enable the LZBridgeGateway. Skipped if already enabled (`enable` reverts on a
+        // 3.7. Enable the LZBridgeGateway. Skipped if already enabled (`enable` reverts on a
         //      repeat call).
         if (gateway.isEnabled()) {
             console2.log("  Gateway already enabled. Skipping enable.");
@@ -550,9 +565,10 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
 
     /// @notice Validate configureAndEnable state after batch execution.
     /// @dev Mirrors LZBridgeSecurityUpgradeProposal._validateLZConfig for L2 chains.
-    ///      Checks that the LZEndpointDelegate policy is the gateway's LZ endpoint delegate, the
-    ///      gateway is enabled, peers are set, enforced options exist, bidirectional rate limits
-    ///      are set, libraries are pinned, and ULN/Executor config is correct for every remote EID.
+    ///      Checks that the LZEndpointDelegate policy is the gateway's LZ endpoint delegate, that
+    ///      both the delegate and the gateway are enabled, peers are set, enforced options exist,
+    ///      bidirectional rate limits are set, libraries are pinned, and ULN/Executor config is
+    ///      correct for every remote EID.
     function _validateConfigureAndEnable() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
@@ -577,7 +593,13 @@ contract LZBridgeGatewayL2Batch is BatchScriptV2 {
         }
         console2.log("  LZEndpointDelegate is the LZ endpoint delegate");
 
-        // 1c. Gateway must be enabled
+        // 1c. Delegate must be enabled
+        if (!IEnabler(delegateAddr).isEnabled()) {
+            revert("LZEndpointDelegate is not enabled");
+        }
+        console2.log("  LZEndpointDelegate is enabled");
+
+        // 1d. Gateway must be enabled
         if (!gateway.isEnabled()) {
             revert("LZBridgeGateway is not enabled");
         }

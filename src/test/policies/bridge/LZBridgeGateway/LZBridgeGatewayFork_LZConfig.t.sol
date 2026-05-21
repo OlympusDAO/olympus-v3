@@ -216,6 +216,10 @@ contract LZBridgeGatewayForkTests_LZConfig is Test {
         );
         s.rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, address(s.bridge));
 
+        vm.startPrank(admin);
+        s.lzDelegate.enable(bytes(""));
+        vm.stopPrank();
+
         vm.prank(bridgeConfigurator);
         s.gateway.setDelegate(address(s.lzDelegate));
         vm.startPrank(admin);

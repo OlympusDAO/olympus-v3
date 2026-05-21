@@ -24,6 +24,16 @@ contract LZEndpointDelegateTests_Constructor is LZEndpointDelegateTestBase {
         );
     }
 
+    function test_constructor_startsDisabled() external {
+        LZEndpointDelegate fresh = new LZEndpointDelegate(kernel, gateway);
+        assertFalse(fresh.isEnabled(), "isEnabled should be false on a fresh deployment");
+        assertEq(
+            uint256(fresh.lastTransitionAt()),
+            0,
+            "lastTransitionAt should be zero on a fresh deployment"
+        );
+    }
+
     function test_constructor_readsEndpointFromGateway() external {
         address otherEndpoint = makeAddr("otherEndpoint");
         MockLZBridgeGateway otherGateway = new MockLZBridgeGateway(otherEndpoint);

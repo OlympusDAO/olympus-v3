@@ -91,6 +91,10 @@ contract LZBridgeActivatorForkTest is Test {
         rolesAdmin.grantRole(ADMIN_ROLE, address(activator));
         rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, address(activator));
         rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, address(activator));
+        // The OCG proposal enables the delegate as a separate action before invoking the
+        // activator. Mirror that here so the activator's OApp-authorized setters pass the
+        // delegate's `givenEnabled` gate.
+        lzDelegate.enable("");
         vm.stopPrank();
     }
 

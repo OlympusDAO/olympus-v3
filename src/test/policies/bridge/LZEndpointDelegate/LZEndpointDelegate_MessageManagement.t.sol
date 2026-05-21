@@ -5,14 +5,16 @@ import {LZEndpointDelegateTestBase} from "src/test/policies/bridge/LZEndpointDel
 
 // Interfaces
 import {Origin} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 /// @dev LZ V2 message management (skip, nilify, burn, clear) forwarded via LZEndpointDelegate.
 ///      Mock-based verification of the proxy: each external call must land on the LZ endpoint
 ///      with the gateway as the OApp argument and the caller-supplied recovery parameters,
 ///      plus role-gated access control. These inbound-channel management primitives are gated
-///      directly to `bridge_admin` / `admin`. For end-to-end recovery scenarios against
-///      the real mock EndpointV2 see the gateway-level recovery tests.
+///      directly to `bridge_channel_manager` / `bridge_admin` / `admin`. For end-to-end
+///      recovery scenarios against the real mock EndpointV2 see the gateway-level recovery
+///      tests.
 contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase {
     bytes32 constant SENDER = bytes32(uint256(0x1234));
     uint64 constant NONCE = 7;
@@ -44,11 +46,25 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
     }
 
-    function testFuzz_skip_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != bridgeAdmin && caller_ != admin);
+    function test_skip_channelManagerCanCall() external {
+        _mockAndExpectSkip();
+        vm.prank(channelManager);
+        lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
+    }
+
+    function testFuzz_skip_revertsIfNotChannelManager(address caller_) external {
+        vm.assume(caller_ != bridgeAdmin && caller_ != admin && caller_ != channelManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
+    }
+
+    function test_skip_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.skip(CANONICAL_EID, SENDER, NONCE);
     }
 
@@ -79,11 +95,25 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
-    function testFuzz_nilify_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != bridgeAdmin && caller_ != admin);
+    function test_nilify_channelManagerCanCall() external {
+        _mockAndExpectNilify();
+        vm.prank(channelManager);
+        lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
+    function testFuzz_nilify_revertsIfNotChannelManager(address caller_) external {
+        vm.assume(caller_ != bridgeAdmin && caller_ != admin && caller_ != channelManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
+    function test_nilify_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.nilify(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
@@ -114,11 +144,25 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
-    function testFuzz_burn_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != bridgeAdmin && caller_ != admin);
+    function test_burn_channelManagerCanCall() external {
+        _mockAndExpectBurn();
+        vm.prank(channelManager);
+        lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
+    function testFuzz_burn_revertsIfNotChannelManager(address caller_) external {
+        vm.assume(caller_ != bridgeAdmin && caller_ != admin && caller_ != channelManager);
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
+    }
+
+    function test_burn_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.burn(CANONICAL_EID, SENDER, NONCE, PAYLOAD_HASH);
     }
 
@@ -160,12 +204,31 @@ contract LZEndpointDelegateTests_MessageManagement is LZEndpointDelegateTestBase
         lzDelegate.clear(origin, guid, message);
     }
 
-    function testFuzz_clear_revertsIfNotBridgeAdminOrAdmin(address caller_) external {
-        vm.assume(caller_ != bridgeAdmin && caller_ != admin);
+    function test_clear_channelManagerCanCall() external {
+        Origin memory origin = _buildOrigin();
+        bytes32 guid = bytes32(uint256(0x55));
+        bytes memory message = hex"deadbeef";
+
+        _mockAndExpectClear(origin, guid, message);
+        vm.prank(channelManager);
+        lzDelegate.clear(origin, guid, message);
+    }
+
+    function testFuzz_clear_revertsIfNotChannelManager(address caller_) external {
+        vm.assume(caller_ != bridgeAdmin && caller_ != admin && caller_ != channelManager);
 
         Origin memory origin = _buildOrigin();
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
+        lzDelegate.clear(origin, bytes32(0), bytes(""));
+    }
+
+    function test_clear_revertsWhenDisabled() external {
+        _disableDelegate();
+
+        Origin memory origin = _buildOrigin();
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeAdmin);
         lzDelegate.clear(origin, bytes32(0), bytes(""));
     }
 }
