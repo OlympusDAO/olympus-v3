@@ -26,3 +26,8 @@ bytes32 constant BRIDGE_FACILITATOR_ROLE = "bridge_facilitator";
 /// @dev LZ bridge rate-limit proposer role. Queue proposer on LZBridgeAndDelegateConfig
 ///      for the rate-limit and in-flight-clear helpers.
 bytes32 constant BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
+/// @dev LZ bridge channel manager role. Optional dedicated role for the LZEndpointDelegate
+///      inbound-channel management primitives (skip, nilify, burn, clear), accepted alongside
+///      bridge_admin and admin so that channel management can be delegated without granting
+///      the broader bridge_admin role.
+bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";

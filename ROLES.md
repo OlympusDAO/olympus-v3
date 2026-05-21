@@ -24,6 +24,7 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_admin | LZBridgeGateway | Call the one-shot `initializeBridgedSupply` bootstrap |
 | bridge_admin | LZBridgeAndDelegateConfig | Queue most timelocked actions (gateway delegate/supply, delegate libraries/configs, periphery setGateway/setReEnabler/setGracePeriod) on the config policy |
 | bridge_admin | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint; intentionally not timelocked |
+| bridge_channel_manager | LZEndpointDelegate | Call the inbound-channel management primitives (skip, nilify, burn, clear) directly on the LayerZero endpoint |
 | bridge_configurator | LZBridgeGateway | Set the LZ endpoint delegate, increase / decrease the bridged supply, set inbound / outbound rate limits, clear inbound / outbound in-flight amounts, and set the grace period. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_configurator | LZEndpointDelegate | Set send / receive libraries and the receive-library timeout, and set ULN / Executor endpoint config on the LayerZero endpoint. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |

@@ -116,7 +116,7 @@ You can review previous audits here:
     Two functions are intentionally outside the `bridge_configurator` / `configurator` gates: the one-shot `LZBridgeGateway.initializeBridgedSupply`, which is called under `bridge_admin` / `admin` immediately after the OCG proposal to bootstrap the canonical bridged supply, and the bootstrap call to `LZCrossChainBridge.setConfigurator`, which is used once after deployment to seed the configurator variable. After both bootstrap calls and the corresponding role / configurator grants, the policy's timelock queue is the only path to those mutators. The remaining non-`bridge_configurator` surface on the gateway covers operational responses that must be immediate: `setPeer`, `setEnforcedOptions`, `setIsReceiveEnabled`, `enable` / `disable` / `reEnable`, and `rescue`.
 8. **Enforced Type 3 options**: Replaces LayerZero V1 adapter parameters with enforced Type 3 options that guarantee minimum destination gas per message type. The gateway supports combining enforced options with caller-supplied options at send time.
 9. **Per-endpoint bidirectional rate limiting**: Mandatory rate limiting via `OffsettingRateLimiter` inheritance. Each peer EID has independent outbound and inbound rate limits with a sliding-window decay; both directions revert with `RateLimitExceeded` once the configured limit is exhausted. Activity in one direction offsets the in-flight amount of the counterpart (with a floor at zero), so balanced round trips free capacity faster than purely additive accounting. Limits are applied at activation time (24-hour window throughout): on canonical Ethereum, 100,000 OHM outbound and 55,000 OHM inbound per remote; on each non-canonical chain, outbound is 50,000 OHM towards Ethereum and 100,000 OHM towards every other non-canonical peer, while inbound is 110,000 OHM per remote regardless of source.
-10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated directly to `bridge_admin` / `admin`.
+10. **V2 inbound-channel management primitives**: Replaces the V1 `forceResumeReceive` with native V2 inbound-channel management functions (`skip`, `nilify`, `burn`, `clear`). These live on `LZEndpointDelegate` and are gated directly to `bridge_channel_manager` / `bridge_admin` / `admin`. The `bridge_channel_manager` role is an optional dedicated role for these primitives; it is not granted at deployment, so that channel management can be delegated later without granting the broader `bridge_admin` role.
 11. **Multi-network Berachain routing**: The Berachain bridge now supports routes to Arbitrum, Optimism, and Base in addition to Ethereum.
 12. **Asset rescue**: Both the gateway and the periphery facilitator inherit the `Rescueable` base, exposing a privileged `rescue(token, to)` that sweeps the full balance of an ERC20 (or the native asset, identified via the EIP-7528 sentinel `ERC7528Constants`) to a non-zero recipient. On `LZBridgeGateway`, rescue is gated by `manager` or `admin`; on `LZCrossChainBridge`, by the contract `owner`. Rescue is callable while the contract is disabled. This recovers assets accidentally sent to either contract without depending on the bridging path.
 
@@ -218,15 +218,15 @@ sequenceDiagram
 | `setReceiveLibrary`        | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
 | `setReceiveLibraryTimeout` | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
 | `setEndpointConfig`        | `bridge_configurator`    | `givenEnabled`; expected to be timelocked |
-| `skip`                     | `bridge_admin` / `admin` | `givenEnabled` |
-| `nilify`                   | `bridge_admin` / `admin` | `givenEnabled` |
-| `burn`                     | `bridge_admin` / `admin` | `givenEnabled` |
-| `clear`                    | `bridge_admin` / `admin` | `givenEnabled` |
-| `enable`                   | `admin`                  | `givenDisabled` |
-| `disable`                  | `admin` / `emergency`    | `givenEnabled` |
+| `skip`                     | `bridge_channel_manager` / `bridge_admin` / `admin` | `givenEnabled` |
+| `nilify`                   | `bridge_channel_manager` / `bridge_admin` / `admin` | `givenEnabled` |
+| `burn`                     | `bridge_channel_manager` / `bridge_admin` / `admin` | `givenEnabled` |
+| `clear`                    | `bridge_channel_manager` / `bridge_admin` / `admin` | `givenEnabled` |
+| `enable`                   | `admin`                                             | `givenDisabled` |
+| `disable`                  | `admin` / `emergency`                               | `givenEnabled` |
 
 The library / endpoint-config setters are gated by `bridge_configurator` and are reached only as delegate sub-actions of `LZBridgeAndDelegateConfig.queue`.
-The inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`) are gated directly to `bridge_admin` / `admin`.
+The inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`) are gated directly to `bridge_channel_manager` / `bridge_admin` / `admin`. The `bridge_channel_manager` role is an optional dedicated role for these primitives and is not granted at deployment; it lets channel management be delegated without granting the broader `bridge_admin` role.
 
 #### LZCrossChainBridge
 
