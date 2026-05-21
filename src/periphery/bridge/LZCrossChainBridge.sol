@@ -228,11 +228,6 @@ contract LZCrossChainBridge is
         _requireConfigurator();
     }
 
-    /// @notice Same as `ReEnablerGracePeriod.setGracePeriod`, but restricted to the enabled state.
-    function setGracePeriod(uint32 period_) public override givenEnabled {
-        super.setGracePeriod(period_);
-    }
-
     /// @inheritdoc ILZCrossChainBridge
     /// @dev Reverts if:
     ///      - `gateway_` is the zero address.

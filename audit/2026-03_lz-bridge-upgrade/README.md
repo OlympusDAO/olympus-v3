@@ -197,7 +197,7 @@ sequenceDiagram
 | `disable`                 | `admin` / `emergency`                          | `givenEnabled` |
 | `reEnable`                | `manager`                                      | inside `gracePeriod` since `lastTransitionAt` |
 | `initializeBridgedSupply` | `bridge_admin` / `admin`                       | one-shot bootstrap; canonical chain only |
-| `setGracePeriod`          | `bridge_configurator`                          | expected to be timelocked |
+| `setGracePeriod`          | `bridge_configurator`                          | `givenEnabled`; expected to be timelocked |
 | `setDelegate`             | `bridge_configurator`                          | expected to be timelocked (`queue` with a `gateway.setDelegate` sub-action) |
 | `increaseBridgedSupply`   | `bridge_configurator`                          | expected to be timelocked; canonical chain only |
 | `decreaseBridgedSupply`   | `bridge_configurator`                          | expected to be timelocked; canonical chain only |
@@ -207,7 +207,7 @@ sequenceDiagram
 | `clearInboundInFlight`    | `bridge_configurator`                          | expected to be timelocked |
 | `rescue`                  | `manager` / `admin`                            |  |
 
-`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured via the `bridge_configurator`-gated `setGracePeriod`, expected to be reached only through a `LZBridgeAndDelegateConfig.queue` batch carrying a `gateway.setGracePeriod` sub-action.
+`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured, while the gateway is enabled, via the `bridge_configurator`-gated `setGracePeriod`, expected to be reached only through a `LZBridgeAndDelegateConfig.queue` batch carrying a `gateway.setGracePeriod` sub-action. Because `setGracePeriod` is gated by `givenEnabled`, the window is fixed at its current value once the gateway is disabled and cannot be changed until the gateway is re-enabled.
 
 `setDelegate` points the gateway's LayerZero endpoint delegate at the `LZEndpointDelegate` policy, whose surface is listed below.
 
@@ -242,7 +242,7 @@ The inbound-channel management primitives (`skip`, `nilify`, `burn`, `clear`) ar
 | `setGracePeriod`     | `configurator`  | expected to be timelocked; `givenEnabled` |
 | `rescue`             | `owner`         |  |
 
-`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured via the configurator-gated `setGracePeriod`. The `reEnabler` address is set in the constructor (the DAO MS in production) and may be updated or cleared by the configurator via the configurator-gated `setReEnabler`; while the address is `address(0)`, `reEnable` always reverts.
+`reEnable` is bounded by the `gracePeriod` window measured from `lastTransitionAt`. The window is initialized at construction time (default `1 days`) and may be reconfigured, while the bridge is enabled, via the configurator-gated `setGracePeriod`. Because `setGracePeriod` is gated by `givenEnabled`, the window is fixed at its current value once the bridge is disabled and cannot be changed until the bridge is re-enabled. The `reEnabler` address is set in the constructor (the DAO MS in production) and may be updated or cleared by the configurator via the configurator-gated `setReEnabler`; while the address is `address(0)`, `reEnable` always reverts.
 
 The `configurator` variable is the address that gates every configurator-gated setter. The bootstrap path is restricted to the contract `owner` (the DAO MS in production) and writes the variable only while it is unset; subsequent rotations must come from the current configurator. In the intended deployment the configurator is the `LZBridgeAndDelegateConfig` policy, so the configurator-gated setters are reached only through that policy's timelock queue. Both paths require the new configurator to implement `ILZBridgeAndDelegateConfig` (checked via ERC-165).
 

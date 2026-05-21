@@ -4,6 +4,7 @@ pragma solidity >=0.8.30;
 import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/LZBridgeGatewayTestBase.sol";
 
 // Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
 // Constants
@@ -13,14 +14,14 @@ import {BRIDGE_CONFIGURATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev Tests for `LZBridgeGateway.setGracePeriod`. The setter is gated to the
-///      `bridge_configurator` role and rejects a zero window through the parent's
-///      `_setGracePeriod` helper.
+///      `bridge_configurator` role, requires the gateway to be enabled, and rejects a zero
+///      window through the parent's `_setGracePeriod` helper.
 contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     // ========== SUCCESS ========== //
 
     function test_setGracePeriod_succeedsWhileEnabled() external {
-        // The gateway is enabled by the test base. The setter must not require a particular
-        // lifecycle state.
+        // The gateway is enabled by the test base, which is the lifecycle state the setter
+        // requires.
         assertTrue(gateway.isEnabled(), "Gateway should start enabled in the test base");
 
         uint32 newPeriod = GRACE_SECONDS * 2;
@@ -68,32 +69,18 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
         );
     }
 
-    function test_setGracePeriod_succeedsWhileDisabled() external {
-        vm.prank(admin);
-        gateway.disable(bytes(""));
-        assertFalse(gateway.isEnabled(), "Gateway should be disabled before the setter call");
-
-        vm.prank(bridgeConfigurator);
-        gateway.setGracePeriod(GRACE_SECONDS * 2);
-
-        assertEq(
-            gateway.gracePeriod(),
-            GRACE_SECONDS * 2,
-            "gracePeriod should be updatable while the gateway is disabled"
-        );
-    }
-
     /// @dev An increase in the grace period extends the deadline measured from
     ///      `lastTransitionAt`, so a re-enable that would have expired under the original
-    ///      window succeeds after the increase.
+    ///      window succeeds after the increase. The window is set while the gateway is
+    ///      enabled and then carried into the disabled state by the subsequent `disable`.
     function test_setGracePeriod_extendedWindowAllowsLateReEnable() external {
-        vm.prank(admin);
-        gateway.disable(bytes(""));
-        uint48 disabledAt = gateway.lastTransitionAt();
-
         uint32 newPeriod = GRACE_SECONDS * 2;
         vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(newPeriod);
+
+        vm.prank(admin);
+        gateway.disable(bytes(""));
+        uint48 disabledAt = gateway.lastTransitionAt();
 
         // Warp past the original deadline but inside the new one. Without the increase,
         // `reEnable` would revert with `GracePeriod_Expired`.
@@ -107,15 +94,16 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
 
     /// @dev A decrease in the grace period shortens the deadline measured from
     ///      `lastTransitionAt`, so a re-enable that would have succeeded under the original
-    ///      window reverts after the decrease.
+    ///      window reverts after the decrease. The window is set while the gateway is
+    ///      enabled and then carried into the disabled state by the subsequent `disable`.
     function test_setGracePeriod_shortenedWindowRejectsLateReEnable() external {
-        vm.prank(admin);
-        gateway.disable(bytes(""));
-        uint48 disabledAt = gateway.lastTransitionAt();
-
         uint32 newPeriod = GRACE_SECONDS / 2;
         vm.prank(bridgeConfigurator);
         gateway.setGracePeriod(newPeriod);
+
+        vm.prank(admin);
+        gateway.disable(bytes(""));
+        uint48 disabledAt = gateway.lastTransitionAt();
 
         uint48 newDeadline = disabledAt + newPeriod;
         vm.warp(uint256(newDeadline) + 1);
@@ -128,6 +116,16 @@ contract LZBridgeGatewayTests_SetGracePeriod is LZBridgeGatewayTestBase {
     }
 
     // ========== REVERTS ========== //
+
+    function test_setGracePeriod_revertsWhileDisabled() external {
+        vm.prank(admin);
+        gateway.disable(bytes(""));
+        assertFalse(gateway.isEnabled(), "Gateway should be disabled before the setter call");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        vm.prank(bridgeConfigurator);
+        gateway.setGracePeriod(GRACE_SECONDS * 2);
+    }
 
     function test_setGracePeriod_revertsIfZeroPeriod() external {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);

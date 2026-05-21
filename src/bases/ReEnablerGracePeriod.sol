@@ -19,10 +19,10 @@ import {ReEnabler} from "src/bases/ReEnabler.sol";
 ///      `EnablerV2` state, so a fresh transition opens a new window of the same length.
 ///
 ///      The window is mutable: an authorized caller may update it after construction via
-///      `setGracePeriod`. The contract is agnostic to the access-control model used by
-///      the implementation, so an inheriting contract must override
-///      `_authorizeSetGracePeriod` to revert when the caller is not permitted to update
-///      the window. An implementation that prefers an immutable window may inherit
+///      `setGracePeriod` while the contract is enabled. The contract is agnostic to the
+///      access-control model used by the implementation, so an inheriting contract must
+///      override `_authorizeSetGracePeriod` to revert when the caller is not permitted to
+///      update the window. An implementation that prefers an immutable window may inherit
 ///      `ReEnablerGracePeriodImmutable` instead, which overrides `setGracePeriod` to
 ///      revert with the canonical `GracePeriod_NotConfigurable` error.
 abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
@@ -30,8 +30,8 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
 
     /// @inheritdoc IGracePeriod
     /// @dev The length of the grace window in seconds. Initialized by the constructor and
-    ///      updatable through `setGracePeriod` when the implementation authorizes the
-    ///      caller.
+    ///      updatable through `setGracePeriod` while the contract is enabled and when the
+    ///      implementation authorizes the caller.
     ///
     ///      The value is the length of the window measured from
     ///      `IEnablerV2.lastTransitionAt`, so a fresh transition restarts the window at
@@ -62,7 +62,16 @@ abstract contract ReEnablerGracePeriod is ReEnabler, IGracePeriod {
     ///      implementation that wishes to lock the window after construction can
     ///      override it and revert with `GracePeriod_NotConfigurable`; see
     ///      `ReEnablerGracePeriodImmutable` for the canonical lock.
-    function setGracePeriod(uint32 period_) public virtual override {
+    ///
+    ///      The setter is gated by `givenEnabled`, so the grace window is fixed at the
+    ///      value it held when the contract was last disabled and cannot be changed while
+    ///      the contract is in the disabled state.
+    ///
+    ///      Reverts if:
+    ///      - The contract is disabled.
+    ///      - `_authorizeSetGracePeriod` rejects the caller.
+    ///      - `period_` is zero.
+    function setGracePeriod(uint32 period_) public virtual override givenEnabled {
         _authorizeSetGracePeriod();
         _setGracePeriod(period_);
     }
