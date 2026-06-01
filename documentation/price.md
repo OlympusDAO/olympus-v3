@@ -59,42 +59,43 @@ This allows `ERC7726OracleCloneable`, `MorphoOracleFactory`, and `ChainlinkOracl
 
 ## Assets
 
-| Asset | Address | Price Feeds | Strategy | Store MA | Use MA | MA Duration |
-| ----- | ------- | ----------- | -------- | -------- | ------ | ----------- |
-| USDS | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [Chainlink DAI-USD](https://etherscan.io/address/0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9), [Pyth USDS-USD](https://insights.pyth.network/price-feeds/Crypto.USDS%2FUSD) | `getAveragePriceExcludingDeviations()` with 1% price-feed deviation and revert on insufficient price feeds | No | No | 0 |
-| sUSDS | [0xa39...fbD](https://etherscan.io/address/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | ERC4626 Submodule | None | No | No | 0 |
-| wETH | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [Pyth ETH-USD](https://insights.pyth.network/price-feeds/Crypto.ETH%2FUSD), [ETH-BTC](https://etherscan.io/address/0xAc559F25B1619171CbC396a50854A3240b6A4e99)x[BTC-USD](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | `getAveragePriceExcludingDeviations()` with 5% price-feed deviation and revert on insufficient price feeds | No | No | 0 |
-| OHM | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755), [Chainlink OHM-ETH](https://etherscan.io/address/0x9a72298ae3886221820B1c878d12D872087D3a23)x[Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419) | `getAveragePriceExcludingDeviations()` with 2% price-feed deviation and revert on insufficient price feeds | Yes | No | 2592000 (30 days) |
+| Asset | Address                                                                                | Price Feeds                                                                                                                                                                                                                                                                                                                                                                                                                                               | Strategy                                                                                                   | Store MA | Use MA | MA Duration       |
+| ----- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | -------- | ------ | ----------------- |
+| USDS  | [0xdC0...84F](https://etherscan.io/address/0xdC035D45d973E3EC169d2276DDab16f1e407384F) | [Chainlink USDS-USD](https://etherscan.io/address/0xfF30586cD0F29eD462364C7e81375FC0C71219b1), [Chainlink DAI-USD](https://etherscan.io/address/0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9), API3 USDS-USD                                                                                                                                                                                                                                                | `getAveragePriceExcludingDeviations()` with 1% price-feed deviation and revert on insufficient price feeds | No       | No     | 0                 |
+| sUSDS | [0xa39...fbD](https://etherscan.io/address/0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD) | ERC4626 Submodule                                                                                                                                                                                                                                                                                                                                                                                                                                         | None                                                                                                       | No       | No     | 0                 |
+| wETH  | [0xc02...cc2](https://etherscan.io/address/0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2) | [Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419), [RedStone ETH-USD](https://etherscan.io/address/0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4), [API3 ETH-USD](https://etherscan.io/address/0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473), [ETH-BTC](https://etherscan.io/address/0xAc559F25B1619171CbC396a50854A3240b6A4e99)x[BTC-USD](https://etherscan.io/address/0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c) | `getAveragePriceExcludingDeviations()` with 5% price-feed deviation and revert on insufficient price feeds | No       | No     | 0                 |
+| OHM   | [0x64a...1d5](https://etherscan.io/address/0x64aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5) | [Uniswap V3 OHM/WETH](https://etherscan.io/address/0x88051b0eea095007d3bef21ab287be961f3d8598), [Uniswap V3 OHM/sUSDS](https://etherscan.io/address/0x0858e2b0f9d75f7300b38d64482ac2c8df06a755), [Chainlink OHM-ETH](https://etherscan.io/address/0x9a72298ae3886221820B1c878d12D872087D3a23)x[Chainlink ETH-USD](https://etherscan.io/address/0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419)                                                                | `getAveragePriceExcludingDeviations()` with 2% price-feed deviation and revert on insufficient price feeds | Yes      | No     | 2592000 (30 days) |
 
 ### Final Configuration Values
 
-The following values match `src/scripts/ops/batches/args/ConfigurePriceV1_2.json`.
+The following values describe the target oracle configuration. Update `src/scripts/ops/batches/args/ConfigurePriceV1_2.json` with the live API3 USDS-USD reader proxy before deployment.
 
-| Asset | Strategy | Price-Feed Deviation | Revert on Insufficient Price Feeds | Expected Price | Expected Tolerance |
-| ----- | -------- | -------------------- | ---------------------------------- | -------------- | ------------------ |
-| USDS | `getAveragePriceExcludingDeviations()` | 100 bps | Yes | 1e18 | 100 bps |
-| sUSDS | None, uses ERC4626 feed only | N/A | N/A | 1.095038992740982406e18 | 100 bps |
-| wETH | `getAveragePriceExcludingDeviations()` | 500 bps | Yes | 2282.17e18 | 500 bps |
-| OHM | `getAveragePriceExcludingDeviations()` | 200 bps | Yes | 19.5e18 | 500 bps |
+| Asset | Strategy                               | Price-Feed Deviation | Revert on Insufficient Price Feeds | Expected Price          | Expected Tolerance |
+| ----- | -------------------------------------- | -------------------- | ---------------------------------- | ----------------------- | ------------------ |
+| USDS  | `getAveragePriceExcludingDeviations()` | 100 bps              | Yes                                | 1e18                    | 100 bps            |
+| sUSDS | None, uses ERC4626 feed only           | N/A                  | N/A                                | 1.095038992740982406e18 | 100 bps            |
+| wETH  | `getAveragePriceExcludingDeviations()` | 500 bps              | Yes                                | 2282.17e18              | 500 bps            |
+| OHM   | `getAveragePriceExcludingDeviations()` | 200 bps              | Yes                                | 19.5e18                 | 500 bps            |
 
-| Asset | Feed Path | Source | Update Threshold | Observation Window | Max Confidence |
-| ----- | --------- | ------ | ---------------- | ------------------ | -------------- |
-| USDS | Chainlink USDS-USD | `chainlinkUsdsUsd` | 86,400 sec (24 hours) | N/A | N/A |
-| USDS | Chainlink DAI-USD | `chainlinkDaiUsd` | 86,400 sec (24 hours) | N/A | N/A |
-| USDS | Pyth USDS-USD | `pythUsdsUsdFeedId` | 86,400 sec (24 hours) | N/A | 0.01e18 ($0.01) |
-| sUSDS | ERC4626 derived from USDS | `getPriceFromUnderlying(sUSDS)` | N/A | N/A | N/A |
-| wETH | Chainlink ETH-USD | `chainlinkEthUsd` | 3,600 sec (1 hour) | N/A | N/A |
-| wETH | RedStone ETH-USD | `redstoneEthUsd` | 86,400 sec (24 hours) | N/A | N/A |
-| wETH | Pyth ETH-USD | `pythEthUsdFeedId` | 3,600 sec (1 hour) | N/A | 10e18 ($10) |
-| wETH | Chainlink ETH-BTC leg | `chainlinkEthBtc` | 86,400 sec (24 hours) | N/A | N/A |
-| wETH | Chainlink BTC-USD leg | `chainlinkBtcUsd` | 3,600 sec (1 hour) | N/A | N/A |
-| OHM | Uniswap V3 OHM/WETH | `uniswapOhmWeth` | N/A | 1,500 sec (25 min) | N/A |
-| OHM | Uniswap V3 OHM/sUSDS | `uniswapOhmSusds` | N/A | 1,500 sec (25 min) | N/A |
-| OHM | Chainlink OHM-ETH leg | env `external.chainlink.ohmEthPriceFeed` | 86,400 sec (24 hours) | N/A | N/A |
-| OHM | Chainlink ETH-USD leg | `chainlinkEthUsd` | 3,600 sec (1 hour) | N/A | N/A |
+| Asset | Feed Path                 | Source                                   | Update Threshold      | Observation Window | Max Confidence |
+| ----- | ------------------------- | ---------------------------------------- | --------------------- | ------------------ | -------------- |
+| USDS  | Chainlink USDS-USD        | `chainlinkUsdsUsd`                       | 86,400 sec (24 hours) | N/A                | N/A            |
+| USDS  | Chainlink DAI-USD         | `chainlinkDaiUsd`                        | 86,400 sec (24 hours) | N/A                | N/A            |
+| USDS  | API3 USDS-USD             | `api3UsdsUsd`                            | 90,000 sec (25 hours) | N/A                | N/A            |
+| sUSDS | ERC4626 derived from USDS | `getPriceFromUnderlying(sUSDS)`          | N/A                   | N/A                | N/A            |
+| wETH  | Chainlink ETH-USD         | `chainlinkEthUsd`                        | 3,600 sec (1 hour)    | N/A                | N/A            |
+| wETH  | RedStone ETH-USD          | `redstoneEthUsd`                         | 86,400 sec (24 hours) | N/A                | N/A            |
+| wETH  | API3 ETH-USD              | `api3EthUsd`                             | 90,000 sec (25 hours) | N/A                | N/A            |
+| wETH  | Chainlink ETH-BTC leg     | `chainlinkEthBtc`                        | 86,400 sec (24 hours) | N/A                | N/A            |
+| wETH  | Chainlink BTC-USD leg     | `chainlinkBtcUsd`                        | 3,600 sec (1 hour)    | N/A                | N/A            |
+| OHM   | Uniswap V3 OHM/WETH       | `uniswapOhmWeth`                         | N/A                   | 1,500 sec (25 min) | N/A            |
+| OHM   | Uniswap V3 OHM/sUSDS      | `uniswapOhmSusds`                        | N/A                   | 1,500 sec (25 min) | N/A            |
+| OHM   | Chainlink OHM-ETH leg     | env `external.chainlink.ohmEthPriceFeed` | 86,400 sec (24 hours) | N/A                | N/A            |
+| OHM   | Chainlink ETH-USD leg     | `chainlinkEthUsd`                        | 3,600 sec (1 hour)    | N/A                | N/A            |
 
-- Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, RedStone, Pyth and Chainlink-derived (ETH-BTC × BTC-USD) oracles.
-- The price of USDS will be determined as the average of the price feeds from 3 sources: 2 Chainlink feeds (USDS-USD and DAI-USD) and 1 Pyth feed (USDS-USD).
+- Ultimately, price resolution for all assets into USD will be reliant on a combination of Chainlink, RedStone, API3 and Chainlink-derived (ETH-BTC × BTC-USD) oracles.
+- Pyth feeds are not included in the target configuration because the protocol would need paid Hermes access to reliably operate the required feed updates. This would add an external subscription dependency for the PRICE module and make the oracle path reliant on a paid off-chain update service.
+- The price of USDS will be determined as the average of the price feeds from 3 sources: 2 Chainlink feeds (USDS-USD and DAI-USD) and 1 API3 feed (USDS-USD).
     - After any zero value or deviating values (> 1% from the median) have been excluded, the average is taken.
     - This ensures that price feeds that are deviating don't alter the average.
     - Strict mode will be enabled, which means that if there are insufficient remaining values to make an average (2), the price resolution will fail.
@@ -117,20 +118,20 @@ The following values match `src/scripts/ops/batches/args/ConfigurePriceV1_2.json
 
 The **update threshold** is the maximum number of seconds that can elapse since the last price feed update before the price is considered stale. If a feed's last update is older than this threshold, the feed returns zero and is excluded from price calculation.
 
-| Asset | Feed | Update Threshold |
-| ----- | ---- | ---------------- |
-| USDS | Chainlink USDS-USD | 86,400 sec (24 hours) |
-| USDS | Chainlink DAI-USD | 86,400 sec (24 hours) |
-| USDS | Pyth USDS-USD | 86,400 sec (24 hours) |
-| wETH | Chainlink ETH-USD | 3,600 sec (1 hour) |
-| wETH | RedStone ETH-USD | 86,400 sec (24 hours) |
-| wETH | Pyth ETH-USD | 3,600 sec (1 hour) |
-| wETH | Chainlink ETH-BTC leg | 86,400 sec (24 hours) |
-| wETH | Chainlink BTC-USD leg | 3,600 sec (1 hour) |
-| OHM | Chainlink OHM-ETH | 86,400 sec (24 hours) |
-| OHM | Chainlink OHM-ETH × ETH-USD | 3,600 sec (1 hour) for ETH-USD |
+| Asset | Feed                        | Update Threshold               |
+| ----- | --------------------------- | ------------------------------ |
+| USDS  | Chainlink USDS-USD          | 86,400 sec (24 hours)          |
+| USDS  | Chainlink DAI-USD           | 86,400 sec (24 hours)          |
+| USDS  | API3 USDS-USD               | 90,000 sec (25 hours)          |
+| wETH  | Chainlink ETH-USD           | 3,600 sec (1 hour)             |
+| wETH  | RedStone ETH-USD            | 86,400 sec (24 hours)          |
+| wETH  | API3 ETH-USD                | 90,000 sec (25 hours)          |
+| wETH  | Chainlink ETH-BTC leg       | 86,400 sec (24 hours)          |
+| wETH  | Chainlink BTC-USD leg       | 3,600 sec (1 hour)             |
+| OHM   | Chainlink OHM-ETH           | 86,400 sec (24 hours)          |
+| OHM   | Chainlink OHM-ETH × ETH-USD | 3,600 sec (1 hour) for ETH-USD |
 
-> **IMPORTANT:** Pyth price feeds require regular price updates to remain valid. If the feed is not updated within the `updateThreshold` period, the price resolution will fail. Use the [pyth-price-pusher](https://github.com/OlympusDAO/pyth-price-pusher) tool to manage automated price updates for all Pyth feeds.
+> **IMPORTANT:** API3 feeds are consumed through Chainlink-interface compatible reader proxies. The configured update threshold is 25 hours for feeds with a 24-hour heartbeat. This gives a one-hour grace period for heartbeat updates that land slightly late, while still failing stale feeds promptly if an update is missed. API3 feed operation also requires regular payment to keep the reader proxy active and the feed updating.
 
 #### Observation Window (Uniswap TWAP Only)
 
@@ -140,35 +141,10 @@ The **observation window** is used only for Uniswap V3 price feeds to calculate 
 - The TWAP is calculated by averaging observations within the window
 - A longer window = more manipulation resistance but slower price updates
 
-| Asset | Feed | Observation Window |
-| ----- | ---- | ------------------ |
-| OHM | Uniswap V3 OHM/WETH | 1,500 sec (25 min) |
-| OHM | Uniswap V3 OHM/sUSDS | 1,500 sec (25 min) |
-
-#### Max Confidence Interval (Pyth Only)
-
-The **max confidence interval** is a Pyth-specific parameter that sets the maximum acceptable confidence interval for a price. Pyth returns a confidence value representing the uncertainty range around the reported price. If the confidence interval exceeds this threshold, the feed is considered unreliable and returns zero.
-
-- Confidence is measured in the same decimals as the price (18 decimals)
-- Higher confidence values = more uncertainty in the price
-- A zero confidence indicates a very precise price
-
-| Asset | Pyth Feed | Max Confidence |
-| ----- | --------- | -------------- |
-| USDS | Pyth USDS-USD | 0.01e18 ($0.01) |
-| wETH | Pyth ETH-USD | 10e18 ($10) |
-
-**How Confidence is Used:**
-
-1. Pyth returns both a `price` and a `conf` (confidence) value
-2. The contract converts `maxConfidence` from 18-decimal scale to Pyth's native scale (based on the feed's exponent)
-3. If the converted value exceeds `uint64`, it is clamped to `type(uint64).max`
-4. If `priceData.conf > maxConfidenceInPythScale`, the feed reverts with `Pyth_FeedConfidenceExcessive`
-5. For Pyth two-feed reads, the contract validates each feed independently, derives a conservative confidence interval for the output product or ratio, and compares it against `outputMaxConfidence`
-6. If the derived output confidence exceeds `outputMaxConfidence`, the feed reverts with `Pyth_DerivedFeedConfidenceExcessive`
-7. For division, if the denominator confidence is greater than or equal to the denominator price, the feed reverts with `Pyth_DerivedFeedConfidenceInvalid`
-
-Pyth two-feed parameters include `firstMaxConfidence`, `secondMaxConfidence`, and `outputMaxConfidence`, all in output decimals. The first two thresholds cap each input feed independently. `outputMaxConfidence` caps the uncertainty of the derived price that callers actually consume.
+| Asset | Feed                 | Observation Window |
+| ----- | -------------------- | ------------------ |
+| OHM   | Uniswap V3 OHM/WETH  | 1,500 sec (25 min) |
+| OHM   | Uniswap V3 OHM/sUSDS | 1,500 sec (25 min) |
 
 ### wETH Price Resolution
 
@@ -178,7 +154,7 @@ sequenceDiagram
     participant WETH
     participant CL_ETH as Chainlink ETH-USD
     participant RS_ETH as RedStone ETH-USD
-    participant Pyth_ETH as Pyth ETH-USD
+    participant API3_ETH as API3 ETH-USD
     participant CL_ETHBTC as Chainlink ETH-BTC
     participant CL_BTCUSD as Chainlink BTC-USD
 
@@ -192,9 +168,9 @@ sequenceDiagram
     and RedStone ETH-USD Path
         WETH->>RS_ETH: latestRoundData()
         RS_ETH-->>WETH: ETH-USD price
-    and Pyth ETH-USD Path
-        WETH->>Pyth_ETH: latestRoundData()
-        Pyth_ETH-->>WETH: ETH-USD price
+    and API3 ETH-USD Path
+        WETH->>API3_ETH: latestRoundData()
+        API3_ETH-->>WETH: ETH-USD price
     and Chainlink-derived Path
         WETH->>CL_ETHBTC: latestRoundData()
         CL_ETHBTC-->>WETH: ETH-BTC price
@@ -215,7 +191,7 @@ sequenceDiagram
     participant USDS
     participant CL_USDS as Chainlink USDS-USD
     participant CL_DAI as Chainlink DAI-USD
-    participant Pyth_USDS as Pyth USDS-USD
+    participant API3_USDS as API3 USDS-USD
 
     User->>USDS: getPrice(USDS)
 
@@ -227,9 +203,9 @@ sequenceDiagram
     and Chainlink DAI-USD Path
         USDS->>CL_DAI: latestRoundData()
         CL_DAI-->>USDS: DAI-USD price
-    and Pyth USDS-USD Path
-        USDS->>Pyth_USDS: latestRoundData()
-        Pyth_USDS-->>USDS: USDS-USD price
+    and API3 USDS-USD Path
+        USDS->>API3_USDS: latestRoundData()
+        API3_USDS-->>USDS: USDS-USD price
     end
 
     Note over USDS: Filter: Exclude zero and values deviating >1% from median<br/>Average: Sum of valid values / count
@@ -248,7 +224,7 @@ sequenceDiagram
     participant WETH
     participant CL_ETH as Chainlink ETH-USD
     participant RS_ETH as RedStone ETH-USD
-    participant Pyth_ETH as Pyth ETH-USD
+    participant API3_ETH as API3 ETH-USD
     participant CL_ETHBTC as Chainlink ETH-BTC
     participant CL_BTCUSD as Chainlink BTC-USD
     participant SUSDS
@@ -256,7 +232,7 @@ sequenceDiagram
     participant USDS
     participant CL_USDS as Chainlink USDS-USD
     participant CL_DAI as Chainlink DAI-USD
-    participant Pyth_USDS as Pyth USDS-USD
+    participant API3_USDS as API3 USDS-USD
 
     User->>OHM: getPrice(OHM)
 
@@ -274,9 +250,9 @@ sequenceDiagram
         and RedStone ETH-USD Path
             WETH->>RS_ETH: latestRoundData()
             RS_ETH-->>WETH: ETH-USD price
-        and Pyth ETH-USD Path
-            WETH->>Pyth_ETH: latestRoundData()
-            Pyth_ETH-->>WETH: ETH-USD price
+        and API3 ETH-USD Path
+            WETH->>API3_ETH: latestRoundData()
+            API3_ETH-->>WETH: ETH-USD price
         and Chainlink-derived Path
             WETH->>CL_ETHBTC: latestRoundData()
             CL_ETHBTC-->>WETH: ETH-BTC price
@@ -305,9 +281,9 @@ sequenceDiagram
         and Chainlink DAI-USD Path
             USDS->>CL_DAI: latestRoundData()
             CL_DAI-->>USDS: DAI-USD price
-        and Pyth USDS-USD Path
-            USDS->>Pyth_USDS: latestRoundData()
-            Pyth_USDS-->>USDS: USDS-USD price
+        and API3 USDS-USD Path
+            USDS->>API3_USDS: latestRoundData()
+            API3_USDS-->>USDS: USDS-USD price
         end
 
         Note over USDS: Filter: Exclude zero and values deviating >1% from median<br/>Average: Sum of valid values / count

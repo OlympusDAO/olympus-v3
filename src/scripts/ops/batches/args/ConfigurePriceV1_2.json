@@ -2,6 +2,10 @@
     "functions": [
         {
             "args": {
+                "api3EthUsd": "0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473",
+                "api3EthUsdUpdateThreshold": 90000,
+                "api3UsdsUsd": "0x0000000000000000000000000000000000000000",
+                "api3UsdsUsdUpdateThreshold": 90000,
                 "chainlinkBtcUsd": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
                 "chainlinkBtcUsdUpdateThreshold": 3600,
                 "chainlinkDaiUsd": "0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9",
@@ -17,13 +21,6 @@
                 "ohmExpectedPrice": "19500000000000000000",
                 "ohmExpectedToleranceBps": 500,
                 "ohmRevertOnInsufficientPriceFeeds": true,
-                "pyth": "0x4305FB66699C3B2702D4d05CF36551390A4c69C6",
-                "pythEthUsdFeedId": "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace",
-                "pythEthUsdMaxConfidence": 10000000000000000000,
-                "pythEthUsdUpdateThreshold": 3600,
-                "pythUsdsUsdFeedId": "0x77f0971af11cc8bac224917275c1bf55f2319ed5c654a1ca955c82fa2d297ea1",
-                "pythUsdsUsdMaxConfidence": 10000000000000000,
-                "pythUsdsUsdUpdateThreshold": 86400,
                 "redstoneEthUsd": "0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4",
                 "redstoneEthUsdUpdateThreshold": 86400,
                 "susdsExpectedPrice": "1095038992740982406",

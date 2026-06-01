@@ -16,7 +16,6 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // PRICE Submodules
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
@@ -70,17 +69,15 @@ contract OracleProposalTest is ProposalTest {
     uint256 internal constant OHM_EXPECTED_PRICE = 17.5e18;
     uint16 internal constant OHM_EXPECTATION_TOLERANCE_BPS = 1_000; // 10%
 
-    function _makeFeedExpectations(
-        uint256 length_,
-        uint256 expectedPrice_,
-        uint16 toleranceBps_
-    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
+    function _makeFeedExpectations(uint256 length_, uint256 expectedPrice_, uint16 toleranceBps_)
+        internal
+        pure
+        returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_)
+    {
         expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
         for (uint256 i; i < length_; i++) {
-            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
-                expectedPrice: expectedPrice_,
-                toleranceBps: toleranceBps_
-            });
+            expectations_[i] =
+                IPriceConfigv2.PriceFeedExpectation({expectedPrice: expectedPrice_, toleranceBps: toleranceBps_});
         }
     }
 
@@ -119,9 +116,7 @@ contract OracleProposalTest is ProposalTest {
         // 1. Deploy PRICE v1_2 module if not already installed
         address priceModule = address(kernel.getModuleForKeycode(toKeycode("PRICE")));
         (uint8 priceMajor, uint8 priceMinor) = Module(priceModule).VERSION();
-        bool needsPriceUpgrade = (priceModule == address(0)) ||
-            (priceMajor != 1) ||
-            (priceMinor < 2);
+        bool needsPriceUpgrade = (priceModule == address(0)) || (priceMajor != 1) || (priceMinor < 2);
 
         if (needsPriceUpgrade) {
             console2.log("Deploying PRICE v1.2 module");
@@ -139,10 +134,7 @@ contract OracleProposalTest is ProposalTest {
         } else {
             console2.log("PRICE v1.2 module already installed");
             // Validate that the addresses file has the correct address for the PRICE module
-            require(
-                addresses.getAddress("olympus-module-price-1_2") == priceModule,
-                "PRICE module address mismatch"
-            );
+            require(addresses.getAddress("olympus-module-price-1_2") == priceModule, "PRICE module address mismatch");
         }
 
         // Get the PRICE module address
@@ -150,7 +142,6 @@ contract OracleProposalTest is ProposalTest {
 
         // 2. Deploy PRICE submodules
         _deployChainlinkPriceFeedsIfNeeded(priceModule);
-        _deployPythPriceFeedsIfNeeded(priceModule);
         _deployUniswapV3PriceIfNeeded(priceModule);
         _deployErc4626PriceIfNeeded(priceModule);
         _deploySimplePriceFeedStrategyIfNeeded(priceModule);
@@ -210,31 +201,13 @@ contract OracleProposalTest is ProposalTest {
         vm.label(submodule, key);
     }
 
-    function _deployPythPriceFeedsIfNeeded(address priceModule_) internal {
-        string memory key = "olympus-submodule-price-pyth-price-feeds-1_0";
-        address submodule = _safeGetAddress(key);
-        if (submodule == address(0)) {
-            console2.log("Deploying PythPriceFeeds");
-            submodule = address(new PythPriceFeeds(Module(priceModule_)));
-            addresses.addAddress(key, submodule);
-        } else {
-            console2.log("PythPriceFeeds already deployed");
-        }
-
-        vm.label(submodule, key);
-    }
-
     function _deployUniswapV3PriceIfNeeded(address priceModule_) internal {
         string memory key = "olympus-submodule-price-uniswap-v3-1_0";
         address submodule = _safeGetAddress(key);
         if (submodule == address(0)) {
             console2.log("Deploying UniswapV3Price");
             submodule = address(
-                new UniswapV3Price(
-                    Module(priceModule_),
-                    _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
-                    _UNISWAP_V3_FACTORY
-                )
+                new UniswapV3Price(Module(priceModule_), _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS, _UNISWAP_V3_FACTORY)
             );
             addresses.addAddress(key, submodule);
         } else {
@@ -279,13 +252,7 @@ contract OracleProposalTest is ProposalTest {
         address policy = _safeGetAddress(key);
         if (policy == address(0)) {
             console2.log("Deploying PriceCache");
-            policy = address(
-                new PriceCache(
-                    Kernel(kernelAddr_),
-                    _UNIT_OF_ACCOUNT_DECIMALS,
-                    _UNIT_OF_ACCOUNT_SYMBOL
-                )
-            );
+            policy = address(new PriceCache(Kernel(kernelAddr_), _UNIT_OF_ACCOUNT_DECIMALS, _UNIT_OF_ACCOUNT_SYMBOL));
             addresses.addAddress(key, policy);
         } else {
             console2.log("PriceCache already deployed");
@@ -348,9 +315,7 @@ contract OracleProposalTest is ProposalTest {
     /// @notice Activate oracle policies if not already active
     function _activateOraclePoliciesIfNeeded() internal {
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
-        address chainlinkFactory = addresses.getAddress(
-            "olympus-policy-chainlink-oracle-factory-1_0"
-        );
+        address chainlinkFactory = addresses.getAddress("olympus-policy-chainlink-oracle-factory-1_0");
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         Kernel kernelAddr = Kernel(addresses.getAddress("olympus-kernel"));
 
@@ -395,13 +360,9 @@ contract OracleProposalTest is ProposalTest {
 
         // Install submodules (skip if already installed)
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-chainlink-price-feeds-1_0");
-        _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-pyth-price-feeds-1_0");
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-uniswap-v3-1_0");
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-erc4626-1_0");
-        _installSubmoduleIfNeeded(
-            priceConfig,
-            "olympus-submodule-price-simple-price-feed-strategy-1_0"
-        );
+        _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-simple-price-feed-strategy-1_0");
 
         // Configure USDS with a simple Chainlink feed
         _configureUSDS(priceConfig, usds);
@@ -422,11 +383,8 @@ contract OracleProposalTest is ProposalTest {
         vm.label(chainlinkUsdsUsd, "chainlinkUsdsUsd");
 
         // Create strategy component: empty (single price feed)
-        IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode(""),
-            selector: bytes4(0),
-            params: abi.encode("")
-        });
+        IPRICEv2.Component memory strategy =
+            IPRICEv2.Component({target: toSubKeycode(""), selector: bytes4(0), params: abi.encode("")});
 
         // Create feed component using Chainlink
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
@@ -444,17 +402,18 @@ contract OracleProposalTest is ProposalTest {
         // Add USDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAsset(
-            usds_,
-            false, // storeMovingAverage
-            false, // useMovingAverage
-            uint32(0), // movingAverageDuration
-            uint48(0), // lastObservationTime
-            new uint256[](0), // observations
-            strategy,
-            feeds,
-            _makeFeedExpectations(feeds.length, USDS_EXPECTED_PRICE, USDS_EXPECTATION_TOLERANCE_BPS)
-        );
+        PriceConfigv2(priceConfig_)
+            .addAsset(
+                usds_,
+                false, // storeMovingAverage
+                false, // useMovingAverage
+                uint32(0), // movingAverageDuration
+                uint48(0), // lastObservationTime
+                new uint256[](0), // observations
+                strategy,
+                feeds,
+                _makeFeedExpectations(feeds.length, USDS_EXPECTED_PRICE, USDS_EXPECTATION_TOLERANCE_BPS)
+            );
         vm.stopPrank();
 
         console2.log("USDS asset configured");
@@ -465,11 +424,8 @@ contract OracleProposalTest is ProposalTest {
         console2.log("Configuring sUSDS asset");
 
         // Create strategy component: empty (single price feed)
-        IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode(""),
-            selector: bytes4(0),
-            params: abi.encode("")
-        });
+        IPRICEv2.Component memory strategy =
+            IPRICEv2.Component({target: toSubKeycode(""), selector: bytes4(0), params: abi.encode("")});
 
         // Create feed component using ERC4626
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
@@ -482,21 +438,18 @@ contract OracleProposalTest is ProposalTest {
         // Add sUSDS asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAsset(
-            susds_,
-            false, // storeMovingAverage
-            false, // useMovingAverage
-            uint32(0), // movingAverageDuration
-            uint48(0), // lastObservationTime
-            new uint256[](0), // observations
-            strategy,
-            feeds,
-            _makeFeedExpectations(
-                feeds.length,
-                SUSDS_EXPECTED_PRICE,
-                SUSDS_EXPECTATION_TOLERANCE_BPS
-            )
-        );
+        PriceConfigv2(priceConfig_)
+            .addAsset(
+                susds_,
+                false, // storeMovingAverage
+                false, // useMovingAverage
+                uint32(0), // movingAverageDuration
+                uint48(0), // lastObservationTime
+                new uint256[](0), // observations
+                strategy,
+                feeds,
+                _makeFeedExpectations(feeds.length, SUSDS_EXPECTED_PRICE, SUSDS_EXPECTATION_TOLERANCE_BPS)
+            );
         vm.stopPrank();
 
         console2.log("sUSDS asset configured");
@@ -511,11 +464,8 @@ contract OracleProposalTest is ProposalTest {
         vm.label(address(ohmSusdsPool), "ohmSusdsPool");
 
         // Create strategy component: empty (single price feed)
-        IPRICEv2.Component memory strategy = IPRICEv2.Component({
-            target: toSubKeycode(""),
-            selector: bytes4(0),
-            params: abi.encode("")
-        });
+        IPRICEv2.Component memory strategy =
+            IPRICEv2.Component({target: toSubKeycode(""), selector: bytes4(0), params: abi.encode("")});
 
         // Create feed component for OHM/sUSDS pool
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
@@ -524,8 +474,7 @@ contract OracleProposalTest is ProposalTest {
             selector: UniswapV3Price.getTokenTWAP.selector,
             params: abi.encode(
                 UniswapV3Price.UniswapV3Params({
-                    pool: ohmSusdsPool,
-                    observationWindowSeconds: OHM_OBSERVATION_WINDOW_SECONDS
+                    pool: ohmSusdsPool, observationWindowSeconds: OHM_OBSERVATION_WINDOW_SECONDS
                 })
             )
         });
@@ -533,17 +482,18 @@ contract OracleProposalTest is ProposalTest {
         // Add OHM asset via PriceConfig
         address daoMS = addresses.getAddress("olympus-multisig-dao");
         vm.startPrank(daoMS);
-        PriceConfigv2(priceConfig_).addAsset(
-            ohm_,
-            false, // storeMovingAverage
-            false, // useMovingAverage
-            uint32(0), // movingAverageDuration
-            uint48(0), // lastObservationTime
-            new uint256[](0), // observations
-            strategy,
-            feeds,
-            _makeFeedExpectations(feeds.length, OHM_EXPECTED_PRICE, OHM_EXPECTATION_TOLERANCE_BPS)
-        );
+        PriceConfigv2(priceConfig_)
+            .addAsset(
+                ohm_,
+                false, // storeMovingAverage
+                false, // useMovingAverage
+                uint32(0), // movingAverageDuration
+                uint48(0), // lastObservationTime
+                new uint256[](0), // observations
+                strategy,
+                feeds,
+                _makeFeedExpectations(feeds.length, OHM_EXPECTED_PRICE, OHM_EXPECTATION_TOLERANCE_BPS)
+            );
         vm.stopPrank();
 
         console2.log("OHM asset configured with OHM/sUSDS Uniswap V3 pool");
@@ -563,10 +513,7 @@ contract OracleProposalTest is ProposalTest {
         SubKeycode subKeycode = Submodule(submodule).SUBKEYCODE();
 
         // Check if submodule is already installed in PRICE module
-        if (
-            address(ModuleWithSubmodules(priceModule).getSubmoduleForKeycode(subKeycode)) !=
-            address(0)
-        ) {
+        if (address(ModuleWithSubmodules(priceModule).getSubmoduleForKeycode(subKeycode)) != address(0)) {
             console2.log("Submodule already installed in PRICE module:", key_);
             return;
         }
@@ -593,26 +540,17 @@ contract OracleProposalTest is ProposalTest {
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
 
-        address chainlinkFactory = addresses.getAddress(
-            "olympus-policy-chainlink-oracle-factory-1_0"
-        );
+        address chainlinkFactory = addresses.getAddress("olympus-policy-chainlink-oracle-factory-1_0");
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
 
         // Verify roles
         assertTrue(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
-        assertTrue(
-            roles.hasRole(daoMS, ORACLE_MANAGER_ROLE),
-            "DAO MS does not have oracle_manager role"
-        );
-        assertTrue(
-            roles.hasRole(timelock, ORACLE_MANAGER_ROLE),
-            "Timelock does not have oracle_manager role"
-        );
+        assertTrue(roles.hasRole(daoMS, ORACLE_MANAGER_ROLE), "DAO MS does not have oracle_manager role");
+        assertTrue(roles.hasRole(timelock, ORACLE_MANAGER_ROLE), "Timelock does not have oracle_manager role");
 
         // Verify policies enabled
         assertTrue(
-            IEnabler(addresses.getAddress("olympus-policy-price-cache-1_0")).isEnabled(),
-            "PriceCache not enabled"
+            IEnabler(addresses.getAddress("olympus-policy-price-cache-1_0")).isEnabled(), "PriceCache not enabled"
         );
         assertTrue(
             IEnabler(addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0")).isEnabled(),
@@ -623,36 +561,17 @@ contract OracleProposalTest is ProposalTest {
 
         // Verify oracles deployed
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
-        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
-            DEFAULT_ORACLE_MAX_AGE
-        );
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(DEFAULT_ORACLE_MAX_AGE);
         assertTrue(erc7726Oracle != address(0), "ERC7726 oracle not deployed");
-        assertTrue(
-            IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle),
-            "ERC7726 oracle not enabled"
-        );
+        assertTrue(IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle), "ERC7726 oracle not enabled");
 
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
-            ohm,
-            usds,
-            DEFAULT_ORACLE_MAX_AGE
-        );
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, DEFAULT_ORACLE_MAX_AGE);
         assertTrue(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
-        assertTrue(
-            IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
-            "Chainlink oracle not enabled"
-        );
+        assertTrue(IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle), "Chainlink oracle not enabled");
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(
-            ohm,
-            usds,
-            DEFAULT_ORACLE_MAX_AGE
-        );
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, DEFAULT_ORACLE_MAX_AGE);
         assertTrue(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
-        assertTrue(
-            IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
-            "Morpho oracle not enabled"
-        );
+        assertTrue(IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle), "Morpho oracle not enabled");
     }
 
     /// @notice Validates that the ERC7726 oracle clone returns a valid OHM price
@@ -662,21 +581,14 @@ contract OracleProposalTest is ProposalTest {
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
-        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
-            DEFAULT_ORACLE_MAX_AGE
-        );
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(DEFAULT_ORACLE_MAX_AGE);
 
         // Validate ERC7726 clone can quote OHM in terms of USDS
         // Quote 1 OHM (9 decimals) in USDS (18 decimals)
         uint256 ohmInUsds = IERC7726Oracle(erc7726Oracle).getQuote(1e9, ohm, usds);
         console2.log("Asset price of OHM:", ohmInUsds);
         assertFalse(
-            Deviation.isDeviating(
-                ohmInUsds,
-                OHM_EXPECTED_PRICE,
-                OHM_EXPECTATION_TOLERANCE_BPS,
-                BPS_MAX
-            ),
+            Deviation.isDeviating(ohmInUsds, OHM_EXPECTED_PRICE, OHM_EXPECTATION_TOLERANCE_BPS, BPS_MAX),
             "OHM price outside tolerance"
         );
     }
