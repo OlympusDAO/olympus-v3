@@ -102,10 +102,18 @@ Then track delivery (queries the LayerZero Scan testnet API by source tx hash):
 - **OHM appears on Arbitrum Sepolia only after a transfer is bridged in** (there is no minter in
   the mock stack). Bridge `Sepolia -> Arbitrum Sepolia` first, then you can send onward from it.
 
+## Repairing a deployed bridge
+
+To repair live bridges (re-apply DVN config, skip a stuck message, correct bridged supply), see
+`FIX.md` and `shell/lz-bridge-testnet/fix.sh`.
+
 ## Notes
 
 - Testnet-only flow, driven by one EOA. It skips the timelock / multisig / OCG governance
   ceremony used in production (`LZBridgeActivator`, `LZBridgeGatewayL2Batch`). See `COMPARISON.md`.
 - LZ addresses (endpoint, libraries, executor, DVNs, EIDs) are pinned in `LZTestnetConfig.sol`.
+- `foundry.toml` must grant write access to the deployments dir (already added to this repo):
+  `{ access = "read-write", path = "./src/scripts/lz-bridge-testnet/deployments/" }` under
+  `fs_permissions`. Without it `deploy` reverts with `vm.writeJson: ... not allowed`.
 - To wire a different set of testnets, add their addresses to `LZTestnetConfig.sol` and update
   the chain id mapping in `_resolveChain()` in `LZBridgeTestnetBase.sol`.
