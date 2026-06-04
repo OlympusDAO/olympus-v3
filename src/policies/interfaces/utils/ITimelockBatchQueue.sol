@@ -12,6 +12,12 @@ pragma solidity >=0.8.15;
 ///
 ///         Atomicity is a property of the batch lifecycle: a revert in any sub-action validator
 ///         or executor reverts the entire batch.
+///
+///         Ordering is a property of a single batch only: sub-actions execute in array order
+///         within their batch, but no ordering is enforced across separately queued actions,
+///         so independently queued batches may execute in any order once their timelocks
+///         elapse. Actions with execution-order dependencies must be queued within a single
+///         batch; independent batches must not be assumed to execute in queue order.
 interface ITimelockBatchQueue {
     // ========== EVENTS ========== //
 
@@ -233,7 +239,9 @@ interface ITimelockBatchQueue {
     /// @dev    Implementations must revert from implementation-specific hooks if the caller or
     ///         any sub-action should not be executed. Standard action state and timestamp
     ///         checks revert from the abstract implementation. The batch is atomic: a revert
-    ///         in any sub-action reverts the entire batch.
+    ///         in any sub-action reverts the entire batch. Cross-batch ordering is not
+    ///         enforced: once their timelocks elapse, separately queued actions may be
+    ///         executed in any order, regardless of the order in which they were queued.
     ///
     /// @param  actionId_ The queued action ID.
     function executeQueuedAction(uint64 actionId_) external;
