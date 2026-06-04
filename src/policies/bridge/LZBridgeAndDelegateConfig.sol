@@ -35,6 +35,9 @@ import {ADMIN_ROLE, EMERGENCY_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE}
 ///      rotations cannot be smuggled into an arbitrary batch. Cancellation is gated to the
 ///      emergency role only, so the proposer cannot rescind its own queued action; the
 ///      emergency role is intended for a multisig veto independent of the proposer roles.
+///      Disabling the policy suspends queueing and execution but does not clear queued
+///      actions; before re-enabling, the emergency role must cancel any queued action that
+///      should not become executable again.
 contract LZBridgeAndDelegateConfig is
     Policy,
     PolicyEnablerV2,
@@ -280,6 +283,13 @@ contract LZBridgeAndDelegateConfig is
     ///      per sub-action in `_executeSubAction`: dispatch is by the `TargetKind` recorded at
     ///      queue time.
     ///
+    ///      Disabling the policy suspends execution but does not clear the queue: queued
+    ///      actions remain in storage and become executable again once the policy is
+    ///      re-enabled, for as long as their execution windows have not expired. Before
+    ///      re-enabling, the emergency role must therefore cancel every queued action that
+    ///      should not survive the disable, such as an action queued by a compromised
+    ///      proposer.
+    ///
     ///      Reverts if:
     ///      - The policy is disabled
     function _validateExecution(
@@ -293,7 +303,7 @@ contract LZBridgeAndDelegateConfig is
     /// @inheritdoc TimelockBatchQueue
     /// @dev Cancellation is restricted to the emergency role; the proposer cannot rescind
     ///      its own queued action. Intentionally permitted while the policy is disabled so
-    ///      stale or malicious queued actions can be cleared.
+    ///      stale or unwanted queued actions can be cleared before the policy is re-enabled.
     ///
     ///      Reverts if:
     ///      - The caller does not have the emergency role
