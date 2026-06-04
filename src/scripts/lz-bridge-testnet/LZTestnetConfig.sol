@@ -10,9 +10,8 @@ import {UlnConfig} from "@lz-evm-messagelib-v2-3.0.162/uln/UlnBase.sol";
 ///         `LZConfigLib`: it covers Ethereum Sepolia, Base Sepolia and Arbitrum Sepolia and
 ///         exposes the same shaped helpers so the wiring code reads the same way.
 /// @dev Addresses were sourced from the LayerZero metadata API
-///      (https://metadata.layerzero-api.com/v1/metadata). The three target testnets share
-///      exactly three V2 DVN providers (LayerZero Labs, Nethermind and Horizen), so every
-///      route pins three required DVNs.
+///      (https://metadata.layerzero-api.com/v1/metadata). Every route pins two required DVNs
+///      (LayerZero Labs and Horizen); the Nethermind testnet DVN does not verify and is excluded.
 library LZTestnetConfig {
     // ========== ERRORS ========== //
 
@@ -59,7 +58,7 @@ library LZTestnetConfig {
     address internal constant BASE_SEPOLIA_LZ_DVN = 0xe1a12515F9AB2764b887bF60B923Ca494EBbB2d6;
     address internal constant ARB_SEPOLIA_LZ_DVN = 0x53f488E93b4f1b60E8E83aa374dBe1780A1EE8a8;
 
-    // Nethermind DVN
+    // Nethermind DVN (not in the route set: the testnet DVN does not verify)
     address internal constant SEPOLIA_NETHERMIND_DVN = 0x68802e01D6321D5159208478f297d7007A7516Ed;
     address internal constant BASE_SEPOLIA_NETHERMIND_DVN =
         0xd9222CC3Ccd1DF7c070d700EA377D4aDA2B86Eb5;
@@ -208,10 +207,9 @@ library LZTestnetConfig {
         revert LZTestnetConfig_UnsupportedEid(eid_);
     }
 
-    /// @notice Returns the three required DVNs for a route, sorted ascending by address.
-    /// @dev All three testnets share the LayerZero Labs, Nethermind and Horizen DVNs, so the
-    ///      same three providers are pinned on every route. The returned addresses are local to
-    ///      `localEid_`. `remoteEid_` is validated so an unsupported route fails loudly.
+    /// @notice Returns the two required DVNs for a route, sorted ascending by address.
+    /// @dev LayerZero Labs and Horizen, local to `localEid_`. The Nethermind testnet DVN does
+    ///      not verify and is excluded. `remoteEid_` is validated.
     /// @param localEid_ The local chain's V2 testnet EID.
     /// @param remoteEid_ The remote chain's V2 testnet EID.
     function dvnsForRoute(
@@ -222,10 +220,9 @@ library LZTestnetConfig {
         // cannot configure a route to an unsupported chain.
         endpointForEid(remoteEid_);
 
-        dvns = new address[](3);
+        dvns = new address[](2);
         dvns[0] = lzDvnForEid(localEid_);
-        dvns[1] = nethermindDvnForEid(localEid_);
-        dvns[2] = horizenDvnForEid(localEid_);
+        dvns[1] = horizenDvnForEid(localEid_);
 
         // Insertion sort to produce the ascending order required by the ULN config.
         for (uint256 i = 1; i < dvns.length; ++i) {
