@@ -10,11 +10,14 @@ What each file in this folder is:
   read/write the per-chain deployment files, assert the caller.
 - `LZBridgeTestnetDeploy.s.sol` — script with `deploy()`, `configure()`, `status()`.
 - `LZBridgeTestnetSend.s.sol` — script with `send(dstChain, to, amount)`.
+- `LZBridgeTestnetFix.s.sol` — repair script: `reapplyConfig()`, `skipInbound(srcChain, nonce)`,
+  `correctBridgedSupply(amount)`, `discover()`.
 - `README.md` — step-by-step deployment and usage guide.
+- `FIX.md` — guide for the repair script (fix.sh).
 - `COMPARISON.md` — how this setup differs from production config.
 - `CONTENTS.md` — this file.
 - `deployments/` — per-chain address files (`<chain>.json`) and `messages.json`, written at
   runtime by the scripts.
 
 Shell wrappers live in `shell/lz-bridge-testnet/`: `deploy.sh`, `configure.sh`, `status.sh`,
-`send.sh`, `message_status.sh`.
+`send.sh`, `message_status.sh`, `fix.sh`.

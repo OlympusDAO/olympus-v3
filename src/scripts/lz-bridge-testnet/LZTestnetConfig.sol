@@ -56,8 +56,8 @@ library LZTestnetConfig {
 
     // LayerZero Labs DVN
     address internal constant SEPOLIA_LZ_DVN = 0x8eebf8b423B73bFCa51a1Db4B7354AA0bFCA9193;
-    address internal constant BASE_SEPOLIA_LZ_DVN = 0xbf6FF58f60606EdB2F190769B951D825BCb214E2;
-    address internal constant ARB_SEPOLIA_LZ_DVN = 0x5C8C267174e1F345234FF5315D6cfd6716763BaC;
+    address internal constant BASE_SEPOLIA_LZ_DVN = 0xe1a12515F9AB2764b887bF60B923Ca494EBbB2d6;
+    address internal constant ARB_SEPOLIA_LZ_DVN = 0x53f488E93b4f1b60E8E83aa374dBe1780A1EE8a8;
 
     // Nethermind DVN
     address internal constant SEPOLIA_NETHERMIND_DVN = 0x68802e01D6321D5159208478f297d7007A7516Ed;
@@ -68,7 +68,7 @@ library LZTestnetConfig {
 
     // Horizen DVN
     address internal constant SEPOLIA_HORIZEN_DVN = 0x843139c725c2FB9814dE6A12fB890D8dBf3e1698;
-    address internal constant BASE_SEPOLIA_HORIZEN_DVN = 0xe1cdD37c13450bc256A39D27B1e1B5d1BC26ddE2;
+    address internal constant BASE_SEPOLIA_HORIZEN_DVN = 0xB1B2319767B86800C4CFe8623a72C00D9d90cFb6;
     address internal constant ARB_SEPOLIA_HORIZEN_DVN = 0xc6cec4e6b8F3DC87E676D06A24864081311EDa15;
 
     // ========== CONFIG TYPES (EndpointV2 / SetConfigParam.configType) ========== //
