@@ -29,6 +29,11 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         bytes32 payloadHash;
     }
 
+    struct OnActionCancelledCall {
+        uint64 actionId;
+        uint256 subActionCount;
+    }
+
     uint48 public constant MIN_DELAY = 1 days;
     uint48 public constant MAX_DELAY = 30 days;
     uint256 internal constant _NO_REJECT_INDEX = type(uint256).max;
@@ -50,6 +55,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
     uint256[] public executedValues;
 
     ExecuteSubActionCall[] internal _executeSubActionCalls;
+    OnActionCancelledCall[] internal _onActionCancelledCalls;
 
     constructor(uint48 initialTimelockDelay_) TimelockBatchQueue(initialTimelockDelay_) {}
 
@@ -125,6 +131,10 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         return _executeSubActionCalls;
     }
 
+    function getOnActionCancelledCalls() external view returns (OnActionCancelledCall[] memory) {
+        return _onActionCancelledCalls;
+    }
+
     function getExecutedValues() external view returns (uint256[] memory) {
         return executedValues;
     }
@@ -177,6 +187,12 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         if (rejectCancellation) revert MockTimelockBatchQueue_CancellationRejected();
         if (cancellationCaller != address(0) && caller_ != cancellationCaller)
             revert MockTimelockBatchQueue_CancellationRejected();
+    }
+
+    function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal override {
+        _onActionCancelledCalls.push(
+            OnActionCancelledCall({actionId: actionId_, subActionCount: subActionCount_})
+        );
     }
 
     function _executeSubAction(
@@ -1098,6 +1114,7 @@ contract TimelockBatchQueueTest is Test {
     //  [X] one TimelockSubActionExecuted then TimelockActionExecuted emitted, in order
     //  [X] action.executed = true and actions cleared
     //  [X] executedValues records the decoded payload
+    //  [X] _onActionCancelled is not called
     function test_executeQueuedAction_singleAction_succeeds() public {
         uint64 actionId = _queueSingleAction();
         _warpReady(actionId, type(uint256).max);
@@ -1125,6 +1142,8 @@ contract TimelockBatchQueueTest is Test {
         assertEq(calls[0].index, 0, "call index");
         assertEq(calls[0].target, target1, "call target");
         assertEq(calls[0].selector, selector1, "call selector");
+
+        assertEq(queue.getOnActionCancelledCalls().length, 0, "_onActionCancelled not called");
     }
 
     // given a 3-element batch is ready
@@ -1218,6 +1237,7 @@ contract TimelockBatchQueueTest is Test {
     //  [X] cancelQueuedAction reverts
     //  [X] action.cancelled remains false
     //  [X] actions retained
+    //  [X] _onActionCancelled is not called
     function test_cancelQueuedAction_givenValidateCancellationRejects_reverts() public {
         uint64 actionId = _queueSingleAction();
         queue.setRejectCancellation(true);
@@ -1227,10 +1247,12 @@ contract TimelockBatchQueueTest is Test {
         queue.cancelQueuedAction(actionId);
         assertEq(queue.getQueuedAction(actionId).cancelled, false, "cancelled false");
         assertEq(queue.getQueuedActionLength(actionId), 1, "actions retained");
+        assertEq(queue.getOnActionCancelledCalls().length, 0, "_onActionCancelled not called");
     }
 
     // given a single-action queue
     //  [X] cancelQueuedAction emits TimelockActionCancelled, sets cancelled, clears actions
+    //  [X] _onActionCancelled is called once with (actionId, 1)
     function test_cancelQueuedAction_single_succeeds(address canceller_) public {
         vm.assume(canceller_ != address(0));
         uint64 actionId = _queueSingleAction();
@@ -1241,10 +1263,17 @@ contract TimelockBatchQueueTest is Test {
         ITimelockBatchQueue.QueuedAction memory a = queue.getQueuedAction(actionId);
         assertEq(a.cancelled, true, "cancelled");
         assertEq(a.actions.length, 0, "actions cleared");
+
+        MockTimelockBatchQueue.OnActionCancelledCall[] memory calls = queue
+            .getOnActionCancelledCalls();
+        assertEq(calls.length, 1, "_onActionCancelled called once");
+        assertEq(calls[0].actionId, actionId, "_onActionCancelled actionId");
+        assertEq(calls[0].subActionCount, 1, "_onActionCancelled subActionCount");
     }
 
     // given a 3-element batch
     //  [X] cancelQueuedAction emits TimelockActionCancelled, sets cancelled, clears actions
+    //  [X] _onActionCancelled is called once with (actionId, 3)
     function test_cancelQueuedAction_batch_succeeds(address canceller_) public {
         vm.assume(canceller_ != address(0));
         (uint64 actionId, ) = _queueThreeBatch();
@@ -1255,6 +1284,12 @@ contract TimelockBatchQueueTest is Test {
         ITimelockBatchQueue.QueuedAction memory a = queue.getQueuedAction(actionId);
         assertEq(a.cancelled, true, "cancelled");
         assertEq(a.actions.length, 0, "actions cleared");
+
+        MockTimelockBatchQueue.OnActionCancelledCall[] memory calls = queue
+            .getOnActionCancelledCalls();
+        assertEq(calls.length, 1, "_onActionCancelled called once");
+        assertEq(calls[0].actionId, actionId, "_onActionCancelled actionId");
+        assertEq(calls[0].subActionCount, 3, "_onActionCancelled subActionCount");
     }
 
     // given an action is past executableAt but not yet expired

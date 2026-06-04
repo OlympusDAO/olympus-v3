@@ -136,6 +136,50 @@ contract LZBridgeAndDelegateConfigTests_ExecuteQueuedAction is LZBridgeAndDelega
         );
     }
 
+    /// @dev The per-sub-action `TargetKind` entries recorded at queue time are consumed and
+    ///      cleared by execution, so no stale storage remains for the completed action.
+    function test_execute_clearsSubActionTargetKind() external {
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = ITimelockBatchQueue.BatchAction({
+            target: address(gateway),
+            selector: ILZBridgeGateway.increaseBridgedSupply.selector,
+            payload: abi.encode(uint256(1))
+        });
+        batch[1] = ITimelockBatchQueue.BatchAction({
+            target: address(facilitator),
+            selector: IGracePeriod.setGracePeriod.selector,
+            payload: abi.encode(uint32(123))
+        });
+
+        vm.prank(bridgeAdmin);
+        uint64 actionId = config.queue(batch);
+
+        assertEq(
+            uint256(config.subActionTargetKind(actionId, 0)),
+            uint256(ILZBridgeAndDelegateConfig.TargetKind.GATEWAY),
+            "Sub-action 0 kind should be GATEWAY after queueing"
+        );
+        assertEq(
+            uint256(config.subActionTargetKind(actionId, 1)),
+            uint256(ILZBridgeAndDelegateConfig.TargetKind.FACILITATOR),
+            "Sub-action 1 kind should be FACILITATOR after queueing"
+        );
+
+        _warpPastTimelock();
+        config.executeQueuedAction(actionId);
+
+        assertEq(
+            uint256(config.subActionTargetKind(actionId, 0)),
+            uint256(ILZBridgeAndDelegateConfig.TargetKind.NONE),
+            "Sub-action 0 kind should be cleared after execution"
+        );
+        assertEq(
+            uint256(config.subActionTargetKind(actionId, 1)),
+            uint256(ILZBridgeAndDelegateConfig.TargetKind.NONE),
+            "Sub-action 1 kind should be cleared after execution"
+        );
+    }
+
     // ========== STATE GUARDS ========== //
 
     function test_execute_revertsBeforeTimelockElapsed() external {

@@ -27,7 +27,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///           `TimelockActionExecuted` event is emitted.
 ///         - `cancelQueuedAction` validates standard cancellable state, delegates
 ///           implementation-specific cancellation authorization to `_validateCancellation`,
-///           clears the stored sub-actions, and emits `TimelockActionCancelled`.
+///           clears the stored sub-actions, calls `_onActionCancelled` so derived contracts
+///           can clear per-sub-action state recorded at queue time, and emits
+///           `TimelockActionCancelled`.
 ///
 ///         Derived contracts must implement the virtual hooks by reverting on failure. Hooks
 ///         should not return booleans; a successful return means the hook accepted the
@@ -149,6 +151,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action has already been executed
     ///             - The action has been cancelled
     ///             - `_validateCancellation` reverts
+    ///             - `_onActionCancelled` reverts
     function cancelQueuedAction(uint64 actionId_) external {
         ITimelockBatchQueue.QueuedAction storage action = _queuedActions[actionId_];
         _validateCancellableState(actionId_, action);
@@ -156,7 +159,11 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         _validateCancellation(msg.sender, actionId_, action);
 
         action.cancelled = true;
+
+        uint256 len = action.actions.length;
         delete action.actions;
+
+        _onActionCancelled(actionId_, len);
 
         emit TimelockActionCancelled(actionId_, msg.sender);
     }
@@ -359,6 +366,17 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         uint64 actionId_,
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view virtual;
+
+    /// @notice Hook invoked once when a queued action is cancelled, after the stored
+    ///         sub-actions have been cleared.
+    /// @dev    Default implementation is a no-op. Derived contracts override to clear any
+    ///         per-sub-action state recorded at queue time by `_onSubActionQueued`. The
+    ///         sub-action count is captured before the stored array is deleted, so
+    ///         implementations can iterate the indices that were recorded.
+    ///
+    /// @param  actionId_       The cancelled action ID.
+    /// @param  subActionCount_ The number of sub-actions the action held before clearing.
+    function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal virtual {}
 
     /// @notice Execute a single sub-action of a batched queued action.
     /// @dev    Derived contracts must revert on failure. Called by the base contract once per

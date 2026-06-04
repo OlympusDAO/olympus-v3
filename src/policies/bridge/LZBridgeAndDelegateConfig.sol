@@ -89,8 +89,11 @@ contract LZBridgeAndDelegateConfig is
     address public override facilitator;
 
     /// @notice Records, per queued sub-action, the `TargetKind` it was validated against at
-    ///         queue time: `_subActionTargetKind[actionId][index]`.
-    mapping(uint64 => mapping(uint256 => TargetKind)) private _subActionTargetKind;
+    ///         queue time: `subActionTargetKind[actionId][index]`.
+    /// @dev Returns `NONE` for unknown action ids or indices. Entries are cleared when
+    ///      consumed by `_executeSubAction` and on cancellation by `_onActionCancelled`, so
+    ///      no stale entries remain once an action completes.
+    mapping(uint64 actionId_ => mapping(uint256 index_ => TargetKind)) public subActionTargetKind;
 
     // ========== INITIALIZATION ========== //
 
@@ -266,7 +269,7 @@ contract LZBridgeAndDelegateConfig is
             _revertActionInvalid(action_.target, action_.selector);
         }
 
-        _subActionTargetKind[actionId_][index_] = kind;
+        subActionTargetKind[actionId_][index_] = kind;
     }
 
     /// @inheritdoc TimelockBatchQueue
@@ -307,6 +310,8 @@ contract LZBridgeAndDelegateConfig is
     ///      that kind still holds the queued address before forwarding the call.
     ///      The payload-shape checks performed at queue time are deliberately not re-run here,
     ///      since storage already holds the queued action and ABI decoding will revert on mismatch.
+    ///      The recorded kind is consumed exactly once, so its entry is cleared before
+    ///      dispatch; a revert in the dispatched call rolls the deletion back with the batch.
     ///
     ///      Reverts if:
     ///      - The recorded kind's target slot no longer holds the queued address
@@ -316,7 +321,8 @@ contract LZBridgeAndDelegateConfig is
         uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
-        TargetKind kind = _subActionTargetKind[actionId_][index_];
+        TargetKind kind = subActionTargetKind[actionId_][index_];
+        delete subActionTargetKind[actionId_][index_];
         if (kind == TargetKind.GATEWAY) {
             _requireTargetUnchanged(actionId_, index_, action_.target, gateway);
             _executeGatewaySubAction(action_);
@@ -331,6 +337,15 @@ contract LZBridgeAndDelegateConfig is
             _executeSelfSubAction(action_);
         } else {
             _revertActionInvalid(action_.target, action_.selector);
+        }
+    }
+
+    /// @inheritdoc TimelockBatchQueue
+    /// @dev Clears the per-sub-action `TargetKind` entries recorded at queue time so no
+    ///      stale entries remain after cancellation.
+    function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal override {
+        for (uint256 i = 0; i < subActionCount_; ++i) {
+            delete subActionTargetKind[actionId_][i];
         }
     }
 
