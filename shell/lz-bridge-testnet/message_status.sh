@@ -26,11 +26,11 @@ load_named_args "$@"
 API_BASE="https://scan-testnet.layerzero-api.com/v1"
 MESSAGES=${messages:-"$ROOT_DIR/src/scripts/lz-bridge-testnet/deployments/messages.json"}
 
-command -v jq >/dev/null || {
+command -v jq > /dev/null || {
     echo "jq is required"
     exit 1
 }
-command -v curl >/dev/null || {
+command -v curl > /dev/null || {
     echo "curl is required"
     exit 1
 }
@@ -40,7 +40,7 @@ command -v curl >/dev/null || {
 report_tx() {
     local tx="$1"
     local resp status dsttx guid src_eid dst_eid
-    resp=$(curl -sf --max-time 20 "$API_BASE/messages/tx/$tx" 2>/dev/null || true)
+    resp=$(curl -sf --max-time 20 "$API_BASE/messages/tx/$tx" 2> /dev/null || true)
 
     if [ -z "$resp" ] || [ "$(echo "$resp" | jq -r '.data | length')" = "0" ]; then
         echo "  $tx -> NOT INDEXED YET (pending, or wrong/old hash)"
