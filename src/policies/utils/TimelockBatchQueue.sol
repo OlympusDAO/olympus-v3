@@ -12,6 +12,11 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         construction: a revert in any sub-action validator or executor rolls back the entire
 ///         batch.
 ///
+///         Sub-actions execute in array order within a batch, but no ordering is enforced
+///         across separately queued actions: execution is permissionless once a timelock
+///         elapses, so independently queued batches may execute in any order. Actions with
+///         execution-order dependencies must be queued within a single batch.
+///
 ///         Lifecycle:
 ///         - `_queueAction` enforces the configured batch size bounds, calls
 ///           `_onSubActionQueued` per sub-action and `_onBatchQueued` once for cross-sub
