@@ -142,6 +142,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork("mainnet", FORK_BLOCK);
+        _labelMainnetAddresses();
 
         // Get system contracts
         kernel = Kernel(KERNEL);
@@ -184,6 +185,13 @@ contract OlympusPricev1_2ForkTest is Test {
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);
 
+        vm.label(address(price), "PRICE v1.2");
+        vm.label(address(priceConfig), "PriceConfig v2");
+        vm.label(address(chainlinkPrice), "ChainlinkPriceFeeds");
+        vm.label(address(uniswapV3Price), "UniswapV3Price");
+        vm.label(address(erc4626Price), "ERC4626Price");
+        vm.label(address(strategy), "SimplePriceFeedStrategy");
+
         // ========== SAME-BATCH PRICE v1.2 UPGRADE ==========
         // All operations happen in the same transaction (via kernelExecutor),
         // ensuring no Heart heartbeat occurs between upgrade and configuration.
@@ -222,6 +230,36 @@ contract OlympusPricev1_2ForkTest is Test {
     }
 
     // ========== HELPER FUNCTIONS ========== //
+
+    function _labelMainnetAddresses() internal {
+        vm.label(OHM, "OHM");
+        vm.label(WETH, "WETH");
+        vm.label(USDS, "USDS");
+        vm.label(SUSDS, "sUSDS");
+
+        vm.label(KERNEL, "Kernel");
+        vm.label(HEART, "Heart");
+        vm.label(ROLES_ADMIN, "RolesAdmin");
+        vm.label(EMISSION_MANAGER, "EmissionManager");
+        vm.label(YIELD_REPO, "YieldRepurchaseFacility");
+        vm.label(CONVERTIBLE_DEPOSIT_AUCTIONEER, "ConvertibleDepositAuctioneer");
+        vm.label(TIMELOCK, "Timelock");
+        vm.label(DAO_MS, "DAO MS");
+
+        vm.label(CHAINLINK_ETH_USD, "Chainlink ETH/USD");
+        vm.label(CHAINLINK_BTC_USD, "Chainlink BTC/USD");
+        vm.label(CHAINLINK_ETH_BTC, "Chainlink ETH/BTC");
+        vm.label(CHAINLINK_OHM_ETH, "Chainlink OHM/ETH");
+        vm.label(CHAINLINK_USDS_USD, "Chainlink USDS/USD");
+        vm.label(CHAINLINK_DAI_USD, "Chainlink DAI/USD");
+        vm.label(REDSTONE_ETH_USD, "Redstone ETH/USD");
+        vm.label(API3_ETH_USD, "API3 ETH/USD");
+        vm.label(API3_USDS_USD, "API3 USDS/USD");
+
+        vm.label(UNISWAP_OHM_WETH, "Uniswap V3 OHM/WETH");
+        vm.label(UNISWAP_OHM_SUSDS, "Uniswap V3 OHM/sUSDS");
+        vm.label(UNISWAP_V3_FACTORY, "Uniswap V3 Factory");
+    }
 
     function _configureOhmAsset() internal {
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
