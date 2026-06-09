@@ -516,9 +516,7 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(chainlinkDaiUsdParams)
         );
 
-        // Feed 2: API3 USDS/USD (uses Chainlink interface). The production address is
-        // still a zero-address placeholder, so this fork test uses a local feed until
-        // the live API3 reader proxy is available.
+        // Feed 2: API3 USDS/USD (uses Chainlink interface).
         ChainlinkPriceFeeds.OneFeedParams memory api3UsdsUsdParams = ChainlinkPriceFeeds
             .OneFeedParams(AggregatorV2V3Interface(API3_USDS_USD), USDS_UPDATE_THRESHOLD);
         feeds[2] = IPRICEv2.Component(
