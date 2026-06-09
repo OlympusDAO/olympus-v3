@@ -50,7 +50,8 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant ROLES_ADMIN = 0xb216d714d91eeC4F7120a732c11428857C659eC8;
     address public constant EMISSION_MANAGER = 0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff;
     address public constant YIELD_REPO = 0x271e35a8555a62F6bA76508E85dfD76D580B0692;
-    address public constant CONVERTIBLE_DEPOSIT_AUCTIONEER = 0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
+    address public constant CONVERTIBLE_DEPOSIT_AUCTIONEER =
+        0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
@@ -125,18 +126,22 @@ contract OlympusPricev1_2ForkTest is Test {
         uint256 initialPrice
     );
 
-    function _makeFeedExpectations(uint256 length_, uint256 minPrice_, uint256 maxPrice_)
-        internal
-        pure
-        returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_)
-    {
+    function _makeFeedExpectations(
+        uint256 length_,
+        uint256 minPrice_,
+        uint256 maxPrice_
+    ) internal pure returns (IPriceConfigv2.PriceFeedExpectation[] memory expectations_) {
         uint256 expectedPrice = (minPrice_ + maxPrice_) / 2;
-        uint16 toleranceBps = SafeCast.encodeUInt16(maxPrice_.mulDivUp(BPS_MAX, expectedPrice) - BPS_MAX);
+        uint16 toleranceBps = SafeCast.encodeUInt16(
+            maxPrice_.mulDivUp(BPS_MAX, expectedPrice) - BPS_MAX
+        );
 
         expectations_ = new IPriceConfigv2.PriceFeedExpectation[](length_);
         for (uint256 i; i < length_; i++) {
-            expectations_[i] =
-                IPriceConfigv2.PriceFeedExpectation({expectedPrice: expectedPrice, toleranceBps: toleranceBps});
+            expectations_[i] = IPriceConfigv2.PriceFeedExpectation({
+                expectedPrice: expectedPrice,
+                toleranceBps: toleranceBps
+            });
         }
     }
 
@@ -180,8 +185,11 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
-        UniswapV3Price uniswapV3Price =
-            new UniswapV3Price(price, _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS, UNISWAP_V3_FACTORY);
+        UniswapV3Price uniswapV3Price = new UniswapV3Price(
+            price,
+            _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
+            UNISWAP_V3_FACTORY
+        );
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);
 
@@ -282,18 +290,24 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Feed 0: Uniswap OHM/WETH
         UniswapV3Price.UniswapV3Params memory ohmWethParams = UniswapV3Price.UniswapV3Params({
-            pool: IUniswapV3Pool(UNISWAP_OHM_WETH), observationWindowSeconds: OHM_WETH_OBSERVATION_WINDOW
+            pool: IUniswapV3Pool(UNISWAP_OHM_WETH),
+            observationWindowSeconds: OHM_WETH_OBSERVATION_WINDOW
         });
         feeds[0] = IPRICEv2.Component(
-            toSubKeycode("PRICE.UNIV3"), UniswapV3Price.getTokenTWAP.selector, abi.encode(ohmWethParams)
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(ohmWethParams)
         );
 
         // Feed 1: Uniswap OHM/sUSDS
         UniswapV3Price.UniswapV3Params memory ohmSusdsParams = UniswapV3Price.UniswapV3Params({
-            pool: IUniswapV3Pool(UNISWAP_OHM_SUSDS), observationWindowSeconds: OHM_SUSDS_OBSERVATION_WINDOW
+            pool: IUniswapV3Pool(UNISWAP_OHM_SUSDS),
+            observationWindowSeconds: OHM_SUSDS_OBSERVATION_WINDOW
         });
         feeds[1] = IPRICEv2.Component(
-            toSubKeycode("PRICE.UNIV3"), UniswapV3Price.getTokenTWAP.selector, abi.encode(ohmSusdsParams)
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(ohmSusdsParams)
         );
 
         // Feed 2: Chainlink OHM/ETH x ETH/USD
@@ -319,8 +333,11 @@ contract OlympusPricev1_2ForkTest is Test {
         IPRICEv2.Component memory ohmStrategy_,
         IPRICEv2.Component[] memory feeds_
     ) internal {
-        (uint32 movingAverageDuration, uint48 lastObservationTime, uint256[] memory observations) =
-            _getMigratedOhmObservations();
+        (
+            uint32 movingAverageDuration,
+            uint48 lastObservationTime,
+            uint256[] memory observations
+        ) = _getMigratedOhmObservations();
 
         // Add OHM asset via PriceConfig with moving average configuration
         priceConfig.addAsset(
@@ -339,10 +356,18 @@ contract OlympusPricev1_2ForkTest is Test {
     function _getMigratedOhmObservations()
         internal
         view
-        returns (uint32 movingAverageDuration_, uint48 lastObservationTime_, uint256[] memory observations_)
+        returns (
+            uint32 movingAverageDuration_,
+            uint48 lastObservationTime_,
+            uint256[] memory observations_
+        )
     {
         uint48 oldObservationFrequency = oldPrice.observationFrequency();
-        assertEq(price.observationFrequency(), oldObservationFrequency, "Observation frequency should match PRICE v1");
+        assertEq(
+            price.observationFrequency(),
+            oldObservationFrequency,
+            "Observation frequency should match PRICE v1"
+        );
 
         uint32 oldNumObservations = oldPrice.numObservations();
         movingAverageDuration_ = uint32(oldPrice.movingAverageDuration());
@@ -350,7 +375,8 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Use the live PRICE v1 observation count rather than a hard-coded seed. With an 8-hour
         // observation frequency and a 30-day moving average, this migrates 90 raw observations.
-        uint256 expectedNumObservations = uint256(movingAverageDuration_) / uint256(oldObservationFrequency);
+        uint256 expectedNumObservations = uint256(movingAverageDuration_) /
+            uint256(oldObservationFrequency);
         assertEq(
             uint256(oldNumObservations),
             expectedNumObservations,
@@ -392,8 +418,8 @@ contract OlympusPricev1_2ForkTest is Test {
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](4);
 
         // Feed 0: Chainlink ETH/USD
-        ChainlinkPriceFeeds.OneFeedParams memory chainlinkEthUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(CHAINLINK_ETH_USD), WETH_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory chainlinkEthUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(CHAINLINK_ETH_USD), WETH_UPDATE_THRESHOLD);
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -402,8 +428,8 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Feed 1: RedStone ETH/USD (uses Chainlink interface)
         // Note: RedStone is accessed via Chainlink interface in production
-        ChainlinkPriceFeeds.OneFeedParams memory redstoneEthUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(REDSTONE_ETH_USD), WETH_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory redstoneEthUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(REDSTONE_ETH_USD), WETH_UPDATE_THRESHOLD);
         feeds[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -411,19 +437,22 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // Feed 2: API3 ETH/USD (uses Chainlink interface)
-        ChainlinkPriceFeeds.OneFeedParams memory api3EthUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(API3_ETH_USD), WETH_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory api3EthUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(API3_ETH_USD), WETH_UPDATE_THRESHOLD);
         feeds[2] = IPRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"), ChainlinkPriceFeeds.getOneFeedPrice.selector, abi.encode(api3EthUsdParams)
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(api3EthUsdParams)
         );
 
         // Feed 3: Derived ETH-USD from ETH-BTC × BTC-USD
-        ChainlinkPriceFeeds.TwoFeedParams memory derivedEthUsdParams = ChainlinkPriceFeeds.TwoFeedParams({
-            firstFeed: AggregatorV2V3Interface(CHAINLINK_ETH_BTC),
-            firstUpdateThreshold: WETH_ETH_BTC_UPDATE_THRESHOLD,
-            secondFeed: AggregatorV2V3Interface(CHAINLINK_BTC_USD),
-            secondUpdateThreshold: WETH_BTC_USD_UPDATE_THRESHOLD
-        });
+        ChainlinkPriceFeeds.TwoFeedParams memory derivedEthUsdParams = ChainlinkPriceFeeds
+            .TwoFeedParams({
+                firstFeed: AggregatorV2V3Interface(CHAINLINK_ETH_BTC),
+                firstUpdateThreshold: WETH_ETH_BTC_UPDATE_THRESHOLD,
+                secondFeed: AggregatorV2V3Interface(CHAINLINK_BTC_USD),
+                secondUpdateThreshold: WETH_BTC_USD_UPDATE_THRESHOLD
+            });
         feeds[3] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
@@ -470,8 +499,8 @@ contract OlympusPricev1_2ForkTest is Test {
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
 
         // Feed 0: Chainlink USDS/USD
-        ChainlinkPriceFeeds.OneFeedParams memory chainlinkUsdsUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(CHAINLINK_USDS_USD), USDS_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory chainlinkUsdsUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(CHAINLINK_USDS_USD), USDS_UPDATE_THRESHOLD);
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -479,8 +508,8 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // Feed 1: Chainlink DAI/USD
-        ChainlinkPriceFeeds.OneFeedParams memory chainlinkDaiUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(CHAINLINK_DAI_USD), USDS_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory chainlinkDaiUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(CHAINLINK_DAI_USD), USDS_UPDATE_THRESHOLD);
         feeds[1] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -490,10 +519,12 @@ contract OlympusPricev1_2ForkTest is Test {
         // Feed 2: API3 USDS/USD (uses Chainlink interface). The production address is
         // still a zero-address placeholder, so this fork test uses a local feed until
         // the live API3 reader proxy is available.
-        ChainlinkPriceFeeds.OneFeedParams memory api3UsdsUsdParams =
-            ChainlinkPriceFeeds.OneFeedParams(AggregatorV2V3Interface(API3_USDS_USD), USDS_UPDATE_THRESHOLD);
+        ChainlinkPriceFeeds.OneFeedParams memory api3UsdsUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(API3_USDS_USD), USDS_UPDATE_THRESHOLD);
         feeds[2] = IPRICEv2.Component(
-            toSubKeycode("PRICE.CHAINLINK"), ChainlinkPriceFeeds.getOneFeedPrice.selector, abi.encode(api3UsdsUsdParams)
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(api3UsdsUsdParams)
         );
 
         // Add USDS asset via PriceConfig
@@ -518,8 +549,11 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
         // Empty strategy (single feed, no aggregation needed)
-        IPRICEv2.Component memory susdsStrategy =
-            IPRICEv2.Component({target: toSubKeycode(""), selector: bytes4(0), params: abi.encode("")});
+        IPRICEv2.Component memory susdsStrategy = IPRICEv2.Component({
+            target: toSubKeycode(""),
+            selector: bytes4(0),
+            params: abi.encode("")
+        });
 
         // Single ERC4626 feed - derives price from the underlying asset (USDS)
         IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
@@ -546,10 +580,12 @@ contract OlympusPricev1_2ForkTest is Test {
     }
 
     /// @notice Validates that a price is within a reasonable range
-    function _assertPriceInRange(uint256 price_, uint256 minPrice_, uint256 maxPrice_, string memory assetName_)
-        internal
-        pure
-    {
+    function _assertPriceInRange(
+        uint256 price_,
+        uint256 minPrice_,
+        uint256 maxPrice_,
+        string memory assetName_
+    ) internal pure {
         assertGe(price_, minPrice_, string.concat(assetName_, " price below minimum"));
         assertLe(price_, maxPrice_, string.concat(assetName_, " price above maximum"));
     }
@@ -576,15 +612,21 @@ contract OlympusPricev1_2ForkTest is Test {
     function test_priceValidation_ohmUsesDeviationFilteredAverage() public view {
         IPRICEv2.Asset memory ohmAsset = price.getAssetData(OHM);
         IPRICEv2.Component memory ohmStrategy = abi.decode(ohmAsset.strategy, (IPRICEv2.Component));
-        ISimplePriceFeedStrategy.DeviationParams memory params =
-            abi.decode(ohmStrategy.params, (ISimplePriceFeedStrategy.DeviationParams));
+        ISimplePriceFeedStrategy.DeviationParams memory params = abi.decode(
+            ohmStrategy.params,
+            (ISimplePriceFeedStrategy.DeviationParams)
+        );
 
         assertEq(
             ohmStrategy.selector,
             SimplePriceFeedStrategy.getAveragePriceExcludingDeviations.selector,
             "OHM should use deviation-filtered average"
         );
-        assertEq(params.deviationBps, OHM_DEVIATION_BPS, "OHM deviation threshold should match config");
+        assertEq(
+            params.deviationBps,
+            OHM_DEVIATION_BPS,
+            "OHM deviation threshold should match config"
+        );
         assertTrue(params.revertOnInsufficientCount, "OHM strategy should use strict mode");
     }
 
@@ -639,9 +681,21 @@ contract OlympusPricev1_2ForkTest is Test {
         bytes4 getPriceWithVariantSelector = bytes4(keccak256("getPrice(address,(uint8,bytes1))"));
         bytes4 getPriceSelector = bytes4(keccak256("getPrice(address)"));
 
-        vm.mockCall(address(price), abi.encodeWithSelector(getPriceSelector, OHM), abi.encode(price_));
-        vm.mockCall(address(price), abi.encodeWithSelector(IPRICEv1.getCurrentPrice.selector), abi.encode(price_));
-        vm.mockCall(address(price), abi.encodeWithSelector(IPRICEv1.getLastPrice.selector), abi.encode(price_));
+        vm.mockCall(
+            address(price),
+            abi.encodeWithSelector(getPriceSelector, OHM),
+            abi.encode(price_)
+        );
+        vm.mockCall(
+            address(price),
+            abi.encodeWithSelector(IPRICEv1.getCurrentPrice.selector),
+            abi.encode(price_)
+        );
+        vm.mockCall(
+            address(price),
+            abi.encodeWithSelector(IPRICEv1.getLastPrice.selector),
+            abi.encode(price_)
+        );
         vm.mockCall(
             address(price),
             abi.encodeWithSelector(getPriceWithVariantSelector, OHM, IPRICEv2.Variant.CURRENT),
@@ -741,7 +795,11 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Verify PRICE moving average was updated
         uint48 lastObsTimeAfter = price.lastObservationTime();
-        assertEq(lastObsTimeAfter, SafeCast.encodeUInt48(block.timestamp), "Last observation time should be updated");
+        assertEq(
+            lastObsTimeAfter,
+            SafeCast.encodeUInt48(block.timestamp),
+            "Last observation time should be updated"
+        );
         assertGt(lastObsTimeAfter, lastObsTimeBefore, "Last observation time should be updated");
 
         // Verify moving average was updated
@@ -762,7 +820,6 @@ contract OlympusPricev1_2ForkTest is Test {
         givenOhmPrice(17e18) // Below 50% premium
         warpToNextHeartbeat
         beat // Epoch 0
-
     {
         // Verify that the CD auction target is 0 (disabled)
         assertEq(cdAuctioneer.getAuctionParameters().target, 0, "CD auction target should be 0");
@@ -781,7 +838,6 @@ contract OlympusPricev1_2ForkTest is Test {
         givenOhmPrice(24e18) // Above 50% premium
         warpToNextHeartbeat
         beat // Epoch 0
-
     {
         // Calculate the expected min price
         uint256 expectedMinPrice = emissionManager.getMinPriceFor(24e18);
@@ -820,7 +876,13 @@ contract OlympusPricev1_2ForkTest is Test {
         // Ignore the market ID, as it depends on the number of bond markets created on
         // mainnet before the fork block. The token pair and initial price are deterministic.
         vm.expectEmit(false, true, true, true);
-        emit MarketCreated(0, address(OHM), address(emissionManager.reserve()), uint48(0), expectedInitialPrice);
+        emit MarketCreated(
+            0,
+            address(OHM),
+            address(emissionManager.reserve()),
+            uint48(0),
+            expectedInitialPrice
+        );
 
         // Beat
         // Epoch 0, auction results next index is 0
@@ -829,7 +891,11 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.stopSnapshotGas();
 
         // Verify
-        assertGt(emissionManager.activeMarketId(), activeMarketIdBefore, "Active market ID should increase");
+        assertGt(
+            emissionManager.activeMarketId(),
+            activeMarketIdBefore,
+            "Active market ID should increase"
+        );
     }
 
     // when the heartbeat launches a YRF market
@@ -853,7 +919,11 @@ contract OlympusPricev1_2ForkTest is Test {
         // Expect event
         vm.expectEmit(true, true, true, true);
         emit MarketCreated(
-            expectedMarketId, address(emissionManager.reserve()), address(OHM), uint48(0), expectedInitialPrice
+            expectedMarketId,
+            address(emissionManager.reserve()),
+            address(OHM),
+            uint48(0),
+            expectedInitialPrice
         );
 
         // Beat

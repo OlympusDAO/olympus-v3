@@ -51,66 +51,67 @@ contract OracleProposal is GovernorBravoProposal {
 
     // Provides a detailed description of the proposal.
     function description() public pure override returns (string memory) {
-        return string.concat(
-            "# Enable Oracle Policies and OHM/USDS Oracles\n",
-            "\n",
-            "## Summary\n",
-            "\n",
-            "This proposal enables the oracle policies and deploys OHM/USDS oracles.\n",
-            "\n",
-            "## Oracle Policies\n",
-            "\n",
-            "This proposal enables three oracle factories:\n",
-            "\n",
-            "### 1. ERC7726OracleFactory\n\n",
-            "- **Purpose**: Factory for deploying ERC7726-compatible oracle clones\n",
-            "- **Function**: Creates ERC7726-compatible cached-price oracles from PRICE data\n",
-            "- **Use Cases**: General lending integrations requiring ERC7726 quote interfaces\n",
-            "\n",
-            "### 2. ChainlinkOracleFactory\n\n",
-            "- **Purpose**: Factory for deploying gas-efficient Chainlink oracle clones\n",
-            "- **Function**: Creates ERC7726-compliant oracles using PRICE as the price source\n",
-            "- **Use Cases**: Protocols requiring Chainlink-compatible oracles\n",
-            "\n",
-            "### 3. MorphoOracleFactory\n\n",
-            "- **Purpose**: Factory for deploying Morpho-compatible oracle clones\n",
-            "- **Function**: Creates oracles with Morpho-specific price scaling (36 decimals)\n",
-            "- **Use Cases**: Morpho lending protocol integration\n",
-            "\n",
-            "## Actions\n",
-            "\n",
-            "This proposal will execute the following actions:\n",
-            "\n",
-            "1. **Grant `admin` role to Timelock** (if needed)\n",
-            "2. **Grant `oracle_manager` role to DAO MS and Timelock** (if needed)\n",
-            "3. **Enable PriceCache policy** (if needed)\n",
-            "4. **Enable ERC7726OracleFactory policy**\n",
-            "5. **Enable ChainlinkOracleFactory policy**\n",
-            "6. **Enable MorphoOracleFactory policy**\n",
-            "7. **Deploy ERC7726 oracle** (via ERC7726OracleFactory)\n",
-            "8. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
-            "9. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
-            "\n",
-            "## Technical Details\n",
-            "\n",
-            "### Oracle Factory Benefits\n",
-            "\n",
-            "- **Gas Efficiency**: Uses ClonesWithImmutableArgs for minimal deployment cost\n",
-            "- **Security**: Oracles inherit access control from PRICE and factory policies\n",
-            "- **Flexibility**: New oracles can be deployed by `oracle_manager` role holders without additional governance\n",
-            "\n",
-            "## Risks and Considerations\n",
-            "\n",
-            "- **Oracle Availability**: Enabled oracle policies depend on PRICE functioning correctly\n",
-            "- **Price Feed Dependencies**: Oracle accuracy depends on underlying PRICE feeds\n",
-            "\n",
-            "## Resources\n",
-            "\n",
-            "- [Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-05_Olympus_Price_Feed_Updates_Report.pdf)\n",
-            "- [Implementation PR](https://github.com/OlympusDAO/olympus-v3/pull/187)\n",
-            "- [PRICE Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/price.md)\n",
-            "- [Oracle Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/oracle_factories.md)\n"
-        );
+        return
+            string.concat(
+                "# Enable Oracle Policies and OHM/USDS Oracles\n",
+                "\n",
+                "## Summary\n",
+                "\n",
+                "This proposal enables the oracle policies and deploys OHM/USDS oracles.\n",
+                "\n",
+                "## Oracle Policies\n",
+                "\n",
+                "This proposal enables three oracle factories:\n",
+                "\n",
+                "### 1. ERC7726OracleFactory\n\n",
+                "- **Purpose**: Factory for deploying ERC7726-compatible oracle clones\n",
+                "- **Function**: Creates ERC7726-compatible cached-price oracles from PRICE data\n",
+                "- **Use Cases**: General lending integrations requiring ERC7726 quote interfaces\n",
+                "\n",
+                "### 2. ChainlinkOracleFactory\n\n",
+                "- **Purpose**: Factory for deploying gas-efficient Chainlink oracle clones\n",
+                "- **Function**: Creates ERC7726-compliant oracles using PRICE as the price source\n",
+                "- **Use Cases**: Protocols requiring Chainlink-compatible oracles\n",
+                "\n",
+                "### 3. MorphoOracleFactory\n\n",
+                "- **Purpose**: Factory for deploying Morpho-compatible oracle clones\n",
+                "- **Function**: Creates oracles with Morpho-specific price scaling (36 decimals)\n",
+                "- **Use Cases**: Morpho lending protocol integration\n",
+                "\n",
+                "## Actions\n",
+                "\n",
+                "This proposal will execute the following actions:\n",
+                "\n",
+                "1. **Grant `admin` role to Timelock** (if needed)\n",
+                "2. **Grant `oracle_manager` role to DAO MS and Timelock** (if needed)\n",
+                "3. **Enable PriceCache policy** (if needed)\n",
+                "4. **Enable ERC7726OracleFactory policy**\n",
+                "5. **Enable ChainlinkOracleFactory policy**\n",
+                "6. **Enable MorphoOracleFactory policy**\n",
+                "7. **Deploy ERC7726 oracle** (via ERC7726OracleFactory)\n",
+                "8. **Deploy OHM/USDS Chainlink oracle** (via ChainlinkOracleFactory)\n",
+                "9. **Deploy OHM/USDS Morpho oracle** (via MorphoOracleFactory)\n",
+                "\n",
+                "## Technical Details\n",
+                "\n",
+                "### Oracle Factory Benefits\n",
+                "\n",
+                "- **Gas Efficiency**: Uses ClonesWithImmutableArgs for minimal deployment cost\n",
+                "- **Security**: Oracles inherit access control from PRICE and factory policies\n",
+                "- **Flexibility**: New oracles can be deployed by `oracle_manager` role holders without additional governance\n",
+                "\n",
+                "## Risks and Considerations\n",
+                "\n",
+                "- **Oracle Availability**: Enabled oracle policies depend on PRICE functioning correctly\n",
+                "- **Price Feed Dependencies**: Oracle accuracy depends on underlying PRICE feeds\n",
+                "\n",
+                "## Resources\n",
+                "\n",
+                "- [Audit Report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-05_Olympus_Price_Feed_Updates_Report.pdf)\n",
+                "- [Implementation PR](https://github.com/OlympusDAO/olympus-v3/pull/187)\n",
+                "- [PRICE Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/price.md)\n",
+                "- [Oracle Documentation](https://github.com/OlympusDAO/olympus-v3/blob/4248bd6d45e160f7d369c1d44f126d8cef0b7f57/documentation/oracle_factories.md)\n"
+            );
     }
 
     // Cache addresses in _deploy
@@ -128,7 +129,9 @@ contract OracleProposal is GovernorBravoProposal {
         address daoMS = addresses.getAddress("olympus-multisig-dao");
 
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
-        address chainlinkFactory = addresses.getAddress("olympus-policy-chainlink-oracle-factory-1_0");
+        address chainlinkFactory = addresses.getAddress(
+            "olympus-policy-chainlink-oracle-factory-1_0"
+        );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
 
@@ -165,7 +168,11 @@ contract OracleProposal is GovernorBravoProposal {
         if (!roles.hasRole(timelock, ORACLE_MANAGER_ROLE)) {
             _pushAction(
                 rolesAdmin,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, ORACLE_MANAGER_ROLE, timelock),
+                abi.encodeWithSelector(
+                    RolesAdmin.grantRole.selector,
+                    ORACLE_MANAGER_ROLE,
+                    timelock
+                ),
                 "Grant oracle_manager role to Timelock"
             );
         } else {
@@ -174,36 +181,66 @@ contract OracleProposal is GovernorBravoProposal {
 
         // STEP 3: Enable PriceCache, if needed
         if (!IEnabler(priceCache).isEnabled()) {
-            _pushAction(priceCache, abi.encodeWithSelector(IEnabler.enable.selector, ""), "Enable PriceCache");
+            _pushAction(
+                priceCache,
+                abi.encodeWithSelector(IEnabler.enable.selector, ""),
+                "Enable PriceCache"
+            );
         } else {
             console2.log("PriceCache already enabled");
         }
 
         // STEP 4: Enable oracle policies
-        _pushAction(erc7726Factory, abi.encodeWithSelector(IEnabler.enable.selector, ""), "Enable ERC7726OracleFactory");
-
         _pushAction(
-            chainlinkFactory, abi.encodeWithSelector(IEnabler.enable.selector, ""), "Enable ChainlinkOracleFactory"
+            erc7726Factory,
+            abi.encodeWithSelector(IEnabler.enable.selector, ""),
+            "Enable ERC7726OracleFactory"
         );
 
-        _pushAction(morphoFactory, abi.encodeWithSelector(IEnabler.enable.selector, ""), "Enable MorphoOracleFactory");
+        _pushAction(
+            chainlinkFactory,
+            abi.encodeWithSelector(IEnabler.enable.selector, ""),
+            "Enable ChainlinkOracleFactory"
+        );
+
+        _pushAction(
+            morphoFactory,
+            abi.encodeWithSelector(IEnabler.enable.selector, ""),
+            "Enable MorphoOracleFactory"
+        );
 
         // STEP 5: Deploy oracles
         _pushAction(
             erc7726Factory,
-            abi.encodeWithSelector(IERC7726OracleFactory.createOracle.selector, DEFAULT_ORACLE_MAX_AGE, ""),
+            abi.encodeWithSelector(
+                IERC7726OracleFactory.createOracle.selector,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
             "Deploy ERC7726 oracle"
         );
 
         _pushAction(
             chainlinkFactory,
-            abi.encodeWithSelector(IOracleFactory.createOracle.selector, ohm, usds, DEFAULT_ORACLE_MAX_AGE, ""),
+            abi.encodeWithSelector(
+                IOracleFactory.createOracle.selector,
+                ohm,
+                usds,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
             "Deploy OHM/USDS Chainlink oracle"
         );
 
         _pushAction(
             morphoFactory,
-            abi.encodeWithSelector(IOracleFactory.createOracle.selector, ohm, usds, DEFAULT_ORACLE_MAX_AGE, ""),
+            abi.encodeWithSelector(
+                IOracleFactory.createOracle.selector,
+                ohm,
+                usds,
+                DEFAULT_ORACLE_MAX_AGE,
+                ""
+            ),
             "Deploy OHM/USDS Morpho oracle"
         );
     }
@@ -234,7 +271,8 @@ contract OracleProposal is GovernorBravoProposal {
     ///      These mocks are cleared immediately after simulation and do not affect the calldata
     ///      submitted to governance.
     function _mockPriceFeedsAtTimelockExecution(Addresses addresses) internal {
-        uint256 executionTimestamp = block.timestamp + ITimelock(addresses.getAddress("olympus-timelock")).delay();
+        uint256 executionTimestamp = block.timestamp +
+            ITimelock(addresses.getAddress("olympus-timelock")).delay();
 
         _mockChainlinkFeedAt(CHAINLINK_BTC_USD, executionTimestamp);
         _mockChainlinkFeedAt(CHAINLINK_DAI_USD, executionTimestamp);
@@ -248,7 +286,8 @@ contract OracleProposal is GovernorBravoProposal {
     }
 
     function _mockChainlinkFeedAt(address feed_, uint256 updatedAt_) internal {
-        (uint80 roundId, int256 answer,,, uint80 answeredInRound) = AggregatorV2V3Interface(feed_).latestRoundData();
+        (uint80 roundId, int256 answer, , , uint80 answeredInRound) = AggregatorV2V3Interface(feed_)
+            .latestRoundData();
 
         vm.mockCall(
             feed_,
@@ -265,7 +304,9 @@ contract OracleProposal is GovernorBravoProposal {
         address ohm = addresses.getAddress("olympus-legacy-ohm");
         address usds = addresses.getAddress("external-tokens-usds");
 
-        address chainlinkFactory = addresses.getAddress("olympus-policy-chainlink-oracle-factory-1_0");
+        address chainlinkFactory = addresses.getAddress(
+            "olympus-policy-chainlink-oracle-factory-1_0"
+        );
         address morphoFactory = addresses.getAddress("olympus-policy-morpho-oracle-factory-1_0");
         address erc7726Factory = addresses.getAddress("olympus-policy-erc7726-oracle-factory-1_0");
         address priceCache = addresses.getAddress("olympus-policy-price-cache-1_0");
@@ -278,8 +319,14 @@ contract OracleProposal is GovernorBravoProposal {
         require(roles.hasRole(timelock, ADMIN_ROLE), "Timelock does not have admin role");
 
         // Verify oracle_manager role granted
-        require(roles.hasRole(daoMS, ORACLE_MANAGER_ROLE), "DAO MS does not have oracle_manager role");
-        require(roles.hasRole(timelock, ORACLE_MANAGER_ROLE), "Timelock does not have oracle_manager role");
+        require(
+            roles.hasRole(daoMS, ORACLE_MANAGER_ROLE),
+            "DAO MS does not have oracle_manager role"
+        );
+        require(
+            roles.hasRole(timelock, ORACLE_MANAGER_ROLE),
+            "Timelock does not have oracle_manager role"
+        );
 
         // Verify price cache and oracle policies are enabled
         require(IEnabler(priceCache).isEnabled(), "PriceCache not enabled");
@@ -288,32 +335,55 @@ contract OracleProposal is GovernorBravoProposal {
         require(IEnabler(morphoFactory).isEnabled(), "MorphoOracleFactory not enabled");
 
         // Verify oracles were deployed
-        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(DEFAULT_ORACLE_MAX_AGE);
+        address erc7726Oracle = IERC7726OracleFactory(erc7726Factory).getOracle(
+            DEFAULT_ORACLE_MAX_AGE
+        );
         require(erc7726Oracle != address(0), "ERC7726 oracle not deployed");
-        require(IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle), "ERC7726 oracle not enabled");
-
-        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(ohm, usds, DEFAULT_ORACLE_MAX_AGE);
-        require(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
         require(
-            IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle), "OHM/USDS Chainlink oracle not enabled"
+            IERC7726OracleFactory(erc7726Factory).isOracleEnabled(erc7726Oracle),
+            "ERC7726 oracle not enabled"
         );
 
-        address morphoOracle = IOracleFactory(morphoFactory).getOracle(ohm, usds, DEFAULT_ORACLE_MAX_AGE);
+        address chainlinkOracle = IOracleFactory(chainlinkFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
+        require(chainlinkOracle != address(0), "OHM/USDS Chainlink oracle not deployed");
+        require(
+            IOracleFactory(chainlinkFactory).isOracleEnabled(chainlinkOracle),
+            "OHM/USDS Chainlink oracle not enabled"
+        );
+
+        address morphoOracle = IOracleFactory(morphoFactory).getOracle(
+            ohm,
+            usds,
+            DEFAULT_ORACLE_MAX_AGE
+        );
         require(morphoOracle != address(0), "OHM/USDS Morpho oracle not deployed");
-        require(IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle), "OHM/USDS Morpho oracle not enabled");
+        require(
+            IOracleFactory(morphoFactory).isOracleEnabled(morphoOracle),
+            "OHM/USDS Morpho oracle not enabled"
+        );
     }
 
-    function _verifyFactoryConfiguration(address factory_, string memory name_, bool isERC7726_, address priceCache_)
-        internal
-        view
-    {
+    function _verifyFactoryConfiguration(
+        address factory_,
+        string memory name_,
+        bool isERC7726_,
+        address priceCache_
+    ) internal view {
         require(factory_.code.length != 0, string.concat(name_, " not deployed"));
-        require(address(Policy(factory_).kernel()) == address(_kernel), string.concat(name_, " wrong kernel"));
+        require(
+            address(Policy(factory_).kernel()) == address(_kernel),
+            string.concat(name_, " wrong kernel")
+        );
         require(_kernel.isPolicyActive(Policy(factory_)), string.concat(name_, " not activated"));
 
         address expectedSource = priceCache_;
-        address factorySource =
-            isERC7726_ ? IERC7726OracleFactory(factory_).getPriceCache() : IOracleFactory(factory_).getPriceCache();
+        address factorySource = isERC7726_
+            ? IERC7726OracleFactory(factory_).getPriceCache()
+            : IOracleFactory(factory_).getPriceCache();
 
         require(factorySource == expectedSource, string.concat(name_, " wrong price cache"));
     }
