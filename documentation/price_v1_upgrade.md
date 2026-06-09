@@ -69,11 +69,11 @@ Modify PriceConfigv2 to be enabled by default, and DAO MS has `price_admin` role
 
 ```bash
 ./shell/deployV3.sh \
-    --account \
-    src/scripts/deploy/savedDeployments/price_v1_2_deploy.json \
+    --account <wallet> \
+    --sequence src/scripts/deploy/savedDeployments/price_v1_2_deploy.json \
     --chain mainnet \
     --broadcast true \
-    --verify true < wallet > --sequence
+    --verify true
 ```
 
 This deploys:
