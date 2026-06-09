@@ -79,10 +79,10 @@ contract OlympusPricev1_2ForkTest is Test {
     // Price validation bounds (18 decimals) - from production config
     uint256 internal constant USDS_MIN_PRICE = 0.99e18;
     uint256 internal constant USDS_MAX_PRICE = 1.01e18;
-    uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
-    uint256 internal constant SUSDS_MAX_PRICE = 1.1e18;
-    uint256 internal constant ETH_MIN_PRICE = 1500e18;
-    uint256 internal constant ETH_MAX_PRICE = 2100e18;
+    uint256 internal constant SUSDS_MIN_PRICE = 1.09e18;
+    uint256 internal constant SUSDS_MAX_PRICE = 1.11e18;
+    uint256 internal constant ETH_MIN_PRICE = 1650e18;
+    uint256 internal constant ETH_MAX_PRICE = 1700e18;
     uint256 internal constant OHM_MIN_PRICE = 16.50e18;
     uint256 internal constant OHM_MAX_PRICE = 17.00e18;
     uint256 internal constant BPS_MAX = 10_000;
