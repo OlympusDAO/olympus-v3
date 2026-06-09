@@ -56,7 +56,6 @@ Modify PriceConfigv2 to be enabled by default, and DAO MS has `price_admin` role
 
 - `OlympusPricev1_2` - PRICE v1.2 module
 - `ChainlinkPriceFeeds` - Chainlink price feed submodule
-- `PythPriceFeeds` - Pyth price feed submodule
 - `UniswapV3Price` - Uniswap V3 price submodule
 - `ERC4626Price` - ERC4626 price submodule
 - `SimplePriceFeedStrategy` - Price strategy submodule
@@ -70,24 +69,24 @@ Modify PriceConfigv2 to be enabled by default, and DAO MS has `price_admin` role
 
 ```bash
 ./shell/deployV3.sh \
-  --account <wallet> \
-  --sequence src/scripts/deploy/savedDeployments/price_v1_2_deploy.json \
-  --chain mainnet \
-  --broadcast true \
-  --verify true
+    --account <wallet> \
+    --sequence src/scripts/deploy/savedDeployments/price_v1_2_deploy.json \
+    --chain mainnet \
+    --broadcast true \
+    --verify true
 ```
 
 This deploys:
 
 1. PRICE v1.2 module (`OlympusPricev1_2`)
-2. 5 submodules (ChainlinkPriceFeeds, PythPriceFeeds, UniswapV3Price, ERC4626Price, SimplePriceFeedStrategy)
+2. 4 submodules (ChainlinkPriceFeeds, UniswapV3Price, ERC4626Price, SimplePriceFeedStrategy)
 3. PriceConfigv2 policy (auto-enabled on installation)
 
 ### 3. MS Batch Script for PRICE Configuration
 
 **Batch script:** `src/scripts/ops/batches/ConfigurePriceV1_2.sol`
 
-This batch installs all 5 submodules and configures 4 assets (USDS, sUSDS, wETH, OHM) in a single transaction.
+This batch installs all 4 required submodules and configures 4 assets (USDS, sUSDS, wETH, OHM) in a single transaction.
 
 Create an args file with price feed addresses (JSON format with `.functions[].name` and `.functions[].args` structure).
 
@@ -103,10 +102,10 @@ Create an args file with price feed addresses (JSON format with `.functions[].na
 
 **Batch actions:**
 
-1. Install 5 submodules via `PriceConfigv2.installSubmodule()`
-2. Configure USDS (Chainlink USDS-USD + Chainlink DAI-USD + Pyth feeds, deviation-based strategy)
+1. Install 4 submodules via `PriceConfigv2.installSubmodule()`
+2. Configure USDS (Chainlink USDS-USD + Chainlink DAI-USD + API3 USDS-USD, deviation-based strategy)
 3. Configure sUSDS (ERC4626 wrapper, uses USDS price)
-4. Configure wETH (Chainlink + RedStone + Pyth feeds, deviation-based strategy)
+4. Configure wETH (Chainlink ETH-USD + RedStone ETH-USD + API3 ETH-USD + Chainlink ETH-BTC × BTC-USD, deviation-based strategy)
 5. Configure OHM (2x Uniswap V3 feeds + Chainlink OHM-ETH × ETH-USD, deviation-filtered average strategy, migrated 30-day moving average)
 
 **Automatic validation:** The batch script simulates a full 24-hour Heart cycle (3 beats) to validate PRICE configuration before proposing the batch.
@@ -139,14 +138,14 @@ No OCG approval required — only `price_admin` role.
 
 ## File Reference
 
-| File | Purpose |
-| ---- | ------- |
-| `shell/deployV3.sh` | Deployment shell script |
-| `src/scripts/deploy/DeployV3.s.sol` | Deployment script |
-| `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence |
-| `shell/safeBatchV2.sh` | Batch execution shell script |
-| `src/scripts/ops/batches/ConfigurePriceV1_2.sol` | PRICE configuration batch |
-| `src/policies/price/PriceConfig.v2.sol` | Configuration policy |
-| `src/modules/PRICE/OlympusPrice.v1_2.sol` | PRICE v1.2 module |
+| File                                                         | Purpose                      |
+| ------------------------------------------------------------ | ---------------------------- |
+| `shell/deployV3.sh`                                          | Deployment shell script      |
+| `src/scripts/deploy/DeployV3.s.sol`                          | Deployment script            |
+| `src/scripts/deploy/savedDeployments/price_v1_2_deploy.json` | Deployment sequence          |
+| `shell/safeBatchV2.sh`                                       | Batch execution shell script |
+| `src/scripts/ops/batches/ConfigurePriceV1_2.sol`             | PRICE configuration batch    |
+| `src/policies/price/PriceConfig.v2.sol`                      | Configuration policy         |
+| `src/modules/PRICE/OlympusPrice.v1_2.sol`                    | PRICE v1.2 module            |
 
 For oracle-related files, see **[Oracle Factories and Policies](oracle_factories.md)**.

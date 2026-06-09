@@ -16,7 +16,6 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 
 // PRICE Submodules
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
@@ -47,9 +46,8 @@ import {Deviation} from "src/libraries/Deviation.sol";
 contract OracleProposalTest is ProposalTest {
     Kernel public kernel;
 
-    // Block to fork from (after DAO MS deployment, before OCG proposal)
-    // TODO: Update to the block after the DAO MS deployment
-    uint48 public constant FORK_BLOCK = 24413007 + 1;
+    // Block to fork from after the API3 USDS/USD deployment.
+    uint48 public constant FORK_BLOCK = 25279717 + 1;
 
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
     uint16 internal constant BPS_MAX = 10_000;
@@ -150,7 +148,6 @@ contract OracleProposalTest is ProposalTest {
 
         // 2. Deploy PRICE submodules
         _deployChainlinkPriceFeedsIfNeeded(priceModule);
-        _deployPythPriceFeedsIfNeeded(priceModule);
         _deployUniswapV3PriceIfNeeded(priceModule);
         _deployErc4626PriceIfNeeded(priceModule);
         _deploySimplePriceFeedStrategyIfNeeded(priceModule);
@@ -205,20 +202,6 @@ contract OracleProposalTest is ProposalTest {
             addresses.addAddress(key, submodule);
         } else {
             console2.log("ChainlinkPriceFeeds already deployed");
-        }
-
-        vm.label(submodule, key);
-    }
-
-    function _deployPythPriceFeedsIfNeeded(address priceModule_) internal {
-        string memory key = "olympus-submodule-price-pyth-price-feeds-1_0";
-        address submodule = _safeGetAddress(key);
-        if (submodule == address(0)) {
-            console2.log("Deploying PythPriceFeeds");
-            submodule = address(new PythPriceFeeds(Module(priceModule_)));
-            addresses.addAddress(key, submodule);
-        } else {
-            console2.log("PythPriceFeeds already deployed");
         }
 
         vm.label(submodule, key);
@@ -395,7 +378,6 @@ contract OracleProposalTest is ProposalTest {
 
         // Install submodules (skip if already installed)
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-chainlink-price-feeds-1_0");
-        _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-pyth-price-feeds-1_0");
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-uniswap-v3-1_0");
         _installSubmoduleIfNeeded(priceConfig, "olympus-submodule-price-erc4626-1_0");
         _installSubmoduleIfNeeded(

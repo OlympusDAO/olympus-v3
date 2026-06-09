@@ -12,10 +12,6 @@
             "args": {}
         },
         {
-            "name": "PythPriceFeeds",
-            "args": {}
-        },
-        {
             "name": "UniswapV3Price",
             "args": {
                 "averageBlockTimeSeconds": 12

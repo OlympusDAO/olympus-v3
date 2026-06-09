@@ -23,7 +23,6 @@ import {toSubKeycode} from "src/Submodules.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {PriceConfigv2} from "src/policies/price/PriceConfig.v2.sol";
@@ -42,9 +41,9 @@ contract OlympusPricev1_2ForkTest is Test {
     using FullMath for uint256;
 
     // Constants
-    /// @dev Fork block after CD deployment, specified so that YRF and EM are at particular epochs
-    /// @dev YRF epoch 4, EM epoch 1
-    uint256 internal constant FORK_BLOCK = 24582000 + 1;
+    /// @dev Fork block after API3 USDS/USD deployment.
+    uint256 internal constant FORK_BLOCK = 25279717 + 1;
+
     address public constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
     address public constant KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
     address public constant HEART = 0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB;
@@ -55,7 +54,6 @@ contract OlympusPricev1_2ForkTest is Test {
         0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a;
     address public constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
     address public constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address public constant PYTH = 0x4305FB66699C3B2702D4d05CF36551390A4c69C6;
     address public constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
     address public constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
     address public constant SUSDS = 0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD;
@@ -66,31 +64,31 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant REDSTONE_ETH_USD = 0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4;
     address public constant CHAINLINK_USDS_USD = 0xfF30586cD0F29eD462364C7e81375FC0C71219b1;
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
+    address public constant API3_ETH_USD = 0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473;
+    address public constant API3_USDS_USD = 0x6C3C2A615Ea3c592487b3e06ecAF01D9a3181f47;
     address public constant UNISWAP_OHM_WETH = 0x88051B0eea095007D3bEf21aB287Be961f3d8598;
     address public constant UNISWAP_OHM_SUSDS = 0x0858e2B0F9D75f7300B38D64482aC2C8DF06a755;
     address public constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
-    uint256 internal constant OHM_USD_PRICE = 20e18;
-    bytes32 internal constant ETH_USD_FEED_ID =
-        0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
-    bytes32 internal constant PYTH_USDS_USD_FEED_ID =
-        0x77f0971af11cc8bac224917275c1bf55f2319ed5c654a1ca955c82fa2d297ea1;
+    uint256 internal constant OHM_USD_PRICE = 16.89e18;
+    uint256 internal constant CDA_MINIMUM_BID = 100e18;
+    uint256 internal constant CDA_INITIAL_TICK_SIZE_BASE = 2e18;
+    uint24 internal constant CDA_INITIAL_TICK_STEP_MULTIPLIER = 10075;
+    uint256 internal constant EM_TICK_SIZE = 150e9;
 
     // Price validation bounds (18 decimals) - from production config
     uint256 internal constant USDS_MIN_PRICE = 0.99e18;
     uint256 internal constant USDS_MAX_PRICE = 1.01e18;
-    uint256 internal constant SUSDS_MIN_PRICE = 1.06e18;
-    uint256 internal constant SUSDS_MAX_PRICE = 1.10e18;
-    uint256 internal constant ETH_MIN_PRICE = 1500e18;
-    uint256 internal constant ETH_MAX_PRICE = 2100e18;
-    uint256 internal constant OHM_MIN_PRICE = 17e18;
-    uint256 internal constant OHM_MAX_PRICE = 22e18;
+    uint256 internal constant SUSDS_MIN_PRICE = 1.09e18;
+    uint256 internal constant SUSDS_MAX_PRICE = 1.11e18;
+    uint256 internal constant ETH_MIN_PRICE = 1650e18;
+    uint256 internal constant ETH_MAX_PRICE = 1700e18;
+    uint256 internal constant OHM_MIN_PRICE = 16.50e18;
+    uint256 internal constant OHM_MAX_PRICE = 17.00e18;
     uint256 internal constant BPS_MAX = 10_000;
     uint256 internal constant WETH_DEVIATION_BPS = 500; // 5% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
     uint256 internal constant OHM_DEVIATION_BPS = 200; // 2% deviation
-    uint256 internal constant PYTH_ETH_USD_MAX_CONFIDENCE = 10e18;
-    uint256 internal constant PYTH_USDS_USD_MAX_CONFIDENCE = 0.1e18;
     uint48 internal constant WETH_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant WETH_ETH_BTC_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant WETH_BTC_USD_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
@@ -114,8 +112,8 @@ contract OlympusPricev1_2ForkTest is Test {
 
     // Submodules
     ChainlinkPriceFeeds public chainlinkPrice;
-    PythPriceFeeds public pythPrice;
     SimplePriceFeedStrategy public strategy;
+    AggregatorV2V3Interface internal _api3UsdsUsdFeed;
 
     // Permissioned addresses
     address public kernelExecutor;
@@ -149,6 +147,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
     function setUp() public {
         vm.createSelectFork("mainnet", FORK_BLOCK);
+        _labelMainnetAddresses();
 
         // Get system contracts
         kernel = Kernel(KERNEL);
@@ -162,10 +161,15 @@ contract OlympusPricev1_2ForkTest is Test {
         cdAuctioneer = ConvertibleDepositAuctioneer(CONVERTIBLE_DEPOSIT_AUCTIONEER);
         yrf = YieldRepurchaseFacility(YIELD_REPO);
 
-        // Ensure that the EmissionManager's bond market capacity scalar is set to 1e18 (100%)
-        // This is disabled (0) at the time of the fork
-        vm.prank(TIMELOCK);
+        // Restore CD/EM sizing from ConvertibleDepositActivator. The live fork has since been
+        // updated with higher values that prevent this test from reaching its target scenario.
+        vm.startPrank(TIMELOCK);
+        cdAuctioneer.setMinimumBid(CDA_MINIMUM_BID);
+        cdAuctioneer.setTickSizeBase(CDA_INITIAL_TICK_SIZE_BASE);
+        cdAuctioneer.setTickStep(CDA_INITIAL_TICK_STEP_MULTIPLIER);
+        emissionManager.setTickSize(EM_TICK_SIZE);
         emissionManager.setBondMarketCapacityScalar(1e18);
+        vm.stopPrank();
 
         // Get observation frequency from old PRICE module
         uint32 observationFrequency = uint32(oldPrice.observationFrequency());
@@ -181,7 +185,6 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // Deploy submodules
         chainlinkPrice = new ChainlinkPriceFeeds(price);
-        pythPrice = new PythPriceFeeds(price);
         UniswapV3Price uniswapV3Price = new UniswapV3Price(
             price,
             _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS,
@@ -189,6 +192,13 @@ contract OlympusPricev1_2ForkTest is Test {
         );
         ERC4626Price erc4626Price = new ERC4626Price(price);
         strategy = new SimplePriceFeedStrategy(price);
+
+        vm.label(address(price), "PRICE v1.2");
+        vm.label(address(priceConfig), "PriceConfig v2");
+        vm.label(address(chainlinkPrice), "ChainlinkPriceFeeds");
+        vm.label(address(uniswapV3Price), "UniswapV3Price");
+        vm.label(address(erc4626Price), "ERC4626Price");
+        vm.label(address(strategy), "SimplePriceFeedStrategy");
 
         // ========== SAME-BATCH PRICE v1.2 UPGRADE ==========
         // All operations happen in the same transaction (via kernelExecutor),
@@ -208,7 +218,6 @@ contract OlympusPricev1_2ForkTest is Test {
         // We assume that the DAO MS has the price_admin role
         vm.startPrank(DAO_MS);
         priceConfig.installSubmodule(address(chainlinkPrice));
-        priceConfig.installSubmodule(address(pythPrice));
         priceConfig.installSubmodule(address(uniswapV3Price));
         priceConfig.installSubmodule(address(erc4626Price));
         priceConfig.installSubmodule(address(strategy));
@@ -229,6 +238,36 @@ contract OlympusPricev1_2ForkTest is Test {
     }
 
     // ========== HELPER FUNCTIONS ========== //
+
+    function _labelMainnetAddresses() internal {
+        vm.label(OHM, "OHM");
+        vm.label(WETH, "WETH");
+        vm.label(USDS, "USDS");
+        vm.label(SUSDS, "sUSDS");
+
+        vm.label(KERNEL, "Kernel");
+        vm.label(HEART, "Heart");
+        vm.label(ROLES_ADMIN, "RolesAdmin");
+        vm.label(EMISSION_MANAGER, "EmissionManager");
+        vm.label(YIELD_REPO, "YieldRepurchaseFacility");
+        vm.label(CONVERTIBLE_DEPOSIT_AUCTIONEER, "ConvertibleDepositAuctioneer");
+        vm.label(TIMELOCK, "Timelock");
+        vm.label(DAO_MS, "DAO MS");
+
+        vm.label(CHAINLINK_ETH_USD, "Chainlink ETH/USD");
+        vm.label(CHAINLINK_BTC_USD, "Chainlink BTC/USD");
+        vm.label(CHAINLINK_ETH_BTC, "Chainlink ETH/BTC");
+        vm.label(CHAINLINK_OHM_ETH, "Chainlink OHM/ETH");
+        vm.label(CHAINLINK_USDS_USD, "Chainlink USDS/USD");
+        vm.label(CHAINLINK_DAI_USD, "Chainlink DAI/USD");
+        vm.label(REDSTONE_ETH_USD, "Redstone ETH/USD");
+        vm.label(API3_ETH_USD, "API3 ETH/USD");
+        vm.label(API3_USDS_USD, "API3 USDS/USD");
+
+        vm.label(UNISWAP_OHM_WETH, "Uniswap V3 OHM/WETH");
+        vm.label(UNISWAP_OHM_SUSDS, "Uniswap V3 OHM/sUSDS");
+        vm.label(UNISWAP_V3_FACTORY, "Uniswap V3 Factory");
+    }
 
     function _configureOhmAsset() internal {
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
@@ -358,7 +397,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
     function _configureWethAsset() internal {
         // Configure WETH with production configuration: 4 feeds with deviation strategy
-        // Feeds: Chainlink ETH/USD, RedStone ETH/USD (via Chainlink interface), Pyth ETH/USD, Derived ETH/BTC×BTC/USD
+        // Feeds: Chainlink ETH/USD, RedStone ETH/USD, API3 ETH/USD, Derived ETH/BTC×BTC/USD
 
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
@@ -397,17 +436,13 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(redstoneEthUsdParams)
         );
 
-        // Feed 2: Pyth ETH/USD
-        PythPriceFeeds.OneFeedParams memory pythEthUsdParams = PythPriceFeeds.OneFeedParams(
-            PYTH,
-            ETH_USD_FEED_ID,
-            WETH_UPDATE_THRESHOLD,
-            PYTH_ETH_USD_MAX_CONFIDENCE
-        );
+        // Feed 2: API3 ETH/USD (uses Chainlink interface)
+        ChainlinkPriceFeeds.OneFeedParams memory api3EthUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(API3_ETH_USD), WETH_UPDATE_THRESHOLD);
         feeds[2] = IPRICEv2.Component(
-            toSubKeycode("PRICE.PYTH"),
-            PythPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(pythEthUsdParams)
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(api3EthUsdParams)
         );
 
         // Feed 3: Derived ETH-USD from ETH-BTC × BTC-USD
@@ -443,7 +478,7 @@ contract OlympusPricev1_2ForkTest is Test {
 
     function _configureUsdsAsset() internal {
         // Configure USDS with production configuration: 3 feeds with deviation strategy
-        // Feeds: Chainlink USDS/USD, Chainlink DAI/USD, Pyth USDS/USD
+        // Feeds: Chainlink USDS/USD, Chainlink DAI/USD, API3 USDS/USD
 
         vm.startPrank(DAO_MS); // DAO_MS has price_admin permissions
 
@@ -481,17 +516,13 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encode(chainlinkDaiUsdParams)
         );
 
-        // Feed 2: Pyth USDS/USD
-        PythPriceFeeds.OneFeedParams memory pythUsdsUsdParams = PythPriceFeeds.OneFeedParams(
-            PYTH,
-            PYTH_USDS_USD_FEED_ID,
-            USDS_UPDATE_THRESHOLD,
-            PYTH_USDS_USD_MAX_CONFIDENCE
-        );
+        // Feed 2: API3 USDS/USD (uses Chainlink interface).
+        ChainlinkPriceFeeds.OneFeedParams memory api3UsdsUsdParams = ChainlinkPriceFeeds
+            .OneFeedParams(AggregatorV2V3Interface(API3_USDS_USD), USDS_UPDATE_THRESHOLD);
         feeds[2] = IPRICEv2.Component(
-            toSubKeycode("PRICE.PYTH"),
-            PythPriceFeeds.getOneFeedPrice.selector,
-            abi.encode(pythUsdsUsdParams)
+            toSubKeycode("PRICE.CHAINLINK"),
+            ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            abi.encode(api3UsdsUsdParams)
         );
 
         // Add USDS asset via PriceConfig
@@ -838,12 +869,13 @@ contract OlympusPricev1_2ForkTest is Test {
         warpToNextHeartbeat
     {
         uint256 expectedInitialPrice = 24e36; // Bond market scaling
-        uint256 expectedMarketId = 730 + 1;
+        uint256 activeMarketIdBefore = emissionManager.activeMarketId();
 
-        // Expect event
-        vm.expectEmit(true, true, true, true);
+        // Ignore the market ID, as it depends on the number of bond markets created on
+        // mainnet before the fork block. The token pair and initial price are deterministic.
+        vm.expectEmit(false, true, true, true);
         emit MarketCreated(
-            expectedMarketId,
+            0,
             address(OHM),
             address(emissionManager.reserve()),
             uint48(0),
@@ -857,10 +889,10 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.stopSnapshotGas();
 
         // Verify
-        assertEq(
+        assertGt(
             emissionManager.activeMarketId(),
-            expectedMarketId,
-            "Active market ID should be the expected market ID"
+            activeMarketIdBefore,
+            "Active market ID should increase"
         );
     }
 
@@ -880,7 +912,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // = 42955326460481099
         // Adjusted by 1e17 for bond market scaling
         uint256 expectedInitialPrice = 42955326460481099 * 1e17;
-        uint256 expectedMarketId = 728 + 1;
+        uint256 expectedMarketId = 825 + 1;
 
         // Expect event
         vm.expectEmit(true, true, true, true);
