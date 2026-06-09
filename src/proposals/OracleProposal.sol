@@ -36,7 +36,7 @@ contract OracleProposal is GovernorBravoProposal {
     address internal constant CHAINLINK_OHM_ETH = 0x9a72298ae3886221820B1c878d12D872087D3a23;
     address internal constant CHAINLINK_USDS_USD = 0xfF30586cD0F29eD462364C7e81375FC0C71219b1;
     address internal constant API3_ETH_USD = 0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473;
-    address internal constant API3_USDS_USD = address(0);
+    address internal constant API3_USDS_USD = 0x6C3C2A615Ea3c592487b3e06ecAF01D9a3181f47;
     address internal constant REDSTONE_ETH_USD = 0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4;
 
     // Returns the id of the proposal.
@@ -243,9 +243,7 @@ contract OracleProposal is GovernorBravoProposal {
         _mockChainlinkFeedAt(CHAINLINK_OHM_ETH, executionTimestamp);
         _mockChainlinkFeedAt(CHAINLINK_USDS_USD, executionTimestamp);
         _mockChainlinkFeedAt(API3_ETH_USD, executionTimestamp);
-        if (API3_USDS_USD != address(0)) {
-            _mockChainlinkFeedAt(API3_USDS_USD, executionTimestamp);
-        }
+        _mockChainlinkFeedAt(API3_USDS_USD, executionTimestamp);
         _mockChainlinkFeedAt(REDSTONE_ETH_USD, executionTimestamp);
     }
 

@@ -4,7 +4,7 @@
             "args": {
                 "api3EthUsd": "0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473",
                 "api3EthUsdUpdateThreshold": 90000,
-                "api3UsdsUsd": "0x0000000000000000000000000000000000000000",
+                "api3UsdsUsd": "0x6C3C2A615Ea3c592487b3e06ecAF01D9a3181f47",
                 "api3UsdsUsdUpdateThreshold": 90000,
                 "chainlinkBtcUsd": "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c",
                 "chainlinkBtcUsdUpdateThreshold": 3600,
@@ -18,7 +18,7 @@
                 "chainlinkUsdsUsd": "0xfF30586cD0F29eD462364C7e81375FC0C71219b1",
                 "chainlinkUsdsUsdUpdateThreshold": 86400,
                 "ohmDeviationBps": 200,
-                "ohmExpectedPrice": "19500000000000000000",
+                "ohmExpectedPrice": "16890000000000000000",
                 "ohmExpectedToleranceBps": 500,
                 "ohmRevertOnInsufficientPriceFeeds": true,
                 "redstoneEthUsd": "0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4",

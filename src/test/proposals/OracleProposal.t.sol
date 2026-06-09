@@ -46,9 +46,8 @@ import {Deviation} from "src/libraries/Deviation.sol";
 contract OracleProposalTest is ProposalTest {
     Kernel public kernel;
 
-    // Block to fork from (after DAO MS deployment, before OCG proposal)
-    // TODO: Update to the block after the DAO MS deployment
-    uint48 public constant FORK_BLOCK = 24413007 + 1;
+    // Block to fork from after the API3 USDS/USD deployment.
+    uint48 public constant FORK_BLOCK = 25279717 + 1;
 
     uint48 internal constant DEFAULT_ORACLE_MAX_AGE = 1 hours;
     uint16 internal constant BPS_MAX = 10_000;
