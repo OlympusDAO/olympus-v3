@@ -1340,12 +1340,12 @@ contract OlympusPricev1_2ForkTest is Test {
         // = 42955326460481099
         // Adjusted by 1e17 for bond market scaling
         uint256 expectedInitialPrice = 42955326460481099 * 1e17;
-        uint256 expectedMarketId = 825 + 1;
 
-        // Expect event
-        vm.expectEmit(true, true, true, true);
+        // Ignore the market ID, as it depends on the number of bond markets created on
+        // mainnet before the fork block. The token pair and initial price are deterministic.
+        vm.expectEmit(false, true, true, true);
         emit MarketCreated(
-            expectedMarketId,
+            0,
             address(emissionManager.reserve()),
             address(OHM),
             uint48(0),
