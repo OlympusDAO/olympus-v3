@@ -16,6 +16,7 @@ import {ISimplePriceFeedStrategy} from "src/modules/PRICE/submodules/strategies/
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
+import {Strings} from "@openzeppelin-4.8.0/utils/Strings.sol";
 
 // Bophades
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -35,7 +36,9 @@ import {ConvertibleDepositAuctioneer} from "src/policies/deposits/ConvertibleDep
 
 import {UniswapV3Price} from "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol";
 import {ERC4626Price} from "src/modules/PRICE/submodules/feeds/ERC4626Price.sol";
-import {IUniswapV3Pool} from "@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol";
+import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
+import {TickMath} from "@uniswap-v3-core-1.0.1/libraries/TickMath.sol";
+import {OracleLibrary} from "@uniswap-v3-periphery-1.4.2/libraries/OracleLibrary.sol";
 
 contract OlympusPricev1_2ForkTest is Test {
     using FullMath for uint256;
@@ -98,6 +101,12 @@ contract OlympusPricev1_2ForkTest is Test {
     uint32 internal constant OHM_WETH_OBSERVATION_WINDOW = 1500;
     uint32 internal constant OHM_SUSDS_OBSERVATION_WINDOW = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
+    int24 internal constant OHM_SUSDS_LOWER_RANGE_TICK = 234360;
+    uint128 internal constant OHM_BASE_AMOUNT = 1e9;
+    uint256 internal constant OHM_SUSDS_TICK_WORD_SEARCH_LIMIT = 64;
+    uint8 internal constant PRICE_LOG_DECIMALS = 6;
+    uint8 internal constant WETH_DECIMALS = 18;
+    uint8 internal constant SUSDS_DECIMALS = 18;
 
     // System contracts
     Kernel public kernel;
@@ -125,6 +134,25 @@ contract OlympusPricev1_2ForkTest is Test {
         uint48 vesting,
         uint256 initialPrice
     );
+
+    error UnsupportedOhmQuoteToken(address quoteToken_);
+    error InitializedTickRangeNotFound(address pool_, int24 tick_);
+
+    struct OhmDownsideLogData {
+        string scenario;
+        uint256 targetOhmUsdPrice;
+        uint256 wethUsdPrice;
+        uint256 susdsUsdPrice;
+        uint256 chainlinkEthUsdPrice;
+        uint256 ohmWethUsdPrice;
+        uint256 ohmSusdsUsdPrice;
+        uint256 chainlinkOhmUsdPrice;
+        uint256 expectedPrice;
+        uint256 resolvedPrice;
+        int24 ohmSusdsLockedTick;
+        int24 ohmSusdsLiquidityLowerTick;
+        int24 ohmSusdsLiquidityUpperTick;
+    }
 
     function _makeFeedExpectations(
         uint256 length_,
@@ -592,18 +620,22 @@ contract OlympusPricev1_2ForkTest is Test {
     function test_priceValidation_assetPricesAreSane() public view {
         // Validate USDS price (uses real feeds)
         uint256 usdsPrice = price.getPrice(USDS);
+        _logPrice("USDS/USD", usdsPrice);
         _assertPriceInRange(usdsPrice, USDS_MIN_PRICE, USDS_MAX_PRICE, "USDS");
 
         // Validate sUSDS price (uses ERC4626 submodule)
         uint256 susdsPrice = price.getPrice(SUSDS);
+        _logPrice("sUSDS/USD", susdsPrice);
         _assertPriceInRange(susdsPrice, SUSDS_MIN_PRICE, SUSDS_MAX_PRICE, "sUSDS");
 
         // Validate WETH price (uses real feeds)
         uint256 wethPrice = price.getPrice(WETH);
+        _logPrice("WETH/USD", wethPrice);
         _assertPriceInRange(wethPrice, ETH_MIN_PRICE, ETH_MAX_PRICE, "WETH");
 
         // Validate OHM price (uses Uniswap V3 TWAP feeds)
         uint256 ohmPrice = price.getPrice(OHM);
+        _logPrice("OHM/USD", ohmPrice);
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 
@@ -650,7 +682,403 @@ contract OlympusPricev1_2ForkTest is Test {
         // prices[2] = 30e18 (18 decimals)
         // Median benchmark is 20.5e18. With a 2% threshold, 30e18 deviates and is excluded.
         // Expected: (20.2e18 + 20.5e18) / 2 = 20.35e18.
+        _logPrice("Strategy input price 0", prices[0]);
+        _logPrice("Strategy input price 1", prices[1]);
+        _logPrice("Strategy outlier price", prices[2]);
+        _logPrice("Strategy resolved price", resolvedPrice);
         assertEq(resolvedPrice, 2035e16, "OHM strategy should exclude the outlier");
+    }
+
+    function test_priceValidation_ohmSusdsLowerRangeStillContributesAt1630() public {
+        OhmDownsideLogData memory logData;
+        logData.scenario = "OHM at 16.30";
+        logData.targetOhmUsdPrice = 16.30e18;
+        logData.wethUsdPrice = price.getPrice(WETH);
+        logData.susdsUsdPrice = price.getPrice(SUSDS);
+        logData.chainlinkEthUsdPrice = _getChainlinkEthUsdPrice();
+        logData.ohmSusdsLockedTick = OHM_SUSDS_LOWER_RANGE_TICK;
+
+        IUniswapV3Pool ohmWethPool = IUniswapV3Pool(UNISWAP_OHM_WETH);
+        IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(UNISWAP_OHM_SUSDS);
+        (
+            logData.ohmSusdsLiquidityLowerTick,
+            logData.ohmSusdsLiquidityUpperTick
+        ) = _getInitializedTickRange(ohmSusdsPool, logData.ohmSusdsLockedTick);
+        int24 ohmWethTick = _getTwapTickForOhmUsdPrice(
+            ohmWethPool,
+            logData.targetOhmUsdPrice,
+            logData.wethUsdPrice
+        );
+
+        _mockUniswapTwap(ohmWethPool, OHM_WETH_OBSERVATION_WINDOW, ohmWethTick);
+        _mockUniswapTwap(ohmSusdsPool, OHM_SUSDS_OBSERVATION_WINDOW, logData.ohmSusdsLockedTick);
+        _assertPoolTick(ohmSusdsPool, logData.ohmSusdsLockedTick);
+        logData.chainlinkOhmUsdPrice = _mockChainlinkOhmEthPrice(logData.targetOhmUsdPrice);
+
+        logData.ohmWethUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethPool,
+            ohmWethTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmSusdsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmSusdsPool,
+            logData.ohmSusdsLockedTick,
+            logData.susdsUsdPrice
+        );
+
+        // At $16.30, the OHM/sUSDS lower range price is still within the 2% deviation threshold,
+        // so all three OHM feeds remain in the resolved average.
+        logData.expectedPrice =
+            (logData.ohmWethUsdPrice + logData.ohmSusdsUsdPrice + logData.chainlinkOhmUsdPrice) /
+            3;
+        logData.resolvedPrice = price.getPrice(OHM);
+        _logOhmDownsideFeedPrices(logData);
+        assertEq(
+            logData.resolvedPrice,
+            logData.expectedPrice,
+            "OHM/sUSDS lower range should contribute"
+        );
+
+        vm.clearMockedCalls();
+    }
+
+    function test_priceValidation_ohmSusdsLowerRangeExcludedAfterFurtherDrop() public {
+        OhmDownsideLogData memory logData;
+        logData.scenario = "OHM below lower range";
+        logData.targetOhmUsdPrice = 16e18;
+        logData.wethUsdPrice = price.getPrice(WETH);
+        logData.susdsUsdPrice = price.getPrice(SUSDS);
+        logData.chainlinkEthUsdPrice = _getChainlinkEthUsdPrice();
+        logData.ohmSusdsLockedTick = OHM_SUSDS_LOWER_RANGE_TICK;
+
+        IUniswapV3Pool ohmWethPool = IUniswapV3Pool(UNISWAP_OHM_WETH);
+        IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(UNISWAP_OHM_SUSDS);
+        (
+            logData.ohmSusdsLiquidityLowerTick,
+            logData.ohmSusdsLiquidityUpperTick
+        ) = _getInitializedTickRange(ohmSusdsPool, logData.ohmSusdsLockedTick);
+        int24 ohmWethTick = _getTwapTickForOhmUsdPrice(
+            ohmWethPool,
+            logData.targetOhmUsdPrice,
+            logData.wethUsdPrice
+        );
+
+        _mockUniswapTwap(ohmWethPool, OHM_WETH_OBSERVATION_WINDOW, ohmWethTick);
+        _mockUniswapTwap(ohmSusdsPool, OHM_SUSDS_OBSERVATION_WINDOW, logData.ohmSusdsLockedTick);
+        _assertPoolTick(ohmSusdsPool, logData.ohmSusdsLockedTick);
+        logData.chainlinkOhmUsdPrice = _mockChainlinkOhmEthPrice(logData.targetOhmUsdPrice);
+
+        logData.ohmWethUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethPool,
+            ohmWethTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmSusdsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmSusdsPool,
+            logData.ohmSusdsLockedTick,
+            logData.susdsUsdPrice
+        );
+
+        // The OHM/sUSDS lower range price is now more than 2% above the other feeds, so it is
+        // excluded and PRICE resolves OHM from OHM/WETH plus Chainlink OHM/ETH x ETH/USD.
+        uint256 maxAllowedDeviation = logData.targetOhmUsdPrice.mulDiv(OHM_DEVIATION_BPS, BPS_MAX);
+        assertGt(
+            logData.ohmSusdsUsdPrice - logData.targetOhmUsdPrice,
+            maxAllowedDeviation,
+            "OHM/sUSDS lower range price should deviate"
+        );
+
+        logData.expectedPrice = (logData.ohmWethUsdPrice + logData.chainlinkOhmUsdPrice) / 2;
+        logData.resolvedPrice = price.getPrice(OHM);
+        _logOhmDownsideFeedPrices(logData);
+        assertEq(
+            logData.resolvedPrice,
+            logData.expectedPrice,
+            "OHM/sUSDS lower range should be excluded"
+        );
+
+        vm.clearMockedCalls();
+    }
+
+    function _logOhmDownsideFeedPrices(OhmDownsideLogData memory logData_) internal pure {
+        console2.log(logData_.scenario);
+        _logTick("OHM/sUSDS locked tick", logData_.ohmSusdsLockedTick);
+        _logTick("OHM/sUSDS liquidity lower tick", logData_.ohmSusdsLiquidityLowerTick);
+        _logTick("OHM/sUSDS liquidity upper tick", logData_.ohmSusdsLiquidityUpperTick);
+        _logPrice("target OHM/USD", logData_.targetOhmUsdPrice);
+        _logPrice("PRICE WETH/USD", logData_.wethUsdPrice);
+        _logPrice("PRICE sUSDS/USD", logData_.susdsUsdPrice);
+        _logPrice("Chainlink ETH/USD", logData_.chainlinkEthUsdPrice);
+        _logPrice("OHM/WETH OHM/USD", logData_.ohmWethUsdPrice);
+        _logPrice("OHM/sUSDS OHM/USD", logData_.ohmSusdsUsdPrice);
+        _logPrice("Chainlink OHM/ETH x ETH/USD", logData_.chainlinkOhmUsdPrice);
+        _logPrice("expected PRICE OHM/USD", logData_.expectedPrice);
+        _logPrice("resolved PRICE OHM/USD", logData_.resolvedPrice);
+    }
+
+    function _logPrice(string memory label_, uint256 price_) internal pure {
+        console2.log(label_, _formatPrice(price_, PRICE_LOG_DECIMALS));
+    }
+
+    function _logTick(string memory label_, int24 tick_) internal pure {
+        console2.log(label_, _formatTick(tick_));
+    }
+
+    function _formatPrice(
+        uint256 price_,
+        uint8 decimalPlaces_
+    ) internal pure returns (string memory) {
+        uint256 scale = 1e18;
+        uint256 whole = price_ / scale;
+        uint256 fraction = (price_ % scale) / (10 ** (18 - decimalPlaces_));
+
+        return
+            string.concat(Strings.toString(whole), ".", _formatFraction(fraction, decimalPlaces_));
+    }
+
+    function _formatFraction(
+        uint256 fraction_,
+        uint8 decimalPlaces_
+    ) internal pure returns (string memory) {
+        bytes memory buffer = new bytes(decimalPlaces_);
+        uint256 value = fraction_;
+
+        for (uint256 i = decimalPlaces_; i > 0; i--) {
+            buffer[i - 1] = bytes1(uint8(48 + (value % 10)));
+            value /= 10;
+        }
+
+        return string(buffer);
+    }
+
+    function _formatTick(int24 tick_) internal pure returns (string memory) {
+        int256 tick = int256(tick_);
+        uint256 absTick = tick < 0 ? uint256(-tick) : uint256(tick);
+
+        return tick < 0 ? string.concat("-", Strings.toString(absTick)) : Strings.toString(absTick);
+    }
+
+    function _assertPoolTick(IUniswapV3Pool pool_, int24 expectedTick_) internal view {
+        (, int24 tick, , , , , ) = pool_.slot0();
+        assertEq(tick, expectedTick_, "Pool tick should be locked");
+    }
+
+    function _getInitializedTickRange(
+        IUniswapV3Pool pool_,
+        int24 tick_
+    ) internal view returns (int24 lowerTick_, int24 upperTick_) {
+        int24 tickSpacing = pool_.tickSpacing();
+        int24 compressedTick = tick_ / tickSpacing;
+        int24 lowerCompressedTick = _getPreviousInitializedCompressedTick(pool_, compressedTick);
+        int24 upperCompressedTick = _getNextInitializedCompressedTick(pool_, compressedTick + 1);
+
+        lowerTick_ = lowerCompressedTick * tickSpacing;
+        upperTick_ = upperCompressedTick * tickSpacing;
+    }
+
+    function _getPreviousInitializedCompressedTick(
+        IUniswapV3Pool pool_,
+        int24 compressedTick_
+    ) internal view returns (int24) {
+        int16 wordPosition;
+        uint8 bitPosition;
+        (wordPosition, bitPosition) = _getTickBitmapPosition(compressedTick_);
+
+        for (uint256 i; i <= OHM_SUSDS_TICK_WORD_SEARCH_LIMIT; i++) {
+            uint256 mask = bitPosition == 255
+                ? type(uint256).max
+                : (uint256(1) << (uint256(bitPosition) + 1)) - 1;
+            uint256 maskedBitmap = pool_.tickBitmap(wordPosition) & mask;
+
+            if (maskedBitmap != 0) {
+                for (uint256 bit = uint256(bitPosition) + 1; bit > 0; bit--) {
+                    uint256 candidateBit = bit - 1;
+                    if (maskedBitmap & (uint256(1) << candidateBit) != 0)
+                        return _getCompressedTickFromBitmapPosition(wordPosition, candidateBit);
+                }
+            }
+
+            wordPosition--;
+            bitPosition = 255;
+        }
+
+        revert InitializedTickRangeNotFound(address(pool_), compressedTick_);
+    }
+
+    function _getNextInitializedCompressedTick(
+        IUniswapV3Pool pool_,
+        int24 compressedTick_
+    ) internal view returns (int24) {
+        int16 wordPosition;
+        uint8 bitPosition;
+        (wordPosition, bitPosition) = _getTickBitmapPosition(compressedTick_);
+
+        for (uint256 i; i <= OHM_SUSDS_TICK_WORD_SEARCH_LIMIT; i++) {
+            uint256 mask = type(uint256).max << uint256(bitPosition);
+            uint256 maskedBitmap = pool_.tickBitmap(wordPosition) & mask;
+
+            if (maskedBitmap != 0) {
+                for (uint256 bit = uint256(bitPosition); bit < 256; bit++) {
+                    if (maskedBitmap & (uint256(1) << bit) != 0)
+                        return _getCompressedTickFromBitmapPosition(wordPosition, bit);
+                }
+            }
+
+            wordPosition++;
+            bitPosition = 0;
+        }
+
+        revert InitializedTickRangeNotFound(address(pool_), compressedTick_);
+    }
+
+    function _getTickBitmapPosition(
+        int24 compressedTick_
+    ) internal pure returns (int16 wordPosition_, uint8 bitPosition_) {
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        wordPosition_ = int16(compressedTick_ >> 8);
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        bitPosition_ = uint8(uint24(compressedTick_ % 256));
+    }
+
+    function _getCompressedTickFromBitmapPosition(
+        int16 wordPosition_,
+        uint256 bitPosition_
+    ) internal pure returns (int24) {
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        return int24(int256(wordPosition_) * 256 + int256(bitPosition_));
+    }
+
+    function _getTwapTickForOhmUsdPrice(
+        IUniswapV3Pool pool_,
+        uint256 targetOhmUsdPrice_,
+        uint256 quoteUsdPrice_
+    ) internal view returns (int24 tick_) {
+        assertEq(pool_.token0(), OHM, "OHM should be token0");
+
+        int24 low = 100000;
+        int24 high = 260000;
+
+        while (low < high) {
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            int24 mid = int24((int256(low) + int256(high) + 1) / 2);
+            uint256 priceAtMid = _getOhmUsdPriceAtTick(pool_, mid, quoteUsdPrice_);
+
+            if (priceAtMid <= targetOhmUsdPrice_) {
+                low = mid;
+            } else {
+                high = mid - 1;
+            }
+        }
+
+        tick_ = low;
+    }
+
+    function _getOhmUsdPriceAtTick(
+        IUniswapV3Pool pool_,
+        int24 tick_,
+        uint256 quoteUsdPrice_
+    ) internal view returns (uint256) {
+        address quoteToken = pool_.token0() == OHM ? pool_.token1() : pool_.token0();
+        uint8 quoteTokenDecimals;
+
+        if (quoteToken == WETH) {
+            quoteTokenDecimals = WETH_DECIMALS;
+        } else if (quoteToken == SUSDS) {
+            quoteTokenDecimals = SUSDS_DECIMALS;
+        } else {
+            revert UnsupportedOhmQuoteToken(quoteToken);
+        }
+
+        uint256 baseInQuotePrice = OracleLibrary.getQuoteAtTick(
+            tick_,
+            OHM_BASE_AMOUNT,
+            OHM,
+            quoteToken
+        );
+
+        return quoteUsdPrice_.mulDiv(baseInQuotePrice, 10 ** quoteTokenDecimals);
+    }
+
+    function _mockUniswapTwap(
+        IUniswapV3Pool pool_,
+        uint32 observationWindow_,
+        int24 tick_
+    ) internal {
+        (
+            ,
+            ,
+            uint16 observationIndex,
+            uint16 observationCardinality,
+            uint16 observationCardinalityNext,
+            uint8 feeProtocol,
+            bool unlocked
+        ) = pool_.slot0();
+
+        vm.mockCall(
+            address(pool_),
+            abi.encodeWithSelector(bytes4(keccak256("slot0()"))),
+            abi.encode(
+                TickMath.getSqrtRatioAtTick(tick_),
+                tick_,
+                observationIndex,
+                observationCardinality,
+                observationCardinalityNext,
+                feeProtocol,
+                unlocked
+            )
+        );
+
+        uint32[] memory observationWindow = new uint32[](2);
+        observationWindow[0] = observationWindow_;
+        observationWindow[1] = 0;
+
+        int56[] memory tickCumulatives = new int56[](2);
+        tickCumulatives[0] = 0;
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        tickCumulatives[1] = int56(tick_) * int56(uint56(observationWindow_));
+
+        uint160[] memory secondsPerLiquidityCumulativeX128s = new uint160[](2);
+
+        vm.mockCall(
+            address(pool_),
+            abi.encodeWithSelector(bytes4(keccak256("observe(uint32[])")), observationWindow),
+            abi.encode(tickCumulatives, secondsPerLiquidityCumulativeX128s)
+        );
+    }
+
+    function _mockChainlinkOhmEthPrice(
+        uint256 targetOhmUsdPrice_
+    ) internal returns (uint256 mockedOhmUsdPrice_) {
+        AggregatorV2V3Interface ohmEthFeed = AggregatorV2V3Interface(CHAINLINK_OHM_ETH);
+        uint256 ethUsdPrice = _getChainlinkEthUsdPrice();
+        uint8 ohmEthDecimals = ohmEthFeed.decimals();
+        uint256 ohmEthAnswer = targetOhmUsdPrice_.mulDiv(10 ** ohmEthDecimals, ethUsdPrice);
+
+        vm.mockCall(
+            CHAINLINK_OHM_ETH,
+            abi.encodeWithSelector(bytes4(keccak256("latestRoundData()"))),
+            abi.encode(
+                uint80(1),
+                /// forge-lint: disable-next-line(unsafe-typecast)
+                int256(ohmEthAnswer),
+                block.timestamp,
+                block.timestamp,
+                uint80(1)
+            )
+        );
+
+        uint256 ohmEthPrice = ohmEthAnswer.mulDiv(1e18, 10 ** ohmEthDecimals);
+        mockedOhmUsdPrice_ = ohmEthPrice.mulDiv(ethUsdPrice, 1e18);
+    }
+
+    function _getChainlinkEthUsdPrice() internal view returns (uint256) {
+        AggregatorV2V3Interface ethUsdFeed = AggregatorV2V3Interface(CHAINLINK_ETH_USD);
+        (, int256 ethUsdAnswer, , , ) = ethUsdFeed.latestRoundData();
+        assertGt(ethUsdAnswer, 0, "Chainlink ETH/USD price should be positive");
+
+        uint8 ethUsdDecimals = ethUsdFeed.decimals();
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        return uint256(ethUsdAnswer).mulDiv(1e18, 10 ** ethUsdDecimals);
     }
 
     function _warpToNextHeartbeat() internal {
