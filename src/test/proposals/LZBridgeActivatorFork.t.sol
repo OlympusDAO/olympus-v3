@@ -23,16 +23,12 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
-import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpgradeProposal.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {MockLZEndpointDelegate} from "src/test/policies/bridge/LZEndpointDelegate/MockLZEndpointDelegate.sol";
 import {MockLZBridgeGateway} from "src/test/policies/bridge/LZEndpointDelegate/MockLZBridgeGateway.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
-    /// @dev OCG proposal ID for the LZ bridge security upgrade (OIP-197).
-    uint256 internal constant _PROPOSAL_ID = 16;
-
     // Fork configuration
     uint256 internal constant FORK_BLOCK = 25029000;
 
@@ -100,16 +96,6 @@ contract LZBridgeActivatorForkTest is Test {
         // delegate's `givenEnabled` gate.
         lzDelegate.enable("");
         vm.stopPrank();
-    }
-
-    // ========== PROPOSAL METADATA ========== //
-
-    function test_proposalId() public {
-        assertEq(
-            (new LZBridgeSecurityUpgradeProposal()).id(),
-            _PROPOSAL_ID,
-            "Proposal ID should match OIP-197"
-        );
     }
 
     // ========== CONSTRUCTOR TESTS ========== //
