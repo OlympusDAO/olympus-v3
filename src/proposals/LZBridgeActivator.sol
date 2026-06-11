@@ -3,27 +3,38 @@ pragma solidity >=0.8.30;
 
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
-import {IMessageLibManager, SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
-import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
+import {ILZEndpointDelegate} from "src/policies/interfaces/ILZEndpointDelegate.sol";
+import {ILZEndpointV2Authorized} from "src/policies/interfaces/ILZEndpointV2Authorized.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @title LZBridgeActivator
 /// @notice Single-use contract to configure and activate the LZBridgeGateway during the
 ///         OCG proposal. Batches all endpoint configuration, peer setup, enforced options,
-///         and enablement into a single proposal action, working around the
-///         governor's 15-action limit.
+///         per-endpoint bidirectional rate limits and enablement into a single proposal action,
+///         working around the governor's 15-action limit.
 ///
 /// @dev Assumes:
-///      - The `admin` and `bridge_admin` roles have been granted to this contract.
-///      - The gateway has been activated in the Kernel (by the DAO MS pre-OCG).
+///      - The `admin`, `bridge_admin`, and `bridge_configurator` roles have been granted to
+///        this contract for the duration of the activation. `bridge_configurator` is the role
+///        that gates the privileged configuration mutators on the gateway and the LZ
+///        endpoint delegate; granting it temporarily lets the activator drive setup
+///        directly, without routing the calls through the LZBridgeAndDelegateConfig timelock.
+///        All three are revoked immediately after `activate()`, leaving `bridge_configurator`
+///        only on the LZBridgeAndDelegateConfig policy.
+///      - The gateway and the LZEndpointDelegate policy have been activated in the Kernel
+///        (by the DAO MS pre-OCG).
 ///      - The caller is this contract's owner (the OCG timelock).
 ///
-///      This contract sets itself as the gateway's LZ endpoint delegate at the start of
-///      `activate()` and revokes the delegate at the end. While set as delegate, it
-///      calls the LZ endpoint directly (setSendLibrary, setReceiveLibrary, setConfig)
-///      on behalf of the gateway. Gateway-level operations (setPeer, setEnforcedOptions,
-///      enable) are called through the gateway's role-gated functions.
+///      `activate()` points the gateway's endpoint delegate at the LZEndpointDelegate policy and
+///      drives all OApp-authorized endpoint calls through that policy (libraries, ULN/Executor config).
+///      Gateway-level operations (setPeer, setEnforcedOptions, enable) are called through the
+///      gateway's role-gated functions directly. The delegate assignment is the steady-state
+///      configuration and is not revoked when activation completes; subsequent OApp-authorized
+///      endpoint operations continue to go through LZEndpointDelegate.
 contract LZBridgeActivator is Owned {
     // ========== CONSTANTS ========== //
 
@@ -33,6 +44,7 @@ contract LZBridgeActivator is Owned {
     // ========== IMMUTABLES ========== //
 
     address public immutable GATEWAY;
+    address public immutable DELEGATE;
     address public immutable ENDPOINT;
 
     address public immutable ARB_GATEWAY;
@@ -54,6 +66,7 @@ contract LZBridgeActivator is Owned {
 
     /// @param owner_ The OCG timelock address.
     /// @param gateway_ The LZBridgeGateway address on this chain.
+    /// @param delegate_ The LZEndpointDelegate policy address on this chain.
     /// @param endpoint_ The LayerZero V2 endpoint address.
     /// @param arbGateway_ Remote gateway on Arbitrum.
     /// @param optGateway_ Remote gateway on Optimism.
@@ -62,6 +75,7 @@ contract LZBridgeActivator is Owned {
     constructor(
         address owner_,
         address gateway_,
+        address delegate_,
         address endpoint_,
         address arbGateway_,
         address optGateway_,
@@ -70,14 +84,20 @@ contract LZBridgeActivator is Owned {
     ) Owned(owner_) {
         _requireNonzeroAddress(owner_, "owner");
         _requireNonzeroAddress(gateway_, "gateway");
+        _requireNonzeroAddress(delegate_, "delegate");
         _requireNonzeroAddress(endpoint_, "endpoint");
         _requireNonzeroAddress(arbGateway_, "arbGateway");
         _requireNonzeroAddress(optGateway_, "optGateway");
         _requireNonzeroAddress(baseGateway_, "baseGateway");
         _requireNonzeroAddress(beraGateway_, "beraGateway");
         if (endpoint_ != ILZBridgeGateway(gateway_).LZ_ENDPOINT()) revert InvalidParams("endpoint");
+        if (
+            endpoint_ != ILZEndpointDelegate(delegate_).LZ_ENDPOINT() ||
+            gateway_ != ILZEndpointDelegate(delegate_).GATEWAY()
+        ) revert InvalidParams("delegate");
 
         GATEWAY = gateway_;
+        DELEGATE = delegate_;
         ENDPOINT = endpoint_;
         ARB_GATEWAY = arbGateway_;
         OPT_GATEWAY = optGateway_;
@@ -89,7 +109,9 @@ contract LZBridgeActivator is Owned {
 
     /// @notice Configures and activates the LZBridgeGateway.
     /// @dev  This function assumes:
-    ///       - The `admin` and `bridge_admin` roles have been granted to this contract.
+    ///       - The `admin`, `bridge_admin`, and `bridge_configurator` roles have been granted
+    ///         to this contract for the duration of the activation.
+    ///       - The LZEndpointDelegate policy is active in the Kernel.
     ///
     ///       This function reverts if:
     ///       - The caller is not the owner.
@@ -97,17 +119,16 @@ contract LZBridgeActivator is Owned {
     function activate() external onlyOwner {
         if (isActivated) revert AlreadyActivated();
 
-        // Set this contract as the LZ endpoint delegate for the gateway.
-        // This allows us to call endpoint config functions directly.
-        ILZBridgeGateway(GATEWAY).setDelegate(address(this));
+        // Point the gateway's endpoint delegate at the LZEndpointDelegate policy so subsequent
+        // OApp-authorized endpoint calls forwarded by this activator (and, after the proposal closes,
+        // by the DAO MS via batches) succeed.
+        ILZBridgeGateway(GATEWAY).setDelegate(DELEGATE);
 
         _configureLZEndpoint();
         _setPeers();
         _setEnforcedOptions();
+        _setRateLimits();
         _enable();
-
-        // Revoke delegate. Endpoint config is now locked to gateway-only.
-        ILZBridgeGateway(GATEWAY).setDelegate(address(0));
 
         isActivated = true;
         emit Activated(msg.sender);
@@ -115,11 +136,10 @@ contract LZBridgeActivator is Owned {
 
     // ========== INTERNAL ========== //
 
-    /// @dev Configures LZ V2 endpoint via delegate: pin libraries and set ULN/Executor
-    ///      config for all 4 remote chains. Calls the endpoint directly.
+    /// @dev Configures the LZ V2 endpoint via the LZEndpointDelegate policy: pin libraries and
+    ///      set ULN/Executor config for all 4 remote chains.
     function _configureLZEndpoint() internal {
-        address gw = GATEWAY;
-        address ep = ENDPOINT;
+        ILZEndpointV2Authorized lzDelegate = ILZEndpointV2Authorized(DELEGATE);
         address sendLib = LZConfigLib.ETH_SEND_ULN_302;
         address recvLib = LZConfigLib.ETH_RECV_ULN_302;
         uint64 localConf = LZConfigLib.ETH_OUTBOUND_CONFIRMATIONS;
@@ -137,15 +157,13 @@ contract LZBridgeActivator is Owned {
             LZConfigLib.BERA_OUTBOUND_CONFIRMATIONS
         ];
 
-        IMessageLibManager libManager = IMessageLibManager(ep);
-
         for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
             uint32 eid = remoteEids[i];
             address[] memory dvns = LZConfigLib.dvnsForRoute(LZConfigLib.ETH_EID, eid);
 
-            // Pin libraries (delegate calls endpoint directly)
-            libManager.setSendLibrary(gw, eid, sendLib);
-            libManager.setReceiveLibrary(gw, eid, recvLib, 0);
+            // Pin libraries (the delegate proxies the call to the endpoint with GATEWAY as the OApp)
+            lzDelegate.setSendLibrary(eid, sendLib);
+            lzDelegate.setReceiveLibrary(eid, recvLib, 0);
 
             // Send ULN + Executor config
             SetConfigParam[] memory sendParams = new SetConfigParam[](2);
@@ -159,7 +177,7 @@ contract LZBridgeActivator is Owned {
                 configType: LZConfigLib.CONFIG_TYPE_EXECUTOR,
                 config: LZConfigLib.encodeExecutorConfig(LZConfigLib.ETH_EID)
             });
-            libManager.setConfig(gw, sendLib, sendParams);
+            lzDelegate.setEndpointConfig(sendLib, sendParams);
 
             // Receive ULN config
             SetConfigParam[] memory recvParams = new SetConfigParam[](1);
@@ -168,7 +186,7 @@ contract LZBridgeActivator is Owned {
                 configType: LZConfigLib.CONFIG_TYPE_ULN,
                 config: LZConfigLib.encodeUlnConfig(remoteConfs[i], dvns)
             });
-            libManager.setConfig(gw, recvLib, recvParams);
+            lzDelegate.setEndpointConfig(recvLib, recvParams);
         }
     }
 
@@ -224,9 +242,45 @@ contract LZBridgeActivator is Owned {
         ILZBridgeGateway(GATEWAY).setEnforcedOptions(opts);
     }
 
+    /// @dev Sets bidirectional rate limits on the gateway for all 4 remote chains.
+    ///      Outbound limit applies to OHM leaving the canonical chain; inbound limit
+    ///      applies to OHM arriving from a remote chain. Window and per-direction
+    ///      limits are sourced from `LZConfigLib`.
+    function _setRateLimits() internal {
+        uint32[_REMOTE_CHAIN_COUNT] memory remoteEids = [
+            LZConfigLib.ARB_EID,
+            LZConfigLib.OPT_EID,
+            LZConfigLib.BASE_EID,
+            LZConfigLib.BERA_EID
+        ];
+
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory outConfigs = new IOffsettingRateLimiter.RateLimitConfig[](_REMOTE_CHAIN_COUNT);
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory inConfigs = new IOffsettingRateLimiter.RateLimitConfig[](_REMOTE_CHAIN_COUNT);
+
+        uint32 window = LZConfigLib.RATE_LIMIT_WINDOW;
+
+        for (uint256 i = 0; i < _REMOTE_CHAIN_COUNT; ++i) {
+            outConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: LZConfigLib.outRateLimitForRoute(LZConfigLib.ETH_EID, remoteEids[i]),
+                window: window
+            });
+            inConfigs[i] = IOffsettingRateLimiter.RateLimitConfig({
+                eid: remoteEids[i],
+                limit: LZConfigLib.inRateLimitForRoute(LZConfigLib.ETH_EID, remoteEids[i]),
+                window: window
+            });
+        }
+
+        ILZBridgeGateway(GATEWAY).setOutRateLimits(outConfigs);
+        ILZBridgeGateway(GATEWAY).setInRateLimits(inConfigs);
+    }
+
     /// @dev Enables the gateway policy.
     function _enable() internal {
-        PolicyEnabler(GATEWAY).enable("");
+        IEnabler(GATEWAY).enable("");
     }
 
     function _requireNonzeroAddress(address address_, string memory parameter_) private pure {

@@ -5,6 +5,9 @@ on:
             - master
     pull_request:
 
+permissions:
+    contents: read
+
 jobs:
     lint:
         runs-on: ubuntu-latest
@@ -15,6 +18,12 @@ jobs:
 
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
+
+            - name: Run forge lint inline annotations
+              uses: 0xJem/forge-lint-inline-action@7f2d23ba91fe2839c0e16034869f4881d3fd2d41 # v0.1.0
+              with:
+                  install-foundry: false
+                  fail-level: error
 
             - name: Run lint check
               run: pnpm run lint:check

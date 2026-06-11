@@ -1,6 +1,23 @@
 {
     "sequence": [
-        { "name": "LZCrossChainBridge", "args": {} },
-        { "name": "LZBridgeGateway", "args": {} }
+        {
+            "name": "LZBridgeGateway",
+            "args": {
+                "graceSeconds": 86400
+            }
+        },
+        { "name": "LZEndpointDelegate", "args": {} },
+        {
+            "name": "LZCrossChainBridge",
+            "args": {
+                "graceSeconds": 86400
+            }
+        },
+        {
+            "name": "LZBridgeAndDelegateConfig",
+            "args": {
+                "initialTimelockDelay": 86400
+            }
+        }
     ]
 }

@@ -50,6 +50,39 @@ contract LZBridgeGatewayTests_EnforcedOptions is LZBridgeGatewayTestBase {
         gateway.setEnforcedOptions(opts);
     }
 
+    function test_setEnforcedOptions_revertsIfOptionsEmpty() external {
+        bytes memory emptyOptions = "";
+
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({eid: uint32(42), msgType: uint16(1), options: emptyOptions});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_InvalidOptions.selector,
+                emptyOptions
+            )
+        );
+        vm.prank(admin);
+        gateway.setEnforcedOptions(opts);
+    }
+
+    function test_setEnforcedOptions_revertsIfOptionsShorterThanType3Prefix() external {
+        // A single byte is too short to carry the 2-byte Type 3 prefix.
+        bytes memory shortOptions = hex"03";
+
+        EnforcedOptionParam[] memory opts = new EnforcedOptionParam[](1);
+        opts[0] = EnforcedOptionParam({eid: uint32(42), msgType: uint16(1), options: shortOptions});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZBridgeGateway.LZBridgeGateway_InvalidOptions.selector,
+                shortOptions
+            )
+        );
+        vm.prank(admin);
+        gateway.setEnforcedOptions(opts);
+    }
+
     function testFuzz_setEnforcedOptions_revertsIfNotAdmin(address caller_) external {
         vm.assume(caller_ != admin);
 

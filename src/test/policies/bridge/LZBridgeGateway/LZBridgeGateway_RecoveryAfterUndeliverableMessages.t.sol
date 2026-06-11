@@ -8,7 +8,7 @@ import {ILayerZeroEndpointV2, MessagingFee, Origin} from "@lz-evm-protocol-v2-3.
 import {IMessagingChannel} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessagingChannel.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 /// @dev Recovery from permanently undeliverable messages. Each test simulates
 ///      a misconfiguration or compromise that makes a message unrecoverable,
@@ -64,7 +64,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // Recovery: correct bridgedSupply (OHM was burned but never minted on destination)
         uint256 currentSupply = gateway.bridgedSupply();
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(currentSupply);
 
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply should be corrected");
@@ -103,9 +103,10 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         );
 
         // 3. Admin cannot call clear() because the real payload is unknown.
-        //    Admin nilifies the fake hash instead.
+        //    Admin nilifies the fake hash instead via the LZEndpointDelegate policy, which is the
+        //    gateway's endpoint delegate.
         vm.prank(bridgeAdmin);
-        gateway.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
+        lzDelegate.nilify(NONCANONICAL_EID, peer, 1, fakeHash);
 
         assertEq(
             ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1),
@@ -117,11 +118,11 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         //    inboundNonce() returns 1 (NIL hash counts as "verified" for nonce tracking).
         //    skip() requires nonce == inboundNonce + 1, so we skip nonce 2.
         vm.prank(bridgeAdmin);
-        gateway.skip(NONCANONICAL_EID, peer, 2);
+        lzDelegate.skip(NONCANONICAL_EID, peer, 2);
 
         // 5. Burn the nilified nonce permanently (pass NIL hash as payloadHash)
         vm.prank(bridgeAdmin);
-        gateway.burn(NONCANONICAL_EID, peer, 1, bytes32(type(uint256).max));
+        lzDelegate.burn(NONCANONICAL_EID, peer, 1, bytes32(type(uint256).max));
 
         assertEq(
             ep.inboundPayloadHash(address(gateway), NONCANONICAL_EID, peer, 1),
@@ -138,6 +139,88 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // NOTE: If a legitimate user's OHM was burned on the non-canonical chain
         // (real message at the same nonce), the protocol must reimburse.
+    }
+
+    // ========== INFLOW LIMIT BELOW OUTFLOW -> FIX OUTFLOW + CLEAR + REIMBURSE ========== //
+
+    /// @notice Admin set the destination inflow limit lower than the source outflow
+    ///         ceiling. The user sends an amount that fits the outflow ceiling but
+    ///         exceeds the full inflow limit, leaving the message permanently
+    ///         undeliverable. Recovery: admin tightens outflow on the source so future
+    ///         sends cannot exceed inflow, clears the stuck message on the destination,
+    ///         decreases bridgedSupply on canonical, and reimburses the user with
+    ///         replacement OHM.
+    function test_scenario_inflowLimitLowerThanOutflowSoFixOutflowAndClearAndReimburse() external {
+        // Misconfiguration: destination inflow limit (100e9) is below source outflow
+        // ceiling (500e9). A 500e9 send passes outflow but cannot pass inflow.
+        _setInRateLimit(gateway2, CANONICAL_EID, 100e9, 3600);
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 500e9, 3600);
+
+        uint256 amount = 500e9;
+        uint256 facilitatorBalanceBefore = ohm.balanceOf(facilitator);
+
+        // User sends. OHM is burned on canonical and bridgedSupply increases
+        bytes memory packetBytes = _sendCanonicalNoDeliver(amount);
+        assertEq(
+            gateway.bridgedSupply(),
+            amount,
+            "bridgedSupply should increase by the sent amount"
+        );
+        assertEq(
+            ohm.balanceOf(facilitator),
+            facilitatorBalanceBefore - amount,
+            "Facilitator OHM should decrease by the sent amount"
+        );
+
+        // DVNs verify the message (hash stored)
+        _verifyOnly(packetBytes);
+
+        // Delivery fails permanently: the inflow limit (100e9) cannot absorb 500e9
+        // even after a full window of decay.
+        bool delivered = _tryDeliverPacket(packetBytes);
+        assertFalse(delivered, "Delivery should fail (inflow limit too low for this send)");
+
+        // Recovery step 1: admin lowers outflow to match inflow so future sends cannot
+        // exceed the destination's inbound capacity.
+        _setOutRateLimit(gateway, NONCANONICAL_EID, 100e9, 3600);
+
+        // Recovery step 2: admin clears the stuck message on the destination so the
+        // nonce advances and the path is unblocked.
+        (bytes32 guid, bytes memory message) = this.extractGuidAndMessage(packetBytes);
+        (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
+        Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
+
+        vm.prank(bridgeAdmin);
+        lzDelegate2.clear(origin, guid, message);
+
+        IMessagingChannel ep = _nonCanonicalEndpoint();
+        bytes32 peer = _canonicalPeer();
+        assertEq(
+            ep.inboundPayloadHash(address(gateway2), CANONICAL_EID, peer, 1),
+            bytes32(0),
+            "Hash should be empty after clear"
+        );
+        assertEq(
+            ohm.balanceOf(recipient),
+            0,
+            "Recipient should have no OHM (clear skips lzReceive)"
+        );
+
+        // Recovery step 3: correct bridgedSupply on canonical (the send increased it,
+        // but the inbound never landed).
+        vm.prank(bridgeConfigurator);
+        gateway.decreaseBridgedSupply(amount);
+        assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
+
+        // Recovery step 4: reimburse the user. The user's OHM was burned on canonical
+        // but never minted on destination. Mint replacement OHM directly to make the
+        // user whole.
+        ohm.mint(facilitator, amount);
+        assertEq(
+            ohm.balanceOf(facilitator),
+            facilitatorBalanceBefore,
+            "Facilitator should be reimbursed for the burned OHM"
+        );
     }
 
     // ========== DISABLED OLD BRIDGE -> CLEAR + FIX PEER ========== //
@@ -163,13 +246,14 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
         bool delivered = _tryDeliverPacket(packetBytes);
         assertFalse(delivered, "Delivery should fail (gateway disabled)");
 
-        // 5. Admin clears the message from the old gateway (clear works when disabled)
+        // 5. Admin clears the message from the old gateway via the destination's delegate policy
+        //    (clear works when disabled because it bypasses the gateway's `lzReceive`).
         (bytes32 guid, bytes memory message) = this.extractGuidAndMessage(packetBytes);
         (uint32 srcEid, bytes32 senderAddr, uint64 nonce) = this.extractOrigin(packetBytes);
         Origin memory origin = Origin({srcEid: srcEid, sender: senderAddr, nonce: nonce});
 
         vm.prank(bridgeAdmin);
-        gateway2.clear(origin, guid, message);
+        lzDelegate2.clear(origin, guid, message);
 
         // 6. Verify clear outcome: hash deleted, nonce advanced, no OHM minted
         IMessagingChannel ep = _nonCanonicalEndpoint();
@@ -193,7 +277,7 @@ contract LZBridgeGatewayTests_RecoveryAfterUndeliverableMessages is
 
         // 7. Correct bridgedSupply on canonical (send increased it, but receive never happened)
         assertEq(gateway.bridgedSupply(), amount, "bridgedSupply was increased by the send");
-        vm.prank(bridgeAdmin);
+        vm.prank(bridgeConfigurator);
         gateway.decreaseBridgedSupply(amount);
         assertEq(gateway.bridgedSupply(), 0, "bridgedSupply corrected");
 

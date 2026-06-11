@@ -7,6 +7,7 @@ import {LZBridgeGatewayTestBase} from "src/test/policies/bridge/LZBridgeGateway/
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
@@ -18,6 +19,32 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @dev Enable/disable lifecycle.
 contract LZBridgeGatewayTests_EnableDisable is LZBridgeGatewayTestBase {
+    function test_enable_updatesLastTransitionAt() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+        uint48 disabledAt = gateway.lastTransitionAt();
+        assertGt(uint256(disabledAt), 0, "lastTransitionAt should be non-zero after disable");
+
+        vm.warp(vm.getBlockTimestamp() + 30);
+        gateway.enable(bytes(""));
+        assertEq(
+            uint256(gateway.lastTransitionAt()),
+            uint256(uint48(vm.getBlockTimestamp())),
+            "lastTransitionAt should be refreshed on enable"
+        );
+        vm.stopPrank();
+    }
+
+    function test_enable_emitsTransitionEvent() external {
+        vm.startPrank(admin);
+        gateway.disable(bytes(""));
+
+        vm.expectEmit(true, true, false, true);
+        emit IEnablerV2.Transition(admin, true, bytes(""), uint48(vm.getBlockTimestamp()));
+        gateway.enable(bytes(""));
+        vm.stopPrank();
+    }
+
     function test_enable() external {
         vm.startPrank(admin);
         gateway.disable(bytes(""));

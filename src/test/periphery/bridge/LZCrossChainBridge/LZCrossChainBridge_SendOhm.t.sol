@@ -11,7 +11,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZCrossChainBridge} from "src/periphery/interfaces/ILZCrossChainBridge.sol";
 
 // Libraries
-import {LZConfigLib} from "src/libraries/LZConfigLib.sol";
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
     function test_sendOhm() external {
@@ -21,7 +21,13 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
 
         vm.expectEmit(true, true, true, true);
-        emit ILZCrossChainBridge.Bridged(user, amount, NONCANONICAL_EID, fee.nativeFee);
+        emit ILZCrossChainBridge.Bridged(
+            user,
+            amount,
+            NONCANONICAL_EID,
+            fee.nativeFee,
+            fee.nativeFee
+        );
 
         vm.prank(user);
         bridge.sendOhm{value: fee.nativeFee}(NONCANONICAL_EID, recipient, amount);
@@ -37,13 +43,49 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
             userEthBefore - fee.nativeFee,
             "User should spend exactly the native fee"
         );
-        assertEq(address(bridge).balance, 0, "Bridge should hold no ETH after send");
-        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
+        assertEq(address(bridge).balance, 0, "Bridge should hold no native after send");
+        assertEq(address(gateway).balance, 0, "Gateway should hold no native after send");
         assertEq(
             gateway.bridgedSupply(),
             amount,
             "Bridged supply should increase by amount on canonical"
         );
+    }
+
+    /// @notice When the caller overpays, the Bridged event reports the actual nativeFee
+    ///         charged by LayerZero, and the excess is refunded to msg.sender.
+    function test_sendOhm_emitsActualNativeFeeOnOverpayment() external {
+        uint256 amount = 1000e9;
+        MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
+
+        uint256 excess = 3 ether;
+        uint256 totalSent = fee.nativeFee + excess;
+        uint256 userEthBefore = user.balance;
+
+        vm.expectEmit(true, true, true, true);
+        emit ILZCrossChainBridge.Bridged(user, amount, NONCANONICAL_EID, fee.nativeFee, totalSent);
+
+        vm.prank(user);
+        bridge.sendOhm{value: totalSent}(NONCANONICAL_EID, recipient, amount);
+
+        // Deliver packet so the OHM is credited on destination
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+
+        // User should only be debited the actual fee (excess is refunded to msg.sender).
+        uint256 userEthAfter = user.balance;
+        assertGe(
+            userEthAfter,
+            userEthBefore - fee.nativeFee - 0.01 ether,
+            "User should be charged only the actual fee (plus small refund tolerance)"
+        );
+        assertLe(
+            userEthAfter,
+            userEthBefore - fee.nativeFee,
+            "User cannot be charged less than the actual fee"
+        );
+
+        assertEq(address(bridge).balance, 0, "Bridge should hold no ETH after send");
+        assertEq(address(gateway).balance, 0, "Gateway should hold no ETH after send");
     }
 
     function test_sendOhm_revertsIfNotEnabled() external {
@@ -53,6 +95,17 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
         vm.prank(user);
         bridge.sendOhm{value: 1 ether}(NONCANONICAL_EID, recipient, 1000e9);
+    }
+
+    function test_sendOhm_revertsIfRecipientZero() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ILZCrossChainBridge.LZCrossChainBridge_InvalidAddress.selector,
+                "to"
+            )
+        );
+        vm.prank(user);
+        bridge.sendOhm{value: 1 ether}(NONCANONICAL_EID, address(0), 1000e9);
     }
 
     function test_sendOhm_revertsIfAmountZero() external {
@@ -111,11 +164,11 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         uint256 amount = 1000e9;
         MessagingFee memory fee = bridge.estimateSendFee(NONCANONICAL_EID, recipient, amount);
 
-        // Drain user's ETH so they can't cover the fee
+        // Drain user's native balance so they can't cover the fee
         uint256 userBalance = user.balance;
         vm.prank(user);
         payable(address(0xdead)).transfer(userBalance);
-        assertEq(user.balance, 0, "User should have no ETH");
+        assertEq(user.balance, 0, "User should have no native balance");
 
         // Low-level call because vm.prank + {value} reverts at cheatcode level
         // when sender has insufficient balance
@@ -123,7 +176,7 @@ contract LZCrossChainBridgeTests_SendOhm is LZCrossChainBridgeTestBase {
         (bool success, ) = address(bridge).call{value: fee.nativeFee}(
             abi.encodeWithSelector(bridge.sendOhm.selector, NONCANONICAL_EID, recipient, amount)
         );
-        assertFalse(success, "Should revert with insufficient ETH balance");
+        assertFalse(success, "Should revert with insufficient native balance");
     }
 
     function testFuzz_sendOhm_variousAmounts(uint256 amount_) external {
