@@ -13,7 +13,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 /// @notice Ethereum MS batch scripts for the LZBridgeGateway policy.
 ///
 ///         Entry points:
-///         - `activateGateway` (pre-OCG): activate the new gateway and the LZEndpointDelegate policy in the Kernel
+///         - `activateGateway` (pre-OCG): activate the new gateway, the LZEndpointDelegate policy, and the LZBridgeAndDelegateConfig policy in the Kernel
 ///         - `initBridgedSupply` (post-OCG): set the initial bridged supply tracking
 ///
 ///         The old CrossChainBridge is deactivated post-OCG via LZCrossChainBridgeBatch.setup().
@@ -31,7 +31,7 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
 
     // =========== ENTRY POINTS =========== //
 
-    /// @notice Ethereum Phase 1 (pre-OCG): activate the new gateway and delegate policies in the Kernel.
+    /// @notice Ethereum Phase 1 (pre-OCG): activate the new gateway, delegate, and config policies in the Kernel.
     ///         The old CrossChainBridge remains active during the OCG voting period and is
     ///         deactivated post-OCG via LZCrossChainBridgeBatch.setup().
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
@@ -52,10 +52,12 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
         address kernel = _envAddressNotZero("olympus.Kernel");
         address newGateway = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         address newDelegate = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address newConfig = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
 
-        console2.log("\n=== Ethereum Phase 1: Activate Gateway + Delegate ===");
+        console2.log("\n=== Ethereum Phase 1: Activate Gateway + Delegate + Config ===");
         console2.log("New LZBridgeGateway:", newGateway);
         console2.log("New LZEndpointDelegate:", newDelegate);
+        console2.log("New LZBridgeAndDelegateConfig:", newConfig);
 
         // Pre-flight: the gateway's `LZ_ENDPOINT` must match env.json so a gateway deployed
         // against the wrong endpoint is caught here, before the OCG activator runs against it.
@@ -80,6 +82,12 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
                 Actions.ActivatePolicy,
                 newDelegate
             )
+        );
+
+        // Activate the LZBridgeAndDelegateConfig policy.
+        addToBatch(
+            kernel,
+            abi.encodeWithSelector(Kernel.executeAction.selector, Actions.ActivatePolicy, newConfig)
         );
 
         _setPostBatchValidateSelector(this._validateActivateGateway.selector);
@@ -147,10 +155,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
     // =========== VALIDATION =========== //
 
     /// @notice Validate activateGateway state after batch execution.
-    /// @dev Checks that the gateway and the delegate are active in the Kernel.
+    /// @dev Checks that the gateway, the delegate, and the config policy are active in the Kernel.
     function _validateActivateGateway() external view {
         address gatewayAddr = _envAddressNotZero("olympus.policies.LZBridgeGateway");
         address delegateAddr = _envAddressNotZero("olympus.policies.LZEndpointDelegate");
+        address configAddr = _envAddressNotZero("olympus.policies.LZBridgeAndDelegateConfig");
         LZBridgeGateway gateway = LZBridgeGateway(gatewayAddr);
 
         console2.log("\nValidating activateGateway post-batch state");
@@ -164,6 +173,11 @@ contract LZBridgeGatewayBatch is BatchScriptV2 {
             revert("LZEndpointDelegate is not active in the Kernel");
         }
         console2.log("  LZEndpointDelegate is active in the Kernel");
+
+        if (!Policy(configAddr).isActive()) {
+            revert("LZBridgeAndDelegateConfig is not active in the Kernel");
+        }
+        console2.log("  LZBridgeAndDelegateConfig is active in the Kernel");
 
         // Re-check the gateway's LZ_ENDPOINT against env.json so the post-batch validator is
         // independently checkable (the same gate also runs in the pre-flight).
