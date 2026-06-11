@@ -80,7 +80,6 @@ set_registry_addr olympus-lz-bridge-activator                  "$ac"
 
 step "Pre-OCG: activate policies in the Kernel (DAO MS)"
 run_batch LZBridgeGatewayBatch activateGateway mainnet
-activate_policy mainnet "$cf"
 
 # Grant the timelock the roles the proposal assumes are already present. The
 # grant is sent from the current RolesAdmin admin; if that is not the timelock,
