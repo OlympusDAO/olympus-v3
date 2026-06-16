@@ -3,7 +3,7 @@
 # Deploys the LayerZero testnet bridge stack on a single chain.
 #
 # Usage:
-# ./shell/lz-bridge-testnet/deploy.sh
+# ./shell/lz-bridge/testnet/deploy.sh
 #   --chain <sepolia|base-sepolia|arbitrum-sepolia>
 #   --account <cast wallet> OR --ledger <mnemonic-index>
 #   [--broadcast <false>]
@@ -13,9 +13,13 @@
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-source "$SCRIPT_DIR/../lib/arguments.sh"
-source "$SCRIPT_DIR/../lib/forge.sh"
+ROOT_DIR=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2> /dev/null)
+[ -n "$ROOT_DIR" ] || {
+    echo "Error: not inside a git repository." >&2
+    exit 1
+}
+source "$ROOT_DIR/shell/lib/arguments.sh"
+source "$ROOT_DIR/shell/lib/forge.sh"
 
 load_named_args "$@"
 

@@ -70,6 +70,6 @@ contract LZBridgeTestnetSend is LZBridgeTestnetBase {
         LZCrossChainBridge(periphery).sendOhm{value: fee.nativeFee}(dstEid, to_, amount_);
         vm.stopBroadcast();
 
-        console2.log("  Sent. Track with shell/lz-bridge-testnet/message_status.sh");
+        console2.log("  Sent. Track with shell/lz-bridge/testnet/message_status.sh");
     }
 }

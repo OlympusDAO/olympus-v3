@@ -5,21 +5,25 @@
 #
 # Usage:
 #   # All messages recorded by send.sh:
-#   ./shell/lz-bridge-testnet/message_status.sh
+#   ./shell/lz-bridge/testnet/message_status.sh
 #
 #   # A single source tx hash (also works for any external testnet bridge tx):
-#   ./shell/lz-bridge-testnet/message_status.sh --tx 0x<sourceTxHash>
+#   ./shell/lz-bridge/testnet/message_status.sh --tx 0x<sourceTxHash>
 #
 #   # A custom messages file:
-#   ./shell/lz-bridge-testnet/message_status.sh --messages path/to/messages.json
+#   ./shell/lz-bridge/testnet/message_status.sh --messages path/to/messages.json
 #
 # Requires curl and jq.
 
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-source "$SCRIPT_DIR/../lib/arguments.sh"
+ROOT_DIR=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2> /dev/null)
+[ -n "$ROOT_DIR" ] || {
+    echo "Error: not inside a git repository." >&2
+    exit 1
+}
+source "$ROOT_DIR/shell/lib/arguments.sh"
 
 load_named_args "$@"
 

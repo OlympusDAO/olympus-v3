@@ -4,7 +4,7 @@
 # deployments/messages.json (source tx hash + metadata) so its status can be tracked later.
 #
 # Usage:
-# ./shell/lz-bridge-testnet/send.sh
+# ./shell/lz-bridge/testnet/send.sh
 #   --chain <source chain>          (sepolia | base-sepolia | arbitrum-sepolia)
 #   --dst <destination chain>       (sepolia | base-sepolia | arbitrum-sepolia)
 #   --amount <ohm amount, 9 decimals>   (1 OHM == 1000000000)
@@ -17,9 +17,13 @@
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-source "$SCRIPT_DIR/../lib/arguments.sh"
-source "$SCRIPT_DIR/../lib/forge.sh"
+ROOT_DIR=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2> /dev/null)
+[ -n "$ROOT_DIR" ] || {
+    echo "Error: not inside a git repository." >&2
+    exit 1
+}
+source "$ROOT_DIR/shell/lib/arguments.sh"
+source "$ROOT_DIR/shell/lib/forge.sh"
 
 load_named_args "$@"
 
@@ -97,4 +101,4 @@ jq --argjson e "$ENTRY" '. + [$e]' "$MESSAGES" > "$MESSAGES.tmp" && mv "$MESSAGE
 echo ""
 echo "Recorded message in $MESSAGES"
 echo "  srcTxHash: $TX_HASH"
-echo "Check status with: ./shell/lz-bridge-testnet/message_status.sh"
+echo "Check status with: ./shell/lz-bridge/testnet/message_status.sh"

@@ -15,18 +15,22 @@
 #   correct   : decrease the canonical bridgedSupply by a stuck transfer amount
 #
 # Usage:
-#   ./shell/lz-bridge-testnet/ops.sh --action discover --chain base-sepolia
-#   ./shell/lz-bridge-testnet/ops.sh --action skip     --chain base-sepolia --src sepolia --nonce 1 --account W --broadcast true
-#   ./shell/lz-bridge-testnet/ops.sh --action correct  --chain sepolia      --amount 1000000000 --account W --broadcast true
+#   ./shell/lz-bridge/testnet/ops.sh --action discover --chain base-sepolia
+#   ./shell/lz-bridge/testnet/ops.sh --action skip     --chain base-sepolia --src sepolia --nonce 1 --account W --broadcast true
+#   ./shell/lz-bridge/testnet/ops.sh --action correct  --chain sepolia      --amount 1000000000 --account W --broadcast true
 #
 # Requires ALCHEMY_API_KEY in .env.
 
 set -e
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ROOT_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
-source "$SCRIPT_DIR/../lib/arguments.sh"
-source "$SCRIPT_DIR/../lib/forge.sh"
+ROOT_DIR=$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2> /dev/null)
+[ -n "$ROOT_DIR" ] || {
+    echo "Error: not inside a git repository." >&2
+    exit 1
+}
+source "$ROOT_DIR/shell/lib/arguments.sh"
+source "$ROOT_DIR/shell/lib/forge.sh"
 
 load_named_args "$@"
 

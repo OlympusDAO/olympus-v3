@@ -13,4 +13,4 @@ What each file in this folder is:
 - `CONTENTS.md` — this file.
 - `deployments/` — per-chain address files (`<chain>.json`) and `messages.json`, written at runtime by the scripts.
 
-Shell wrappers live in `shell/lz-bridge-testnet/`: `deploy.sh`, `configure.sh`, `status.sh`, `send.sh`, `message_status.sh`, `ops.sh`.
+Shell wrappers live in `shell/lz-bridge/testnet/`: `deploy.sh`, `configure.sh`, `status.sh`, `send.sh`, `message_status.sh`, `ops.sh`.
