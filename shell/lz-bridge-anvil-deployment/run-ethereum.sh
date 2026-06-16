@@ -5,8 +5,8 @@
 # Flow:
 #   1. Deploy the canonical set (gateway, delegate, periphery bridge, config,
 #      activator) and sync addresses into the OCG proposal registry.
-#   2. Pre-OCG (DAO MS as Kernel executor): activate gateway + delegate via the
-#      real batch, then activate the config policy.
+#   2. Pre-OCG (DAO MS as Kernel executor): activate the gateway, the delegate
+#      and the config policy in the Kernel via the real batch.
 #   3. Grant the timelock the admin + bridge_admin roles the proposal expects.
 #   4. OCG: replay LZBridgeSecurityUpgradeProposal actions from the timelock
 #      (roles, delegate enable, LZBridgeActivator.activate, role rewire, config
@@ -16,7 +16,12 @@
 #      periphery setup.
 #
 # Usage:
-#   ./run-ethereum.sh [--port 8545] [--supply <uint>] [--keep-fork]
+#   ./run-ethereum.sh [--port 8545] [--supply <uint>] [--keep-fork] [--use-deployed]
+#
+# --use-deployed: skip step 1 and rehearse the OCG proposal (plus the pre/post-OCG
+#   batches) against the bridge addresses already in env.json / addresses.json (the
+#   real on-chain deployment) rather than a fresh throwaway set. The mainnet fork is
+#   taken at the latest block, which is after those contracts were deployed.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,12 +33,26 @@ TIMELOCK="0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39"
 INITIAL_BRIDGED_SUPPLY="1000000000000" # 1000 OHM at 9 decimals; any positive test value
 
 while [ $# -gt 0 ]; do
-  case "$1" in
-    --port) PORT="$2"; RPC="http://localhost:${PORT}"; shift 2;;
-    --supply) INITIAL_BRIDGED_SUPPLY="$2"; shift 2;;
-    --keep-fork) KEEP_FORK="true"; shift;;
-    *) die "unknown argument: $1";;
-  esac
+    case "$1" in
+        --port)
+            PORT="$2"
+            RPC="http://localhost:${PORT}"
+            shift 2
+            ;;
+        --supply)
+            INITIAL_BRIDGED_SUPPLY="$2"
+            shift 2
+            ;;
+        --keep-fork)
+            KEEP_FORK="true"
+            shift
+            ;;
+        --use-deployed)
+            USE_DEPLOYED="true"
+            shift
+            ;;
+        *) die "unknown argument: $1" ;;
+    esac
 done
 
 # executeOnAnvilFork.sh health-checks http://localhost:8545 explicitly.
@@ -45,38 +64,51 @@ backup_tracked_files
 trap cleanup EXIT
 
 # Stand-in L2 gateways consumed by the activator constructor and stored as peers.
-step "Inject placeholder L2 gateways"
-for ch in arbitrum optimism base berachain; do
-  set_env_addr "$ch" "olympus.policies.LZBridgeGateway" "${PLACEHOLDER_GATEWAY[$ch]}"
-  log "  $ch -> ${PLACEHOLDER_GATEWAY[$ch]}"
-done
+# With --use-deployed the activator is not redeployed, so the real L2 gateway
+# addresses already in env.json are kept instead.
+if [ "$USE_DEPLOYED" != "true" ]; then
+    step "Inject placeholder L2 gateways"
+    for ch in arbitrum optimism base berachain; do
+        set_env_addr "$ch" "olympus.policies.LZBridgeGateway" "${PLACEHOLDER_GATEWAY[$ch]}"
+        log "  $ch -> ${PLACEHOLDER_GATEWAY[$ch]}"
+    done
+fi
 
 step "Set initialBridgedSupply=$INITIAL_BRIDGED_SUPPLY"
 tmp="$(mktemp)"
 jq --argjson v "$INITIAL_BRIDGED_SUPPLY" \
-  '(.functions[] | select(.name == "initBridgedSupply").args.initialBridgedSupply) = $v' \
-  "$REPO_ROOT/$SUPPLY_ARGS" > "$tmp"
+    '(.functions[] | select(.name == "initBridgedSupply").args.initialBridgedSupply) = $v' \
+    "$REPO_ROOT/$SUPPLY_ARGS" > "$tmp"
 mv "$tmp" "$REPO_ROOT/$SUPPLY_ARGS"
 
 start_anvil "$CHAIN"
 fund "$DEPLOYER_ADDR"
 fund "$TIMELOCK"
 
-deploy_sequence "src/scripts/deploy/savedDeployments/lz_bridge_canonical.json"
+if [ "$USE_DEPLOYED" = "true" ]; then
+    step "Using already-deployed canonical addresses from env.json (skipping deploy)"
+else
+    deploy_sequence "src/scripts/deploy/savedDeployments/lz_bridge_canonical.json"
+fi
 
-gw="$(env_addr mainnet olympus.policies.LZBridgeGateway)";            require_addr "$gw" gateway
-dl="$(env_addr mainnet olympus.policies.LZEndpointDelegate)";        require_addr "$dl" delegate
-cf="$(env_addr mainnet olympus.policies.LZBridgeAndDelegateConfig)"; require_addr "$cf" config
-pb="$(env_addr mainnet olympus.periphery.LZCrossChainBridge)";       require_addr "$pb" periphery
-ac="$(env_addr mainnet olympus.periphery.LZBridgeActivator)";        require_addr "$ac" activator
+gw="$(env_addr mainnet olympus.policies.LZBridgeGateway)"
+require_addr "$gw" gateway
+dl="$(env_addr mainnet olympus.policies.LZEndpointDelegate)"
+require_addr "$dl" delegate
+cf="$(env_addr mainnet olympus.policies.LZBridgeAndDelegateConfig)"
+require_addr "$cf" config
+pb="$(env_addr mainnet olympus.periphery.LZCrossChainBridge)"
+require_addr "$pb" periphery
+ac="$(env_addr mainnet olympus.periphery.LZBridgeActivator)"
+require_addr "$ac" activator
 log "Deployed gateway=$gw delegate=$dl config=$cf periphery=$pb activator=$ac"
 
 step "Sync addresses.json (proposal registry)"
-set_registry_addr olympus-policy-lz-bridge-gateway             "$gw"
-set_registry_addr olympus-policy-lz-endpoint-delegate          "$dl"
+set_registry_addr olympus-policy-lz-bridge-gateway "$gw"
+set_registry_addr olympus-policy-lz-endpoint-delegate "$dl"
 set_registry_addr olympus-policy-lz-bridge-and-delegate-config "$cf"
-set_registry_addr olympus-periphery-lz-cross-chain-bridge      "$pb"
-set_registry_addr olympus-lz-bridge-activator                  "$ac"
+set_registry_addr olympus-periphery-lz-cross-chain-bridge "$pb"
+set_registry_addr olympus-lz-bridge-activator "$ac"
 
 step "Pre-OCG: activate policies in the Kernel (DAO MS)"
 run_batch LZBridgeGatewayBatch activateGateway mainnet
@@ -93,24 +125,24 @@ bridge_admin_role="$(cast format-bytes32-string bridge_admin)"
 radmin="$(cast call "$roles_admin" 'admin()(address)' --rpc-url "$RPC")"
 log "RolesAdmin.admin = $radmin ; timelock = $TIMELOCK"
 if [ "${radmin,,}" != "${TIMELOCK,,}" ]; then
-  log "Handing RolesAdmin admin to the timelock"
-  cast_send_impersonated "$radmin" "$roles_admin" "pushNewAdmin(address)" "$TIMELOCK"
-  cast_send_impersonated "$TIMELOCK" "$roles_admin" "pullNewAdmin()"
-  radmin="$TIMELOCK"
+    log "Handing RolesAdmin admin to the timelock"
+    cast_send_impersonated "$radmin" "$roles_admin" "pushNewAdmin(address)" "$TIMELOCK"
+    cast_send_impersonated "$TIMELOCK" "$roles_admin" "pullNewAdmin()"
+    radmin="$TIMELOCK"
 fi
 for role in "$admin_role" "$bridge_admin_role"; do
-  has="$(cast call "$roles_mod" 'hasRole(address,bytes32)(bool)' "$TIMELOCK" "$role" --rpc-url "$RPC")"
-  if [ "$has" != "true" ]; then
-    cast_send_impersonated "$radmin" "$roles_admin" "grantRole(bytes32,address)" "$role" "$TIMELOCK"
-    log "  granted $role to the timelock"
-  fi
+    has="$(cast call "$roles_mod" 'hasRole(address,bytes32)(bool)' "$TIMELOCK" "$role" --rpc-url "$RPC")"
+    if [ "$has" != "true" ]; then
+        cast_send_impersonated "$radmin" "$roles_admin" "grantRole(bytes32,address)" "$role" "$TIMELOCK"
+        log "  granted $role to the timelock"
+    fi
 done
 
 step "OCG: execute LZBridgeSecurityUpgradeProposal from the timelock"
 RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \
-  --file src/proposals/LZBridgeSecurityUpgradeProposal.sol \
-  --contract LZBridgeSecurityUpgradeProposalScript \
-  2>&1 | tee "$LOG_DIR/proposal.log"
+    --file src/proposals/LZBridgeSecurityUpgradeProposal.sol \
+    --contract LZBridgeSecurityUpgradeProposalScript \
+    2>&1 | tee "$LOG_DIR/proposal.log"
 
 step "Post-OCG: bridged supply + periphery (DAO MS)"
 run_batch LZBridgeGatewayBatch initBridgedSupply mainnet "$SUPPLY_ARGS"

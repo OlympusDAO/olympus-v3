@@ -51,6 +51,10 @@ PORT="${PORT:-8545}"
 RPC="http://localhost:${PORT}"
 ANVIL_PID=""
 KEEP_FORK="${KEEP_FORK:-false}"
+# When true, the run scripts skip the deploy step and act on the bridge addresses
+# already recorded in env.json / addresses.json (the real on-chain deployment)
+# instead of deploying a fresh throwaway set onto the fork.
+USE_DEPLOYED="${USE_DEPLOYED:-false}"
 
 log()  { printf '\n\033[1;36m[harness]\033[0m %s\n' "$*"; }
 step() { printf '\n\033[1;33m==== %s ====\033[0m\n' "$*"; }

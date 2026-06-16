@@ -56,12 +56,24 @@ Steps:
 
 The proposal is executed directly from the timelock via impersonation (`executeOnAnvilFork`), which builds the action list and replays each action. It does not simulate the governor vote and does not mint OHM or gOHM. To exercise the full governance path instead (propose, deal gOHM, vote, queue, execute), use `src/scripts/proposals/submitProposal.sh` with `shell/anvil/deal_gohm.sh` and `shell/anvil/warp.sh`; the bridge state reached is the same.
 
+## Rehearse against the already-deployed contracts
+
+Once the bridge contracts are live on the real networks (their addresses recorded in `env.json` / `addresses.json`) but the OCG proposal has not been submitted yet, pass `--use-deployed` to skip the deploy step and run the activation flow against those real addresses instead of a fresh throwaway set:
+
+```bash
+./run-ethereum.sh --use-deployed              # OCG proposal against the deployed mainnet contracts
+./run-l2.sh --chain arbitrum --use-deployed   # L2 batches against the deployed Arbitrum contracts
+```
+
+The fork is taken at the latest block (after the contracts were deployed), so their bytecode is present. The flow still runs the pre-OCG `activateGateway` batch and the post-OCG steps, so it assumes the deployed contracts are still in their pre-activation state (the DAO MS batch and the OCG proposal have not executed on chain yet).
+
 ## Options
 
 - `--chain <name>` (L2 only): `arbitrum` (default), `optimism`, `base`, `berachain`.
 - `--port <port>`: Anvil port (default `8545`; Ethereum requires `8545`).
 - `--supply <uint>` (Ethereum only): initial bridged supply (default `1000000000000`).
 - `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
+- `--use-deployed`: skip the deploy step and run against the bridge addresses already in `env.json` / `addresses.json`. See "Rehearse against the already-deployed contracts".
 
 Env overrides: `ANVIL_CUPS` (default `250`) and `ANVIL_BACKOFF_MS` (default `1000`) throttle the fork's upstream RPC. Per-step logs are written to `logs/`.
 
