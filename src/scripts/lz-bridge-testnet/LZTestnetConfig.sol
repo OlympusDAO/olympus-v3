@@ -58,17 +58,13 @@ library LZTestnetConfig {
     address internal constant BASE_SEPOLIA_LZ_DVN = 0xe1a12515F9AB2764b887bF60B923Ca494EBbB2d6;
     address internal constant ARB_SEPOLIA_LZ_DVN = 0x53f488E93b4f1b60E8E83aa374dBe1780A1EE8a8;
 
-    // Nethermind DVN (not in the route set: the testnet DVN does not verify)
-    address internal constant SEPOLIA_NETHERMIND_DVN = 0x68802e01D6321D5159208478f297d7007A7516Ed;
-    address internal constant BASE_SEPOLIA_NETHERMIND_DVN =
-        0xd9222CC3Ccd1DF7c070d700EA377D4aDA2B86Eb5;
-    address internal constant ARB_SEPOLIA_NETHERMIND_DVN =
-        0x3a74F7174709842d3b8a14ce60B4AA2499F2A2F2;
-
     // Horizen DVN
     address internal constant SEPOLIA_HORIZEN_DVN = 0x843139c725c2FB9814dE6A12fB890D8dBf3e1698;
     address internal constant BASE_SEPOLIA_HORIZEN_DVN = 0xB1B2319767B86800C4CFe8623a72C00D9d90cFb6;
     address internal constant ARB_SEPOLIA_HORIZEN_DVN = 0xc6cec4e6b8F3DC87E676D06A24864081311EDa15;
+
+    // The Nethermind testnet DVN (also present on all three chains) is deliberately omitted from
+    // the route set because it does not verify, so only LayerZero Labs and Horizen are pinned.
 
     // ========== CONFIG TYPES (EndpointV2 / SetConfigParam.configType) ========== //
 
@@ -178,14 +174,6 @@ library LZTestnetConfig {
         if (eid_ == SEPOLIA_EID) return SEPOLIA_LZ_DVN;
         if (eid_ == BASE_SEPOLIA_EID) return BASE_SEPOLIA_LZ_DVN;
         if (eid_ == ARB_SEPOLIA_EID) return ARB_SEPOLIA_LZ_DVN;
-        revert LZTestnetConfig_UnsupportedEid(eid_);
-    }
-
-    /// @notice Returns the Nethermind DVN address for a given testnet EID.
-    function nethermindDvnForEid(uint32 eid_) internal pure returns (address) {
-        if (eid_ == SEPOLIA_EID) return SEPOLIA_NETHERMIND_DVN;
-        if (eid_ == BASE_SEPOLIA_EID) return BASE_SEPOLIA_NETHERMIND_DVN;
-        if (eid_ == ARB_SEPOLIA_EID) return ARB_SEPOLIA_NETHERMIND_DVN;
         revert LZTestnetConfig_UnsupportedEid(eid_);
     }
 

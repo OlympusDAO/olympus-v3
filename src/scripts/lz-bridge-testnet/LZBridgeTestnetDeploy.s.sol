@@ -183,9 +183,12 @@ contract LZBridgeTestnetDeploy is LZBridgeTestnetBase {
     }
 
     /// @notice Wires the deployed stack on the active chain: grants the bootstrap roles to the
-    ///         deployer, configures the LZ endpoint (libraries, ULN/Executor, three DVNs), sets
+    ///         deployer, configures the LZ endpoint (libraries, ULN/Executor, two DVNs), sets
     ///         peers, enforced options and bidirectional rate limits, then enables the delegate,
     ///         the gateway and the periphery. Requires all three chains to be deployed first.
+    /// @dev Idempotent: re-running it on a live deployment re-applies the current `LZTestnetConfig`
+    ///      values (skipping no-op role grants, library re-pins and enables), so it doubles as the
+    ///      "set config" path after changing DVNs or any other endpoint parameter.
     function configure() external {
         string memory chain_ = _resolveChain();
         _loadEnv(chain_);
@@ -275,7 +278,7 @@ contract LZBridgeTestnetDeploy is LZBridgeTestnetBase {
     }
 
     /// @dev Configures send/receive libraries and ULN/Executor config for every remote, using
-    ///      the three DVNs shared by all three testnets (LayerZero Labs, Nethermind, Horizen).
+    ///      the two verifying DVNs shared by all three testnets (LayerZero Labs and Horizen).
     function _configureLZ() internal {
         ILZEndpointV2Authorized delegate = ILZEndpointV2Authorized(_delegate);
         ILayerZeroEndpointV2 endpoint = ILayerZeroEndpointV2(_endpoint);

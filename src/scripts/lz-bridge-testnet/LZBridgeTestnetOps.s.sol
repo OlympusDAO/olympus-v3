@@ -6,7 +6,6 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {LZBridgeTestnetBase} from "./LZBridgeTestnetBase.sol";
 
 // Interfaces
-import {SetConfigParam} from "@lz-evm-protocol-v2-3.0.162/interfaces/IMessageLibManager.sol";
 import {IEndpointV2State} from "src/interfaces/layerzero/IEndpointV2State.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
@@ -21,10 +20,18 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_CHANNEL_
 // Local
 import {LZTestnetConfig} from "./LZTestnetConfig.sol";
 
-/// @title LZBridgeTestnetFix
-/// @notice Repairs already-deployed testnet bridges and unblocks stuck inbound messages.
+/// @title LZBridgeTestnetOps
+/// @notice Operational tooling for an already-deployed testnet bridge: unblock a stuck inbound
+///         message and correct the canonical bridged supply after an undeliverable send, plus a
+///         read-only discovery helper.
 ///
-/// @dev The local gateway address is read from `deployments/<chain>.json` (the file written by
+/// @dev The endpoint config (libraries, ULN/DVNs, Executor, peers, enforced options, rate limits)
+///      is owned by the deploy script's idempotent `configure()`: to change DVNs or any other
+///      endpoint parameter, edit `LZTestnetConfig` and re-run `configure`. This script holds only
+///      the entry points that `configure` cannot cover, because they act on in-flight message state
+///      rather than on configuration.
+///
+///      The local gateway address is read from `deployments/<chain>.json` (the file written by
 ///      `deploy`). The delegate is then read on-chain from `endpoint.delegates(gateway)` and the
 ///      stuck-message sender from `gateway.peers(srcEid)`, so only the local gateway needs to be
 ///      on file.
@@ -36,15 +43,12 @@ import {LZTestnetConfig} from "./LZTestnetConfig.sol";
 ///      caller's roles, NOT through the `LZBridgeAndDelegateConfig` timelock.
 ///
 ///      Entry points:
-///      - `reapplyConfig()`  re-applies ULN (DVN) + Executor config for every remote.
-///        Caller needs `bridge_configurator`. Run after correcting DVN addresses in
-///        `LZTestnetConfig`.
 ///      - `skipInbound(srcChain, nonce)`  skips one stuck inbound nonce on the active
 ///        (destination) chain. Caller needs `admin`, `bridge_admin`, or `bridge_channel_manager`.
 ///      - `correctBridgedSupply(amount)`  reduces the canonical bridged supply after an
 ///        undeliverable send. Caller needs `bridge_configurator`; canonical chain only.
 ///      - `discover()`  (read-only) prints the delegate and remote peers.
-contract LZBridgeTestnetFix is LZBridgeTestnetBase {
+contract LZBridgeTestnetOps is LZBridgeTestnetBase {
     error LZTestnet_NoDelegate(address gateway);
     error LZTestnet_NoPeer(uint32 srcEid);
     error LZTestnet_MissingRole(string role, address account);
@@ -76,64 +80,6 @@ contract LZBridgeTestnetFix is LZBridgeTestnetBase {
             console2.log("    peer (remote gateway, bytes32):");
             console2.logBytes32(peer);
         }
-    }
-
-    /// @notice Re-applies the Send/Receive ULN (DVN) config and the Send Executor config for every
-    ///         remote of the active chain, using the (corrected) addresses in `LZTestnetConfig`.
-    /// @dev Libraries and peers are left untouched (only the DVN addresses were wrong).
-    ///      Preconditions: endpoint matches, delegate wired and enabled, caller holds
-    ///      `bridge_configurator`. `setEndpointConfig` overwrites idempotently.
-    function reapplyConfig() external {
-        string memory chain_ = _resolveChain();
-        _loadEnv(chain_);
-        address gateway = _localGateway(chain_);
-        address delegate = _resolveDelegate(gateway);
-        _requireDelegateEnabled(delegate);
-        _requireRole(gateway, BRIDGE_CONFIGURATOR_ROLE, "bridge_configurator");
-
-        uint32 localEid = LZTestnetConfig.eidForChain(chain_);
-        address sendLib = LZTestnetConfig.sendUln302ForEid(localEid);
-        address recvLib = LZTestnetConfig.recvUln302ForEid(localEid);
-        uint64 localConf = LZTestnetConfig.confirmationsForEid(localEid);
-        string[] memory remotes = LZTestnetConfig.remoteChainsForChain(chain_);
-
-        console2.log("\n=== [LZ testnet] Reapply config:", chain_, "===");
-        console2.log("  gateway:", gateway, "delegate:", delegate);
-
-        vm.startBroadcast();
-        for (uint256 i = 0; i < remotes.length; ++i) {
-            uint32 remoteEid = LZTestnetConfig.eidForChain(remotes[i]);
-            address[] memory dvns = LZTestnetConfig.dvnsForRoute(localEid, remoteEid);
-
-            SetConfigParam[] memory sendParams = new SetConfigParam[](2);
-            sendParams[0] = SetConfigParam({
-                eid: remoteEid,
-                configType: LZTestnetConfig.CONFIG_TYPE_ULN,
-                config: LZTestnetConfig.encodeUlnConfig(localConf, dvns)
-            });
-            sendParams[1] = SetConfigParam({
-                eid: remoteEid,
-                configType: LZTestnetConfig.CONFIG_TYPE_EXECUTOR,
-                config: LZTestnetConfig.encodeExecutorConfig(localEid)
-            });
-            ILZEndpointV2Authorized(delegate).setEndpointConfig(sendLib, sendParams);
-
-            SetConfigParam[] memory recvParams = new SetConfigParam[](1);
-            recvParams[0] = SetConfigParam({
-                eid: remoteEid,
-                configType: LZTestnetConfig.CONFIG_TYPE_ULN,
-                config: LZTestnetConfig.encodeUlnConfig(
-                    LZTestnetConfig.confirmationsForEid(remoteEid),
-                    dvns
-                )
-            });
-            ILZEndpointV2Authorized(delegate).setEndpointConfig(recvLib, recvParams);
-
-            console2.log("  Reapplied ULN + Executor for remote EID:", remoteEid);
-        }
-        vm.stopBroadcast();
-
-        console2.log("  Done. Re-run on every chain whose DVN addresses changed.");
     }
 
     /// @notice Skips a single stuck inbound nonce on the active (destination) chain.
