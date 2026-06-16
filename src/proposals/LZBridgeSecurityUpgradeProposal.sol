@@ -58,8 +58,7 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
     // ========== PROPOSAL ========== //
 
     function id() public pure override returns (uint256) {
-        // TODO: Set the proposal ID before submission
-        return 15;
+        return 16;
     }
 
     function name() public pure override returns (string memory) {
@@ -94,9 +93,10 @@ contract LZBridgeSecurityUpgradeProposal is GovernorBravoProposal {
                 "\n",
                 "## Resources\n",
                 "\n",
-                "- TODO: Add link to audit report\n",
-                "- TODO: Add link to PR\n",
-                "- TODO: Add RFC/OIP reference\n",
+                "- [Guardian audit report (June 2026)](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-06-Bridge.pdf)\n",
+                "- [Implementation PR #222](https://github.com/OlympusDAO/olympus-v3/pull/222)\n",
+                "- [OIP-197: LayerZero Bridge Security Upgrade](https://forum.olympusdao.finance/d/5375-oip-197-layerzero-bridge-security-upgrade)\n",
+                "- [RFC: LayerZero Bridge Security Upgrade](https://forum.olympusdao.finance/d/5365-rfc-layerzero-bridge-security-upgrade)\n",
                 "\n",
                 "## Assumptions\n",
                 "\n",

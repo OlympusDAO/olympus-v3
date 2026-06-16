@@ -3,14 +3,14 @@
         {
             "name": "LZBridgeGateway",
             "args": {
-                "graceSeconds": 86400
+                "graceSeconds": 259200
             }
         },
         { "name": "LZEndpointDelegate", "args": {} },
         {
             "name": "LZCrossChainBridge",
             "args": {
-                "graceSeconds": 86400
+                "graceSeconds": 259200
             }
         },
         {

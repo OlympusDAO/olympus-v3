@@ -31,6 +31,9 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {LZBridgeSecurityUpgradeProposal} from "src/proposals/LZBridgeSecurityUpgradeProposal.sol";
 
 contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
+    /// @dev OCG proposal ID (OIP-197). Must match `LZBridgeSecurityUpgradeProposal.id()`.
+    uint256 internal constant _PROPOSAL_ID = 16;
+
     /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
     ///      Update this once the contracts are deployed on mainnet.
     uint256 public constant BLOCK = 25029000;
@@ -375,6 +378,11 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     // ========================================================================
     // End State Tests
     // ========================================================================
+
+    /// @notice Validates the configured OCG proposal ID matches OIP-197.
+    function test_proposalId() public {
+        assertEq(proposal.id(), _PROPOSAL_ID, "Proposal ID should match OIP-197");
+    }
 
     /// @notice Validates that the proposal leaves the system in the correct end state.
     function test_proposalEndState() public view {

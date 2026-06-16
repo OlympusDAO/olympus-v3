@@ -179,9 +179,10 @@ interface ILZBridgeGateway is IOffsettingRateLimiter {
     ///
     ///      The delegate is authorized to configure anything on the LayerZero endpoint
     ///      on behalf of this contract (e.g. send/receive libraries, DVN config).
-    ///      Pass `address(0)` to clear the delegate.
+    ///      `delegate_` must be nonzero: the delegate cannot be cleared, only replaced
+    ///      with another nonzero address.
     ///
-    /// @param delegate_ The new delegate address, or `address(0)` to clear.
+    /// @param delegate_ The new delegate address; must be nonzero.
     function setDelegate(address delegate_) external;
 
     /// @notice One-shot bootstrap of the bridged supply on the canonical chain.
