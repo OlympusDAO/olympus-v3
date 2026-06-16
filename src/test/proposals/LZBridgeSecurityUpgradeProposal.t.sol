@@ -34,9 +34,10 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
     /// @dev OCG proposal ID (OIP-197). Must match `LZBridgeSecurityUpgradeProposal.id()`.
     uint256 internal constant _PROPOSAL_ID = 16;
 
-    /// @dev Block where timelock already has `admin` + `bridge_admin` roles.
-    ///      Update this once the contracts are deployed on mainnet.
-    uint256 public constant BLOCK = 25029000;
+    /// @dev Post-deployment mainnet fork block. The LZ bridge contracts are deployed (the
+    ///      activator, last in the deploy sequence, was created at block 25294104), the timelock
+    ///      holds `admin` + `bridge_admin`, and the new policies are not yet active in the Kernel.
+    uint256 public constant BLOCK = 25331058;
 
     /// @dev Grace window passed to the gateway constructor in the local-deploy branch.
     uint32 internal constant _GRACE_SECONDS = 1 days;
@@ -46,10 +47,10 @@ contract LZBridgeSecurityUpgradeProposalTest is ProposalTest {
 
     // ========== DEPLOYMENT TOGGLES ==========
 
-    /// @dev Set to true once contracts have been deployed on Ethereum.
-    ///      When false, setUp() deploys them locally and registers in
-    ///      the address registry before proposal simulation.
-    bool public constant IS_CONTRACTS_DEPLOYED = false;
+    /// @dev True now that the contracts are deployed on Ethereum: setUp() reads them from the
+    ///      address registry. When false, setUp() deploys them locally and registers them in the
+    ///      address registry before proposal simulation.
+    bool public constant IS_CONTRACTS_DEPLOYED = true;
 
     // ========== CONTRACTS ==========
 
