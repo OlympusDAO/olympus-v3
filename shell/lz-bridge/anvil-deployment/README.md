@@ -79,4 +79,4 @@ Env overrides: `ANVIL_CUPS` (default `250`) and `ANVIL_BACKOFF_MS` (default `100
 
 ## After a `--keep-fork` run
 
-The fork stays on `http://localhost:8545` with the contracts deployed and the addresses in `env.json` / `addresses.json`. Send further transactions with `cast` against that RPC, impersonating any address (the fork runs with `--auto-impersonate`). Stop it with `kill <pid>` (printed on exit).
+The fork stays on `http://localhost:<port>` — the `--port` value, `8545` by default — with the contracts deployed and the addresses in `env.json` / `addresses.json`. Send further transactions with `cast` against that RPC, impersonating any address (the fork runs with `--auto-impersonate`). Stop it with `kill <pid>` (printed on exit).

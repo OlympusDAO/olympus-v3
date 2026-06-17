@@ -35,11 +35,13 @@ INITIAL_BRIDGED_SUPPLY="1000000000000" # 1000 OHM at 9 decimals; any positive te
 while [ $# -gt 0 ]; do
     case "$1" in
         --port)
+            [ $# -ge 2 ] || die "--port requires a value"
             PORT="$2"
             RPC="http://localhost:${PORT}"
             shift 2
             ;;
         --supply)
+            [ $# -ge 2 ] || die "--supply requires a value"
             INITIAL_BRIDGED_SUPPLY="$2"
             shift 2
             ;;
@@ -119,7 +121,9 @@ run_batch LZBridgeGatewayBatch activateGateway mainnet
 # grants (sent from the timelock) are accepted.
 step "Grant admin + bridge_admin to the timelock"
 roles_mod="$(env_addr mainnet olympus.modules.OlympusRoles)"
+require_addr "$roles_mod" "mainnet olympus.modules.OlympusRoles"
 roles_admin="$(env_addr mainnet olympus.policies.RolesAdmin)"
+require_addr "$roles_admin" "mainnet olympus.policies.RolesAdmin"
 admin_role="$(cast format-bytes32-string admin)"
 bridge_admin_role="$(cast format-bytes32-string bridge_admin)"
 radmin="$(cast call "$roles_admin" 'admin()(address)' --rpc-url "$RPC")"

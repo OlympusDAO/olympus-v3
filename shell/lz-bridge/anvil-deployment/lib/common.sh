@@ -107,6 +107,10 @@ cleanup() {
 start_anvil() {
   local fork_alias="$1"
   mkdir -p "$LOG_DIR"
+  # Fail fast if the port is taken: a new Anvil that cannot bind exits, leaving cast on the stale fork.
+  if cast block-number --rpc-url "$RPC" >/dev/null 2>&1; then
+    die "$RPC is already serving an RPC (port $PORT in use). Stop that process before starting the harness."
+  fi
   log "Starting Anvil fork of '$fork_alias' on $RPC (CUPS=$ANVIL_CUPS, backoff=${ANVIL_BACKOFF_MS}ms)"
   anvil \
     --fork-url "$fork_alias" \
@@ -119,11 +123,11 @@ start_anvil() {
   ANVIL_PID=$!
   local i
   for i in $(seq 1 90); do
+    kill -0 "$ANVIL_PID" 2>/dev/null || { tail -n 30 "$LOG_DIR/anvil-$fork_alias.log"; die "Anvil exited during startup"; }
     if cast block-number --rpc-url "$RPC" >/dev/null 2>&1; then
       log "Anvil ready at block $(cast block-number --rpc-url "$RPC"), pid $ANVIL_PID"
       return 0
     fi
-    kill -0 "$ANVIL_PID" 2>/dev/null || { tail -n 30 "$LOG_DIR/anvil-$fork_alias.log"; die "Anvil exited during startup"; }
     sleep 1
   done
   die "Anvil did not become ready within 90s"
@@ -143,10 +147,15 @@ set_env_addr() {
 
 # set_registry_addr <name> <addr>   (updates the chainId 1 entry in addresses.json)
 set_registry_addr() {
-  local tmp; tmp="$(mktemp)"
-  jq --arg n "$1" --arg a "$2" '(.[] | select(.name == $n and .chainId == 1)).addr = $a' \
-    "$REPO_ROOT/$ADDR_JSON" > "$tmp"
-  mv "$tmp" "$REPO_ROOT/$ADDR_JSON"
+  local target="$REPO_ROOT/$ADDR_JSON" tmp
+  tmp="$(mktemp)"
+  jq --arg n "$1" --arg a "$2" '
+    if any(.[]; .name == $n and .chainId == 1)
+    then map(if .name == $n and .chainId == 1 then .addr = $a else . end)
+    else error("no chainId 1 registry entry for " + $n)
+    end
+  ' "$target" > "$tmp" || { rm -f "$tmp"; die "failed to update $ADDR_JSON for '$1'"; }
+  mv "$tmp" "$target"
 }
 
 require_addr() {
@@ -158,12 +167,16 @@ require_addr() {
 # deploy_sequence <sequence-file-relative-to-repo-root>
 deploy_sequence() {
   step "Deploy sequence: $1"
-  FOUNDRY_PROFILE=deploy forge script src/scripts/deploy/DeployV3.s.sol:DeployV3 \
-    --sig "deploy(string)()" "$1" \
-    --rpc-url "$RPC" \
-    --private-key "$DEPLOYER_KEY" --sender "$DEPLOYER_ADDR" \
-    --slow --broadcast -vvv \
-    2>&1 | tee "$LOG_DIR/deploy.log"
+  (
+    cd "$REPO_ROOT"
+    set -o pipefail
+    FOUNDRY_PROFILE=deploy forge script src/scripts/deploy/DeployV3.s.sol:DeployV3 \
+      --sig "deploy(string)()" "$1" \
+      --rpc-url "$RPC" \
+      --private-key "$DEPLOYER_KEY" --sender "$DEPLOYER_ADDR" \
+      --slow --broadcast -vvv \
+      2>&1 | tee "$LOG_DIR/deploy.log"
+  ) || die "deploy sequence failed; see $LOG_DIR/deploy.log"
 }
 
 # run_batch <ContractName> <function> <chain> [argsFileRelative]
@@ -176,11 +189,15 @@ run_batch() {
   require_addr "$daoMS" "$chain olympus.multisig.dao"
   fund "$daoMS"
   step "Batch ${contract}.${fn} (chain=$chain, owner=DAO MS $daoMS)"
-  FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
-    "src/scripts/ops/batches/${contract}.sol:${contract}" \
-    --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
-    --rpc-url "$RPC" --sender "$daoMS" --unlocked --slow -vvv --broadcast \
-    2>&1 | tee "$LOG_DIR/batch-${contract}-${fn}.log"
+  (
+    cd "$REPO_ROOT"
+    set -o pipefail
+    FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
+      "src/scripts/ops/batches/${contract}.sol:${contract}" \
+      --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
+      --rpc-url "$RPC" --sender "$daoMS" --unlocked --slow -vvv --broadcast \
+      2>&1 | tee "$LOG_DIR/batch-${contract}-${fn}.log"
+  ) || die "batch ${contract}.${fn} failed; see $LOG_DIR/batch-${contract}-${fn}.log"
 }
 
 # cast_send_impersonated <from> <to> <sig> [args...]

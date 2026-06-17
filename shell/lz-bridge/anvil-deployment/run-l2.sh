@@ -24,10 +24,12 @@ CHAIN="arbitrum"
 while [ $# -gt 0 ]; do
     case "$1" in
         --chain)
+            [ $# -ge 2 ] || die "--chain requires a value"
             CHAIN="$2"
             shift 2
             ;;
         --port)
+            [ $# -ge 2 ] || die "--port requires a value"
             PORT="$2"
             RPC="http://localhost:${PORT}"
             shift 2
@@ -93,7 +95,7 @@ kernel="$(env_addr "$CHAIN" olympus.Kernel)"
 old_bridge="$(env_addr "$CHAIN" olympus.policies.CrossChainBridge)"
 old_active="$(cast call "$kernel" 'isPolicyActive(address)(bool)' "$old_bridge" --rpc-url "$RPC")"
 log "old CrossChainBridge isPolicyActive=$old_active"
-[ "$old_active" = "true" ] || log "WARNING: activateGateway will revert on DeactivatePolicy (old bridge already inactive in Kernel)."
+[ "$old_active" = "true" ] || die "old CrossChainBridge is already inactive in the Kernel; activateGateway would revert on DeactivatePolicy. Aborting before running the batch."
 
 step "Gateway batch (LZBridgeGatewayL2Batch)"
 run_batch LZBridgeGatewayL2Batch activateGateway "$CHAIN"
