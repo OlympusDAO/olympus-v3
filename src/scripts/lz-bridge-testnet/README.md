@@ -81,7 +81,7 @@ Then track delivery (queries the LayerZero Scan testnet API by source tx hash):
 
 - **Deploy all three chains, then configure all three, before sending.** A send to a chain that has not been configured yet will fail on delivery (no peer / no receive config).
 - **The first transfer must originate from Sepolia (the canonical chain).** Sepolia only mints OHM on receipt up to the amount previously sent out from it (`bridgedSupply` accounting), so `Sepolia -> L2` must happen before any `L2 -> Sepolia`. `L2 -> L2` is unrestricted.
-- **OHM appears on Arbitrum Sepolia only after a transfer is bridged in** (there is no minter in the mock stack). Bridge `Sepolia -> Arbitrum Sepolia` first, then you can send onward from it.
+- OHM can be minted on Arbitrum Sepolia after a transfer is bridged in if needed, then you can send onward from it.
 
 ## Changing config or recovering a stuck message
 

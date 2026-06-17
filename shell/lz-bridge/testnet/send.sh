@@ -34,6 +34,19 @@ validate_text "$chain" "No source chain. Use --chain <sepolia|base-sepolia|arbit
 validate_text "$dst" "No destination chain. Use --dst <sepolia|base-sepolia|arbitrum-sepolia>."
 validate_text "$amount" "No amount. Use --amount <ohm with 9 decimals>."
 
+validate_chain_name() {
+    case "$1" in
+        sepolia | base-sepolia | arbitrum-sepolia) ;;
+        *)
+            display_error "Unsupported chain '$1'. Use sepolia|base-sepolia|arbitrum-sepolia."
+            exit 1
+            ;;
+    esac
+}
+
+validate_chain_name "$chain"
+validate_chain_name "$dst"
+
 BROADCAST=${broadcast:-true}
 set_broadcast_flag "$BROADCAST"
 validate_and_set_account "$account" "$ledger"
@@ -45,7 +58,7 @@ eid_for_chain() {
         sepolia) echo 40161 ;;
         base-sepolia) echo 40245 ;;
         arbitrum-sepolia) echo 40231 ;;
-        *) echo 0 ;;
+        *) return 1 ;;
     esac
 }
 
@@ -86,11 +99,14 @@ fi
 MESSAGES="$ROOT_DIR/src/scripts/lz-bridge-testnet/deployments/messages.json"
 [ -f "$MESSAGES" ] || echo '[]' > "$MESSAGES"
 
+SRC_EID=$(eid_for_chain "$chain") || exit 1
+DST_EID=$(eid_for_chain "$dst") || exit 1
+
 ENTRY=$(jq -n \
     --arg src "$chain" \
     --arg dst "$dst" \
-    --argjson srcEid "$(eid_for_chain "$chain")" \
-    --argjson dstEid "$(eid_for_chain "$dst")" \
+    --argjson srcEid "$SRC_EID" \
+    --argjson dstEid "$DST_EID" \
     --arg recipient "$RECIPIENT" \
     --arg amount "$amount" \
     --arg tx "$TX_HASH" \

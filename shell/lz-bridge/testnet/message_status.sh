@@ -44,7 +44,11 @@ command -v curl > /dev/null || {
 report_tx() {
     local tx="$1"
     local resp status dsttx guid src_eid dst_eid
-    resp=$(curl -sf --max-time 20 "$API_BASE/messages/tx/$tx" 2> /dev/null || true)
+    resp=$(curl -sf --max-time 20 "$API_BASE/messages/tx/$tx" 2> /dev/null) || {
+        echo "  $tx -> no LZ Scan data (not indexed yet, or API unavailable); keeping prior status"
+        echo "__NO_UPDATE__"
+        return
+    }
 
     if [ -z "$resp" ] || [ "$(echo "$resp" | jq -r '.data | length')" = "0" ]; then
         echo "  $tx -> NOT INDEXED YET (pending, or wrong/old hash)"
@@ -102,7 +106,11 @@ for i in $(seq 0 $((COUNT - 1))); do
     echo "$OUT" | sed '$d'
     STATUS=$(echo "$OUT" | tail -n1)
 
-    NEW_ENTRY=$(echo "$ENTRY" | jq --arg s "$STATUS" '.status = $s')
+    if [ "$STATUS" = "__NO_UPDATE__" ]; then
+        NEW_ENTRY="$ENTRY" # not indexed / API unavailable: keep the prior status
+    else
+        NEW_ENTRY=$(echo "$ENTRY" | jq --arg s "$STATUS" '.status = $s')
+    fi
     UPDATED=$(echo "$UPDATED" | jq --argjson e "$NEW_ENTRY" '. + [$e]')
     echo ""
 done

@@ -6,8 +6,8 @@ import {console2} from "@forge-std-1.9.6/console2.sol";
 import {LZBridgeTestnetBase} from "./LZBridgeTestnetBase.sol";
 
 // Interfaces
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 // Contracts
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
