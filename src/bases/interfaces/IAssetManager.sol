@@ -38,6 +38,8 @@ interface IAssetManager {
         uint256 depositCap
     );
 
+    error AssetManager_UnderlyingShareRedemptionRequiresVault();
+
     // ========== EVENTS ========== //
 
     event AssetConfigured(address indexed asset, address indexed vault);
@@ -76,11 +78,13 @@ interface IAssetManager {
     /// @param depositCap     The maximum amount of assets that can be deposited. Set to 0 to disable deposits.
     /// @param minimumDeposit The minimum amount of assets that can be deposited in a single transaction (set to 0 to disable the check)
     /// @param vault          The ERC4626 vault that the asset is deposited into
+    /// @param redeemForUnderlyingShares Whether a redemption delivers the vault's underlying shares instead of the asset
     struct AssetConfiguration {
         bool isConfigured;
         uint256 depositCap;
         uint256 minimumDeposit;
         address vault;
+        bool redeemForUnderlyingShares;
     }
 
     // ========== ASSET FUNCTIONS ========== //

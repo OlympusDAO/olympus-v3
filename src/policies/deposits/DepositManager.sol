@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(asm-keccak256, mixed-case-function)
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -160,7 +160,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         major = 1;
-        minor = 0;
+        minor = 1;
 
         return (major, minor);
     }
@@ -479,7 +479,26 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
         uint256 depositCap_,
         uint256 minimumDeposit_
     ) external onlyEnabled onlyManagerOrAdminRole {
-        _addAsset(asset_, vault_, depositCap_, minimumDeposit_);
+        _addAsset(asset_, vault_, depositCap_, minimumDeposit_, false);
+    }
+
+    /// @inheritdoc IDepositManager
+    /// @dev        See {addAsset}. Configures the asset so that a redemption delivers the vault's
+    ///             underlying shares instead of the asset.
+    ///
+    ///             This function reverts if:
+    ///             - The contract is not enabled
+    ///             - The caller does not have the admin or manager role
+    ///             - asset_ is the zero address
+    ///             - minimumDeposit_ > depositCap_
+    ///             - No vault is configured
+    function addAssetWithRedeemForUnderlyingShares(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) external onlyEnabled onlyManagerOrAdminRole {
+        _addAsset(asset_, vault_, depositCap_, minimumDeposit_, true);
     }
 
     /// @inheritdoc IDepositManager
@@ -651,6 +670,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        Notes:
     ///             - This function is only callable by addresses with the deposit operator role
     ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
+    ///             - For a share-redeeming asset, the loan is disbursed in the vault's underlying shares, while the borrow accounting and repayment remain denominated in the asset.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled

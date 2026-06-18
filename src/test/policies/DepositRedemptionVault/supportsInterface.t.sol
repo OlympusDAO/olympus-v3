@@ -7,6 +7,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
@@ -34,6 +35,13 @@ contract DepositRedemptionVaultSupportsInterfaceTest is DepositRedemptionVaultTe
             redemptionVault.supportsInterface(type(IEnabler).interfaceId),
             true,
             "IEnabler mismatch"
+        );
+
+        // Test IVersioned
+        assertEq(
+            redemptionVault.supportsInterface(type(IVersioned).interfaceId),
+            true,
+            "IVersioned mismatch"
         );
 
         // Test non-implemented interfaces (should be false)

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IUnderlyingShareRedeemableVault} from "src/bases/interfaces/IUnderlyingShareRedeemableVault.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
@@ -104,7 +105,11 @@ abstract contract BaseAssetManager is IAssetManager {
             // due to rounding errors in the ERC4626 vault
             // To avoid minting more receipt tokens than the actual redeemable amount,
             // we should use the previewRedeem function to get the actual amount of assets redeemable by the shares.
-            actualAmount = vault.previewRedeem(shares);
+            // Share-redeeming vaults deliver the underlying shares without redeeming, so
+            // book at the nominal conversion value (convertToAssets).
+            actualAmount = !assetConfiguration.redeemForUnderlyingShares
+                ? vault.previewRedeem(shares)
+                : vault.convertToAssets(shares);
         }
 
         // Amount of shares must be non-zero
@@ -152,10 +157,23 @@ abstract contract BaseAssetManager is IAssetManager {
             // Early exit if the amount of shares is 0, to prevent a revert
             if (shares == 0) return (0, 0);
 
-            // Early exit if the shares would result in a zero amount of assets (and hence a revert)
-            if (vault.previewRedeem(shares) == 0) return (0, 0);
+            if (!assetConfiguration.redeemForUnderlyingShares) {
+                // Redeem the shares to the asset and send them to the depositor.
+                // Early exit if the shares would result in a zero amount of assets (and hence a revert)
+                if (vault.previewRedeem(shares) == 0) return (0, 0);
 
-            assetAmount = vault.redeem(shares, depositor_, address(this));
+                assetAmount = vault.redeem(shares, depositor_, address(this));
+            } else {
+                // Deliver the vault's underlying shares directly to the depositor, recording their
+                // nominal conversion value (convertToAssets) for accounting.
+                assetAmount = vault.convertToAssets(shares);
+                if (assetAmount == 0) return (0, 0);
+                IUnderlyingShareRedeemableVault(address(vault)).redeemForUnderlyingShares(
+                    shares,
+                    depositor_,
+                    address(this)
+                );
+            }
         }
 
         // Update the shares deposited by the caller (operator)
@@ -177,7 +195,12 @@ abstract contract BaseAssetManager is IAssetManager {
         if (assetConfiguration.vault == address(0)) {
             sharesInAssets = shares;
         } else {
-            sharesInAssets = IERC4626(assetConfiguration.vault).previewRedeem(shares);
+            // Value the held shares: post-redemption value (previewRedeem) for vaults redeemed to the asset,
+            // nominal conversion value (convertToAssets) for share-redeeming vaults.
+            IERC4626 vault = IERC4626(assetConfiguration.vault);
+            sharesInAssets = !assetConfiguration.redeemForUnderlyingShares
+                ? vault.previewRedeem(shares)
+                : vault.convertToAssets(shares);
         }
 
         return (shares, sharesInAssets);
@@ -200,16 +223,19 @@ abstract contract BaseAssetManager is IAssetManager {
     ///         - The asset is already configured
     ///         - The vault asset does not match the asset
     ///         - The minimum deposit exceeds the deposit cap
+    ///         - Share redemption is requested without a vault
     ///
     /// @param asset_          The asset to configure
     /// @param vault_          The vault to use
     /// @param depositCap_     The deposit cap of the asset
     /// @param minimumDeposit_ The minimum deposit amount for the asset
+    /// @param redeemForUnderlyingShares_ Whether a redemption delivers the vault's underlying shares instead of the asset
     function _addAsset(
         IERC20 asset_,
         IERC4626 vault_,
         uint256 depositCap_,
-        uint256 minimumDeposit_
+        uint256 minimumDeposit_,
+        bool redeemForUnderlyingShares_
     ) internal {
         // Validate that the asset is not the zero address
         if (address(asset_) == address(0)) {
@@ -226,6 +252,11 @@ abstract contract BaseAssetManager is IAssetManager {
             revert AssetManager_VaultAssetMismatch();
         }
 
+        // Share redemption requires a vault to deliver the underlying shares from
+        if (redeemForUnderlyingShares_ && address(vault_) == address(0)) {
+            revert AssetManager_UnderlyingShareRedemptionRequiresVault();
+        }
+
         // Validate that minimum deposit does not exceed deposit cap
         if (minimumDeposit_ > depositCap_) {
             revert AssetManager_MinimumDepositExceedsDepositCap(
@@ -240,7 +271,8 @@ abstract contract BaseAssetManager is IAssetManager {
             isConfigured: true,
             vault: address(vault_),
             depositCap: depositCap_,
-            minimumDeposit: minimumDeposit_
+            minimumDeposit: minimumDeposit_,
+            redeemForUnderlyingShares: redeemForUnderlyingShares_
         });
 
         // Add the asset to the array of configured assets

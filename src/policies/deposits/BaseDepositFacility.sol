@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(asm-keccak256, mixed-case-variable)
-pragma solidity >=0.8.20;
+pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -17,7 +17,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Bophades
 import {Kernel, Policy} from "src/Kernel.sol";
-import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {PolicyEnabler} from "src/policies/utils/PolicyEnabler.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -25,7 +25,12 @@ import {DEPOSv1} from "src/modules/DEPOS/DEPOS.v1.sol";
 
 /// @title Base Deposit Facility
 /// @notice Abstract base contract for deposit facilities with shared functionality
-abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility, ReentrancyGuard {
+abstract contract BaseDepositFacility is
+    Policy,
+    PolicyEnabler,
+    IDepositFacility,
+    ReentrancyGuardTransient
+{
     using FullMath for uint256;
     using TransferHelper for ERC20;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -500,41 +505,89 @@ abstract contract BaseDepositFacility is Policy, PolicyEnabler, IDepositFacility
         // Validate that there are enough available deposits
         _validateAvailableDeposits(depositToken_, amount_);
 
-        // Withdraw the deposit
-        uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+        // A vault redeems the shares to the asset; the discount is applied to the actual
+        // amount withdrawn, and the remainder is swept to the TRSRY as yield.
+        if (!DEPOSIT_MANAGER.getAssetConfiguration(depositToken_).redeemForUnderlyingShares) {
+            // Withdraw the deposit
+            uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
+                IDepositManager.WithdrawParams({
+                    asset: depositToken_,
+                    depositPeriod: depositPeriod_,
+                    depositor: msg.sender,
+                    recipient: address(this),
+                    amount: amount_,
+                    isWrapped: false
+                })
+            );
+
+            // Calculate the quantity of deposit token to withdraw and return
+            // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
+            uint256 discountedAssetsOut = _previewReclaim(
+                depositToken_,
+                depositPeriod_,
+                actualAmount
+            );
+
+            // Transfer discounted amount of the deposit token to the recipient
+            ERC20(address(depositToken_)).safeTransfer(msg.sender, discountedAssetsOut);
+
+            // Transfer the remaining deposit tokens to the TRSRY
+            ERC20(address(depositToken_)).safeTransfer(
+                address(TRSRY),
+                actualAmount - discountedAssetsOut
+            );
+
+            // Emit event
+            emit Reclaimed(
+                msg.sender,
+                address(depositToken_),
+                depositPeriod_,
+                discountedAssetsOut,
+                actualAmount - discountedAssetsOut
+            );
+
+            return discountedAssetsOut;
+        }
+
+        // For a share-redeeming asset (e.g. osUSDe), the vault's underlying shares (sUSDe) are
+        // delivered rather than the asset. The reclaim discount is applied to the requested
+        // amount, and each portion is withdrawn directly to its recipient.
+        uint256 discountedAmount = _previewReclaim(depositToken_, depositPeriod_, amount_);
+        uint256 treasuryAmount = amount_ - discountedAmount;
+
+        DEPOSIT_MANAGER.withdraw(
             IDepositManager.WithdrawParams({
                 asset: depositToken_,
                 depositPeriod: depositPeriod_,
                 depositor: msg.sender,
-                recipient: address(this),
-                amount: amount_,
+                recipient: msg.sender,
+                amount: discountedAmount,
                 isWrapped: false
             })
         );
 
-        // Calculate the quantity of deposit token to withdraw and return
-        // This will create a difference between the quantity of deposit tokens and the vault shares, which will be swept as yield
-        uint256 discountedAssetsOut = _previewReclaim(depositToken_, depositPeriod_, actualAmount);
+        if (treasuryAmount != 0) {
+            DEPOSIT_MANAGER.withdraw(
+                IDepositManager.WithdrawParams({
+                    asset: depositToken_,
+                    depositPeriod: depositPeriod_,
+                    depositor: msg.sender,
+                    recipient: address(TRSRY),
+                    amount: treasuryAmount,
+                    isWrapped: false
+                })
+            );
+        }
 
-        // Transfer discounted amount of the deposit token to the recipient
-        ERC20(address(depositToken_)).safeTransfer(msg.sender, discountedAssetsOut);
-
-        // Transfer the remaining deposit tokens to the TRSRY
-        ERC20(address(depositToken_)).safeTransfer(
-            address(TRSRY),
-            actualAmount - discountedAssetsOut
-        );
-
-        // Emit event
         emit Reclaimed(
             msg.sender,
             address(depositToken_),
             depositPeriod_,
-            discountedAssetsOut,
-            actualAmount - discountedAssetsOut
+            discountedAmount,
+            treasuryAmount
         );
 
-        return discountedAssetsOut;
+        return discountedAmount;
     }
 
     // ========== POSITION MANAGEMENT ========== //

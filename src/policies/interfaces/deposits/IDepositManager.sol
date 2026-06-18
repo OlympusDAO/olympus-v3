@@ -375,6 +375,22 @@ interface IDepositManager is IAssetManager {
         uint256 minimumDeposit_
     ) external;
 
+    /// @notice Adds a new asset whose redemptions deliver the vault's underlying shares instead of
+    ///         the asset.
+    /// @dev    Behaves like {addAsset}, but configures the asset for share redemption. A vault is
+    ///         required.
+    ///
+    /// @param  asset_            The address of the underlying asset
+    /// @param  vault_            The address of the ERC4626 vault to deposit the asset into
+    /// @param  depositCap_       The deposit cap of the asset
+    /// @param  minimumDeposit_   The minimum deposit amount for the asset
+    function addAssetWithRedeemForUnderlyingShares(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) external;
+
     /// @notice Sets the deposit cap for an asset
     /// @dev    The implementing contract is expected to handle the following:
     ///         - Validating that the caller has the correct role
