@@ -45,7 +45,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///        sUSDe shares received. Lossless. Gated by `isEnabled`.
 ///      - `redeem`: burn osUSDe and sell the matching sUSDe for USDe through the swapper.
 ///        Lossy (swap slippage), bounded by `slippageCap`. Available while disabled.
-///      - `redeemAsShares`: burn osUSDe and return the matching sUSDe one-to-one.
+///      - `redeemForUnderlyingShares`: burn osUSDe and return the matching sUSDe one-to-one.
 ///        Lossless, swapper-independent, and available while disabled, so holders always
 ///        retain an exit even if the swap route is unhealthy or the wrapper is paused.
 ///      - `withdraw`: disabled.
@@ -186,8 +186,8 @@ contract OlympusSUSDe is
 
     /// @inheritdoc EnablerV2
     /// @dev Disabling only blocks new deposits. The wrapper keeps backing existing osUSDe with
-    ///      sUSDe, the swapper and slippage cap are retained, and `redeem` and `redeemAsShares`
-    ///      stay open so holders can always exit.
+    ///      sUSDe, the swapper and slippage cap are retained, and `redeem` and
+    ///      `redeemForUnderlyingShares` stay open so holders can always exit.
     function _beforeDisable(bytes calldata) internal override {}
 
     // ========== ERC4626: METADATA ========== //
@@ -251,7 +251,7 @@ contract OlympusSUSDe is
 
     /// @inheritdoc IERC4626
     /// @dev Inverse of `previewRedeem`: the shares needed so the swap exit yields at least `assets_`, rounded up.
-    ///      Provided for share-sizing; the `withdraw` action itself is disabled (use `redeem` or `redeemAsShares`).
+    ///      Provided for share-sizing; the `withdraw` action itself is disabled (use `redeem` or `redeemForUnderlyingShares`).
     function previewWithdraw(uint256 assets_) public view override returns (uint256) {
         return
             Math.mulDiv(
@@ -351,7 +351,7 @@ contract OlympusSUSDe is
 
     /// @inheritdoc IERC4626
     /// @dev Disabled. The swap delivers a variable amount of at least the floor, not exactly `assets`.
-    ///      Use `redeem` (variable assets out) or `redeemAsShares` (sUSDe out).
+    ///      Use `redeem` (variable assets out) or `redeemForUnderlyingShares` (sUSDe out).
     function withdraw(uint256, address, address) external pure override returns (uint256) {
         revert IOlympusSUSDe_UseRedeem();
     }
@@ -395,7 +395,7 @@ contract OlympusSUSDe is
     }
 
     /// @inheritdoc IOlympusSUSDe
-    function redeemAsShares(
+    function redeemForUnderlyingShares(
         uint256 shares_,
         address receiver_,
         address owner_
@@ -410,17 +410,19 @@ contract OlympusSUSDe is
 
         _SUSDE.safeTransfer(receiver_, shares_);
 
-        emit WithdrawnAsShares(msg.sender, receiver_, owner_, shares_);
+        emit RedeemedForUnderlyingShares(msg.sender, receiver_, owner_, shares_);
         return shares_;
     }
 
     /// @inheritdoc IOlympusSUSDe
-    function previewRedeemAsShares(uint256 shares_) external pure override returns (uint256) {
+    function previewRedeemForUnderlyingShares(
+        uint256 shares_
+    ) external pure override returns (uint256) {
         return shares_;
     }
 
     /// @inheritdoc IOlympusSUSDe
-    function maxRedeemAsShares(address owner_) external view override returns (uint256) {
+    function maxRedeemForUnderlyingShares(address owner_) external view override returns (uint256) {
         return balanceOf(owner_);
     }
 

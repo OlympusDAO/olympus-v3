@@ -22,7 +22,7 @@ interface IOlympusSUSDe is IERC4626 {
     /// @param receiver The address that received the sUSDe.
     /// @param owner The address whose osUSDe shares were burned.
     /// @param shares The number of osUSDe shares burned, equal to the sUSDe shares sent.
-    event WithdrawnAsShares(
+    event RedeemedForUnderlyingShares(
         address indexed caller,
         address indexed receiver,
         address indexed owner,
@@ -70,25 +70,27 @@ interface IOlympusSUSDe is IERC4626 {
     /// @param receiver The address that receives the sUSDe.
     /// @param owner The address whose osUSDe shares are burned.
     /// @return susdeShares The number of sUSDe shares sent, equal to `shares`.
-    function redeemAsShares(
+    function redeemForUnderlyingShares(
         uint256 shares,
         address receiver,
         address owner
     ) external returns (uint256 susdeShares);
 
     /// @notice Returns the sUSDe shares received for redeeming `shares` osUSDe through
-    ///         `redeemAsShares`.
+    ///         `redeemForUnderlyingShares`.
     /// @dev Always one-to-one (returns `shares`), since osUSDe is backed one-to-one by sUSDe.
     /// @param shares The osUSDe shares to redeem.
     /// @return susdeShares The sUSDe shares that would be returned.
-    function previewRedeemAsShares(uint256 shares) external pure returns (uint256 susdeShares);
+    function previewRedeemForUnderlyingShares(
+        uint256 shares
+    ) external pure returns (uint256 susdeShares);
 
-    /// @notice Returns the maximum osUSDe shares `owner` can redeem through `redeemAsShares`.
+    /// @notice Returns the maximum osUSDe shares `owner` can redeem through `redeemForUnderlyingShares`.
     /// @dev Equal to the owner's balance, and to the sUSDe returned one-to-one. Available while
     ///      the wrapper is disabled, so it does not depend on the enabled state.
     /// @param owner The holder.
     /// @return maxShares The maximum osUSDe shares redeemable as sUSDe.
-    function maxRedeemAsShares(address owner) external view returns (uint256 maxShares);
+    function maxRedeemForUnderlyingShares(address owner) external view returns (uint256 maxShares);
 
     // ========== ADMIN ========== //
 
