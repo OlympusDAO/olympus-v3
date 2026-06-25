@@ -192,7 +192,7 @@ pnpm run lint:check
 This runs:
 
 - `prettier:check` - Check formatting
-- `forge-lint:check` - Check Solidity linting
+- `forge-lint:check` - Check Solidity formatting and linting
 - `markdownlint:check` - Check Markdown files
 
 ### Full Lint (With Auto-Fix)
@@ -204,7 +204,7 @@ pnpm run lint
 This runs:
 
 - `prettier` - Auto-formats code
-- `forge-lint` - Check Solidity linting
+- `forge-lint` - Format Solidity files and check Solidity linting
 - `markdownlint` - Auto-fixes Markdown issues
 
 ### Individual Tools
@@ -213,10 +213,10 @@ This runs:
 # Format code only (fastest)
 pnpm run prettier
 
-# Check Solidity linting only
+# Check Solidity formatting and linting only
 pnpm run forge-lint:check
 
-# Run Solidity linting only
+# Format Solidity files and run Solidity linting only
 pnpm run forge-lint
 ```
 
@@ -243,7 +243,7 @@ Many linting issues can be auto-fixed by running:
 
 ```bash
 pnpm run prettier  # Auto-formats code
-pnpm run forge-lint # Checks Solidity lint rules
+pnpm run forge-lint # Formats Solidity files and checks Solidity lint rules
 ```
 
 Run formatting first, then address any remaining Forge lint notes manually.
