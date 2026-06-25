@@ -26,19 +26,19 @@ contract V1MigratorAdminProposal is GovernorBravoProposal {
 
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 15;
+        return 16;
     }
 
     // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
-        return "Grant V1Migrator Merkle Root Admin to DAO MS";
+        return "Grant V1Migrator Admin Role to DAO MS";
     }
 
     // Provides a brief description of the proposal.
     function description() public pure override returns (string memory) {
         return
             string.concat(
-                "# Grant V1Migrator Merkle Root Admin to DAO MS\n\n",
+                "# Grant V1Migrator Admin Role to DAO MS\n\n",
                 "## Summary\n\n",
                 "This proposal grants the `legacy_migration_admin` role to the DAO MS on Ethereum mainnet.\n\n",
                 "## Context\n\n",
