@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
-pragma solidity ^0.8.15;
+pragma solidity >=0.8.20;
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
