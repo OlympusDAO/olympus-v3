@@ -28,7 +28,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 **Linting:**
 
-- `pnpm run lint` - Format and lint code (prettier + solhint + markdownlint)
+- `pnpm run lint` - Format and lint code (prettier + forge lint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
 - `pnpm run prettier` - Format code (runs quicker than linting)
 
