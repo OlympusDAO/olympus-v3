@@ -8,7 +8,7 @@ import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {V1MigratorAdminProposal} from "src/proposals/V1MigratorAdminProposal.sol";
 
 contract V1MigratorAdminProposalTest is ProposalTest {
-    uint256 public constant BLOCK = 24_876_700;
+    uint256 public constant BLOCK = 25395851 + 1;
 
     // Casting is safe because this fixed role label is shorter than 32 bytes.
     /// forge-lint: disable-next-line(unsafe-typecast)
@@ -25,7 +25,7 @@ contract V1MigratorAdminProposalTest is ProposalTest {
 
         V1MigratorAdminProposal proposal = new V1MigratorAdminProposal();
 
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         _setupSuite(address(proposal));
 
