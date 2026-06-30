@@ -48,6 +48,7 @@ contract V1MigratorAdminProposal is GovernorBravoProposal {
                 "## Context\n\n",
                 // solhint-disable-next-line quotes
                 'This builds off OCG proposal ID 13, "Defund OHM v1 TokenMigrator and Enable V1Migrator". Proposal ID 13 enabled the V1Migrator policy and noted that the DAO MS would update the V1Migrator merkle root as a follow-on action.\n\n',
+                "A previous version of this proposal was prepared as OCG proposal ID 16. Since that proposal ID has already been used on mainnet, this version uses OCG proposal ID 17.\n\n",
                 "The V1Migrator `setMerkleRoot(bytes32)` function is callable by either a policy admin or an address with the `legacy_migration_admin` role. Granting this role to the DAO MS enables the DAO MS to set the merkle root through a Safe transaction.\n\n",
                 "The maximum OHM v1 that can be migrated has been determined to be 102,397.596876863 OHM v1. V1Migrator enforces this through its remaining MINTR mint approval, which is denominated in OHM v2 units. The full aggregate OHM v1 amount previews to 102,397.596876862 OHM v2 due to gOHM conversion rounding, so a 102,397.596876863 OHM remaining mint approval covers the full migration amount.\n\n",
                 "## Actions\n\n",
