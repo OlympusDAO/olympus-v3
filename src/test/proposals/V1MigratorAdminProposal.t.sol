@@ -58,6 +58,14 @@ contract V1MigratorAdminProposalTest is ProposalTest {
     function test_maxMigratableOhmV1FitsWithinRemainingMintApproval() public view {
         uint256 ohmV2Preview = v1Migrator.previewMigrate(MAX_MIGRATABLE_OHM_V1);
 
+        // previewMigrate converts OHM v1 (9 decimals) to gOHM (18 decimals) and back.
+        // At this fork block, gOHM index = 269_238_508_004 (9 decimals).
+        // gOHM = floor(102_397_596_876_863 * 1e18 / 269_238_508_004)
+        //      = 380_322_999_246_978_845_994
+        // OHM v2 = floor(380_322_999_246_978_845_994 * 269_238_508_004 / 1e18)
+        //        = 102_397_596_876_862
+        // The two floor divisions round down by one 9-decimal OHM base unit:
+        // 102,397.596876863 OHM v1 -> 102,397.596876862 OHM v2.
         assertEq(
             ohmV2Preview,
             EXPECTED_OHM_V2_PREVIEW,
