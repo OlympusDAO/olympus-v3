@@ -17,7 +17,7 @@ contract OlympusBackingOracle is Policy, PolicyEnablerV2, IOlympusBackingOracle,
     // ========== CONSTANTS ========== //
 
     uint256 private constant _ENABLE_DATA_LENGTH = 32;
-    uint256 private constant _MAX_BACKING_REDUCTION_PERCENT = 10;
+    uint256 private constant _MAX_BACKING_CHANGE_PERCENT = 10;
     uint256 private constant _PERCENT_SCALE = 100;
 
     // ========== STATE ========== //
@@ -79,19 +79,22 @@ contract OlympusBackingOracle is Policy, PolicyEnablerV2, IOlympusBackingOracle,
     ///      - The caller does not have the admin role.
     ///      - The policy is not enabled.
     ///      - `newBacking_` is zero.
-    ///      - `newBacking_` reduces the current backing beyond the allowed threshold (`_MAX_BACKING_REDUCTION_PERCENT`).
+    ///      - `newBacking_` changes the current backing beyond the allowed threshold.
     function setBacking(uint256 newBacking_) external givenEnabled onlyAdminRole {
         _requireNonzeroBacking(newBacking_);
 
         uint256 currentBacking = backing;
-        // Cannot reduce by more than _MAX_BACKING_REDUCTION_PERCENT per call
-        uint256 minBacking = (currentBacking * (_PERCENT_SCALE - _MAX_BACKING_REDUCTION_PERCENT)) /
+        // Cannot change by more than _MAX_BACKING_CHANGE_PERCENT per call
+        uint256 minBacking = (currentBacking * (_PERCENT_SCALE - _MAX_BACKING_CHANGE_PERCENT)) /
             _PERCENT_SCALE;
-        if (newBacking_ < minBacking)
-            revert OlympusBackingOracle_BackingReductionTooLarge(
+        uint256 maxBacking = (currentBacking * (_PERCENT_SCALE + _MAX_BACKING_CHANGE_PERCENT)) /
+            _PERCENT_SCALE;
+        if (newBacking_ < minBacking || newBacking_ > maxBacking)
+            revert OlympusBackingOracle_BackingChangeTooLarge(
                 currentBacking,
                 newBacking_,
-                minBacking
+                minBacking,
+                maxBacking
             );
 
         _setBacking(newBacking_);

@@ -21,14 +21,16 @@ interface IOlympusBackingOracle {
     /// @notice Thrown when the new backing value is zero.
     error OlympusBackingOracle_ZeroBacking();
 
-    /// @notice Thrown when the new backing value reduces the current backing beyond the allowed threshold.
+    /// @notice Thrown when the new backing value changes the current backing beyond the allowed threshold.
     /// @param currentBacking The current backing value.
     /// @param newBacking The proposed new backing value.
     /// @param minBacking The minimum allowed backing value.
-    error OlympusBackingOracle_BackingReductionTooLarge(
+    /// @param maxBacking The maximum allowed backing value.
+    error OlympusBackingOracle_BackingChangeTooLarge(
         uint256 currentBacking,
         uint256 newBacking,
-        uint256 minBacking
+        uint256 minBacking,
+        uint256 maxBacking
     );
 
     // ============ ADMIN FUNCTIONS ============ //
