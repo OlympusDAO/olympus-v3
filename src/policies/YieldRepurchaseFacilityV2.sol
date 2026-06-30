@@ -33,7 +33,7 @@ import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuar
 import {Rescueable} from "src/bases/Rescueable.sol";
 
 // Constants
-import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title YieldRepurchaseFacilityV2
 /// @notice Multi-asset Yield Repurchase Facility (YRF), version 2.
@@ -123,6 +123,10 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Maximum reserve token decimals supported when adding a vault.
     uint8 private constant _MAX_RESERVE_DECIMALS = 18;
+
+    /// @notice Decimals of the backing value, and therefore the decimals the `PRICE` oracle
+    ///         must report so that the oracle price can be compared against the backing.
+    uint8 private constant _BACKING_DECIMALS = 18;
 
     /// @notice Function selector for `reserve()` on a Clearinghouse.
     /// @dev Used by a graceful `staticcall` so the heartbeat does not revert when the
@@ -227,7 +231,11 @@ contract YieldRepurchaseFacilityV2 is
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
             revert Policy_WrongModuleVersion(expected);
 
+        // The oracle price is compared against the 18-decimal backing value, so the
+        // oracle must report 18 decimals.
         _oracleDecimals = PRICE.decimals();
+        if (_oracleDecimals != _BACKING_DECIMALS)
+            revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals(_oracleDecimals);
     }
 
     /// @inheritdoc Policy
@@ -595,7 +603,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The backing recycle is funded directly from the treasury rather than from the
     ///      buyback prefund pool, so it does not consume the week's buyback budget.
     ///      Any shares that cannot be redeemed this cycle are returned to the treasury,
-    ///      so the same OHM backing is not withdrawn more than once across retries. 
+    ///      so the same OHM backing is not withdrawn more than once across retries.
     ///      The withdrawal is capped by the treasury balance.
     /// @return received The reserve received.
     function _withdrawAndRedeemFresh(
@@ -821,7 +829,9 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The caller is not the configured teller.
+    ///      - The facility is disabled.
     ///      - The market is not owned by this facility (`_marketVaults[id_]` is zero).
+    ///      - The market's funding vault is inactive (deactivated or removed).
     function callback(
         uint256 id_,
         uint256 inputAmount_,
@@ -829,10 +839,15 @@ contract YieldRepurchaseFacilityV2 is
     ) external override nonReentrant {
         if (msg.sender != teller) revert IYieldRepurchaseFacilityV2_InvalidCaller(msg.sender);
 
+        _requireEnabled();
+
         address vault = _marketVaults[id_];
         if (vault == address(0)) revert IYieldRepurchaseFacilityV2_UnknownMarket(id_);
 
-        address reserve_ = _assetConfigs[vault].reserve;
+        ReserveAsset storage config = _assetConfigs[vault];
+        if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault);
+
+        address reserve_ = config.reserve;
 
         // Accumulate OHM purchased and the per-market amounts.
         _ohmPurchased += inputAmount_;
@@ -1030,19 +1045,7 @@ contract YieldRepurchaseFacilityV2 is
         address clearinghouse_,
         uint256 offset_
     ) external override onlyAdminRole {
-        if (clearinghouse_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("clearinghouse");
-
-        uint256 receivables = _readClearinghousePrincipal(clearinghouse_);
-        if (offset_ > receivables)
-            revert IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
-                clearinghouse_,
-                offset_,
-                receivables
-            );
-
-        _receivablesOffsets[clearinghouse_] = offset_;
-        emit ClearinghouseOffsetSet(clearinghouse_, offset_);
+        _setClearinghouseOffset(clearinghouse_, offset_);
     }
 
     // ============ MANAGER FUNCTIONS ============ //
@@ -1078,12 +1081,13 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Mirrors the v1 behavior of only enforcing the 10% cap when the existing
-    ///      projection is non-zero, so that a manager can seed the projection from zero
-    ///      right after `addAsset` without a dedicated initialization path.
+    /// @dev The 10% cap only constrains the adjustment of an existing non-zero `nextYield`.
+    ///      Seeding the projection from zero is unbounded, so it is restricted to the admin
+    ///      role.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the manager or admin role.
+    ///      - The current `nextYield` is zero and the caller does not hold the admin role.
     ///      - The vault is not registered.
     ///      - The new value increases an existing non-zero `nextYield` by more than 10%.
     function adjustNextYield(
@@ -1095,8 +1099,9 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
 
         uint256 previous = config.nextYield;
-        if (
-            previous > 0 &&
+        if (previous == 0) {
+            _requireRole(msg.sender, ADMIN_ROLE);
+        } else if (
             newNextYield_ > previous &&
             newNextYield_.mulDiv(_ONE_HUNDRED_PERCENT, previous) > _MAX_INCREASE_FACTOR
         ) {
@@ -1109,27 +1114,17 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the manager role.
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
     function increaseClearinghouseOffset(
         address clearinghouse_,
         uint256 additionalOffset_
-    ) external override onlyManagerOrAdminRole {
-        if (clearinghouse_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("clearinghouse");
-
-        uint256 receivables = _readClearinghousePrincipal(clearinghouse_);
-        uint256 newOffset = _receivablesOffsets[clearinghouse_] + additionalOffset_;
-        if (newOffset > receivables)
-            revert IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
-                clearinghouse_,
-                newOffset,
-                receivables
-            );
-
-        _receivablesOffsets[clearinghouse_] = newOffset;
-        emit ClearinghouseOffsetSet(clearinghouse_, newOffset);
+    ) external override onlyManagerRole {
+        _setClearinghouseOffset(
+            clearinghouse_,
+            _receivablesOffsets[clearinghouse_] + additionalOffset_
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1293,6 +1288,26 @@ contract YieldRepurchaseFacilityV2 is
         );
         if (!success || data.length < 32) return 0;
         receivables = abi.decode(data, (uint256));
+    }
+
+    /// @notice Sets the receivables offset for a Clearinghouse to a specified value.
+    /// @dev Reverts if:
+    ///      - The Clearinghouse is the zero address.
+    ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
+    function _setClearinghouseOffset(address clearinghouse_, uint256 offset_) internal {
+        if (clearinghouse_ == address(0))
+            revert IYieldRepurchaseFacilityV2_ZeroAddress("clearinghouse");
+
+        uint256 receivables = _readClearinghousePrincipal(clearinghouse_);
+        if (offset_ > receivables)
+            revert IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
+                clearinghouse_,
+                offset_,
+                receivables
+            );
+
+        _receivablesOffsets[clearinghouse_] = offset_;
+        emit ClearinghouseOffsetSet(clearinghouse_, offset_);
     }
 
     /// @notice Converts an 18-decimal value down to `targetDecimals_` decimals.

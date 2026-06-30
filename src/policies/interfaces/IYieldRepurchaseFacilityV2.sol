@@ -186,6 +186,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param decimals The reserve decimals reported by the vault's underlying asset.
     error IYieldRepurchaseFacilityV2_UnsupportedDecimals(address vault, uint8 decimals);
 
+    /// @notice Thrown when the `PRICE` module does not report 18 decimals.
+    /// @dev The facility compares the oracle price directly against the 18-decimal backing
+    ///      value, so it requires the oracle to also report 18 decimals.
+    /// @param decimals The decimals reported by the `PRICE` module.
+    error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals(uint8 decimals);
+
     /// @notice Thrown when attempting to rescue OHM, a registered vault or a registered
     ///         reserve token.
     /// @param token The token that cannot be rescued.
@@ -279,6 +285,7 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Set a Clearinghouse receivables offset (used to neutralize phantom
     ///         receivables that would otherwise inflate the projected yield).
+    /// @dev Restricted to the admin role.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param offset_ The new cumulative offset.
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
@@ -295,11 +302,15 @@ interface IYieldRepurchaseFacilityV2 {
     function setInitialDiscount(uint256 initialDiscount_) external;
 
     /// @notice Override the projected next-week yield for a vault.
+    /// @dev Adjusting an existing non-zero projection is capped at a 10% increase and is
+    ///      available to the manager or admin role. Seeding the projection from zero is
+    ///      unbounded and is therefore restricted to the admin role.
     /// @param vault_ The vault whose projection is overridden.
     /// @param newNextYield_ The new projected yield.
     function adjustNextYield(address vault_, uint256 newNextYield_) external;
 
     /// @notice Increase the cumulative offset of a Clearinghouse.
+    /// @dev Restricted to the manager role.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param additionalOffset_ The amount to add to the existing offset.
     function increaseClearinghouseOffset(
