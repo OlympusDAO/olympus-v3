@@ -13,7 +13,8 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when a bond market is created for a reserve asset.
     /// @param vault The ERC4626 vault that funds the market.
     /// @param marketId The bond market identifier.
-    /// @param bidAmount The capacity of the market, denominated in the vault's reserve token.
+    /// @param bidAmount The capacity of the market. Denominated in the vault's reserve token for a
+    ///        redeem-to-reserve vault, or in the vault's shares for a sell-shares vault.
     event RepoMarket(address indexed vault, uint256 indexed marketId, uint256 bidAmount);
 
     /// @notice Emitted when the projected next-week yield is updated for a vault.
@@ -149,6 +150,17 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The vault that is currently set as the backing vault.
     error IYieldRepurchaseFacilityV2_VaultIsBackingVault(address vault);
 
+    /// @notice Thrown when setting a sell-shares vault as the backing vault. The backing vault
+    ///         must be redeemable so that backing can be recovered as its reserve token.
+    /// @param vault The vault that cannot be the backing vault.
+    error IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(address vault);
+
+    /// @notice Thrown when adding a sell-shares vault whose share decimals do not match its
+    ///         reserve decimals. The bond market prices the shares using the reserve decimals, so
+    ///         the two must be equal.
+    /// @param vault The vault being added.
+    error IYieldRepurchaseFacilityV2_SellSharesDecimalsMismatch(address vault);
+
     /// @notice Thrown when the initial discount is greater than or equal to `1e18` (100%).
     error IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 
@@ -216,8 +228,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The ERC4626 vault address.
     /// @param reserve The cached underlying reserve token of the vault.
     /// @param reserveDecimals The cached decimals of `reserve`.
-    /// @param nominalValuation True to value the vault's shares at the nominal `convertToAssets`;
-    ///        false values shares at the realizable `previewRedeem`.
+    /// @param sellShares True to sell the vault's shares on bond markets (for a vault
+    ///        whose shares cannot be synchronously redeemed, e.g. sUSDe); false redeems the shares
+    ///        to the reserve and sells the reserve.
     /// @param isActive True if the asset participates in the periodic cycle.
     /// @param yieldBuybackShare The share of yield routed to buybacks (`1e18` = 100%).
     /// @param lastReserveBalance The protocol-owned reserve balance snapshotted at the
@@ -237,7 +250,7 @@ interface IYieldRepurchaseFacilityV2 {
         address vault;
         address reserve;
         uint8 reserveDecimals;
-        bool nominalValuation;
+        bool sellShares;
         bool isActive;
         uint256 yieldBuybackShare;
         uint256 lastReserveBalance;
@@ -256,14 +269,15 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve decimals.
     /// @param initialConversionRate_ The initial `lastConversionRate` snapshot (the reserve
     ///        value of `10 ** reserveDecimals` vault shares).
-    /// @param nominalValuation_ True to value the vault's shares at the nominal `convertToAssets`;
-    ///        false values shares at the realizable `previewRedeem`.
+    /// @param sellShares_ True to sell the vault's shares on bond markets (for a vault
+    ///        whose shares cannot be synchronously redeemed, e.g. sUSDe); false redeems the shares
+    ///        to the reserve and sells the reserve.
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
         uint256 initialReserveBalance_,
         uint256 initialConversionRate_,
-        bool nominalValuation_
+        bool sellShares_
     ) external;
 
     /// @notice Remove a vault from the whitelist and return any leftover balance to the treasury.

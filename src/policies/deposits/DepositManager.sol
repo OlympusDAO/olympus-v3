@@ -483,8 +483,8 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        See {addAsset}. Configures the asset so that a redemption delivers the vault's
-    ///             underlying shares instead of the asset.
+    /// @dev        See {addAsset}. Configures the asset so that a withdrawal delivers the vault's
+    ///             shares instead of redeeming them to the asset.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
@@ -492,7 +492,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     ///             - asset_ is the zero address
     ///             - minimumDeposit_ > depositCap_
     ///             - No vault is configured
-    function addAssetWithRedeemForUnderlyingShares(
+    function addAssetWithRedeemShares(
         IERC20 asset_,
         IERC4626 vault_,
         uint256 depositCap_,
@@ -670,7 +670,7 @@ contract DepositManager is Policy, PolicyEnabler, IDepositManager, BaseAssetMana
     /// @dev        Notes:
     ///             - This function is only callable by addresses with the deposit operator role
     ///             - Given a low enough amount, the actual amount withdrawn may be 0. This function will not revert in such a case.
-    ///             - For a share-redeeming asset, the loan is disbursed in the vault's underlying shares, while the borrow accounting and repayment remain denominated in the asset.
+    ///             - For a share-redeeming asset, the loan is disbursed in the vault's shares, while the borrow accounting and repayment remain denominated in the asset.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled

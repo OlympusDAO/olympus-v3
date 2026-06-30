@@ -16,6 +16,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/IYieldRepurcha
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
 // Modules
@@ -397,7 +398,8 @@ contract YieldRepurchaseFacilityV2 is
     function _weeklyReset() private {
         _epoch = 0;
 
-        uint256 clearinghouseYield = _computeClearinghouseYield(true);
+        uint256 clearinghouseYield = _clearinghouseYield();
+        _emitClearinghouseMismatches();
         address backingVault_ = backingVault;
         uint256 vaultsLength = _vaults.length;
 
@@ -437,14 +439,9 @@ contract YieldRepurchaseFacilityV2 is
             config.nextYield = newNextYield;
             emit NextYieldSet(vault, newNextYield);
 
-            // Refresh the conversion rate snapshot (unaffected by the prefund) on the vault's
-            // valuation basis: previewRedeem by default, convertToAssets for a nominal-valuation
-            // vault.
-            config.lastConversionRate = _valueShares(
-                vault,
-                config.nominalValuation,
-                10 ** config.reserveDecimals
-            );
+            // Refresh the conversion rate snapshot (unaffected by the prefund) at the vault's
+            // redeemable reserve value.
+            config.lastConversionRate = _conversionRate(config);
 
             // Prefund the week's budget from the treasury.
             _prefundVault(vault, config);
@@ -509,6 +506,22 @@ contract YieldRepurchaseFacilityV2 is
 
         uint256 bidAmount = weeklyBudgetRemaining / daysRemaining_;
         if (bidAmount == 0) return;
+
+        // A sell-shares vault delivers its shares as the bond payout instead of redeeming them to
+        // the reserve. The capacity is the shares worth `bidAmount` of reserve. The market is
+        // priced from the shares' redeemable reserve value in `_createMarket`.
+        if (config_.sellShares) {
+            uint256 capacityShares = IERC4626(vault_).previewWithdraw(bidAmount);
+            uint256 availableShares = config_.prefundedShares;
+            if (capacityShares > availableShares) {
+                emit RedeemCapped(vault_, capacityShares, availableShares);
+                capacityShares = availableShares;
+            }
+            if (capacityShares == 0) return;
+
+            _createMarket(vault_, config_, capacityShares, oraclePrice_);
+            return;
+        }
 
         address reserve_ = config_.reserve;
         uint256 currentReserve = IERC20(reserve_).balanceOf(address(this));
@@ -703,14 +716,30 @@ contract YieldRepurchaseFacilityV2 is
         uint256 bidAmount_,
         uint256 oraclePrice_
     ) private {
+        uint256 marketOraclePrice = oraclePrice_;
+        address payoutToken = config_.reserve;
+
+        // A sell-shares vault pays out its shares. Denominate the OHM oracle price in
+        // vault shares, so the floor does not pay out more than OHM per share.
+        // The payout token is the vault, not the reserve.
+        if (config_.sellShares) {
+            uint256 conversionRate = _conversionRate(config_);
+            if (conversionRate == 0) {
+                emit MarketCreationFailed(vault_, bidAmount_);
+                return;
+            }
+            marketOraclePrice = oraclePrice_.mulDiv(10 ** config_.reserveDecimals, conversionRate);
+            payoutToken = vault_;
+        }
+
         (
             uint256 formattedInitialPrice,
             uint256 formattedMinimumPrice,
             int8 scaleAdjustment
-        ) = _computeMarketPricing(oraclePrice_, config_.reserveDecimals);
+        ) = _computeMarketPricing(marketOraclePrice, config_.reserveDecimals);
 
         (bool success, uint256 marketId) = _submitMarket(
-            config_.reserve,
+            payoutToken,
             bidAmount_,
             formattedInitialPrice,
             formattedMinimumPrice,
@@ -854,27 +883,41 @@ contract YieldRepurchaseFacilityV2 is
         _amountsPerMarket[id_][0] += inputAmount_;
         _amountsPerMarket[id_][1] += outputAmount_;
 
-        // Decrement the vault's remaining weekly budget and tracked raw-reserve pool by
-        // the actual reserve outflow.
+        // Decrement the vault's remaining weekly budget and the tracked share/reserve pool by
+        // the actual payout.
         _recordReserveOutflow(vault, outputAmount_);
 
-        // Deliver the reserve payout to the teller.
-        IERC20(reserve_).safeTransfer(msg.sender, outputAmount_);
+        // Deliver the payout to the teller: the vault shares for a sell-shares vault, otherwise
+        // the reserve.
+        IERC20(config.sellShares ? vault : reserve_).safeTransfer(msg.sender, outputAmount_);
     }
 
-    /// @notice Records the reserve paid out for `vault_`: decreases both the remaining
-    ///         weekly budget and the tracked raw-reserve pool by `amount_`, flooring at zero.
-    /// @dev Floors at zero as a defensive measure for edge cases where the payout exceeds
-    ///      the tracked amounts (e.g. when a part of the payout was funded by donated
-    ///      reserve).
-    function _recordReserveOutflow(address vault_, uint256 amount_) private {
+    /// @notice Records the payout for `vault_`: decreases the remaining weekly budget and the
+    ///         tracked pool by the payout, flooring at zero.
+    /// @dev For a sell-shares vault the payout is in vault shares, so the budget is debited by the
+    ///      shares' redeemable reserve value and the prefunded share pool by the
+    ///      raw share count. Otherwise the payout is reserve and both the budget and the prefunded
+    ///      reserve pool are debited by it. Floors at zero as a defensive measure for edge cases
+    ///      where the payout exceeds the tracked amounts (e.g. when a part of the payout was funded
+    ///      by donated reserve).
+    function _recordReserveOutflow(address vault_, uint256 outputAmount_) private {
         ReserveAsset storage config = _assetConfigs[vault_];
-        config.weeklyBudgetRemaining = amount_ > config.weeklyBudgetRemaining
-            ? 0
-            : config.weeklyBudgetRemaining - amount_;
-        config.prefundedReserve = amount_ > config.prefundedReserve
-            ? 0
-            : config.prefundedReserve - amount_;
+
+        if (!config.sellShares) {
+            config.weeklyBudgetRemaining = Math.saturatingSub(
+                config.weeklyBudgetRemaining,
+                outputAmount_
+            );
+            config.prefundedReserve = Math.saturatingSub(config.prefundedReserve, outputAmount_);
+            return;
+        }
+
+        uint256 reserveValue = IERC4626(vault_).previewRedeem(outputAmount_);
+        config.weeklyBudgetRemaining = Math.saturatingSub(
+            config.weeklyBudgetRemaining,
+            reserveValue
+        );
+        config.prefundedShares = Math.saturatingSub(config.prefundedShares, outputAmount_);
     }
 
     /// @inheritdoc IBondCallback
@@ -908,13 +951,14 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault reports the zero address as its underlying asset.
     ///      - The vault's underlying asset is already used by another registered vault.
     ///      - The vault's underlying asset decimals exceed 18.
+    ///      - The vault is sell-shares and its share decimals do not match its reserve decimals.
     ///      - The share is greater than `1e18`.
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
         uint256 initialReserveBalance_,
         uint256 initialConversionRate_,
-        bool nominalValuation_
+        bool sellShares_
     ) external override onlyAdminRole {
         if (vault_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("vault");
         if (yieldBuybackShare_ > _ONE_HUNDRED_PERCENT)
@@ -929,6 +973,11 @@ contract YieldRepurchaseFacilityV2 is
         if (reserveDecimals > _MAX_RESERVE_DECIMALS)
             revert IYieldRepurchaseFacilityV2_UnsupportedDecimals(vault_, reserveDecimals);
 
+        // A sell-shares vault delivers its shares as the bond payout, priced using the reserve
+        // decimals, so the share decimals must equal the reserve decimals.
+        if (sellShares_ && IERC20Metadata(vault_).decimals() != reserveDecimals)
+            revert IYieldRepurchaseFacilityV2_SellSharesDecimalsMismatch(vault_);
+
         // Prevent registering two vaults that share the same reserve token. This keeps
         // the asset/reserve mapping single-valued, which simplifies the Clearinghouse
         // mismatch handling and the per-vault budget bookkeeping.
@@ -942,7 +991,7 @@ contract YieldRepurchaseFacilityV2 is
             vault: vault_,
             reserve: reserve_,
             reserveDecimals: reserveDecimals,
-            nominalValuation: nominalValuation_,
+            sellShares: sellShares_,
             isActive: true,
             yieldBuybackShare: yieldBuybackShare_,
             lastReserveBalance: initialReserveBalance_,
@@ -1014,6 +1063,8 @@ contract YieldRepurchaseFacilityV2 is
         if (config.vault == address(0))
             revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
         if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault_);
+        if (config.sellShares)
+            revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(vault_);
 
         backingVault = vault_;
         emit BackingVaultSet(vault_);
@@ -1161,18 +1212,9 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ YIELD HELPERS ============ //
 
-    /// @notice Values `shares_` of `vault_` in reserve units using the vault's valuation basis.
-    /// @dev Returns the realizable `previewRedeem` by default, or the nominal `convertToAssets`
-    ///      when `nominalValuation_` is set.
-    function _valueShares(
-        address vault_,
-        bool nominalValuation_,
-        uint256 shares_
-    ) private view returns (uint256) {
-        return
-            !nominalValuation_
-                ? IERC4626(vault_).previewRedeem(shares_)
-                : IERC4626(vault_).convertToAssets(shares_);
+    /// @notice The vault's conversion rate: the reserve value of one whole share unit.
+    function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
+        return IERC4626(config_.vault).previewRedeem(10 ** config_.reserveDecimals);
     }
 
     /// @notice Computes vault appreciation since the last weekly reset, in reserve units.
@@ -1182,66 +1224,55 @@ contract YieldRepurchaseFacilityV2 is
         uint256 lastRate = config_.lastConversionRate;
         if (lastRate == 0) return 0;
 
-        // Value a unit of shares on the vault's basis (previewRedeem by default, convertToAssets
-        // for a nominal-valuation vault), matching the snapshot taken in the weekly reset.
-        uint256 currentRate = _valueShares(
-            config_.vault,
-            config_.nominalValuation,
-            10 ** config_.reserveDecimals
-        );
+        // Re-read the conversion rate, matching the snapshot taken in the weekly reset.
+        uint256 currentRate = _conversionRate(config_);
         if (currentRate <= lastRate) return 0;
 
         // yield = lastReserveBalance * (currentRate - lastRate) / lastRate.
         yield = config_.lastReserveBalance.mulDiv(currentRate - lastRate, lastRate);
     }
 
-    /// @notice Computes the global Clearinghouse receivables interest for the next week.
-    /// @dev Emits `ClearinghouseDebtTokenMismatch` only when called from the state-changing
-    ///      weekly reset (`emitEvents_ = true`). The view-only variant is silent.
-    function _computeClearinghouseYield(bool emitEvents_) private returns (uint256 yield) {
+    /// @notice The reserve token of the backing vault, or the zero address if it is not set.
+    function _backingReserve() private view returns (address) {
         address backingVault_ = backingVault;
-        if (backingVault_ == address(0)) return 0;
-        address backingReserve = _assetConfigs[backingVault_].reserve;
+        if (backingVault_ == address(0)) return address(0);
+        return _assetConfigs[backingVault_].reserve;
+    }
+
+    /// @notice The weekly Clearinghouse interest on `receivables_` of `offset_`.
+    function _clearinghouseInterest(
+        uint256 receivables_,
+        uint256 offset_
+    ) private pure returns (uint256) {
+        uint256 effective = Math.saturatingSub(receivables_, offset_);
+        return (effective * _CH_RATE_NUMERATOR) / _CH_RATE_DENOMINATOR / _WEEKS_PER_YEAR;
+    }
+
+    /// @notice The global Clearinghouse receivables interest for the next week, in reserve units.
+    function _clearinghouseYield() private view returns (uint256 yield) {
+        address backingReserve = _backingReserve();
         if (backingReserve == address(0)) return 0;
 
         uint256 len = CHREG.registryCount();
         for (uint256 i; i < len; ++i) {
             address ch = CHREG.registry(i);
-            address chReserve = _readClearinghouseReserve(ch);
-            if (chReserve != backingReserve) {
-                if (emitEvents_) emit ClearinghouseDebtTokenMismatch(ch);
-                continue;
-            }
-
-            uint256 receivables = _readClearinghousePrincipal(ch);
-            uint256 offset = _receivablesOffsets[ch];
-            uint256 effective = receivables > offset ? receivables - offset : 0;
-
-            // effective * (_CH_RATE_NUMERATOR / _CH_RATE_DENOMINATOR) / _WEEKS_PER_YEAR.
-            yield += (effective * _CH_RATE_NUMERATOR) / _CH_RATE_DENOMINATOR / _WEEKS_PER_YEAR;
+            if (_readClearinghouseReserve(ch) != backingReserve) continue;
+            yield += _clearinghouseInterest(
+                _readClearinghousePrincipal(ch),
+                _receivablesOffsets[ch]
+            );
         }
     }
 
-    /// @notice View-only variant of `_computeClearinghouseYield` used by `getNextYield`.
-    /// @dev Duplicates the loop because the state-changing variant emits events and
-    ///      cannot be reused from a `view` context.
-    function _computeClearinghouseYieldView() private view returns (uint256 yield) {
-        address backingVault_ = backingVault;
-        if (backingVault_ == address(0)) return 0;
-        address backingReserve = _assetConfigs[backingVault_].reserve;
-        if (backingReserve == address(0)) return 0;
+    function _emitClearinghouseMismatches() private {
+        address backingReserve = _backingReserve();
+        if (backingReserve == address(0)) return;
 
         uint256 len = CHREG.registryCount();
         for (uint256 i; i < len; ++i) {
             address ch = CHREG.registry(i);
-            address chReserve = _readClearinghouseReserve(ch);
-            if (chReserve != backingReserve) continue;
-
-            uint256 receivables = _readClearinghousePrincipal(ch);
-            uint256 offset = _receivablesOffsets[ch];
-            uint256 effective = receivables > offset ? receivables - offset : 0;
-
-            yield += (effective * _CH_RATE_NUMERATOR) / _CH_RATE_DENOMINATOR / _WEEKS_PER_YEAR;
+            if (_readClearinghouseReserve(ch) != backingReserve)
+                emit ClearinghouseDebtTokenMismatch(ch);
         }
     }
 
@@ -1261,9 +1292,8 @@ contract YieldRepurchaseFacilityV2 is
             }
         }
 
-        // Value the protocol-owned shares on the vault's basis: previewRedeem by default, or
-        // convertToAssets for a nominal-valuation vault.
-        balance = _valueShares(vault_, _assetConfigs[vault_].nominalValuation, totalShares);
+        // Value the protocol-owned shares at their redeemable reserve value.
+        balance = IERC4626(vault_).previewRedeem(totalShares);
     }
 
     /// @notice Reads `Clearinghouse.reserve()` via a `staticcall`.
@@ -1349,7 +1379,7 @@ contract YieldRepurchaseFacilityV2 is
 
         uint256 vaultYield = _computeVaultYield(config);
         uint256 totalYield = vault_ == backingVault
-            ? vaultYield + _computeClearinghouseYieldView()
+            ? vaultYield + _clearinghouseYield()
             : vaultYield;
 
         yield = totalYield.mulDiv(config.yieldBuybackShare, _ONE_HUNDRED_PERCENT);

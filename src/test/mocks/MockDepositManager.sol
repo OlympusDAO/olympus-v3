@@ -85,12 +85,7 @@ contract MockDepositManager is IDepositManager {
 
     function addAsset(IERC20, IERC4626, uint256, uint256) external pure override {}
 
-    function addAssetWithRedeemForUnderlyingShares(
-        IERC20,
-        IERC4626,
-        uint256,
-        uint256
-    ) external pure override {}
+    function addAssetWithRedeemShares(IERC20, IERC4626, uint256, uint256) external pure override {}
 
     function setAssetDepositCap(IERC20, uint256) external pure override {}
 
@@ -159,10 +154,14 @@ contract MockDepositManager is IDepositManager {
     function getAssetConfiguration(
         IERC20
     ) external pure override returns (AssetConfiguration memory) {
-        return AssetConfiguration(false, 0, 0, address(0), false);
+        return AssetConfiguration(false, 0, 0, address(0));
     }
 
     function getConfiguredAssets() external pure override returns (IERC20[] memory) {
         return new IERC20[](0);
+    }
+
+    function getRedeemShares(IERC20) external pure override returns (bool) {
+        return false;
     }
 }

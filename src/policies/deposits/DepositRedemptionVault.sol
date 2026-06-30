@@ -960,10 +960,8 @@ contract DepositRedemptionVault is
         );
         uint256 totalToConsume = retainedCollateral + previousPrincipal;
 
-        // A share-redeeming asset delivers the vault's underlying shares rather than the asset.
-        bool deliversShares = DEPOSIT_MANAGER
-            .getAssetConfiguration(IERC20(redemption.depositToken))
-            .redeemForUnderlyingShares;
+        // A share-redeeming asset delivers the vault's shares rather than the asset.
+        bool deliversShares = DEPOSIT_MANAGER.getRedeemShares(IERC20(redemption.depositToken));
 
         // Handle transfers
         uint256 retainedCollateralActual;
@@ -991,9 +989,9 @@ contract DepositRedemptionVault is
                             address(this)
                         );
                 } else {
-                    // The retained collateral is delivered in the vault's underlying shares, so
-                    // withdraw each portion directly to its recipient. The asset is not held by
-                    // this contract for a share-redeeming asset.
+                    // The retained collateral is delivered in the vault's shares, so withdraw each
+                    // portion directly to its recipient. The asset is not held by this contract
+                    // for a share-redeeming asset.
                     uint256 keeperPortion = retainedCollateral.mulDiv(
                         _claimDefaultRewardPercentage,
                         ONE_HUNDRED_PERCENT

@@ -507,7 +507,7 @@ abstract contract BaseDepositFacility is
 
         // A vault redeems the shares to the asset; the discount is applied to the actual
         // amount withdrawn, and the remainder is swept to the TRSRY as yield.
-        if (!DEPOSIT_MANAGER.getAssetConfiguration(depositToken_).redeemForUnderlyingShares) {
+        if (!DEPOSIT_MANAGER.getRedeemShares(depositToken_)) {
             // Withdraw the deposit
             uint256 actualAmount = DEPOSIT_MANAGER.withdraw(
                 IDepositManager.WithdrawParams({
@@ -549,8 +549,8 @@ abstract contract BaseDepositFacility is
             return discountedAssetsOut;
         }
 
-        // For a share-redeeming asset (e.g. osUSDe), the vault's underlying shares (sUSDe) are
-        // delivered rather than the asset. The reclaim discount is applied to the requested
+        // For a share-redeeming asset (e.g. USDe deposited into sUSDe), the vault's shares (sUSDe)
+        // are delivered rather than the asset. The reclaim discount is applied to the requested
         // amount, and each portion is withdrawn directly to its recipient.
         uint256 discountedAmount = _previewReclaim(depositToken_, depositPeriod_, amount_);
         uint256 treasuryAmount = amount_ - discountedAmount;

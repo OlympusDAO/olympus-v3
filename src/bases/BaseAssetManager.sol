@@ -3,7 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
-import {IUnderlyingShareRedeemableVault} from "src/bases/interfaces/IUnderlyingShareRedeemableVault.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
@@ -16,7 +16,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.
 ///         This contract supports multiple assets, and can store them idle or in an ERC4626 vault (specified at the time of configuration). Once an approach is specified, it cannot be changed. This is to avoid the threat of a governance attack that shifts the deposited funds to a different vault in order to steal them.
 ///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
-abstract contract BaseAssetManager is IAssetManager {
+abstract contract BaseAssetManager is IAssetManagerV1_1 {
     using TransferHelper for ERC20;
 
     // ========== STATE VARIABLES ========== //
@@ -29,6 +29,10 @@ abstract contract BaseAssetManager is IAssetManager {
 
     /// @notice Mapping of assets and operators to the number of shares they have deposited
     mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
+
+    /// @notice Whether withdrawals of an asset deliver the vault's shares instead of
+    ///         redeeming them to the asset. Defaults to false (redeem to the asset).
+    mapping(IERC20 asset => bool redeemShares) internal _redeemShares;
 
     // ========== ACTION FUNCTIONS ========== //
 
@@ -105,11 +109,7 @@ abstract contract BaseAssetManager is IAssetManager {
             // due to rounding errors in the ERC4626 vault
             // To avoid minting more receipt tokens than the actual redeemable amount,
             // we should use the previewRedeem function to get the actual amount of assets redeemable by the shares.
-            // Share-redeeming vaults deliver the underlying shares without redeeming, so
-            // book at the nominal conversion value (convertToAssets).
-            actualAmount = !assetConfiguration.redeemForUnderlyingShares
-                ? vault.previewRedeem(shares)
-                : vault.convertToAssets(shares);
+            actualAmount = vault.previewRedeem(shares);
         }
 
         // Amount of shares must be non-zero
@@ -157,22 +157,18 @@ abstract contract BaseAssetManager is IAssetManager {
             // Early exit if the amount of shares is 0, to prevent a revert
             if (shares == 0) return (0, 0);
 
-            if (!assetConfiguration.redeemForUnderlyingShares) {
+            if (!_redeemShares[asset_]) {
                 // Redeem the shares to the asset and send them to the depositor.
                 // Early exit if the shares would result in a zero amount of assets (and hence a revert)
                 if (vault.previewRedeem(shares) == 0) return (0, 0);
 
                 assetAmount = vault.redeem(shares, depositor_, address(this));
             } else {
-                // Deliver the vault's underlying shares directly to the depositor, recording their
-                // nominal conversion value (convertToAssets) for accounting.
-                assetAmount = vault.convertToAssets(shares);
+                // Deliver the vault shares to the depositor, recording their redeemable
+                // reserve value for accounting.
+                assetAmount = vault.previewRedeem(shares);
                 if (assetAmount == 0) return (0, 0);
-                IUnderlyingShareRedeemableVault(address(vault)).redeemForUnderlyingShares(
-                    shares,
-                    depositor_,
-                    address(this)
-                );
+                ERC20(address(vault)).safeTransfer(depositor_, shares);
             }
         }
 
@@ -195,12 +191,8 @@ abstract contract BaseAssetManager is IAssetManager {
         if (assetConfiguration.vault == address(0)) {
             sharesInAssets = shares;
         } else {
-            // Value the held shares: post-redemption value (previewRedeem) for vaults redeemed to the asset,
-            // nominal conversion value (convertToAssets) for share-redeeming vaults.
-            IERC4626 vault = IERC4626(assetConfiguration.vault);
-            sharesInAssets = !assetConfiguration.redeemForUnderlyingShares
-                ? vault.previewRedeem(shares)
-                : vault.convertToAssets(shares);
+            // Value the held shares at their redeemable reserve value
+            sharesInAssets = IERC4626(assetConfiguration.vault).previewRedeem(shares);
         }
 
         return (shares, sharesInAssets);
@@ -229,13 +221,13 @@ abstract contract BaseAssetManager is IAssetManager {
     /// @param vault_          The vault to use
     /// @param depositCap_     The deposit cap of the asset
     /// @param minimumDeposit_ The minimum deposit amount for the asset
-    /// @param redeemForUnderlyingShares_ Whether a redemption delivers the vault's underlying shares instead of the asset
+    /// @param redeemShares_   Whether withdrawals deliver the vault's shares instead of the asset
     function _addAsset(
         IERC20 asset_,
         IERC4626 vault_,
         uint256 depositCap_,
         uint256 minimumDeposit_,
-        bool redeemForUnderlyingShares_
+        bool redeemShares_
     ) internal {
         // Validate that the asset is not the zero address
         if (address(asset_) == address(0)) {
@@ -252,9 +244,9 @@ abstract contract BaseAssetManager is IAssetManager {
             revert AssetManager_VaultAssetMismatch();
         }
 
-        // Share redemption requires a vault to deliver the underlying shares from
-        if (redeemForUnderlyingShares_ && address(vault_) == address(0)) {
-            revert AssetManager_UnderlyingShareRedemptionRequiresVault();
+        // Share redemption requires a vault to deliver the shares from
+        if (redeemShares_ && address(vault_) == address(0)) {
+            revert AssetManager_RedeemSharesRequiresVault();
         }
 
         // Validate that minimum deposit does not exceed deposit cap
@@ -271,9 +263,10 @@ abstract contract BaseAssetManager is IAssetManager {
             isConfigured: true,
             vault: address(vault_),
             depositCap: depositCap_,
-            minimumDeposit: minimumDeposit_,
-            redeemForUnderlyingShares: redeemForUnderlyingShares_
+            minimumDeposit: minimumDeposit_
         });
+
+        _redeemShares[asset_] = redeemShares_;
 
         // Add the asset to the array of configured assets
         _configuredAssets.push(asset_);
@@ -281,6 +274,7 @@ abstract contract BaseAssetManager is IAssetManager {
         emit AssetConfigured(address(asset_), address(vault_));
         emit AssetDepositCapSet(address(asset_), depositCap_);
         emit AssetMinimumDepositSet(address(asset_), minimumDeposit_);
+        emit AssetRedeemSharesSet(address(asset_), redeemShares_);
     }
 
     /// @notice Set the deposit cap for an asset
@@ -372,11 +366,17 @@ abstract contract BaseAssetManager is IAssetManager {
         return _configuredAssets;
     }
 
+    /// @inheritdoc IAssetManagerV1_1
+    function getRedeemShares(IERC20 asset_) public view override returns (bool) {
+        return _redeemShares[asset_];
+    }
+
     // ========== ERC165 ========== //
 
     function supportsInterface(bytes4 interfaceId) public view virtual returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IAssetManager).interfaceId;
+            interfaceId == type(IAssetManager).interfaceId ||
+            interfaceId == type(IAssetManagerV1_1).interfaceId;
     }
 }
