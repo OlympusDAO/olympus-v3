@@ -15,6 +15,8 @@ contract V1MigratorAdminProposalTest is ProposalTest {
     bytes32 public constant LEGACY_MIGRATION_ADMIN_ROLE = bytes32("legacy_migration_admin");
     bytes32 public constant TEST_MERKLE_ROOT =
         0x4f02394ace62d235ea2896d0a0cc2ecdd57b0f5bb7f4739daab260f90ddd7bdb;
+    uint256 public constant MAX_MIGRATABLE_OHM_V1 = 102_397_596_876_863;
+    uint256 public constant EXPECTED_OHM_V2_PREVIEW = 102_397_596_876_862;
 
     ROLESv1 public roles;
     V1Migrator public v1Migrator;
@@ -25,7 +27,7 @@ contract V1MigratorAdminProposalTest is ProposalTest {
 
         V1MigratorAdminProposal proposal = new V1MigratorAdminProposal();
 
-        hasBeenSubmitted = true;
+        hasBeenSubmitted = false;
 
         _setupSuite(address(proposal));
 
@@ -45,6 +47,26 @@ contract V1MigratorAdminProposalTest is ProposalTest {
         assertTrue(
             roles.hasRole(daoMS, LEGACY_MIGRATION_ADMIN_ROLE),
             "DAO MS should have the legacy_migration_admin role"
+        );
+        assertEq(
+            v1Migrator.remainingMintApproval(),
+            MAX_MIGRATABLE_OHM_V1,
+            "V1Migrator remaining mint approval should match max migratable OHM v1"
+        );
+    }
+
+    function test_maxMigratableOhmV1FitsWithinRemainingMintApproval() public view {
+        uint256 ohmV2Preview = v1Migrator.previewMigrate(MAX_MIGRATABLE_OHM_V1);
+
+        assertEq(
+            ohmV2Preview,
+            EXPECTED_OHM_V2_PREVIEW,
+            "Full max migratable OHM v1 amount should preview with one OHM base unit rounded down"
+        );
+        assertLe(
+            ohmV2Preview,
+            v1Migrator.remainingMintApproval(),
+            "V1Migrator remaining mint approval should cover the full max migratable OHM v1 preview"
         );
     }
 
