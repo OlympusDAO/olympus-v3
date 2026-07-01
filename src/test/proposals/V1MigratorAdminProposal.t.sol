@@ -27,7 +27,7 @@ contract V1MigratorAdminProposalTest is ProposalTest {
 
         V1MigratorAdminProposal proposal = new V1MigratorAdminProposal();
 
-        hasBeenSubmitted = false;
+        hasBeenSubmitted = true;
 
         _setupSuite(address(proposal));
 
