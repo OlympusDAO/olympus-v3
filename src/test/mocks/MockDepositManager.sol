@@ -1,13 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.20;
 
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 contract MockDepositManager is IDepositManager {
+    error MockDepositManager_TransferFailed();
+
     Kernel public kernel;
 
     IERC20 public asset;
@@ -26,14 +30,18 @@ contract MockDepositManager is IDepositManager {
     function deposit(
         DepositParams calldata params
     ) external override returns (uint256 receiptTokenId, uint256 actualAmount) {
-        asset.transferFrom(params.depositor, address(this), params.amount);
+        if (!asset.transferFrom(params.depositor, address(this), params.amount)) {
+            revert MockDepositManager_TransferFailed();
+        }
         return (1, params.amount);
     }
 
     function withdraw(
         WithdrawParams calldata params
     ) external override returns (uint256 actualAmount) {
-        asset.transfer(params.recipient, params.amount);
+        if (!asset.transfer(params.recipient, params.amount)) {
+            revert MockDepositManager_TransferFailed();
+        }
         return params.amount;
     }
 
@@ -102,11 +110,23 @@ contract MockDepositManager is IDepositManager {
         uint8,
         address
     ) external pure override returns (AssetPeriod memory) {
-        return AssetPeriod(false, 0, address(0), address(0));
+        return
+            AssetPeriod({
+                isEnabled: false,
+                depositPeriod: 0,
+                asset: address(0),
+                operator: address(0)
+            });
     }
 
     function getAssetPeriod(uint256) external pure override returns (AssetPeriod memory) {
-        return AssetPeriod(false, 0, address(0), address(0));
+        return
+            AssetPeriod({
+                isEnabled: false,
+                depositPeriod: 0,
+                asset: address(0),
+                operator: address(0)
+            });
     }
 
     function isAssetPeriod(
@@ -114,7 +134,7 @@ contract MockDepositManager is IDepositManager {
         uint8,
         address
     ) external pure override returns (AssetPeriodStatus memory) {
-        return AssetPeriodStatus(false, false);
+        return AssetPeriodStatus({isConfigured: false, isEnabled: false});
     }
 
     function getAssetPeriods() external pure override returns (AssetPeriod[] memory) {
@@ -152,10 +172,22 @@ contract MockDepositManager is IDepositManager {
     function getAssetConfiguration(
         IERC20
     ) external pure override returns (AssetConfiguration memory) {
-        return AssetConfiguration(false, 0, 0, address(0));
+        return
+            AssetConfiguration({
+                isConfigured: false,
+                depositCap: 0,
+                minimumDeposit: 0,
+                vault: address(0)
+            });
     }
 
     function getConfiguredAssets() external pure override returns (IERC20[] memory) {
         return new IERC20[](0);
+    }
+
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IDepositManager).interfaceId;
     }
 }

@@ -471,31 +471,32 @@ Keeping composites outside the core policy saves bytecode and avoids turning `Bu
 
 ### Fee Calculations
 
-The fixed term prevents perpetual 0% shorts from consuming capacity indefinitely. The same capacity fee curve should be used for borrows and extension terms:
+The fixed term prevents perpetual 0% shorts from consuming capacity indefinitely. Each asset has its own capacity fee curve. For a given asset, the same curve should be used for borrows and extension terms:
 
 ```text
 // Round utilization up so fee pressure is not understated near a boundary.
-globalUtilizationBps = ceil(totalActiveDebtOhm * 10_000 / globalDebtCap)
-assetUtilizationBps = ceil(assetActiveDebtOhm[asset] * 10_000 / assetDebtCap[asset])
-utilizationBps = max(globalUtilizationBps, assetUtilizationBps)
+// Use WAD precision so the fee curve does not quantize utilization to bps.
+assetUtilizationWad = ceil(assetActiveDebtOhm[asset] * 1e18 / assetDebtCap[asset])
+kinkWad = kinkBps * 1e18 / 10_000
+baseFeeRateWad = baseFeeBps * 1e18 / 10_000
 
-if utilizationBps <= kinkBps:
+if assetUtilizationWad <= kinkWad:
     // Round down because this computes a fee rate from utilization.
-    feeBps = baseFeeBps + floor(utilizationBps * slope1Bps / 10_000)
+    feeRateWad = baseFeeRateWad + floor(assetUtilizationWad * slope1Bps / 10_000)
 else:
-    feeBps = baseFeeBps
+    feeRateWad = baseFeeRateWad
         // Round down because this computes a fee rate from utilization.
-        + floor(kinkBps * slope1Bps / 10_000)
-        + floor((utilizationBps - kinkBps) * slope2Bps / 10_000)
+        + floor(kinkWad * slope1Bps / 10_000)
+        + floor((assetUtilizationWad - kinkWad) * slope2Bps / 10_000)
 ```
 
 This follows the standard piecewise linear borrow-market shape used by Euler's `IRMLinearKink` and Compound's `JumpRateModel`: a base rate, a first slope up to the kink, then a steeper second slope above the kink.
 
-Rate components round down because they are intermediate rate calculations, not the final value transfer. This avoids charging an extra basis point from each curve segment due only to integer precision and keeps the configured curve predictable. Protocol-favorable rounding still applies where value moves: utilization rounds up before entering the curve, and actual collateral-denominated fees round up when charged. If governance wants higher protocol compensation, it should increase `baseFeeBps`, `slope1Bps`, or `slope2Bps` rather than rely on rounding artifacts.
+Rate components round down because they are intermediate rate calculations, not the final value transfer. This avoids charging extra from each curve segment due only to integer precision and keeps the configured curve predictable. Protocol-favorable rounding still applies where value moves: utilization rounds up before entering the curve, and actual collateral-denominated fees round up when charged. If governance wants higher protocol compensation, it should increase `baseFeeBps`, `slope1Bps`, or `slope2Bps` rather than rely on rounding artifacts.
 
-Use one facility-level fee curve for both global and asset utilization. `kinkBps`, `slope1Bps`, and `slope2Bps` should be consistent across both; asset-specific risk should be handled through debt caps, collateral factor, minimum collateral ratio, `termLength`, and `maxMaturityHorizon`. Per-asset fee curves can be added later only if there is a clear need.
+Fees use asset utilization only. The global debt cap is still enforced as a facility-wide open-interest limit, but it is not a fee input; otherwise one collateral asset could make another asset's borrow or extension fees jump merely because the global facility is full. Asset-specific risk is handled through per-asset fee curves, debt caps, collateral factor, minimum collateral ratio, `termLength`, and `maxMaturityHorizon`.
 
-The curve is continuous at `kinkBps` and monotonic when both slopes are non-negative. Example with `baseFeeBps = 25`, `slope1Bps = 100`, `slope2Bps = 900`, and `kinkBps = 8,000`:
+The curve is continuous at `kinkWad` and monotonic when both slopes are non-negative. Example with `baseFeeBps = 25`, `slope1Bps = 100`, `slope2Bps = 900`, and `kinkBps = 8,000`:
 
 ```text
 utilization = 70%  -> fee = 25 + 70 = 95 bps
@@ -504,9 +505,9 @@ utilization = 90%  -> fee = 25 + 80 + 90 = 195 bps
 utilization = 100% -> fee = 25 + 80 + 180 = 285 bps
 ```
 
-For v1, use one dynamic lever: utilization-based fees. Keep collateral ratios, term lengths, and max maturity horizons as admin-set, timelocked parameters. Use one fee curve for both borrows and extensions.
+For v1, use one dynamic lever: utilization-based fees. Keep collateral ratios, term lengths, and max maturity horizons as admin-set, timelocked parameters. Use one fee curve per asset, and use that asset's curve for both borrows and extensions.
 
-Fees are charged only at borrow and extension, so high utilization affects users when they create or extend debt, not continuously while a position is active. This keeps the product 0% interest, but means stale open interest can stay cheap until the next extension. Fixed maturity and the shared borrow/extension fee are therefore the mechanism that eventually reprices high utilization.
+Fees are charged only at borrow and extension, so high utilization affects users when they create or extend debt, not continuously while a position is active. This keeps the product 0% interest, but means stale open interest can stay cheap until the next extension. Fixed maturity and the per-asset borrow/extension fee are therefore the mechanism that eventually reprices high utilization.
 
 `borrow` should be asset-specific and debt-targeted:
 
@@ -520,7 +521,7 @@ The contract calculates the fee from the incremental borrow:
 
 ```text
 incrementalRequiredCollateral = ceil(incrementalRequiredCollateralUsd / collateralUsdPrice)
-feeCollateral = ceil(incrementalRequiredCollateral * feeBps / 10_000)
+feeCollateral = ceil(incrementalRequiredCollateral * feeRateWad / 1e18)
 
 require(feeCollateral <= maxFee)
 ```
@@ -530,7 +531,7 @@ Round `incrementalRequiredCollateral` up because it is the minimum collateral re
 Extension fees are denominated in the position's collateral asset. `maxFee` is the borrower's cap on the total fee for the full extension:
 
 ```text
-singleTermExtensionFee = ceil(currentRequiredCollateral * feeBps / 10_000)
+singleTermExtensionFee = ceil(currentRequiredCollateral * feeRateWad / 1e18)
 extensionFee = singleTermExtensionFee * termCount
 
 require(extensionFee <= maxFee)
@@ -540,26 +541,26 @@ The single-term fee rounds up so fee dust cannot be avoided. The total extension
 
 ## Scenario Analysis
 
-| Scenario | Position | Protocol Impact | Desired Outcome |
-| --- | --- | --- | --- |
-| User deposits collateral | Credited collateral increases for `positions[owner][asset]`; debt and maturity do not change. | Health improves if debt is active. No new OHM is minted. | Yes. This is the primary maintenance action when health falls. |
-| User withdraws collateral | Credited collateral decreases only if the position remains healthy or has no debt. | Borrower claim falls; backing-eligible collateral may fall but must remain sufficient for active debt. | Yes, subject to current PRICE and health checks. |
-| User partially repays | Repaid OHM is burned. Debt decreases and credited collateral stays posted. | Active debt and capacity usage fall. Backing requirement falls with remaining OHM debt. | Yes. Repayment should improve health and not depend on current prices. |
-| User fully repays | All remaining OHM debt is burned. Position exits the active borrower index but collateral remains withdrawable. | Active debt falls by the full remaining debt. No seized unrepaid OHM remains. | Yes. Debt close and collateral withdrawal are separate actions. |
-| OHM/USDS rises to seizure boundary | `healthFactor` falls below `1e18`; position becomes seizable if PRICE is fresh. Borrower can still repay or deposit collateral before seizure. | Seizure moves collateral to `TRSRY`; unrepaid OHM remains circulating but should be backed by seized collateral. | Yes, if backing preservation still holds and maintenance actions remain available before seizure. |
-| OHM/USDS falls | `healthFactor` improves. Borrower can repay cheaper OHM and later withdraw collateral subject to health checks. | Repaid OHM is burned; fees and harvested surplus remain protocol benefit. | Yes. This is the intended short payoff. |
-| OHM/USDS falls and borrower wants more debt | Borrower can borrow more against the same asset position if health, maturity, capacity, and fees permit. The new borrow pays the current borrow fee and does not extend maturity. | Additional borrowing is exposed to current utilization fees and capacity checks. | Yes. Repricing happens at each borrow and extension. |
-| OHM/USDS falls below backing | Market requirement may fall, but backing requirement should dominate. | Prevents below-backing OHM from being minted without backing-eligible collateral. | Yes. Backing floor must remain binding. |
-| User borrows while OHM is below backing | Borrow succeeds only if collateral covers the backing requirement. | Mints OHM but adds enough backing-eligible collateral to avoid reducing backing per backed OHM. | Yes, if backing-eligible accounting caps counted collateral. |
-| Collateral asset depegs or falls | Collateral USD value falls; `healthFactor` can fall below `1e18` even if OHM price is unchanged. | Seizure may deliver impaired collateral to `TRSRY`; asset caps and haircuts absorb this risk. | Desired only with conservative asset parameters and fresh PRICE. |
-| Collateral asset rallies | `healthFactor` improves. Borrower remains entitled only to credited principal plus price exposure of their collateral claim, not vault surplus. | Seizure becomes less likely. Protocol should not count all excess active collateral as backing. | Yes. Excess borrower collateral is not free protocol backing. |
-| Vault earns yield | Borrower `healthFactor` does not improve from vault yield. Surplus can be claimed to `TRSRY` through the custody layer. | Protocol captures surplus without weakening borrower collateral accounting. | Yes. |
-| Vault suffers loss | Non-monotonic vault losses are out of v1 scope. The affected collateral asset should be disabled until custody accounting supports losses. | Hidden insolvency risk if loss-making vaults are enabled under monotonic assumptions. | Not desired for v1. |
-| Vault has async underlying withdrawals | Burner Loans should require synchronous custody actions. If the underlying asset cannot be withdrawn synchronously, DepositManager may synchronously return the vault token instead. | Keeps position state transitions synchronous while leaving async withdrawal handling to the custody/YRF layer. | Yes, if the returned holding token is explicitly supported. |
-| Active debt position reaches maturity | If not repaid or extended, it becomes seizable. Repayment, collateral deposits, and extension remain available until seizure if the position is otherwise healthy; new borrow does not. | Prevents indefinite 0% capacity usage while still allowing a borrower to rescue a healthy matured position before automation acts. | Yes. |
-| Debt-free position passes old maturity | No seizure is allowed because `debtOhm == 0`. Collateral remains withdrawable. | No protocol debt remains, so there is no default to resolve. | Yes. |
-| PRICE is stale or unavailable | Opens, extensions, and seizures should revert. Repayment should remain available. | Protocol risk-taking pauses without trapping borrowers. | Yes. |
-| Large borrower consumes debt cap | New borrows and extensions are constrained by global and asset caps. | Limits market, governance, and Cooler side effects. | Yes. |
+| Scenario                                    | Position                                                                                                                                                                                | Protocol Impact                                                                                                                    | Desired Outcome                                                                                   |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| User deposits collateral                    | Credited collateral increases for `positions[owner][asset]`; debt and maturity do not change.                                                                                           | Health improves if debt is active. No new OHM is minted.                                                                           | Yes. This is the primary maintenance action when health falls.                                    |
+| User withdraws collateral                   | Credited collateral decreases only if the position remains healthy or has no debt.                                                                                                      | Borrower claim falls; backing-eligible collateral may fall but must remain sufficient for active debt.                             | Yes, subject to current PRICE and health checks.                                                  |
+| User partially repays                       | Repaid OHM is burned. Debt decreases and credited collateral stays posted.                                                                                                              | Active debt and capacity usage fall. Backing requirement falls with remaining OHM debt.                                            | Yes. Repayment should improve health and not depend on current prices.                            |
+| User fully repays                           | All remaining OHM debt is burned. Position exits the active borrower index but collateral remains withdrawable.                                                                         | Active debt falls by the full remaining debt. No seized unrepaid OHM remains.                                                      | Yes. Debt close and collateral withdrawal are separate actions.                                   |
+| OHM/USDS rises to seizure boundary          | `healthFactor` falls below `1e18`; position becomes seizable if PRICE is fresh. Borrower can still repay or deposit collateral before seizure.                                          | Seizure moves collateral to `TRSRY`; unrepaid OHM remains circulating but should be backed by seized collateral.                   | Yes, if backing preservation still holds and maintenance actions remain available before seizure. |
+| OHM/USDS falls                              | `healthFactor` improves. Borrower can repay cheaper OHM and later withdraw collateral subject to health checks.                                                                         | Repaid OHM is burned; fees and harvested surplus remain protocol benefit.                                                          | Yes. This is the intended short payoff.                                                           |
+| OHM/USDS falls and borrower wants more debt | Borrower can borrow more against the same asset position if health, maturity, capacity, and fees permit. The new borrow pays the current borrow fee and does not extend maturity.       | Additional borrowing is exposed to current utilization fees and capacity checks.                                                   | Yes. Repricing happens at each borrow and extension.                                              |
+| OHM/USDS falls below backing                | Market requirement may fall, but backing requirement should dominate.                                                                                                                   | Prevents below-backing OHM from being minted without backing-eligible collateral.                                                  | Yes. Backing floor must remain binding.                                                           |
+| User borrows while OHM is below backing     | Borrow succeeds only if collateral covers the backing requirement.                                                                                                                      | Mints OHM but adds enough backing-eligible collateral to avoid reducing backing per backed OHM.                                    | Yes, if backing-eligible accounting caps counted collateral.                                      |
+| Collateral asset depegs or falls            | Collateral USD value falls; `healthFactor` can fall below `1e18` even if OHM price is unchanged.                                                                                        | Seizure may deliver impaired collateral to `TRSRY`; asset caps and haircuts absorb this risk.                                      | Desired only with conservative asset parameters and fresh PRICE.                                  |
+| Collateral asset rallies                    | `healthFactor` improves. Borrower remains entitled only to credited principal plus price exposure of their collateral claim, not vault surplus.                                         | Seizure becomes less likely. Protocol should not count all excess active collateral as backing.                                    | Yes. Excess borrower collateral is not free protocol backing.                                     |
+| Vault earns yield                           | Borrower `healthFactor` does not improve from vault yield. Surplus can be claimed to `TRSRY` through the custody layer.                                                                 | Protocol captures surplus without weakening borrower collateral accounting.                                                        | Yes.                                                                                              |
+| Vault suffers loss                          | Non-monotonic vault losses are out of v1 scope. The affected collateral asset should be disabled until custody accounting supports losses.                                              | Hidden insolvency risk if loss-making vaults are enabled under monotonic assumptions.                                              | Not desired for v1.                                                                               |
+| Vault has async underlying withdrawals      | Burner Loans should require synchronous custody actions. If the underlying asset cannot be withdrawn synchronously, DepositManager may synchronously return the vault token instead.    | Keeps position state transitions synchronous while leaving async withdrawal handling to the custody/YRF layer.                     | Yes, if the returned holding token is explicitly supported.                                       |
+| Active debt position reaches maturity       | If not repaid or extended, it becomes seizable. Repayment, collateral deposits, and extension remain available until seizure if the position is otherwise healthy; new borrow does not. | Prevents indefinite 0% capacity usage while still allowing a borrower to rescue a healthy matured position before automation acts. | Yes.                                                                                              |
+| Debt-free position passes old maturity      | No seizure is allowed because `debtOhm == 0`. Collateral remains withdrawable.                                                                                                          | No protocol debt remains, so there is no default to resolve.                                                                       | Yes.                                                                                              |
+| PRICE is stale or unavailable               | Opens, extensions, and seizures should revert. Repayment should remain available.                                                                                                       | Protocol risk-taking pauses without trapping borrowers.                                                                            | Yes.                                                                                              |
+| Large borrower consumes debt cap            | New borrows and extensions are constrained by global and asset caps.                                                                                                                    | Limits market, governance, and Cooler side effects.                                                                                | Yes.                                                                                              |
 
 ## Interaction Ordering
 
@@ -953,8 +954,7 @@ When disabled, `borrow` and `extend` should be blocked. `repay` should remain av
 
 `burner_loans_admin` functions within admin-set bounds:
 
-- `setUtilizationCurve(...)`
-- `setFeeParams(...)`, for the shared borrow and extension fee curve.
+- `setFeeConfig(asset, ...)`, for the asset's borrow and extension fee curve.
 - `setGlobalDebtCap(...)`, only when lowering the cap and not below active debt.
 - `setAssetDebtCap(...)`, only when lowering the cap and not below active asset debt.
 - `setMaxKeeperRewardAsset(asset, ...)`.
@@ -1171,7 +1171,7 @@ Borrowers must always be able to close active debt by returning OHM until the po
 ## Open Questions
 
 - Should active Burner Loans backing be indexed from on-chain state directly, or should the subgraph compute the backing cap from active debt off-chain?
-  Answer: unresolved. The contract should expose the raw position, collateral, and asset state needed by indexers. The subgraph can compute the backing cap off-chain, but the exact indexing source should be decided with the subgraph implementation.
+    Answer: unresolved. The contract should expose the raw position, collateral, and asset state needed by indexers. The subgraph can compute the backing cap off-chain, but the exact indexing source should be decided with the subgraph implementation.
 
 ## Recommended V1 Scope
 
@@ -1195,6 +1195,5 @@ Defer:
 
 - Transferable position ownership.
 - Non-monotonic vault accounting.
-- Per-asset fee curves.
 - Automatic risk-parameter changes based on utilization.
 - General collateral marketplace behavior.
