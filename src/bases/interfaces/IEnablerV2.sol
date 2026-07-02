@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.15;
 
+// Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @title IEnablerV2
