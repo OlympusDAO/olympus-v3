@@ -24,11 +24,13 @@ verbosity = 3
 # The "size" script in package.json replicates these overrides, as "forge build --sizes" does not use the profiles defined here
 additional_compiler_profiles = [
     { name = "ten-runs", optimizer_runs = 10 },
+    { name = "four-hundred-runs", optimizer_runs = 400 },
     { name = "five-thousand-runs", optimizer_runs = 5000 },
 ]
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
+    { paths = "src/policies/YieldRepurchaseFacilityV2.sol", profile = "four-hundred-runs" },
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "**", version = "0.8.15" },
 ]
