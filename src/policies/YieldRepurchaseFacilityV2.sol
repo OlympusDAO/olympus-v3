@@ -892,7 +892,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Records the payout for `vault_`: decreases the remaining weekly budget and the
     ///         tracked pool by the payout, flooring at zero.
     /// @dev For a sell-shares vault the payout is in vault shares, so the budget is debited by the
-    ///      shares' redeemable reserve value and the prefunded share pool by the
+    ///      shares' reserve value rounded up and the prefunded share pool by the
     ///      raw share count. Otherwise the payout is reserve and both the budget and the prefunded
     ///      reserve pool are debited by it. Floors at zero as a defensive measure for edge cases
     ///      where the payout exceeds the tracked amounts (e.g. when a part of the payout was funded
@@ -909,7 +909,11 @@ contract YieldRepurchaseFacilityV2 is
             );
             config_.prefundedReserve = Math.saturatingSub(config_.prefundedReserve, outputAmount_);
         } else {
-            uint256 reserveValue = IERC4626(vault_).previewRedeem(outputAmount_);
+            // Debit the budget by the round-up reserve value of the sold shares. A round-down
+            // debit leaves the budget richer than the share pool by up to a wei per purchase,
+            // so the final bid of the week would request more shares than the pool holds and
+            // the next prefund would re-withdraw the rounding dust from the treasury.
+            uint256 reserveValue = IERC4626(vault_).previewMint(outputAmount_);
             config_.weeklyBudgetRemaining = Math.saturatingSub(
                 config_.weeklyBudgetRemaining,
                 reserveValue
