@@ -316,6 +316,9 @@ interface IYieldRepurchaseFacilityV2 {
     ) external;
 
     /// @notice Re-activate a previously deactivated vault.
+    /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
+    ///      computed at the next weekly reset covers only the period after reactivation and
+    ///      the yield accrued while the vault was inactive is retained by the treasury.
     /// @param vault_ The vault to activate.
     function activateAsset(address vault_) external;
 

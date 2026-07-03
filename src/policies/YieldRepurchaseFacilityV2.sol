@@ -70,6 +70,8 @@ import {ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 ///        withdrawn from the treasury twice. At the weekly reset the carried budget
 ///        is re-marked upward to the pool value, so yield earned on the pool itself
 ///        is also committed to buybacks.
+///      - Enabling re-baselines every registered vault: the projection and the weekly
+///        budget are cleared and the snapshots are refreshed.
 ///      - Lifecycle uses `PolicyEnablerV2` and the periodic entry point is
 ///        `IPeriodicTask.execute()`.
 contract YieldRepurchaseFacilityV2 is
@@ -275,15 +277,37 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Decodes the `initialDiscount` and primes the epoch counter so that the first
     ///      `execute()` call triggers a weekly reset.
     ///
+    ///      Every registered vault is re-baselined: the projection (`nextYield`) and the
+    ///      remaining weekly budget are cleared, and the balance and conversion rate snapshots
+    ///      are refreshed. Yield accrued and budget committed before a preceding disable are
+    ///      thereby retained by the treasury instead of being withdrawn at the first weekly
+    ///      reset. To fund the first week, the admin can seed the projection via
+    ///      the `adjustNextYield` after enabling.
+    ///
     ///      Reverts if:
     ///      - The encoded payload length does not match one 32-byte word.
     ///      - `initialDiscount` is greater than or equal to `1e18` (100%).
+    ///      - A registered vault reverts on `previewRedeem`.
     function _beforeEnable(bytes calldata data_) internal override {
         if (data_.length != _ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
         uint256 initialDiscount_ = abi.decode(data_, (uint256));
         _setInitialDiscount(initialDiscount_);
+
+        // Re-baseline every registered vault, so that stale snapshots kept across a disable
+        // period cannot roll the yield of the whole period into the first projection.
+        uint256 vaultsLength = _vaults.length;
+        for (uint256 i; i < vaultsLength; ++i) {
+            address vault = _vaults[i];
+            ReserveAsset storage config = _assetConfigs[vault];
+
+            config.nextYield = 0;
+            config.weeklyBudgetRemaining = 0;
+            _refreshSnapshots(vault, config);
+
+            emit NextYieldSet(vault, 0);
+        }
 
         _epoch = _EPOCH_LENGTH - 1;
     }
@@ -292,6 +316,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev On disable, burns the accumulated OHM, returns every held balance to TRSRY
     ///      (including the prefunded pool and any donations), clears the prefunded
     ///      counters, and resets the epoch counter. The payload is unused.
+    ///
+    ///      The per-vault budget, projection and snapshots are deliberately left in storage
+    ///      for inspection while disabled.
     function _beforeDisable(bytes calldata) internal override {
         // Burn the accumulated purchased OHM. The accumulator is the source of truth.
         uint256 purchasedOhm = _ohmPurchased;
@@ -1150,7 +1177,11 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
+    ///      computed at the next weekly reset covers only the period after reactivation and
+    ///      the yield accrued while the vault was inactive is retained by the treasury.
+    ///
+    ///      Reverts if:
     ///      - The caller does not hold the manager or admin role.
     ///      - The vault is not registered.
     ///      - The vault is already active.
@@ -1159,6 +1190,8 @@ contract YieldRepurchaseFacilityV2 is
         if (config.isActive) revert IYieldRepurchaseFacilityV2_AssetActive(vault_);
 
         config.isActive = true;
+        _refreshSnapshots(vault_, config);
+
         emit AssetActivated(vault_);
     }
 
@@ -1182,6 +1215,13 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice The vault's conversion rate: the reserve value of one whole share unit.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
         return IERC4626(config_.vault).previewRedeem(10 ** config_.reserveDecimals);
+    }
+
+    /// @notice Refreshes the vault's conversion rate and protocol reserve balance snapshots
+    ///         to their current values.
+    function _refreshSnapshots(address vault_, ReserveAsset storage config_) private {
+        config_.lastConversionRate = _conversionRate(config_);
+        config_.lastReserveBalance = _getProtocolReserveBalance(vault_);
     }
 
     /// @notice Computes vault appreciation since the last weekly reset, in reserve units.
