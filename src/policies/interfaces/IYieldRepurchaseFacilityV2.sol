@@ -73,13 +73,6 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param clearinghouse The Clearinghouse address.
     event ClearinghouseDebtTokenMismatch(address indexed clearinghouse);
 
-    /// @notice Emitted when a vault redemption delivers less reserve than requested.
-    ///         The bid amount is reduced accordingly.
-    /// @param vault The ERC4626 vault.
-    /// @param requested The reserve amount requested.
-    /// @param redeemed The reserve amount actually received.
-    event RedeemCapped(address indexed vault, uint256 requested, uint256 redeemed);
-
     /// @notice Emitted when a vault redemption attempt fails. The redemption is skipped
     ///         and retried on a later cycle.
     /// @param vault The ERC4626 vault.
@@ -185,9 +178,21 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param marketId The market identifier received by the callback.
     error IYieldRepurchaseFacilityV2_UnknownMarket(uint256 marketId);
 
-    /// @notice Thrown by the bond callback when the caller is not the configured teller.
+    /// @notice Thrown by the bond callback when the caller is not the configured teller, and
+    ///         by the self-redeem helper when the caller is not the facility itself.
     /// @param caller The unexpected caller.
     error IYieldRepurchaseFacilityV2_InvalidCaller(address caller);
+
+    /// @notice Thrown by the self-redeem helper when a vault delivers less reserve than its
+    ///         own `previewRedeem` promise for the redeemed shares.
+    /// @param vault The vault.
+    /// @param expected The reserve amount promised by `previewRedeem`.
+    /// @param received The reserve amount actually delivered.
+    error IYieldRepurchaseFacilityV2_InsufficientRedeem(
+        address vault,
+        uint256 expected,
+        uint256 received
+    );
 
     /// @notice Thrown when adding a vault whose reserve token reports more than 18 decimals.
     /// @param vault The vault being added.

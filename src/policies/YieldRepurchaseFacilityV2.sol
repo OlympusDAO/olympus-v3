@@ -504,10 +504,12 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Executes the daily cycle for a single active vault.
     /// @dev Computes the planned `bidAmount`, redeems the deficit from the vault into
-    ///      reserve units, adjusts the bid down if the redemption is capped, and creates
-    ///      a new SDA bond market. The caller is responsible for verifying that the
-    ///      oracle/backing precondition holds, so the redeem step is never taken when
-    ///      the resulting market would be skipped.
+    ///      reserve units, silently caps the bid at the funds actually held, and creates
+    ///      a new SDA bond market. A gap between the planned bid and the held funds is a
+    ///      treasury shortfall already reported by `PrefundShortfall` at the weekly reset,
+    ///      or a failed redemption reported by `RedeemFailed`. The caller is responsible
+    ///      for verifying that the oracle/backing precondition holds, so the redeem step
+    ///      is never taken when the resulting market would be skipped.
     function _executeDailyCycle(
         address vault_,
         ReserveAsset storage config_,
@@ -521,15 +523,15 @@ contract YieldRepurchaseFacilityV2 is
         if (bidAmount == 0) return;
 
         // A sell-shares vault delivers its shares as the bond payout instead of redeeming them to
-        // the reserve. The capacity is the shares worth `bidAmount` of reserve. The market is
-        // priced from the shares' redeemable reserve value in `_createMarket`.
+        // the reserve. The capacity is the shares worth `bidAmount` of reserve, capped by the
+        // prefunded shares the facility actually holds so the market can not owe more shares
+        // than it can pay. The market is priced from the shares' redeemable reserve value in
+        // `_createMarket`.
         if (config_.sellShares) {
-            uint256 capacityShares = IERC4626(vault_).previewWithdraw(bidAmount);
-            uint256 availableShares = config_.prefundedShares;
-            if (capacityShares > availableShares) {
-                emit RedeemCapped(vault_, capacityShares, availableShares);
-                capacityShares = availableShares;
-            }
+            uint256 capacityShares = Math.min(
+                IERC4626(vault_).previewWithdraw(bidAmount),
+                config_.prefundedShares
+            );
             if (capacityShares == 0) return;
 
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
@@ -542,7 +544,6 @@ contract YieldRepurchaseFacilityV2 is
                 uint256 redeemed = _redeemFromPrefunded(vault_, reserve_, deficit, config_);
 
                 if (redeemed < deficit) {
-                    emit RedeemCapped(vault_, deficit, redeemed);
                     // Reduce the planned bid so the bond market is never created with a
                     // capacity greater than the reserve actually held by the facility.
                     bidAmount = currentReserve + redeemed;
@@ -556,10 +557,11 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Redeems `shares_` from `vault_` into its reserve.
-    /// @dev The `redeem` call is wrapped in `try/catch`: on any failure the function reports
-    ///      `(0, 0)`, emits `RedeemFailed`, and leaves all shares untouched so the caller can
-    ///      roll the budget over and retry next cycle. The received reserve is measured as
-    ///      a balance delta.
+    /// @dev The redemption runs through the external `selfRedeemChecked` boundary inside a
+    ///      `try/catch`: on a reverting vault, or on a vault that delivers less reserve than
+    ///      its own `previewRedeem` promise, the whole redemption is undone, the function
+    ///      reports `(0, 0)` and emits `RedeemFailed`, so the caller rolls the budget over
+    ///      and retries next cycle.
     /// @return received The reserve received.
     /// @return used The number of shares redeemed: `shares_` on success, zero on failure.
     function _redeemShares(
@@ -570,16 +572,41 @@ contract YieldRepurchaseFacilityV2 is
         if (shares_ == 0) return (0, 0);
 
         uint256 reserveBefore = IERC20(reserve_).balanceOf(address(this));
-        try IERC4626(vault_).redeem(shares_, address(this), address(this)) {
-            uint256 reserveAfter = IERC20(reserve_).balanceOf(address(this));
-            received = reserveAfter - reserveBefore;
-            used = shares_;
+        try this.selfRedeemChecked(vault_, reserve_, shares_) returns (uint256 received_) {
+            return (received_, shares_);
         } catch {
-            // The redeem reverted. Report no redemption so the caller treats it as a
-            // shortfall; no shares were burned.
+            // The redemption reverted or under-delivered. Report no redemption so the caller
+            // treats it as a shortfall; the revert boundary restored all shares.
             emit RedeemFailed(vault_, shares_);
             return (0, 0);
         }
+    }
+
+    /// @notice Redeems `shares_` from `vault_` and reverts unless the vault delivers at least
+    ///         its own `previewRedeem` promise for those shares.
+    /// @dev Callable only by the facility itself. The external call creates a revert boundary
+    ///      for `_redeemShares`.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not the facility itself.
+    ///      - The vault redemption reverts.
+    ///      - The delivered reserve is less than `previewRedeem(shares_)`.
+    /// @return received The reserve received, measured as a balance delta.
+    function selfRedeemChecked(
+        address vault_,
+        address reserve_,
+        uint256 shares_
+    ) external returns (uint256 received) {
+        if (msg.sender != address(this))
+            revert IYieldRepurchaseFacilityV2_InvalidCaller(msg.sender);
+
+        uint256 expected = IERC4626(vault_).previewRedeem(shares_);
+        uint256 reserveBefore = IERC20(reserve_).balanceOf(address(this));
+        IERC4626(vault_).redeem(shares_, address(this), address(this));
+        received = IERC20(reserve_).balanceOf(address(this)) - reserveBefore;
+
+        if (received < expected)
+            revert IYieldRepurchaseFacilityV2_InsufficientRedeem(vault_, expected, received);
     }
 
     /// @notice Redeems up to `deficit_` of reserve from the vault's prefunded share pool.
