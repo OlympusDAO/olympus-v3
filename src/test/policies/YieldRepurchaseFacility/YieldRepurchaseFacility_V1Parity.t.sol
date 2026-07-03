@@ -1,31 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.30;
 
-import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
+import {YieldRepurchaseFacilityV2TestBase} from "./YieldRepurchaseFacilityV2TestBase.sol";
 
-import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
-import {BondAggregator} from "src/test/lib/bonds/BondAggregator.sol";
-import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
-import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
-
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusBackingOracle} from "policies/OlympusBackingOracle.sol";
-import {YieldRepurchaseFacilityV2} from "policies/YieldRepurchaseFacilityV2.sol";
 import {IPolicyAdmin} from "policies/interfaces/utils/IPolicyAdmin.sol";
 import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFacilityV2.sol";
 
@@ -41,149 +26,26 @@ import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFa
 //   token holdings, so intra-week vault appreciation is excluded until the next weekly reset.
 //
 // solhint-disable-next-line max-states-count
-contract YieldRepurchaseFacilityV1ParityTest is Test {
+contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBase {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
-
     using FullMath for uint256;
 
-    UserFactory public userCreator;
     address internal alice;
     address internal bob;
-    address internal guardian;
-    address internal policy;
-    address internal heart;
-
-    RolesAuthority internal auth;
-    BondAggregator internal aggregator;
-    BondFixedTermTeller internal teller;
-    BondFixedTermSDA internal auctioneer;
-    MockOhm internal ohm;
-    MockERC20 internal reserve;
-    MockERC4626 internal sReserve;
-    MockERC20 internal oldReserve;
-
-    Kernel internal kernel;
-    MockPrice internal PRICE;
-    OlympusTreasury internal TRSRY;
-    OlympusMinter internal MINTR;
-    OlympusRoles internal ROLES;
-    OlympusClearinghouseRegistry internal CHREG;
     address internal godmode;
-
-    MockClearinghouse internal clearinghouse;
-    YieldRepurchaseFacilityV2 internal yieldRepo;
-    OlympusBackingOracle internal backingOracle;
-    RolesAdmin internal rolesAdmin;
 
     uint256 internal initialReserves = 105_000_000e18;
     uint256 internal initialConversionRate = 1_05e16;
     uint256 internal initialPrincipalReceivables = 100_000_000e18;
     uint256 internal initialYield = 50_000e18 + ((initialPrincipalReceivables * 5) / 1000) / 52;
 
-    // V1 used a 9-decimal scale constant of 1133 * 1e7 (11.33 per OHM, applied to a 9-decimal
-    // OHM balance). The V2 backing oracle stores the backing with 18 decimals, so the same
-    // dollar value is 1133 * 1e16. For a balance of 100e9 OHM both produce 1133e18 reserve.
-    uint256 internal backingPerToken = 1133 * 1e16;
-
-    // V1 hardcoded the initial price as 3% below the oracle price (price * 97 / 100).
-    // V2 receives the discount as a configurable parameter, so 3e16 (3%, 18 decimals)
-    // reproduces the V1 pricing exactly.
-    uint256 internal initialDiscount = 3e16;
-
     function setUp() public {
-        vm.warp(51 * 365 * 24 * 60 * 60); // Set timestamp at roughly Jan 1, 2021 (51 years since Unix epoch)
-        userCreator = new UserFactory();
-        {
-            /// Deploy bond system to test against
-            address[] memory users = userCreator.create(5);
-            alice = users[0];
-            bob = users[1];
-            guardian = users[2];
-            policy = users[3];
-            heart = users[4];
-            auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
+        _deployStack();
 
-            /// Deploy the bond system
-            aggregator = new BondAggregator(guardian, auth);
-            teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
-
-            /// Register auctioneer on the bond system
-            vm.prank(guardian);
-            aggregator.registerAuctioneer(auctioneer);
-        }
-
-        {
-            /// Deploy mock tokens
-            ohm = new MockOhm("Olympus", "OHM", 9);
-            reserve = new MockERC20("Reserve", "RSV", 18);
-            oldReserve = new MockERC20("Old Reserve", "oRSV", 18);
-            sReserve = new MockERC4626(reserve, "sReserve", "sRSV");
-        }
-
-        {
-            /// Deploy kernel
-            kernel = new Kernel(); // this contract will be the executor
-
-            /// Deploy modules (some mocks)
-            PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            TRSRY = new OlympusTreasury(kernel);
-            MINTR = new OlympusMinter(kernel, address(ohm));
-            ROLES = new OlympusRoles(kernel);
-
-            // Deploy mock clearinghouse and registry
-            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
-            CHREG = new OlympusClearinghouseRegistry(
-                kernel,
-                address(clearinghouse),
-                new address[](0)
-            );
-
-            /// Configure mocks
-            PRICE.setMovingAverage(10 * 1e18);
-            PRICE.setLastPrice(10 * 1e18);
-            PRICE.setDecimals(18);
-            PRICE.setLastTime(uint48(block.timestamp));
-        }
-
-        {
-            /// Deploy protocol loop
-            yieldRepo = new YieldRepurchaseFacilityV2(kernel, address(ohm));
-
-            /// Deploy the backing oracle (V2 replaces the V1 backingPerToken constant)
-            backingOracle = new OlympusBackingOracle(kernel);
-
-            /// Deploy ROLES administrator
-            rolesAdmin = new RolesAdmin(kernel);
-        }
-
-        {
-            /// Initialize system and kernel
-
-            /// Install modules
-            kernel.executeAction(Actions.InstallModule, address(PRICE));
-            kernel.executeAction(Actions.InstallModule, address(TRSRY));
-            kernel.executeAction(Actions.InstallModule, address(MINTR));
-            kernel.executeAction(Actions.InstallModule, address(ROLES));
-            kernel.executeAction(Actions.InstallModule, address(CHREG));
-
-            /// Approve policies
-            kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
-            kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
-            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        }
-        {
-            /// Configure access control
-
-            /// YieldRepurchaseFacilityV2 ROLES
-            rolesAdmin.grantRole("heart", address(heart));
-            rolesAdmin.grantRole("admin", guardian);
-        }
-
-        // V2 creates bond markets with a callback, which requires the market owner to be
-        // authorized on the auctioneer (V1 created markets without a callback)
-        vm.prank(guardian);
-        auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
+        // Extra test accounts used by the V1-parity bond-purchase flows.
+        address[] memory users = userCreator.create(2);
+        alice = users[0];
+        bob = users[1];
 
         // Mint tokens to users, clearinghouse, and TRSRY for testing
         uint256 testOhm = 1_000_000 * 1e9;
@@ -216,45 +78,16 @@ contract YieldRepurchaseFacilityV1ParityTest is Test {
         // Set principal receivables for the clearinghouse
         clearinghouse.setPrincipalReceivables(uint256(100_000_000e18));
 
-        // Initialize the backing oracle with the same backing value as the V1 constant
+        // Enable the backing oracle and the facility.
+        _enableFacility();
+
+        // Register the reserve asset with a 100% yield buyback share, make it
+        // the backing vault, and seed the initial yield.
         vm.startPrank(guardian);
-        backingOracle.enable(abi.encode(backingPerToken));
-
-        // Initialize the yield repo facility
-        // V1 passed the initial reserve balance, conversion rate and yield via the enable params.
-        // V2 passes the bond contracts, backing oracle and initial discount via the enable params,
-        // and the per-asset state via addAsset/adjustNextYield.
-        yieldRepo.enable(
-            abi.encode(
-                IYieldRepurchaseFacilityV2.EnableParams({
-                    backingOracle: address(backingOracle),
-                    bondAuctioneer: address(auctioneer),
-                    teller: address(teller),
-                    initialDiscount: initialDiscount
-                })
-            )
-        );
-
-        // Register the reserve asset with a 100% yield buyback share (the V1 behaviour)
         yieldRepo.addAsset(address(sReserve), 1e18, initialReserves, initialConversionRate, false);
-
-        // The clearinghouse yield and the OHM backing withdrawals are attributed to the backing vault
         yieldRepo.setBackingVault(address(sReserve));
-
-        // Seed the initial yield (in V1 this was part of the enable params)
         yieldRepo.adjustNextYield(address(sReserve), initialYield);
         vm.stopPrank();
-    }
-
-    function _mintYield() internal {
-        // Get the balance of reserves in the sReserve contract
-        uint256 sReserveBalance = sReserve.totalAssets();
-
-        // Calculate the yield to mint (0.01%)
-        uint256 yield = sReserveBalance / 10000;
-
-        // Mint the yield
-        reserve.mint(address(sReserve), yield);
     }
 
     // test cases
