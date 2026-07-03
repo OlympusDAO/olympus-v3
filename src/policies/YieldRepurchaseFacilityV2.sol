@@ -100,9 +100,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev `1.1e18` corresponds to a 10% maximum increase.
     uint256 private constant _MAX_INCREASE_FACTOR = 11 * 1e17;
 
-    /// @notice Expected length of the `enable` payload (`abi.encode(EnableParams)`).
-    /// @dev Four 32-byte words: `backingOracle`, `bondAuctioneer`, `teller`, `initialDiscount`.
-    uint256 private constant _ENABLE_PARAMS_LENGTH = 128;
+    /// @notice Expected length of the `enable` payload (`abi.encode(initialDiscount)`).
+    /// @dev One 32-byte word: `initialDiscount`.
+    uint256 private constant _ENABLE_PARAMS_LENGTH = 32;
 
     /// @notice Numerator of the Clearinghouse annual interest rate (0.5%).
     uint256 private constant _CH_RATE_NUMERATOR = 5;
@@ -200,12 +200,24 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @param kernel_ The Olympus Kernel.
     /// @param ohm_ The OHM token address.
-    constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
+    /// @param backingOracle_ The OHM backing oracle policy address.
+    /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
+    /// @param teller_ The Bond Protocol teller.
+    constructor(
+        Kernel kernel_,
+        address ohm_,
+        address backingOracle_,
+        address bondAuctioneer_,
+        address teller_
+    ) Policy(kernel_) {
         if (address(kernel_) == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("kernel");
         if (ohm_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("ohm");
 
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
+
+        _setBackingOracle(backingOracle_);
+        _setBondContracts(bondAuctioneer_, teller_);
 
         // Disabled by default by PolicyEnablerV2.
     }
@@ -267,37 +279,20 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ENABLE / DISABLE ============ //
 
     /// @inheritdoc EnablerV2
-    /// @dev Decodes the `EnableParams` payload, stores external references, and primes
-    ///      the epoch counter so that the first `execute()` call triggers a weekly reset.
+    /// @dev Decodes the `initialDiscount` and primes the epoch counter so that the first
+    ///      `execute()` call triggers a weekly reset.
     ///
     ///      Reverts if:
-    ///      - The encoded payload length does not match `EnableParams`.
-    ///      - Any address argument is the zero address.
+    ///      - The encoded payload length does not match one 32-byte word.
     ///      - `initialDiscount` is greater than or equal to `1e18` (100%).
     function _beforeEnable(bytes calldata data_) internal override {
         if (data_.length != _ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
-        EnableParams memory params = abi.decode(data_, (EnableParams));
-
-        if (params.backingOracle == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("backingOracle");
-        if (params.bondAuctioneer == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("bondAuctioneer");
-        if (params.teller == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("teller");
-        if (params.initialDiscount >= _ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
-
-        backingOracle = params.backingOracle;
-        bondAuctioneer = params.bondAuctioneer;
-        teller = params.teller;
-        initialDiscount = params.initialDiscount;
+        uint256 initialDiscount_ = abi.decode(data_, (uint256));
+        _setInitialDiscount(initialDiscount_);
 
         _epoch = _EPOCH_LENGTH - 1;
-
-        emit BackingOracleSet(params.backingOracle);
-        emit BondContractsSet(params.bondAuctioneer, params.teller);
-        emit InitialDiscountSet(params.initialDiscount);
     }
 
     /// @inheritdoc EnablerV2
@@ -1047,11 +1042,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if the caller does not hold the admin role or the address is zero.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
-        if (backingOracle_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("backingOracle");
-
-        backingOracle = backingOracle_;
-        emit BackingOracleSet(backingOracle_);
+        _setBackingOracle(backingOracle_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1078,6 +1069,22 @@ contract YieldRepurchaseFacilityV2 is
         address bondAuctioneer_,
         address teller_
     ) external override onlyAdminRole {
+        _setBondContracts(bondAuctioneer_, teller_);
+    }
+
+    /// @notice Validates and sets the backing oracle, then emits `BackingOracleSet`.
+    /// @dev Reverts if the address is zero.
+    function _setBackingOracle(address backingOracle_) internal {
+        if (backingOracle_ == address(0))
+            revert IYieldRepurchaseFacilityV2_ZeroAddress("backingOracle");
+
+        backingOracle = backingOracle_;
+        emit BackingOracleSet(backingOracle_);
+    }
+
+    /// @notice Validates and sets the bond auctioneer and teller, then emits `BondContractsSet`.
+    /// @dev Reverts if either address is zero.
+    function _setBondContracts(address bondAuctioneer_, address teller_) internal {
         if (bondAuctioneer_ == address(0))
             revert IYieldRepurchaseFacilityV2_ZeroAddress("bondAuctioneer");
         if (teller_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("teller");
@@ -1124,6 +1131,12 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller does not hold the manager or admin role.
     ///      - The discount is greater than or equal to `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external override onlyManagerOrAdminRole {
+        _setInitialDiscount(initialDiscount_);
+    }
+
+    /// @notice Validates and sets the initial discount, then emits `InitialDiscountSet`.
+    /// @dev Reverts if the discount is greater than or equal to `1e18` (100%).
+    function _setInitialDiscount(uint256 initialDiscount_) internal {
         if (initialDiscount_ >= _ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 

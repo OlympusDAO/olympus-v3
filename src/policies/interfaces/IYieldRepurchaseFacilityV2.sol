@@ -211,19 +211,6 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ STRUCTS ============ //
 
-    /// @notice The decoded payload passed to `enable(bytes)`.
-    /// @param backingOracle The OHM backing oracle policy address.
-    /// @param bondAuctioneer The Bond Protocol SDA auctioneer.
-    /// @param teller The Bond Protocol teller.
-    /// @param initialDiscount The discount applied to the oracle price when seeding the
-    ///        initial market price (`1e18` = 100%).
-    struct EnableParams {
-        address backingOracle;
-        address bondAuctioneer;
-        address teller;
-        uint256 initialDiscount;
-    }
-
     /// @notice The per-reserve configuration and state tracked by the facility.
     /// @param vault The ERC4626 vault address.
     /// @param reserve The cached underlying reserve token of the vault.
