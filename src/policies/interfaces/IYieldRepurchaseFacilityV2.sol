@@ -116,10 +116,6 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ ERRORS ============ //
 
-    /// @notice Thrown when a function expects a non-zero address but receives the zero address.
-    /// @param parameter A short identifier of the offending input.
-    error IYieldRepurchaseFacilityV2_ZeroAddress(string parameter);
-
     /// @notice Thrown when the enable payload length does not match the expected layout.
     error IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 

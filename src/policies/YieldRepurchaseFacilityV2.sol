@@ -9,12 +9,15 @@ import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReserve.sol";
+import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
+import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
@@ -129,15 +132,6 @@ contract YieldRepurchaseFacilityV2 is
     ///         must report so that the oracle price can be compared against the backing.
     uint8 private constant _BACKING_DECIMALS = 18;
 
-    /// @notice Function selector for `reserve()` on a Clearinghouse.
-    /// @dev Used by a graceful `staticcall` so the heartbeat does not revert when the
-    ///      Clearinghouse does not expose this getter.
-    bytes4 private constant _CLEARINGHOUSE_RESERVE_SELECTOR = bytes4(keccak256("reserve()"));
-
-    /// @notice Function selector for `principalReceivables()` on a Clearinghouse.
-    bytes4 private constant _CLEARINGHOUSE_PRINCIPAL_SELECTOR =
-        bytes4(keccak256("principalReceivables()"));
-
     // ============ IMMUTABLES ============ //
 
     /// @notice The OHM token.
@@ -210,8 +204,8 @@ contract YieldRepurchaseFacilityV2 is
         address bondAuctioneer_,
         address teller_
     ) Policy(kernel_) {
-        if (address(kernel_) == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("kernel");
-        if (ohm_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("ohm");
+        _requireNonzeroAddress(address(kernel_), "kernel");
+        _requireNonzeroAddress(ohm_, "ohm");
 
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
@@ -395,7 +389,6 @@ contract YieldRepurchaseFacilityV2 is
 
         uint256 clearinghouseYield = _clearinghouseYield();
         _emitClearinghouseMismatches();
-        address backingVault_ = backingVault;
         uint256 vaultsLength = _vaults.length;
 
         for (uint256 i; i < vaultsLength; ++i) {
@@ -421,15 +414,7 @@ contract YieldRepurchaseFacilityV2 is
             // so that the new `nextYield` reflects the appreciation since the previous
             // reset. This reads the stored snapshots, not the treasury balance, so it is
             // unaffected by the prefund below.
-            uint256 vaultYield = _computeVaultYield(config);
-            uint256 totalYield = vault == backingVault_
-                ? vaultYield + clearinghouseYield
-                : vaultYield;
-
-            uint256 newNextYield = totalYield.mulDiv(
-                config.yieldBuybackShare,
-                _ONE_HUNDRED_PERCENT
-            );
+            uint256 newNextYield = _projectNextYield(config, clearinghouseYield);
 
             config.nextYield = newNextYield;
             emit NextYieldSet(vault, newNextYield);
@@ -955,14 +940,14 @@ contract YieldRepurchaseFacilityV2 is
         uint256 initialConversionRate_,
         bool sellShares_
     ) external override onlyAdminRole {
-        if (vault_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("vault");
+        _requireNonzeroAddress(vault_, "vault");
         if (yieldBuybackShare_ > _ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
         if (_assetConfigs[vault_].vault != address(0))
             revert IYieldRepurchaseFacilityV2_AssetAlreadyRegistered(vault_);
 
         address reserve_ = IERC4626(vault_).asset();
-        if (reserve_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("vault asset");
+        _requireNonzeroAddress(reserve_, "vault.asset");
 
         uint8 reserveDecimals = IERC20Metadata(reserve_).decimals();
         if (reserveDecimals > _MAX_RESERVE_DECIMALS)
@@ -1008,9 +993,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is currently active.
     ///      - The vault is currently set as the `backingVault`.
     function removeAsset(address vault_) external override onlyAdminRole {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
         if (config.isActive) revert IYieldRepurchaseFacilityV2_AssetActive(vault_);
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
 
@@ -1050,9 +1033,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered or is currently inactive.
     function setBackingVault(address vault_) external override onlyAdminRole {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
         if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault_);
         if (config.sellShares)
             revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(vault_);
@@ -1075,8 +1056,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Validates and sets the backing oracle, then emits `BackingOracleSet`.
     /// @dev Reverts if the address is zero.
     function _setBackingOracle(address backingOracle_) internal {
-        if (backingOracle_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("backingOracle");
+        _requireNonzeroAddress(backingOracle_, "backingOracle");
 
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
@@ -1085,9 +1065,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Validates and sets the bond auctioneer and teller, then emits `BondContractsSet`.
     /// @dev Reverts if either address is zero.
     function _setBondContracts(address bondAuctioneer_, address teller_) internal {
-        if (bondAuctioneer_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("bondAuctioneer");
-        if (teller_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress("teller");
+        _requireNonzeroAddress(bondAuctioneer_, "bondAuctioneer");
+        _requireNonzeroAddress(teller_, "teller");
 
         bondAuctioneer = bondAuctioneer_;
         teller = teller_;
@@ -1117,12 +1096,11 @@ contract YieldRepurchaseFacilityV2 is
         address vault_,
         uint256 newShare_
     ) external override onlyManagerOrAdminRole {
-        if (_assetConfigs[vault_].vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
         if (newShare_ > _ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
 
-        _assetConfigs[vault_].yieldBuybackShare = newShare_;
+        config.yieldBuybackShare = newShare_;
         emit YieldBuybackShareSet(vault_, newShare_);
     }
 
@@ -1158,9 +1136,7 @@ contract YieldRepurchaseFacilityV2 is
         address vault_,
         uint256 newNextYield_
     ) external override onlyManagerOrAdminRole {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
 
         uint256 previous = config.nextYield;
         if (previous == 0) {
@@ -1197,9 +1173,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is not registered.
     ///      - The vault is already active.
     function activateAsset(address vault_) external override onlyManagerOrAdminRole {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
         if (config.isActive) revert IYieldRepurchaseFacilityV2_AssetActive(vault_);
 
         config.isActive = true;
@@ -1213,9 +1187,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is already inactive.
     ///      - The vault is currently set as the `backingVault`.
     function deactivateAsset(address vault_) external override onlyManagerOrAdminRole {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
         if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault_);
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
 
@@ -1243,6 +1215,20 @@ contract YieldRepurchaseFacilityV2 is
 
         // yield = lastReserveBalance * (currentRate - lastRate) / lastRate.
         yield = config_.lastReserveBalance.mulDiv(currentRate - lastRate, lastRate);
+    }
+
+    /// @notice The buyback portion of the projected next-week yield for `config_`.
+    /// @dev The caller supplies the global Clearinghouse yield (computed once per reset,
+    ///      or read on demand in the view).
+    function _projectNextYield(
+        ReserveAsset storage config_,
+        uint256 clearinghouseYield_
+    ) private view returns (uint256) {
+        uint256 vaultYield = _computeVaultYield(config_);
+        uint256 totalYield = config_.vault == backingVault
+            ? vaultYield + clearinghouseYield_
+            : vaultYield;
+        return totalYield.mulDiv(config_.yieldBuybackShare, _ONE_HUNDRED_PERCENT);
     }
 
     /// @notice The reserve token of the backing vault, or the zero address if it is not set.
@@ -1309,28 +1295,29 @@ contract YieldRepurchaseFacilityV2 is
         balance = IERC4626(vault_).previewRedeem(totalShares);
     }
 
-    /// @notice Reads `Clearinghouse.reserve()` via a `staticcall`.
+    /// @notice Reads `Clearinghouse.reserve()` through a `try/catch`.
+    /// @dev Returns `address(0)` when the Clearinghouse does not expose `reserve()`,
+    ///      so the heartbeat skips it instead of reverting.
     /// @return reserve The reserve token address, or `address(0)` on failure.
-    function _readClearinghouseReserve(
-        address clearinghouse_
-    ) private view returns (address reserve) {
-        (bool success, bytes memory data) = clearinghouse_.staticcall(
-            abi.encodeWithSelector(_CLEARINGHOUSE_RESERVE_SELECTOR)
-        );
-        if (!success || data.length < 32) return address(0);
-        reserve = abi.decode(data, (address));
+    function _readClearinghouseReserve(address clearinghouse_) private view returns (address) {
+        try IClearinghouseReserve(clearinghouse_).reserve() returns (address reserve) {
+            return reserve;
+        } catch {
+            return address(0);
+        }
     }
 
-    /// @notice Reads `Clearinghouse.principalReceivables()` via a `staticcall`.
+    /// @notice Reads `Clearinghouse.principalReceivables()` through a `try/catch`.
+    /// @dev Returns zero when the Clearinghouse does not expose the getter.
     /// @return receivables The reported principal receivables, or zero on failure.
-    function _readClearinghousePrincipal(
-        address clearinghouse_
-    ) private view returns (uint256 receivables) {
-        (bool success, bytes memory data) = clearinghouse_.staticcall(
-            abi.encodeWithSelector(_CLEARINGHOUSE_PRINCIPAL_SELECTOR)
-        );
-        if (!success || data.length < 32) return 0;
-        receivables = abi.decode(data, (uint256));
+    function _readClearinghousePrincipal(address clearinghouse_) private view returns (uint256) {
+        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
+            uint256 receivables
+        ) {
+            return receivables;
+        } catch {
+            return 0;
+        }
     }
 
     /// @notice Sets the receivables offset for a Clearinghouse to a specified value.
@@ -1338,8 +1325,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The Clearinghouse is the zero address.
     ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
     function _setClearinghouseOffset(address clearinghouse_, uint256 offset_) internal {
-        if (clearinghouse_ == address(0))
-            revert IYieldRepurchaseFacilityV2_ZeroAddress("clearinghouse");
+        _requireNonzeroAddress(clearinghouse_, "clearinghouse");
 
         uint256 receivables = _readClearinghousePrincipal(clearinghouse_);
         if (offset_ > receivables)
@@ -1361,6 +1347,20 @@ contract YieldRepurchaseFacilityV2 is
         return value18_ / (10 ** (18 - targetDecimals_));
     }
 
+    /// @notice Returns the storage config for `vault_`, reverting if it is not registered.
+    function _requireRegistered(
+        address vault_
+    ) private view returns (ReserveAsset storage config_) {
+        config_ = _assetConfigs[vault_];
+        if (config_.vault == address(0))
+            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+    }
+
+    /// @notice Reverts with `Errors.BadInput(parameter_)` if `value_` is the zero address.
+    function _requireNonzeroAddress(address value_, string memory parameter_) private pure {
+        if (value_ == address(0)) revert Errors.BadInput(parameter_);
+    }
+
     // ============ VIEW FUNCTIONS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1373,9 +1373,7 @@ contract YieldRepurchaseFacilityV2 is
     function getAssetConfig(
         address vault_
     ) external view override returns (ReserveAsset memory config) {
-        config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        config = _requireRegistered(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1386,23 +1384,15 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if the vault is not registered.
     function getNextYield(address vault_) external view override returns (uint256 yield) {
-        ReserveAsset storage config = _assetConfigs[vault_];
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        ReserveAsset storage config = _requireRegistered(vault_);
 
-        uint256 vaultYield = _computeVaultYield(config);
-        uint256 totalYield = vault_ == backingVault
-            ? vaultYield + _clearinghouseYield()
-            : vaultYield;
-
-        yield = totalYield.mulDiv(config.yieldBuybackShare, _ONE_HUNDRED_PERCENT);
+        yield = _projectNextYield(config, _clearinghouseYield());
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if the vault is not registered.
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
-        if (_assetConfigs[vault_].vault == address(0))
-            revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+        _requireRegistered(vault_);
         return _getProtocolReserveBalance(vault_);
     }
 
