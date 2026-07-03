@@ -31,7 +31,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
+import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {Rescueable} from "src/bases/Rescueable.sol";
@@ -134,6 +134,22 @@ contract YieldRepurchaseFacilityV2 is
     ///         must report so that the oracle price can be compared against the backing.
     uint8 private constant _BACKING_DECIMALS = 18;
 
+    /// @notice Keycode for the TRSRY module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("TRSRY")`.
+    Keycode internal constant _KEYCODE_TRSRY = Keycode.wrap(0x5452535259); // toKeycode("TRSRY")
+
+    /// @notice Keycode for the PRICE module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("PRICE")`.
+    Keycode internal constant _KEYCODE_PRICE = Keycode.wrap(0x5052494345); // toKeycode("PRICE")
+
+    /// @notice Keycode for the CHREG module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("CHREG")`.
+    Keycode internal constant _KEYCODE_CHREG = Keycode.wrap(0x4348524547); // toKeycode("CHREG")
+
+    /// @notice Keycode for the ROLES module dependency.
+    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("ROLES")`.
+    Keycode internal constant _KEYCODE_ROLES = Keycode.wrap(0x524f4c4553); // toKeycode("ROLES")
+
     // ============ IMMUTABLES ============ //
 
     /// @notice The OHM token.
@@ -221,10 +237,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc Policy
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
-        dependencies[0] = toKeycode("TRSRY");
-        dependencies[1] = toKeycode("PRICE");
-        dependencies[2] = toKeycode("CHREG");
-        dependencies[3] = toKeycode("ROLES");
+        dependencies[0] = _KEYCODE_TRSRY;
+        dependencies[1] = _KEYCODE_PRICE;
+        dependencies[2] = _KEYCODE_CHREG;
+        dependencies[3] = _KEYCODE_ROLES;
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
         PRICE = PRICEv1(getModuleAddress(dependencies[1]));
@@ -235,7 +251,6 @@ contract YieldRepurchaseFacilityV2 is
         (uint8 priceMajor, ) = PRICE.VERSION();
         (uint8 chregMajor, ) = CHREG.VERSION();
         (uint8 rolesMajor, ) = ROLES.VERSION();
-
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
             revert Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
 
@@ -244,26 +259,27 @@ contract YieldRepurchaseFacilityV2 is
         _oracleDecimals = PRICE.decimals();
         if (_oracleDecimals != _BACKING_DECIMALS)
             revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals(_oracleDecimals);
+
+        return dependencies;
     }
 
     /// @inheritdoc Policy
     function requestPermissions()
         external
-        view
+        pure
         override
         returns (Permissions[] memory permissions)
     {
-        Keycode trsryKeycode = toKeycode("TRSRY");
-
         permissions = new Permissions[](2);
         permissions[0] = Permissions({
-            keycode: trsryKeycode,
+            keycode: _KEYCODE_TRSRY,
             funcSelector: TRSRYv1.withdrawReserves.selector
         });
         permissions[1] = Permissions({
-            keycode: trsryKeycode,
+            keycode: _KEYCODE_TRSRY,
             funcSelector: TRSRYv1.increaseWithdrawApproval.selector
         });
+        return permissions;
     }
 
     /// @inheritdoc IVersioned
@@ -297,9 +313,10 @@ contract YieldRepurchaseFacilityV2 is
 
         // Re-baseline every registered vault, so that stale snapshots kept across a disable
         // period cannot roll the yield of the whole period into the first projection.
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            address vault = _vaults[i];
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
 
             config.nextYield = 0;
@@ -322,21 +339,20 @@ contract YieldRepurchaseFacilityV2 is
     function _beforeDisable(bytes calldata) internal override {
         // Burn the accumulated purchased OHM. The accumulator is the source of truth.
         uint256 purchasedOhm = _ohmPurchased;
-        if (purchasedOhm > 0) {
+        if (purchasedOhm != 0) {
             _ohmPurchased = 0;
             IBurnableERC20(address(_OHM)).burn(purchasedOhm);
         }
 
         // Sweep any residual OHM (e.g. unexpected donations) to TRSRY.
         uint256 ohmBalance = _OHM.balanceOf(address(this));
-        if (ohmBalance > 0) {
-            _OHM.safeTransfer(address(TRSRY), ohmBalance);
-        }
+        if (ohmBalance != 0) _OHM.safeTransfer(address(TRSRY), ohmBalance);
 
         // Return all vault shares and free reserve back to TRSRY.
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            address vault = _vaults[i];
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
 
             _returnBalancesToTrsry(vault, config.reserve);
@@ -364,9 +380,7 @@ contract YieldRepurchaseFacilityV2 is
         if (_epoch % _EPOCHS_PER_DAY != 0) return;
 
         // End-of-week reset.
-        if (_epoch == _EPOCH_LENGTH) {
-            _weeklyReset();
-        }
+        if (_epoch == _EPOCH_LENGTH) _weeklyReset();
 
         // Burn the accumulated purchased OHM and recycle the backing into the primary
         // vault's budget. Runs once per daily cycle, before per-vault market creation.
@@ -385,9 +399,10 @@ contract YieldRepurchaseFacilityV2 is
         // Number of days remaining in the current week, in the range `[1, 7]`.
         uint256 daysRemaining = _DAYS_PER_WEEK - uint256(_epoch / _EPOCHS_PER_DAY);
 
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            address vault = _vaults[i];
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
             if (!config.isActive) continue;
 
@@ -407,10 +422,11 @@ contract YieldRepurchaseFacilityV2 is
 
         uint256 clearinghouseYield = _clearinghouseYield();
         _emitClearinghouseMismatches();
-        uint256 vaultsLength = _vaults.length;
 
-        for (uint256 i; i < vaultsLength; ++i) {
-            address vault = _vaults[i];
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
             if (!config.isActive) continue;
 
@@ -517,27 +533,26 @@ contract YieldRepurchaseFacilityV2 is
             if (capacityShares == 0) return;
 
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
-            return;
-        }
+        } else {
+            address reserve_ = config_.reserve;
+            uint256 currentReserve = IERC20(reserve_).balanceOf(address(this));
 
-        address reserve_ = config_.reserve;
-        uint256 currentReserve = IERC20(reserve_).balanceOf(address(this));
+            if (currentReserve < bidAmount) {
+                uint256 deficit = bidAmount - currentReserve;
+                uint256 redeemed = _redeemFromPrefunded(vault_, reserve_, deficit, config_);
 
-        if (currentReserve < bidAmount) {
-            uint256 deficit = bidAmount - currentReserve;
-            uint256 redeemed = _redeemFromPrefunded(vault_, reserve_, deficit, config_);
-
-            if (redeemed < deficit) {
-                emit RedeemCapped(vault_, deficit, redeemed);
-                // Reduce the planned bid so the bond market is never created with a
-                // capacity greater than the reserve actually held by the facility.
-                bidAmount = currentReserve + redeemed;
+                if (redeemed < deficit) {
+                    emit RedeemCapped(vault_, deficit, redeemed);
+                    // Reduce the planned bid so the bond market is never created with a
+                    // capacity greater than the reserve actually held by the facility.
+                    bidAmount = currentReserve + redeemed;
+                }
             }
+
+            if (bidAmount == 0) return;
+
+            _createMarket(vault_, config_, bidAmount, oraclePrice_);
         }
-
-        if (bidAmount == 0) return;
-
-        _createMarket(vault_, config_, bidAmount, oraclePrice_);
     }
 
     /// @notice Redeems up to `shares_` from `vault_`, capped by the vault per-owner
@@ -838,7 +853,7 @@ contract YieldRepurchaseFacilityV2 is
         int8 decimals;
         while (price_ >= 10) {
             price_ = price_ / 10;
-            decimals++;
+            ++decimals;
         }
         return decimals - int8(_oracleDecimals);
     }
@@ -876,12 +891,13 @@ contract YieldRepurchaseFacilityV2 is
 
         // Accumulate OHM purchased and the per-market amounts.
         _ohmPurchased += inputAmount_;
-        _amountsPerMarket[id_][0] += inputAmount_;
-        _amountsPerMarket[id_][1] += outputAmount_;
+        uint256[2] storage marketAmounts = _amountsPerMarket[id_];
+        marketAmounts[0] += inputAmount_;
+        marketAmounts[1] += outputAmount_;
 
         // Decrement the vault's remaining weekly budget and the tracked share/reserve pool by
         // the actual payout.
-        _recordReserveOutflow(vault, outputAmount_);
+        _recordReserveOutflow(config, vault, outputAmount_);
 
         // Deliver the payout to the teller: the vault shares for a sell-shares vault, otherwise
         // the reserve.
@@ -896,31 +912,32 @@ contract YieldRepurchaseFacilityV2 is
     ///      reserve pool are debited by it. Floors at zero as a defensive measure for edge cases
     ///      where the payout exceeds the tracked amounts (e.g. when a part of the payout was funded
     ///      by donated reserve).
-    function _recordReserveOutflow(address vault_, uint256 outputAmount_) private {
-        ReserveAsset storage config = _assetConfigs[vault_];
-
-        if (!config.sellShares) {
-            config.weeklyBudgetRemaining = Math.saturatingSub(
-                config.weeklyBudgetRemaining,
+    function _recordReserveOutflow(
+        ReserveAsset storage config_,
+        address vault_,
+        uint256 outputAmount_
+    ) private {
+        if (!config_.sellShares) {
+            config_.weeklyBudgetRemaining = Math.saturatingSub(
+                config_.weeklyBudgetRemaining,
                 outputAmount_
             );
-            config.prefundedReserve = Math.saturatingSub(config.prefundedReserve, outputAmount_);
-            return;
+            config_.prefundedReserve = Math.saturatingSub(config_.prefundedReserve, outputAmount_);
+        } else {
+            uint256 reserveValue = IERC4626(vault_).previewRedeem(outputAmount_);
+            config_.weeklyBudgetRemaining = Math.saturatingSub(
+                config_.weeklyBudgetRemaining,
+                reserveValue
+            );
+            config_.prefundedShares = Math.saturatingSub(config_.prefundedShares, outputAmount_);
         }
-
-        uint256 reserveValue = IERC4626(vault_).previewRedeem(outputAmount_);
-        config.weeklyBudgetRemaining = Math.saturatingSub(
-            config.weeklyBudgetRemaining,
-            reserveValue
-        );
-        config.prefundedShares = Math.saturatingSub(config.prefundedShares, outputAmount_);
     }
 
     /// @inheritdoc IBondCallback
     function amountsForMarket(
         uint256 id_
     ) external view override returns (uint256 in_, uint256 out_) {
-        uint256[2] memory marketAmounts = _amountsPerMarket[id_];
+        uint256[2] storage marketAmounts = _amountsPerMarket[id_];
         return (marketAmounts[0], marketAmounts[1]);
     }
 
@@ -957,8 +974,7 @@ contract YieldRepurchaseFacilityV2 is
         bool sellShares_
     ) external override onlyAdminRole {
         _requireNonzeroAddress(vault_, "vault");
-        if (yieldBuybackShare_ > _ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+        _requireValidYieldBuybackShare(yieldBuybackShare_);
         if (_assetConfigs[vault_].vault != address(0))
             revert IYieldRepurchaseFacilityV2_AssetAlreadyRegistered(vault_);
 
@@ -977,9 +993,10 @@ contract YieldRepurchaseFacilityV2 is
         // Prevent registering two vaults that share the same reserve token. This keeps
         // the asset/reserve mapping single-valued, which simplifies the Clearinghouse
         // mismatch handling and the per-vault budget bookkeeping.
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            if (_assetConfigs[_vaults[i]].reserve == reserve_)
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            if (_assetConfigs[vaults[i]].reserve == reserve_)
                 revert IYieldRepurchaseFacilityV2_DuplicateReserve(vault_, reserve_);
         }
 
@@ -997,7 +1014,7 @@ contract YieldRepurchaseFacilityV2 is
             prefundedShares: 0,
             prefundedReserve: 0
         });
-        _vaults.push(vault_);
+        vaults.push(vault_);
 
         emit AssetAdded(vault_, reserve_, yieldBuybackShare_);
     }
@@ -1017,11 +1034,12 @@ contract YieldRepurchaseFacilityV2 is
         _returnBalancesToTrsry(vault_, config.reserve);
 
         // Remove from the vault list (swap-and-pop).
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            if (_vaults[i] == vault_) {
-                _vaults[i] = _vaults[vaultsLength - 1];
-                _vaults.pop();
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            if (vaults[i] == vault_) {
+                vaults[i] = vaults[vaultsLength - 1];
+                vaults.pop();
                 break;
             }
         }
@@ -1106,8 +1124,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 newShare_
     ) external override onlyManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (newShare_ > _ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+        _requireValidYieldBuybackShare(newShare_);
 
         config.yieldBuybackShare = newShare_;
         emit YieldBuybackShareSet(vault_, newShare_);
@@ -1275,7 +1292,7 @@ contract YieldRepurchaseFacilityV2 is
         if (backingReserve == address(0)) return 0;
 
         uint256 len = CHREG.registryCount();
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             address ch = CHREG.registry(i);
             if (_readClearinghouseReserve(ch) != backingReserve) continue;
             yield += _clearinghouseInterest(
@@ -1290,7 +1307,7 @@ contract YieldRepurchaseFacilityV2 is
         if (backingReserve == address(0)) return;
 
         uint256 len = CHREG.registryCount();
-        for (uint256 i; i < len; ++i) {
+        for (uint256 i = 0; i < len; ++i) {
             address ch = CHREG.registry(i);
             if (_readClearinghouseReserve(ch) != backingReserve)
                 emit ClearinghouseDebtTokenMismatch(ch);
@@ -1308,7 +1325,7 @@ contract YieldRepurchaseFacilityV2 is
 
         if (vault_ == backingVault) {
             uint256 activeCount = CHREG.activeCount();
-            for (uint256 i; i < activeCount; ++i) {
+            for (uint256 i = 0; i < activeCount; ++i) {
                 totalShares += IERC20(vault_).balanceOf(CHREG.active(i));
             }
         }
@@ -1383,16 +1400,18 @@ contract YieldRepurchaseFacilityV2 is
         if (value_ == address(0)) revert Errors.BadInput(parameter_);
     }
 
+    /// @notice Reverts if `share_` exceeds `_ONE_HUNDRED_PERCENT`.
+    function _requireValidYieldBuybackShare(uint256 share_) private pure {
+        if (share_ > _ONE_HUNDRED_PERCENT)
+            revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+    }
+
     /// @notice Returns any residual vault shares and free reserve held by the facility to the TRSRY.
     function _returnBalancesToTrsry(address vault_, address reserve_) private {
         uint256 vaultBalance = IERC20(vault_).balanceOf(address(this));
-        if (vaultBalance > 0) {
-            IERC20(vault_).safeTransfer(address(TRSRY), vaultBalance);
-        }
+        if (vaultBalance != 0) IERC20(vault_).safeTransfer(address(TRSRY), vaultBalance);
         uint256 reserveBalance = IERC20(reserve_).balanceOf(address(this));
-        if (reserveBalance > 0) {
-            IERC20(reserve_).safeTransfer(address(TRSRY), reserveBalance);
-        }
+        if (reserveBalance != 0) IERC20(reserve_).safeTransfer(address(TRSRY), reserveBalance);
     }
 
     /// @notice Withdraws `shares_` of `vault_` from the treasury to the facility.
@@ -1470,9 +1489,10 @@ contract YieldRepurchaseFacilityV2 is
     function rescue(address token_, address payable to_) public override {
         if (token_ == address(_OHM)) revert IYieldRepurchaseFacilityV2_CannotRescue(token_);
 
-        uint256 vaultsLength = _vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            address vault = _vaults[i];
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            address vault = vaults[i];
             if (token_ == vault || token_ == _assetConfigs[vault].reserve)
                 revert IYieldRepurchaseFacilityV2_CannotRescue(token_);
         }
@@ -1481,7 +1501,11 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     function _authorizeRescue() internal view override {
-        _requireRole(msg.sender, "admin");
+        _requireAdminRole();
+    }
+
+    function _requireAdminRole() private view {
+        _requireRole(msg.sender, ADMIN_ROLE);
     }
 
     // ============ ERC165 ============ //
