@@ -234,9 +234,8 @@ contract YieldRepurchaseFacilityV2 is
         (uint8 chregMajor, ) = CHREG.VERSION();
         (uint8 rolesMajor, ) = ROLES.VERSION();
 
-        bytes memory expected = abi.encode([1, 1, 1, 1]);
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
-            revert Policy_WrongModuleVersion(expected);
+            revert Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
 
         // The oracle price is compared against the 18-decimal backing value, so the
         // oracle must report 18 decimals.
@@ -313,15 +312,7 @@ contract YieldRepurchaseFacilityV2 is
             address vault = _vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
 
-            uint256 vaultBalance = IERC20(vault).balanceOf(address(this));
-            if (vaultBalance > 0) {
-                IERC20(vault).safeTransfer(address(TRSRY), vaultBalance);
-            }
-
-            uint256 reserveBalance = IERC20(config.reserve).balanceOf(address(this));
-            if (reserveBalance > 0) {
-                IERC20(config.reserve).safeTransfer(address(TRSRY), reserveBalance);
-            }
+            _returnBalancesToTrsry(vault, config.reserve);
 
             // The prefunded balances have been returned, so clear the counters to keep
             // them consistent if the facility is later re-enabled.
@@ -464,8 +455,7 @@ contract YieldRepurchaseFacilityV2 is
         }
         if (sharesToWithdraw == 0) return;
 
-        TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(vault_), sharesToWithdraw);
-        TRSRY.withdrawReserves(address(this), SolmateERC20(vault_), sharesToWithdraw);
+        _withdrawShares(vault_, sharesToWithdraw);
         config_.prefundedShares = currentShares + sharesToWithdraw;
     }
 
@@ -611,8 +601,7 @@ contract YieldRepurchaseFacilityV2 is
         if (shares > trsryBalance) shares = trsryBalance;
         if (shares == 0) return 0;
 
-        TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(vault_), shares);
-        TRSRY.withdrawReserves(address(this), SolmateERC20(vault_), shares);
+        _withdrawShares(vault_, shares);
 
         uint256 used;
         (received, used) = _redeemShares(vault_, reserve_, shares);
@@ -998,14 +987,7 @@ contract YieldRepurchaseFacilityV2 is
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
 
         // Return any residual vault shares and free reserve back to TRSRY.
-        uint256 vaultBalance = IERC20(vault_).balanceOf(address(this));
-        if (vaultBalance > 0) {
-            IERC20(vault_).safeTransfer(address(TRSRY), vaultBalance);
-        }
-        uint256 reserveBalance = IERC20(config.reserve).balanceOf(address(this));
-        if (reserveBalance > 0) {
-            IERC20(config.reserve).safeTransfer(address(TRSRY), reserveBalance);
-        }
+        _returnBalancesToTrsry(vault_, config.reserve);
 
         // Remove from the vault list (swap-and-pop).
         uint256 vaultsLength = _vaults.length;
@@ -1359,6 +1341,24 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Reverts with `Errors.BadInput(parameter_)` if `value_` is the zero address.
     function _requireNonzeroAddress(address value_, string memory parameter_) private pure {
         if (value_ == address(0)) revert Errors.BadInput(parameter_);
+    }
+
+    /// @notice Returns any residual vault shares and free reserve held by the facility to the TRSRY.
+    function _returnBalancesToTrsry(address vault_, address reserve_) private {
+        uint256 vaultBalance = IERC20(vault_).balanceOf(address(this));
+        if (vaultBalance > 0) {
+            IERC20(vault_).safeTransfer(address(TRSRY), vaultBalance);
+        }
+        uint256 reserveBalance = IERC20(reserve_).balanceOf(address(this));
+        if (reserveBalance > 0) {
+            IERC20(reserve_).safeTransfer(address(TRSRY), reserveBalance);
+        }
+    }
+
+    /// @notice Withdraws `shares_` of `vault_` from the treasury to the facility.
+    function _withdrawShares(address vault_, uint256 shares_) private {
+        TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(vault_), shares_);
+        TRSRY.withdrawReserves(address(this), SolmateERC20(vault_), shares_);
     }
 
     // ============ VIEW FUNCTIONS ============ //
