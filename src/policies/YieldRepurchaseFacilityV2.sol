@@ -555,16 +555,13 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @notice Redeems up to `shares_` from `vault_`, capped by the vault per-owner
-    ///         redeem limit.
-    /// @dev Both the `maxRedeem` and `redeem` calls are wrapped in `try/catch`: a vault may
-    ///      revert at execution time even when `maxRedeem` reports a non-zero limit (e.g. a
-    ///      vault that performs an internal swap on withdrawal). On any failure the function
-    ///      reports `(0, 0)`, emits `RedeemFailed`, and leaves all shares untouched so the
-    ///      caller can roll the budget over and retry next cycle. This guarantees a single
-    ///      misbehaving vault cannot brick the heartbeat through the redeem path.
+    /// @notice Redeems `shares_` from `vault_` into its reserve.
+    /// @dev The `redeem` call is wrapped in `try/catch`: on any failure the function reports
+    ///      `(0, 0)`, emits `RedeemFailed`, and leaves all shares untouched so the caller can
+    ///      roll the budget over and retry next cycle. The received reserve is measured as
+    ///      a balance delta.
     /// @return received The reserve received.
-    /// @return used The number of shares actually redeemed (after the `maxRedeem` cap).
+    /// @return used The number of shares redeemed: `shares_` on success, zero on failure.
     function _redeemShares(
         address vault_,
         address reserve_,
@@ -572,28 +569,15 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 received, uint256 used) {
         if (shares_ == 0) return (0, 0);
 
-        // Cap by the vault's per-owner redeem limit, which may be smaller than the share
-        // amount when the vault enforces a per-call limit (e.g. an internal swap route).
-        // A reverting `maxRedeem` is treated as "nothing redeemable this cycle".
-        uint256 maxRedeemable;
-        try IERC4626(vault_).maxRedeem(address(this)) returns (uint256 maxRedeemable_) {
-            maxRedeemable = maxRedeemable_;
-        } catch {
-            emit RedeemFailed(vault_, shares_);
-            return (0, 0);
-        }
-
-        used = shares_ > maxRedeemable ? maxRedeemable : shares_;
-        if (used == 0) return (0, 0);
-
         uint256 reserveBefore = IERC20(reserve_).balanceOf(address(this));
-        try IERC4626(vault_).redeem(used, address(this), address(this)) {
+        try IERC4626(vault_).redeem(shares_, address(this), address(this)) {
             uint256 reserveAfter = IERC20(reserve_).balanceOf(address(this));
             received = reserveAfter - reserveBefore;
+            used = shares_;
         } catch {
-            // The redeem reverted despite the `maxRedeem` cap. Report no redemption so the
-            // caller treats it as a shortfall; no shares were burned.
-            emit RedeemFailed(vault_, used);
+            // The redeem reverted. Report no redemption so the caller treats it as a
+            // shortfall; no shares were burned.
+            emit RedeemFailed(vault_, shares_);
             return (0, 0);
         }
     }
@@ -602,8 +586,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Only shares tracked by `prefundedShares` are eligible, so donated shares are
     ///      ignored. The received reserve is tracked in `prefundedReserve` until it is paid
     ///      out through a bond market, so the pool value is preserved across the conversion.
-    ///      The redemption is capped by the vault per-owner redeem limit, so the caller must
-    ///      handle a shortfall (the returned amount may be less than `deficit_`).
+    ///      The redemption is capped by the available prefunded shares and reports zero on a
+    ///      redeem failure, so the caller must handle a shortfall (the returned amount may be
+    ///      less than `deficit_`).
     /// @return redeemed The reserve received.
     function _redeemFromPrefunded(
         address vault_,
@@ -662,7 +647,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      from the `backingVault`, then burns OHM in proportion to the actually
     ///      received backing. Any unprocessed remainder stays in `_ohmPurchased`
     ///      and is retried on the next cycle, so a temporarily under-funded TRSRY
-    ///      or a capped `maxRedeem` never causes purchased OHM to be burned without
+    ///      or a failed redemption does not cause purchased OHM to be burned without
     ///      a corresponding backing recovery.
     ///
     ///      Returns silently when:
