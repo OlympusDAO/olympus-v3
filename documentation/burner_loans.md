@@ -239,7 +239,7 @@ Burner Loans should use one position per owner per collateral asset:
 
 ```text
 positions[owner][collateralAsset] = Position({
-    creditedCollateral,
+    depositedCollateral,
     debtOhm,
     maturity,
     lastBorrowBlock,
@@ -249,7 +249,7 @@ positions[owner][collateralAsset] = Position({
 
 There are no arbitrary loan IDs in v1. A user can hold multiple Burner Loans positions only by using multiple collateral assets. A debt-free position may keep deposited collateral, but it is not active, cannot be seized, and does not consume debt capacity.
 
-Borrowing can execute only if the resulting `healthFactor >= 1e18` after applying the requested debt, credited collateral, asset haircut, and current PRICE inputs:
+Borrowing can execute only if the resulting `healthFactor >= 1e18` after applying the requested debt, deposited collateral, asset haircut, and current PRICE inputs:
 
 ```text
 riskAdjustedCollateralUsd >= max(
@@ -277,13 +277,13 @@ maturity = block.timestamp + asset.termLength
 
 If `debtOhm > 0`, a borrow increases debt and charges a borrow fee on the incremental OHM amount, but it must not move maturity. Extending maturity is only done by `extend`, which charges the extension fee on the active position. This prevents a borrower from borrowing a small additional amount to roll the entire position for free.
 
-`borrow` does not deposit collateral. A borrower must already have enough credited collateral in the owner/asset position, or use `BurnerLoansComposites.depositAndBorrow(...)` to deposit collateral and borrow in one transaction.
+`borrow` does not deposit collateral. A borrower must already have enough deposited collateral in the owner/asset position, or use `BurnerLoansComposites.depositAndBorrow(...)` to deposit collateral and borrow in one transaction.
 
 ### Collateral Maintenance
 
-`depositCollateral` increases credited principal without changing debt or maturity. It improves health and should be allowed for active positions, including unhealthy unseized positions, because it reduces protocol risk.
+`depositCollateral` increases deposited principal without changing debt or maturity. It improves health and should be allowed for active positions, including unhealthy unseized positions, because it reduces protocol risk.
 
-`withdrawCollateral` reduces credited principal and transfers collateral to a recipient. It can execute only if the remaining position is healthy or has zero debt:
+`withdrawCollateral` reduces deposited principal and transfers collateral to a recipient. It can execute only if the remaining position is healthy or has zero debt:
 
 ```text
 if debtOhm > 0:
@@ -302,14 +302,14 @@ Repayment reduces debt only. It does not automatically release collateral:
 
 ```text
 debtOhmAfter = debtOhmBefore - min(repayOhm, debtOhmBefore)
-creditedCollateralAfter = creditedCollateralBefore
+depositedCollateralAfter = depositedCollateralBefore
 ```
 
 This is what lets repayment improve `healthFactor` when OHM rises or collateral falls. Collateral is returned only by an explicit `withdrawCollateral` call, which applies the health check above.
 
-Example: a borrower deposits `1,000 USDS` and borrows `4 OHM`. Repaying `1 OHM` burns `1 OHM`, leaves `1,000 USDS` credited to the position, and improves health. If the borrower also wants collateral back, they call `withdrawCollateral` after repayment.
+Example: a borrower deposits `1,000 USDS` and borrows `4 OHM`. Repaying `1 OHM` burns `1 OHM`, leaves `1,000 USDS` deposited in the position, and improves health. If the borrower also wants collateral back, they call `withdrawCollateral` after repayment.
 
-Full repayment burns all remaining OHM debt, removes the borrower from the active asset index, and leaves credited collateral withdrawable. Full repayment must not leave debt dust or active-index dust.
+Full repayment burns all remaining OHM debt, removes the borrower from the active asset index, and leaves deposited collateral withdrawable. Full repayment must not leave debt dust or active-index dust.
 
 ### Seizure
 
@@ -505,7 +505,7 @@ utilization = 90%  -> fee = 25 + 80 + 90 = 195 bps
 utilization = 100% -> fee = 25 + 80 + 180 = 285 bps
 ```
 
-For v1, use one dynamic lever: utilization-based fees. Keep collateral ratios, term lengths, and max maturity horizons as admin-set, timelocked parameters. Use one fee curve per asset, and use that asset's curve for both borrows and extensions.
+For v1, use one dynamic lever: utilization-based fees. Keep collateral ratios, term lengths, and max maturity horizons as configured parameters that change only through the timelocked risk-parameter path. Use one fee curve per asset, and use that asset's curve for both borrows and extensions.
 
 Fees are charged only at borrow and extension, so high utilization affects users when they create or extend debt, not continuously while a position is active. This keeps the product 0% interest, but means stale open interest can stay cheap until the next extension. Fixed maturity and the per-asset borrow/extension fee are therefore the mechanism that eventually reprices high utilization.
 
@@ -578,7 +578,7 @@ State-changing functions should use consistent names, parameters, and return ord
 
 ```text
 depositCollateral(collateralAsset, collateralAmount, onBehalfOf)
-    -> creditedCollateral, healthFactor
+    -> depositedCollateral, totalDepositedCollateral
 withdrawCollateral(collateralAsset, collateralAmount, onBehalfOf, recipient)
     -> withdrawnToken, withdrawnAmount, remainingCollateral, healthFactor
 borrow(collateralAsset, ohmAmount, onBehalfOf, recipient, maxFee)
@@ -796,9 +796,13 @@ Each collateral asset should define:
 enabled
 collateralFactorBps
 minCollateralRatioBps
+backingMultiplierBps
 assetDebtCap
 termLength
 maxMaturityHorizon
+feeConfig
+keeperRewardBps
+maxKeeperReward
 ```
 
 Parameter effects:
@@ -806,9 +810,12 @@ Parameter effects:
 - `enabled`: Allows new borrows and extensions for the asset. Disabling must not block repayment, seizure, or cleanup.
 - `collateralFactorBps`: Haircut applied after USD valuation.
 - `minCollateralRatioBps`: Per-asset market solvency threshold.
+- `backingMultiplierBps`: Per-asset multiplier applied to the backing preservation floor.
 - `assetDebtCap`: Maximum active OHM debt backed by this asset.
 - `termLength`: Duration of one borrow or extension term for this asset.
 - `maxMaturityHorizon`: Maximum time from the current block timestamp to a position's maturity after extension, expressed in days.
+- `feeConfig`: Per-asset borrow and extension fee curve.
+- `keeperRewardBps` and `maxKeeperReward`: Per-asset seizure reward bounds.
 
 The asset vault should be handled by `DepositManager`, not duplicated in `BurnerLoans` asset config. `BurnerLoans` only needs to know how to deposit, withdraw, value current holdings, and account for principal.
 
@@ -831,12 +838,14 @@ riskAdjustedCollateralUsd >=
 
 Asset configuration updates should support:
 
-- Add a new asset.
-- Enable or disable new borrows and extensions for an asset.
-- Update asset debt cap.
-- Update collateral factor within admin-set bounds.
-- Update minimum collateral ratio within admin-set bounds.
-- Update term length or max maturity horizon within admin-set bounds.
+- Add a new asset through the admin-only whitelist path.
+- Update global and per-asset debt caps through the admin-only cap path.
+- Enable or disable new borrows and extensions for an already whitelisted asset.
+- Update collateral factor within admin-set bounds through the timelocked risk path.
+- Update minimum collateral ratio within admin-set bounds through the timelocked risk path.
+- Update backing multiplier through the timelocked risk path.
+- Update term length or max maturity horizon within admin-set bounds through the timelocked risk path.
+- Update fee and keeper reward settings through the timelocked risk path.
 
 Disabling an asset should block new borrows and extensions, but must not block repayment, seizure, or yield/accounting cleanup for existing positions.
 
@@ -875,7 +884,7 @@ Reuse the MonoCooler authorization pattern:
 
 Caller rules:
 
-- `depositCollateral` may be permissionless because it only increases credited collateral for `onBehalfOf`. If future deposit hooks can also delegate, route rewards, or change metadata, those hooks need owner/operator authorization.
+- `depositCollateral` may be called by the owner or an authorized operator. Permissionless top-ups can be considered later, but v1 keeps every `onBehalfOf` position mutation on the same owner/operator authorization surface.
 - `withdrawCollateral` may be called by the owner or an authorized operator only if the recipient is safe.
 - `borrow` may be called by the owner or an authorized operator only if the OHM recipient is safe.
 - `extend` may be called by the owner or an authorized operator if the position is not health-seizable and has not already been seized. Maturity alone does not block extension if the borrower extends before seizure executes. Operators enable contracts to build on top of Burner Loans, similar to migration helpers around Cooler V2.
@@ -925,25 +934,41 @@ burner_loans_admin
 
 Parameter changes should be split by blast radius.
 
-Timelocked admin-only functions:
+Admin-only direct functions:
 
-- `addCollateralAsset(...)`
-- `setGlobalDebtCap(...)`, when increasing the cap.
-- `setAssetDebtCap(...)`, when increasing the cap.
-- `setBackingMultiplierBps(...)`
-- `setMinCollateralRatioBps(...)`
-- `setCollateralFactorBps(...)`
-- `setAssetTermLength(...)`
-- `setAssetMaxMaturityHorizon(...)`
-- Any change that can reduce active-position `healthFactor` or make active positions newly seizable.
-- Any change that can reduce backing protection or increase mint capacity.
+- `addAsset(asset, config)`, which whitelists a new collateral asset.
+- `setGlobalDebtCap(cap)`.
+- `setAssetDebtCap(asset, cap)`.
+- `setConfigurator(configurator)`.
 
-Admin or `burner_loans_admin`, with a timelock when enabling risk:
+Whitelisting assets and changing caps are governance-level capacity decisions. They should not be callable by `burner_loans_admin`, even for cap decreases. If governance wants those actions timelocked, the `admin` role should be held by the governance timelock or another governance-controlled executor.
 
-- `enableAsset(asset)`, if the asset has already been added and remains within admin-set bounds.
-- `disableAsset(asset)`, which blocks new borrows and extensions for that asset.
+Debt caps are denominated in the debt token, OHM, using OHM's native decimals.
 
-Burner Loans should use `PolicyEnablerV2` for global enable/disable behavior. `PolicyEnablerV2` is being developed on the `lz-bridge-upgrade` branch, so implementation requires cross-porting that utility and its tests before building `BurnerLoans`. Burner Loans should then layer asset-level `enableAsset(asset)` and `disableAsset(asset)` on top of the global switch.
+Timelocked risk-parameter queue functions callable by `admin` or `burner_loans_admin` should live on a dedicated config timelock contract, not on `BurnerLoans` itself, for contract size reasons. The config timelock queues and later executes calls to normal restricted setters on `BurnerLoans`:
+
+- `setFeeConfig(asset, ...)`, for the asset's borrow and extension fee curve.
+- `setBackingMultiplierBps(asset, ...)`.
+- `setMinCollateralRatioBps(asset, ...)`.
+- `setCollateralFactorBps(asset, ...)`.
+- `setTermLength(asset, ...)`.
+- `setMaxMaturityHorizon(asset, ...)`.
+- `setKeeperRewardBps(asset, ...)`.
+- `setMaxKeeperReward(asset, ...)`.
+
+`enableAsset(asset)` is admin-only. Enabling an asset allows new debt and therefore belongs with governance-controlled capacity and whitelist decisions.
+
+`disableAsset(asset)` is an immediate emergency/admin action, not a timelocked action. It only blocks new borrows and extensions for that asset; it must not block repayment, seizure, or safe cleanup.
+
+`reenableAsset(asset)` is an emergency/admin recovery path for short-lived asset disables. It may only be used within a fixed grace period after `disableAsset(asset)`, should validate that PRICE and DepositManager support are still healthy, and should not be callable by `burner_loans_admin` unless that caller also holds emergency/admin authority. After the grace period, governance must use `enableAsset(asset)`.
+
+Every config function callable by `burner_loans_admin` must go through a timelock. The implementation should use a separate `BurnerLoansConfigTimelock` policy that reuses the `TimelockBatchQueue` abstract and `ITimelockBatchQueue` interface from the `lz-bridge-upgrade` branch at commit `de6eda9990568ad0eb3aeb0915c3042c0e4443b5`. Queue-time validation should check caller role, asset whitelist status, payload shape, and parameter bounds. Execution can be permissionless after the delay while both the timelock policy and Burner Loans are enabled. Emergency should be able to cancel queued actions.
+
+`BurnerLoans` should store a `configurator` address, expected to be the `BurnerLoansConfigTimelock` contract, and expose normal restricted setters callable by either the configurator or `admin`. This lets OCG execute risk-parameter updates directly through the OCG timelock without forcing an OCG timelock followed by a second Burner Loans timelock. `burner_loans_admin` still reaches those setters only through the external config timelock. Governance/admin can rotate the configurator. Queued actions that target an old configurator or old Burner Loans target should become stale and require cancellation/re-queueing.
+
+Direct admin functions should remain on `BurnerLoans` only where the core state must change immediately or where governance owns the blast radius: asset whitelisting, cap changes, asset enable, asset disable, asset re-enable, global enable, and global disable.
+
+Burner Loans should use `PolicyEnablerV2` for global enable/disable behavior. `PolicyEnablerV2` is being developed on the `lz-bridge-upgrade` branch, so implementation requires cross-porting that utility and its tests before building `BurnerLoans`. Burner Loans should then layer asset-level `enableAsset(asset)`, `disableAsset(asset)`, and `reenableAsset(asset)` on top of the global switch.
 
 Global functions:
 
@@ -952,32 +977,42 @@ Global functions:
 
 When disabled, `borrow` and `extend` should be blocked. `repay` should remain available. `seize` should remain available unless the emergency is specifically an oracle compromise, in which case seizure safety depends on PRICE freshness and may need to revert through normal oracle checks. Harvesting surplus to `TRSRY` may remain available if it cannot reduce borrower collateral.
 
-`burner_loans_admin` functions within admin-set bounds:
-
-- `setFeeConfig(asset, ...)`, for the asset's borrow and extension fee curve.
-- `setGlobalDebtCap(...)`, only when lowering the cap and not below active debt.
-- `setAssetDebtCap(...)`, only when lowering the cap and not below active asset debt.
-- `setMaxKeeperRewardAsset(asset, ...)`.
-- `setKeeperRewardBps(...)`.
-- `setAssetTermLength(...)`, only if it affects new borrows/extensions and not active position maturity.
-- `setAssetMaxMaturityHorizon(...)`, only if it affects new extensions and not active position maturity.
-- `disableAsset(asset)`, if asset-level risk events require blocking new borrows and extensions.
-
-Debt cap decreases and keeper reward changes should be timelocked even when performed by `burner_loans_admin`.
-
 Even within bounds, `burner_loans_admin` should not be able to:
 
 - Add assets.
-- Increase global or asset debt caps.
+- Change global or asset debt caps.
+- Enable assets.
+- Disable or re-enable assets unless it also holds emergency/admin authority.
 - Make active positions seizable by parameter update without a timelock.
 
 PRICE configuration is out of scope for `BurnerLoans` and is handled by PRICE. Seized collateral and harvested yield go to `TRSRY`; there is no configurable yield recipient.
 
 Repayment should not be pausable.
 
+## Contract Size Strategy
+
+The current U0-U4 implementation checkpoint measures `31,824 B` runtime size for `BurnerLoans`, which is `7,248 B` over the EIP-170 limit. Moving code into an abstract parent improves readability but does not reduce deployed size, because inherited code is still compiled into the child contract. Size reduction needs to move behavior into separately deployed contracts or remove behavior from the core policy.
+
+Decided v1 split:
+
+- Keep `BurnerLoans` as the core state machine for positions, debt, collateral, pricing, repayment, seizure, and direct emergency/governance controls.
+- Move timed risk-parameter queueing into `BurnerLoansConfigTimelock`.
+- Keep `BurnerLoansComposites` as periphery for batched UX flows.
+- Keep periodic seizure scanning in `BurnerLoansSeizer`.
+- Consider a view/helper contract for heavy previews if full preview implementations materially increase size.
+
+Supporting options if size remains tight:
+
+1. **External preview/helper contract.** Useful if previews become large. It preserves a small core while still giving integrators rich read APIs. The tradeoff is that previews are no longer guaranteed to share exact internal code paths unless tests compare helper output to execution behavior.
+2. **External linked math library.** Can reduce core bytecode if linked as an external library. Internal libraries do not help size because code is inlined. External math adds call overhead and deployment complexity, so reserve it for rare or bulky helpers rather than hot-path debt/collateral accounting.
+3. **Trim return structs/events/interface surface.** This can save some ABI and event code, but it is unlikely to solve a `7 KB+` overage alone and would weaken integration ergonomics. Use only after larger architectural moves.
+4. **Proxy, diamond, or facet split.** Avoid for v1. It can bypass per-contract size pressure, but it materially increases storage-layout, upgrade, access-control, and invariant complexity.
+
+External config timelock is the chosen first step because it removes queue storage, queue lifecycle, batch execution, cancellation, role validation, and queue helper functions from the core policy. It adds a cross-contract trust boundary and deployment wiring, but matches the LayerZero config-policy pattern and targets the largest removable bytecode block.
+
 ## Parameter Bounds
 
-Admin should set hard bounds that `burner_loans_admin` cannot exceed:
+Admin should set hard whitelist and capacity bounds. Timelocked risk-parameter changes cannot exceed those bounds:
 
 ```text
 assetDebtCap[asset] <= globalDebtCap
@@ -1037,10 +1072,10 @@ Mint, market, and governance impact must remain bounded. For v1, `globalDebtCap`
 ```text
 amountRepaid == min(repayOhm, debtOhmBefore)
 debtOhmAfter == debtOhmBefore - amountRepaid
-creditedCollateralAfter == creditedCollateralBefore
+depositedCollateralAfter == depositedCollateralBefore
 ```
 
-Repayment burns OHM and reduces debt. It must not release or reduce credited collateral. This is what makes repayment a health-improving maintenance action.
+Repayment burns OHM and reduces debt. It must not release or reduce deposited collateral. This is what makes repayment a health-improving maintenance action.
 
 ### Full Repayment No Debt Dust
 
@@ -1048,7 +1083,7 @@ Repayment burns OHM and reduces debt. It must not release or reduce credited col
 if repayOhm >= debtOhmBefore:
     position.debtOhm == 0
     activeBorrowersByAsset[asset] excludes owner
-    creditedCollateral is unchanged
+    depositedCollateral is unchanged
 ```
 
 Full repayment must clear debt and remove the borrower from the active asset index. Rounding must not leave debt dust or active-index dust. Collateral remains withdrawable through `withdrawCollateral`.
@@ -1134,7 +1169,7 @@ Seizure must be objective and reproducible.
 ```text
 if position is seized:
     debtOhmAfter == 0
-    creditedCollateralAfter == 0
+    depositedCollateralAfter == 0
     activeBorrowersByAsset[asset] excludes owner
     seizedUnrepaidDebtOhm increases by debtOhmBefore
 ```
