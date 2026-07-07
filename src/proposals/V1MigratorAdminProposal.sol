@@ -28,10 +28,9 @@ contract V1MigratorAdminProposal is GovernorBravoProposal {
     error DaoMsMissingLegacyMigrationAdminRole();
     error InvalidRemainingMintApproval(uint256 actual, uint256 expected);
 
-    // OCG proposal ID 16 was prepared for an earlier version and has already been used on mainnet.
     // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
-        return 17;
+        return 18;
     }
 
     // Returns the name of the proposal.
