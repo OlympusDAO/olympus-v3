@@ -8,7 +8,8 @@ import {V1Migrator} from "src/policies/V1Migrator.sol";
 import {V1MigratorAdminProposal} from "src/proposals/V1MigratorAdminProposal.sol";
 
 contract V1MigratorAdminProposalTest is ProposalTest {
-    uint256 public constant BLOCK = 25395851 + 1;
+    // Proposal 18 creation block. Earlier blocks do not include its stored Governor actions.
+    uint256 public constant BLOCK = 25_481_770;
 
     // Casting is safe because this fixed role label is shorter than 32 bytes.
     /// forge-lint: disable-next-line(unsafe-typecast)
