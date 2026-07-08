@@ -14,6 +14,14 @@ interface IBurnerLoans {
     error BurnerLoans_InvalidBps(uint256 bps);
     error BurnerLoans_InvalidCap();
     error BurnerLoans_InvalidDepositManager(address depositManager);
+    error BurnerLoans_AssetAlreadyConfigured(address asset);
+    error BurnerLoans_AssetNotConfigured(address asset);
+    error BurnerLoans_AssetNotEnabled(address asset);
+    error BurnerLoans_AssetAlreadyEnabled(address asset);
+    error BurnerLoans_AssetReenableExpired(address asset, uint48 deadline);
+    error BurnerLoans_InvalidFeeConfig();
+    error BurnerLoans_UnauthorizedConfigurator(address caller);
+    error BurnerLoans_InvalidModuleVersion();
 
     // ========== ENUMS ========== //
 
@@ -40,7 +48,7 @@ interface IBurnerLoans {
     }
 
     /// @notice Asset-level risk and term configuration.
-    /// @param enabled Whether the asset accepts new deposits, borrows, and extensions.
+    /// @param enabled Whether the asset accepts new borrows and extensions.
     /// @param collateralDecimals Decimal scale returned by the collateral ERC20.
     /// @param collateralFactorBps Risk haircut applied to collateral value, in bps.
     /// @param minCollateralRatioBps Minimum collateral ratio applied to OHM debt value, in bps.
@@ -63,16 +71,35 @@ interface IBurnerLoans {
         uint256 maxKeeperReward;
     }
 
+    /// @notice Asset-level risk and term configuration supplied by callers.
+    /// @dev Excludes storage-only fields (`enabled`, `collateralDecimals`) and separately managed debt cap.
+    /// @param collateralFactorBps Collateral factor, in bps.
+    /// @param minCollateralRatioBps Minimum collateral ratio, in bps.
+    /// @param backingMultiplierBps Backing multiplier, in bps.
+    /// @param keeperRewardBps Keeper reward share, in bps.
+    /// @param termLength Fixed term length, in seconds.
+    /// @param maxMaturityHorizon Maximum maturity horizon, in seconds.
+    /// @param maxKeeperReward Maximum keeper reward, in collateral token decimals.
+    struct AssetRiskConfigInput {
+        uint16 collateralFactorBps;
+        uint16 minCollateralRatioBps;
+        uint16 backingMultiplierBps;
+        uint16 keeperRewardBps;
+        uint48 termLength;
+        uint48 maxMaturityHorizon;
+        uint256 maxKeeperReward;
+    }
+
     /// @notice Asset-level utilization fee curve.
     /// @param baseFeeBps Base fee charged on borrows and extensions, in bps.
-    /// @param kinkBps Utilization point where the second slope starts, in bps.
-    /// @param slope1Bps Fee slope from zero utilization through the kink, in bps.
-    /// @param slope2Bps Fee slope above the kink, in bps.
-    struct FeeConfig {
+    /// @param kinkBps Utilization point where the second slope starts, in bps. Zero means no kink.
+    /// @param preKinkSlopeBps Aave-style full fee-rate increase from zero utilization through the kink, in bps.
+    /// @param postKinkSlopeBps Aave-style additional fee-rate increase from the kink to full utilization, in bps. Must be zero when `kinkBps` is zero.
+    struct AssetFeeConfig {
         uint16 baseFeeBps;
         uint16 kinkBps;
-        uint16 slope1Bps;
-        uint16 slope2Bps;
+        uint16 preKinkSlopeBps;
+        uint16 postKinkSlopeBps;
     }
 
     /// @notice Result returned by borrow previews.
@@ -137,30 +164,6 @@ interface IBurnerLoans {
         bool executable;
     }
 
-    /// @notice Signature authorization payload.
-    /// @param account Account granting operator authorization.
-    /// @param authorized Operator being authorized.
-    /// @param authorizationDeadline Timestamp until which the operator is authorized, in seconds.
-    /// @param nonce Account nonce consumed by the signature.
-    /// @param signatureDeadline Timestamp until which the signature may be submitted, in seconds.
-    struct Authorization {
-        address account;
-        address authorized;
-        uint96 authorizationDeadline;
-        uint256 nonce;
-        uint256 signatureDeadline;
-    }
-
-    /// @notice ECDSA signature components.
-    /// @param v Recovery identifier.
-    /// @param r ECDSA r value.
-    /// @param s ECDSA s value.
-    struct Signature {
-        uint8 v;
-        bytes32 r;
-        bytes32 s;
-    }
-
     // ========== EVENTS ========== //
 
     event CollateralDeposited(
@@ -207,33 +210,102 @@ interface IBurnerLoans {
         uint256 keeperReward
     );
     event YieldHarvested(address indexed asset, uint256 amount);
-    event AuthorizationSet(
-        address indexed caller,
-        address indexed account,
-        address indexed authorized,
-        uint96 authorizationDeadline
-    );
+    event GlobalDebtCapSet(uint256 debtCapOhm);
+    event AssetAdded(address indexed asset, AssetConfig config);
+    event AssetDebtCapSet(address indexed asset, uint256 debtCapOhm);
+    event ConfiguratorSet(address indexed configurator);
+    event AssetRiskConfigSet(address indexed asset, AssetRiskConfigInput config);
+    event AssetFeeConfigSet(address indexed asset, AssetFeeConfig config);
+    event AssetEnabled(address indexed asset);
+    event AssetDisabled(address indexed asset);
+    event AssetReenabled(address indexed asset);
 
     // ========== VIEW FUNCTIONS ========== //
 
+    /// @notice Returns the OHM token address.
+    /// @return address The OHM token used for borrowing and repayment.
     function ohm() external view returns (address);
 
+    /// @notice Returns the DepositManager used for collateral custody.
+    /// @return address The DepositManager address.
     function depositManager() external view returns (address);
 
+    /// @notice Returns the global active debt cap.
+    /// @return uint256 The maximum total active Burner Loans debt, in OHM decimals.
     function globalDebtCapOhm() external view returns (uint256);
 
+    /// @notice Returns current active debt across all configured collateral assets.
+    /// @return uint256 The total active Burner Loans debt, in OHM decimals.
     function totalActiveDebtOhm() external view returns (uint256);
 
+    /// @notice Returns the configured Burner Loans timelock executor.
+    /// @return address The configurator address.
+    function configurator() external view returns (address);
+
+    /// @notice Returns current active debt for a collateral asset.
+    /// @param asset_ The collateral asset to query.
+    /// @return uint256 The active debt backed by `asset_`, in OHM decimals.
     function assetActiveDebtOhm(address asset_) external view returns (uint256);
 
+    /// @notice Returns whether a collateral asset has been configured.
+    /// @param asset_ The collateral asset to query.
+    /// @return bool True if `asset_` has been added to Burner Loans.
+    function isAssetConfigured(address asset_) external view returns (bool);
+
+    /// @notice Returns when an asset was last disabled.
+    /// @dev Returns zero when the asset is currently enabled or has not been disabled.
+    /// @param asset_ The collateral asset to query.
+    /// @return uint48 The disable timestamp, in seconds.
+    function assetDisabledAt(address asset_) external view returns (uint48);
+
+    /// @notice Returns the risk and term configuration for a collateral asset.
+    /// @param asset_ The collateral asset to query.
+    /// @return AssetConfig The asset configuration.
     function getAssetConfig(address asset_) external view returns (AssetConfig memory);
 
-    function getFeeConfig(address asset_) external view returns (FeeConfig memory);
+    /// @notice Returns the utilization fee configuration for a collateral asset.
+    /// @param asset_ The collateral asset to query.
+    /// @return AssetFeeConfig The asset fee curve.
+    function getAssetFeeConfig(address asset_) external view returns (AssetFeeConfig memory);
 
+    /// @notice Validates a complete asset risk configuration.
+    /// @dev Reverts if the supplied configuration violates Burner Loans risk, maturity, or reward bounds.
+    /// @param config_ Complete asset configuration to validate.
+    function validateAssetRiskConfig(AssetConfig calldata config_) external pure;
+
+    /// @notice Validates a complete utilization fee configuration.
+    /// @dev Reverts if the supplied fee curve violates bps bounds, kink rules, or the maximum fee rate.
+    /// @param config_ Complete fee configuration to validate.
+    function validateFeeConfig(AssetFeeConfig calldata config_) external pure;
+
+    /// @notice Validates an asset active debt cap against live Burner Loans state.
+    /// @dev Reverts if `asset_` is not configured, `debtCapOhm_` is below current active
+    ///      debt for `asset_`, or `debtCapOhm_` is above the global debt cap.
+    /// @param asset_ Collateral asset to validate.
+    /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
+    function validateAssetDebtCap(address asset_, uint256 debtCapOhm_) external view;
+
+    /// @notice Returns a borrower position for one collateral asset.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param borrower_ The position owner.
+    /// @return Position The borrower's position.
     function getPosition(address asset_, address borrower_) external view returns (Position memory);
 
+    /// @notice Returns whether a borrower's position can currently be seized.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param borrower_ The position owner.
+    /// @return bool True if the position is seizable by health factor or maturity.
     function isSeizable(address asset_, address borrower_) external view returns (bool);
 
+    /// @notice Scans active borrowers for a collateral asset and returns seizable borrowers.
+    /// @dev Intended for on-chain automation with bounded work per call.
+    /// @param asset_ The collateral asset to scan.
+    /// @param startIndex_ The index in the active borrower set to start scanning.
+    /// @param maxBorrowersToCheck_ Maximum active borrowers to inspect.
+    /// @param maxBorrowersToReturn_ Maximum seizable borrowers to return.
+    /// @return borrowers Seizable borrower addresses found in this scan window.
+    /// @return nextIndex The next active-borrower index to scan.
+    /// @return expectedKeeperReward Expected keeper reward for seizing the returned borrowers, in collateral token decimals.
     function getSeizableBorrowers(
         address asset_,
         uint256 startIndex_,
@@ -244,63 +316,117 @@ interface IBurnerLoans {
         view
         returns (address[] memory borrowers, uint256 nextIndex, uint256 expectedKeeperReward);
 
+    /// @notice Returns all active borrowers for a collateral asset.
+    /// @dev Intended primarily for off-chain indexing and inspection because the result can grow.
+    /// @param asset_ The collateral asset to query.
+    /// @return borrowers Active borrower addresses for `asset_`.
     function getActiveBorrowers(address asset_) external view returns (address[] memory borrowers);
 
+    /// @notice Returns a borrower's current health factor for one collateral asset.
+    /// @dev The health factor is WAD-scaled. Values below 1e18 are seizable.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param borrower_ The position owner.
+    /// @return uint256 The WAD-scaled health factor.
     function healthFactor(address asset_, address borrower_) external view returns (uint256);
-
-    function authorizations(address account_, address authorized_) external view returns (uint96);
-
-    function authorizationNonces(address account_) external view returns (uint256);
-
-    function isSenderAuthorized(address account_) external view returns (bool);
 
     // ========== PREVIEW FUNCTIONS ========== //
 
+    /// @notice Previews the collateral deposited into a position.
+    /// @param asset_ The collateral asset to deposit.
+    /// @param amount_ The amount of collateral to deposit, in collateral token decimals.
+    /// @param onBehalfOf_ The position owner receiving the collateral deposit.
+    /// @return depositedCollateral Collateral expected to be deposited, in collateral token decimals.
+    /// @return totalDepositedCollateral Total position collateral after the deposit, in collateral token decimals.
     function previewDepositCollateral(
         address asset_,
         uint256 amount_,
         address onBehalfOf_
     ) external view returns (uint256 depositedCollateral, uint256 totalDepositedCollateral);
 
+    /// @notice Previews collateral withdrawal from a position.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param amount_ The requested withdrawal amount, in collateral token decimals.
+    /// @param onBehalfOf_ The position owner.
+    /// @return WithdrawPreview Preview data including return token, amount out, remaining collateral, and health factor.
     function previewWithdrawCollateral(
         address asset_,
         uint256 amount_,
         address onBehalfOf_
     ) external view returns (WithdrawPreview memory);
 
+    /// @notice Previews borrowing OHM against an existing collateral position.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param ohmAmount_ The OHM amount to borrow, in OHM decimals.
+    /// @param onBehalfOf_ The position owner.
+    /// @return BorrowPreview Preview data including fee, resulting debt, resulting health factor, and maturity.
     function previewBorrow(
         address asset_,
         uint256 ohmAmount_,
         address onBehalfOf_
     ) external view returns (BorrowPreview memory);
 
+    /// @notice Previews repayment of OHM debt.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param ohmAmount_ The requested repayment amount, in OHM decimals.
+    /// @param onBehalfOf_ The position owner whose debt is repaid.
+    /// @return repayAmount OHM expected to be repaid, in OHM decimals.
+    /// @return remainingDebtOhm Debt remaining after repayment, in OHM decimals.
     function previewRepay(
         address asset_,
         uint256 ohmAmount_,
         address onBehalfOf_
     ) external view returns (uint256 repayAmount, uint256 remainingDebtOhm);
 
+    /// @notice Previews extension of a position's maturity.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param onBehalfOf_ The position owner.
+    /// @param termCount_ Number of fixed asset terms to extend by.
+    /// @return ExtendPreview Preview data including fee, new maturity, current health factor, and executability.
     function previewExtend(
         address asset_,
         address onBehalfOf_,
         uint256 termCount_
     ) external view returns (ExtendPreview memory);
 
+    /// @notice Previews seizing a batch of borrowers for one collateral asset.
+    /// @param asset_ The collateral asset backing all borrower positions.
+    /// @param borrowers_ Borrowers to inspect for seizure.
+    /// @return SeizePreview Preview data including debt closed, collateral seized, treasury collateral, and keeper reward.
     function previewSeize(
         address asset_,
         address[] calldata borrowers_
     ) external view returns (SeizePreview memory);
 
+    /// @notice Previews surplus yield harvest for a collateral asset.
+    /// @param asset_ The collateral asset to harvest.
+    /// @return HarvestPreview Preview data including harvestable amount and executability.
     function previewHarvestYield(address asset_) external view returns (HarvestPreview memory);
 
     // ========== USER FUNCTIONS ========== //
 
+    /// @notice Deposits collateral into a position.
+    /// @dev Caller must be the position owner or an authorized operator.
+    /// @param asset_ The collateral asset to deposit.
+    /// @param amount_ The collateral amount to deposit, in collateral token decimals.
+    /// @param onBehalfOf_ The position owner receiving the collateral deposit.
+    /// @return depositedCollateral Collateral deposited through the custody layer, in collateral token decimals.
+    /// @return totalDepositedCollateral Total position collateral after the deposit, in collateral token decimals.
     function depositCollateral(
         address asset_,
         uint256 amount_,
         address onBehalfOf_
     ) external returns (uint256 depositedCollateral, uint256 totalDepositedCollateral);
 
+    /// @notice Withdraws collateral from a position.
+    /// @dev Caller must be the position owner or an authorized operator. The recipient is caller-specified.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param amount_ The requested withdrawal amount, in collateral token decimals.
+    /// @param onBehalfOf_ The position owner.
+    /// @param recipient_ The account receiving the withdrawn asset or share token.
+    /// @return tokenOut Token returned by the custody layer, either collateral asset or a vault/share token.
+    /// @return amountOut Amount returned, in `tokenOut` decimals.
+    /// @return remainingDepositedCollateral Position collateral remaining, in collateral token decimals.
+    /// @return healthFactor Resulting WAD-scaled health factor.
     function withdrawCollateral(
         address asset_,
         uint256 amount_,
@@ -315,6 +441,18 @@ interface IBurnerLoans {
             uint256 healthFactor
         );
 
+    /// @notice Borrows OHM against a collateral position.
+    /// @dev Caller must be the position owner or an authorized operator. Reverts if the asset or policy is disabled.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param ohmAmount_ The OHM amount to borrow, in OHM decimals.
+    /// @param onBehalfOf_ The position owner whose debt increases.
+    /// @param recipient_ The account receiving borrowed OHM.
+    /// @param maxFee_ Maximum acceptable borrow fee, in collateral token decimals.
+    /// @return borrowedOhm OHM borrowed, in OHM decimals.
+    /// @return feeCollateral Fee paid immediately, in collateral token decimals.
+    /// @return totalDebtOhm Total position debt after borrowing, in OHM decimals.
+    /// @return maturity Position maturity after borrowing, as a Unix timestamp.
+    /// @return healthFactor Resulting WAD-scaled health factor.
     function borrow(
         address asset_,
         uint256 ohmAmount_,
@@ -331,12 +469,28 @@ interface IBurnerLoans {
             uint256 healthFactor
         );
 
+    /// @notice Repays OHM debt for a position.
+    /// @dev Repayment is permissionless; collateral remains owned by the position owner.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param ohmAmount_ The requested repayment amount, in OHM decimals.
+    /// @param onBehalfOf_ The position owner whose debt is repaid.
+    /// @return repaidOhm OHM repaid and burned, in OHM decimals.
+    /// @return remainingDebtOhm Debt remaining after repayment, in OHM decimals.
     function repay(
         address asset_,
         uint256 ohmAmount_,
         address onBehalfOf_
     ) external returns (uint256 repaidOhm, uint256 remainingDebtOhm);
 
+    /// @notice Extends a debt-bearing position's maturity.
+    /// @dev Caller must be the position owner or an authorized operator. Fees scale linearly with `termCount_`.
+    /// @param asset_ The collateral asset backing the position.
+    /// @param onBehalfOf_ The position owner.
+    /// @param termCount_ Number of fixed asset terms to extend by.
+    /// @param maxFee_ Maximum acceptable total extension fee, in collateral token decimals.
+    /// @return newMaturity Position maturity after extension, as a Unix timestamp.
+    /// @return feeCollateral Fee paid immediately, in collateral token decimals.
+    /// @return healthFactor Current WAD-scaled health factor.
     function extend(
         address asset_,
         address onBehalfOf_,
@@ -344,6 +498,14 @@ interface IBurnerLoans {
         uint256 maxFee_
     ) external returns (uint48 newMaturity, uint256 feeCollateral, uint256 healthFactor);
 
+    /// @notice Seizes one or more seizable borrowers for one collateral asset.
+    /// @dev All borrowers must be for `asset_`. Non-protocol callers may receive a capped keeper reward.
+    /// @param asset_ The collateral asset backing all seized positions.
+    /// @param borrowers_ Borrower positions to seize.
+    /// @return seizedDebtOhm Debt closed by seizure, in OHM decimals.
+    /// @return seizedCollateral Collateral seized from borrowers, in collateral token decimals.
+    /// @return collateralToTreasury Collateral sent or credited to TRSRY, in collateral token decimals.
+    /// @return keeperReward Collateral paid to a non-protocol keeper, in collateral token decimals.
     function seize(
         address asset_,
         address[] calldata borrowers_
@@ -356,30 +518,84 @@ interface IBurnerLoans {
             uint256 keeperReward
         );
 
+    /// @notice Harvests surplus collateral yield to TRSRY.
+    /// @param asset_ The collateral asset to harvest.
+    /// @return amount Amount harvested, in collateral token decimals unless the custody layer returns shares.
     function harvestYield(address asset_) external returns (uint256 amount);
-
-    // ========== AUTHORIZATION FUNCTIONS ========== //
-
-    function setAuthorization(address authorized_, uint96 authorizationDeadline_) external;
-
-    function setAuthorizationWithSig(
-        Authorization calldata authorization_,
-        Signature calldata signature_
-    ) external;
-
-    function cancelAuthorization(address authorized_) external;
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    function setGlobalDebtCapOhm(uint256 debtCapOhm_) external;
+    /// @notice Sets the global active debt cap.
+    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
+    ///      function is effectively timelocked by governance. Reverts while Burner Loans is
+    ///      disabled.
+    /// @param debtCapOhm_ New global cap, in OHM decimals.
+    function setGlobalDebtCap(uint256 debtCapOhm_) external;
 
-    function setFeeConfig(address asset_, FeeConfig calldata config_) external;
+    /// @notice Adds a whitelisted collateral asset.
+    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
+    ///      function is effectively timelocked by governance. Validates PRICE approval,
+    ///      DepositManager support, ERC20 decimal scale, and risk bounds. The asset is enabled
+    ///      immediately and collateral decimals are read from the ERC20. Reverts while Burner
+    ///      Loans is disabled.
+    /// @param asset_ Collateral asset to add.
+    /// @param debtCapOhm_ Initial active debt cap, in OHM decimals.
+    /// @param riskConfig_ Initial risk and term configuration.
+    /// @param feeConfig_ Initial utilization fee curve.
+    function addAsset(
+        address asset_,
+        uint256 debtCapOhm_,
+        AssetRiskConfigInput calldata riskConfig_,
+        AssetFeeConfig calldata feeConfig_
+    ) external;
 
-    function addAsset(address asset_, AssetConfig calldata config_) external;
+    /// @notice Sets an asset's active debt cap.
+    /// @dev Callable by admin or the configurator. Direct admin calls are effectively
+    ///      timelocked by governance in the expected deployment. Reverts while Burner Loans is
+    ///      disabled.
+    /// @param asset_ Collateral asset to update.
+    /// @param debtCapOhm_ New asset cap, in OHM decimals.
+    function setAssetDebtCap(address asset_, uint256 debtCapOhm_) external;
 
-    function setAssetConfig(address asset_, AssetConfig calldata config_) external;
+    /// @notice Sets the external config timelock executor.
+    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
+    ///      function is effectively timelocked by governance. The configurator can call
+    ///      risk-parameter setters without holding admin. Reverts while Burner Loans is
+    ///      disabled.
+    /// @param configurator_ New configurator address.
+    function setConfigurator(address configurator_) external;
 
+    /// @notice Enables a configured asset for new borrows and extensions.
+    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
+    ///      function is effectively timelocked by governance. Used for governance-level
+    ///      enablement, including recovery after the re-enable grace period.
+    /// @param asset_ Collateral asset to enable.
+    function enableAsset(address asset_) external;
+
+    /// @notice Immediately disables a configured asset for new borrows and extensions.
+    /// @dev Emergency/admin-only. Does not block repayment, seizure, harvest, or safe cleanup.
+    /// @param asset_ Collateral asset to disable.
     function disableAsset(address asset_) external;
 
-    function enableAsset(address asset_) external;
+    /// @notice Re-enables an asset shortly after an emergency disable.
+    /// @dev Admin or burner_loans_admin only. Reverts after the grace period; governance must then use
+    ///      `enableAsset`.
+    /// @param asset_ Collateral asset to re-enable.
+    function reEnableAsset(address asset_) external;
+
+    /// @notice Sets asset risk and term fields.
+    /// @dev Callable by admin or the configurator. Replaces all risk and term fields
+    ///      while preserving admin-only fields such as enabled status, collateral decimals, and debt cap.
+    ///      Reverts while Burner Loans is disabled.
+    /// @param asset_ Collateral asset to update.
+    /// @param config_ Complete risk and term configuration.
+    function setAssetRiskConfig(address asset_, AssetRiskConfigInput calldata config_) external;
+
+    /// @notice Sets the complete asset fee curve.
+    /// @dev Callable by admin or the configurator. The Burner Loans Config Timelock
+    ///      may expose partial-update helpers, but this setter receives the full resulting curve.
+    ///      Reverts while Burner Loans is disabled.
+    /// @param asset_ Collateral asset to update.
+    /// @param config_ Complete fee curve.
+    function setAssetFeeConfig(address asset_, AssetFeeConfig calldata config_) external;
 }

@@ -456,6 +456,18 @@ require(newMaturity <= block.timestamp + asset.maxMaturityHorizon)
 
 `termCount` must be greater than zero. `maxMaturityHorizon` is a per-asset duration, expressed in the same day-based unit as `termLength`, that caps how far into the future the position's maturity can be after an extension. The cap is a risk control for a 0% short facility: it prevents a borrower from locking very long-dated debt at today's fee, oracle state, and risk configuration. Burner Loans uses extension cadence as the main repricing mechanism. A borrower can still keep a position open indefinitely, but only by returning periodically for current health checks and current utilization-based fees.
 
+`maxMaturityHorizon` is measured from the current block timestamp, not from the existing maturity. It is therefore a rolling maximum future maturity, not a lifetime extension counter. For example, if `termLength = 30 days` and `maxMaturityHorizon = 35 days`, a borrower whose position matures now can extend once, but cannot extend by two terms because a 60-day maturity would exceed `block.timestamp + 35 days`. Later, when time has passed and the position is again close to maturity, the borrower may extend again if the position is healthy and the new maturity remains within the then-current horizon.
+
+The asset configuration must always satisfy:
+
+```text
+0 < termLength < maxMaturityHorizon
+maxMaturityHorizon <= protocolMaxMaturityHorizon
+protocolMaxMaturityHorizon > protocolMaxTermLength
+```
+
+This ensures a new borrow can always receive at least one full term under the asset's current configuration, and that a one-term extension can be valid when the position is close enough to maturity. `maxMaturityHorizon` must be strictly greater than `termLength`; if they are equal, the borrower has no practical extension window. The protocol-level horizon maximum must also be strictly greater than the protocol-level term maximum; otherwise the longest permitted term would only fit inside the horizon at the exact current timestamp, which is not a usable operating assumption. If governance changes `termLength` and `maxMaturityHorizon` together, or queues those changes across multiple timelocked actions, each resulting projected configuration must preserve `termLength < maxMaturityHorizon`.
+
 ### Composites
 
 The core `BurnerLoans` policy should keep the primitive surface small. One-transaction UX should live in a periphery contract, similar to `CoolerComposites`:
@@ -474,35 +486,40 @@ Keeping composites outside the core policy saves bytecode and avoids turning `Bu
 The fixed term prevents perpetual 0% shorts from consuming capacity indefinitely. Each asset has its own capacity fee curve. For a given asset, the same curve should be used for borrows and extension terms:
 
 ```text
-// Round utilization up so fee pressure is not understated near a boundary.
-// Use WAD precision so the fee curve does not quantize utilization to bps.
 assetUtilizationWad = ceil(assetActiveDebtOhm[asset] * 1e18 / assetDebtCap[asset])
-kinkWad = kinkBps * 1e18 / 10_000
 baseFeeRateWad = baseFeeBps * 1e18 / 10_000
 
-if assetUtilizationWad <= kinkWad:
-    // Round down because this computes a fee rate from utilization.
-    feeRateWad = baseFeeRateWad + floor(assetUtilizationWad * slope1Bps / 10_000)
+if kinkBps == 0:
+    // No kink: preKinkSlopeBps is the full 0%-to-100% utilization increase. postKinkSlopeBps must be zero.
+    feeRateWad = baseFeeRateWad + floor(assetUtilizationWad * preKinkSlopeBps / 10_000)
 else:
-    feeRateWad = baseFeeRateWad
-        // Round down because this computes a fee rate from utilization.
-        + floor(kinkWad * slope1Bps / 10_000)
-        + floor((assetUtilizationWad - kinkWad) * slope2Bps / 10_000)
+    kinkWad = kinkBps * 1e18 / 10_000
+    if assetUtilizationWad <= kinkWad:
+        // Aave-style preKinkSlopeBps: full fee-rate increase from 0% utilization to the kink.
+        // Round down because this computes an intermediate rate.
+        feeRateWad = baseFeeRateWad
+            + floor(assetUtilizationWad * preKinkSlopeBps * 1e18 / (kinkWad * 10_000))
+    else:
+        // Aave-style postKinkSlopeBps: additional fee-rate increase from the kink to 100%.
+        feeRateWad = baseFeeRateWad
+            + preKinkSlopeBps * 1e18 / 10_000
+            // Round down because this computes an intermediate rate.
+            + floor((assetUtilizationWad - kinkWad) * postKinkSlopeBps * 1e18 / ((1e18 - kinkWad) * 10_000))
 ```
 
-This follows the standard piecewise linear borrow-market shape used by Euler's `IRMLinearKink` and Compound's `JumpRateModel`: a base rate, a first slope up to the kink, then a steeper second slope above the kink.
+This follows Aave-style slope semantics: `preKinkSlopeBps` is the full fee-rate increase from 0% utilization to the kink, and `postKinkSlopeBps` is the additional increase from the kink to 100% utilization. If `kinkBps` is zero, the curve intentionally becomes a single-slope curve using `preKinkSlopeBps` as the full 0%-to-100% increase; in that mode `postKinkSlopeBps` must be zero.
 
-Rate components round down because they are intermediate rate calculations, not the final value transfer. This avoids charging extra from each curve segment due only to integer precision and keeps the configured curve predictable. Protocol-favorable rounding still applies where value moves: utilization rounds up before entering the curve, and actual collateral-denominated fees round up when charged. If governance wants higher protocol compensation, it should increase `baseFeeBps`, `slope1Bps`, or `slope2Bps` rather than rely on rounding artifacts.
+Rate components round down because they are intermediate rate calculations, not the final value transfer. This avoids charging extra from each curve segment due only to integer precision and keeps the configured curve predictable. Protocol-favorable rounding still applies where value moves: utilization rounds up before entering the curve, and actual collateral-denominated fees round up when charged. If governance wants higher protocol compensation, it should increase `baseFeeBps`, `preKinkSlopeBps`, or `postKinkSlopeBps` rather than rely on rounding artifacts.
 
 Fees use asset utilization only. The global debt cap is still enforced as a facility-wide open-interest limit, but it is not a fee input; otherwise one collateral asset could make another asset's borrow or extension fees jump merely because the global facility is full. Asset-specific risk is handled through per-asset fee curves, debt caps, collateral factor, minimum collateral ratio, `termLength`, and `maxMaturityHorizon`.
 
-The curve is continuous at `kinkWad` and monotonic when both slopes are non-negative. Example with `baseFeeBps = 25`, `slope1Bps = 100`, `slope2Bps = 900`, and `kinkBps = 8,000`:
+The curve is continuous at `kinkWad` and monotonic when both slopes are non-negative. Example with `baseFeeBps = 25`, `preKinkSlopeBps = 100`, `postKinkSlopeBps = 900`, and `kinkBps = 8,000`:
 
 ```text
-utilization = 70%  -> fee = 25 + 70 = 95 bps
-utilization = 80%  -> fee = 25 + 80 = 105 bps
-utilization = 90%  -> fee = 25 + 80 + 90 = 195 bps
-utilization = 100% -> fee = 25 + 80 + 180 = 285 bps
+utilization = 70%  -> fee = 25 + floor(70 / 80 * 100) = 112.5 bps
+utilization = 80%  -> fee = 25 + 100 = 125 bps
+utilization = 90%  -> fee = 25 + 100 + floor(10 / 20 * 900) = 575 bps
+utilization = 100% -> fee = 25 + 100 + 900 = 1,025 bps
 ```
 
 For v1, use one dynamic lever: utilization-based fees. Keep collateral ratios, term lengths, and max maturity horizons as configured parameters that change only through the timelocked risk-parameter path. Use one fee curve per asset, and use that asset's curve for both borrows and extensions.
@@ -793,7 +810,6 @@ Volatile collateral does not need automatic conversion to a stable asset. `Burne
 Each collateral asset should define:
 
 ```text
-enabled
 collateralFactorBps
 minCollateralRatioBps
 backingMultiplierBps
@@ -805,9 +821,11 @@ keeperRewardBps
 maxKeeperReward
 ```
 
+When an asset is added, `BurnerLoans` should set `enabled = true` and derive `collateralDecimals` from the ERC20. Callers should not provide either field in the add-asset input.
+
 Parameter effects:
 
-- `enabled`: Allows new borrows and extensions for the asset. Disabling must not block repayment, seizure, or cleanup.
+- `enabled`: Allows new borrows and extensions for the asset. It is set to true on asset registration. Disabling must not block repayment, seizure, or cleanup.
 - `collateralFactorBps`: Haircut applied after USD valuation.
 - `minCollateralRatioBps`: Per-asset market solvency threshold.
 - `backingMultiplierBps`: Per-asset multiplier applied to the backing preservation floor.
@@ -825,7 +843,7 @@ The core checks using asset configuration are:
 activeDebtOhmByAsset[asset] + newDebtOhm <= assetDebtCap
 totalActiveDebtOhm + newDebtOhm <= globalDebtCap
 termLength > 0
-maxMaturityHorizon >= termLength
+maxMaturityHorizon > termLength
 0 < termCount
 oldMaturity + termCount * termLength <= block.timestamp + maxMaturityHorizon
 riskAdjustedCollateralUsd =
@@ -936,53 +954,81 @@ Parameter changes should be split by blast radius.
 
 Admin-only direct functions:
 
-- `addAsset(asset, config)`, which whitelists a new collateral asset.
+- `addAsset(asset, debtCap, riskConfigInput, feeConfig)`, which whitelists and enables a new collateral asset with its initial debt cap, risk config, and fee curve.
 - `setGlobalDebtCap(cap)`.
-- `setAssetDebtCap(asset, cap)`.
 - `setConfigurator(configurator)`.
+- `setGracePeriod(gracePeriod)`, using the shared `IGracePeriod` surface.
+- `enableAsset(asset)`.
 
-Whitelisting assets and changing caps are governance-level capacity decisions. They should not be callable by `burner_loans_admin`, even for cap decreases. If governance wants those actions timelocked, the `admin` role should be held by the governance timelock or another governance-controlled executor.
+Whitelisting assets, changing the global cap, rotating the configurator, changing the re-enable grace period, and enabling assets are governance-level decisions. They should not be callable by `burner_loans_admin`. In the expected deployment, the `admin` role is held by the OCG timelock, so these admin-only functions are effectively timelocked by governance. They do not need an additional `BurnerLoansConfigTimelock` delay unless governance deliberately assigns `admin` to a non-timelocked executor, which should be avoided.
 
 Debt caps are denominated in the debt token, OHM, using OHM's native decimals.
 
+| Configuration group       | Parameters or actions                                                                                                                         | `admin`             | `burner_loans_admin` | `emergency`    |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------- | -------------- |
+| Asset whitelist           | `addAsset(asset, debtCap, riskConfigInput, feeConfig)`                                                                                        | Yes, OCG timelock   | No                   | No             |
+| Global debt cap           | `setGlobalDebtCap(cap)`                                                                                                                       | Yes, OCG timelock   | No                   | No             |
+| Asset debt cap            | `setAssetDebtCap(asset, cap)` directly, or queued through `queueSetAssetDebtCap(asset, cap)` / `queueBatch(...)`                              | Yes, direct or queue | Queue only           | No             |
+| Asset risk config         | collateral factor, min collateral ratio, backing multiplier, term length, max maturity horizon, keeper reward bps, and max keeper reward      | Yes, direct or queue | Queue only           | No             |
+| Asset fee config          | base fee, kink, pre-kink slope, and post-kink slope                                                                                           | Yes, direct or queue | Queue only           | No             |
+| Config timelock queue     | `queueSetAssetDebtCap`, `queueSetAssetRiskConfig`, `queueSetAssetFeeConfig`, and `queueBatch`                                                 | Yes                 | Yes                  | No             |
+| Config timelock execute   | `executeQueuedAction(actionId)` after the timelock delay and before expiry                                                                    | No role required    | No role required     | No role required |
+| Config timelock cancel    | `cancelQueuedAction(actionId)`                                                                                                                | No                  | No                   | Yes            |
+| Config timelock pointer   | `setConfigurator(configurator)`                                                                                                               | Yes, OCG timelock   | No                   | No             |
+| Re-enable grace period    | `setGracePeriod(gracePeriod)`                                                                                                                 | Yes, OCG timelock   | No                   | No             |
+| Asset enable              | `enableAsset(asset)`                                                                                                                          | Yes, OCG timelock   | No                   | No             |
+| Asset disable             | `disableAsset(asset)`                                                                                                                         | Yes, immediate      | No                   | Yes, immediate |
+| Asset re-enable           | `reEnableAsset(asset)` inside grace period                                                                                                    | Yes, grace-period   | Yes, grace-period    | No             |
+| Global enable             | `enable()`                                                                                                                                    | Yes, OCG timelock   | No                   | No             |
+| Global disable            | `disable()`                                                                                                                                   | Yes, immediate      | No                   | Yes, immediate |
+| Global re-enable          | `reEnable()` inside grace period                                                                                                              | Yes, grace-period   | Yes, grace-period    | No             |
+
 Timelocked risk-parameter queue functions callable by `admin` or `burner_loans_admin` should live on a dedicated config timelock contract, not on `BurnerLoans` itself, for contract size reasons. The config timelock queues and later executes calls to normal restricted setters on `BurnerLoans`:
 
-- `setFeeConfig(asset, ...)`, for the asset's borrow and extension fee curve.
-- `setBackingMultiplierBps(asset, ...)`.
-- `setMinCollateralRatioBps(asset, ...)`.
-- `setCollateralFactorBps(asset, ...)`.
-- `setTermLength(asset, ...)`.
-- `setMaxMaturityHorizon(asset, ...)`.
-- `setKeeperRewardBps(asset, ...)`.
-- `setMaxKeeperReward(asset, ...)`.
+- `setAssetFeeConfig(asset, ...)`, for the asset's borrow and extension fee curve.
+- `setAssetRiskConfig(asset, ...)`, for collateral factor, min collateral ratio, backing multiplier, term length, max maturity horizon, keeper reward bps, and max keeper reward.
+- `setAssetDebtCap(asset, ...)`, for the asset-level debt cap.
 
-`enableAsset(asset)` is admin-only. Enabling an asset allows new debt and therefore belongs with governance-controlled capacity and whitelist decisions.
+The config timelock exposes typed queue helpers for the three supported setters plus
+`queueBatch(...)` for atomic ordered batches. `executeQueuedAction(actionId)` is permissionless
+after the configured delay while the queued action is still inside its execution window.
+`cancelQueuedAction(actionId)` is emergency-only and clears the stored sub-actions and projected
+post-state for the cancelled action.
+
+`enableAsset(asset)` is admin-only. Enabling an asset allows new debt and therefore belongs with governance-controlled capacity and whitelist decisions. With the expected OCG timelock as `admin`, `enableAsset` is timelocked through OCG.
 
 `disableAsset(asset)` is an immediate emergency/admin action, not a timelocked action. It only blocks new borrows and extensions for that asset; it must not block repayment, seizure, or safe cleanup.
 
-`reenableAsset(asset)` is an emergency/admin recovery path for short-lived asset disables. It may only be used within a fixed grace period after `disableAsset(asset)`, should validate that PRICE and DepositManager support are still healthy, and should not be callable by `burner_loans_admin` unless that caller also holds emergency/admin authority. After the grace period, governance must use `enableAsset(asset)`.
+`reEnableAsset(asset)` is an admin or `burner_loans_admin` recovery path for short-lived asset disables. It may only be used within the configured grace period after `disableAsset(asset)`, should validate that PRICE and DepositManager support are still healthy, and should not be callable by emergency-only operators. After the grace period, governance must use `enableAsset(asset)`.
+
+`reEnable()` is the matching admin or `burner_loans_admin` recovery path for short-lived global disables. It may only be used within the same configured grace period after `disable()`. After the grace period, governance must use `enable()`. The shared grace period should default to `7 days` and reject zero, matching the imported LayerZero bridge `ReEnablerGracePeriod` stack from commit `de6eda9990568ad0eb3aeb0915c3042c0e4443b5`. Burner Loans should not add a separate maximum grace-period cap unless the shared base adds one.
 
 Every config function callable by `burner_loans_admin` must go through a timelock. The implementation should use a separate `BurnerLoansConfigTimelock` policy that reuses the `TimelockBatchQueue` abstract and `ITimelockBatchQueue` interface from the `lz-bridge-upgrade` branch at commit `de6eda9990568ad0eb3aeb0915c3042c0e4443b5`. Queue-time validation should check caller role, asset whitelist status, payload shape, and parameter bounds. Execution can be permissionless after the delay while both the timelock policy and Burner Loans are enabled. Emergency should be able to cancel queued actions.
 
+The config timelock should not enforce global action-ID ordering across separately queued actions. Instead, each queued sub-action should store the config pre-state hash it was validated against and should re-check that hash at execution. If a later action depends on an earlier queued action, executing it before the earlier action will fail as stale because the expected pre-state does not exist yet. If an unrelated earlier action expires, becomes stale, or needs emergency cancellation, it should not block a later action whose own expected pre-state still matches. This avoids making the entire config timelock liveness depend on resolving every older queued action.
+
 `BurnerLoans` should store a `configurator` address, expected to be the `BurnerLoansConfigTimelock` contract, and expose normal restricted setters callable by either the configurator or `admin`. This lets OCG execute risk-parameter updates directly through the OCG timelock without forcing an OCG timelock followed by a second Burner Loans timelock. `burner_loans_admin` still reaches those setters only through the external config timelock. Governance/admin can rotate the configurator. Queued actions that target an old configurator or old Burner Loans target should become stale and require cancellation/re-queueing.
 
-Direct admin functions should remain on `BurnerLoans` only where the core state must change immediately or where governance owns the blast radius: asset whitelisting, cap changes, asset enable, asset disable, asset re-enable, global enable, and global disable.
+Direct admin functions should remain on `BurnerLoans` only where the core state must change immediately or where governance owns the blast radius: asset whitelisting, cap changes, asset enable, asset disable, asset re-enable, global enable, global disable, and short-lived global re-enable.
 
-Burner Loans should use `PolicyEnablerV2` for global enable/disable behavior. `PolicyEnablerV2` is being developed on the `lz-bridge-upgrade` branch, so implementation requires cross-porting that utility and its tests before building `BurnerLoans`. Burner Loans should then layer asset-level `enableAsset(asset)`, `disableAsset(asset)`, and `reenableAsset(asset)` on top of the global switch.
+Burner Loans should use `PolicyEnablerV2` for global enable/disable behavior. `PolicyEnablerV2` is being developed on the `lz-bridge-upgrade` branch, so implementation requires cross-porting that utility and its tests before building `BurnerLoans`. Burner Loans should then layer asset-level `enableAsset(asset)`, `disableAsset(asset)`, and `reEnableAsset(asset)` on top of the global switch.
 
 Global functions:
 
 - `disable()` stops risk-taking actions and should be callable by emergency/admin authority.
 - `enable()` resumes normal operation and should be admin-only.
+- `reEnable()` resumes normal operation within the shared grace period after an emergency disable and should be callable by admin or `burner_loans_admin`.
 
 When disabled, `borrow` and `extend` should be blocked. `repay` should remain available. `seize` should remain available unless the emergency is specifically an oracle compromise, in which case seizure safety depends on PRICE freshness and may need to revert through normal oracle checks. Harvesting surplus to `TRSRY` may remain available if it cannot reduce borrower collateral.
 
 Even within bounds, `burner_loans_admin` should not be able to:
 
 - Add assets.
-- Change global or asset debt caps.
+- Change the global debt cap.
 - Enable assets.
-- Disable or re-enable assets unless it also holds emergency/admin authority.
+- Change the asset re-enable grace period.
+- Disable assets, or re-enable assets outside the grace period.
+- Re-enable the policy outside the grace period.
 - Make active positions seizable by parameter update without a timelock.
 
 PRICE configuration is out of scope for `BurnerLoans` and is handled by PRICE. Seized collateral and harvested yield go to `TRSRY`; there is no configurable yield recipient.
@@ -1018,23 +1064,33 @@ Admin should set hard whitelist and capacity bounds. Timelocked risk-parameter c
 assetDebtCap[asset] <= globalDebtCap
 totalActiveDebtOhm <= globalDebtCap
 assetActiveDebtOhm[asset] <= assetDebtCap[asset]
+Debt caps may be zero only when the corresponding active debt is zero.
 
-0 < kinkBps < 10_000
+feeCapBps = 10_000
+maxCollateralFactorBps = 10_000
+maxCollateralRatioBps = 50_000
+maxBackingMultiplierBps = 50_000
+maxKeeperRewardBound = type(uint128).max
+
 baseFeeBps <= feeCapBps
-slope1Bps <= slope2Bps
-baseFeeBps
-    + floor(kinkBps * slope1Bps / 10_000)
-    + floor((10_000 - kinkBps) * slope2Bps / 10_000)
-    <= feeCapBps
+
+If kinkBps == 0:
+    postKinkSlopeBps == 0
+    baseFeeBps + preKinkSlopeBps <= feeCapBps
+
+If kinkBps > 0:
+    kinkBps < 10_000
+    baseFeeBps + preKinkSlopeBps + postKinkSlopeBps <= feeCapBps
 
 10_000 <= minCollateralRatioBps <= maxCollateralRatioBps
 0 < collateralFactorBps <= maxCollateralFactorBps <= 10_000
-backingMultiplierBps >= 10_000
+10_000 <= backingMultiplierBps <= maxBackingMultiplierBps
 
 minTermLength <= termLength <= maxTermLength
-termLength <= maxMaturityHorizon <= protocolMaxMaturityHorizon
-seizureRewardBps <= maxSeizureRewardBps
-maxKeeperRewardAsset[asset] <= maxKeeperRewardAssetBound[asset]
+termLength < maxMaturityHorizon <= protocolMaxMaturityHorizon
+protocolMaxMaturityHorizon > protocolMaxTermLength
+keeperRewardBps <= 10_000
+maxKeeperRewardAsset[asset] <= maxKeeperRewardBound
 ```
 
 Asset-level bounds should be at least as strict as global bounds. Disabling an asset must not block repayment or seizure of existing positions.

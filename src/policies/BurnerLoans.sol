@@ -3,9 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -14,49 +12,16 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Contracts
-import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
+import {BurnerLoansConfig} from "src/policies/abstracts/BurnerLoansConfig.sol";
 
 /// @title Burner Loans
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
-/// @dev U0-U2 implement shared enablement, policy wiring, and scale-aware math only.
-contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
-    // ========== CONSTANTS ========== //
-
-    uint256 internal constant _BPS = 10_000;
-    uint256 internal constant _WAD = 1e18;
-    uint8 internal constant _MAX_SCALE_DECIMALS = 77;
-    uint8 internal constant _MAX_TOKEN_DECIMALS = 36;
-
-    // ========== IMMUTABLES ========== //
-
-    IERC20 internal immutable _OHM;
-    IDepositManager internal immutable _DEPOSIT_MANAGER;
-
-    // ========== MODULES ========== //
-
-    MINTRv1 public MINTR;
-    IPRICEv2 public PRICE;
-    TRSRYv1 public TRSRY;
-
-    // ========== STATE ========== //
-
-    uint256 public override globalDebtCapOhm;
-    uint256 public override totalActiveDebtOhm;
-
-    mapping(address asset => uint256 debtOhm) public override assetActiveDebtOhm;
-    mapping(address asset => AssetConfig config) internal _assetConfigs;
-    mapping(address asset => FeeConfig config) internal _feeConfigs;
-    mapping(address owner => mapping(address asset => Position position)) internal _positions;
-    mapping(address account => mapping(address authorized => uint96 deadline))
-        public
-        override authorizations;
-    mapping(address account => uint256 nonce) public override authorizationNonces;
-
+/// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
+contract BurnerLoans is BurnerLoansConfig {
     // ========== INTERNAL STRUCTS ========== //
 
     struct RequiredCollateralUsdInputs {
@@ -88,22 +53,11 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
 
     // ========== CONSTRUCTOR ========== //
 
-    constructor(Kernel kernel_, IERC20 ohm_, IDepositManager depositManager_) Policy(kernel_) {
-        if (address(ohm_) == address(0) || address(depositManager_) == address(0)) {
-            revert BurnerLoans_ZeroAddress();
-        }
-        if (
-            !ERC165Checker.supportsInterface(
-                address(depositManager_),
-                type(IDepositManager).interfaceId
-            )
-        ) {
-            revert BurnerLoans_InvalidDepositManager(address(depositManager_));
-        }
-
-        _OHM = ohm_;
-        _DEPOSIT_MANAGER = depositManager_;
-    }
+    constructor(
+        Kernel kernel_,
+        IERC20 ohm_,
+        IDepositManager depositManager_
+    ) BurnerLoansConfig(kernel_, ohm_, depositManager_) {}
 
     // ========== POLICY SETUP ========== //
 
@@ -115,34 +69,40 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         dependencies[2] = toKeycode("ROLES");
         dependencies[3] = toKeycode("TRSRY");
 
-        MINTR = MINTRv1(getModuleAddress(dependencies[0]));
+        _MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         address priceAddress = getModuleAddress(dependencies[1]);
         ROLES = ROLESv1(getModuleAddress(dependencies[2]));
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
+        _TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
         if (!IERC165(priceAddress).supportsInterface(type(IPRICEv2).interfaceId)) {
-            revert Policy_WrongModuleVersion(abi.encode("PRICE must support IPRICEv2"));
+            revert BurnerLoans_InvalidModuleVersion();
         }
-        PRICE = IPRICEv2(priceAddress);
+        _PRICE = IPRICEv2(priceAddress);
 
-        (uint8 mintrMajor, ) = MINTR.VERSION();
+        (uint8 mintrMajor, ) = _MINTR.VERSION();
         (uint8 priceMajor, uint8 priceMinor) = Module(priceAddress).VERSION();
         (uint8 rolesMajor, ) = ROLES.VERSION();
-        (uint8 trsryMajor, ) = TRSRY.VERSION();
+        (uint8 trsryMajor, ) = _TRSRY.VERSION();
 
         bool priceVersionSupported = priceMajor == 2 || (priceMajor == 1 && priceMinor >= 2);
         if (mintrMajor != 1 || !priceVersionSupported || rolesMajor != 1 || trsryMajor != 1) {
-            revert Policy_WrongModuleVersion(abi.encode("MINTR 1, PRICE >=1.2, ROLES 1, TRSRY 1"));
+            revert BurnerLoans_InvalidModuleVersion();
         }
 
-        _OHM.approve(address(MINTR), type(uint256).max);
+        _OHM.approve(address(_MINTR), type(uint256).max);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external view override returns (Permissions[] memory requests) {
         requests = new Permissions[](2);
-        requests[0] = Permissions({keycode: MINTR.KEYCODE(), funcSelector: MINTR.mintOhm.selector});
-        requests[1] = Permissions({keycode: MINTR.KEYCODE(), funcSelector: MINTR.burnOhm.selector});
+        requests[0] = Permissions({
+            keycode: _MINTR.KEYCODE(),
+            funcSelector: _MINTR.mintOhm.selector
+        });
+        requests[1] = Permissions({
+            keycode: _MINTR.KEYCODE(),
+            funcSelector: _MINTR.burnOhm.selector
+        });
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -163,8 +123,8 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
     }
 
     /// @inheritdoc IBurnerLoans
-    function getFeeConfig(address asset_) external view returns (FeeConfig memory) {
-        return _feeConfigs[asset_];
+    function getAssetFeeConfig(address asset_) external view returns (AssetFeeConfig memory) {
+        return _assetFeeConfigs[asset_];
     }
 
     /// @inheritdoc IBurnerLoans
@@ -198,11 +158,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
     /// @inheritdoc IBurnerLoans
     function healthFactor(address, address) external pure returns (uint256) {
         revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function isSenderAuthorized(address account_) external view returns (bool) {
-        return msg.sender == account_ || authorizations[account_][msg.sender] >= block.timestamp;
     }
 
     // ========== PREVIEW FUNCTIONS ========== //
@@ -253,29 +208,38 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
     // ========== USER FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoans
-    function depositCollateral(address, uint256, address) external pure returns (uint256, uint256) {
+    function depositCollateral(
+        address asset_,
+        uint256,
+        address
+    ) external view returns (uint256, uint256) {
+        _requireAssetConfigured(asset_);
         revert BurnerLoans_NotImplemented();
     }
 
     /// @inheritdoc IBurnerLoans
     function withdrawCollateral(
-        address,
+        address asset_,
         uint256,
         address,
-        address
-    ) external pure returns (address, uint256, uint256, uint256) {
+        address recipient_
+    ) external view returns (address, uint256, uint256, uint256) {
+        _requireAssetConfigured(asset_);
+        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
         revert BurnerLoans_NotImplemented();
     }
 
     /// @inheritdoc IBurnerLoans
     function borrow(
-        address,
+        address asset_,
         uint256,
         address,
-        address,
+        address recipient_,
         uint256
     ) external view returns (uint256, uint256, uint256, uint48, uint256) {
         _requireEnabled();
+        _requireAssetEnabled(asset_);
+        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
         revert BurnerLoans_NotImplemented();
     }
 
@@ -286,12 +250,13 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
 
     /// @inheritdoc IBurnerLoans
     function extend(
-        address,
+        address asset_,
         address,
         uint256,
         uint256
     ) external view returns (uint48, uint256, uint256) {
         _requireEnabled();
+        _requireAssetEnabled(asset_);
         revert BurnerLoans_NotImplemented();
     }
 
@@ -308,68 +273,12 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         revert BurnerLoans_NotImplemented();
     }
 
-    // ========== AUTHORIZATION FUNCTIONS ========== //
-
-    /// @inheritdoc IBurnerLoans
-    function setAuthorization(address, uint96) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function setAuthorizationWithSig(Authorization calldata, Signature calldata) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function cancelAuthorization(address) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    // ========== ADMIN FUNCTIONS ========== //
-
-    /// @inheritdoc IBurnerLoans
-    function setGlobalDebtCapOhm(uint256) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function setFeeConfig(address, FeeConfig calldata) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function addAsset(address, AssetConfig calldata) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function setAssetConfig(address, AssetConfig calldata) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function disableAsset(address) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
-    /// @inheritdoc IBurnerLoans
-    function enableAsset(address) external pure {
-        revert BurnerLoans_NotImplemented();
-    }
-
     // ========== INTERNAL MATH HELPERS ========== //
 
-    /// @notice Returns 10 ** decimals_ after validating the exponent is safe.
+    /// @notice Returns 10 ** decimals_.
     /// @dev Input: decimal count. Output: integer scale.
     function _scale(uint8 decimals_) internal pure returns (uint256) {
-        if (decimals_ > _MAX_SCALE_DECIMALS) revert BurnerLoans_InvalidDecimals(decimals_);
         return 10 ** decimals_;
-    }
-
-    /// @notice Validates token-native decimals used for ERC20 balances.
-    /// @dev Input: token decimals. Output: none. Reverts above the configured safe token scale.
-    function _validateTokenDecimals(uint8 decimals_) internal pure {
-        if (decimals_ > _MAX_TOKEN_DECIMALS) revert BurnerLoans_InvalidDecimals(decimals_);
     }
 
     /// @notice Converts OHM debt to USD value, rounding up.
@@ -381,7 +290,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         uint8 ohmDecimals_
     ) internal pure returns (uint256) {
         if (ohmUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        _validateTokenDecimals(ohmDecimals_);
         return FullMath.mulDivUp(debtOhm_, ohmUsdPrice_, _scale(ohmDecimals_));
     }
 
@@ -394,7 +302,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         uint8 collateralDecimals_
     ) internal pure returns (uint256) {
         if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        _validateTokenDecimals(collateralDecimals_);
         return FullMath.mulDiv(collateralAmount_, collateralUsdPrice_, _scale(collateralDecimals_));
     }
 
@@ -404,7 +311,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         uint256 collateralValueUsd_,
         uint256 collateralFactorBps_
     ) internal pure returns (uint256) {
-        _validateBps(collateralFactorBps_);
         return FullMath.mulDiv(collateralValueUsd_, collateralFactorBps_, _BPS);
     }
 
@@ -418,7 +324,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         uint256 backingMultiplierBps_
     ) internal pure returns (uint256) {
         if (backingPerOhmUsd_ == 0) revert BurnerLoans_InvalidPrice();
-        _validateTokenDecimals(ohmDecimals_);
 
         uint256 backingValueUsd = FullMath.mulDivUp(
             debtOhm_,
@@ -459,24 +364,12 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
         uint8 collateralDecimals_
     ) internal pure returns (uint256) {
         if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        _validateTokenDecimals(collateralDecimals_);
         return
             FullMath.mulDivUp(
                 requiredCollateralUsd_,
                 _scale(collateralDecimals_),
                 collateralUsdPrice_
             );
-    }
-
-    /// @notice Converts required backing USD to collateral token units, rounding up.
-    /// @dev Input: USD in PRICE decimals. Output: collateral amount in token-native decimals.
-    function _requiredBackingAsset(
-        uint256 requiredBackingUsd_,
-        uint256 collateralUsdPrice_,
-        uint8 collateralDecimals_
-    ) internal pure returns (uint256) {
-        return
-            _requiredCollateralAsset(requiredBackingUsd_, collateralUsdPrice_, collateralDecimals_);
     }
 
     /// @notice Calculates borrower health, rounding down.
@@ -521,25 +414,42 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
     }
 
     /// @notice Calculates utilization fee rate from the piecewise linear kink curve.
-    /// @dev `utilizationWad_` is WAD. Fee config values are bps. Output is WAD.
+    /// @dev Uses Aave-style slope semantics. `preKinkSlopeBps` is the full increase from 0 utilization to the
+    /// kink. `postKinkSlopeBps` is the additional increase from the kink to 100% utilization. `utilizationWad_`
+    /// is WAD. Fee config values are bps. Output is WAD.
     function _feeRateWad(
         uint256 utilizationWad_,
-        FeeConfig memory feeConfig_
-    ) internal pure returns (uint256) {
+        AssetFeeConfig memory feeConfig_
+    ) internal pure override returns (uint256) {
         if (utilizationWad_ > _WAD) revert BurnerLoans_InvalidParam();
-        _validateBps(feeConfig_.kinkBps);
 
         uint256 baseFeeRateWad = uint256(feeConfig_.baseFeeBps) * (_WAD / _BPS);
+        if (feeConfig_.kinkBps == 0) {
+            return
+                baseFeeRateWad + FullMath.mulDiv(utilizationWad_, feeConfig_.preKinkSlopeBps, _BPS);
+        }
+
         uint256 kinkWad = uint256(feeConfig_.kinkBps) * (_WAD / _BPS);
 
         if (utilizationWad_ <= kinkWad) {
-            return baseFeeRateWad + FullMath.mulDiv(utilizationWad_, feeConfig_.slope1Bps, _BPS);
+            return
+                baseFeeRateWad +
+                FullMath.mulDiv(
+                    utilizationWad_,
+                    uint256(feeConfig_.preKinkSlopeBps) * _WAD,
+                    kinkWad * _BPS
+                );
         }
 
         return
             baseFeeRateWad +
-            FullMath.mulDiv(kinkWad, feeConfig_.slope1Bps, _BPS) +
-            FullMath.mulDiv(utilizationWad_ - kinkWad, feeConfig_.slope2Bps, _BPS);
+            uint256(feeConfig_.preKinkSlopeBps) *
+            (_WAD / _BPS) +
+            FullMath.mulDiv(
+                utilizationWad_ - kinkWad,
+                uint256(feeConfig_.postKinkSlopeBps) * _WAD,
+                (_WAD - kinkWad) * _BPS
+            );
     }
 
     /// @notice Calculates the borrow fee in collateral units, rounding value transfers up.
@@ -565,8 +475,6 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
     /// @notice Calculates the keeper reward for a seizure batch.
     /// @dev All collateral amounts are token-native decimals. Price and backing inputs use PRICE decimals.
     function _keeperRewardAsset(KeeperRewardInputs memory inputs_) internal pure returns (uint256) {
-        _validateBps(inputs_.rewardBps);
-
         if (
             inputs_.isProtocolSeizureCaller ||
             inputs_.rewardBps == 0 ||
@@ -590,7 +498,7 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
             inputs_.ohmDecimals,
             inputs_.backingMultiplierBps
         );
-        uint256 requiredBackingAsset = _requiredBackingAsset(
+        uint256 requiredBackingAsset = _requiredCollateralAsset(
             requiredBackingUsd,
             inputs_.collateralUsdPrice,
             inputs_.collateralDecimals
@@ -604,29 +512,5 @@ contract BurnerLoans is Policy, PolicyEnablerV2, IBurnerLoans, IVersioned {
             configuredRewardAsset < surplusAfterBackingAsset
                 ? configuredRewardAsset
                 : surplusAfterBackingAsset;
-    }
-
-    /// @notice Reverts if a bps value exceeds 100%.
-    function _validateBps(uint256 bps_) internal pure {
-        if (bps_ > _BPS) revert BurnerLoans_InvalidBps(bps_);
-    }
-
-    // ========== VERSION ========== //
-
-    /// @inheritdoc IVersioned
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
-        return (1, 0);
-    }
-
-    // ========== ERC165 ========== //
-
-    /// @notice ERC165 interface support.
-    function supportsInterface(
-        bytes4 interfaceId_
-    ) public view virtual override(EnablerV2) returns (bool) {
-        return
-            interfaceId_ == type(IBurnerLoans).interfaceId ||
-            interfaceId_ == type(IVersioned).interfaceId ||
-            super.supportsInterface(interfaceId_);
     }
 }

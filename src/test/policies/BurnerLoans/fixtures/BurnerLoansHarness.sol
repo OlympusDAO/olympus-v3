@@ -3,6 +3,9 @@ pragma solidity >=0.8.24;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {Kernel} from "src/Kernel.sol";
+import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -66,14 +69,6 @@ contract BurnerLoansHarness is BurnerLoans {
             );
     }
 
-    function requiredBackingAsset(
-        uint256 requiredBackingUsd_,
-        uint256 collateralUsdPrice_,
-        uint8 collateralDecimals_
-    ) external pure returns (uint256) {
-        return _requiredBackingAsset(requiredBackingUsd_, collateralUsdPrice_, collateralDecimals_);
-    }
-
     function healthFactor(
         uint256 riskAdjustedCollateralUsd_,
         uint256 requiredCollateralUsd_
@@ -97,7 +92,7 @@ contract BurnerLoansHarness is BurnerLoans {
 
     function feeRateWad(
         uint256 utilizationWad_,
-        IBurnerLoans.FeeConfig memory feeConfig_
+        IBurnerLoans.AssetFeeConfig memory feeConfig_
     ) external pure returns (uint256) {
         return _feeRateWad(utilizationWad_, feeConfig_);
     }
@@ -121,5 +116,26 @@ contract BurnerLoansHarness is BurnerLoans {
         KeeperRewardInputs calldata inputs_
     ) external pure returns (uint256) {
         return _keeperRewardAsset(inputs_);
+    }
+
+    function setActiveDebtForTest(
+        address asset_,
+        uint256 totalActiveDebtOhm_,
+        uint256 assetActiveDebtOhm_
+    ) external {
+        totalActiveDebtOhm = totalActiveDebtOhm_;
+        assetActiveDebtOhm[asset_] = assetActiveDebtOhm_;
+    }
+
+    function MINTR() external view returns (MINTRv1) {
+        return _MINTR;
+    }
+
+    function PRICE() external view returns (IPRICEv2) {
+        return _PRICE;
+    }
+
+    function TRSRY() external view returns (TRSRYv1) {
+        return _TRSRY;
     }
 }

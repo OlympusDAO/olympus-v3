@@ -5,22 +5,37 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansConstructorTest is BurnerLoansTest {
+    // constructor
+    // given OHM address is zero
+    //  when BurnerLoans is deployed
+    //   then it reverts
     function test_constructor_givenOhmIsZero_reverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
         new BurnerLoans(kernel, IERC20(address(0)), depositManager);
     }
 
+    // constructor
+    // given DepositManager address is zero
+    //  when BurnerLoans is deployed
+    //   then it reverts
     function test_constructor_givenDepositManagerIsZero_reverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
         new BurnerLoans(kernel, IERC20(address(ohm)), IDepositManager(address(0)));
     }
 
+    // constructor
+    // given DepositManager does not implement the required interface
+    //  when BurnerLoans is deployed
+    //   then it reverts
     function test_constructor_givenDepositManagerDoesNotSupportInterface_reverts() public {
         MockInvalidDepositManager invalidDepositManager = new MockInvalidDepositManager();
 
@@ -37,9 +52,27 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
         );
     }
 
+    // constructor
+    // given constructor parameters are valid
+    //  when the deployed BurnerLoans instance is inspected
+    //   then immutable dependencies and defaults are set
     function test_constructor_givenValidParams_setsImmutableDependencies() public view {
         assertEq(burnerLoans.ohm(), address(ohm), "ohm");
         assertEq(burnerLoans.depositManager(), address(depositManager), "deposit manager");
+        assertEq(
+            burnerLoans.gracePeriod(),
+            BurnerLoansConstants.REENABLE_GRACE_PERIOD,
+            "reenable grace period"
+        );
+    }
+
+    // constructor
+    // given BurnerLoans address is zero
+    //  when BurnerLoansConfigTimelock is deployed
+    //   then it reverts
+    function test_configTimelockConstructor_givenBurnerLoansIsZero_reverts() public {
+        vm.expectRevert(IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ZeroAddress.selector);
+        new BurnerLoansConfigTimelock(kernel, IBurnerLoans(address(0)));
     }
 }
 

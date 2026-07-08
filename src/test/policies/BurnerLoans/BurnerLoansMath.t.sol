@@ -248,24 +248,43 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_feeRateWad_matchesDocumentedKinkCurveExamples() public view {
-        IBurnerLoans.FeeConfig memory feeConfig = _defaultFeeConfig();
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
 
-        assertEq(burnerLoans.feeRateWad(0.7e18, feeConfig), 0.0095e18, "70%");
-        assertEq(burnerLoans.feeRateWad(0.8e18, feeConfig), 0.0105e18, "80%");
-        assertEq(burnerLoans.feeRateWad(0.9e18, feeConfig), 0.0195e18, "90%");
-        assertEq(burnerLoans.feeRateWad(1e18, feeConfig), 0.0285e18, "100%");
+        // base = 25 bps
+        // kink = 80%
+        // preKinkSlope = 100 bps, applied as the full 0%-to-kink increase
+        // postKinkSlope = 900 bps, applied as the full kink-to-100% increase
+        assertEq(burnerLoans.feeRateWad(0.7e18, feeConfig), 0.01125e18, "70%");
+        assertEq(burnerLoans.feeRateWad(0.8e18, feeConfig), 0.0125e18, "80%");
+        assertEq(burnerLoans.feeRateWad(0.9e18, feeConfig), 0.0575e18, "90%");
+        assertEq(burnerLoans.feeRateWad(1e18, feeConfig), 0.1025e18, "100%");
+    }
+
+    function test_feeRateWad_givenNoKink_usesSlope1AcrossFullRange() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
+            baseFeeBps: 25,
+            kinkBps: 0,
+            preKinkSlopeBps: 1000,
+            postKinkSlopeBps: 0
+        });
+
+        // base = 25 bps = 0.0025e18
+        // utilization = 90% = 0.9e18
+        // preKinkSlope = 1000 bps = 10%
+        // Expected: 0.0025e18 + floor(0.9e18 * 1000 / 10000) = 0.0925e18
+        assertEq(burnerLoans.feeRateWad(0.9e18, feeConfig), 0.0925e18, "single slope fee");
     }
 
     function test_feeRateWad_componentsRoundDownAndDoNotDivideBpsFirst() public view {
-        IBurnerLoans.FeeConfig memory feeConfig = IBurnerLoans.FeeConfig({
+        IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 0,
-            kinkBps: 10_000,
-            slope1Bps: 3333,
-            slope2Bps: 0
+            kinkBps: 0,
+            preKinkSlopeBps: 3333,
+            postKinkSlopeBps: 0
         });
 
         // utilization = 999999999000000000 / 1e18
-        // slope1 = 3333 bps
+        // preKinkSlope = 3333 bps
         // Expected: floor(999999999000000000 * 3333 / 10000)
         //         = 333299999666700000
         // Dividing utilization by 1e18 before multiplying would incorrectly return zero.
@@ -277,16 +296,16 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_feeRateWad_givenNearCapUtilization_doesNotQuantizeToBps() public view {
-        IBurnerLoans.FeeConfig memory feeConfig = IBurnerLoans.FeeConfig({
+        IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 0,
-            kinkBps: 10_000,
-            slope1Bps: 10_000,
-            slope2Bps: 0
+            kinkBps: 0,
+            preKinkSlopeBps: 10_000,
+            postKinkSlopeBps: 0
         });
         uint256 utilizationWad = burnerLoans.assetUtilizationWad(999_999_999, 1_000_000_000);
 
         // utilization = 999999999000000000 / 1e18 = 99.9999999%
-        // slope1 = 10000 bps = 100%, so expected fee rate equals utilization.
+        // preKinkSlope = 10000 bps = 100%, so expected fee rate equals utilization.
         // A bps path would produce either 9999 bps (0.9999e18) if floored or 10000 bps (1e18)
         // if rounded up. The WAD path preserves the exact 0.999999999e18 fee rate.
         assertEq(
@@ -297,13 +316,13 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_feeRateWad_isMonotonicAndContinuousAtKink() public view {
-        IBurnerLoans.FeeConfig memory feeConfig = _defaultFeeConfig();
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
 
         uint256 atKink = burnerLoans.feeRateWad(0.8e18, feeConfig);
         uint256 justAboveKink = burnerLoans.feeRateWad(0.8001e18, feeConfig);
         uint256 aboveKink = burnerLoans.feeRateWad(0.9e18, feeConfig);
 
-        assertEq(atKink, 0.0105e18, "at kink");
+        assertEq(atKink, 0.0125e18, "at kink");
         assertGe(justAboveKink, atKink, "kink continuity");
         assertGe(aboveKink, justAboveKink, "monotonic");
     }
@@ -315,11 +334,11 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_borrowFee_givenNearCapUtilization_doesNotLosePrecision() public view {
-        IBurnerLoans.FeeConfig memory feeConfig = IBurnerLoans.FeeConfig({
+        IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 0,
-            kinkBps: 10_000,
-            slope1Bps: 10_000,
-            slope2Bps: 0
+            kinkBps: 0,
+            preKinkSlopeBps: 10_000,
+            postKinkSlopeBps: 0
         });
         uint256 utilizationWad = burnerLoans.assetUtilizationWad(999_999_999, 1_000_000_000);
         uint256 feeRateWad = burnerLoans.feeRateWad(utilizationWad, feeConfig);
@@ -423,13 +442,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_givenTokenDecimalsAboveMax_reverts() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidDecimals.selector, 37)
-        );
-        burnerLoans.debtValueUsd(1e9, 10e18, 37);
-    }
-
     function testFuzz_utilizationBps_roundsUp(uint256 debt_, uint256 cap_) public view {
         cap_ = bound(cap_, 1, 1e36);
         debt_ = bound(debt_, 0, cap_);
@@ -460,7 +472,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     ) public view {
         uint256 utilizationA = bound(utilizationA_, 0, 1e18);
         uint256 utilizationB = bound(utilizationB_, utilizationA, 1e18);
-        IBurnerLoans.FeeConfig memory feeConfig = _defaultFeeConfig();
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
 
         assertGe(
             burnerLoans.feeRateWad(utilizationB, feeConfig),

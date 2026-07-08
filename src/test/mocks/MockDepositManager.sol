@@ -15,6 +15,14 @@ contract MockDepositManager is IDepositManager {
     Kernel public kernel;
 
     IERC20 public asset;
+    IERC20[] internal _configuredAssets;
+    AssetPeriod[] internal _assetPeriods;
+    uint256[] internal _receiptTokenIds;
+    uint256 internal _nextReceiptTokenId = 1;
+
+    mapping(IERC20 asset => AssetConfiguration config) internal _assetConfigurations;
+    mapping(bytes32 periodKey => uint256 indexPlusOne) internal _assetPeriodIndexPlusOne;
+    mapping(bytes32 periodKey => uint256 receiptTokenId) internal _receiptTokenIdsByPeriod;
 
     constructor(Kernel kernel_, address asset_) {
         kernel = kernel_;
@@ -91,35 +99,110 @@ contract MockDepositManager is IDepositManager {
 
     // ========== DEPOSIT CONFIGURATIONS ========== //
 
-    function addAsset(IERC20, IERC4626, uint256, uint256) external pure override {}
+    function addAsset(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) external override {
+        AssetConfiguration storage configuration = _assetConfigurations[asset_];
+        if (!configuration.isConfigured) {
+            _configuredAssets.push(asset_);
+        }
 
-    function setAssetDepositCap(IERC20, uint256) external pure override {}
-
-    function setAssetMinimumDeposit(IERC20, uint256) external pure override {}
-
-    function addAssetPeriod(IERC20, uint8, address) external pure override returns (uint256) {
-        return 0;
+        configuration.isConfigured = true;
+        configuration.depositCap = depositCap_;
+        configuration.minimumDeposit = minimumDeposit_;
+        configuration.vault = address(vault_);
     }
 
-    function disableAssetPeriod(IERC20, uint8, address) external pure override {}
+    function setAssetDepositCap(IERC20 asset_, uint256 depositCap_) external override {
+        _assetConfigurations[asset_].depositCap = depositCap_;
+    }
 
-    function enableAssetPeriod(IERC20, uint8, address) external pure override {}
+    function setAssetMinimumDeposit(IERC20 asset_, uint256 minimumDeposit_) external override {
+        _assetConfigurations[asset_].minimumDeposit = minimumDeposit_;
+    }
 
-    function getAssetPeriod(
-        IERC20,
-        uint8,
-        address
-    ) external pure override returns (AssetPeriod memory) {
-        return
+    function addAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external override returns (uint256) {
+        bytes32 periodKey = _assetPeriodKey(asset_, depositPeriod_, operator_);
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[periodKey];
+        if (indexPlusOne != 0) {
+            return _receiptTokenIdsByPeriod[periodKey];
+        }
+
+        uint256 receiptTokenId = _nextReceiptTokenId++;
+        _assetPeriodIndexPlusOne[periodKey] = _assetPeriods.length + 1;
+        _receiptTokenIdsByPeriod[periodKey] = receiptTokenId;
+        _receiptTokenIds.push(receiptTokenId);
+        _assetPeriods.push(
             AssetPeriod({
                 isEnabled: false,
-                depositPeriod: 0,
-                asset: address(0),
-                operator: address(0)
-            });
+                depositPeriod: depositPeriod_,
+                asset: address(asset_),
+                operator: operator_
+            })
+        );
+
+        return receiptTokenId;
     }
 
-    function getAssetPeriod(uint256) external pure override returns (AssetPeriod memory) {
+    function disableAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external override {
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[
+            _assetPeriodKey(asset_, depositPeriod_, operator_)
+        ];
+        if (indexPlusOne != 0) {
+            _assetPeriods[indexPlusOne - 1].isEnabled = false;
+        }
+    }
+
+    function enableAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external override {
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[
+            _assetPeriodKey(asset_, depositPeriod_, operator_)
+        ];
+        if (indexPlusOne != 0) {
+            _assetPeriods[indexPlusOne - 1].isEnabled = true;
+        }
+    }
+
+    function getAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (AssetPeriod memory) {
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[
+            _assetPeriodKey(asset_, depositPeriod_, operator_)
+        ];
+        if (indexPlusOne == 0) {
+            return
+                AssetPeriod({
+                    isEnabled: false,
+                    depositPeriod: 0,
+                    asset: address(0),
+                    operator: address(0)
+                });
+        }
+        return _assetPeriods[indexPlusOne - 1];
+    }
+
+    function getAssetPeriod(uint256 tokenId_) external view override returns (AssetPeriod memory) {
+        uint256 len = _receiptTokenIds.length;
+        for (uint256 i; i < len; ++i) {
+            if (_receiptTokenIds[i] == tokenId_) return _assetPeriods[i];
+        }
+
         return
             AssetPeriod({
                 isEnabled: false,
@@ -130,37 +213,51 @@ contract MockDepositManager is IDepositManager {
     }
 
     function isAssetPeriod(
-        IERC20,
-        uint8,
-        address
-    ) external pure override returns (AssetPeriodStatus memory) {
-        return AssetPeriodStatus({isConfigured: false, isEnabled: false});
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (AssetPeriodStatus memory) {
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[
+            _assetPeriodKey(asset_, depositPeriod_, operator_)
+        ];
+        return
+            AssetPeriodStatus({
+                isConfigured: indexPlusOne != 0,
+                isEnabled: indexPlusOne != 0 && _assetPeriods[indexPlusOne - 1].isEnabled
+            });
     }
 
-    function getAssetPeriods() external pure override returns (AssetPeriod[] memory) {
-        return new AssetPeriod[](0);
+    function getAssetPeriods() external view override returns (AssetPeriod[] memory) {
+        return _assetPeriods;
     }
 
     // ========== RECEIPT TOKEN FUNCTIONS ========== //
 
-    function getReceiptTokenId(IERC20, uint8, address) external pure override returns (uint256) {
-        return 0;
+    function getReceiptTokenId(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (uint256) {
+        return _receiptTokenIdsByPeriod[_assetPeriodKey(asset_, depositPeriod_, operator_)];
     }
 
     function getReceiptToken(
-        IERC20,
-        uint8,
-        address
-    ) external pure override returns (uint256, address) {
-        return (0, address(0));
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view override returns (uint256, address) {
+        return (
+            _receiptTokenIdsByPeriod[_assetPeriodKey(asset_, depositPeriod_, operator_)],
+            address(0)
+        );
     }
 
     function getReceiptTokenManager() external pure override returns (IReceiptTokenManager) {
         return IReceiptTokenManager(address(0));
     }
 
-    function getReceiptTokenIds() external pure override returns (uint256[] memory) {
-        return new uint256[](0);
+    function getReceiptTokenIds() external view override returns (uint256[] memory) {
+        return _receiptTokenIds;
     }
 
     // ========== IAssetManager FUNCTIONS ========== //
@@ -170,24 +267,26 @@ contract MockDepositManager is IDepositManager {
     }
 
     function getAssetConfiguration(
-        IERC20
-    ) external pure override returns (AssetConfiguration memory) {
-        return
-            AssetConfiguration({
-                isConfigured: false,
-                depositCap: 0,
-                minimumDeposit: 0,
-                vault: address(0)
-            });
+        IERC20 asset_
+    ) external view override returns (AssetConfiguration memory) {
+        return _assetConfigurations[asset_];
     }
 
-    function getConfiguredAssets() external pure override returns (IERC20[] memory) {
-        return new IERC20[](0);
+    function getConfiguredAssets() external view override returns (IERC20[] memory) {
+        return _configuredAssets;
     }
 
     function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IDepositManager).interfaceId;
+    }
+
+    function _assetPeriodKey(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(asset_, depositPeriod_, operator_));
     }
 }
