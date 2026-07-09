@@ -44,8 +44,8 @@ contract OlympusPricev1_2ForkTest is Test {
     using FullMath for uint256;
 
     // Constants
-    /// @dev Fork block after API3 USDS/USD deployment.
-    uint256 internal constant FORK_BLOCK = 25279717 + 1;
+    /// @dev Fork block after the OHM/WETH 100 bps liquidity deployment with live 25-minute observations.
+    uint256 internal constant FORK_BLOCK = 25488388;
 
     address public constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
     address public constant KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
@@ -69,7 +69,10 @@ contract OlympusPricev1_2ForkTest is Test {
     address public constant CHAINLINK_DAI_USD = 0xAed0c38402a5d19df6E4c03F4E2DceD6e29c1ee9;
     address public constant API3_ETH_USD = 0x5b0cf2b36a65a6BB085D501B971e4c102B9Cd473;
     address public constant API3_USDS_USD = 0x6C3C2A615Ea3c592487b3e06ecAF01D9a3181f47;
-    address public constant UNISWAP_OHM_WETH = 0x88051B0eea095007D3bEf21aB287Be961f3d8598;
+    address public constant UNISWAP_OHM_WETH_THIRTY_BPS =
+        0x88051B0eea095007D3bEf21aB287Be961f3d8598;
+    address public constant UNISWAP_OHM_WETH_ONE_HUNDRED_BPS =
+        0x584eC2562b937C4AC0452184D8d83346382B5D3a;
     address public constant UNISWAP_OHM_SUSDS = 0x0858e2B0F9D75f7300B38D64482aC2C8DF06a755;
     address public constant UNISWAP_V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 
@@ -84,10 +87,10 @@ contract OlympusPricev1_2ForkTest is Test {
     uint256 internal constant USDS_MAX_PRICE = 1.01e18;
     uint256 internal constant SUSDS_MIN_PRICE = 1.09e18;
     uint256 internal constant SUSDS_MAX_PRICE = 1.11e18;
-    uint256 internal constant ETH_MIN_PRICE = 1650e18;
-    uint256 internal constant ETH_MAX_PRICE = 1700e18;
-    uint256 internal constant OHM_MIN_PRICE = 16.50e18;
-    uint256 internal constant OHM_MAX_PRICE = 17.00e18;
+    uint256 internal constant ETH_MIN_PRICE = 1700e18;
+    uint256 internal constant ETH_MAX_PRICE = 1800e18;
+    uint256 internal constant OHM_MIN_PRICE = 16.00e18;
+    uint256 internal constant OHM_MAX_PRICE = 17.50e18;
     uint256 internal constant BPS_MAX = 10_000;
     uint256 internal constant WETH_DEVIATION_BPS = 500; // 5% deviation
     uint256 internal constant USDS_DEVIATION_BPS = 100; // 1% deviation
@@ -98,9 +101,11 @@ contract OlympusPricev1_2ForkTest is Test {
     uint48 internal constant USDS_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     uint48 internal constant OHM_UPDATE_THRESHOLD = 2 * 86400; // 48 hours (differs from production to allow for warping)
     // 25-minute TWAP fits within 128-cardinality pools at 12s/block (requires 125 observations).
-    uint32 internal constant OHM_WETH_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW = 1500;
+    uint32 internal constant OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW = 1500;
     uint32 internal constant OHM_SUSDS_OBSERVATION_WINDOW = 1500;
     uint32 internal constant _UNISWAP_V3_AVERAGE_BLOCK_TIME_SECONDS = 12;
+    int24 internal constant OHM_WETH_ONE_HUNDRED_BPS_UPPER_RANGE_TICK = 161000;
     int24 internal constant OHM_SUSDS_LOWER_RANGE_TICK = 234360;
     uint128 internal constant OHM_BASE_AMOUNT = 1e9;
     uint256 internal constant OHM_SUSDS_TICK_WORD_SEARCH_LIMIT = 64;
@@ -144,11 +149,13 @@ contract OlympusPricev1_2ForkTest is Test {
         uint256 wethUsdPrice;
         uint256 susdsUsdPrice;
         uint256 chainlinkEthUsdPrice;
-        uint256 ohmWethUsdPrice;
+        uint256 ohmWethThirtyBpsUsdPrice;
+        uint256 ohmWethOneHundredBpsUsdPrice;
         uint256 ohmSusdsUsdPrice;
         uint256 chainlinkOhmUsdPrice;
         uint256 expectedPrice;
         uint256 resolvedPrice;
+        int24 ohmWethOneHundredBpsLockedTick;
         int24 ohmSusdsLockedTick;
         int24 ohmSusdsLiquidityLowerTick;
         int24 ohmSusdsLiquidityUpperTick;
@@ -292,7 +299,8 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.label(API3_ETH_USD, "API3 ETH/USD");
         vm.label(API3_USDS_USD, "API3 USDS/USD");
 
-        vm.label(UNISWAP_OHM_WETH, "Uniswap V3 OHM/WETH");
+        vm.label(UNISWAP_OHM_WETH_THIRTY_BPS, "Uniswap V3 OHM/WETH 30 bps");
+        vm.label(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS, "Uniswap V3 OHM/WETH 100 bps");
         vm.label(UNISWAP_OHM_SUSDS, "Uniswap V3 OHM/sUSDS");
         vm.label(UNISWAP_V3_FACTORY, "Uniswap V3 Factory");
     }
@@ -313,33 +321,46 @@ contract OlympusPricev1_2ForkTest is Test {
             )
         });
 
-        // Create feed components for the two Uniswap pools using getTokenTWAP, and the Chainlink OHM/ETH feed
-        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](3);
+        // Create feed components for the three Uniswap pools using getTokenTWAP, and the Chainlink OHM/ETH feed
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](4);
 
-        // Feed 0: Uniswap OHM/WETH
-        UniswapV3Price.UniswapV3Params memory ohmWethParams = UniswapV3Price.UniswapV3Params({
-            pool: IUniswapV3Pool(UNISWAP_OHM_WETH),
-            observationWindowSeconds: OHM_WETH_OBSERVATION_WINDOW
-        });
+        // Feed 0: Uniswap OHM/WETH 30 bps
+        UniswapV3Price.UniswapV3Params memory ohmWethThirtyBpsParams = UniswapV3Price
+            .UniswapV3Params({
+                pool: IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS),
+                observationWindowSeconds: OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW
+            });
         feeds[0] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenTWAP.selector,
-            abi.encode(ohmWethParams)
+            abi.encode(ohmWethThirtyBpsParams)
         );
 
-        // Feed 1: Uniswap OHM/sUSDS
+        // Feed 1: Uniswap OHM/WETH 100 bps
+        UniswapV3Price.UniswapV3Params memory ohmWethOneHundredBpsParams = UniswapV3Price
+            .UniswapV3Params({
+                pool: IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS),
+                observationWindowSeconds: OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW
+            });
+        feeds[1] = IPRICEv2.Component(
+            toSubKeycode("PRICE.UNIV3"),
+            UniswapV3Price.getTokenTWAP.selector,
+            abi.encode(ohmWethOneHundredBpsParams)
+        );
+
+        // Feed 2: Uniswap OHM/sUSDS
         UniswapV3Price.UniswapV3Params memory ohmSusdsParams = UniswapV3Price.UniswapV3Params({
             pool: IUniswapV3Pool(UNISWAP_OHM_SUSDS),
             observationWindowSeconds: OHM_SUSDS_OBSERVATION_WINDOW
         });
-        feeds[1] = IPRICEv2.Component(
+        feeds[2] = IPRICEv2.Component(
             toSubKeycode("PRICE.UNIV3"),
             UniswapV3Price.getTokenTWAP.selector,
             abi.encode(ohmSusdsParams)
         );
 
-        // Feed 2: Chainlink OHM/ETH x ETH/USD
-        feeds[2] = IPRICEv2.Component(
+        // Feed 3: Chainlink OHM/ETH x ETH/USD
+        feeds[3] = IPRICEv2.Component(
             toSubKeycode("PRICE.CHAINLINK"),
             ChainlinkPriceFeeds.getTwoFeedPriceMul.selector,
             abi.encode(
@@ -636,6 +657,7 @@ contract OlympusPricev1_2ForkTest is Test {
         // Validate OHM price (uses Uniswap V3 TWAP feeds)
         uint256 ohmPrice = price.getPrice(OHM);
         _logPrice("OHM/USD", ohmPrice);
+        _logCurrentOhmFeedPrices();
         _assertPriceInRange(ohmPrice, OHM_MIN_PRICE, OHM_MAX_PRICE, "OHM");
     }
 
@@ -658,13 +680,17 @@ contract OlympusPricev1_2ForkTest is Test {
             "OHM deviation threshold should match config"
         );
         assertTrue(params.revertOnInsufficientCount, "OHM strategy should use strict mode");
+
+        IPRICEv2.Component[] memory feeds = abi.decode(ohmAsset.feeds, (IPRICEv2.Component[]));
+        assertEq(feeds.length, 4, "OHM should use four price feeds");
     }
 
     function test_priceValidation_ohmDeviationStrategyExcludesOutlier() public view {
-        uint256[] memory prices = new uint256[](3);
+        uint256[] memory prices = new uint256[](4);
         prices[0] = 202e17;
         prices[1] = 205e17;
-        prices[2] = 30e18;
+        prices[2] = 204e17;
+        prices[3] = 30e18;
 
         uint256 resolvedPrice = strategy.getAveragePriceExcludingDeviations(
             prices,
@@ -679,14 +705,17 @@ contract OlympusPricev1_2ForkTest is Test {
 
         // prices[0] = 20.2e18 (18 decimals)
         // prices[1] = 20.5e18 (18 decimals)
-        // prices[2] = 30e18 (18 decimals)
-        // Median benchmark is 20.5e18. With a 2% threshold, 30e18 deviates and is excluded.
-        // Expected: (20.2e18 + 20.5e18) / 2 = 20.35e18.
+        // prices[2] = 20.4e18 (18 decimals)
+        // prices[3] = 30e18 (18 decimals)
+        // Median benchmark is the midpoint of 20.4e18 and 20.5e18 for an even-length array.
+        // With a 2% threshold, 30e18 deviates and is excluded.
+        // Expected: (20.2e18 + 20.5e18 + 20.4e18) / 3 = 20.366666666666666666e18.
         _logPrice("Strategy input price 0", prices[0]);
         _logPrice("Strategy input price 1", prices[1]);
-        _logPrice("Strategy outlier price", prices[2]);
+        _logPrice("Strategy input price 2", prices[2]);
+        _logPrice("Strategy outlier price", prices[3]);
         _logPrice("Strategy resolved price", resolvedPrice);
-        assertEq(resolvedPrice, 2035e16, "OHM strategy should exclude the outlier");
+        assertEq(resolvedPrice, 20366666666666666666, "OHM strategy should exclude the outlier");
     }
 
     function test_priceValidation_ohmSusdsLowerRangeStillContributesAt1630() public {
@@ -698,26 +727,46 @@ contract OlympusPricev1_2ForkTest is Test {
         logData.chainlinkEthUsdPrice = _getChainlinkEthUsdPrice();
         logData.ohmSusdsLockedTick = OHM_SUSDS_LOWER_RANGE_TICK;
 
-        IUniswapV3Pool ohmWethPool = IUniswapV3Pool(UNISWAP_OHM_WETH);
+        IUniswapV3Pool ohmWethThirtyBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS);
+        IUniswapV3Pool ohmWethOneHundredBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS);
         IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(UNISWAP_OHM_SUSDS);
         (
             logData.ohmSusdsLiquidityLowerTick,
             logData.ohmSusdsLiquidityUpperTick
         ) = _getInitializedTickRange(ohmSusdsPool, logData.ohmSusdsLockedTick);
-        int24 ohmWethTick = _getTwapTickForOhmUsdPrice(
-            ohmWethPool,
+        int24 ohmWethThirtyBpsTick = _getTwapTickForOhmUsdPrice(
+            ohmWethThirtyBpsPool,
+            logData.targetOhmUsdPrice,
+            logData.wethUsdPrice
+        );
+        int24 ohmWethOneHundredBpsTick = _getTwapTickForOhmUsdPrice(
+            ohmWethOneHundredBpsPool,
             logData.targetOhmUsdPrice,
             logData.wethUsdPrice
         );
 
-        _mockUniswapTwap(ohmWethPool, OHM_WETH_OBSERVATION_WINDOW, ohmWethTick);
+        _mockUniswapTwap(
+            ohmWethThirtyBpsPool,
+            OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW,
+            ohmWethThirtyBpsTick
+        );
+        _mockUniswapTwap(
+            ohmWethOneHundredBpsPool,
+            OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW,
+            ohmWethOneHundredBpsTick
+        );
         _mockUniswapTwap(ohmSusdsPool, OHM_SUSDS_OBSERVATION_WINDOW, logData.ohmSusdsLockedTick);
         _assertPoolTick(ohmSusdsPool, logData.ohmSusdsLockedTick);
         logData.chainlinkOhmUsdPrice = _mockChainlinkOhmEthPrice(logData.targetOhmUsdPrice);
 
-        logData.ohmWethUsdPrice = _getOhmUsdPriceAtTick(
-            ohmWethPool,
-            ohmWethTick,
+        logData.ohmWethThirtyBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethThirtyBpsPool,
+            ohmWethThirtyBpsTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmWethOneHundredBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethOneHundredBpsPool,
+            ohmWethOneHundredBpsTick,
             logData.wethUsdPrice
         );
         logData.ohmSusdsUsdPrice = _getOhmUsdPriceAtTick(
@@ -727,10 +776,13 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // At $16.30, the OHM/sUSDS lower range price is still within the 2% deviation threshold,
-        // so all three OHM feeds remain in the resolved average.
+        // so all four OHM feeds remain in the resolved average.
         logData.expectedPrice =
-            (logData.ohmWethUsdPrice + logData.ohmSusdsUsdPrice + logData.chainlinkOhmUsdPrice) /
-            3;
+            (logData.ohmWethThirtyBpsUsdPrice +
+                logData.ohmWethOneHundredBpsUsdPrice +
+                logData.ohmSusdsUsdPrice +
+                logData.chainlinkOhmUsdPrice) /
+            4;
         logData.resolvedPrice = price.getPrice(OHM);
         _logOhmDownsideFeedPrices(logData);
         assertEq(
@@ -751,26 +803,46 @@ contract OlympusPricev1_2ForkTest is Test {
         logData.chainlinkEthUsdPrice = _getChainlinkEthUsdPrice();
         logData.ohmSusdsLockedTick = OHM_SUSDS_LOWER_RANGE_TICK;
 
-        IUniswapV3Pool ohmWethPool = IUniswapV3Pool(UNISWAP_OHM_WETH);
+        IUniswapV3Pool ohmWethThirtyBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS);
+        IUniswapV3Pool ohmWethOneHundredBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS);
         IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(UNISWAP_OHM_SUSDS);
         (
             logData.ohmSusdsLiquidityLowerTick,
             logData.ohmSusdsLiquidityUpperTick
         ) = _getInitializedTickRange(ohmSusdsPool, logData.ohmSusdsLockedTick);
-        int24 ohmWethTick = _getTwapTickForOhmUsdPrice(
-            ohmWethPool,
+        int24 ohmWethThirtyBpsTick = _getTwapTickForOhmUsdPrice(
+            ohmWethThirtyBpsPool,
+            logData.targetOhmUsdPrice,
+            logData.wethUsdPrice
+        );
+        int24 ohmWethOneHundredBpsTick = _getTwapTickForOhmUsdPrice(
+            ohmWethOneHundredBpsPool,
             logData.targetOhmUsdPrice,
             logData.wethUsdPrice
         );
 
-        _mockUniswapTwap(ohmWethPool, OHM_WETH_OBSERVATION_WINDOW, ohmWethTick);
+        _mockUniswapTwap(
+            ohmWethThirtyBpsPool,
+            OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW,
+            ohmWethThirtyBpsTick
+        );
+        _mockUniswapTwap(
+            ohmWethOneHundredBpsPool,
+            OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW,
+            ohmWethOneHundredBpsTick
+        );
         _mockUniswapTwap(ohmSusdsPool, OHM_SUSDS_OBSERVATION_WINDOW, logData.ohmSusdsLockedTick);
         _assertPoolTick(ohmSusdsPool, logData.ohmSusdsLockedTick);
         logData.chainlinkOhmUsdPrice = _mockChainlinkOhmEthPrice(logData.targetOhmUsdPrice);
 
-        logData.ohmWethUsdPrice = _getOhmUsdPriceAtTick(
-            ohmWethPool,
-            ohmWethTick,
+        logData.ohmWethThirtyBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethThirtyBpsPool,
+            ohmWethThirtyBpsTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmWethOneHundredBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethOneHundredBpsPool,
+            ohmWethOneHundredBpsTick,
             logData.wethUsdPrice
         );
         logData.ohmSusdsUsdPrice = _getOhmUsdPriceAtTick(
@@ -780,7 +852,7 @@ contract OlympusPricev1_2ForkTest is Test {
         );
 
         // The OHM/sUSDS lower range price is now more than 2% above the other feeds, so it is
-        // excluded and PRICE resolves OHM from OHM/WETH plus Chainlink OHM/ETH x ETH/USD.
+        // excluded and PRICE resolves OHM from both OHM/WETH pools plus Chainlink OHM/ETH x ETH/USD.
         uint256 maxAllowedDeviation = logData.targetOhmUsdPrice.mulDiv(OHM_DEVIATION_BPS, BPS_MAX);
         assertGt(
             logData.ohmSusdsUsdPrice - logData.targetOhmUsdPrice,
@@ -788,7 +860,11 @@ contract OlympusPricev1_2ForkTest is Test {
             "OHM/sUSDS lower range price should deviate"
         );
 
-        logData.expectedPrice = (logData.ohmWethUsdPrice + logData.chainlinkOhmUsdPrice) / 2;
+        logData.expectedPrice =
+            (logData.ohmWethThirtyBpsUsdPrice +
+                logData.ohmWethOneHundredBpsUsdPrice +
+                logData.chainlinkOhmUsdPrice) /
+            3;
         logData.resolvedPrice = price.getPrice(OHM);
         _logOhmDownsideFeedPrices(logData);
         assertEq(
@@ -800,8 +876,85 @@ contract OlympusPricev1_2ForkTest is Test {
         vm.clearMockedCalls();
     }
 
+    function test_priceValidation_ohmWethOneHundredBpsUpperRangeExcludedAfterRally() public {
+        OhmDownsideLogData memory logData;
+        logData.scenario = "OHM above OHM/WETH 100 bps upper range";
+        logData.targetOhmUsdPrice = 17.50e18;
+        logData.wethUsdPrice = price.getPrice(WETH);
+        logData.susdsUsdPrice = price.getPrice(SUSDS);
+        logData.chainlinkEthUsdPrice = _getChainlinkEthUsdPrice();
+        logData.ohmWethOneHundredBpsLockedTick = OHM_WETH_ONE_HUNDRED_BPS_UPPER_RANGE_TICK;
+
+        IUniswapV3Pool ohmWethThirtyBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS);
+        IUniswapV3Pool ohmWethOneHundredBpsPool = IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS);
+        IUniswapV3Pool ohmSusdsPool = IUniswapV3Pool(UNISWAP_OHM_SUSDS);
+        int24 ohmWethThirtyBpsTick = _getTwapTickForOhmUsdPrice(
+            ohmWethThirtyBpsPool,
+            logData.targetOhmUsdPrice,
+            logData.wethUsdPrice
+        );
+        int24 ohmSusdsTick = _getTwapTickForOhmUsdPrice(
+            ohmSusdsPool,
+            logData.targetOhmUsdPrice,
+            logData.susdsUsdPrice
+        );
+
+        _mockUniswapTwap(
+            ohmWethThirtyBpsPool,
+            OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW,
+            ohmWethThirtyBpsTick
+        );
+        _mockUniswapTwap(
+            ohmWethOneHundredBpsPool,
+            OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW,
+            logData.ohmWethOneHundredBpsLockedTick
+        );
+        _mockUniswapTwap(ohmSusdsPool, OHM_SUSDS_OBSERVATION_WINDOW, ohmSusdsTick);
+        _assertPoolTick(ohmWethOneHundredBpsPool, logData.ohmWethOneHundredBpsLockedTick);
+        logData.chainlinkOhmUsdPrice = _mockChainlinkOhmEthPrice(logData.targetOhmUsdPrice);
+
+        logData.ohmWethThirtyBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethThirtyBpsPool,
+            ohmWethThirtyBpsTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmWethOneHundredBpsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmWethOneHundredBpsPool,
+            logData.ohmWethOneHundredBpsLockedTick,
+            logData.wethUsdPrice
+        );
+        logData.ohmSusdsUsdPrice = _getOhmUsdPriceAtTick(
+            ohmSusdsPool,
+            ohmSusdsTick,
+            logData.susdsUsdPrice
+        );
+
+        uint256 maxAllowedDeviation = logData.targetOhmUsdPrice.mulDiv(OHM_DEVIATION_BPS, BPS_MAX);
+        assertGt(
+            logData.targetOhmUsdPrice - logData.ohmWethOneHundredBpsUsdPrice,
+            maxAllowedDeviation,
+            "OHM/WETH 100 bps upper range price should deviate"
+        );
+
+        logData.expectedPrice =
+            (logData.ohmWethThirtyBpsUsdPrice +
+                logData.ohmSusdsUsdPrice +
+                logData.chainlinkOhmUsdPrice) /
+            3;
+        logData.resolvedPrice = price.getPrice(OHM);
+        _logOhmDownsideFeedPrices(logData);
+        assertEq(
+            logData.resolvedPrice,
+            logData.expectedPrice,
+            "OHM/WETH 100 bps upper range should be excluded"
+        );
+
+        vm.clearMockedCalls();
+    }
+
     function _logOhmDownsideFeedPrices(OhmDownsideLogData memory logData_) internal pure {
         console2.log(logData_.scenario);
+        _logTick("OHM/WETH 100 bps locked tick", logData_.ohmWethOneHundredBpsLockedTick);
         _logTick("OHM/sUSDS locked tick", logData_.ohmSusdsLockedTick);
         _logTick("OHM/sUSDS liquidity lower tick", logData_.ohmSusdsLiquidityLowerTick);
         _logTick("OHM/sUSDS liquidity upper tick", logData_.ohmSusdsLiquidityUpperTick);
@@ -809,11 +962,54 @@ contract OlympusPricev1_2ForkTest is Test {
         _logPrice("PRICE WETH/USD", logData_.wethUsdPrice);
         _logPrice("PRICE sUSDS/USD", logData_.susdsUsdPrice);
         _logPrice("Chainlink ETH/USD", logData_.chainlinkEthUsdPrice);
-        _logPrice("OHM/WETH OHM/USD", logData_.ohmWethUsdPrice);
+        _logPrice("OHM/WETH 30 bps OHM/USD", logData_.ohmWethThirtyBpsUsdPrice);
+        _logPrice("OHM/WETH 100 bps OHM/USD", logData_.ohmWethOneHundredBpsUsdPrice);
         _logPrice("OHM/sUSDS OHM/USD", logData_.ohmSusdsUsdPrice);
         _logPrice("Chainlink OHM/ETH x ETH/USD", logData_.chainlinkOhmUsdPrice);
         _logPrice("expected PRICE OHM/USD", logData_.expectedPrice);
         _logPrice("resolved PRICE OHM/USD", logData_.resolvedPrice);
+    }
+
+    function _logCurrentOhmFeedPrices() internal view {
+        uint256 wethUsdPrice = price.getPrice(WETH);
+        uint256 susdsUsdPrice = price.getPrice(SUSDS);
+        int24 ohmWethThirtyBpsTick = _consultTwapTick(
+            IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS),
+            OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW
+        );
+        int24 ohmWethOneHundredBpsTick = _consultTwapTick(
+            IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS),
+            OHM_WETH_ONE_HUNDRED_BPS_OBSERVATION_WINDOW
+        );
+        int24 ohmSusdsTick = _consultTwapTick(
+            IUniswapV3Pool(UNISWAP_OHM_SUSDS),
+            OHM_SUSDS_OBSERVATION_WINDOW
+        );
+
+        _logTick("OHM/WETH 30 bps TWAP tick", ohmWethThirtyBpsTick);
+        _logPrice(
+            "OHM/WETH 30 bps OHM/USD",
+            _getOhmUsdPriceAtTick(
+                IUniswapV3Pool(UNISWAP_OHM_WETH_THIRTY_BPS),
+                ohmWethThirtyBpsTick,
+                wethUsdPrice
+            )
+        );
+        _logTick("OHM/WETH 100 bps TWAP tick", ohmWethOneHundredBpsTick);
+        _logPrice(
+            "OHM/WETH 100 bps OHM/USD",
+            _getOhmUsdPriceAtTick(
+                IUniswapV3Pool(UNISWAP_OHM_WETH_ONE_HUNDRED_BPS),
+                ohmWethOneHundredBpsTick,
+                wethUsdPrice
+            )
+        );
+        _logTick("OHM/sUSDS TWAP tick", ohmSusdsTick);
+        _logPrice(
+            "OHM/sUSDS OHM/USD",
+            _getOhmUsdPriceAtTick(IUniswapV3Pool(UNISWAP_OHM_SUSDS), ohmSusdsTick, susdsUsdPrice)
+        );
+        _logPrice("Chainlink OHM/ETH x ETH/USD", _getChainlinkOhmUsdPrice());
     }
 
     function _logPrice(string memory label_, uint256 price_) internal pure {
@@ -973,6 +1169,13 @@ contract OlympusPricev1_2ForkTest is Test {
         tick_ = low;
     }
 
+    function _consultTwapTick(
+        IUniswapV3Pool pool_,
+        uint32 observationWindow_
+    ) internal view returns (int24 tick_) {
+        (tick_, ) = OracleLibrary.consult(address(pool_), observationWindow_);
+    }
+
     function _getOhmUsdPriceAtTick(
         IUniswapV3Pool pool_,
         int24 tick_,
@@ -1071,6 +1274,18 @@ contract OlympusPricev1_2ForkTest is Test {
         mockedOhmUsdPrice_ = ohmEthPrice.mulDiv(ethUsdPrice, 1e18);
     }
 
+    function _getChainlinkOhmUsdPrice() internal view returns (uint256) {
+        AggregatorV2V3Interface ohmEthFeed = AggregatorV2V3Interface(CHAINLINK_OHM_ETH);
+        (, int256 ohmEthAnswer, , , ) = ohmEthFeed.latestRoundData();
+        assertGt(ohmEthAnswer, 0, "Chainlink OHM/ETH price should be positive");
+
+        uint8 ohmEthDecimals = ohmEthFeed.decimals();
+        /// forge-lint: disable-next-line(unsafe-typecast)
+        uint256 ohmEthPrice = uint256(ohmEthAnswer).mulDiv(1e18, 10 ** ohmEthDecimals);
+
+        return ohmEthPrice.mulDiv(_getChainlinkEthUsdPrice(), 1e18);
+    }
+
     function _getChainlinkEthUsdPrice() internal view returns (uint256) {
         AggregatorV2V3Interface ethUsdFeed = AggregatorV2V3Interface(CHAINLINK_ETH_USD);
         (, int256 ethUsdAnswer, , , ) = ethUsdFeed.latestRoundData();
@@ -1101,10 +1316,15 @@ contract OlympusPricev1_2ForkTest is Test {
     }
 
     modifier givenOhmPrice(uint256 price_) {
-        // Mock the getPrice function to return a specific OHM price
-        // This allows us to test specific premium scenarios without manipulating pool state
-        // The selector for getPrice(address,Variant) is 0x5d5d8e3b
-        bytes4 getPriceWithVariantSelector = bytes4(keccak256("getPrice(address,(uint8,bytes1))"));
+        vm.clearMockedCalls();
+        _mockOhmPrice(price_);
+        _;
+    }
+
+    function _mockOhmPrice(uint256 price_) internal {
+        // Mock the getPrice function to return a specific OHM price. This allows tests to
+        // exercise premium scenarios without manipulating pool state.
+        bytes4 getPriceWithVariantSelector = bytes4(keccak256("getPrice(address,uint8)"));
         bytes4 getPriceSelector = bytes4(keccak256("getPrice(address)"));
 
         vm.mockCall(
@@ -1127,13 +1347,11 @@ contract OlympusPricev1_2ForkTest is Test {
             abi.encodeWithSelector(getPriceWithVariantSelector, OHM, IPRICEv2.Variant.CURRENT),
             abi.encode(price_, SafeCast.encodeUInt48(block.timestamp))
         );
-        // Also mock LAST variant to return the same price
         vm.mockCall(
             address(price),
             abi.encodeWithSelector(getPriceWithVariantSelector, OHM, IPRICEv2.Variant.LAST),
             abi.encode(price_, SafeCast.encodeUInt48(block.timestamp))
         );
-        _;
     }
 
     modifier givenAuctionTrackingPeriod(uint8 period_) {
@@ -1172,11 +1390,11 @@ contract OlympusPricev1_2ForkTest is Test {
     //  [X] resolves the OHM price when one OHM feed path fails
     function test_getPrice_OHM_singleFeedFailure() public {
         uint32[] memory observationWindow = new uint32[](2);
-        observationWindow[0] = OHM_WETH_OBSERVATION_WINDOW;
+        observationWindow[0] = OHM_WETH_THIRTY_BPS_OBSERVATION_WINDOW;
         observationWindow[1] = 0;
 
         vm.mockCallRevert(
-            UNISWAP_OHM_WETH,
+            UNISWAP_OHM_WETH_THIRTY_BPS,
             abi.encodeWithSelector(bytes4(keccak256("observe(uint32[])")), observationWindow),
             "OHM/WETH unavailable"
         );
@@ -1242,8 +1460,12 @@ contract OlympusPricev1_2ForkTest is Test {
         public
         givenOhmPrice(24e18) // Above 50% premium
         warpToNextHeartbeat
-        beat // Epoch 2
+        beat // Epoch 0
         givenOhmPrice(17e18) // Below 50% premium
+        warpToNextHeartbeat
+        beat // Epoch 1
+        warpToNextHeartbeat
+        beat // Epoch 2
         warpToNextHeartbeat
         beat // Epoch 0
     {
@@ -1258,10 +1480,11 @@ contract OlympusPricev1_2ForkTest is Test {
         public
         givenOhmPrice(24e18) // Above 50% premium
         warpToNextHeartbeat
+        beat // Epoch 0
+        warpToNextHeartbeat
         beat // Epoch 1
         warpToNextHeartbeat
         beat // Epoch 2
-        givenOhmPrice(24e18) // Above 50% premium
         warpToNextHeartbeat
         beat // Epoch 0
     {
@@ -1285,10 +1508,8 @@ contract OlympusPricev1_2ForkTest is Test {
         givenBondMarketCapacityScalar(1e18)
         givenOhmPrice(24e18)
         warpToNextHeartbeat
-        beat // Epoch 2
-        givenOhmPrice(24e18)
-        warpToNextHeartbeat
         beat // Epoch 0, auction results next index is 1
+        givenOhmPrice(24e18)
         warpToNextHeartbeat
         beat // Epoch 1
         warpToNextHeartbeat
@@ -1299,8 +1520,8 @@ contract OlympusPricev1_2ForkTest is Test {
         uint256 expectedInitialPrice = 24e36; // Bond market scaling
         uint256 activeMarketIdBefore = emissionManager.activeMarketId();
 
-        // Ignore the market ID, as it depends on the number of bond markets created on
-        // mainnet before the fork block. The token pair and initial price are deterministic.
+        // Expect event. The market ID depends on live Bond Protocol state at the fork block, so
+        // ignore topic 1 and assert the stable payout/quote/price fields.
         vm.expectEmit(false, true, true, true);
         emit MarketCreated(
             0,
@@ -1331,9 +1552,9 @@ contract OlympusPricev1_2ForkTest is Test {
         public
         givenOhmPrice(24e18) // Above 50% premium
         warpToNextHeartbeat
-        beat // YRF epoch 5
-        warpToNextHeartbeat
     {
+        // At FORK_BLOCK, YRF starts at epoch 5. The next heartbeat reaches epoch 6 and creates
+        // the market, so pre-beating here would emit MarketCreated before the expectation below.
         // Calculate the expected initial price
         // From YRF._createMarket()
         // 10 ** (18 * 2) / ((24e18 * 97) / 100)
@@ -1341,8 +1562,8 @@ contract OlympusPricev1_2ForkTest is Test {
         // Adjusted by 1e17 for bond market scaling
         uint256 expectedInitialPrice = 42955326460481099 * 1e17;
 
-        // Ignore the market ID, as it depends on the number of bond markets created on
-        // mainnet before the fork block. The token pair and initial price are deterministic.
+        // Expect event. The market ID depends on live Bond Protocol state at the fork block, so
+        // ignore topic 1 and assert the stable payout/quote/price fields.
         vm.expectEmit(false, true, true, true);
         emit MarketCreated(
             0,
