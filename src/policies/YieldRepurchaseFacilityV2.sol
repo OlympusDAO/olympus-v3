@@ -323,7 +323,7 @@ contract YieldRepurchaseFacilityV2 is
             config.weeklyBudgetRemaining = 0;
             _refreshSnapshots(vault, config);
 
-            emit NextYieldSet(vault, 0);
+            emit NextYieldSet(config.reserve, 0);
         }
 
         _epoch = _EPOCH_LENGTH - 1;
@@ -451,7 +451,7 @@ contract YieldRepurchaseFacilityV2 is
             uint256 newNextYield = _projectNextYield(config, clearinghouseYield);
 
             config.nextYield = newNextYield;
-            emit NextYieldSet(vault, newNextYield);
+            emit NextYieldSet(config.reserve, newNextYield);
 
             // Refresh the conversion rate snapshot (unaffected by the prefund) at the vault's
             // redeemable reserve value.
@@ -779,7 +779,7 @@ contract YieldRepurchaseFacilityV2 is
 
         _marketVaults[marketId] = vault_;
 
-        emit RepoMarket(vault_, marketId, bidAmount_);
+        emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
     }
 
     /// @notice Computes the formatted initial price, minimum price, and scale adjustment
@@ -1191,7 +1191,7 @@ contract YieldRepurchaseFacilityV2 is
         }
 
         config.nextYield = newNextYield_;
-        emit NextYieldAdjusted(vault_, previous, newNextYield_);
+        emit NextYieldAdjusted(config.reserve, previous, newNextYield_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2

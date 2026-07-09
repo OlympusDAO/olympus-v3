@@ -13,14 +13,20 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when a bond market is created for a reserve asset.
     /// @param vault The ERC4626 vault that funds the market.
     /// @param marketId The bond market identifier.
-    /// @param bidAmount The capacity of the market. Denominated in the vault's reserve token for a
-    ///        redeem-to-reserve vault, or in the vault's shares for a sell-shares vault.
-    event RepoMarket(address indexed vault, uint256 indexed marketId, uint256 bidAmount);
+    /// @param payoutToken The token the market pays out: the vault's reserve token for a
+    ///        redeem-to-reserve vault, or the vault itself for a sell-shares vault.
+    /// @param bidAmount The capacity of the market, denominated in the payout token.
+    event RepoMarket(
+        address indexed vault,
+        uint256 indexed marketId,
+        address indexed payoutToken,
+        uint256 bidAmount
+    );
 
     /// @notice Emitted when the projected next-week yield is updated for a vault.
-    /// @param vault The ERC4626 vault.
-    /// @param nextYield The projected yield, in the vault's reserve token decimals.
-    event NextYieldSet(address indexed vault, uint256 nextYield);
+    /// @param reserve The underlying reserve token of the vault.
+    /// @param nextYield The projected yield, in the reserve token decimals.
+    event NextYieldSet(address indexed reserve, uint256 nextYield);
 
     /// @notice Emitted when the buyback share for a vault is updated.
     /// @param vault The ERC4626 vault.
@@ -95,10 +101,10 @@ interface IYieldRepurchaseFacilityV2 {
     event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
     /// @notice Emitted when the projected yield is overridden by a manager.
-    /// @param vault The ERC4626 vault.
+    /// @param reserve The underlying reserve token of the vault.
     /// @param previousYield The previous projected yield value.
     /// @param newYield The new projected yield value.
-    event NextYieldAdjusted(address indexed vault, uint256 previousYield, uint256 newYield);
+    event NextYieldAdjusted(address indexed reserve, uint256 previousYield, uint256 newYield);
 
     /// @notice Emitted when accumulated OHM purchases are burned and the corresponding
     ///         backing is recycled.
