@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.30;
+pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBondCallback} from "src/interfaces/IBondCallback.sol";
@@ -404,13 +404,13 @@ contract YieldRepurchaseFacilityV2 is
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
-            if (!config.isActive) continue;
+            if (!config.isAssetEnabled) continue;
 
             _executeDailyCycle(vault, config, daysRemaining, oraclePrice);
         }
     }
 
-    /// @notice Performs the weekly reset for every active vault.
+    /// @notice Performs the weekly reset for every enabled vault.
     /// @dev Re-marks the carried budget to the current prefunded pool value, rolls last
     ///      week's projected yield into the buyback budget, computes the projection for
     ///      the next week (state-changing variant, emits events on Clearinghouse
@@ -428,7 +428,7 @@ contract YieldRepurchaseFacilityV2 is
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
             ReserveAsset storage config = _assetConfigs[vault];
-            if (!config.isActive) continue;
+            if (!config.isAssetEnabled) continue;
 
             // Re-mark the carried budget upward to the current pool value, so the
             // appreciation earned on the facility-held pool is committed to buybacks
@@ -502,7 +502,7 @@ contract YieldRepurchaseFacilityV2 is
         config_.prefundedShares = currentShares + sharesToWithdraw;
     }
 
-    /// @notice Executes the daily cycle for a single active vault.
+    /// @notice Executes the daily cycle for a single enabled vault.
     /// @dev Computes the planned `bidAmount`, redeems the deficit from the vault into
     ///      reserve units, silently caps the bid at the funds actually held, and creates
     ///      a new SDA bond market. A gap between the planned bid and the held funds is a
@@ -571,7 +571,6 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 received, uint256 used) {
         if (shares_ == 0) return (0, 0);
 
-        uint256 reserveBefore = IERC20(reserve_).balanceOf(address(this));
         try this.selfRedeemChecked(vault_, reserve_, shares_) returns (uint256 received_) {
             return (received_, shares_);
         } catch {
@@ -883,7 +882,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller is not the configured teller.
     ///      - The facility is disabled.
     ///      - The market is not owned by this facility (`_marketVaults[id_]` is zero).
-    ///      - The market's funding vault is inactive (deactivated or removed).
+    ///      - The market's funding vault is disabled or removed.
     function callback(
         uint256 id_,
         uint256 inputAmount_,
@@ -897,7 +896,7 @@ contract YieldRepurchaseFacilityV2 is
         if (vault == address(0)) revert IYieldRepurchaseFacilityV2_UnknownMarket(id_);
 
         ReserveAsset storage config = _assetConfigs[vault];
-        if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault);
+        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault);
 
         address reserve_ = config.reserve;
 
@@ -1021,7 +1020,7 @@ contract YieldRepurchaseFacilityV2 is
             reserve: reserve_,
             reserveDecimals: reserveDecimals,
             sellShares: sellShares_,
-            isActive: true,
+            isAssetEnabled: true,
             yieldBuybackShare: yieldBuybackShare_,
             lastReserveBalance: initialReserveBalance_,
             lastConversionRate: initialConversionRate_,
@@ -1039,11 +1038,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered.
-    ///      - The vault is currently active.
+    ///      - The vault is currently enabled.
     ///      - The vault is currently set as the `backingVault`.
     function removeAsset(address vault_) external override onlyAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (config.isActive) revert IYieldRepurchaseFacilityV2_AssetActive(vault_);
+        if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled(vault_);
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
 
         // Return any residual vault shares and free reserve back to TRSRY.
@@ -1074,10 +1073,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - The vault is not registered or is currently inactive.
+    ///      - The vault is not registered or is currently disabled.
     function setBackingVault(address vault_) external override onlyAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault_);
+        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
         if (config.sellShares)
             revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(vault_);
 
@@ -1211,36 +1210,37 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
-    ///      computed at the next weekly reset covers only the period after reactivation and
-    ///      the yield accrued while the vault was inactive is retained by the treasury.
+    ///      computed at the next weekly reset covers only the period after the vault is
+    ///      re-enabled and the yield accrued while the vault was disabled is retained by
+    ///      the treasury.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the manager or admin role.
     ///      - The vault is not registered.
-    ///      - The vault is already active.
-    function activateAsset(address vault_) external override onlyManagerOrAdminRole {
+    ///      - The vault is already enabled.
+    function enableAsset(address vault_) external override onlyManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (config.isActive) revert IYieldRepurchaseFacilityV2_AssetActive(vault_);
+        if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled(vault_);
 
-        config.isActive = true;
+        config.isAssetEnabled = true;
         _refreshSnapshots(vault_, config);
 
-        emit AssetActivated(vault_);
+        emit AssetEnabled(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
     ///      - The caller does not hold the manager or admin role.
     ///      - The vault is not registered.
-    ///      - The vault is already inactive.
+    ///      - The vault is already disabled.
     ///      - The vault is currently set as the `backingVault`.
-    function deactivateAsset(address vault_) external override onlyManagerOrAdminRole {
+    function disableAsset(address vault_) external override onlyManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (!config.isActive) revert IYieldRepurchaseFacilityV2_AssetInactive(vault_);
+        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
 
-        config.isActive = false;
-        emit AssetDeactivated(vault_);
+        config.isAssetEnabled = false;
+        emit AssetDisabled(vault_);
     }
 
     // ============ YIELD HELPERS ============ //

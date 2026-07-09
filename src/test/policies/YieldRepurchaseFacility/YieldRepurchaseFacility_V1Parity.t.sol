@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.30;
+pragma solidity >=0.8.24;
 
 import {YieldRepurchaseFacilityV2TestBase} from "./YieldRepurchaseFacilityV2TestBase.sol";
 
@@ -134,7 +134,7 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
         );
         assertEq(config.vault, address(sReserve));
         assertEq(config.reserve, address(reserve));
-        assertTrue(config.isActive);
+        assertTrue(config.isAssetEnabled);
         assertEq(config.yieldBuybackShare, 1e18);
 
         // initial reserve balance is set correctly

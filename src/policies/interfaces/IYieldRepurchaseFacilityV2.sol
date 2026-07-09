@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity >=0.8.24;
 
 /// @title IYieldRepurchaseFacilityV2
 /// @notice The interface for the Multi-Asset Yield Repurchase Facility (YRF) policy.
@@ -43,13 +43,13 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The ERC4626 vault.
     event AssetRemoved(address indexed vault);
 
-    /// @notice Emitted when a reserve asset is activated.
+    /// @notice Emitted when a reserve asset is enabled.
     /// @param vault The ERC4626 vault.
-    event AssetActivated(address indexed vault);
+    event AssetEnabled(address indexed vault);
 
-    /// @notice Emitted when a reserve asset is deactivated.
+    /// @notice Emitted when a reserve asset is disabled.
     /// @param vault The ERC4626 vault.
-    event AssetDeactivated(address indexed vault);
+    event AssetDisabled(address indexed vault);
 
     /// @notice Emitted when the backing oracle is updated.
     /// @param backingOracle The new backing oracle.
@@ -132,15 +132,15 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The vault that is already registered.
     error IYieldRepurchaseFacilityV2_AssetAlreadyRegistered(address vault);
 
-    /// @notice Thrown when an asset operation requires the asset to be inactive.
-    /// @param vault The vault that is still active.
-    error IYieldRepurchaseFacilityV2_AssetActive(address vault);
+    /// @notice Thrown when an asset operation requires the asset to be disabled.
+    /// @param vault The vault that is still enabled.
+    error IYieldRepurchaseFacilityV2_AssetEnabled(address vault);
 
-    /// @notice Thrown when an asset operation requires the asset to be active.
-    /// @param vault The vault that is inactive.
-    error IYieldRepurchaseFacilityV2_AssetInactive(address vault);
+    /// @notice Thrown when an asset operation requires the asset to be enabled.
+    /// @param vault The vault that is disabled.
+    error IYieldRepurchaseFacilityV2_AssetDisabled(address vault);
 
-    /// @notice Thrown when a vault is removed or deactivated while still being used as
+    /// @notice Thrown when a vault is removed or disabled while still being used as
     ///         the `backingVault`.
     /// @param vault The vault that is currently set as the backing vault.
     error IYieldRepurchaseFacilityV2_VaultIsBackingVault(address vault);
@@ -225,7 +225,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param sellShares True to sell the vault's shares on bond markets (for a vault
     ///        whose shares cannot be synchronously redeemed, e.g. sUSDe); false redeems the shares
     ///        to the reserve and sells the reserve.
-    /// @param isActive True if the asset participates in the periodic cycle.
+    /// @param isAssetEnabled True if the asset participates in the periodic cycle.
     /// @param yieldBuybackShare The share of yield routed to buybacks (`1e18` = 100%).
     /// @param lastReserveBalance The protocol-owned reserve balance snapshotted at the
     ///        last weekly reset, in `reserveDecimals`.
@@ -245,7 +245,7 @@ interface IYieldRepurchaseFacilityV2 {
         address reserve;
         uint8 reserveDecimals;
         bool sellShares;
-        bool isActive;
+        bool isAssetEnabled;
         uint256 yieldBuybackShare;
         uint256 lastReserveBalance;
         uint256 lastConversionRate;
@@ -326,16 +326,17 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 additionalOffset_
     ) external;
 
-    /// @notice Re-activate a previously deactivated vault.
+    /// @notice Re-enable a previously disabled vault.
     /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
-    ///      computed at the next weekly reset covers only the period after reactivation and
-    ///      the yield accrued while the vault was inactive is retained by the treasury.
-    /// @param vault_ The vault to activate.
-    function activateAsset(address vault_) external;
+    ///      computed at the next weekly reset covers only the period after the vault is
+    ///      re-enabled and the yield accrued while the vault was disabled is retained by
+    ///      the treasury.
+    /// @param vault_ The vault to enable.
+    function enableAsset(address vault_) external;
 
     /// @notice Pause a vault. While paused the vault is skipped by `execute()`.
     /// @param vault_ The vault to pause.
-    function deactivateAsset(address vault_) external;
+    function disableAsset(address vault_) external;
 
     // ============ VIEW FUNCTIONS ============ //
 
