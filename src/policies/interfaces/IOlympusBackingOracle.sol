@@ -36,6 +36,7 @@ interface IOlympusBackingOracle {
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @notice Set the backing value (the reserve per OHM, 18 decimals).
+    /// @dev Callable by the backing_manager or admin role.
     /// @param newBacking_ The new backing value (18 decimals).
     function setBacking(uint256 newBacking_) external;
 

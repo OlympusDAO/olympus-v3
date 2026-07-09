@@ -528,7 +528,7 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
 
         // Try to call adjustNextYield with an invalid caller
         // Expect it to fail
-        // V2 DIFFERENCE: the function is gated by the manager-or-admin modifier, which reverts
+        // V2 DIFFERENCE: the function is gated by the yrf_manager-or-admin modifier, which reverts
         // with NotAuthorised() instead of ROLES_RequireRole("admin")
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(alice);

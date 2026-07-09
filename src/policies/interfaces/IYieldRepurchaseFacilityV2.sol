@@ -100,7 +100,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param sharesWithdrawn The share amount actually withdrawn from the treasury.
     event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
-    /// @notice Emitted when the projected yield is overridden by a manager.
+    /// @notice Emitted when the projected yield is overridden.
     /// @param reserve The underlying reserve token of the vault.
     /// @param previousYield The previous projected yield value.
     /// @param newYield The new projected yield value.
@@ -311,14 +311,14 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Override the projected next-week yield for a vault.
     /// @dev Adjusting an existing non-zero projection is capped at a 10% increase and is
-    ///      available to the manager or admin role. Seeding the projection from zero is
+    ///      available to the yrf_manager or admin role. Seeding the projection from zero is
     ///      unbounded and is therefore restricted to the admin role.
     /// @param vault_ The vault whose projection is overridden.
     /// @param newNextYield_ The new projected yield.
     function adjustNextYield(address vault_, uint256 newNextYield_) external;
 
     /// @notice Increase the cumulative offset of a Clearinghouse.
-    /// @dev Restricted to the manager role.
+    /// @dev Restricted to the yrf_manager role.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param additionalOffset_ The amount to add to the existing offset.
     function increaseClearinghouseOffset(

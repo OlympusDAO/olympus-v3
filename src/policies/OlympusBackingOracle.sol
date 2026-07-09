@@ -11,6 +11,9 @@ import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 
+// Constants
+import {BACKING_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
 /// @title OlympusBackingOracle
 /// @notice A policy that serves as the canonical OHM backing value (the reserve per OHM, 18 decimals).
 contract OlympusBackingOracle is Policy, PolicyEnablerV2, IOlympusBackingOracle, IVersioned {
@@ -55,6 +58,14 @@ contract OlympusBackingOracle is Policy, PolicyEnablerV2, IOlympusBackingOracle,
         return (1, 0);
     }
 
+    // ========== ROLE GATES ========== //
+
+    /// @notice Reverts if the caller holds neither the `backing_manager` role nor the admin role.
+    modifier onlyBackingManagerOrAdminRole() {
+        _requireAuthorized(!_hasRole(msg.sender, BACKING_MANAGER_ROLE) && !_isAdmin(msg.sender));
+        _;
+    }
+
     // ========== ENABLE ========== //
 
     /// @inheritdoc EnablerV2
@@ -76,11 +87,11 @@ contract OlympusBackingOracle is Policy, PolicyEnablerV2, IOlympusBackingOracle,
 
     /// @inheritdoc IOlympusBackingOracle
     /// @dev Reverts if:
-    ///      - The caller does not have the admin role.
+    ///      - The caller holds neither the backing_manager role nor the admin role.
     ///      - The policy is not enabled.
     ///      - `newBacking_` is zero.
     ///      - `newBacking_` changes the current backing beyond the allowed threshold.
-    function setBacking(uint256 newBacking_) external givenEnabled onlyAdminRole {
+    function setBacking(uint256 newBacking_) external givenEnabled onlyBackingManagerOrAdminRole {
         _requireNonzeroBacking(newBacking_);
 
         uint256 currentBacking = backing;

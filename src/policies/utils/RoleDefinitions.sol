@@ -10,6 +10,13 @@ bytes32 constant MANAGER_ROLE = "manager";
 /// @dev Heart role, e.g. performing periodic tasks.
 bytes32 constant HEART_ROLE = "heart";
 
+/// @dev YieldRepurchaseFacilityV2 managerial access. Typically assigned to a multisig/council.
+bytes32 constant YRF_MANAGER_ROLE = "yrf_manager";
+
+/// @dev OlympusBackingOracle managerial access, e.g. updating the OHM backing value.
+///      Typically assigned to a multisig/council.
+bytes32 constant BACKING_MANAGER_ROLE = "backing_manager";
+
 /// @dev LZ bridge configurator role. Gates the privileged configuration mutators on
 ///      LZBridgeGateway and LZEndpointDelegate. Expected to be granted exclusively to the
 ///      LZBridgeAndDelegateConfig policy, in which case calls are dispatched through that

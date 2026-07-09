@@ -37,7 +37,7 @@ import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuar
 import {Rescueable} from "src/bases/Rescueable.sol";
 
 // Constants
-import {ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title YieldRepurchaseFacilityV2
 /// @notice Multi-asset Yield Repurchase Facility (YRF), version 2.
@@ -285,6 +285,22 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IVersioned
     function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (2, 0);
+    }
+
+    // ============ ROLE GATES ============ //
+
+    /// @notice Reverts if the caller holds neither the `yrf_manager` role nor the admin role.
+    /// @dev The facility uses its own `yrf_manager` role in place of the shared `manager` role,
+    ///      so that managerial access to the facility can be delegated independently.
+    modifier onlyYrfManagerOrAdminRole() {
+        _requireAuthorized(!_hasRole(msg.sender, YRF_MANAGER_ROLE) && !_isAdmin(msg.sender));
+        _;
+    }
+
+    /// @notice Reverts if the caller does not hold the `yrf_manager` role.
+    modifier onlyYrfManagerRole() {
+        _requireRole(msg.sender, YRF_MANAGER_ROLE);
+        _;
     }
 
     // ============ ENABLE / DISABLE ============ //
@@ -1131,13 +1147,13 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the yrf_manager or admin role.
     ///      - The vault is not registered.
     ///      - The share is greater than `1e18`.
     function setYieldBuybackShare(
         address vault_,
         uint256 newShare_
-    ) external override onlyManagerOrAdminRole {
+    ) external override onlyYrfManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireValidYieldBuybackShare(newShare_);
 
@@ -1147,9 +1163,11 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the yrf_manager or admin role.
     ///      - The discount is greater than or equal to `1e18`.
-    function setInitialDiscount(uint256 initialDiscount_) external override onlyManagerOrAdminRole {
+    function setInitialDiscount(
+        uint256 initialDiscount_
+    ) external override onlyYrfManagerOrAdminRole {
         _setInitialDiscount(initialDiscount_);
     }
 
@@ -1169,14 +1187,14 @@ contract YieldRepurchaseFacilityV2 is
     ///      role.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the yrf_manager or admin role.
     ///      - The current `nextYield` is zero and the caller does not hold the admin role.
     ///      - The vault is not registered.
     ///      - The new value increases an existing non-zero `nextYield` by more than 10%.
     function adjustNextYield(
         address vault_,
         uint256 newNextYield_
-    ) external override onlyManagerOrAdminRole {
+    ) external override onlyYrfManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
 
         uint256 previous = config.nextYield;
@@ -1195,13 +1213,13 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The caller does not hold the manager role.
+    ///      - The caller does not hold the yrf_manager role.
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
     function increaseClearinghouseOffset(
         address clearinghouse_,
         uint256 additionalOffset_
-    ) external override onlyManagerRole {
+    ) external override onlyYrfManagerRole {
         _setClearinghouseOffset(
             clearinghouse_,
             _receivablesOffsets[clearinghouse_] + additionalOffset_
@@ -1215,10 +1233,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      the treasury.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the yrf_manager or admin role.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
-    function enableAsset(address vault_) external override onlyManagerOrAdminRole {
+    function enableAsset(address vault_) external override onlyYrfManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled(vault_);
 
@@ -1230,11 +1248,11 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The caller does not hold the manager or admin role.
+    ///      - The caller does not hold the yrf_manager or admin role.
     ///      - The vault is not registered.
     ///      - The vault is already disabled.
     ///      - The vault is currently set as the `backingVault`.
-    function disableAsset(address vault_) external override onlyManagerOrAdminRole {
+    function disableAsset(address vault_) external override onlyYrfManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
         if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault(vault_);
