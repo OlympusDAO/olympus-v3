@@ -79,6 +79,14 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param clearinghouse The Clearinghouse address.
     event ClearinghouseDebtTokenMismatch(address indexed clearinghouse);
 
+    /// @notice Emitted when a Clearinghouse is included in the backing yield.
+    /// @param clearinghouse The Clearinghouse address.
+    event ClearinghouseIncluded(address indexed clearinghouse);
+
+    /// @notice Emitted when a Clearinghouse inclusion is removed.
+    /// @param clearinghouse The Clearinghouse address.
+    event ClearinghouseExcluded(address indexed clearinghouse);
+
     /// @notice Emitted when a vault redemption attempt fails. The redemption is skipped
     ///         and retried on a later cycle.
     /// @param vault The ERC4626 vault.
@@ -180,6 +188,14 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 offset,
         uint256 principalReceivables
     );
+
+    /// @notice Thrown when `includeClearinghouse` targets a Clearinghouse that is already
+    ///         included in the backing yield.
+    error IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
+
+    /// @notice Thrown when `excludeClearinghouse` targets a Clearinghouse that is not
+    ///         included in the backing yield.
+    error IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
 
     /// @notice Thrown by IBondCallback hooks that this facility does not support.
     error IYieldRepurchaseFacilityV2_NotSupported();
@@ -324,6 +340,15 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 additionalOffset_
     ) external;
 
+    /// @notice Includes a Clearinghouse in the backing vault's yield projection regardless
+    ///         of its reserve token.
+    /// @param clearinghouse_ The Clearinghouse address.
+    function includeClearinghouse(address clearinghouse_) external;
+
+    /// @notice Removes a Clearinghouse from the backing vault's yield projection.
+    /// @param clearinghouse_ The Clearinghouse address.
+    function excludeClearinghouse(address clearinghouse_) external;
+
     /// @notice Re-enables a previously disabled vault.
     /// @param vault_ The vault to enable.
     function enableAsset(address vault_) external;
@@ -377,6 +402,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///         `principalReceivables` when computing yield.
     /// @param clearinghouse_ The Clearinghouse address.
     function clearinghouseOffset(address clearinghouse_) external view returns (uint256);
+
+    /// @notice Returns whether a Clearinghouse is included in the backing yield regardless
+    ///         of its reserve token.
+    function isClearinghouseIncluded(address clearinghouse_) external view returns (bool);
 
     /// @notice The Bond Protocol teller used by this facility.
     function teller() external view returns (address);

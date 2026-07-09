@@ -216,6 +216,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Cumulative offset applied to a Clearinghouse's `principalReceivables`.
     mapping(address clearinghouse => uint256 offset) internal _receivablesOffsets;
 
+    /// @notice Clearinghouses counted toward the backing yield regardless of their reserve
+    ///         token.
+    mapping(address clearinghouse => bool included) internal _includedClearinghouses;
+
     /// @notice The vault that funds each open bond market created by this facility.
     /// @dev Set on market creation; a non-zero entry implicitly validates that the market
     ///      was created here.
@@ -1323,6 +1327,44 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      By default only Clearinghouses whose reserve matches the backing reserve are
+    ///      counted. Inclusion is meant for Clearinghouses whose receivables accrue to the
+    ///      backing reserve, so the receivables must be denominated in a token with the same
+    ///      decimals as the backing reserve. The receivables offset of the Clearinghouse
+    ///      applies as usual. Only Clearinghouses present in the CHREG registry are iterated,
+    ///      so including any other address has no effect.
+    ///
+    ///      The function reverts if:
+    ///      - The caller does not hold the admin role.
+    ///      - `clearinghouse_` is the zero address.
+    ///      - The Clearinghouse is already included.
+    function includeClearinghouse(address clearinghouse_) external override onlyAdminRole {
+        _requireNonzeroAddress(clearinghouse_, "clearinghouse");
+        if (_includedClearinghouses[clearinghouse_])
+            revert IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
+
+        _includedClearinghouses[clearinghouse_] = true;
+        emit ClearinghouseIncluded(clearinghouse_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The function reverts if:
+    ///      - The caller holds neither the yrf_manager role nor the admin role.
+    ///      - The Clearinghouse is not included.
+    function excludeClearinghouse(
+        address clearinghouse_
+    ) external override onlyYrfManagerOrAdminRole {
+        if (!_includedClearinghouses[clearinghouse_])
+            revert IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
+
+        _includedClearinghouses[clearinghouse_] = false;
+        emit ClearinghouseExcluded(clearinghouse_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reachable through the manager timelock or directly by the admin, so a re-enable is
     ///      de-facto timelocked.
     ///
@@ -1415,6 +1457,17 @@ contract YieldRepurchaseFacilityV2 is
         return (effective * _CH_RATE_NUMERATOR) / _CH_RATE_DENOMINATOR / _WEEKS_PER_YEAR;
     }
 
+    /// @notice Returns whether a Clearinghouse counts toward the backing yield: either its
+    ///         reserve matches the backing reserve, or it has been explicitly included.
+    function _countsTowardBackingYield(
+        address clearinghouse_,
+        address backingReserve_
+    ) private view returns (bool) {
+        return
+            _includedClearinghouses[clearinghouse_] ||
+            _readClearinghouseReserve(clearinghouse_) == backingReserve_;
+    }
+
     /// @notice The global Clearinghouse receivables interest for the next week, in reserve units.
     function _clearinghouseYield() private view returns (uint256 yield) {
         address backingReserve = _backingReserve();
@@ -1423,7 +1476,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 len = CHREG.registryCount();
         for (uint256 i = 0; i < len; ++i) {
             address ch = CHREG.registry(i);
-            if (_readClearinghouseReserve(ch) != backingReserve) continue;
+            if (!_countsTowardBackingYield(ch, backingReserve)) continue;
             yield += _clearinghouseInterest(
                 _readClearinghousePrincipal(ch),
                 _receivablesOffsets[ch]
@@ -1438,7 +1491,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 len = CHREG.registryCount();
         for (uint256 i = 0; i < len; ++i) {
             address ch = CHREG.registry(i);
-            if (_readClearinghouseReserve(ch) != backingReserve)
+            if (!_countsTowardBackingYield(ch, backingReserve))
                 emit ClearinghouseDebtTokenMismatch(ch);
         }
     }
@@ -1594,6 +1647,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     function clearinghouseOffset(address clearinghouse_) external view override returns (uint256) {
         return _receivablesOffsets[clearinghouse_];
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    function isClearinghouseIncluded(address clearinghouse_) external view override returns (bool) {
+        return _includedClearinghouses[clearinghouse_];
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
