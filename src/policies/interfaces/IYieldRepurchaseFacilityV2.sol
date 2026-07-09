@@ -306,12 +306,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param offset_ The new cumulative offset.
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
 
-    /// @notice Adjust the buyback share for a registered vault.
+    /// @notice Sets the yield buyback share of a registered vault.
     /// @param vault_ The vault whose share is updated.
     /// @param newShare_ The new share (`1e18` = 100%).
     function setYieldBuybackShare(address vault_, uint256 newShare_) external;
 
-    /// @notice Adjust the initial discount applied to bond market initial price.
+    /// @notice Sets the initial discount applied to bond market initial price.
     /// @param initialDiscount_ The new initial discount (`1e18` = 100%).
     function setInitialDiscount(uint256 initialDiscount_) external;
 
@@ -398,4 +398,8 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice The running epoch counter, in the range `[0, 21)`.
     function epoch() external view returns (uint48);
+
+    /// @notice Returns the address of the timelock policy authorized to call the operational
+    ///         manager functions.
+    function managerTimelock() external view returns (address);
 }

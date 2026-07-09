@@ -168,6 +168,13 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice The cached OHM decimals (9 on mainnet).
     uint8 private immutable _OHM_DECIMALS;
 
+    /// @notice The manager timelock authorized for the timelocked manager functions.
+    /// @dev The functions `setYieldBuybackShare`, `setInitialDiscount`, and `enableAsset` trust
+    ///      only this address for the manager path, so the manager reaches them through
+    ///      the timelock's queue.
+    ///      The admin (expected to be held only by the OCG timelock) keeps a direct path to them.
+    address private immutable _MANAGER_TIMELOCK;
+
     // ============ MODULES ============ //
 
     TRSRYv1 internal TRSRY;
@@ -225,6 +232,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
     /// @param teller_ The Bond Protocol teller.
+    /// @param managerTimelock_ The timelock policy authorized for the operational manager functions.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
     constructor(
         Kernel kernel_,
@@ -232,13 +240,16 @@ contract YieldRepurchaseFacilityV2 is
         address backingOracle_,
         address bondAuctioneer_,
         address teller_,
+        address managerTimelock_,
         uint32 gracePeriod_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(ohm_, "ohm");
+        _requireNonzeroAddress(managerTimelock_, "managerTimelock");
 
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
+        _MANAGER_TIMELOCK = managerTimelock_;
 
         _setBackingOracle(backingOracle_);
         _setBondContracts(bondAuctioneer_, teller_);
@@ -312,6 +323,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Reverts if the caller does not hold the `yrf_manager` role.
     modifier onlyYrfManagerRole() {
         _requireRole(msg.sender, YRF_MANAGER_ROLE);
+        _;
+    }
+
+    /// @notice Reverts unless the caller is the manager timelock or holds the admin role.
+    modifier onlyManagerTimelockOrAdminRole() {
+        _requireAuthorized(msg.sender != _MANAGER_TIMELOCK && !_isAdmin(msg.sender));
         _;
     }
 
@@ -1245,10 +1262,13 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
-    ///      - The caller does not hold the yrf_manager or admin role.
+    /// @dev Reachable through the manager timelock or directly by the admin, so a re-enable is
+    ///      de-facto timelocked.
+    ///
+    ///      Reverts if:
+    ///      - The caller is neither the manager timelock nor the admin.
     ///      - The vault is not registered.
-    ///      - The share is greater than `1e18`.
+    ///      - The share exceeds 100% (`1e18`).
     function setYieldBuybackShare(
         address vault_,
         uint256 newShare_
@@ -1261,9 +1281,12 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
-    ///      - The caller does not hold the yrf_manager or admin role.
-    ///      - The discount is greater than or equal to `1e18`.
+    /// @dev Reachable through the manager timelock or directly by the admin, so a change is
+    ///      de-facto timelocked.
+    ///
+    ///      Reverts if:
+    ///      - The caller is neither the manager timelock nor the admin.
+    ///      - The initial discount is not less than 100% (`1e18`).
     function setInitialDiscount(
         uint256 initialDiscount_
     ) external override onlyYrfManagerOrAdminRole {
@@ -1300,12 +1323,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The next yield is reset to zero and the yield snapshots are refreshed, so a
+    /// @dev Reachable through the manager timelock or directly by the admin, so a re-enable is
+    ///      de-facto timelocked.
+    ///
+    ///      The next yield is reset to zero and the yield snapshots are refreshed, so a
     ///      value left over from before the asset was disabled does not enter the weekly
     ///      budget; the yield projection resumes at the following weekly reset.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the yrf_manager or admin role.
+    ///      - The caller is neither the manager timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyYrfManagerOrAdminRole {
@@ -1578,6 +1604,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     function epoch() external view override returns (uint48) {
         return _epoch;
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    function managerTimelock() external view override returns (address) {
+        return _MANAGER_TIMELOCK;
     }
 
     // ============ RESCUE ============ //
