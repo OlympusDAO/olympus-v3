@@ -16,7 +16,7 @@ import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFa
 
 // This file is a copy of the V1 YieldRepurchaseFacility tests, updated to run against
 // the multi-asset YieldRepurchaseFacilityV2 with a single sUSDS-like reserve asset.
-// Its purpose is to highlight differences in the calculations.
+// Its purpose is to highlight some differences in the calculations.
 //
 // Known V2 design differences are marked with "V2 DIFFERENCE" comments:
 // - execute() skips the daily cycle (no bond market) when the oracle price is below the backing.
@@ -24,7 +24,10 @@ import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFa
 // - Bond markets have a minimum price floor (the undiscounted oracle price) instead of zero.
 // - The daily bid amount is based on the weeklyBudgetRemaining counter instead of actual
 //   token holdings, so intra-week vault appreciation is excluded until the next weekly reset.
-//
+// - Shutdown: disable only halts operation, the funds are returned separately via
+//   returnFundsToTreasury.
+// - No the adjustNextYield function; nextYield corrections go through the clearinghouse offsets,
+//   setYieldBuybackShare, and the enable/addAsset yield seeds.
 // solhint-disable-next-line max-states-count
 contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBase {
     using ModuleTestFixtureGenerator for OlympusClearinghouseRegistry;
@@ -83,11 +86,16 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
 
         // Register the reserve asset with a 100% yield buyback share, make it
         // the backing vault, and seed the initial yield.
-        vm.startPrank(guardian);
-        yieldRepo.addAsset(address(sReserve), 1e18, initialReserves, initialConversionRate, false);
-        yieldRepo.setBackingVault(address(sReserve));
-        yieldRepo.adjustNextYield(address(sReserve), initialYield);
-        vm.stopPrank();
+        vm.prank(guardian);
+        yieldRepo.addAsset(
+            address(sReserve),
+            1e18,
+            initialReserves,
+            initialConversionRate,
+            initialYield,
+            false,
+            true
+        );
     }
 
     // test cases
@@ -115,7 +123,6 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
     //       [X] when epoch != epochLength
     //         [X] OHM in the contract is burned and reserves are added at the backing rate
     //         [X] a new bond market is created with correct bid amount
-    // [X] adjustNextYield
     // [X] shutdown
     // [X] getNextYield
     // [X] getReserveBalance
@@ -298,7 +305,8 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
     function test_endEpoch_isShutdown() public {
         // Shutdown the yieldRepo contract
         // V2 DIFFERENCE: the disable payload is unused (V1 expected an abi-encoded token list);
-        // all registered vault/reserve balances are transferred to the TRSRY automatically
+        // disable only halts operation, the funds are returned separately via
+        // returnFundsToTreasury.
         vm.prank(guardian);
         yieldRepo.disable("");
 
@@ -515,64 +523,6 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
         }
     }
 
-    function test_adjustNextYield() public {
-        // Mint yield to the sReserve
-        _mintYield();
-
-        // Call endEpoch to set the next yield
-        vm.prank(heart);
-        yieldRepo.execute();
-
-        // Get the next yield value
-        uint256 nextYield = yieldRepo.getAssetConfig(address(sReserve)).nextYield;
-
-        // Try to call adjustNextYield with an invalid caller
-        // Expect it to fail
-        // V2 DIFFERENCE: the function is gated by the yrf_manager-or-admin modifier, which reverts
-        // with NotAuthorised() instead of ROLES_RequireRole("admin")
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
-        vm.prank(alice);
-        yieldRepo.adjustNextYield(address(sReserve), nextYield);
-
-        // Call adjustNextYield with a value that is too high
-        // Expect it to fail
-        uint256 newNextYield = (nextYield * 12) / 10;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TooMuchIncrease.selector
-            )
-        );
-        vm.prank(guardian);
-        yieldRepo.adjustNextYield(address(sReserve), newNextYield);
-
-        // Call adjustNextYield with a value greater than the current yield but only by 10%
-        // Expect it to succeed
-        newNextYield = (nextYield * 11) / 10;
-        vm.prank(guardian);
-        yieldRepo.adjustNextYield(address(sReserve), newNextYield);
-
-        // Check that the next yield has been adjusted
-        assertEq(yieldRepo.getAssetConfig(address(sReserve)).nextYield, newNextYield);
-
-        // Call adjustNextYield with a value that is lower than the current yield
-        // Expect it to succeed
-        newNextYield = (newNextYield * 9) / 10;
-        vm.prank(guardian);
-        yieldRepo.adjustNextYield(address(sReserve), newNextYield);
-
-        // Check that the next yield has been adjusted
-        assertEq(yieldRepo.getAssetConfig(address(sReserve)).nextYield, newNextYield);
-
-        // Call adjustNextYield with a value of zero next yield
-        // Expect it to succeed
-        vm.prank(guardian);
-        yieldRepo.adjustNextYield(address(sReserve), 0);
-
-        // Check that the next yield has been adjusted
-        assertEq(yieldRepo.getAssetConfig(address(sReserve)).nextYield, 0);
-    }
-
     function test_shutdown() public {
         // Try to call shutdown as an invalid caller
         // Expect it to fail
@@ -603,13 +553,23 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
 
         // Call shutdown with a valid caller
         // Expect it to succeed
-        // V2 DIFFERENCE: the registered vault/reserve balances are transferred to the TRSRY
-        // automatically, the payload with the token list is no longer used
+        // V2 DIFFERENCE: disable only halts operation and leaves the funds in place (so
+        // that the manager can resume the week via reEnable); the V1 shutdown sweep is
+        // performed by the separate returnFundsToTreasury function, the payload with the
+        // token list is no longer used
         vm.prank(guardian);
         yieldRepo.disable("");
 
         // Check that the contract is shutdown
         assertEq(yieldRepo.isEnabled(), false);
+
+        // Check that the yieldRepo contract balances have NOT been transferred by disable
+        assertEq(reserve.balanceOf(address(yieldRepo)), yieldRepoReserveBalance);
+        assertEq(sReserve.balanceOf(address(yieldRepo)), yieldRepoWrappedReserveBalance);
+
+        // Return the funds to the treasury
+        vm.prank(guardian);
+        yieldRepo.returnFundsToTreasury();
 
         // Check that the yieldRepo contract reserve balances have been transferred to the TRSRY
         assertEq(reserve.balanceOf(address(yieldRepo)), 0);

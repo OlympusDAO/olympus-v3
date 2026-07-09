@@ -33,11 +33,13 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
-import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
+import {PolicyReEnabler} from "src/policies/utils/PolicyReEnabler.sol";
+import {ReEnabler} from "src/bases/ReEnabler.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 
 // Constants
-import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title YieldRepurchaseFacilityV2
 /// @notice Multi-asset Yield Repurchase Facility (YRF), version 2.
@@ -46,15 +48,27 @@ import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleD
 ///      SDA markets, to buy more OHM. Purchased OHM is burned, and the recovered backing is
 ///      added to the primary `backingVault` budget.
 ///
+///      Lifecycle:
+///      - `enable` (admin) performs a full restart: the per-vault budgets and yields are
+///        zeroed, the yield snapshots are refreshed, and the epoch counter is set so that
+///        the next `execute` performs a weekly reset. The payload may seed the per-vault
+///        `nextYield` values (an empty seed array restarts with zero yields). Funds still
+///        held by the facility are re-absorbed into the budget by the pool-value sync of
+///        that reset.
+///      - `disable` (emergency or admin) only halts `execute` and `callback`; the funds and
+///        the accounting state are left in place.
+///      - `reEnable` (manager) resumes the interrupted week in place, and is only available
+///        within the grace window after the disable.
+///      - `returnFundsToTreasury` (emergency or admin) burns the purchased OHM and returns
+///        all held balances to the treasury while the facility is disabled.
+///
 ///      Key properties:
 ///      - Yield is tracked independently per ERC4626 reserve vault.
 ///      - Each vault has its own buyback share, splitting yield between buybacks and
 ///        treasury retention.
-///      - The OHM backing value is read from `IOlympusBackingOracle` rather than
-///        being hardcoded.
-///      - Purchased OHM is tracked via the `IBondCallback` accumulator rather than
-///        `ohm.balanceOf(this)`, so direct OHM donations cannot inflate the backing
-///        withdrawal.
+///      - The OHM backing value is read from `IOlympusBackingOracle`.
+///      - Purchased OHM is tracked via the `IBondCallback` accumulator, so direct OHM
+///        donations cannot inflate the backing withdrawal.
 ///      - Every bond market is created with a non-zero `minPrice` (the inverse of the
 ///        undiscounted oracle price), so the SDA price decay never pays out more
 ///        reserve per OHM than the oracle price.
@@ -63,20 +77,19 @@ import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleD
 ///        cannot inflate the buyback budget.
 ///      - Bond auctioneer and teller addresses are mutable through admin functions.
 ///      - The week's buyback budget is withdrawn from the treasury once at the weekly
-///        reset (a prefund) and tracked per vault in explicit counters
-///        (`prefundedShares` and `prefundedReserve`) rather than `balanceOf(this)`,
+///        reset (a prefund) and tracked per vault in explicit counters,
 ///        so direct donations cannot inflate the budget, the bid amounts, or the
 ///        reported reserve balance, and the unsold remainder of a bid is never
 ///        withdrawn from the treasury twice. At the weekly reset the carried budget
 ///        is re-marked upward to the pool value, so yield earned on the pool itself
 ///        is also committed to buybacks.
-///      - Enabling re-baselines every registered vault: the projection and the weekly
-///        budget are cleared and the snapshots are refreshed.
-///      - Lifecycle uses `PolicyEnablerV2` and the periodic entry point is
-///        `IPeriodicTask.execute()`.
+///
+///      The admin role is expected to be held only by the OCG timelock, so every
+///      admin-gated function of this contract is de-facto timelocked.
 contract YieldRepurchaseFacilityV2 is
     Policy,
-    PolicyEnablerV2,
+    PolicyReEnabler,
+    ReEnablerGracePeriod,
     ReentrancyGuardTransient,
     IBondCallback,
     IPeriodicTask,
@@ -89,7 +102,7 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ CONSTANTS ============ //
 
-    /// @notice Number of epochs per week (3 per day x 7 days).
+    /// @notice Number of epochs per week (3 per day * 7 days).
     uint48 private constant _EPOCH_LENGTH = 21;
 
     /// @notice Number of epochs per day.
@@ -101,13 +114,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Precision denominator for the yield buyback share (`1e18` = 100%).
     uint256 private constant _ONE_HUNDRED_PERCENT = 1e18;
 
-    /// @notice Maximum allowed `nextYield` increase per `adjustNextYield` call, scaled by `1e18`.
-    /// @dev `1.1e18` corresponds to a 10% maximum increase.
-    uint256 private constant _MAX_INCREASE_FACTOR = 11 * 1e17;
-
-    /// @notice Expected length of the `enable` payload (`abi.encode(initialDiscount)`).
-    /// @dev One 32-byte word: `initialDiscount`.
-    uint256 private constant _ENABLE_PARAMS_LENGTH = 32;
+    /// @notice Minimum length of the `enable` payload.
+    /// @dev Three 32-byte words: `initialDiscount`, the seed array offset, and the seed
+    ///      array length.
+    uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 96;
 
     /// @notice Numerator of the Clearinghouse annual interest rate (0.5%).
     uint256 private constant _CH_RATE_NUMERATOR = 5;
@@ -215,13 +225,15 @@ contract YieldRepurchaseFacilityV2 is
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
     /// @param teller_ The Bond Protocol teller.
+    /// @param gracePeriod_ The initial re-enable grace window, in seconds.
     constructor(
         Kernel kernel_,
         address ohm_,
         address backingOracle_,
         address bondAuctioneer_,
-        address teller_
-    ) Policy(kernel_) {
+        address teller_,
+        uint32 gracePeriod_
+    ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(ohm_, "ohm");
 
@@ -231,7 +243,7 @@ contract YieldRepurchaseFacilityV2 is
         _setBackingOracle(backingOracle_);
         _setBondContracts(bondAuctioneer_, teller_);
 
-        // Disabled by default by PolicyEnablerV2.
+        // Disabled by default by EnablerV2.
     }
 
     /// @inheritdoc Policy
@@ -306,29 +318,41 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ENABLE / DISABLE ============ //
 
     /// @inheritdoc EnablerV2
-    /// @dev Decodes the `initialDiscount` and primes the epoch counter so that the first
-    ///      `execute()` call triggers a weekly reset.
-    ///
-    ///      Every registered vault is re-baselined: the projection (`nextYield`) and the
-    ///      remaining weekly budget are cleared, and the balance and conversion rate snapshots
-    ///      are refreshed. Yield accrued and budget committed before a preceding disable are
-    ///      thereby retained by the treasury instead of being withdrawn at the first weekly
-    ///      reset. To fund the first week, the admin can seed the projection via
-    ///      the `adjustNextYield` after enabling.
+    /// @dev Performs a full restart of the epoch cycle: the per-vault budgets and yields
+    ///      are zeroed, the yield snapshots are refreshed, and the epoch counter is set so
+    ///      that the next `execute` performs a weekly reset. The payload may seed the next
+    ///      yield of registered vaults; with an empty seed array every vault restarts with
+    ///      a zero yield. Funds still held by the facility are re-absorbed into the budget
+    ///      by the pool-value sync of the first weekly reset. For resuming an interrupted
+    ///      week after a disable, see `reEnable`.
     ///
     ///      Reverts if:
-    ///      - The encoded payload length does not match one 32-byte word.
-    ///      - `initialDiscount` is greater than or equal to `1e18` (100%).
-    ///      - A registered vault reverts on `previewRedeem`.
+    ///      - The payload is shorter than the minimum `abi.encode(uint256, NextYieldSeed[])`.
+    ///      - The initial discount is not less than 100% (`1e18`).
+    ///      - A seed references an unregistered vault.
+    ///      - A registered vault reverts on `previewRedeem` or `balanceOf`.
     function _beforeEnable(bytes calldata data_) internal override {
-        if (data_.length != _ENABLE_PARAMS_LENGTH)
+        if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
-        uint256 initialDiscount_ = abi.decode(data_, (uint256));
+        (uint256 initialDiscount_, NextYieldSeed[] memory nextYieldSeeds) = abi.decode(
+            data_,
+            (uint256, NextYieldSeed[])
+        );
         _setInitialDiscount(initialDiscount_);
 
-        // Re-baseline every registered vault, so that stale snapshots kept across a disable
-        // period cannot roll the yield of the whole period into the first projection.
+        _resetCycle(nextYieldSeeds);
+    }
+
+    /// @notice Restarts the weekly cycle: zeroes the per-vault budgets and yields, applies
+    ///         the supplied next-yield seeds, refreshes the yield snapshots, and rewinds
+    ///         the epoch counter so that the next `execute` performs a weekly reset.
+    /// @dev Reverts if a seed references an unregistered vault. A single `NextYieldSet`
+    ///      event with the resulting value is emitted per vault; when the seed array
+    ///      contains duplicates, the last entry wins.
+    /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
+    function _resetCycle(NextYieldSeed[] memory nextYieldSeeds_) private {
+        // Re-baseline every registered vault
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
@@ -338,22 +362,59 @@ contract YieldRepurchaseFacilityV2 is
             config.nextYield = 0;
             config.weeklyBudgetRemaining = 0;
             _refreshSnapshots(vault, config);
+        }
 
-            emit NextYieldSet(config.reserve, 0);
+        uint256 seedsLength = nextYieldSeeds_.length;
+        for (uint256 i = 0; i < seedsLength; ++i) {
+            NextYieldSeed memory seed = nextYieldSeeds_[i];
+            _requireRegistered(seed.vault).nextYield = seed.nextYield;
+        }
+
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            ReserveAsset storage config = _assetConfigs[vaults[i]];
+            emit NextYieldSet(config.reserve, config.nextYield);
         }
 
         _epoch = _EPOCH_LENGTH - 1;
     }
 
-    /// @inheritdoc EnablerV2
-    /// @dev On disable, burns the accumulated OHM, returns every held balance to TRSRY
-    ///      (including the prefunded pool and any donations), clears the prefunded
-    ///      counters, and resets the epoch counter. The payload is unused.
+    // `_beforeDisable` is deliberately not overridden: disabling only halts `execute` and
+    // `callback`, leaving the funds and the accounting state in place so that `reEnable`
+    // can resume the interrupted week. Use `returnFundsToTreasury` to sweep the funds
+    // after a disable when holding them on the facility is a concern.
+
+    /// @inheritdoc ReEnabler
+    /// @dev Resumes the interrupted epoch cycle in place: the epoch counter, the per-vault
+    ///      budgets, the prefunded balances, and the yield snapshots are intentionally left
+    ///      untouched, so the facility continues the week where it stopped. Epochs advance
+    ///      only while the facility is enabled, so the week is stretched by the downtime;
+    ///      the vault yield accrued during the downtime is captured by the next weekly
+    ///      reset, and `nextYield` is injected into the weekly budget exactly once per
+    ///      reset regardless of the downtime.
+    function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
+        super._beforeReEnable();
+    }
+
+    /// @inheritdoc ReEnablerGracePeriod
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the grace
+    ///      window is de-facto timelocked.
     ///
-    ///      The per-vault budget, projection and snapshots are deliberately left in storage
-    ///      for inspection while disabled.
-    function _beforeDisable(bytes calldata) internal override {
-        // Burn the accumulated purchased OHM. The accumulator is the source of truth.
+    ///      Reverts if:
+    ///      - The caller does not hold the admin role.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The function complements the `disable`, which only halts operation
+    ///      and leaves the funds in place so that `reEnable` can resume the interrupted
+    ///      week. Call this function after a disable when the facility is not expected to
+    ///      be re-enabled soon, or when holding funds on the facility is a concern. The
+    ///      per-vault `nextYield` is intentionally preserved, so a later `reEnable` or
+    ///      `enable` refunds the facility from the treasury at the next weekly reset.
+    ///
+    ///      The function reverts if:
+    ///      - The contract is enabled.
+    ///      - The caller holds neither the emergency role nor the admin role.
+    function returnFundsToTreasury() external override givenDisabled onlyEmergencyOrAdminRole {
         uint256 purchasedOhm = _ohmPurchased;
         if (purchasedOhm != 0) {
             _ohmPurchased = 0;
@@ -374,12 +435,14 @@ contract YieldRepurchaseFacilityV2 is
             _returnBalancesToTrsry(vault, config.reserve);
 
             // The prefunded balances have been returned, so clear the counters to keep
-            // them consistent if the facility is later re-enabled.
+            // them consistent.
             config.prefundedShares = 0;
             config.prefundedReserve = 0;
+
+            config.weeklyBudgetRemaining = 0;
         }
 
-        _epoch = 0;
+        emit FundsReturnedToTreasury(purchasedOhm);
     }
 
     // ============ PERIODIC TASK ============ //
@@ -988,21 +1051,29 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      The asset is registered in the enabled state.
+    ///
+    ///      The function reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault address is the zero address.
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset.
-    ///      - The vault's underlying asset is already used by another registered vault.
+    ///      - Another registered vault uses the same reserve token.
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault is sell-shares and its share decimals do not match its reserve decimals.
-    ///      - The share is greater than `1e18`.
+    ///      - The yield buyback share exceeds 100% (`1e18`).
+    ///      - `setAsBackingVault_` is set together with `sellShares_`.
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
         uint256 initialReserveBalance_,
         uint256 initialConversionRate_,
-        bool sellShares_
+        uint256 nextYield_,
+        bool sellShares_,
+        bool setAsBackingVault_
     ) external override onlyAdminRole {
         _requireNonzeroAddress(vault_, "vault");
         _requireValidYieldBuybackShare(yieldBuybackShare_);
@@ -1040,7 +1111,7 @@ contract YieldRepurchaseFacilityV2 is
             yieldBuybackShare: yieldBuybackShare_,
             lastReserveBalance: initialReserveBalance_,
             lastConversionRate: initialConversionRate_,
-            nextYield: 0,
+            nextYield: nextYield_,
             weeklyBudgetRemaining: 0,
             prefundedShares: 0,
             prefundedReserve: 0
@@ -1048,10 +1119,16 @@ contract YieldRepurchaseFacilityV2 is
         vaults.push(vault_);
 
         emit AssetAdded(vault_, reserve_, yieldBuybackShare_);
+        emit NextYieldSet(reserve_, nextYield_);
+
+        if (setAsBackingVault_) _setBackingVault(vault_, _assetConfigs[vault_]);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered.
     ///      - The vault is currently enabled.
@@ -1081,27 +1158,30 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if the caller does not hold the admin role or the address is zero.
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if the caller does not hold the admin role or the address is zero.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
         _setBackingOracle(backingOracle_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered or is currently disabled.
     function setBackingVault(address vault_) external override onlyAdminRole {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
-        if (config.sellShares)
-            revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(vault_);
-
-        backingVault = vault_;
-        emit BackingVaultSet(vault_);
+        _setBackingVault(vault_, _requireRegistered(vault_));
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - Either argument is the zero address.
     function setBondContracts(
@@ -1120,6 +1200,19 @@ contract YieldRepurchaseFacilityV2 is
         emit BackingOracleSet(backingOracle_);
     }
 
+    /// @notice Makes a registered vault the backing vault.
+    /// @dev Reverts if:
+    ///      - The asset is disabled.
+    ///      - The asset sells vault shares.
+    function _setBackingVault(address vault_, ReserveAsset storage config_) private {
+        if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
+        if (config_.sellShares)
+            revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(vault_);
+
+        backingVault = vault_;
+        emit BackingVaultSet(vault_);
+    }
+
     /// @notice Validates and sets the bond auctioneer and teller, then emits `BondContractsSet`.
     /// @dev Reverts if either address is zero.
     function _setBondContracts(address bondAuctioneer_, address teller_) internal {
@@ -1132,7 +1225,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      The offset is subtracted from the Clearinghouse's principal receivables when
+    ///      the weekly reset projects the next yield, so it is expected that a correction
+    ///      made at any point before the reset keeps the excess receivables out of
+    ///      the projected yield.
+    ///
+    ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The Clearinghouse is the zero address.
     ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
@@ -1142,8 +1243,6 @@ contract YieldRepurchaseFacilityV2 is
     ) external override onlyAdminRole {
         _setClearinghouseOffset(clearinghouse_, offset_);
     }
-
-    // ============ MANAGER FUNCTIONS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
@@ -1182,37 +1281,11 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The 10% cap only constrains the adjustment of an existing non-zero `nextYield`.
-    ///      Seeding the projection from zero is unbounded, so it is restricted to the admin
-    ///      role.
+    /// @dev See `setClearinghouseOffset` for the timing of the offset. The manager can
+    ///      only increase the offset, which reduces the projected yield; lowering the
+    ///      offset requires the admin.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the yrf_manager or admin role.
-    ///      - The current `nextYield` is zero and the caller does not hold the admin role.
-    ///      - The vault is not registered.
-    ///      - The new value increases an existing non-zero `nextYield` by more than 10%.
-    function adjustNextYield(
-        address vault_,
-        uint256 newNextYield_
-    ) external override onlyYrfManagerOrAdminRole {
-        ReserveAsset storage config = _requireRegistered(vault_);
-
-        uint256 previous = config.nextYield;
-        if (previous == 0) {
-            _requireRole(msg.sender, ADMIN_ROLE);
-        } else if (
-            newNextYield_ > previous &&
-            newNextYield_.mulDiv(_ONE_HUNDRED_PERCENT, previous) > _MAX_INCREASE_FACTOR
-        ) {
-            revert IYieldRepurchaseFacilityV2_TooMuchIncrease();
-        }
-
-        config.nextYield = newNextYield_;
-        emit NextYieldAdjusted(config.reserve, previous, newNextYield_);
-    }
-
-    /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
     ///      - The caller does not hold the yrf_manager role.
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
@@ -1227,10 +1300,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
-    ///      computed at the next weekly reset covers only the period after the vault is
-    ///      re-enabled and the yield accrued while the vault was disabled is retained by
-    ///      the treasury.
+    /// @dev The next yield is reset to zero and the yield snapshots are refreshed, so a
+    ///      value left over from before the asset was disabled does not enter the weekly
+    ///      budget; the yield projection resumes at the following weekly reset.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the yrf_manager or admin role.
@@ -1241,17 +1313,14 @@ contract YieldRepurchaseFacilityV2 is
         if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled(vault_);
 
         config.isAssetEnabled = true;
+        config.nextYield = 0;
         _refreshSnapshots(vault_, config);
 
         emit AssetEnabled(vault_);
+        emit NextYieldSet(config.reserve, 0);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reverts if:
-    ///      - The caller does not hold the yrf_manager or admin role.
-    ///      - The vault is not registered.
-    ///      - The vault is already disabled.
-    ///      - The vault is currently set as the `backingVault`.
     function disableAsset(address vault_) external override onlyYrfManagerOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled(vault_);
@@ -1261,7 +1330,7 @@ contract YieldRepurchaseFacilityV2 is
         emit AssetDisabled(vault_);
     }
 
-    // ============ YIELD HELPERS ============ //
+    // ============ HELPERS ============ //
 
     /// @notice The vault's conversion rate: the reserve value of one whole share unit.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
@@ -1549,9 +1618,18 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ERC165 ============ //
 
     /// @inheritdoc EnablerV2
+    /// @dev The override resolves the diamond between the enabler mix-ins and adds the
+    ///      identifiers of the interfaces implemented by the facility itself. The
+    ///      `IReEnabler` and `IGracePeriod` identifiers are advertised by the base chain.
     function supportsInterface(
         bytes4 interfaceId_
-    ) public view virtual override(EnablerV2, IPeriodicTask) returns (bool) {
+    )
+        public
+        view
+        virtual
+        override(PolicyReEnabler, ReEnablerGracePeriod, IPeriodicTask)
+        returns (bool)
+    {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IYieldRepurchaseFacilityV2).interfaceId ||

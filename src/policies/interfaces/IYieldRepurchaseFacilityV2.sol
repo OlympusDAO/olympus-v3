@@ -113,6 +113,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///        in the backing vault's reserve decimals.
     event OhmPurchasesProcessed(uint256 ohmBurned, uint256 backingWithdrawn);
 
+    /// @notice Emitted when the funds held by the facility are returned to the treasury.
+    /// @param ohmBurned The amount of purchased OHM that was burned.
+    event FundsReturnedToTreasury(uint256 ohmBurned);
+
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the enable payload length does not match the expected layout.
@@ -250,23 +254,32 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 prefundedReserve;
     }
 
-    // ============ ADMIN FUNCTIONS ============ //
+    /// @notice A per-vault seed of the `nextYield` value.
+    struct NextYieldSeed {
+        address vault;
+        uint256 nextYield;
+    }
 
-    /// @notice Whitelist a new ERC4626 vault for yield extraction and buybacks.
-    /// @param vault_ The ERC4626 vault to whitelist.
-    /// @param yieldBuybackShare_ The share of yield routed to buybacks (`1e18` = 100%).
-    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve decimals.
-    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot (the reserve
-    ///        value of `10 ** reserveDecimals` vault shares).
-    /// @param sellShares_ True to sell the vault's shares on bond markets (for a vault
-    ///        whose shares cannot be synchronously redeemed, e.g. sUSDe); false redeems the shares
-    ///        to the reserve and sells the reserve.
+    // ============ FUNCTIONS ============ //
+
+    /// @notice Registers an ERC4626 vault as a reserve asset for yield extraction and buybacks,
+    ///         optionally seeding its next yield and making it the backing vault.
+    /// @dev Callable by the admin role.
+    /// @param vault_ The ERC4626 vault to register.
+    /// @param yieldBuybackShare_ The share of the yield routed to buybacks (`1e18` = 100%).
+    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve units.
+    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot.
+    /// @param nextYield_ The initial `nextYield`, in reserve units.
+    /// @param sellShares_ Whether bond markets sell the vault shares instead of the reserve.
+    /// @param setAsBackingVault_ Whether the vault becomes the backing vault.
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
         uint256 initialReserveBalance_,
         uint256 initialConversionRate_,
-        bool sellShares_
+        uint256 nextYield_,
+        bool sellShares_,
+        bool setAsBackingVault_
     ) external;
 
     /// @notice Remove a vault from the whitelist and return any leftover balance to the treasury.
@@ -286,14 +299,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param teller_ The new bond teller.
     function setBondContracts(address bondAuctioneer_, address teller_) external;
 
-    /// @notice Set a Clearinghouse receivables offset (used to neutralize phantom
+    /// @notice Sets the Clearinghouse receivables offset (used to neutralize phantom
     ///         receivables that would otherwise inflate the projected yield).
     /// @dev Restricted to the admin role.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param offset_ The new cumulative offset.
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
-
-    // ============ MANAGER FUNCTIONS ============ //
 
     /// @notice Adjust the buyback share for a registered vault.
     /// @param vault_ The vault whose share is updated.
@@ -304,15 +315,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param initialDiscount_ The new initial discount (`1e18` = 100%).
     function setInitialDiscount(uint256 initialDiscount_) external;
 
-    /// @notice Override the projected next-week yield for a vault.
-    /// @dev Adjusting an existing non-zero projection is capped at a 10% increase and is
-    ///      available to the yrf_manager or admin role. Seeding the projection from zero is
-    ///      unbounded and is therefore restricted to the admin role.
-    /// @param vault_ The vault whose projection is overridden.
-    /// @param newNextYield_ The new projected yield.
-    function adjustNextYield(address vault_, uint256 newNextYield_) external;
-
-    /// @notice Increase the cumulative offset of a Clearinghouse.
+    /// @notice Increases the receivables offset of a Clearinghouse.
     /// @dev Restricted to the yrf_manager role.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param additionalOffset_ The amount to add to the existing offset.
@@ -321,17 +324,19 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 additionalOffset_
     ) external;
 
-    /// @notice Re-enable a previously disabled vault.
-    /// @dev Refreshes the vault's balance and conversion rate snapshots, so the projection
-    ///      computed at the next weekly reset covers only the period after the vault is
-    ///      re-enabled and the yield accrued while the vault was disabled is retained by
-    ///      the treasury.
+    /// @notice Re-enables a previously disabled vault.
     /// @param vault_ The vault to enable.
     function enableAsset(address vault_) external;
 
-    /// @notice Pause a vault. While paused the vault is skipped by `execute()`.
+    /// @notice Pauses a vault. While disabled the vault is skipped by `execute()`.
     /// @param vault_ The vault to pause.
     function disableAsset(address vault_) external;
+
+    /// @notice Burns the purchased OHM held by the facility, transfers all remaining OHM,
+    ///         vault, and reserve balances to the treasury, and zeroes the per-vault
+    ///         prefunded balances and weekly budgets.
+    /// @dev Callable by the emergency role and the admin role.
+    function returnFundsToTreasury() external;
 
     // ============ VIEW FUNCTIONS ============ //
 

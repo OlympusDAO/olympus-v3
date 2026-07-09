@@ -34,6 +34,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
     UserFactory internal userCreator;
     address internal guardian;
     address internal heart;
+    address internal manager;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -60,6 +61,8 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
     uint256 internal backingPerToken = 1133 * 1e16;
     // 3% initial bond discount (18 decimals).
     uint256 internal initialDiscount = 3e16;
+    // Grace window for the manager reEnable after a disable.
+    uint32 internal gracePeriod = 7 days;
 
     /// @notice Deploys the common stack: bond system, tokens, kernel and modules, the facility, the
     ///         backing oracle and the roles. Sets the oracle price to 10e18 and authorizes the
@@ -73,6 +76,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
             address[] memory users = userCreator.create(2);
             guardian = users[0];
             heart = users[1];
+            manager = makeAddr("manager");
             vm.label(guardian, "guardian");
             vm.label(heart, "heart");
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
@@ -134,7 +138,8 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
                 address(ohm),
                 address(backingOracle),
                 address(auctioneer),
-                address(teller)
+                address(teller),
+                gracePeriod
             );
             vm.label(address(yieldRepo), "yieldRepo");
             rolesAdmin = new RolesAdmin(kernel);
@@ -155,6 +160,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
 
         rolesAdmin.grantRole("heart", address(heart));
         rolesAdmin.grantRole("admin", guardian);
+        rolesAdmin.grantRole("manager", manager);
 
         // V2 creates bond markets with a callback, which requires the market owner to be
         // authorized on the auctioneer.
@@ -167,7 +173,9 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
     function _enableFacility() internal {
         vm.startPrank(guardian);
         backingOracle.enable(abi.encode(backingPerToken));
-        yieldRepo.enable(abi.encode(initialDiscount));
+        yieldRepo.enable(
+            abi.encode(initialDiscount, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+        );
         vm.stopPrank();
     }
 
