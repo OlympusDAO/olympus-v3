@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity >=0.8.24;
 
 /// @title IOlympusBackingOracle
 /// @notice The interface for the OlympusBackingOracle policy, which serves as the canonical OHM backing value.
