@@ -211,11 +211,6 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param decimals The decimals reported by the `PRICE` module.
     error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals(uint8 decimals);
 
-    /// @notice Thrown when attempting to rescue OHM, a registered vault or a registered
-    ///         reserve token.
-    /// @param token The token that cannot be rescued.
-    error IYieldRepurchaseFacilityV2_CannotRescue(address token);
-
     // ============ STRUCTS ============ //
 
     /// @notice The per-reserve configuration and state tracked by the facility.

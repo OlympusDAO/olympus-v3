@@ -13,6 +13,7 @@ import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReser
 import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/IYieldRepurchaseFacilityV2.sol";
 
@@ -34,7 +35,6 @@ import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {Rescueable} from "src/bases/Rescueable.sol";
 
 // Constants
 import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -77,10 +77,10 @@ import {ADMIN_ROLE, HEART_ROLE, YRF_MANAGER_ROLE} from "src/policies/utils/RoleD
 contract YieldRepurchaseFacilityV2 is
     Policy,
     PolicyEnablerV2,
-    Rescueable,
     ReentrancyGuardTransient,
     IBondCallback,
     IPeriodicTask,
+    IBasicRescueable,
     IVersioned,
     IYieldRepurchaseFacilityV2
 {
@@ -1513,33 +1513,37 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ RESCUE ============ //
 
-    /// @inheritdoc Rescueable
-    /// @dev The balances of OHM, registered vault shares and registered reserves are tracked
-    ///      by the internal accounting, so sweeping them would desynchronise it. Use the
-    ///      disable or removeAsset functions to return tracked assets to the TRSRY instead.
+    /// @inheritdoc IBasicRescueable
+    /// @dev Sweeps the rescuable balance of `token_` held by the facility to the TRSRY.
     ///
-    ///      Reverts if:
-    ///      - The token is OHM, a registered vault or a registered reserve.
-    function rescue(address token_, address payable to_) public override {
-        if (token_ == address(_OHM)) revert IYieldRepurchaseFacilityV2_CannotRescue(token_);
+    ///      For tokens tracked by the internal accounting, the rescue is capped at the excess
+    ///      of the balance over the tracked amount:
+    ///      - OHM is capped at the balance above the purchased-OHM accumulator.
+    ///      - A registered vault is capped at the share balance above `prefundedShares`.
+    ///      - A registered reserve is capped at the balance above `prefundedReserve`.
+    ///
+    ///      Warning. Rescuing the excess of a registered reserve, or of a sell-shares vault,
+    ///      can defund an open bond market whose capacity counted the donated balance.
+    ///      Purchases on such a market revert until the next daily cycle creates a market sized
+    ///      to the funds actually held.
+    ///
+    ///      Reverts if the caller does not hold the admin role.
+    function rescue(address token_) external override onlyAdminRole {
+        // The tracked amount backs the internal accounting and must stay on the facility.
+        uint256 tracked;
+        if (token_ == address(_OHM)) tracked = _ohmPurchased;
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
-            if (token_ == vault || token_ == _assetConfigs[vault].reserve)
-                revert IYieldRepurchaseFacilityV2_CannotRescue(token_);
+            ReserveAsset storage config = _assetConfigs[vault];
+            if (token_ == vault) tracked += config.prefundedShares;
+            if (token_ == config.reserve) tracked += config.prefundedReserve;
         }
 
-        super.rescue(token_, to_);
-    }
-
-    function _authorizeRescue() internal view override {
-        _requireAdminRole();
-    }
-
-    function _requireAdminRole() private view {
-        _requireRole(msg.sender, ADMIN_ROLE);
+        uint256 amount = Math.saturatingSub(IERC20(token_).balanceOf(address(this)), tracked);
+        if (amount != 0) IERC20(token_).safeTransfer(address(TRSRY), amount);
     }
 
     // ============ ERC165 ============ //
@@ -1547,12 +1551,13 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc EnablerV2
     function supportsInterface(
         bytes4 interfaceId_
-    ) public view virtual override(EnablerV2, Rescueable, IPeriodicTask) returns (bool) {
+    ) public view virtual override(EnablerV2, IPeriodicTask) returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IYieldRepurchaseFacilityV2).interfaceId ||
             interfaceId_ == type(IBondCallback).interfaceId ||
             interfaceId_ == type(IPeriodicTask).interfaceId ||
+            interfaceId_ == type(IBasicRescueable).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
