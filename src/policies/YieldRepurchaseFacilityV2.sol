@@ -1527,8 +1527,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      Purchases on such a market revert until the next daily cycle creates a market sized
     ///      to the funds actually held.
     ///
-    ///      Reverts if the caller does not hold the admin role.
-    function rescue(address token_) external override onlyAdminRole {
+    ///      Reverts if the caller holds neither the yrf_manager role nor the admin role.
+    function rescue(address token_) external override onlyYrfManagerOrAdminRole {
         // The tracked amount backs the internal accounting and must stay on the facility.
         uint256 tracked;
         if (token_ == address(_OHM)) tracked = _ohmPurchased;
