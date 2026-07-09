@@ -2,14 +2,21 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 // Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -22,6 +29,8 @@ import {BurnerLoansConfig} from "src/policies/abstracts/BurnerLoansConfig.sol";
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
 /// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
 contract BurnerLoans is BurnerLoansConfig {
+    using TransferHelper for ERC20;
+
     // ========== INTERNAL STRUCTS ========== //
 
     struct RequiredCollateralUsdInputs {
@@ -163,21 +172,77 @@ contract BurnerLoans is BurnerLoansConfig {
     // ========== PREVIEW FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoans
+    /// @notice Returns a current-state quote for a collateral deposit.
+    /// @dev For vault custody, the returned credit and total can differ from the actual values
+    ///      returned by `depositCollateral`; the write result is authoritative.
+    /// @dev Reverts if:
+    ///      - Burner Loans, the collateral asset, or DepositManager is disabled.
+    ///      - The asset-period custody path is unsupported.
+    ///      - `amount_` is zero, below the DepositManager minimum, or exceeds its operator cap.
+    ///      - Vault rounding produces zero credit.
     function previewDepositCollateral(
-        address,
-        uint256,
-        address
-    ) external pure returns (uint256, uint256) {
-        revert BurnerLoans_NotImplemented();
+        address asset_,
+        uint256 amount_,
+        address onBehalfOf_
+    ) external view returns (uint256, uint256) {
+        _requireEnabled();
+        _requireAssetEnabled(asset_);
+        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
+
+        IDepositManager.AssetConfiguration
+            memory assetConfiguration = _validateDepositCustodySupport(asset_);
+        _validateDepositAmount(asset_, assetConfiguration, amount_);
+
+        uint256 depositedCollateral = _previewDepositAmount(assetConfiguration.vault, amount_);
+        if (depositedCollateral == 0) revert BurnerLoans_ZeroCollateralCredit();
+        return (
+            depositedCollateral,
+            _positions[onBehalfOf_][asset_].depositedCollateral + depositedCollateral
+        );
     }
 
     /// @inheritdoc IBurnerLoans
+    /// @dev Asset disable does not block this exit preview. Reverts if:
+    ///      - Burner Loans or DepositManager is disabled.
+    ///      - The asset-period custody path is unsupported.
+    ///      - `amount_` is zero or exceeds credited collateral.
+    ///      - PRICE is unavailable or stale with debt.
+    ///      `executable` reports only local amount and health feasibility; external custody execution
+    ///      can still revert.
     function previewWithdrawCollateral(
-        address,
-        uint256,
-        address
-    ) external pure returns (WithdrawPreview memory) {
-        revert BurnerLoans_NotImplemented();
+        address asset_,
+        uint256 amount_,
+        address onBehalfOf_
+    ) external view returns (WithdrawPreview memory) {
+        _requireEnabled();
+        AssetConfig storage config = _requireAssetConfigured(asset_);
+        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
+
+        IDepositManager.AssetConfiguration
+            memory assetConfiguration = _validateWithdrawCustodySupport(asset_);
+        Position storage position = _positions[onBehalfOf_][asset_];
+        if (amount_ > position.depositedCollateral) {
+            revert BurnerLoans_InsufficientCollateral(amount_, position.depositedCollateral);
+        }
+
+        uint256 remainingCollateral = position.depositedCollateral - amount_;
+        uint256 resultingHealthFactor = _positionHealthFactor(
+            asset_,
+            config,
+            remainingCollateral,
+            position.debtOhm
+        );
+
+        uint256 returnAmount = _previewWithdrawAmount(assetConfiguration.vault, amount_);
+        return
+            WithdrawPreview({
+                returnToken: asset_,
+                returnAmount: returnAmount,
+                remainingDepositedCollateral: remainingCollateral,
+                resultingHealthFactor: resultingHealthFactor,
+                executable: returnAmount != 0 &&
+                    (position.debtOhm == 0 || resultingHealthFactor >= _WAD)
+            });
     }
 
     /// @inheritdoc IBurnerLoans
@@ -208,27 +273,79 @@ contract BurnerLoans is BurnerLoansConfig {
     // ========== USER FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoans
+    /// @dev Reverts if:
+    ///      - Burner Loans, the collateral asset, or DepositManager is disabled.
+    ///      - The caller is not the owner or an authorized operator.
+    ///      - Custody is unsupported.
+    ///      - `amount_` is zero, below the DepositManager minimum, or exceeds its operator cap.
+    ///      - Token transfer fails, custody leaves residual collateral, or vault rounding produces
+    ///        zero credit.
     function depositCollateral(
         address asset_,
-        uint256,
+        uint256 amount_,
         address onBehalfOf_
-    ) external view returns (uint256, uint256) {
-        _requireAssetConfigured(asset_);
+    ) external returns (uint256, uint256) {
+        _requireEnabled();
+        _requireAssetEnabled(asset_);
+        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        revert BurnerLoans_NotImplemented();
+        IDepositManager.AssetConfiguration
+            memory assetConfiguration = _validateDepositCustodySupport(asset_);
+        _validateDepositAmount(asset_, assetConfiguration, amount_);
+
+        uint256 depositedCollateral = _depositCollateralToCustody(asset_, amount_);
+        if (depositedCollateral == 0) revert BurnerLoans_ZeroCollateralCredit();
+        Position storage position = _positions[onBehalfOf_][asset_];
+        position.depositedCollateral += depositedCollateral;
+
+        emit CollateralDeposited(msg.sender, asset_, onBehalfOf_, amount_, depositedCollateral);
+
+        return (depositedCollateral, position.depositedCollateral);
     }
 
     /// @inheritdoc IBurnerLoans
+    /// @dev Asset disable does not block this exit. Reverts if:
+    ///      - Burner Loans or DepositManager is disabled.
+    ///      - The caller is not the owner or an authorized operator.
+    ///      - Custody is unsupported.
+    ///      - `amount_` is zero, exceeds credited collateral, or rounds to zero output.
+    ///      - `recipient_` is zero, PRICE is unavailable or stale with debt, or health falls below
+    ///        1e18 after the withdrawal.
     function withdrawCollateral(
         address asset_,
-        uint256,
+        uint256 amount_,
         address onBehalfOf_,
         address recipient_
-    ) external view returns (address, uint256, uint256, uint256) {
+    )
+        external
+        returns (
+            address tokenOut,
+            uint256 amountOut,
+            uint256 remainingDepositedCollateral,
+            uint256 healthFactor_
+        )
+    {
+        _requireEnabled();
         _requireAssetConfigured(asset_);
+        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
-        revert BurnerLoans_NotImplemented();
+        IDepositManager.AssetConfiguration
+            memory assetConfiguration = _validateWithdrawCustodySupport(asset_);
+        if (_previewWithdrawAmount(assetConfiguration.vault, amount_) == 0)
+            revert BurnerLoans_ZeroCollateralWithdrawal();
+
+        (remainingDepositedCollateral, healthFactor_) = _debitCollateral(
+            asset_,
+            amount_,
+            onBehalfOf_
+        );
+        amountOut = _withdrawCollateralFromCustody(asset_, amount_, recipient_);
+        if (amountOut == 0) revert BurnerLoans_ZeroCollateralWithdrawal();
+
+        emit CollateralWithdrawn(msg.sender, asset_, onBehalfOf_, recipient_, amount_);
+
+        tokenOut = asset_;
     }
 
     /// @inheritdoc IBurnerLoans
@@ -275,6 +392,280 @@ contract BurnerLoans is BurnerLoansConfig {
     /// @inheritdoc IBurnerLoans
     function harvestYield(address) external pure returns (uint256) {
         revert BurnerLoans_NotImplemented();
+    }
+
+    // ========== INTERNAL CUSTODY HELPERS ========== //
+
+    /// @notice Validates DepositManager asset-period support for Burner Loans custody.
+    function _validateDepositCustodySupport(
+        address asset_
+    ) internal view returns (IDepositManager.AssetConfiguration memory assetConfiguration) {
+        _requireDepositManagerEnabled();
+
+        assetConfiguration = _DEPOSIT_MANAGER.getAssetConfiguration(IERC20(asset_));
+        if (!assetConfiguration.isConfigured) {
+            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        }
+
+        IDepositManager.AssetPeriodStatus memory assetPeriod = _DEPOSIT_MANAGER.isAssetPeriod(
+            IERC20(asset_),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(this)
+        );
+        if (!assetPeriod.isConfigured || !assetPeriod.isEnabled) {
+            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        }
+
+        return assetConfiguration;
+    }
+
+    /// @notice Validates DepositManager asset-period support for existing custody exits.
+    function _validateWithdrawCustodySupport(
+        address asset_
+    ) internal view returns (IDepositManager.AssetConfiguration memory assetConfiguration) {
+        _requireDepositManagerEnabled();
+
+        assetConfiguration = _DEPOSIT_MANAGER.getAssetConfiguration(IERC20(asset_));
+        if (!assetConfiguration.isConfigured) {
+            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        }
+
+        IDepositManager.AssetPeriodStatus memory assetPeriod = _DEPOSIT_MANAGER.isAssetPeriod(
+            IERC20(asset_),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(this)
+        );
+        if (!assetPeriod.isConfigured) {
+            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        }
+
+        return assetConfiguration;
+    }
+
+    /// @notice Reverts unless the configured DepositManager exposes an enabled custody surface.
+    /// @dev DepositManager lifecycle is exposed through `IEnabler`, not `IDepositManager`. A
+    ///      missing lifecycle surface is treated as unavailable custody so previews and writes
+    ///      fail before quoting or moving collateral.
+    /// @dev Reverts if:
+    ///      - The manager is disabled.
+    ///      - The manager does not implement the `IEnabler.isEnabled()` view.
+    ///      Reverts with `BurnerLoans_InvalidDepositManager` in either case.
+    function _requireDepositManagerEnabled() internal view {
+        try IEnabler(address(_DEPOSIT_MANAGER)).isEnabled() returns (bool enabled) {
+            if (!enabled) revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        } catch {
+            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
+        }
+    }
+
+    /// @notice Mirrors DepositManager deposit amount constraints for previews and early write validation.
+    function _validateDepositAmount(
+        address asset_,
+        IDepositManager.AssetConfiguration memory assetConfiguration_,
+        uint256 amount_
+    ) internal view {
+        if (amount_ < assetConfiguration_.minimumDeposit) {
+            revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                asset_,
+                amount_,
+                assetConfiguration_.minimumDeposit
+            );
+        }
+
+        (, uint256 assetAmountBefore) = _DEPOSIT_MANAGER.getOperatorAssets(
+            IERC20(asset_),
+            address(this)
+        );
+        if (assetAmountBefore + amount_ > assetConfiguration_.depositCap) {
+            revert IAssetManager.AssetManager_DepositCapExceeded(
+                asset_,
+                assetAmountBefore,
+                assetConfiguration_.depositCap
+            );
+        }
+    }
+
+    /// @notice Returns a current-state ERC4626 quote for credited DepositManager collateral.
+    /// @dev A generic vault cannot expose its post-deposit share rate in a view call, so this quote
+    ///      can differ from the actual credit returned by DepositManager if vault state changes or
+    ///      the vault applies different post-deposit accounting.
+    function _previewDepositAmount(
+        address vault_,
+        uint256 amount_
+    ) internal view returns (uint256) {
+        if (vault_ == address(0)) return amount_;
+
+        IERC4626 vault = IERC4626(vault_);
+        uint256 shares = vault.previewDeposit(amount_);
+        if (shares == 0) return 0;
+
+        return vault.previewRedeem(shares);
+    }
+
+    /// @notice Previews the token amount returned by DepositManager for a collateral withdrawal.
+    function _previewWithdrawAmount(
+        address vault_,
+        uint256 amount_
+    ) internal view returns (uint256) {
+        if (vault_ == address(0)) return amount_;
+
+        IERC4626 vault = IERC4626(vault_);
+        return vault.previewRedeem(vault.convertToShares(amount_));
+    }
+
+    /// @notice Pulls collateral from the caller into DepositManager custody.
+    function _depositCollateralToCustody(
+        address asset_,
+        uint256 amount_
+    ) internal returns (uint256) {
+        ERC20 asset = ERC20(asset_);
+        uint256 startingBalance = IERC20(asset_).balanceOf(address(this));
+        asset.safeTransferFrom(msg.sender, address(this), amount_);
+        asset.safeApprove(address(_DEPOSIT_MANAGER), amount_);
+
+        (, uint256 depositedCollateral) = _DEPOSIT_MANAGER.deposit(
+            IDepositManager.DepositParams({
+                asset: IERC20(asset_),
+                depositPeriod: BurnerLoansConstants.DEPOSIT_PERIOD,
+                depositor: address(this),
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+
+        uint256 residualBalance = IERC20(asset_).balanceOf(address(this));
+        if (residualBalance > startingBalance)
+            revert BurnerLoans_ResidualCollateralBalance(asset_, residualBalance - startingBalance);
+
+        _approveCustodyReceiptBurn(asset_);
+
+        return depositedCollateral;
+    }
+
+    /// @notice Allows DepositManager to burn BurnerLoans-held receipt tokens on later withdrawals.
+    function _approveCustodyReceiptBurn(address asset_) internal {
+        IReceiptTokenManager receiptTokenManager = _DEPOSIT_MANAGER.getReceiptTokenManager();
+        if (address(receiptTokenManager) == address(0)) return;
+
+        uint256 receiptTokenId = _DEPOSIT_MANAGER.getReceiptTokenId(
+            IERC20(asset_),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(this)
+        );
+        if (
+            receiptTokenManager.allowance(
+                address(this),
+                address(_DEPOSIT_MANAGER),
+                receiptTokenId
+            ) != type(uint256).max
+        ) {
+            if (
+                !receiptTokenManager.approve(
+                    address(_DEPOSIT_MANAGER),
+                    receiptTokenId,
+                    type(uint256).max
+                )
+            ) {
+                revert BurnerLoans_ReceiptApprovalFailed(address(receiptTokenManager));
+            }
+        }
+    }
+
+    /// @notice Withdraws collateral from DepositManager custody to recipient_.
+    function _withdrawCollateralFromCustody(
+        address asset_,
+        uint256 amount_,
+        address recipient_
+    ) internal returns (uint256) {
+        return
+            _DEPOSIT_MANAGER.withdraw(
+                IDepositManager.WithdrawParams({
+                    asset: IERC20(asset_),
+                    depositPeriod: BurnerLoansConstants.DEPOSIT_PERIOD,
+                    depositor: address(this),
+                    recipient: recipient_,
+                    amount: amount_,
+                    isWrapped: false
+                })
+            );
+    }
+
+    /// @notice Debits position collateral after validating resulting health.
+    function _debitCollateral(
+        address asset_,
+        uint256 amount_,
+        address onBehalfOf_
+    ) internal returns (uint256 remainingCollateral, uint256 resultingHealthFactor) {
+        Position storage position = _positions[onBehalfOf_][asset_];
+        if (amount_ > position.depositedCollateral) {
+            revert BurnerLoans_InsufficientCollateral(amount_, position.depositedCollateral);
+        }
+
+        remainingCollateral = position.depositedCollateral - amount_;
+        resultingHealthFactor = _positionHealthFactor(
+            asset_,
+            _assetConfigs[asset_],
+            remainingCollateral,
+            position.debtOhm
+        );
+        if (position.debtOhm != 0 && resultingHealthFactor < _WAD) {
+            revert BurnerLoans_UnhealthyWithdrawal(resultingHealthFactor);
+        }
+
+        position.depositedCollateral = remainingCollateral;
+        if (remainingCollateral == 0 && position.debtOhm == 0) {
+            position.status = PositionStatus.NoDebt;
+        }
+    }
+
+    /// @notice Calculates health for a prospective position state using fresh PRICE data.
+    /// @dev Debt-free positions deliberately do not require PRICE freshness.
+    function _positionHealthFactor(
+        address asset_,
+        AssetConfig memory config_,
+        uint256 depositedCollateral_,
+        uint256 debtOhm_
+    ) internal view returns (uint256) {
+        if (debtOhm_ == 0) return type(uint256).max;
+
+        uint48 observationFrequency = _PRICE.observationFrequency();
+        (uint256 ohmUsdPrice, ) = _getFreshPrice(address(_OHM), observationFrequency);
+        (uint256 collateralUsdPrice, ) = _getFreshPrice(asset_, observationFrequency);
+        uint8 ohmDecimals = _OHM.decimals();
+
+        uint256 riskAdjustedCollateralUsd = _riskAdjustedCollateralUsd(
+            _collateralValueUsd(
+                depositedCollateral_,
+                collateralUsdPrice,
+                config_.collateralDecimals
+            ),
+            config_.collateralFactorBps
+        );
+        uint256 requiredCollateralUsd = _requiredCollateralUsd(
+            RequiredCollateralUsdInputs({
+                debtValueUsd: _debtValueUsd(debtOhm_, ohmUsdPrice, ohmDecimals),
+                debtOhm: debtOhm_,
+                backingPerOhmUsd: ohmUsdPrice,
+                ohmDecimals: ohmDecimals,
+                minCollateralRatioBps: config_.minCollateralRatioBps,
+                backingMultiplierBps: config_.backingMultiplierBps
+            })
+        );
+
+        return _healthFactor(riskAdjustedCollateralUsd, requiredCollateralUsd);
+    }
+
+    /// @notice Reads a non-zero PRICE value whose timestamp is within one observation window.
+    function _getFreshPrice(
+        address asset_,
+        uint48 observationFrequency_
+    ) internal view returns (uint256 price, uint48 timestamp) {
+        (price, timestamp) = _PRICE.getPrice(asset_, IPRICEv2.Variant.CURRENT);
+        if (price == 0 || timestamp == 0) revert BurnerLoans_InvalidPrice();
+
+        if (block.timestamp > uint256(timestamp) + uint256(observationFrequency_)) {
+            revert BurnerLoans_InvalidPrice();
+        }
     }
 
     // ========== INTERNAL MATH HELPERS ========== //

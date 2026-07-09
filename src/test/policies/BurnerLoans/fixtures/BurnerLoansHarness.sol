@@ -127,6 +127,14 @@ contract BurnerLoansHarness is BurnerLoans {
         assetActiveDebtOhm[asset_] = assetActiveDebtOhm_;
     }
 
+    function setPositionForTest(
+        address asset_,
+        address owner_,
+        IBurnerLoans.Position memory position_
+    ) external {
+        _positions[owner_][asset_] = position_;
+    }
+
     function MINTR() external view returns (MINTRv1) {
         return _MINTR;
     }

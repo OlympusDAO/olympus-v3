@@ -4,6 +4,7 @@ pragma solidity >=0.8.20;
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -19,8 +20,15 @@ contract MockDepositManager is IDepositManager {
     AssetPeriod[] internal _assetPeriods;
     uint256[] internal _receiptTokenIds;
     uint256 internal _nextReceiptTokenId = 1;
+    bool public isEnabled = true;
+    bool public depositReverts;
+    bool public withdrawReverts;
+    bool public depositActualAmountOverrideEnabled;
+    uint256 public depositActualAmountOverride;
 
     mapping(IERC20 asset => AssetConfiguration config) internal _assetConfigurations;
+    mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
+    mapping(bytes32 liabilitiesKey => uint256 liabilities) internal _operatorLiabilities;
     mapping(bytes32 periodKey => uint256 indexPlusOne) internal _assetPeriodIndexPlusOne;
     mapping(bytes32 periodKey => uint256 receiptTokenId) internal _receiptTokenIdsByPeriod;
 
@@ -38,19 +46,81 @@ contract MockDepositManager is IDepositManager {
     function deposit(
         DepositParams calldata params
     ) external override returns (uint256 receiptTokenId, uint256 actualAmount) {
-        if (!asset.transferFrom(params.depositor, address(this), params.amount)) {
+        if (depositReverts) revert MockDepositManager_TransferFailed();
+        _requireEnabledPeriod(params.asset, params.depositPeriod, msg.sender);
+
+        AssetConfiguration memory configuration = _assetConfigurations[params.asset];
+        if (params.amount < configuration.minimumDeposit) {
+            revert IAssetManager.AssetManager_MinimumDepositNotMet(
+                address(params.asset),
+                params.amount,
+                configuration.minimumDeposit
+            );
+        }
+
+        (, uint256 assetAmountBefore) = this.getOperatorAssets(params.asset, msg.sender);
+        if (assetAmountBefore + params.amount > configuration.depositCap) {
+            revert IAssetManager.AssetManager_DepositCapExceeded(
+                address(params.asset),
+                assetAmountBefore,
+                configuration.depositCap
+            );
+        }
+
+        if (!params.asset.transferFrom(params.depositor, address(this), params.amount)) {
             revert MockDepositManager_TransferFailed();
         }
-        return (1, params.amount);
+
+        uint256 shares;
+        if (configuration.vault == address(0)) {
+            shares = params.amount;
+            actualAmount = params.amount;
+        } else {
+            params.asset.approve(configuration.vault, params.amount);
+            shares = IERC4626(configuration.vault).deposit(params.amount, address(this));
+            actualAmount = IERC4626(configuration.vault).previewRedeem(shares);
+        }
+        if (depositActualAmountOverrideEnabled) {
+            actualAmount = depositActualAmountOverride;
+        }
+
+        _operatorShares[_getOperatorKey(params.asset, msg.sender)] += shares;
+        _operatorLiabilities[_getOperatorKey(params.asset, msg.sender)] += actualAmount;
+        receiptTokenId = _receiptTokenIdsByPeriod[
+            _assetPeriodKey(params.asset, params.depositPeriod, msg.sender)
+        ];
+        return (receiptTokenId, actualAmount);
     }
 
     function withdraw(
         WithdrawParams calldata params
     ) external override returns (uint256 actualAmount) {
-        if (!asset.transfer(params.recipient, params.amount)) {
-            revert MockDepositManager_TransferFailed();
+        if (withdrawReverts) revert MockDepositManager_TransferFailed();
+        _requireConfiguredPeriod(params.asset, params.depositPeriod, msg.sender);
+
+        _operatorLiabilities[_getOperatorKey(params.asset, msg.sender)] -= params.amount;
+
+        AssetConfiguration memory configuration = _assetConfigurations[params.asset];
+        bytes32 operatorKey = _getOperatorKey(params.asset, msg.sender);
+        if (configuration.vault == address(0)) {
+            _operatorShares[operatorKey] -= params.amount;
+            actualAmount = params.amount;
+            if (!params.asset.transfer(params.recipient, params.amount)) {
+                revert MockDepositManager_TransferFailed();
+            }
+        } else {
+            uint256 shares = IERC4626(configuration.vault).convertToShares(params.amount);
+            if (shares == 0 || IERC4626(configuration.vault).previewRedeem(shares) == 0) {
+                return 0;
+            }
+            _operatorShares[operatorKey] -= shares;
+            actualAmount = IERC4626(configuration.vault).redeem(
+                shares,
+                params.recipient,
+                address(this)
+            );
         }
-        return params.amount;
+        return actualAmount;
     }
 
     function maxClaimYield(IERC20, address) external pure override returns (uint256) {
@@ -61,8 +131,11 @@ contract MockDepositManager is IDepositManager {
         return 0;
     }
 
-    function getOperatorLiabilities(IERC20, address) external pure override returns (uint256) {
-        return 0;
+    function getOperatorLiabilities(
+        IERC20 asset_,
+        address operator_
+    ) external view override returns (uint256) {
+        return _operatorLiabilities[_getOperatorKey(asset_, operator_)];
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -164,6 +237,12 @@ contract MockDepositManager is IDepositManager {
         }
     }
 
+    function removeAssetPeriod(IERC20 asset_, uint8 depositPeriod_, address operator_) external {
+        bytes32 periodKey = _assetPeriodKey(asset_, depositPeriod_, operator_);
+        delete _assetPeriodIndexPlusOne[periodKey];
+        delete _receiptTokenIdsByPeriod[periodKey];
+    }
+
     function enableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
@@ -262,8 +341,15 @@ contract MockDepositManager is IDepositManager {
 
     // ========== IAssetManager FUNCTIONS ========== //
 
-    function getOperatorAssets(IERC20, address) external pure override returns (uint256, uint256) {
-        return (0, 0);
+    function getOperatorAssets(
+        IERC20 asset_,
+        address operator_
+    ) external view override returns (uint256 shares, uint256 sharesInAssets) {
+        shares = _operatorShares[_getOperatorKey(asset_, operator_)];
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        sharesInAssets = configuration.vault == address(0)
+            ? shares
+            : IERC4626(configuration.vault).previewRedeem(shares);
     }
 
     function getAssetConfiguration(
@@ -282,11 +368,54 @@ contract MockDepositManager is IDepositManager {
             interfaceId_ == type(IDepositManager).interfaceId;
     }
 
+    function setDepositReverts(bool depositReverts_) external {
+        depositReverts = depositReverts_;
+    }
+
+    function setWithdrawReverts(bool withdrawReverts_) external {
+        withdrawReverts = withdrawReverts_;
+    }
+
+    function setDepositActualAmountOverride(bool enabled_, uint256 amount_) external {
+        depositActualAmountOverrideEnabled = enabled_;
+        depositActualAmountOverride = amount_;
+    }
+
+    function _requireConfiguredPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal view {
+        if (_assetPeriodIndexPlusOne[_assetPeriodKey(asset_, depositPeriod_, operator_)] == 0) {
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
+        }
+    }
+
+    function _requireEnabledPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal view {
+        uint256 indexPlusOne = _assetPeriodIndexPlusOne[
+            _assetPeriodKey(asset_, depositPeriod_, operator_)
+        ];
+        if (indexPlusOne == 0) {
+            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
+        }
+        if (!_assetPeriods[indexPlusOne - 1].isEnabled) {
+            revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
+        }
+    }
+
     function _assetPeriodKey(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
     ) internal pure returns (bytes32) {
         return keccak256(abi.encode(asset_, depositPeriod_, operator_));
+    }
+
+    function _getOperatorKey(IERC20 asset_, address operator_) internal pure returns (bytes32) {
+        return keccak256(abi.encode(address(asset_), operator_));
     }
 }

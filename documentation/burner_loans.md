@@ -54,12 +54,14 @@ sequenceDiagram
     participant Vault as ERC4626 Vault
 
     Depositor->>BurnerLoans: depositCollateral(asset, amount, onBehalfOf)
-    BurnerLoans->>BurnerLoans: validate asset and amount
-    BurnerLoans->>BurnerLoans: increase credited collateral
-    BurnerLoans->>DepositManager: deposit credited principal
+    BurnerLoans->>BurnerLoans: validate policy, asset, caller, and custody
+    BurnerLoans->>BurnerLoans: pull amount from caller
+    BurnerLoans->>DepositManager: deposit amount as BurnerLoans operator
     DepositManager->>Vault: deposit collateral asset
     Vault-->>DepositManager: vault shares
-    BurnerLoans-->>Depositor: healthFactor
+    DepositManager-->>BurnerLoans: actual withdrawable credit and receipt token
+    BurnerLoans->>BurnerLoans: credit actual withdrawable amount to position
+    BurnerLoans-->>Depositor: credited amount and total position collateral
 ```
 
 ### Borrow Sequence
@@ -115,18 +117,22 @@ sequenceDiagram
     participant Recipient as recipient
 
     Borrower->>BurnerLoans: withdrawCollateral(asset, amount, onBehalfOf, recipient)
-    BurnerLoans->>PRICE: read OHM/USD and collateral/USD if debt remains
-    BurnerLoans->>BurnerLoans: validate owner/operator and recipient
+    BurnerLoans->>BurnerLoans: validate policy, asset, caller, recipient, and custody
+    BurnerLoans->>BurnerLoans: preflight non-zero quoted custody return
+    opt debt remains
+        BurnerLoans->>PRICE: read fresh OHM/USD and collateral/USD
+    end
     BurnerLoans->>BurnerLoans: validate resulting healthFactor
     BurnerLoans->>BurnerLoans: reduce credited collateral
-    BurnerLoans->>DepositManager: withdraw credited collateral
-    alt underlying is synchronously withdrawable
-        DepositManager->>Vault: redeem shares
-        DepositManager-->>recipient: withdrawn asset
-    else vault token is returned
-        DepositManager-->>recipient: withdrawn vault shares
+    BurnerLoans->>DepositManager: withdraw credited collateral as BurnerLoans operator
+    alt direct or synchronously redeemable custody
+        DepositManager->>Vault: redeem shares when a vault is configured
+        DepositManager-->>recipient: collateral asset
+    else asynchronous or warm-up vault
+        DepositManager-->>BurnerLoans: redeem reverts
+        BurnerLoans-->>Borrower: transaction rolls back
     end
-    BurnerLoans-->>Borrower: healthFactor
+    BurnerLoans-->>Borrower: token out, actual amount, remaining collateral, healthFactor
 ```
 
 ### Extend Sequence
@@ -633,11 +639,11 @@ getPosition(owner, collateralAsset)
 
 `collateral` is the remaining principal-denominated collateral associated with the position. `status` is stored lifecycle state, such as `NoDebt`, `Active`, or `Seized`. `isSeizable` is a derived current predicate, so an active position can return `status = Active` and `isSeizable = true`. `healthFactor` should be computed from current PRICE, not stored, so callers see the same health basis used by `isSeizable`, `previewWithdrawCollateral`, `previewBorrow`, `previewExtend`, and `seize`.
 
-Every user-facing action should have a matching preview that uses the same internal math as the state-changing path. Preview names should mirror the write function name:
+Every user-facing action should have a matching preview that uses the same validation and currently observable math as the state-changing path. Preview names should mirror the write function name:
 
 ```text
 previewDepositCollateral(collateralAsset, collateralAmount, onBehalfOf)
-    -> depositedCollateral, totalDepositedCollateral
+    -> quotedDepositedCollateral, quotedTotalDepositedCollateral
 previewWithdrawCollateral(collateralAsset, collateralAmount, onBehalfOf)
     -> withdrawnToken, withdrawnAmount, remainingCollateral, healthFactor, executable
 previewBorrow(collateralAsset, ohmAmount, onBehalfOf)
@@ -666,9 +672,9 @@ Parameter ordering should follow these conventions:
 - Slippage or spend caps last. `maxFee` is a caller protection value denominated in the collateral asset.
 - Return primary action data first, pagination state next, and ancillary economics last. For example, `getSeizableBorrowers` returns `(borrowers, nextIndex, expectedKeeperReward)`.
 
-Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is currently executable when the preview return type includes an executable flag. `previewDepositCollateral` should mirror the write path's custody accounting and return the collateral expected to be credited plus the resulting total credited collateral; it should not require PRICE merely to quote a health value. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, maturity, and resulting health using current PRICE and asset configuration. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject stale PRICE when debt remains. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. Previews should surface the same stale-price, unsupported-asset, expired-term, and capacity failures that the write path would hit.
+Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is locally executable when the preview return type includes an executable flag. `previewDepositCollateral` composes the vault's current `previewDeposit` and `previewRedeem` values to quote custody credit and the resulting total; the actual credit returned by `depositCollateral` is authoritative because vault state can change between the preview call and transaction and a generic ERC4626 vault does not expose its post-deposit accounting in a view call. It should reject a disabled Burner Loans policy, disabled collateral asset, disabled DepositManager, or unsupported custody configuration. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, maturity, and resulting health using current PRICE and asset configuration. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject a disabled Burner Loans policy, disabled DepositManager, stale PRICE when debt remains, or unsupported custody configuration. Its `executable` flag is false for a zero local custody quote or unhealthy debt-bearing position, and true only means those local checks pass; it does not promise that a vault redeem or DepositManager solvency check will succeed at execution. Asset disable remains a new-exposure freeze, so it does not block withdrawal previews or writes. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. Previews should surface the same deterministic eligibility failures that the write path would hit.
 
-Returning `healthFactor` from state-changing functions is useful for frontends, but it must not make risk-reducing actions unsafe or unavailable. `borrow` and `withdrawCollateral` already require current PRICE checks. `depositCollateral` and `repay` improve risk and should not revert solely because a fresh health quote is unavailable; if the implementation cannot produce a reliable current `healthFactor` without adding that dependency, it should expose an explicit availability flag or sentinel value rather than blocking the action.
+`borrow` and `withdrawCollateral` return a resulting `healthFactor` because both require current PRICE data to execute. `depositCollateral` and `repay` deliberately do not return one: they must remain usable when PRICE is stale because they reduce risk. Returning a quoted health factor would either add an unwanted PRICE dependency or require an ambiguous sentinel. Callers that need a health quote must request it separately once current PRICE is available.
 
 ## Collateral Accounting
 

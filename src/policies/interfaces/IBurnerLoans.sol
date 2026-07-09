@@ -14,6 +14,13 @@ interface IBurnerLoans {
     error BurnerLoans_InvalidBps(uint256 bps);
     error BurnerLoans_InvalidCap();
     error BurnerLoans_InvalidDepositManager(address depositManager);
+    error BurnerLoans_ZeroAmount();
+    error BurnerLoans_ZeroCollateralCredit();
+    error BurnerLoans_ZeroCollateralWithdrawal();
+    error BurnerLoans_InsufficientCollateral(uint256 requested, uint256 available);
+    error BurnerLoans_UnhealthyWithdrawal(uint256 healthFactor);
+    error BurnerLoans_ResidualCollateralBalance(address asset, uint256 balance);
+    error BurnerLoans_ReceiptApprovalFailed(address receiptTokenManager);
     error BurnerLoans_AssetAlreadyConfigured(address asset);
     error BurnerLoans_AssetNotConfigured(address asset);
     error BurnerLoans_AssetNotEnabled(address asset);
@@ -120,7 +127,7 @@ interface IBurnerLoans {
     /// @param returnAmount Amount of `returnToken`, in that token's native decimals.
     /// @param remainingDepositedCollateral Position collateral remaining after withdrawal, in collateral token decimals.
     /// @param resultingHealthFactor Health factor after the withdrawal, scaled to WAD.
-    /// @param executable Whether the withdrawal is expected to execute with current state and prices.
+    /// @param executable Whether local amount and health checks permit the withdrawal.
     struct WithdrawPreview {
         address returnToken;
         uint256 returnAmount;
@@ -324,6 +331,8 @@ interface IBurnerLoans {
     // ========== PREVIEW FUNCTIONS ========== //
 
     /// @notice Previews the collateral deposited into a position.
+    /// @dev Reverts unless Burner Loans and the collateral asset are enabled. The returned
+    ///      amount is the custody layer's expected withdrawable credit, not blindly `amount_`.
     /// @param asset_ The collateral asset to deposit.
     /// @param amount_ The amount of collateral to deposit, in collateral token decimals.
     /// @param onBehalfOf_ The position owner receiving the collateral deposit.
@@ -336,6 +345,9 @@ interface IBurnerLoans {
     ) external view returns (uint256 depositedCollateral, uint256 totalDepositedCollateral);
 
     /// @notice Previews collateral withdrawal from a position.
+    /// @dev Reverts unless Burner Loans is enabled. Asset-level disable does not block
+    ///      withdrawal. Debt-free positions do not require PRICE freshness; debt-bearing
+    ///      positions use fresh PRICE data to report resulting health.
     /// @param asset_ The collateral asset backing the position.
     /// @param amount_ The requested withdrawal amount, in collateral token decimals.
     /// @param onBehalfOf_ The position owner.
@@ -397,7 +409,9 @@ interface IBurnerLoans {
     // ========== USER FUNCTIONS ========== //
 
     /// @notice Deposits collateral into a position.
-    /// @dev Caller must be the position owner or an authorized operator.
+    /// @dev Caller must be the position owner or an authorized operator. Reverts unless Burner
+    ///      Loans and the collateral asset are enabled. Credits the DepositManager actual
+    ///      withdrawable amount and reverts if that amount is zero.
     /// @param asset_ The collateral asset to deposit.
     /// @param amount_ The collateral amount to deposit, in collateral token decimals.
     /// @param onBehalfOf_ The position owner receiving the collateral deposit.
@@ -410,7 +424,9 @@ interface IBurnerLoans {
     ) external returns (uint256 depositedCollateral, uint256 totalDepositedCollateral);
 
     /// @notice Withdraws collateral from a position.
-    /// @dev Caller must be the position owner or an authorized operator. The recipient is caller-specified.
+    /// @dev Caller must be the position owner or an authorized operator. Reverts unless Burner
+    ///      Loans is enabled. Asset-level disable does not block withdrawal. Withdrawals with
+    ///      active debt require fresh PRICE data and resulting health of at least 1e18.
     /// @param asset_ The collateral asset backing the position.
     /// @param amount_ The requested withdrawal amount, in collateral token decimals.
     /// @param onBehalfOf_ The position owner.
