@@ -108,12 +108,6 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param sharesWithdrawn The share amount actually withdrawn from the treasury.
     event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
-    /// @notice Emitted when the projected yield is overridden.
-    /// @param reserve The underlying reserve token of the vault.
-    /// @param previousYield The previous projected yield value.
-    /// @param newYield The new projected yield value.
-    event NextYieldAdjusted(address indexed reserve, uint256 previousYield, uint256 newYield);
-
     /// @notice Emitted when accumulated OHM purchases are burned and the corresponding
     ///         backing is recycled.
     /// @param ohmBurned The amount of OHM burned, in OHM decimals.
@@ -173,10 +167,6 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Thrown when the yield buyback share exceeds `1e18` (100%).
     error IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
-
-    /// @notice Thrown when `adjustNextYield` would increase a non-zero `nextYield` by more
-    ///         than 10%.
-    error IYieldRepurchaseFacilityV2_TooMuchIncrease();
 
     /// @notice Thrown when a Clearinghouse receivables offset would exceed the current
     ///         `principalReceivables` value.

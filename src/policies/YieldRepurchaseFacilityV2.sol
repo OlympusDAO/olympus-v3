@@ -1276,7 +1276,7 @@ contract YieldRepurchaseFacilityV2 is
     function setYieldBuybackShare(
         address vault_,
         uint256 newShare_
-    ) external override onlyYrfManagerOrAdminRole {
+    ) external override onlyManagerTimelockOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireValidYieldBuybackShare(newShare_);
 
@@ -1293,7 +1293,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The initial discount is not less than 100% (`1e18`).
     function setInitialDiscount(
         uint256 initialDiscount_
-    ) external override onlyYrfManagerOrAdminRole {
+    ) external override onlyManagerTimelockOrAdminRole {
         _setInitialDiscount(initialDiscount_);
     }
 
@@ -1376,7 +1376,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller is neither the manager timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
-    function enableAsset(address vault_) external override onlyYrfManagerOrAdminRole {
+    function enableAsset(address vault_) external override onlyManagerTimelockOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled(vault_);
 
