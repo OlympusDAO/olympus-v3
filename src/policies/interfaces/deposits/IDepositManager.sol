@@ -3,7 +3,7 @@ pragma solidity >=0.8.0;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 /// @title  Deposit Manager
@@ -13,7 +13,7 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 ///         - Asset: an ERC20 asset that can be deposited into the contract
 ///         - Asset vault: an optional ERC4626 vault that assets are deposited into
 ///         - Asset period: the combination of an asset and deposit period
-interface IDepositManager is IAssetManagerV1_1 {
+interface IDepositManager is IAssetManager {
     // ========== EVENTS ========== //
 
     event OperatorYieldClaimed(
@@ -369,22 +369,6 @@ interface IDepositManager is IAssetManagerV1_1 {
     /// @param  depositCap_     The deposit cap of the asset
     /// @param  minimumDeposit_ The minimum deposit amount for the asset
     function addAsset(
-        IERC20 asset_,
-        IERC4626 vault_,
-        uint256 depositCap_,
-        uint256 minimumDeposit_
-    ) external;
-
-    /// @notice Adds a new asset whose withdrawals deliver the vault's shares instead of
-    ///         redeeming them to the asset.
-    /// @dev    Behaves like {addAsset}, but configures the asset for share redemption. A vault is
-    ///         required.
-    ///
-    /// @param  asset_            The address of the underlying asset
-    /// @param  vault_            The address of the ERC4626 vault to deposit the asset into
-    /// @param  depositCap_       The deposit cap of the asset
-    /// @param  minimumDeposit_   The minimum deposit amount for the asset
-    function addAssetWithRedeemShares(
         IERC20 asset_,
         IERC4626 vault_,
         uint256 depositCap_,

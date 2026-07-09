@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
-pragma solidity >=0.8.24;
+pragma solidity >=0.8.20;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -94,7 +94,7 @@ contract ConvertibleDepositFacility is
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         major = 1;
-        minor = 1;
+        minor = 0;
 
         return (major, minor);
     }

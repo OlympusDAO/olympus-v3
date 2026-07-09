@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(asm-keccak256, mixed-case-variable)
-pragma solidity >=0.8.24;
+pragma solidity >=0.8.15;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
@@ -14,7 +13,7 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
@@ -28,13 +27,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @title  DepositRedemptionVault
 /// @notice A contract that manages the redemption of receipt tokens with facility coordination and borrowing
-contract DepositRedemptionVault is
-    Policy,
-    IDepositRedemptionVault,
-    IVersioned,
-    PolicyEnabler,
-    ReentrancyGuardTransient
-{
+contract DepositRedemptionVault is Policy, IDepositRedemptionVault, PolicyEnabler, ReentrancyGuard {
     using TransferHelper for ERC20;
     using FullMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -123,14 +116,6 @@ contract DepositRedemptionVault is
         override
         returns (Permissions[] memory permissions)
     {}
-
-    /// @inheritdoc IVersioned
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
-        major = 1;
-        minor = 1;
-
-        return (major, minor);
-    }
 
     // ========== FACILITY MANAGEMENT ========== //
 
@@ -960,9 +945,6 @@ contract DepositRedemptionVault is
         );
         uint256 totalToConsume = retainedCollateral + previousPrincipal;
 
-        // A share-redeeming asset delivers the vault's shares rather than the asset.
-        bool deliversShares = DEPOSIT_MANAGER.getRedeemShares(IERC20(redemption.depositToken));
-
         // Handle transfers
         uint256 retainedCollateralActual;
         {
@@ -979,42 +961,14 @@ contract DepositRedemptionVault is
             }
             // Withdraw deposit for retained collateral
             if (retainedCollateral > 0) {
-                if (!deliversShares) {
-                    // Caution: can be zero
-                    retainedCollateralActual = IDepositFacility(redemption.facility)
-                        .handleCommitWithdraw(
-                            IERC20(redemption.depositToken),
-                            redemption.depositPeriod,
-                            retainedCollateral,
-                            address(this)
-                        );
-                } else {
-                    // The retained collateral is delivered in the vault's shares, so withdraw each
-                    // portion directly to its recipient. The asset is not held by this contract
-                    // for a share-redeeming asset.
-                    uint256 keeperPortion = retainedCollateral.mulDiv(
-                        _claimDefaultRewardPercentage,
-                        ONE_HUNDRED_PERCENT
+                // Caution: can be zero
+                retainedCollateralActual = IDepositFacility(redemption.facility)
+                    .handleCommitWithdraw(
+                        IERC20(redemption.depositToken),
+                        redemption.depositPeriod,
+                        retainedCollateral,
+                        address(this)
                     );
-                    uint256 treasuryPortion = retainedCollateral - keeperPortion;
-
-                    if (keeperPortion != 0) {
-                        IDepositFacility(redemption.facility).handleCommitWithdraw(
-                            IERC20(redemption.depositToken),
-                            redemption.depositPeriod,
-                            keeperPortion,
-                            msg.sender
-                        );
-                    }
-                    if (treasuryPortion != 0) {
-                        IDepositFacility(redemption.facility).handleCommitWithdraw(
-                            IERC20(redemption.depositToken),
-                            redemption.depositPeriod,
-                            treasuryPortion,
-                            address(TRSRY)
-                        );
-                    }
-                }
             }
             // Reset the approval, in case not all was used
             rtm.approve(address(DEPOSIT_MANAGER), receiptTokenId, 0);
@@ -1027,24 +981,21 @@ contract DepositRedemptionVault is
         // avoids inconsistencies from ERC4626 rounding in actual transfers.
         redemption.amount -= retainedCollateral + previousPrincipal;
 
-        // Distribute residual value (keeper reward + treasury). For a share-redeeming asset this
-        // has already been delivered directly above.
-        if (!deliversShares) {
-            // Keeper reward is a percentage of the retained collateral, and can be zero
-            uint256 keeperReward = retainedCollateralActual.mulDiv(
-                _claimDefaultRewardPercentage,
-                ONE_HUNDRED_PERCENT
-            );
-            // Treasury amount is the remainder of the retained collateral after the keeper reward has been deducted, and can be zero
-            uint256 treasuryAmount = retainedCollateralActual - keeperReward;
+        // Distribute residual value (keeper reward + treasury)
+        // Keeper reward is a percentage of the retained collateral, and can be zero
+        uint256 keeperReward = retainedCollateralActual.mulDiv(
+            _claimDefaultRewardPercentage,
+            ONE_HUNDRED_PERCENT
+        );
+        // Treasury amount is the remainder of the retained collateral after the keeper reward has been deducted, and can be zero
+        uint256 treasuryAmount = retainedCollateralActual - keeperReward;
 
-            if (keeperReward > 0) {
-                ERC20(redemption.depositToken).safeTransfer(msg.sender, keeperReward);
-            }
+        if (keeperReward > 0) {
+            ERC20(redemption.depositToken).safeTransfer(msg.sender, keeperReward);
+        }
 
-            if (treasuryAmount > 0) {
-                ERC20(redemption.depositToken).safeTransfer(address(TRSRY), treasuryAmount);
-            }
+        if (treasuryAmount > 0) {
+            ERC20(redemption.depositToken).safeTransfer(address(TRSRY), treasuryAmount);
         }
 
         emit LoanDefaulted(
@@ -1167,7 +1118,6 @@ contract DepositRedemptionVault is
     function supportsInterface(bytes4 interfaceId) public view virtual override returns (bool) {
         return
             interfaceId == type(IERC165).interfaceId ||
-            interfaceId == type(IVersioned).interfaceId ||
             interfaceId == type(IDepositRedemptionVault).interfaceId ||
             super.supportsInterface(interfaceId);
     }
