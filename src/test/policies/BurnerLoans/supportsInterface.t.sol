@@ -10,6 +10,7 @@ import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
@@ -25,6 +26,7 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         assertTrue(burnerLoans.supportsInterface(type(IGracePeriod).interfaceId), "IGracePeriod");
         assertTrue(burnerLoans.supportsInterface(type(IReEnabler).interfaceId), "IReEnabler");
         assertTrue(burnerLoans.supportsInterface(type(IVersioned).interfaceId), "IVersioned");
+        assertTrue(burnerLoans.supportsInterface(type(IOperatorAuth).interfaceId), "IOperatorAuth");
         assertTrue(burnerLoans.supportsInterface(type(IBurnerLoans).interfaceId), "IBurnerLoans");
         assertFalse(
             burnerLoans.supportsInterface(type(ITimelockBatchQueue).interfaceId),

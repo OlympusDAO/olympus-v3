@@ -211,9 +211,10 @@ contract BurnerLoans is BurnerLoansConfig {
     function depositCollateral(
         address asset_,
         uint256,
-        address
+        address onBehalfOf_
     ) external view returns (uint256, uint256) {
         _requireAssetConfigured(asset_);
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
         revert BurnerLoans_NotImplemented();
     }
 
@@ -221,10 +222,11 @@ contract BurnerLoans is BurnerLoansConfig {
     function withdrawCollateral(
         address asset_,
         uint256,
-        address,
+        address onBehalfOf_,
         address recipient_
     ) external view returns (address, uint256, uint256, uint256) {
         _requireAssetConfigured(asset_);
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
         if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
         revert BurnerLoans_NotImplemented();
     }
@@ -233,12 +235,13 @@ contract BurnerLoans is BurnerLoansConfig {
     function borrow(
         address asset_,
         uint256,
-        address,
+        address onBehalfOf_,
         address recipient_,
         uint256
     ) external view returns (uint256, uint256, uint256, uint48, uint256) {
         _requireEnabled();
         _requireAssetEnabled(asset_);
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
         if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
         revert BurnerLoans_NotImplemented();
     }
@@ -251,12 +254,13 @@ contract BurnerLoans is BurnerLoansConfig {
     /// @inheritdoc IBurnerLoans
     function extend(
         address asset_,
-        address,
+        address onBehalfOf_,
         uint256,
         uint256
     ) external view returns (uint48, uint256, uint256) {
         _requireEnabled();
         _requireAssetEnabled(asset_);
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
         revert BurnerLoans_NotImplemented();
     }
 

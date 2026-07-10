@@ -8,6 +8,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -19,6 +20,7 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
+import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Config
@@ -27,6 +29,7 @@ abstract contract BurnerLoansConfig is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
+    OperatorAuth,
     IBurnerLoans,
     IVersioned
 {
@@ -54,7 +57,6 @@ abstract contract BurnerLoansConfig is
     address public override configurator;
 
     mapping(address asset => uint256 debtOhm) public override assetActiveDebtOhm;
-    mapping(address asset => uint48 disabledAt) public override assetDisabledAt;
     mapping(address asset => bool configured) public override isAssetConfigured;
     mapping(address asset => AssetConfig config) internal _assetConfigs;
     mapping(address asset => AssetFeeConfig config) internal _assetFeeConfigs;
@@ -134,7 +136,9 @@ abstract contract BurnerLoansConfig is
         AssetRiskConfigInput calldata riskConfig_,
         AssetFeeConfig calldata feeConfig_
     ) external givenEnabled onlyAdminRole {
-        if (isAssetConfigured[asset_]) revert BurnerLoans_AssetAlreadyConfigured(asset_);
+        if (isAssetConfigured[asset_]) {
+            revert BurnerLoans_AssetAlreadyConfigured(asset_);
+        }
         AssetConfig memory assetConfig = _validateAndBuildAssetConfig(
             asset_,
             debtCapOhm_,
@@ -189,10 +193,9 @@ abstract contract BurnerLoansConfig is
         emit ConfiguratorSet(configurator_);
     }
 
-    /// @notice Enables a configured asset for new borrows and extensions.
+    /// @notice Enables a configured asset for new exposure.
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
-    ///      function is effectively timelocked by governance. Used for governance-level
-    ///      enablement, including recovery after the re-enable grace period.
+    ///      function is effectively timelocked by governance.
     /// @dev Reverts if:
     ///      - The caller does not have the admin role.
     ///      - `asset_` is not configured.
@@ -204,54 +207,25 @@ abstract contract BurnerLoansConfig is
         _validateAssetDependencies(asset_, true);
 
         config.enabled = true;
-        assetDisabledAt[asset_] = 0;
         emit AssetEnabled(asset_);
     }
 
-    /// @notice Immediately disables a configured asset for new borrows and extensions.
-    /// @dev Emergency/admin-only. Does not block repayment, seizure, harvest, or safe cleanup.
+    /// @notice Immediately disables a configured asset for new exposure.
+    /// @dev Admin or burner_loans_admin only. Does not block repayment, withdrawal, seizure,
+    ///      harvest, or safe cleanup while Burner Loans is globally enabled.
     /// @dev Reverts if:
-    ///      - The caller has neither emergency nor admin role.
+    ///      - The caller has neither admin nor burner_loans_admin role.
     ///      - `asset_` is not configured.
     ///      - `asset_` is already disabled.
     /// @param asset_ Collateral asset to disable.
-    function disableAsset(address asset_) external onlyEmergencyOrAdminRole {
+    function disableAsset(address asset_) external {
+        _onlyBurnerLoansAdminOrAdmin();
+
         AssetConfig storage config = _requireAssetConfigured(asset_);
         if (!config.enabled) revert BurnerLoans_AssetNotEnabled(asset_);
 
         config.enabled = false;
-        assetDisabledAt[asset_] = _getBlockTimestamp();
         emit AssetDisabled(asset_);
-    }
-
-    /// @notice Re-enables an asset shortly after an emergency disable.
-    /// @dev Admin or burner_loans_admin only. Reverts after the grace period; governance must
-    ///      then use `enableAsset`.
-    /// @dev Reverts if:
-    ///      - The caller has neither admin nor burner_loans_admin role.
-    ///      - `asset_` is not configured.
-    ///      - `asset_` is already enabled.
-    ///      - The asset was not disabled or the re-enable grace period has elapsed.
-    ///      - PRICE does not approve the asset or returns a zero price.
-    ///      - DepositManager does not configure and enable the asset period for BurnerLoans.
-    /// @param asset_ Collateral asset to re-enable.
-    function reEnableAsset(address asset_) external {
-        _onlyBurnerLoansAdminOrAdmin();
-
-        AssetConfig storage config = _requireAssetConfigured(asset_);
-        if (config.enabled) revert BurnerLoans_AssetAlreadyEnabled(asset_);
-
-        uint48 disabledAt = assetDisabledAt[asset_];
-        uint48 deadline = disabledAt + gracePeriod;
-        if (disabledAt == 0 || _getBlockTimestamp() > deadline) {
-            revert BurnerLoans_AssetReenableExpired(asset_, deadline);
-        }
-
-        _validateAssetDependencies(asset_, true);
-        config.enabled = true;
-        assetDisabledAt[asset_] = 0;
-        emit AssetReenabled(asset_);
-        emit AssetEnabled(asset_);
     }
 
     /// @notice Sets the complete asset fee curve.
@@ -507,7 +481,9 @@ abstract contract BurnerLoansConfig is
         if (
             minCollateralRatioBps_ < _BPS ||
             minCollateralRatioBps_ > BurnerLoansConstants.MAX_COLLATERAL_RATIO_BPS
-        ) revert BurnerLoans_InvalidParam();
+        ) {
+            revert BurnerLoans_InvalidParam();
+        }
     }
 
     /// @notice Validates a required backing multiplier.
@@ -518,7 +494,9 @@ abstract contract BurnerLoansConfig is
         if (
             backingMultiplierBps_ < _BPS ||
             backingMultiplierBps_ > BurnerLoansConstants.MAX_BACKING_MULTIPLIER_BPS
-        ) revert BurnerLoans_InvalidParam();
+        ) {
+            revert BurnerLoans_InvalidParam();
+        }
     }
 
     /// @notice Validates the fixed term and maximum maturity horizon.
@@ -550,8 +528,11 @@ abstract contract BurnerLoansConfig is
                 revert BurnerLoans_InvalidFeeConfig();
             }
         }
-        if (_feeRateWad(_WAD, config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * (_WAD / _BPS))
+        if (
+            _feeRateWad(_WAD, config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * (_WAD / _BPS)
+        ) {
             revert BurnerLoans_InvalidFeeConfig();
+        }
     }
 
     /// @notice Validates that a proposed cap is not below current active debt.
@@ -650,6 +631,7 @@ abstract contract BurnerLoansConfig is
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoans).interfaceId ||
+            interfaceId_ == type(IOperatorAuth).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

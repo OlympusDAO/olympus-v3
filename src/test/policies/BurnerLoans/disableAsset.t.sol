@@ -10,12 +10,12 @@ contract BurnerLoansDisableAssetTest is BurnerLoansTest {
     event AssetDisabled(address indexed asset);
 
     // disableAsset
-    // given caller has neither admin nor emergency role
+    // given caller has neither admin nor burner_loans_admin role
     //  when disableAsset is called for a configured asset
     //   then it reverts
-    function test_givenNonEmergencyOrAdminCaller_reverts(address caller_) public {
+    function test_givenNonAdminOrBurnerLoansAdminCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != emergency);
+        vm.assume(caller_ != burnerLoansAdmin);
         _addDefaultUsdsAsset();
 
         vm.prank(caller_);
@@ -25,10 +25,10 @@ contract BurnerLoansDisableAssetTest is BurnerLoansTest {
 
     // disableAsset
     // given asset is not configured
-    //  when disableAsset is called by emergency
+    //  when disableAsset is called by burner_loans_admin
     //   then it reverts
     function test_givenAssetNotConfigured_reverts(address asset_) public {
-        vm.prank(emergency);
+        vm.prank(burnerLoansAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
         );
@@ -38,38 +38,59 @@ contract BurnerLoansDisableAssetTest is BurnerLoansTest {
     // disableAsset
     // given asset is already disabled
     //  when disableAsset is called again
-    //   then it reverts and preserves the original disabled timestamp
-    function test_givenAlreadyDisabled_revertsAndDoesNotRefreshGraceWindow() public {
+    //   then it reverts
+    function test_givenAlreadyDisabled_reverts() public {
         _addDefaultUsdsAsset();
-        vm.warp(1234);
 
-        vm.prank(emergency);
+        vm.prank(burnerLoansAdmin);
         burnerLoans.disableAsset(address(usds));
 
-        vm.warp(2345);
-        vm.prank(emergency);
+        vm.prank(burnerLoansAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotEnabled.selector, address(usds))
         );
         burnerLoans.disableAsset(address(usds));
-
-        assertEq(burnerLoans.assetDisabledAt(address(usds)), 1234, "disabled at");
     }
 
     // disableAsset
-    // given caller has the emergency role
+    // given caller has the emergency role only
     //  when disableAsset is called for an enabled asset
-    //   then the asset is disabled and timestamp is recorded
-    function test_givenEmergencyCaller_disablesAssetAndRecordsTimestamp() public {
+    //   then it reverts
+    function test_givenEmergencyCaller_reverts() public {
         _addDefaultUsdsAsset();
-        vm.warp(1234);
 
         vm.prank(emergency);
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        burnerLoans.disableAsset(address(usds));
+    }
+
+    // disableAsset
+    // given caller has the admin role
+    //  when disableAsset is called for an enabled asset
+    //   then the asset is disabled
+    function test_givenAdminCaller_disablesAsset() public {
+        _addDefaultUsdsAsset();
+
+        vm.prank(admin);
         vm.expectEmit(true, false, false, true, address(burnerLoans));
         emit AssetDisabled(address(usds));
         burnerLoans.disableAsset(address(usds));
 
         assertFalse(burnerLoans.getAssetConfig(address(usds)).enabled, "enabled");
-        assertEq(burnerLoans.assetDisabledAt(address(usds)), 1234, "disabled at");
+    }
+
+    // disableAsset
+    // given caller has the burner_loans_admin role
+    //  when disableAsset is called for an enabled asset
+    //   then the asset is disabled
+    function test_givenBurnerLoansAdminCaller_disablesAsset() public {
+        _addDefaultUsdsAsset();
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        emit AssetDisabled(address(usds));
+        burnerLoans.disableAsset(address(usds));
+
+        assertFalse(burnerLoans.getAssetConfig(address(usds)).enabled, "enabled");
     }
 }

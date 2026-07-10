@@ -18,7 +18,6 @@ interface IBurnerLoans {
     error BurnerLoans_AssetNotConfigured(address asset);
     error BurnerLoans_AssetNotEnabled(address asset);
     error BurnerLoans_AssetAlreadyEnabled(address asset);
-    error BurnerLoans_AssetReenableExpired(address asset, uint48 deadline);
     error BurnerLoans_InvalidFeeConfig();
     error BurnerLoans_UnauthorizedConfigurator(address caller);
     error BurnerLoans_InvalidModuleVersion();
@@ -48,7 +47,7 @@ interface IBurnerLoans {
     }
 
     /// @notice Asset-level risk and term configuration.
-    /// @param enabled Whether the asset accepts new borrows and extensions.
+    /// @param enabled Whether the asset accepts new exposure.
     /// @param collateralDecimals Decimal scale returned by the collateral ERC20.
     /// @param collateralFactorBps Risk haircut applied to collateral value, in bps.
     /// @param minCollateralRatioBps Minimum collateral ratio applied to OHM debt value, in bps.
@@ -218,7 +217,6 @@ interface IBurnerLoans {
     event AssetFeeConfigSet(address indexed asset, AssetFeeConfig config);
     event AssetEnabled(address indexed asset);
     event AssetDisabled(address indexed asset);
-    event AssetReenabled(address indexed asset);
 
     // ========== VIEW FUNCTIONS ========== //
 
@@ -251,12 +249,6 @@ interface IBurnerLoans {
     /// @param asset_ The collateral asset to query.
     /// @return bool True if `asset_` has been added to Burner Loans.
     function isAssetConfigured(address asset_) external view returns (bool);
-
-    /// @notice Returns when an asset was last disabled.
-    /// @dev Returns zero when the asset is currently enabled or has not been disabled.
-    /// @param asset_ The collateral asset to query.
-    /// @return uint48 The disable timestamp, in seconds.
-    function assetDisabledAt(address asset_) external view returns (uint48);
 
     /// @notice Returns the risk and term configuration for a collateral asset.
     /// @param asset_ The collateral asset to query.
@@ -565,23 +557,17 @@ interface IBurnerLoans {
     /// @param configurator_ New configurator address.
     function setConfigurator(address configurator_) external;
 
-    /// @notice Enables a configured asset for new borrows and extensions.
+    /// @notice Enables a configured asset for new exposure.
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
-    ///      function is effectively timelocked by governance. Used for governance-level
-    ///      enablement, including recovery after the re-enable grace period.
+    ///      function is effectively timelocked by governance.
     /// @param asset_ Collateral asset to enable.
     function enableAsset(address asset_) external;
 
-    /// @notice Immediately disables a configured asset for new borrows and extensions.
-    /// @dev Emergency/admin-only. Does not block repayment, seizure, harvest, or safe cleanup.
+    /// @notice Immediately disables a configured asset for new exposure.
+    /// @dev Admin or burner_loans_admin only. Does not block repayment, withdrawal, seizure, harvest,
+    ///      or safe cleanup while Burner Loans is globally enabled.
     /// @param asset_ Collateral asset to disable.
     function disableAsset(address asset_) external;
-
-    /// @notice Re-enables an asset shortly after an emergency disable.
-    /// @dev Admin or burner_loans_admin only. Reverts after the grace period; governance must then use
-    ///      `enableAsset`.
-    /// @param asset_ Collateral asset to re-enable.
-    function reEnableAsset(address asset_) external;
 
     /// @notice Sets asset risk and term fields.
     /// @dev Callable by admin or the configurator. Replaces all risk and term fields

@@ -23,6 +23,13 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
 abstract contract BurnerLoansTest is Test {
+    event AuthorizationSet(
+        address indexed caller,
+        address indexed account,
+        address indexed authorized,
+        uint48 authorizationDeadline
+    );
+
     address internal admin;
     address internal burnerLoansAdmin;
     address internal emergency;
@@ -184,6 +191,17 @@ abstract contract BurnerLoansTest is Test {
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig()
         );
+    }
+
+    function _setAuthorizationAndExpectEvent(
+        address owner_,
+        address operator_,
+        uint48 deadline_
+    ) internal {
+        vm.prank(owner_);
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit AuthorizationSet(owner_, owner_, operator_, deadline_);
+        burnerLoans.setAuthorization(operator_, deadline_);
     }
 
     function _setDefaultConfigurator() internal {

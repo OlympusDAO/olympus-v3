@@ -56,6 +56,8 @@ contract BurnerLoansReEnableAssetTest is BurnerLoansTest {
         uint48 elapsedAfterDeadline = uint48(bound(elapsedAfterDeadline_, 1, 365 days));
 
         vm.prank(admin);
+        burnerLoans.enable("");
+        vm.prank(admin);
         burnerLoans.setGracePeriod(gracePeriod);
 
         _addDefaultUsdsAsset();
@@ -187,6 +189,8 @@ contract BurnerLoansReEnableAssetTest is BurnerLoansTest {
     //   then the asset is re-enabled
     function test_givenBurnerLoansAdminCallerWithinConfiguredGracePeriod_reenablesAsset() public {
         uint32 gracePeriod = 2 days;
+        vm.prank(admin);
+        burnerLoans.enable("");
         vm.prank(admin);
         burnerLoans.setGracePeriod(gracePeriod);
 

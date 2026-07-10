@@ -197,17 +197,14 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
     }
 
     // enableAsset
-    // given the asset re-enable grace period has expired
+    // given asset is disabled
     //  when enableAsset is called by admin
     //   then admin can recover the asset through the normal enable path
-    function test_givenGracePeriodExpired_allowsAdminRecovery() public {
+    function test_givenAssetDisabled_allowsAdminRecovery() public {
         _addDefaultUsdsAsset();
-        vm.warp(1234);
 
-        vm.prank(emergency);
+        vm.prank(admin);
         burnerLoans.disableAsset(address(usds));
-
-        vm.warp(1234 + BurnerLoansConstants.REENABLE_GRACE_PERIOD + 1);
 
         vm.prank(admin);
         vm.expectEmit(true, false, false, true, address(burnerLoans));
@@ -215,6 +212,5 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         burnerLoans.enableAsset(address(usds));
 
         assertTrue(burnerLoans.getAssetConfig(address(usds)).enabled, "enabled");
-        assertEq(burnerLoans.assetDisabledAt(address(usds)), 0, "disabled at");
     }
 }
