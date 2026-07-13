@@ -8,26 +8,24 @@
         "type": "git",
         "url": "git+https://github.com/OlympusDAO/olympus-v3.git"
     },
-    "packageManager": "pnpm@10.33.0",
     "engines": {
         "node": ">=24",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
-        "pnpm": "10.33.0"
+        "pnpm": ">=10.33.0"
     },
     "scripts": {
-        "preinstall": "npx only-allow@1.2.2 pnpm",
         "postinstall": "./shell/postinstall.sh",
         "build": "forge build",
-        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}' --cache --cache-strategy metadata",
-        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
-        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
-        "solhint": "solhint --config ./.solhint.json 'src/**/*.sol' --fix",
-        "solhint:check": "solhint --config ./.solhint.json 'src/**/*.sol'",
+        "prettier": "prettier --no-error-on-unmatched-pattern --write 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
+        "prettier:list": "prettier --no-error-on-unmatched-pattern --list-different 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
+        "prettier:check": "prettier --no-error-on-unmatched-pattern --check 'src/**/*.sol' '**/*.html' '.*/**/*.{sh,json,yaml,yml,toml}' '**/*.{sh,json,yaml,yml,toml}'",
+        "forge-lint": "forge lint",
+        "forge-lint:check": "forge lint",
         "markdownlint": "markdownlint --dot --fix '**/*.md'",
         "markdownlint:check": "markdownlint --dot '**/*.md'",
-        "lint": "pnpm run prettier && pnpm run solhint && pnpm run markdownlint",
-        "lint:check": "pnpm run prettier:check && pnpm run solhint:check && pnpm run markdownlint:check",
+        "lint": "pnpm run prettier && pnpm run forge-lint && pnpm run markdownlint",
+        "lint:check": "pnpm run prettier:check && pnpm run forge-lint:check && pnpm run markdownlint:check",
         "test": "./shell/test_all.sh",
         "test:unit": "forge test --no-match-contract '(Fork|Script)' --no-match-path 'src/test/proposals/*.t.sol' -vvv && npx prettier --write 'snapshots/**/*.json'",
         "test:fork": "forge test --match-contract 'Fork' --no-match-contract 'CrossChainBridgeFork|TokenPoolFork' --fork-url mainnet -vvv",
@@ -43,32 +41,15 @@
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },
     "devDependencies": {
-        "ajv": "^8.18.0",
-        "markdownlint-cli": "^0.42.0",
+        "ajv": "^8.20.0",
+        "glob": "^13.0.6",
+        "markdownlint-cli": "^0.49.0",
         "prettier": "^3.0.3",
         "prettier-plugin-sh": "^0.14.0",
         "prettier-plugin-solidity": "^1.0.0-beta.19",
         "prettier-plugin-sort-json": "^4.0.0",
         "prettier-plugin-toml": "^2.0.6",
-        "solhint": "^3.3.7",
         "solidity-code-metrics": "^0.0.25"
-    },
-    "pnpm": {
-        "overrides": {
-            "brace-expansion@>=2.0.0 <2.0.3": ">=2.0.3",
-            "cross-spawn@>=7.0.0 <7.0.5": ">=7.0.5",
-            "glob@>=11.0.0 <11.1.0": ">=11.1.0",
-            "fast-uri": "3.1.2",
-            "js-yaml@>=4.0.0 <4.1.1": ">=4.1.1",
-            "lodash@<=4.17.23": ">=4.18.0",
-            "markdown-it@>=13.0.0 <14.1.1": ">=14.1.1",
-            "minimatch@>=10.0.0 <10.2.3": ">=10.2.3",
-            "minimatch@>=5.0.0 <5.1.8": ">=5.1.8",
-            "picomatch@<2.3.2": ">=2.3.2",
-            "solhint>ajv": "6.14.0",
-            "semver@>=7.0.0 <7.5.2": ">=7.5.2",
-            "smol-toml@<1.6.1": ">=1.6.1"
-        }
     },
     "prettier": {
         "tabWidth": 4,
@@ -82,5 +63,6 @@
             "prettier-plugin-toml"
         ],
         "jsonRecursiveSort": true
-    }
+    },
+    "packageManager": "pnpm@10.33.0"
 }
