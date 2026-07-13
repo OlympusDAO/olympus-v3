@@ -224,16 +224,16 @@ pnpm run forge-lint
 
 | Rule | Description | Fix Strategy |
 |------|-------------|--------------|
-| `var-name-mixedcase` | Variable uses mixedCase | Ensure variable uses mixedCase or suppress |
-| `func-name-mixedcase` | Function uses mixedCase | Rename or suppress if external interface |
+| `mixed-case-variable` | Variable uses mixedCase | Ensure variable uses mixedCase or suppress |
+| `mixed-case-function` | Function uses mixedCase | Rename or suppress if external interface |
 | `const-name-snakecase` | Constant uses snakeCase | Rename to SCREAMING_SNAKE_CASE or suppress |
-| `avoid-low-level-calls` | Uses `call`/`delegatecall` | Refactor or suppress if required |
+| `unchecked-call` | Uses `call`/`delegatecall` | Refactor or suppress if required |
 | `no-empty-blocks` | Empty code block | Remove or add comment |
 | `unwrapped-modifier-logic` | Logic after `_;` in modifier | Move logic to function |
 | `unsafe-typecast` | Direct address typecast | Use safe conversion or suppress |
 | `screaming-snake-case-immutable` | Immutable uses UPPER_CASE | Suppress (acceptable pattern) |
 | `reason-string` | Revert uses string message | Use custom error instead |
-| `no-global-import` | Global import used | Use specific imports |
+| `unaliased-plain-import` | Global import used | Use specific imports |
 | `func-visibility` | Function lacks visibility | Add `public`/`external`/`internal` |
 | `max-line-length` | Line exceeds 80 chars | Break line or suppress |
 
