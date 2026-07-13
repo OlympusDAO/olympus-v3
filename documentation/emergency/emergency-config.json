@@ -807,12 +807,12 @@
         "V1Migrator",
         "YieldRepurchaseFacility"
     ],
-    "lastUpdated": "2026-06-17T13:05:25Z",
+    "lastUpdated": "2026-07-13T16:51:29Z",
     "metadata": {
         "description": "Emergency shutdown configuration for Olympus Protocol. This file is the single source of truth for emergency shutdown procedures and is used by the frontend for codegen.",
         "docsUrl": "https://docs.olympusdao.finance/emergency",
         "repository": "OlympusDAO/olympus-v3"
     },
     "updatedBy": "claude-code",
-    "version": "1.0.6"
+    "version": "1.0.7"
 }
