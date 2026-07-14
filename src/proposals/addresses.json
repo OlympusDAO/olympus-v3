@@ -273,5 +273,20 @@
         "addr": "0x6D94B3745B0eCF908B3B467907b947b43Fba5f15",
         "chainId": 1,
         "name": "external-tokens-tempohm"
+    },
+    {
+        "addr": "0x245cc372C84B3645Bf0Ffe6538620B04a217988B",
+        "chainId": 1,
+        "name": "olympus-multisig-incentive-distributor"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-convertible-ohm-teller"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-incentive-distributor-convertible"
     }
 ]
