@@ -19,7 +19,7 @@
                 "chainlinkUsdsUsdUpdateThreshold": 86400,
                 "ohmDeviationBps": 300,
                 "ohmExpectedPrice": "17820000000000000000",
-                "ohmExpectedToleranceBps": 200,
+                "ohmExpectedToleranceBps": 500,
                 "ohmRevertOnInsufficientPriceFeeds": true,
                 "redstoneEthUsd": "0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4",
                 "redstoneEthUsdUpdateThreshold": 86400,
