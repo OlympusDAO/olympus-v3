@@ -18,7 +18,7 @@
                 "chainlinkUsdsUsd": "0xfF30586cD0F29eD462364C7e81375FC0C71219b1",
                 "chainlinkUsdsUsdUpdateThreshold": 86400,
                 "ohmDeviationBps": 300,
-                "ohmExpectedPrice": "17500000000000000000",
+                "ohmExpectedPrice": "17820000000000000000",
                 "ohmExpectedToleranceBps": 200,
                 "ohmRevertOnInsufficientPriceFeeds": true,
                 "redstoneEthUsd": "0x67F6838e58859d612E4ddF04dA396d6DABB66Dc4",
@@ -35,7 +35,7 @@
                 "usdsExpectedToleranceBps": 100,
                 "usdsPriceFeedDeviationBps": 100,
                 "usdsRevertOnInsufficientPriceFeeds": true,
-                "wethExpectedPrice": "1801070000000000000000",
+                "wethExpectedPrice": "1868160000000000000000",
                 "wethExpectedToleranceBps": 500,
                 "wethPriceFeedDeviationBps": 500,
                 "wethRevertOnInsufficientPriceFeeds": true
