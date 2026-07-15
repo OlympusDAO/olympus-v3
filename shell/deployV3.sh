@@ -70,3 +70,9 @@ FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3
     $BROADCAST_FLAG \
     $VERIFY_FLAG \
     $RESUME_FLAG
+
+echo ""
+echo "Formatting deployment JSON files (best effort)"
+pnpm exec prettier --no-error-on-unmatched-pattern --write "deployments/**/*.json" "deployments/**/.*.json" "src/scripts/env.json" || {
+    echo "WARNING: Deployment JSON formatting failed; continuing"
+}

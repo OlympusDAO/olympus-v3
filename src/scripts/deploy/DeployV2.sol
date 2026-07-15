@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
+/// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity 0.8.15;
 
 // Forge
@@ -51,7 +52,7 @@ import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRe
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
-import {OlympusPriceConfig} from "policies/PriceConfig.sol";
+import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import {Distributor} from "policies/Distributor/Distributor.sol";
@@ -82,11 +83,6 @@ import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.s
 import {CoolerComposites} from "src/periphery/CoolerComposites.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
 
-import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
-import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraVirtualRewardPool, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
-import {MockBalancerPool, MockVault} from "src/test/mocks/BalancerMocks.sol";
-import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {Faucet} from "src/test/mocks/Faucet.sol";
 import {LoanConsolidator} from "src/policies/LoanConsolidator.sol";
 
 import {TransferHelper} from "libraries/TransferHelper.sol";
@@ -327,7 +323,7 @@ contract OlympusDeploy is Script {
         // Bophades contracts
         kernel = Kernel(envAddress("olympus.Kernel"));
         // Modules
-        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV2"));
+        PRICE = OlympusPrice(envAddress("olympus.modules.OlympusPriceV1"));
         RANGE = OlympusRange(envAddress("olympus.modules.OlympusRangeV2"));
         TRSRY = OlympusTreasury(envAddress("olympus.modules.OlympusTreasury"));
         MINTR = OlympusMinter(envAddress("olympus.modules.OlympusMinter"));
@@ -1906,3 +1902,4 @@ contract OlympusDeploy is Script {
 //         vm.stopBroadcast();
 //     }
 // }
+/// forge-lint: disable-end(mixed-case-function,mixed-case-variable)

@@ -2,17 +2,15 @@
 pragma solidity >=0.8.0;
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {FullMath} from "libraries/FullMath.sol";
 
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
-import "src/Kernel.sol";
+import {Kernel, Actions, Module, Keycode} from "src/Kernel.sol";
 
 contract PriceTest is Test {
     using FullMath for uint256;
@@ -112,6 +110,7 @@ contract PriceTest is Test {
             ohmEthPriceFeed.setLatestAnswer(ohmEthPrice);
 
             /// Get the current price from the price module and store in the observations array
+            /// forge-lint: disable-next-line(unsafe-typecast)
             observations[i] = uint256(ohmEthPrice).mulDiv(scale, reserveEthPrice);
         }
 
@@ -241,7 +240,7 @@ contract PriceTest is Test {
     /// [X] getTargetPrice
     /// [X] cannot get prices before initialization
 
-    function testCorrectness_KEYCODE() public {
+    function testCorrectness_KEYCODE() public view {
         assertEq("PRICE", Keycode.unwrap(price.KEYCODE()));
     }
 
@@ -434,7 +433,7 @@ contract PriceTest is Test {
         price.initialize(observations, uint48(block.timestamp));
     }
 
-    function testCorrectness_noObservationsBeforeInitialized() public {
+    function testCorrectness_noObservationsBeforeInitialized() public view {
         /// Check that the oberservations array is empty (all values initialized to 0)
         uint256 numObservations = uint256(price.numObservations());
         uint256 zero = uint256(0);

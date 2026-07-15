@@ -1,0 +1,103 @@
+// SPDX-License-Identifier: Unlicense
+/// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
+pragma solidity >=0.8.15;
+
+import {MorphoOracleFactoryTest} from "./MorphoOracleFactoryTest.sol";
+import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+
+contract MorphoOracleFactoryDisableCreationTest is MorphoOracleFactoryTest {
+    // ========== TESTS ========== //
+
+    // when caller does not have the admin, oracle_manager or emergency role
+    //  [X] it reverts with NotAuthorised
+
+    function test_whenCallerDoesNotHaveRequiredRole_reverts(
+        address caller_
+    ) public givenFactoryIsEnabled {
+        vm.assume(caller_ != admin && caller_ != oracleManager && caller_ != emergency);
+
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
+        vm.prank(caller_);
+        factory.disableCreation();
+    }
+
+    // when factory is disabled
+    //  [X] it reverts with NotEnabled
+
+    function test_whenFactoryIsDisabled_reverts() public {
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+
+        vm.prank(admin);
+        factory.disableCreation();
+    }
+
+    // when creation is already disabled
+    //  [X] it reverts with CreationAlreadyDisabled
+
+    function test_whenCreationIsAlreadyDisabled_reverts()
+        public
+        givenFactoryIsEnabled
+        givenCreationIsDisabled
+    {
+        vm.expectRevert(IOracleFactory.OracleFactory_CreationAlreadyDisabled.selector);
+
+        vm.prank(admin);
+        factory.disableCreation();
+    }
+
+    // when creation is enabled
+    //  [X] it disables creation
+    //  [X] it emits CreationDisabled event
+
+    function test_success() public givenFactoryIsEnabled {
+        vm.expectEmit(false, false, false, false);
+        emit IOracleFactory.CreationDisabled();
+
+        vm.prank(admin);
+        factory.disableCreation();
+
+        assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    // when the caller has the oracle_manager role
+    //  [X] it succeeds
+
+    function test_whenCallerHasOracleManagerRole() public givenFactoryIsEnabled {
+        vm.prank(oracleManager);
+        factory.disableCreation();
+
+        assertFalse(factory.isCreationEnabled(), "Creation should be disabled");
+    }
+
+    // when the caller has the manager role
+    //  [X] it reverts
+
+    function test_whenCallerHasManagerRole_reverts() public givenFactoryIsEnabled {
+        // Expect revert
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+
+        // Call function
+        vm.prank(manager);
+        factory.disableCreation();
+    }
+
+    // when the caller has the admin role
+    //  [X] it succeeds
+
+    function test_whenCallerHasAdminRole() public givenFactoryIsEnabled {
+        vm.prank(admin);
+        factory.disableCreation();
+    }
+
+    // when the caller has the emergency role
+    //  [X] it succeeds
+
+    function test_whenCallerHasEmergencyRole() public givenFactoryIsEnabled {
+        vm.prank(emergency);
+        factory.disableCreation();
+    }
+}
+/// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
