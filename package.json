@@ -12,7 +12,7 @@
         "node": ">=24",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
-        "pnpm": ">=10.33.0"
+        "pnpm": ">=11.13.0"
     },
     "scripts": {
         "postinstall": "./shell/postinstall.sh",
@@ -64,5 +64,5 @@
         ],
         "jsonRecursiveSort": true
     },
-    "packageManager": "pnpm@10.33.0"
+    "packageManager": "pnpm@11.13.0"
 }
