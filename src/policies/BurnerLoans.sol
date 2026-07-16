@@ -9,11 +9,14 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -28,7 +31,8 @@ import {BurnerLoansConfig} from "src/policies/abstracts/BurnerLoansConfig.sol";
 /// @title Burner Loans
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
 /// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
-contract BurnerLoans is BurnerLoansConfig {
+contract BurnerLoans is BurnerLoansConfig, ReentrancyGuardTransient {
+    using EnumerableSet for EnumerableSet.AddressSet;
     using TransferHelper for ERC20;
 
     // ========== INTERNAL STRUCTS ========== //
@@ -37,7 +41,6 @@ contract BurnerLoans is BurnerLoansConfig {
         uint256 debtValueUsd;
         uint256 debtOhm;
         uint256 backingPerOhmUsd;
-        uint8 ohmDecimals;
         uint256 minCollateralRatioBps;
         uint256 backingMultiplierBps;
     }
@@ -47,12 +50,25 @@ contract BurnerLoans is BurnerLoansConfig {
         uint256 assetDebtCapOhm;
     }
 
+    struct BorrowQuote {
+        uint256 feeCollateral;
+        uint256 resultingDebtOhm;
+        uint256 resultingHealthFactor;
+        uint48 maturity;
+    }
+
+    struct BorrowPricing {
+        uint256 ohmUsdPrice;
+        uint256 backingPerOhmUsd;
+        uint256 collateralUsdPrice;
+        uint256 riskAdjustedCollateralUsd;
+    }
+
     struct KeeperRewardInputs {
         bool isProtocolSeizureCaller;
         uint256 seizedCollateralAmount;
         uint256 seizedUnrepaidDebtOhm;
         uint256 backingPerOhmUsd;
-        uint8 ohmDecimals;
         uint256 backingMultiplierBps;
         uint256 collateralUsdPrice;
         uint8 collateralDecimals;
@@ -160,8 +176,8 @@ contract BurnerLoans is BurnerLoansConfig {
     }
 
     /// @inheritdoc IBurnerLoans
-    function getActiveBorrowers(address) external pure returns (address[] memory) {
-        revert BurnerLoans_NotImplemented();
+    function getActiveBorrowers(address asset_) external view returns (address[] memory borrowers) {
+        return _activeBorrowersByAsset[asset_].values();
     }
 
     /// @inheritdoc IBurnerLoans
@@ -246,8 +262,34 @@ contract BurnerLoans is BurnerLoansConfig {
     }
 
     /// @inheritdoc IBurnerLoans
-    function previewBorrow(address, uint256, address) external pure returns (BorrowPreview memory) {
-        revert BurnerLoans_NotImplemented();
+    /// @notice Quotes a borrow using fresh prices and pre-borrow asset utilization.
+    /// @dev Reverts if:
+    ///      - Burner Loans or the collateral asset is disabled or unconfigured.
+    ///      - `ohmAmount_` is zero or the position has no credited collateral.
+    ///      - OHM or collateral PRICE is unsupported, zero, or stale.
+    ///      - The resulting global or asset active debt exceeds its cap.
+    ///      - The position is seized, matured, currently unhealthy, or unhealthy after borrowing.
+    ///      `executable` covers deterministic local protocol eligibility only. This signature has no
+    ///      caller, recipient, or `maxFee`, so it cannot promise authorization, fee approval or balance,
+    ///      recipient validity, or max-fee acceptance.
+    function previewBorrow(
+        address asset_,
+        uint256 ohmAmount_,
+        address onBehalfOf_
+    ) external view returns (BorrowPreview memory preview) {
+        _requireEnabled();
+        AssetConfig storage config = _requireAssetEnabled(asset_);
+        if (ohmAmount_ == 0) revert BurnerLoans_ZeroAmount();
+
+        BorrowQuote memory quote = _quoteBorrow(asset_, ohmAmount_, onBehalfOf_, config);
+        return
+            BorrowPreview({
+                fee: quote.feeCollateral,
+                resultingDebtOhm: quote.resultingDebtOhm,
+                resultingHealthFactor: quote.resultingHealthFactor,
+                maturity: quote.maturity,
+                executable: true
+            });
     }
 
     /// @inheritdoc IBurnerLoans
@@ -349,18 +391,37 @@ contract BurnerLoans is BurnerLoansConfig {
     }
 
     /// @inheritdoc IBurnerLoans
+    /// @dev Uses pre-borrow asset utilization for the fee curve and charges the fee on the
+    ///      incremental required collateral. Reverts if:
+    ///      - Burner Loans or the collateral asset is disabled or unconfigured.
+    ///      - The caller is not the owner or an authorized operator.
+    ///      - `ohmAmount_` or `recipient_` is zero, or the position has no credited collateral.
+    ///      - OHM or collateral PRICE is unsupported, zero, or stale.
+    ///      - The resulting global or asset active debt exceeds its cap.
+    ///      - The position is seized, matured, currently unhealthy, or unhealthy after borrowing.
+    ///      - The collateral fee exceeds `maxFee_` or cannot be transferred from the caller.
+    ///      - MINTR cannot mint exactly `ohmAmount_` to `recipient_`.
     function borrow(
         address asset_,
-        uint256,
+        uint256 ohmAmount_,
         address onBehalfOf_,
         address recipient_,
-        uint256
-    ) external view returns (uint256, uint256, uint256, uint48, uint256) {
-        _requireEnabled();
-        _requireAssetEnabled(asset_);
-        _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
-        revert BurnerLoans_NotImplemented();
+        uint256 maxFee_
+    ) external nonReentrant returns (uint256, uint256, uint256, uint48, uint256) {
+        BorrowQuote memory quote = _executeBorrow(
+            asset_,
+            ohmAmount_,
+            onBehalfOf_,
+            recipient_,
+            maxFee_
+        );
+        return (
+            ohmAmount_,
+            quote.feeCollateral,
+            quote.resultingDebtOhm,
+            quote.maturity,
+            quote.resultingHealthFactor
+        );
     }
 
     /// @inheritdoc IBurnerLoans
@@ -392,6 +453,204 @@ contract BurnerLoans is BurnerLoansConfig {
     /// @inheritdoc IBurnerLoans
     function harvestYield(address) external pure returns (uint256) {
         revert BurnerLoans_NotImplemented();
+    }
+
+    // ========== INTERNAL BORROW HELPERS ========== //
+
+    /// @notice Executes a validated borrow with effects before fee collection and OHM minting.
+    function _executeBorrow(
+        address asset_,
+        uint256 ohmAmount_,
+        address onBehalfOf_,
+        address recipient_,
+        uint256 maxFee_
+    ) internal returns (BorrowQuote memory quote) {
+        _requireEnabled();
+        AssetConfig storage config = _requireAssetEnabled(asset_);
+        if (ohmAmount_ == 0) revert BurnerLoans_ZeroAmount();
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
+        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
+
+        quote = _quoteBorrow(asset_, ohmAmount_, onBehalfOf_, config);
+        if (quote.feeCollateral > maxFee_) {
+            revert BurnerLoans_FeeExceedsMax(quote.feeCollateral, maxFee_);
+        }
+
+        Position storage position = _positions[onBehalfOf_][asset_];
+        bool startsDebtEpisode = position.debtOhm == 0;
+        position.debtOhm = quote.resultingDebtOhm;
+        position.status = PositionStatus.Active;
+        position.lastBorrowBlock = uint48(block.number);
+        if (startsDebtEpisode) {
+            position.maturity = quote.maturity;
+            _addActiveBorrower(asset_, onBehalfOf_);
+        }
+        totalActiveDebtOhm += ohmAmount_;
+        assetActiveDebtOhm[asset_] += ohmAmount_;
+
+        if (quote.feeCollateral != 0) {
+            ERC20(asset_).safeTransferFrom(msg.sender, address(_TRSRY), quote.feeCollateral);
+        }
+        _MINTR.mintOhm(recipient_, ohmAmount_);
+
+        emit Borrowed(msg.sender, asset_, onBehalfOf_, recipient_, ohmAmount_, quote.feeCollateral);
+    }
+
+    /// @notice Quotes and validates a borrow using current state and fresh prices.
+    /// @dev Fee utilization is the asset utilization before adding `ohmAmount_`. Debt and
+    ///      collateral amounts use their token-native decimals; prices use PRICE decimals.
+    function _quoteBorrow(
+        address asset_,
+        uint256 ohmAmount_,
+        address onBehalfOf_,
+        AssetConfig memory config_
+    ) internal view returns (BorrowQuote memory quote) {
+        Position storage position = _positions[onBehalfOf_][asset_];
+        if (position.status == PositionStatus.Seized) revert BurnerLoans_PositionSeized();
+        if (position.depositedCollateral == 0) revert BurnerLoans_NoCollateral();
+        if (position.debtOhm != 0 && block.timestamp >= position.maturity) {
+            revert BurnerLoans_PositionMatured(position.maturity);
+        }
+
+        uint256 globalDebtRoom = totalActiveDebtOhm <= globalDebtCapOhm
+            ? globalDebtCapOhm - totalActiveDebtOhm
+            : 0;
+        if (ohmAmount_ > globalDebtRoom) {
+            revert BurnerLoans_GlobalDebtCapExceeded(ohmAmount_, globalDebtRoom);
+        }
+        uint256 assetDebt = assetActiveDebtOhm[asset_];
+        uint256 assetDebtRoom = assetDebt <= config_.debtCap ? config_.debtCap - assetDebt : 0;
+        if (ohmAmount_ > assetDebtRoom) {
+            revert BurnerLoans_AssetDebtCapExceeded(asset_, ohmAmount_, assetDebtRoom);
+        }
+        quote.resultingDebtOhm = position.debtOhm + ohmAmount_;
+
+        // Each distinct price input is read once and reused for current health, resulting health,
+        // and fee calculations so the quote uses one internally consistent price snapshot.
+        BorrowPricing memory pricing;
+        uint48 observationFrequency = _PRICE.observationFrequency();
+        (pricing.ohmUsdPrice, ) = _getFreshPrice(address(_OHM), observationFrequency);
+        pricing.backingPerOhmUsd = _getBackingPerOhmUsd();
+        (pricing.collateralUsdPrice, ) = _getFreshPrice(asset_, observationFrequency);
+        pricing.riskAdjustedCollateralUsd = _riskAdjustedCollateralUsd(
+            _collateralValueUsd(
+                position.depositedCollateral,
+                pricing.collateralUsdPrice,
+                config_.collateralDecimals
+            ),
+            config_.collateralFactorBps
+        );
+
+        _validateCurrentBorrowHealth(position.debtOhm, pricing, config_);
+        quote.resultingHealthFactor = _validateResultingBorrowHealth(
+            quote.resultingDebtOhm,
+            pricing,
+            config_
+        );
+        quote.feeCollateral = _quoteBorrowFee(asset_, ohmAmount_, pricing, config_);
+        quote.maturity = position.debtOhm == 0
+            ? uint48(block.timestamp + config_.termLength)
+            : position.maturity;
+    }
+
+    /// @notice Validates that an existing debt-bearing position is currently healthy.
+    function _validateCurrentBorrowHealth(
+        uint256 currentDebtOhm_,
+        BorrowPricing memory pricing_,
+        AssetConfig memory config_
+    ) internal view {
+        if (currentDebtOhm_ == 0) return;
+
+        uint256 currentHealthFactor = _borrowHealthFactor(currentDebtOhm_, pricing_, config_);
+        if (currentHealthFactor < _WAD) {
+            revert BurnerLoans_UnhealthyPosition(currentHealthFactor);
+        }
+    }
+
+    /// @notice Validates and returns health after applying a proposed borrow.
+    function _validateResultingBorrowHealth(
+        uint256 resultingDebtOhm_,
+        BorrowPricing memory pricing_,
+        AssetConfig memory config_
+    ) internal view returns (uint256 resultingHealthFactor) {
+        resultingHealthFactor = _borrowHealthFactor(resultingDebtOhm_, pricing_, config_);
+        if (resultingHealthFactor < _WAD) {
+            revert BurnerLoans_UnhealthyBorrow(resultingHealthFactor);
+        }
+    }
+
+    /// @notice Calculates borrower health for one debt amount from an already-read price snapshot.
+    function _borrowHealthFactor(
+        uint256 debtOhm_,
+        BorrowPricing memory pricing_,
+        AssetConfig memory config_
+    ) internal view returns (uint256) {
+        return
+            _healthFactor(
+                pricing_.riskAdjustedCollateralUsd,
+                _requiredCollateralUsd(
+                    _requiredCollateralInputs(
+                        debtOhm_,
+                        pricing_.ohmUsdPrice,
+                        pricing_.backingPerOhmUsd,
+                        config_
+                    )
+                )
+            );
+    }
+
+    /// @notice Quotes the collateral fee using incremental debt and pre-borrow asset utilization.
+    function _quoteBorrowFee(
+        address asset_,
+        uint256 ohmAmount_,
+        BorrowPricing memory pricing_,
+        AssetConfig memory config_
+    ) internal view returns (uint256) {
+        uint256 incrementalRequiredCollateral = _requiredCollateralAsset(
+            _requiredCollateralUsd(
+                _requiredCollateralInputs(
+                    ohmAmount_,
+                    pricing_.ohmUsdPrice,
+                    pricing_.backingPerOhmUsd,
+                    config_
+                )
+            ),
+            pricing_.collateralUsdPrice,
+            config_.collateralDecimals
+        );
+        uint256 feeUtilizationWad = _effectiveUtilizationWad(
+            UtilizationInputs({
+                assetDebtOhm: assetActiveDebtOhm[asset_],
+                assetDebtCapOhm: config_.debtCap
+            })
+        );
+        return
+            _borrowFee(
+                incrementalRequiredCollateral,
+                _feeRateWad(feeUtilizationWad, _assetFeeConfigs[asset_])
+            );
+    }
+
+    /// @notice Builds scale-explicit collateral requirement inputs for one debt amount.
+    function _requiredCollateralInputs(
+        uint256 debtOhm_,
+        uint256 ohmUsdPrice_,
+        uint256 backingPerOhmUsd_,
+        AssetConfig memory config_
+    ) internal view returns (RequiredCollateralUsdInputs memory) {
+        return
+            RequiredCollateralUsdInputs({
+                debtValueUsd: _debtValueUsd(debtOhm_, ohmUsdPrice_, _OHM_DECIMALS),
+                debtOhm: debtOhm_,
+                backingPerOhmUsd: backingPerOhmUsd_,
+                minCollateralRatioBps: config_.minCollateralRatioBps,
+                backingMultiplierBps: config_.backingMultiplierBps
+            });
+    }
+
+    /// @notice Adds an owner to the asset-scoped active borrower index once.
+    function _addActiveBorrower(address asset_, address borrower_) internal {
+        _activeBorrowersByAsset[asset_].add(borrower_);
     }
 
     // ========== INTERNAL CUSTODY HELPERS ========== //
@@ -630,8 +889,8 @@ contract BurnerLoans is BurnerLoansConfig {
 
         uint48 observationFrequency = _PRICE.observationFrequency();
         (uint256 ohmUsdPrice, ) = _getFreshPrice(address(_OHM), observationFrequency);
+        uint256 backingPerOhmUsd = _getBackingPerOhmUsd();
         (uint256 collateralUsdPrice, ) = _getFreshPrice(asset_, observationFrequency);
-        uint8 ohmDecimals = _OHM.decimals();
 
         uint256 riskAdjustedCollateralUsd = _riskAdjustedCollateralUsd(
             _collateralValueUsd(
@@ -643,10 +902,9 @@ contract BurnerLoans is BurnerLoansConfig {
         );
         uint256 requiredCollateralUsd = _requiredCollateralUsd(
             RequiredCollateralUsdInputs({
-                debtValueUsd: _debtValueUsd(debtOhm_, ohmUsdPrice, ohmDecimals),
+                debtValueUsd: _debtValueUsd(debtOhm_, ohmUsdPrice, _OHM_DECIMALS),
                 debtOhm: debtOhm_,
-                backingPerOhmUsd: ohmUsdPrice,
-                ohmDecimals: ohmDecimals,
+                backingPerOhmUsd: backingPerOhmUsd,
                 minCollateralRatioBps: config_.minCollateralRatioBps,
                 backingMultiplierBps: config_.backingMultiplierBps
             })
@@ -666,6 +924,18 @@ contract BurnerLoans is BurnerLoansConfig {
         if (block.timestamp > uint256(timestamp) + uint256(observationFrequency_)) {
             revert BurnerLoans_InvalidPrice();
         }
+    }
+
+    /// @notice Reads canonical OHM backing and converts it from 18 decimals to PRICE decimals.
+    /// @dev Conversion rounds up so reducing decimal precision cannot weaken the backing floor.
+    function _getBackingPerOhmUsd() internal view returns (uint256 backingPerOhmUsd) {
+        address backingOracle_ = backingOracle;
+        if (backingOracle_ == address(0)) revert BurnerLoans_ZeroAddress();
+
+        uint256 backing18 = IOlympusBackingOracle(backingOracle_).backing();
+        if (backing18 == 0) revert BurnerLoans_InvalidPrice();
+
+        backingPerOhmUsd = FullMath.mulDivUp(backing18, _scale(_PRICE.decimals()), _WAD);
     }
 
     // ========== INTERNAL MATH HELPERS ========== //
@@ -732,7 +1002,7 @@ contract BurnerLoans is BurnerLoansConfig {
     /// @dev Inputs and output are PRICE decimals except `debtOhm_`, which is OHM decimals.
     function _requiredCollateralUsd(
         RequiredCollateralUsdInputs memory inputs_
-    ) internal pure returns (uint256) {
+    ) internal view returns (uint256) {
         uint256 marketRequirementUsd = FullMath.mulDivUp(
             inputs_.debtValueUsd,
             inputs_.minCollateralRatioBps,
@@ -741,7 +1011,7 @@ contract BurnerLoans is BurnerLoansConfig {
         uint256 backingRequirementUsd = _requiredBackingUsd(
             inputs_.debtOhm,
             inputs_.backingPerOhmUsd,
-            inputs_.ohmDecimals,
+            _OHM_DECIMALS,
             inputs_.backingMultiplierBps
         );
 
@@ -869,7 +1139,7 @@ contract BurnerLoans is BurnerLoansConfig {
 
     /// @notice Calculates the keeper reward for a seizure batch.
     /// @dev All collateral amounts are token-native decimals. Price and backing inputs use PRICE decimals.
-    function _keeperRewardAsset(KeeperRewardInputs memory inputs_) internal pure returns (uint256) {
+    function _keeperRewardAsset(KeeperRewardInputs memory inputs_) internal view returns (uint256) {
         if (
             inputs_.isProtocolSeizureCaller ||
             inputs_.rewardBps == 0 ||
@@ -890,7 +1160,7 @@ contract BurnerLoans is BurnerLoansConfig {
         uint256 requiredBackingUsd = _requiredBackingUsd(
             inputs_.seizedUnrepaidDebtOhm,
             inputs_.backingPerOhmUsd,
-            inputs_.ohmDecimals,
+            _OHM_DECIMALS,
             inputs_.backingMultiplierBps
         );
         uint256 requiredBackingAsset = _requiredCollateralAsset(

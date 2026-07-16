@@ -52,7 +52,7 @@ contract BurnerLoansHarness is BurnerLoans {
 
     function requiredCollateralUsd(
         RequiredCollateralUsdInputs calldata inputs_
-    ) external pure returns (uint256) {
+    ) external view returns (uint256) {
         return _requiredCollateralUsd(inputs_);
     }
 
@@ -114,7 +114,7 @@ contract BurnerLoansHarness is BurnerLoans {
 
     function keeperRewardAsset(
         KeeperRewardInputs calldata inputs_
-    ) external pure returns (uint256) {
+    ) external view returns (uint256) {
         return _keeperRewardAsset(inputs_);
     }
 

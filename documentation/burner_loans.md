@@ -201,6 +201,8 @@ sequenceDiagram
 
 Health is a WAD-scaled ratio where `1e18` is the seizure boundary:
 
+`backingPerOhmUsd` comes from the configured `IOlympusBackingOracle.backing()` value, which is fixed at 18 decimals. Burner Loans converts it to `PRICE.decimals()` before comparing the backing and market requirements. Conversion rounds up when precision is reduced so the scale change cannot weaken the backing floor.
+
 ```text
 requiredCollateralUsd = max(
     // Round requirements up so the protocol does not accept undercollateralized debt.
@@ -229,6 +231,7 @@ If `debtOhm == 0`, `healthFactor` should return `type(uint256).max`. A debt-free
 `BurnerLoans` must be explicit about every numeric scale used in accounting and risk checks:
 
 - PRICE values use the scale returned by `PRICE.decimals()`. Do not assume PRICE is WAD-scaled unless `PRICE.decimals() == 18`.
+- `IOlympusBackingOracle.backing()` uses 18 decimals and is rounded up when converted to PRICE decimals.
 - `healthFactor` is WAD-scaled. `1e18` is exactly the seizure boundary.
 - OHM debt amounts use OHM's native token decimals. Mainnet OHM is 9 decimals.
 - Collateral amounts use the collateral token's native decimals, as returned by ERC20 `decimals()` and represented by `balanceOf()`.
@@ -497,7 +500,7 @@ Keeping composites outside the core policy saves bytecode and avoids turning `Bu
 The fixed term prevents perpetual 0% shorts from consuming capacity indefinitely. Each asset has its own capacity fee curve. For a given asset, the same curve should be used for borrows and extension terms:
 
 ```text
-assetUtilizationWad = ceil(assetActiveDebtOhm[asset] * 1e18 / assetDebtCap[asset])
+assetUtilizationWad = ceil(preBorrowAssetActiveDebtOhm[asset] * 1e18 / assetDebtCap[asset])
 baseFeeRateWad = baseFeeBps * 1e18 / 10_000
 
 if kinkBps == 0:
@@ -523,6 +526,8 @@ This follows Aave-style slope semantics: `preKinkSlopeBps` is the full fee-rate 
 Rate components round down because they are intermediate rate calculations, not the final value transfer. This avoids charging extra from each curve segment due only to integer precision and keeps the configured curve predictable. Protocol-favorable rounding still applies where value moves: utilization rounds up before entering the curve, and actual collateral-denominated fees round up when charged. If governance wants higher protocol compensation, it should increase `baseFeeBps`, `preKinkSlopeBps`, or `postKinkSlopeBps` rather than rely on rounding artifacts.
 
 Fees use asset utilization only. The global debt cap is still enforced as a facility-wide open-interest limit, but it is not a fee input; otherwise one collateral asset could make another asset's borrow or extension fees jump merely because the global facility is full. Asset-specific risk is handled through per-asset fee curves, debt caps, collateral factor, minimum collateral ratio, `termLength`, and `maxMaturityHorizon`.
+
+Borrow fees use the asset utilization immediately before the new debt is added. This follows the existing curve definition, which quotes from current asset open interest, and makes the fee deterministic from the state visible to `previewBorrow`. The quoted rate is applied only to the incremental required collateral for the requested OHM amount. Additional borrows therefore pay the current pre-borrow rate on new exposure without repricing existing debt.
 
 The curve is continuous at `kinkWad` and monotonic when both slopes are non-negative. Example with `baseFeeBps = 25`, `preKinkSlopeBps = 100`, `postKinkSlopeBps = 900`, and `kinkBps = 8,000`:
 
@@ -612,7 +617,7 @@ depositCollateral(collateralAsset, collateralAmount, onBehalfOf)
 withdrawCollateral(collateralAsset, collateralAmount, onBehalfOf, recipient)
     -> withdrawnToken, withdrawnAmount, remainingCollateral, healthFactor
 borrow(collateralAsset, ohmAmount, onBehalfOf, recipient, maxFee)
-    -> amountBorrowed, fee, maturity, healthFactor
+    -> amountBorrowed, fee, totalDebtOhm, maturity, healthFactor
 repay(collateralAsset, repayOhm, onBehalfOf)
     -> amountRepaid, remainingDebt, healthFactor
 extend(collateralAsset, onBehalfOf, termCount, maxFee)
@@ -672,7 +677,7 @@ Parameter ordering should follow these conventions:
 - Slippage or spend caps last. `maxFee` is a caller protection value denominated in the collateral asset.
 - Return primary action data first, pagination state next, and ancillary economics last. For example, `getSeizableBorrowers` returns `(borrowers, nextIndex, expectedKeeperReward)`.
 
-Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is locally executable when the preview return type includes an executable flag. `previewDepositCollateral` composes the vault's current `previewDeposit` and `previewRedeem` values to quote custody credit and the resulting total; the actual credit returned by `depositCollateral` is authoritative because vault state can change between the preview call and transaction and a generic ERC4626 vault does not expose its post-deposit accounting in a view call. It should reject a disabled Burner Loans policy, disabled collateral asset, disabled DepositManager, or unsupported custody configuration. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, maturity, and resulting health using current PRICE and asset configuration. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject a disabled Burner Loans policy, disabled DepositManager, stale PRICE when debt remains, or unsupported custody configuration. Its `executable` flag is false for a zero local custody quote or unhealthy debt-bearing position, and true only means those local checks pass; it does not promise that a vault redeem or DepositManager solvency check will succeed at execution. Asset disable remains a new-exposure freeze, so it does not block withdrawal previews or writes. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. Previews should surface the same deterministic eligibility failures that the write path would hit.
+Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is locally executable when the preview return type includes an executable flag. `previewDepositCollateral` composes the vault's current `previewDeposit` and `previewRedeem` values to quote custody credit and the resulting total; the actual credit returned by `depositCollateral` is authoritative because vault state can change between the preview call and transaction and a generic ERC4626 vault does not expose its post-deposit accounting in a view call. It should reject a disabled Burner Loans policy, disabled collateral asset, disabled DepositManager, or unsupported custody configuration. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, resulting debt, maturity, and resulting health using current PRICE and asset configuration. Its `executable` flag covers deterministic local protocol eligibility only. Because the preview signature has no caller, recipient, or `maxFee`, it cannot promise owner/operator authorization, recipient validity, fee-token approval or balance, or max-fee acceptance. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject a disabled Burner Loans policy, disabled DepositManager, stale PRICE when debt remains, or unsupported custody configuration. Its `executable` flag is false for a zero local custody quote or unhealthy debt-bearing position, and true only means those local checks pass; it does not promise that a vault redeem or DepositManager solvency check will succeed at execution. Asset disable remains a new-exposure freeze, so it does not block withdrawal previews or writes. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. Previews should surface the same deterministic eligibility failures that the write path would hit.
 
 `borrow` and `withdrawCollateral` return a resulting `healthFactor` because both require current PRICE data to execute. `depositCollateral` and `repay` deliberately do not return one: they must remain usable when PRICE is stale because they reduce risk. Returning a quoted health factor would either add an unwanted PRICE dependency or require an ambiguous sentinel. Callers that need a health quote must request it separately once current PRICE is available.
 

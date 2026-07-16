@@ -7,6 +7,124 @@ import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansMathTest is BurnerLoansTest {
+    function _assertHealthFactorLevels(
+        uint256 debtOhm_,
+        uint8 ohmDecimals_,
+        uint8 collateralDecimals_
+    ) internal view {
+        // debt = 100 OHM at $10 = $1,000, regardless of OHM token decimals.
+        uint256 debtValueUsd = burnerLoans.debtValueUsd(debtOhm_, 10e18, ohmDecimals_);
+        assertEq(debtValueUsd, 1_000e18, "manual debt USD value");
+
+        // required collateral = $1,000 * 115% = $1,150.
+        // Below: $1,035 / $1,150 = 0.9e18 health.
+        // Boundary: $1,150 / $1,150 = 1e18 health.
+        // Above: $1,265 / $1,150 = 1.1e18 health.
+        uint256 collateralScale = 10 ** collateralDecimals_;
+        uint256 belowCollateralValueUsd = burnerLoans.collateralValueUsd(
+            1_035 * collateralScale,
+            1e18,
+            collateralDecimals_
+        );
+        uint256 boundaryCollateralValueUsd = burnerLoans.collateralValueUsd(
+            1_150 * collateralScale,
+            1e18,
+            collateralDecimals_
+        );
+        uint256 aboveCollateralValueUsd = burnerLoans.collateralValueUsd(
+            1_265 * collateralScale,
+            1e18,
+            collateralDecimals_
+        );
+
+        assertEq(belowCollateralValueUsd, 1_035e18, "manual below-boundary USD value");
+        assertEq(boundaryCollateralValueUsd, 1_150e18, "manual boundary USD value");
+        assertEq(aboveCollateralValueUsd, 1_265e18, "manual above-boundary USD value");
+
+        // Collateral factor = 100%, so each risk-adjusted value remains unchanged.
+        uint256 belowRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
+            belowCollateralValueUsd,
+            10_000
+        );
+        uint256 boundaryRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
+            boundaryCollateralValueUsd,
+            10_000
+        );
+        uint256 aboveRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
+            aboveCollateralValueUsd,
+            10_000
+        );
+        assertEq(belowRiskAdjustedUsd, 1_035e18, "manual below-boundary risk value");
+        assertEq(boundaryRiskAdjustedUsd, 1_150e18, "manual boundary risk value");
+        assertEq(aboveRiskAdjustedUsd, 1_265e18, "manual above-boundary risk value");
+
+        assertEq(
+            burnerLoans.healthFactor(belowRiskAdjustedUsd, 1_150e18),
+            0.9e18,
+            "manual below-boundary health factor"
+        );
+        assertEq(
+            burnerLoans.healthFactor(boundaryRiskAdjustedUsd, 1_150e18),
+            1e18,
+            "manual boundary health factor"
+        );
+        assertEq(
+            burnerLoans.healthFactor(aboveRiskAdjustedUsd, 1_150e18),
+            1.1e18,
+            "manual above-boundary health factor"
+        );
+
+        _assertHealthFactorImmediatelyAroundBoundary(collateralDecimals_);
+    }
+
+    function _assertHealthFactorImmediatelyAroundBoundary(uint8 collateralDecimals_) internal view {
+        uint256 collateralScale = 10 ** collateralDecimals_;
+        uint256 oneCollateralUnitUsd = collateralDecimals_ == 6 ? 1e12 : 1;
+
+        uint256 belowCollateralValueUsd = burnerLoans.collateralValueUsd(
+            1_150 * collateralScale - 1,
+            1e18,
+            collateralDecimals_
+        );
+        uint256 aboveCollateralValueUsd = burnerLoans.collateralValueUsd(
+            1_150 * collateralScale + 1,
+            1e18,
+            collateralDecimals_
+        );
+
+        // The nearest native collateral units map to 1e12 USD units for 6 decimals
+        // and one USD unit for 18 decimals.
+        assertEq(
+            belowCollateralValueUsd,
+            1_150e18 - oneCollateralUnitUsd,
+            "immediate below-boundary USD value"
+        );
+        assertEq(
+            aboveCollateralValueUsd,
+            1_150e18 + oneCollateralUnitUsd,
+            "immediate above-boundary USD value"
+        );
+
+        uint256 belowHealthFactor = burnerLoans.healthFactor(
+            burnerLoans.riskAdjustedCollateralUsd(belowCollateralValueUsd, 10_000),
+            1_150e18
+        );
+        uint256 aboveHealthFactor = burnerLoans.healthFactor(
+            burnerLoans.riskAdjustedCollateralUsd(aboveCollateralValueUsd, 10_000),
+            1_150e18
+        );
+
+        // 6-decimal collateral moves health by floor/ceil(1e12 / 1,150).
+        // 18-decimal collateral one unit below rounds health down by one WAD unit;
+        // one unit above is below WAD precision and remains exactly 1e18.
+        uint256 expectedBelowHealth = collateralDecimals_ == 6
+            ? 999_999_999_130_434_782
+            : 999_999_999_999_999_999;
+        uint256 expectedAboveHealth = collateralDecimals_ == 6 ? 1_000_000_000_869_565_217 : 1e18;
+        assertEq(belowHealthFactor, expectedBelowHealth, "immediate below-boundary health");
+        assertEq(aboveHealthFactor, expectedAboveHealth, "immediate above-boundary health");
+    }
+
     function test_debtValueUsd_givenPriceDecimalsAreNotWad_usesPriceScale() public view {
         // debt = 4e9 OHM units = 4 OHM with 9 decimals
         // price = 250e8 USD/OHM with 8 PRICE decimals
@@ -80,7 +198,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     debtValueUsd: 1000e18,
                     debtOhm: 4e9,
                     backingPerOhmUsd: 12e18,
-                    ohmDecimals: OHM_DECIMALS,
                     minCollateralRatioBps: 11_500,
                     backingMultiplierBps: 10_000
                 })
@@ -103,7 +220,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     debtValueUsd: 10e18,
                     debtOhm: 4e9,
                     backingPerOhmUsd: 12e18,
-                    ohmDecimals: OHM_DECIMALS,
                     minCollateralRatioBps: 11_000,
                     backingMultiplierBps: 15_000
                 })
@@ -133,6 +249,34 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // collateral = 1150 USDS at 1 USD = 1150e18
         // Expected: floor(1150e18 * 1e18 / 1150e18) = 1e18
         assertEq(burnerLoans.healthFactor(1150e18, 1150e18), 1e18, "health factor");
+    }
+
+    function test_healthFactor_givenNineDecimalDebtAndSixDecimalCollateral_returnsExpectedLevels()
+        public
+        view
+    {
+        _assertHealthFactorLevels(100e9, 9, 6);
+    }
+
+    function test_healthFactor_givenEighteenDecimalDebtAndSixDecimalCollateral_returnsExpectedLevels()
+        public
+        view
+    {
+        _assertHealthFactorLevels(100e18, 18, 6);
+    }
+
+    function test_healthFactor_givenNineDecimalDebtAndEighteenDecimalCollateral_returnsExpectedLevels()
+        public
+        view
+    {
+        _assertHealthFactorLevels(100e9, 9, 18);
+    }
+
+    function test_healthFactor_givenEighteenDecimalDebtAndEighteenDecimalCollateral_returnsExpectedLevels()
+        public
+        view
+    {
+        _assertHealthFactorLevels(100e18, 18, 18);
     }
 
     function test_healthFactor_givenOneWeiAboveBoundary_roundsDownToOneWad() public view {
@@ -247,17 +391,112 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_feeRateWad_matchesDocumentedKinkCurveExamples() public view {
+    // Condition tree:
+    // - Fee curve: 25 bps base, 100 bps pre-kink slope, 900 bps post-kink slope
+    // - Utilization: zero
+    // - Expected branch: only the base fee contributes
+    function test_feeRateWad_givenZeroUtilization() public view {
         IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
 
-        // base = 25 bps
-        // kink = 80%
-        // preKinkSlope = 100 bps, applied as the full 0%-to-kink increase
-        // postKinkSlope = 900 bps, applied as the full kink-to-100% increase
-        assertEq(burnerLoans.feeRateWad(0.7e18, feeConfig), 0.01125e18, "70%");
-        assertEq(burnerLoans.feeRateWad(0.8e18, feeConfig), 0.0125e18, "80%");
-        assertEq(burnerLoans.feeRateWad(0.9e18, feeConfig), 0.0575e18, "90%");
-        assertEq(burnerLoans.feeRateWad(1e18, feeConfig), 0.1025e18, "100%");
+        // base = 25 bps = 25 / 10,000 = 0.0025 WAD
+        // Pre-kink contribution = 0; post-kink contribution = 0.
+        assertEq(
+            burnerLoans.feeRateWad(0, feeConfig),
+            2_500_000_000_000_000,
+            "zero utilization base fee"
+        );
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base and 100 bps full pre-kink increase
+    // - Utilization: 40%, halfway to the 80% kink
+    // - Expected branch: base plus half of the pre-kink slope
+    function test_feeRateWad_givenPreKinkMidpoint() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // Pre-kink contribution = 100 bps * 40% / 80% = 50 bps.
+        // Total = 25 bps + 50 bps = 75 bps = 0.0075 WAD.
+        assertEq(
+            burnerLoans.feeRateWad(0.4e18, feeConfig),
+            7_500_000_000_000_000,
+            "pre-kink midpoint fee"
+        );
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base and 100 bps full pre-kink increase
+    // - Utilization: one WAD unit below the 80% kink
+    // - Expected branch: pre-kink component rounds down by one WAD unit
+    function test_feeRateWad_givenOneWadUnitBelowKink() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // At the kink, the pre-kink contribution is 0.01 WAD.
+        // One utilization WAD unit below the kink gives floor((0.8e18 - 1) / 80)
+        // = 9,999,999,999,999,999. Adding the 0.0025 WAD base gives:
+        // 12,499,999,999,999,999.
+        assertEq(
+            burnerLoans.feeRateWad(0.8e18 - 1, feeConfig),
+            12_499_999_999_999_999,
+            "fee immediately below kink"
+        );
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base and 100 bps full pre-kink increase
+    // - Utilization: exactly at the 80% kink
+    // - Expected branch: the entire pre-kink slope contributes and post-kink contributes zero
+    function test_feeRateWad_givenUtilizationAtKink() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // Total = 25 bps base + 100 bps pre-kink = 125 bps = 0.0125 WAD.
+        assertEq(burnerLoans.feeRateWad(0.8e18, feeConfig), 12_500_000_000_000_000, "fee at kink");
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base, 100 bps pre-kink slope, 900 bps post-kink slope
+    // - Utilization: one WAD unit above the 80% kink
+    // - Expected branch: the first post-kink fraction rounds down to zero
+    function test_feeRateWad_givenOneWadUnitAboveKink() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // Post-kink contribution = floor(1 * 900e18 / (0.2e18 * 10,000)) = 0.
+        // Total therefore remains 25 bps + 100 bps = 125 bps.
+        assertEq(
+            burnerLoans.feeRateWad(0.8e18 + 1, feeConfig),
+            12_500_000_000_000_000,
+            "fee immediately above kink"
+        );
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base, 100 bps pre-kink slope, 900 bps post-kink slope
+    // - Utilization: 90%, halfway from the 80% kink to full utilization
+    // - Expected branch: base and pre-kink components plus half the post-kink slope
+    function test_feeRateWad_givenPostKinkMidpoint() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // Post-kink contribution = 900 bps * (90% - 80%) / (100% - 80%) = 450 bps.
+        // Total = 25 bps + 100 bps + 450 bps = 575 bps = 0.0575 WAD.
+        assertEq(
+            burnerLoans.feeRateWad(0.9e18, feeConfig),
+            57_500_000_000_000_000,
+            "post-kink midpoint fee"
+        );
+    }
+
+    // Condition tree:
+    // - Fee curve: 25 bps base, 100 bps pre-kink slope, 900 bps post-kink slope
+    // - Utilization: 100%
+    // - Expected branch: every configured fee component contributes in full
+    function test_feeRateWad_givenFullUtilization() public view {
+        IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();
+
+        // Total = 25 bps + 100 bps + 900 bps = 1,025 bps = 0.1025 WAD.
+        assertEq(
+            burnerLoans.feeRateWad(1e18, feeConfig),
+            102_500_000_000_000_000,
+            "full utilization fee"
+        );
     }
 
     function test_feeRateWad_givenNoKink_usesSlope1AcrossFullRange() public view {
@@ -364,7 +603,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
                     backingPerOhmUsd: 10e18,
-                    ohmDecimals: OHM_DECIMALS,
                     backingMultiplierBps: 10_000,
                     collateralUsdPrice: 1e18,
                     collateralDecimals: USDS_DECIMALS,
@@ -385,7 +623,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
                     backingPerOhmUsd: 10e18,
-                    ohmDecimals: OHM_DECIMALS,
                     backingMultiplierBps: 10_000,
                     collateralUsdPrice: 1e18,
                     collateralDecimals: USDS_DECIMALS,
@@ -403,7 +640,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
                     backingPerOhmUsd: 10e18,
-                    ohmDecimals: OHM_DECIMALS,
                     backingMultiplierBps: 10_000,
                     collateralUsdPrice: 1e18,
                     collateralDecimals: USDS_DECIMALS,
@@ -429,7 +665,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
                     backingPerOhmUsd: 10e18,
-                    ohmDecimals: OHM_DECIMALS,
                     backingMultiplierBps: 10_000,
                     collateralUsdPrice: 1e18,
                     collateralDecimals: USDS_DECIMALS,

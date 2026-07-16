@@ -19,6 +19,18 @@ interface IBurnerLoans {
     error BurnerLoans_ZeroCollateralWithdrawal();
     error BurnerLoans_InsufficientCollateral(uint256 requested, uint256 available);
     error BurnerLoans_UnhealthyWithdrawal(uint256 healthFactor);
+    error BurnerLoans_NoCollateral();
+    error BurnerLoans_UnhealthyPosition(uint256 healthFactor);
+    error BurnerLoans_UnhealthyBorrow(uint256 healthFactor);
+    error BurnerLoans_PositionMatured(uint48 maturity);
+    error BurnerLoans_PositionSeized();
+    error BurnerLoans_GlobalDebtCapExceeded(uint256 requestedDebtOhm, uint256 availableDebtOhm);
+    error BurnerLoans_AssetDebtCapExceeded(
+        address asset,
+        uint256 requestedDebtOhm,
+        uint256 availableDebtOhm
+    );
+    error BurnerLoans_FeeExceedsMax(uint256 fee, uint256 maxFee);
     error BurnerLoans_ResidualCollateralBalance(address asset, uint256 balance);
     error BurnerLoans_ReceiptApprovalFailed(address receiptTokenManager);
     error BurnerLoans_AssetAlreadyConfigured(address asset);
@@ -217,6 +229,7 @@ interface IBurnerLoans {
     );
     event YieldHarvested(address indexed asset, uint256 amount);
     event GlobalDebtCapSet(uint256 debtCapOhm);
+    event BackingOracleSet(address indexed backingOracle);
     event AssetAdded(address indexed asset, AssetConfig config);
     event AssetDebtCapSet(address indexed asset, uint256 debtCapOhm);
     event ConfiguratorSet(address indexed configurator);
@@ -246,6 +259,10 @@ interface IBurnerLoans {
     /// @notice Returns the configured Burner Loans timelock executor.
     /// @return address The configurator address.
     function configurator() external view returns (address);
+
+    /// @notice Returns the oracle supplying canonical OHM backing.
+    /// @return address The backing oracle address.
+    function backingOracle() external view returns (address);
 
     /// @notice Returns current active debt for a collateral asset.
     /// @param asset_ The collateral asset to query.
@@ -532,6 +549,11 @@ interface IBurnerLoans {
     function harvestYield(address asset_) external returns (uint256 amount);
 
     // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Sets the oracle supplying canonical OHM backing.
+    /// @dev Admin-only and unavailable while Burner Loans is disabled.
+    /// @param backingOracle_ New backing oracle address.
+    function setBackingOracle(address backingOracle_) external;
 
     /// @notice Sets the global active debt cap.
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this

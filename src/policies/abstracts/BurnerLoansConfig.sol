@@ -11,6 +11,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
@@ -42,6 +43,7 @@ abstract contract BurnerLoansConfig is
     // ========== IMMUTABLES ========== //
 
     IERC20 internal immutable _OHM;
+    uint8 internal immutable _OHM_DECIMALS;
     IDepositManager internal immutable _DEPOSIT_MANAGER;
 
     // ========== MODULES ========== //
@@ -55,12 +57,14 @@ abstract contract BurnerLoansConfig is
     uint256 public override globalDebtCapOhm;
     uint256 public override totalActiveDebtOhm;
     address public override configurator;
+    address public override backingOracle;
 
     mapping(address asset => uint256 debtOhm) public override assetActiveDebtOhm;
     mapping(address asset => bool configured) public override isAssetConfigured;
     mapping(address asset => AssetConfig config) internal _assetConfigs;
     mapping(address asset => AssetFeeConfig config) internal _assetFeeConfigs;
     mapping(address owner => mapping(address asset => Position position)) internal _positions;
+    mapping(address asset => EnumerableSet.AddressSet borrowers) internal _activeBorrowersByAsset;
     address[] internal _configuredAssets;
 
     // ========== CONSTRUCTOR ========== //
@@ -83,10 +87,26 @@ abstract contract BurnerLoansConfig is
         }
 
         _OHM = ohm_;
+        _OHM_DECIMALS = ohm_.decimals();
         _DEPOSIT_MANAGER = depositManager_;
     }
 
     // ========== ADMIN FUNCTIONS ========== //
+
+    /// @notice Sets the oracle supplying canonical OHM backing.
+    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
+    ///      function is effectively timelocked by governance.
+    /// @dev Reverts if:
+    ///      - The contract is disabled.
+    ///      - The caller does not have the admin role.
+    ///      - `backingOracle_` is zero.
+    /// @param backingOracle_ New backing oracle address.
+    function setBackingOracle(address backingOracle_) external givenEnabled onlyAdminRole {
+        if (backingOracle_ == address(0)) revert BurnerLoans_ZeroAddress();
+
+        backingOracle = backingOracle_;
+        emit BackingOracleSet(backingOracle_);
+    }
 
     /// @notice Sets the global active debt cap.
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this

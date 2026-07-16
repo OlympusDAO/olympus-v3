@@ -21,6 +21,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
@@ -50,10 +51,19 @@ abstract contract BurnerLoansTest is Test {
     MockDepositManager internal mockDepositManager;
     BurnerLoansHarness internal burnerLoans;
     BurnerLoansConfigTimelock internal configTimelock;
+    MockOlympusBackingOracle internal backingOracle;
 
     uint8 internal constant OHM_DECIMALS = 9;
     uint8 internal constant USDS_DECIMALS = 6;
     uint8 internal constant PRICE_DECIMALS = 18;
+
+    function _ohmDecimals() internal pure virtual returns (uint8) {
+        return OHM_DECIMALS;
+    }
+
+    function _collateralDecimals() internal pure virtual returns (uint8) {
+        return USDS_DECIMALS;
+    }
 
     function setUp() public virtual {
         admin = makeAddr("admin");
@@ -64,8 +74,8 @@ abstract contract BurnerLoansTest is Test {
         vm.startPrank(admin);
 
         kernel = new Kernel();
-        ohm = new MockOhm("OHM", "OHM", OHM_DECIMALS);
-        usds = new MockERC20("USDS", "USDS", USDS_DECIMALS);
+        ohm = new MockOhm("OHM", "OHM", _ohmDecimals());
+        usds = new MockERC20("USDS", "USDS", _collateralDecimals());
         mintr = new OlympusMinter(kernel, address(ohm));
         roles = new OlympusRoles(kernel);
         trsry = new OlympusTreasury(kernel);
@@ -74,6 +84,7 @@ abstract contract BurnerLoansTest is Test {
         receiptTokenManager = new ReceiptTokenManager();
         depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
         burnerLoans = new BurnerLoansHarness(kernel, IERC20(address(ohm)), depositManager);
+        backingOracle = new MockOlympusBackingOracle(1e18);
         configTimelock = new BurnerLoansConfigTimelock(kernel, burnerLoans);
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
@@ -95,12 +106,13 @@ abstract contract BurnerLoansTest is Test {
         depositManager.enable("");
         depositManager.setOperatorName(address(burnerLoans), "brn");
         burnerLoans.enable("");
+        burnerLoans.setBackingOracle(address(backingOracle));
 
         vm.stopPrank();
     }
 
     function _defaultAssetDebtCap() internal pure returns (uint256) {
-        return 100_000e9;
+        return 100_000 * 10 ** _ohmDecimals();
     }
 
     function _defaultAssetFeeConfig() internal pure returns (IBurnerLoans.AssetFeeConfig memory) {
@@ -185,7 +197,7 @@ abstract contract BurnerLoansTest is Test {
 
     function _setDefaultGlobalDebtCap() internal {
         vm.prank(admin);
-        burnerLoans.setGlobalDebtCap(1_000_000e9);
+        burnerLoans.setGlobalDebtCap(1_000_000 * 10 ** _ohmDecimals());
     }
 
     function _addDefaultUsdsAsset() internal {

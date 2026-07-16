@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+
+contract ReentrantFeeToken is MockERC20 {
+    address internal _callbackTarget;
+    bytes internal _callbackData;
+
+    bool public callbackEnabled;
+    bool public callbackSucceeded;
+    bytes4 public callbackRevertSelector;
+
+    constructor() MockERC20("Reentrant USDS", "rUSDS", 18) {}
+
+    function setCallback(address target_, bytes calldata data_) external {
+        _callbackTarget = target_;
+        _callbackData = data_;
+        callbackEnabled = true;
+    }
+
+    function transferFrom(
+        address from_,
+        address to_,
+        uint256 amount_
+    ) public override returns (bool) {
+        bool success = super.transferFrom(from_, to_, amount_);
+        if (callbackEnabled && msg.sender == _callbackTarget) {
+            callbackEnabled = false;
+            bytes memory returnData;
+            (callbackSucceeded, returnData) = _callbackTarget.call(_callbackData);
+            if (returnData.length >= 4) {
+                bytes4 selector;
+                assembly ("memory-safe") {
+                    selector := mload(add(returnData, 0x20))
+                }
+                callbackRevertSelector = selector;
+            }
+        }
+        return success;
+    }
+}
