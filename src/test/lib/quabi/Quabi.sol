@@ -78,14 +78,24 @@ library Quabi {
     }
 
     function getFunctions(string memory contractName) public returns (bytes4[] memory) {
-        string memory query = "'[.ast.nodes[-1].nodes[] | if .nodeType == \"FunctionDefinition\" and .kind == \"function\" then .functionSelector else empty end ]'";
+        string memory query = string(bytes.concat(
+            "'[.ast.nodes[] | select(.nodeType == \"ContractDefinition\" and .name == \"",
+            bytes(contractName),
+            "\") | .nodes[] | if .nodeType == \"FunctionDefinition\" and .kind == \"function\" then .functionSelector else empty end ]'"
+        ));
         string memory path = getPath(contractName);
 
         return getSelectors(query, path);
     }
 
     function getFunctionsWithModifier(string memory contractName, string memory modifierName) public returns (bytes4[] memory) {
-        string memory query = string(bytes.concat("'[.ast.nodes[-1].nodes[] | if .nodeType == \"FunctionDefinition\" and .kind == \"function\" and ([.modifiers[] | .modifierName.name == \"", bytes(modifierName), "\" ] | any ) then .functionSelector else empty end ]'"));
+        string memory query = string(bytes.concat(
+            "'[.ast.nodes[] | select(.nodeType == \"ContractDefinition\" and .name == \"",
+            bytes(contractName),
+            "\") | .nodes[] | if .nodeType == \"FunctionDefinition\" and .kind == \"function\" and ([.modifiers[] | .modifierName.name == \"",
+            bytes(modifierName),
+            "\" ] | any ) then .functionSelector else empty end ]'"
+        ));
         string memory path = getPath(contractName);
 
         return getSelectors(query, path);

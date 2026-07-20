@@ -63,7 +63,7 @@ contract VerifyLegacyStaking is Script {
         return env.readAddress(fullKey);
     }
 
-    function _printHeader() internal view {
+    function _printHeader() internal pure {
         console2.log("\n=== Verifying Legacy Staking Deployment ===");
     }
 

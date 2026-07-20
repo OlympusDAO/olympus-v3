@@ -31,3 +31,6 @@ bytes32 constant BRIDGE_RATE_LIMITER_ROLE = "bridge_rate_limiter";
 ///      bridge_admin and admin so that channel management can be delegated without granting
 ///      the broader bridge_admin role.
 bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";
+
+/// @dev Oracle manager role, e.g. managing oracle deployments.
+bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";

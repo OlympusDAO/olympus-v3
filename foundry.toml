@@ -87,3 +87,5 @@ solidity-http = { version = "0.0.7", git = "https://github.com/Recon-Fuzz/solidi
 "@layerzerolabs-oapp-evm" = "0.4.1"
 "@layerzerolabs-test-devtools-evm-foundry" = "8.0.1"
 "@layerzerolabs-lz-evm-v1-0-7" = "3.0.162"
+uniswap-v3-core = { version = "1.0.1", git = "https://github.com/Uniswap/v3-core.git", rev = "6562c52e8f75f0c10f9deaf44861847585fc8129" }
+uniswap-v3-periphery = { version = "1.4.2", git = "https://github.com/Uniswap/v3-periphery.git", rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c" }

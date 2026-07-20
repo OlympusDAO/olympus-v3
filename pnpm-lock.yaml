@@ -7,6 +7,17 @@ settings:
 overrides:
   brace-expansion@>=5.0.0 <5.0.6: ^5.0.6
   fast-uri@>=3.0.0 <=3.1.1: ^3.1.2
+  cross-spawn@>=7.0.0 <7.0.5: ^7.0.5
+  glob@>=11.0.0 <11.1.0: ^11.1.0
+  js-yaml@>=4.0.0 <4.2.0: ^4.2.0
+  lodash@<=4.17.23: ^4.18.0
+  markdown-it@>=13.0.0 <14.2.0: ^14.2.0
+  minimatch@>=10.0.0 <10.2.3: ^10.2.3
+  minimatch@>=5.0.0 <5.1.8: ^5.1.8
+  picomatch@<2.3.2: ^2.3.2
+  semver@>=7.0.0 <7.5.2: ^7.5.2
+  smol-toml@<1.6.1: ^1.6.1
+  ajv@>=6.0.0 <6.14.0: 6.14.0
 
 importers:
 
@@ -399,6 +410,7 @@ packages:
 
   mvdan-sh@0.10.1:
     resolution: {integrity: sha512-kMbrH0EObaKmK3nVRKUIIya1dpASHIEusM13S4V1ViHFuxuNxCo+arxoa6j/dbV22YBGjl7UKJm9QQKJ2Crzhg==}
+    deprecated: See https://github.com/mvdan/sh/issues/1145
 
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}

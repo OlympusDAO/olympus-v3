@@ -12,7 +12,7 @@
         "node": ">=24",
         "npm": "use-pnpm",
         "yarn": "use-pnpm",
-        "pnpm": ">=10.33.0"
+        "pnpm": ">=11.13.0"
     },
     "scripts": {
         "postinstall": "./shell/postinstall.sh",
@@ -27,12 +27,16 @@
         "lint": "pnpm run prettier && pnpm run forge-lint && pnpm run markdownlint",
         "lint:check": "pnpm run prettier:check && pnpm run forge-lint:check && pnpm run markdownlint:check",
         "test": "./shell/test_all.sh",
-        "test:unit": "forge test --no-match-contract '(Fork|Script)' --no-match-path 'src/test/proposals/*.t.sol' -vvv",
+        "test:unit": "forge test --no-match-contract '(Fork|Script)' --no-match-path 'src/test/proposals/*.t.sol' -vvv && npx prettier --write 'snapshots/**/*.json'",
         "test:fork": "forge test --match-contract 'Fork' --no-match-contract 'CrossChainBridgeFork|TokenPoolFork' --fork-url mainnet -vvv",
+        "test:fork:loan-consolidator": "forge test --match-contract 'LoanConsolidatorFork' --fork-url mainnet -vvv",
+        "test:fork:boosted-liquidity": "forge test --match-contract 'BLVault.*Fork|BLVaultManager.*Fork' --fork-url mainnet -vvv",
+        "test:fork:proposal-helpers": "forge test --match-contract 'ConvertibleDepositActivatorFork|MigrationProposalHelperFork' --fork-url mainnet -vvv",
+        "test:fork:misc": "forge test --match-contract 'Fork' --no-match-contract 'CrossChainBridgeFork|TokenPoolFork|LoanConsolidatorFork|BLVault.*Fork|BLVaultManager.*Fork|ConvertibleDepositActivatorFork|MigrationProposalHelperFork' --fork-url mainnet -vvv",
         "test:proposal": "forge test --match-path 'src/test/proposals/*.t.sol' --no-match-contract 'Fork' --fork-url mainnet -vvv",
         "test:crosschainfork": "forge test --match-contract 'CrossChainBridgeFork|TokenPoolFork' -vvv",
         "test:coverage": "./shell/test_coverage.sh",
-        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --skip test --skip '*/*Mock*.sol' --skip 'UniswapDeployer.sol' --skip 'Operator.sol' --skip 'MonoCooler.sol'",
+        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --skip 'src/test/*' --skip 'Operator.sol' --skip 'MonoCooler.sol'",
         "metrics": "node shell/metrics.js",
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },
@@ -60,5 +64,5 @@
         ],
         "jsonRecursiveSort": true
     },
-    "packageManager": "pnpm@10.33.0"
+    "packageManager": "pnpm@11.13.0"
 }

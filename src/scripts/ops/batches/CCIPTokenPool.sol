@@ -16,13 +16,16 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 /// @title ConfigureCCIPTokenPool
 /// @notice Multi-sig batch to configure the CCIP bridge
 ///         This scripts is designed to define the desired configuration,
 ///         and the script will execute the necessary transactions to
 ///         configure the CCIP bridge to the desired state.
-contract CCIPTokenPoolBatch is BatchScriptV2 {
+contract CCIPTokenPool is BatchScriptV2 {
+    using SafeCast for uint256;
+
     /// @dev Returns true if the chain is canonical chain upon which new OHM is minted (mainnet or sepolia)
     function _isChainCanonical(string memory chain_) internal pure returns (bool) {
         return
@@ -553,6 +556,109 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 _getRateLimiterConfigEmergencyShutdown()
             )
         );
+    }
+
+    function _readRateLimiterConfig(
+        string memory functionName_,
+        string memory argPrefix_
+    ) internal view returns (RateLimiter.Config memory) {
+        // capacity and rate are OHM local token units with 9 decimals, matching the CCIP OHM token decimals.
+        return
+            RateLimiter.Config({
+                isEnabled: _readBatchArgBool(
+                    functionName_,
+                    string.concat(argPrefix_, ".isEnabled")
+                ),
+                capacity: _readBatchArgUint256(
+                    functionName_,
+                    string.concat(argPrefix_, ".capacity")
+                ).encodeUInt128(),
+                rate: _readBatchArgUint256(functionName_, string.concat(argPrefix_, ".rate"))
+                    .encodeUInt128()
+            });
+    }
+
+    function _logRateLimiterConfig(
+        string memory label_,
+        RateLimiter.Config memory config_
+    ) internal pure {
+        console2.log(label_);
+        console2.log("  Enabled:", config_.isEnabled);
+        console2.log("  Capacity:", config_.capacity);
+        console2.log("  Rate:", config_.rate);
+    }
+
+    /// @notice Sets the outbound and inbound TokenPool rate limits for a remote chain
+    /// @dev    The local chain is determined from block.chainid. `capacity` is the max bucket size and `rate` is the
+    ///         bucket refill per second. Both fields are denominated in OHM local token units with 9 decimals.
+    ///         Args file format:
+    ///         {
+    ///           "functions": [{
+    ///             "name": "setRateLimits",
+    ///             "args": {
+    ///               "localChain": "mainnet",
+    ///               "remoteChain": "base",
+    ///               "outboundRateLimiterConfig": {"isEnabled": true, "capacity": "100000000000", "rate": "100000000"},
+    ///               "inboundRateLimiterConfig": {"isEnabled": true, "capacity": "100000000000", "rate": "100000000"}
+    ///             }
+    ///           }]
+    ///         }
+    function setRateLimits(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFilePath_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_) {
+        string memory localChain = _readBatchArgString("setRateLimits", "localChain");
+        if (keccak256(abi.encodePacked(localChain)) != keccak256(abi.encodePacked(chain))) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("Local chain arg does not match the execution chain");
+        }
+        _skipHeartbeatValidation = true;
+
+        string memory remoteChain = _readBatchArgString("setRateLimits", "remoteChain");
+        uint64 remoteChainSelector = uint64(
+            _envUintNotZero(remoteChain, "external.ccip.ChainSelector")
+        );
+        address tokenPoolAddress = _getTokenPoolAddressNotZero(chain);
+
+        if (!TokenPool(tokenPoolAddress).isSupportedChain(remoteChainSelector)) {
+            // solhint-disable-next-line gas-custom-errors
+            revert("Remote chain is not configured on the TokenPool");
+        }
+
+        RateLimiter.Config memory outboundRateLimiterConfig = _readRateLimiterConfig(
+            "setRateLimits",
+            "outboundRateLimiterConfig"
+        );
+        RateLimiter.Config memory inboundRateLimiterConfig = _readRateLimiterConfig(
+            "setRateLimits",
+            "inboundRateLimiterConfig"
+        );
+
+        console2.log("Setting rate limits for chain combo");
+        console2.log("  Local chain:", chain);
+        console2.log("  Remote chain:", remoteChain);
+        console2.log("  Remote chain selector:", remoteChainSelector);
+        console2.log("  Token pool:", tokenPoolAddress);
+        _logRateLimiterConfig("Outbound rate limiter config", outboundRateLimiterConfig);
+        _logRateLimiterConfig("Inbound rate limiter config", inboundRateLimiterConfig);
+
+        addToBatch(
+            tokenPoolAddress,
+            abi.encodeWithSelector(
+                TokenPool.setChainRateLimiterConfig.selector,
+                remoteChainSelector,
+                outboundRateLimiterConfig,
+                inboundRateLimiterConfig
+            )
+        );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
     }
 
     /// @notice Performs an emergency shutdown of the TokenPool for a specific remote chain by enabling the rate limiter with a very low capacity

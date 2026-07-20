@@ -663,11 +663,11 @@ contract V1MigratorMigrateTest is V1MigratorTest {
     //     [X] it returns the rounded amount
     //     [X] small amounts may return zero
 
-    function test_previewMigrate_whenAmountIsZero_returnsZero() public {
+    function test_previewMigrate_whenAmountIsZero_returnsZero() public view {
         assertEq(migrator.previewMigrate(0), 0, "Should return 0 for zero amount");
     }
 
-    function test_previewMigrate_whenAmountIsNonZero_returnsConvertedAmount() public {
+    function test_previewMigrate_whenAmountIsNonZero_returnsConvertedAmount() public view {
         uint256 amount = 1000e9;
         uint256 expected = _expectedOHMv2(amount);
         uint256 actual = migrator.previewMigrate(amount);
@@ -675,7 +675,7 @@ contract V1MigratorMigrateTest is V1MigratorTest {
         assertEq(actual, expected, "Preview should match expected OHM v2");
     }
 
-    function test_previewMigrate_matchesHelperFunction() public {
+    function test_previewMigrate_matchesHelperFunction() public view {
         uint256 amount = 500e9;
 
         assertEq(
@@ -685,7 +685,7 @@ contract V1MigratorMigrateTest is V1MigratorTest {
         );
     }
 
-    function test_fuzz_previewMigrate_matchesMigrate(uint256 amount_) public {
+    function test_fuzz_previewMigrate_matchesMigrate(uint256 amount_) public view {
         // Minimum of 3 ensures gOHM conversion produces non-zero result
         amount_ = bound(amount_, 3, ALICE_ALLOWANCE);
 
@@ -699,7 +699,7 @@ contract V1MigratorMigrateTest is V1MigratorTest {
         );
     }
 
-    function test_previewMigrate_smallAmountsMayRoundToZero() public {
+    function test_previewMigrate_smallAmountsMayRoundToZero() public view {
         // At MockGohm index of 269238508004, values < 2 round to 0
         assertEq(migrator.previewMigrate(0), 0, "0 should return 0");
         assertEq(migrator.previewMigrate(1), 0, "1 should round to 0");

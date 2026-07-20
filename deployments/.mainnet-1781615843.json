@@ -1,0 +1,8 @@
+{
+    "olympus.modules.OlympusPriceV1": "0x465cCc69d285415Bce199f855d3A68ea3537F8FE",
+    "olympus.policies.OlympusPriceConfigV2": "0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd",
+    "olympus.submodules.PRICE.ChainlinkPriceFeeds": "0x1c22ecaCaFD35cfE997729f2880F8C23aa5A2fb2",
+    "olympus.submodules.PRICE.ERC4626Price": "0x5d23a83c9bEc7AC6acea3760BC2EEca9186F3037",
+    "olympus.submodules.PRICE.SimplePriceFeedStrategy": "0xC8b00Cbc78fd9d43E5cDDd86099B9394C4CeF95D",
+    "olympus.submodules.PRICE.UniswapV3Price": "0x5F8A7a25373AEEb4cbfC281BF74EbBE6996C8099"
+}

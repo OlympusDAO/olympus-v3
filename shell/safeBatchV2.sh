@@ -98,6 +98,7 @@ if [ "$fork" == "true" ]; then
     # Override RPC and set env var for Anvil mode
     chain="http://localhost:8545"
     export USE_ANVIL_FORK=true
+    export USE_TENDERLY_FORK=false
 else
     # Set USE_TENDERLY_FORK based on tenderly flag
     export USE_TENDERLY_FORK=$tenderly
