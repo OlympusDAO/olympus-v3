@@ -62,8 +62,9 @@ interface IOperatorAuth {
 
     /// @notice Returns the next signature nonce for an account.
     /// @dev A valid `setAuthorizationWithSig` call must include this exact nonce. The nonce
-    ///      increments after a successful signature authorization, so if nonce `1` has already
-    ///      been consumed this returns `2`.
+    ///      increments after every successful direct authorization, cancellation, or signature
+    ///      authorization. Direct changes therefore invalidate signatures prepared with the
+    ///      account's previous nonce.
     /// @param account_ Account whose nonce is queried.
     /// @return nonce Nonce that must be included in the next authorization signature.
     function authorizationNonces(address account_) external view returns (uint256);
@@ -82,6 +83,7 @@ interface IOperatorAuth {
     // ========== AUTHORIZATION FUNCTIONS ========== //
 
     /// @notice Sets or updates operator authorization for the caller.
+    /// @dev Invalidates authorization signatures prepared with the caller's current nonce.
     /// @param authorized_ Operator to authorize.
     /// @param authorizationDeadline_ Timestamp until which the operator is authorized, in seconds.
     function setAuthorization(address authorized_, uint48 authorizationDeadline_) external;
@@ -95,6 +97,7 @@ interface IOperatorAuth {
     ) external;
 
     /// @notice Clears operator authorization for the caller.
+    /// @dev Invalidates authorization signatures prepared with the caller's current nonce.
     /// @param authorized_ Operator whose authorization should be cancelled.
     function cancelAuthorization(address authorized_) external;
 }

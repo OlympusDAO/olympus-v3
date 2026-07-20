@@ -234,6 +234,56 @@ contract OperatorAuthTest is Test {
         assertEq(auth.authorizationDeadlines(owner, operator), 0, "owner authorization");
     }
 
+    function test_setAuthorization_givenExistingNonce() public {
+        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        uint256 nonceBefore = auth.authorizationNonces(owner);
+
+        _setAuthorizationAndExpectEvent(owner, otherOperator, uint48(block.timestamp + 2 days));
+
+        assertEq(
+            auth.authorizationNonces(owner),
+            nonceBefore + 1,
+            "nonce after direct authorization"
+        );
+    }
+
+    function test_setAuthorization_givenPendingSignature_invalidatesSignature() public {
+        uint48 directDeadline = uint48(block.timestamp + 1 days);
+        uint48 signedDeadline = uint48(block.timestamp + 2 days);
+        (
+            IOperatorAuth.Authorization memory authorization,
+            IOperatorAuth.Signature memory signature
+        ) = _signedAuthorization(
+                owner,
+                ownerKey,
+                operator,
+                signedDeadline,
+                auth.authorizationNonces(owner),
+                uint48(block.timestamp + 1 hours)
+            );
+
+        _setAuthorizationAndExpectEvent(owner, operator, directDeadline);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOperatorAuth.OperatorAuth_InvalidNonce.selector,
+                authorization.nonce
+            )
+        );
+        auth.setAuthorizationWithSig(authorization, signature);
+
+        assertEq(
+            auth.authorizationNonces(owner),
+            authorization.nonce + 1,
+            "nonce after direct authorization"
+        );
+        assertEq(
+            auth.authorizationDeadlines(owner, operator),
+            directDeadline,
+            "direct authorization deadline"
+        );
+    }
+
     function test_cancelAuthorization_givenNoAuthorizationExists_clearsWithoutRevert() public {
         vm.expectEmit(address(auth));
         emit AuthorizationSet(owner, owner, operator, 0);
@@ -271,6 +321,50 @@ contract OperatorAuthTest is Test {
 
         assertEq(auth.authorizationDeadlines(owner, operator), 0, "stored deadline");
         assertEq(auth.isSenderAuthorized(operator, owner), false, "authorized after cancel");
+    }
+
+    function test_cancelAuthorization_givenExistingNonce() public {
+        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        uint256 nonceBefore = auth.authorizationNonces(owner);
+
+        vm.prank(owner);
+        auth.cancelAuthorization(operator);
+
+        assertEq(auth.authorizationNonces(owner), nonceBefore + 1, "nonce after cancellation");
+    }
+
+    function test_cancelAuthorization_givenPendingSignature_invalidatesSignature() public {
+        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        (
+            IOperatorAuth.Authorization memory authorization,
+            IOperatorAuth.Signature memory signature
+        ) = _signedAuthorization(
+                owner,
+                ownerKey,
+                operator,
+                uint48(block.timestamp + 2 days),
+                auth.authorizationNonces(owner),
+                uint48(block.timestamp + 1 hours)
+            );
+
+        vm.prank(owner);
+        auth.cancelAuthorization(operator);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IOperatorAuth.OperatorAuth_InvalidNonce.selector,
+                authorization.nonce
+            )
+        );
+        auth.setAuthorizationWithSig(authorization, signature);
+
+        assertEq(
+            auth.authorizationNonces(owner),
+            authorization.nonce + 1,
+            "nonce after cancellation"
+        );
+        assertEq(auth.authorizationDeadlines(owner, operator), 0, "cancelled authorization");
+        assertEq(auth.isSenderAuthorized(operator, owner), false, "operator after cancellation");
     }
 
     function test_cancelAuthorization_givenCallerIsNotOwner_clearsOnlyCallerAuthorization() public {
@@ -341,6 +435,30 @@ contract OperatorAuthTest is Test {
         assertEq(auth.authorizationDeadlines(owner, caller), 0, "caller not authorized");
         assertEq(auth.authorizationDeadlines(caller, operator), 0, "caller account not changed");
         assertEq(auth.isSenderAuthorized(operator, owner), true, "authorized");
+    }
+
+    function test_setAuthorizationWithSig_givenExistingNonce() public {
+        _setAuthorizationAndExpectEvent(owner, otherOperator, uint48(block.timestamp + 1 days));
+        uint256 nonceBefore = auth.authorizationNonces(owner);
+        (
+            IOperatorAuth.Authorization memory authorization,
+            IOperatorAuth.Signature memory signature
+        ) = _signedAuthorization(
+                owner,
+                ownerKey,
+                operator,
+                uint48(block.timestamp + 2 days),
+                nonceBefore,
+                uint48(block.timestamp + 1 hours)
+            );
+
+        auth.setAuthorizationWithSig(authorization, signature);
+
+        assertEq(
+            auth.authorizationNonces(owner),
+            nonceBefore + 1,
+            "nonce after signature authorization"
+        );
     }
 
     function test_setAuthorizationWithSig_givenSelfAuthorization_reverts() public {

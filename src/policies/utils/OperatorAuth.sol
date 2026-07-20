@@ -46,6 +46,7 @@ abstract contract OperatorAuth is IOperatorAuth {
     /// @dev Reverts with `OperatorAuth_ExpiredAuthorization` when `authorizationDeadline_` is
     ///      before the current block timestamp.
     ///      Reverts with `OperatorAuth_SelfAuthorization` when `authorized_` is the caller.
+    ///      Invalidates authorization signatures prepared with the caller's current nonce.
     /// @param authorized_ Operator to authorize.
     /// @param authorizationDeadline_ Timestamp until which the operator is authorized, in seconds.
     function setAuthorization(
@@ -62,7 +63,9 @@ abstract contract OperatorAuth is IOperatorAuth {
         _validateAuthorizationDeadline(authorizationDeadline_);
 
         // Condition: direct authorization is scoped to `msg.sender`; callers cannot set
-        // authorization for any other account through this function.
+        // authorization for any other account through this function. Incrementing the account
+        // nonce prevents an earlier signature from overwriting this direct authorization.
+        authorizationNonces[msg.sender]++;
         emit AuthorizationSet(msg.sender, msg.sender, authorized_, authorizationDeadline_);
         authorizationDeadlines[msg.sender][authorized_] = authorizationDeadline_;
     }
@@ -120,11 +123,14 @@ abstract contract OperatorAuth is IOperatorAuth {
     }
 
     /// @notice Clears operator authorization for the caller.
-    /// @dev Does not revert when the operator is already unauthorized.
+    /// @dev Does not revert when the operator is already unauthorized. Invalidates authorization
+    ///      signatures prepared with the caller's current nonce.
     /// @param authorized_ Operator whose authorization should be cancelled.
     function cancelAuthorization(address authorized_) external override {
         // Condition: cancellation is scoped to `msg.sender`; callers cannot clear
-        // authorization for any other account through this function.
+        // authorization for any other account through this function. Incrementing the account
+        // nonce prevents an earlier signature from restoring the cancelled authorization.
+        authorizationNonces[msg.sender]++;
         emit AuthorizationSet(msg.sender, msg.sender, authorized_, 0);
         authorizationDeadlines[msg.sender][authorized_] = 0;
     }
