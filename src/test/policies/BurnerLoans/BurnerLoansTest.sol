@@ -9,6 +9,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -226,6 +227,15 @@ abstract contract BurnerLoansTest is Test {
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig()
         );
+    }
+
+    function _createDuplicateUsdsMarketForTest() internal returns (uint32 marketId) {
+        uint32 existingMarketId = burnerLoansConfig.marketId(address(burnerLoans), address(usds));
+        IFLOANv1.Market memory market = floan.getMarket(existingMarketId);
+        bytes memory configData = floan.getMarketConfigData(existingMarketId);
+
+        vm.prank(address(burnerLoansConfig));
+        marketId = floan.createMarket(market, configData);
     }
 
     function _setOtherMarketDebtForTest(uint128 debtOhm_) internal returns (MockERC20 asset) {

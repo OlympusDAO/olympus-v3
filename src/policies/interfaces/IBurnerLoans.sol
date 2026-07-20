@@ -35,6 +35,7 @@ interface IBurnerLoans {
     error BurnerLoans_ReceiptApprovalFailed(address receiptTokenManager);
     error BurnerLoans_AssetAlreadyConfigured(address asset);
     error BurnerLoans_AssetNotConfigured(address asset);
+    error BurnerLoans_AmbiguousMarket(address asset, uint256 marketCount);
     error BurnerLoans_AssetNotEnabled(address asset);
     error BurnerLoans_AssetAlreadyEnabled(address asset);
     error BurnerLoans_InvalidFeeConfig();

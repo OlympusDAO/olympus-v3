@@ -10,7 +10,10 @@ Burner Loans stores generic fixed-term loan records in the [FLOAN module](./floa
 `BurnerLoans` policy owns the borrower lifecycle and read/preview API, `BurnerLoansConfig` owns
 configuration of FLOAN markets for a nominated facility, and `BurnerLoansConfigTimelock` delays
 delegated risk changes. `BurnerLoans` and `BurnerLoansConfig` do not reference each other: both
-derive the same market from `(facility, collateralAsset, OHM)` and interact directly with FLOAN.
+query FLOAN for `(facility, collateralAsset, OHM)` and require exactly one matching market.
+`BurnerLoansConfig` refuses to create a second market for that tuple, while the lifecycle fails
+closed if FLOAN is ever configured ambiguously. The globally unique FLOAN `marketId` is sufficient;
+Burner Loans does not maintain a separate market reference.
 Linked
 libraries contain bytecode-heavy quote, view, custody, and arithmetic helpers without introducing
 another policy or another copy of module state.
@@ -281,7 +284,9 @@ For v1, USDS deposited into sUSDS should be the initial enabled collateral path.
 
 FLOAN permits multiple positions per owner and market. Burner Loans deliberately uses FLOAN's
 default market/borrower position and therefore exposes one position per owner per collateral
-market. Positions have globally unique IDs and are indexed by market and borrower:
+market. Although FLOAN permits multiple markets for the same facility and token pair, Burner Loans
+requires exactly one such market so an asset always resolves unambiguously. Positions have
+globally unique IDs and are indexed by market and borrower:
 
 ```text
 floanPosition[marketId][owner] = Position({

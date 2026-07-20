@@ -25,6 +25,7 @@ abstract contract FLOANTest is Test {
     address internal debtToken;
     address internal otherDebtToken;
     address internal borrower;
+    address internal otherBorrower;
 
     function setUp() public virtual {
         kernel = new Kernel();
@@ -50,6 +51,7 @@ abstract contract FLOANTest is Test {
         debtToken = makeAddr("debtToken");
         otherDebtToken = makeAddr("otherDebtToken");
         borrower = makeAddr("borrower");
+        otherBorrower = makeAddr("otherBorrower");
         vm.warp(1 days);
         vm.roll(100);
     }
@@ -104,5 +106,14 @@ abstract contract FLOANTest is Test {
         positionId = floan.getOrCreatePosition(marketId_, borrower_);
         floan.increaseDebt(positionId, principal_, 0, uint48(block.timestamp + 30 days));
         vm.stopPrank();
+    }
+
+    function _createPosition(
+        uint32 marketId_,
+        address facility_,
+        address borrower_
+    ) internal returns (uint64 positionId) {
+        vm.prank(facility_);
+        positionId = floan.createPosition(marketId_, borrower_);
     }
 }

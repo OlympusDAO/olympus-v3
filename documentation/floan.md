@@ -48,9 +48,11 @@ struct Market {
 }
 ```
 
-The market key is `(facility, collateralToken, debtToken)`. FLOAN rejects a duplicate key, while a
-different facility may operate the same token pair. Configuration clients can derive a market ID
-from that tuple rather than maintaining a second registry.
+Every market has a globally unique `marketId`. FLOAN also indexes all market IDs by
+`(facility, collateralToken, debtToken)`, but that tuple is not unique: a facility may operate
+multiple markets for the same token pair with different terms or product-specific configuration.
+`getMarketIds` returns every matching ID, so products can either select a particular market ID or
+impose a stricter cardinality rule without adding a second market-reference field.
 
 Common fixed-term terms are typed:
 
@@ -157,8 +159,10 @@ The product policy remains responsible for:
 
 [Burner Loans](./burner_loans.md) uses one FLOAN market per collateral/OHM pair. Its lifecycle
 policy is the facility and custodian. `BurnerLoansConfig` independently manages FLOAN markets for
-that facility. FLOAN stores the ledger and exposes aggregate facility OHM principal; Burner Loans
-owns and enforces its global OHM cap.
+that facility and refuses to create a second matching market. Burner Loans requires the FLOAN
+tuple index to contain exactly one market and fails closed if it is ambiguous. FLOAN stores the
+ledger and exposes aggregate facility OHM principal; Burner Loans owns and enforces its global OHM
+cap.
 
 ### Cooler V1-style loans
 

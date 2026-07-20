@@ -573,14 +573,11 @@ abstract contract BurnerLoansConfigBase is
     }
 
     function _isAssetConfigured(address facility_, address asset_) internal view returns (bool) {
-        (bool exists, ) = _FLOAN.getMarketId(facility_, asset_, address(_OHM));
-        return exists;
+        return BurnerLoansMarketConfig.hasMarket(_FLOAN, facility_, asset_, address(_OHM));
     }
 
     function _marketId(address facility_, address asset_) internal view returns (uint32 marketId_) {
-        bool exists;
-        (exists, marketId_) = _FLOAN.getMarketId(facility_, asset_, address(_OHM));
-        if (!exists) revert BurnerLoans_AssetNotConfigured(asset_);
+        return BurnerLoansMarketConfig.marketId(_FLOAN, facility_, asset_, address(_OHM));
     }
 
     function _getAssetConfig(uint32 marketId_) internal view returns (AssetConfig memory config) {

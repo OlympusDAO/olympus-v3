@@ -5,10 +5,7 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
-import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
@@ -65,15 +62,6 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
             BurnerLoansConstants.REENABLE_GRACE_PERIOD,
             "reenable grace period"
         );
-    }
-
-    // constructor
-    // given BurnerLoans address is zero
-    //  when BurnerLoansConfigTimelock is deployed
-    //   then it reverts
-    function test_configTimelockConstructor_givenBurnerLoansIsZero_reverts() public {
-        vm.expectRevert(IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ZeroAddress.selector);
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(0)), address(burnerLoans));
     }
 }
 

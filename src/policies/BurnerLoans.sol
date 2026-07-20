@@ -267,8 +267,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function assetActiveDebtOhm(address asset_) external view returns (uint256) {
-        (bool exists, uint32 marketId_) = _FLOAN.getMarketId(address(this), asset_, address(_OHM));
-        return exists ? _FLOAN.marketPrincipalDue(marketId_) : 0;
+        return BurnerLoansView.assetActiveDebtOhm(_FLOAN, address(this), address(_OHM), asset_);
     }
 
     function getPosition(

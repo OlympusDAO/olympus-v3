@@ -2,9 +2,54 @@
 pragma solidity >=0.8.24;
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANDecreaseDebtTest is FLOANTest {
+    function test_givenCallerWithoutKernelPermission_decreaseDebt_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
+        );
+        floan.decreaseDebt(positionId, 1, 0);
+    }
+
+    function test_givenPermissionedNonFacility_decreaseDebt_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        vm.prank(otherFacility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, marketId, otherFacility)
+        );
+        floan.decreaseDebt(positionId, 1, 0);
+    }
+
+    function test_givenOriginationsDisabled_decreaseDebt_stillSucceeds() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        vm.prank(manager);
+        floan.setMarketOriginationsEnabled(marketId, false);
+        vm.prank(facility);
+        floan.decreaseDebt(positionId, 40e9, 0);
+
+        assertEq(floan.getPosition(positionId).principalDue, 60e9, "principal due");
+    }
+
+    function test_givenZeroOrExcessiveAmount_decreaseDebt_revertsWithoutStateChange() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        vm.startPrank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, 0, 0);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, 100e9 + 1, 0);
+        vm.stopPrank();
+
+        assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
+        assertEq(floan.marketPrincipalDue(marketId), 100e9, "market principal unchanged");
+    }
+
     function test_updatesMarketFacilityAndTokenPrincipalTotals() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);

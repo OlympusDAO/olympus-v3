@@ -19,6 +19,31 @@ library BurnerLoansMarketConfig {
         uint16 postKinkSlopeBps;
     }
 
+    function marketId(
+        IFLOANv1 floan_,
+        address facility_,
+        address collateralToken_,
+        address debtToken_
+    ) internal view returns (uint32) {
+        uint256[] memory marketIds = floan_.getMarketIds(facility_, collateralToken_, debtToken_);
+        if (marketIds.length == 0) {
+            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(collateralToken_);
+        }
+        if (marketIds.length != 1) {
+            revert IBurnerLoans.BurnerLoans_AmbiguousMarket(collateralToken_, marketIds.length);
+        }
+        return uint32(marketIds[0]);
+    }
+
+    function hasMarket(
+        IFLOANv1 floan_,
+        address facility_,
+        address collateralToken_,
+        address debtToken_
+    ) internal view returns (bool) {
+        return floan_.getMarketIds(facility_, collateralToken_, debtToken_).length != 0;
+    }
+
     function decode(bytes memory data_) internal pure returns (Data memory) {
         return abi.decode(data_, (Data));
     }

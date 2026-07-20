@@ -10,7 +10,6 @@ interface IFLOANv1 {
     error FLOAN_InvalidMaturity(uint48 expected, uint48 actual);
     error FLOAN_InvalidPosition(uint64 positionId);
     error FLOAN_NotManager(uint32 marketId, address caller);
-    error FLOAN_MarketAlreadyExists(address facility, address collateralToken, address debtToken);
     error FLOAN_NotFacility(uint32 marketId, address caller);
     error FLOAN_OriginationsDisabled(uint32 marketId);
     error FLOAN_PrincipalCapExceeded(uint32 marketId, uint128 principalCap);
@@ -96,11 +95,13 @@ interface IFLOANv1 {
 
     function debtTokenPrincipalDue(address debtToken_) external view returns (uint256);
 
-    function getMarketId(
+    /// @notice Returns every market matching a facility and token pair.
+    /// @dev A facility may own more than one market for the same collateral and debt tokens.
+    function getMarketIds(
         address facility_,
         address collateralToken_,
         address debtToken_
-    ) external view returns (bool exists, uint32 marketId);
+    ) external view returns (uint256[] memory marketIds);
 
     function getMarket(uint32 marketId_) external view returns (Market memory);
 

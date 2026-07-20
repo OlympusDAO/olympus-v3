@@ -630,6 +630,25 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
+    // - FLOAN: two markets share the Burner Loans facility, collateral, and debt-token tuple
+    // - Expected branch: Burner Loans rejects the ambiguous market instead of selecting one
+    function test_givenMultipleMarketsForAsset_borrowAndPreviewRevert() public {
+        _createDuplicateUsdsMarketForTest();
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
+            address(usds),
+            2
+        );
+
+        vm.expectRevert(error);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(error);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+    }
+
+    // Condition tree:
     // - Capacity: resulting facility debt exceeds the global cap
     // - Asset capacity: sufficient
     // - Expected branch: global cap error includes resulting debt and cap

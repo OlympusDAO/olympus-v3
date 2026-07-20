@@ -287,11 +287,7 @@ library BurnerLoansQuote {
         address debtToken_,
         address asset_
     ) private view returns (uint32 marketId_, IBurnerLoans.AssetConfig memory config) {
-        bool exists;
-        (exists, marketId_) = floan_.getMarketId(facility_, asset_, debtToken_);
-        if (!exists) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
+        marketId_ = BurnerLoansMarketConfig.marketId(floan_, facility_, asset_, debtToken_);
         IFLOANv1.Market memory market = floan_.getMarket(marketId_);
         if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);

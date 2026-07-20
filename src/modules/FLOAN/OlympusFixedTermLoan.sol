@@ -51,13 +51,12 @@ contract OlympusFixedTermLoan is FLOANv1 {
         return _debtTokenPrincipalDue[debtToken_];
     }
 
-    function getMarketId(
+    function getMarketIds(
         address facility_,
         address collateralToken_,
         address debtToken_
-    ) public view override returns (bool exists, uint32 marketId) {
-        uint32 marketIdPlusOne = _marketIds[facility_][collateralToken_][debtToken_];
-        return (marketIdPlusOne != 0, marketIdPlusOne == 0 ? 0 : marketIdPlusOne - 1);
+    ) external view override returns (uint256[] memory marketIds) {
+        return _marketIds[facility_][collateralToken_][debtToken_].values();
     }
 
     function getMarket(uint32 marketId_) external view override returns (Market memory) {
@@ -137,11 +136,10 @@ contract OlympusFixedTermLoan is FLOANv1 {
         bytes calldata configData_
     ) external override permissioned returns (uint32 marketId) {
         _validateNewMarket(market_);
-        _requireMarketDoesNotExist(market_.facility, market_.collateralToken, market_.debtToken);
 
         marketId = _marketCount++;
         _markets[marketId] = market_;
-        _marketIds[market_.facility][market_.collateralToken][market_.debtToken] = marketId + 1;
+        _marketIds[market_.facility][market_.collateralToken][market_.debtToken].add(marketId);
         _marketConfigData[marketId] = configData_;
 
         emit MarketCreated(
@@ -204,10 +202,9 @@ contract OlympusFixedTermLoan is FLOANv1 {
         Market storage market = _markets[marketId_];
         address oldFacility = market.facility;
         if (facility_ == oldFacility) return;
-        _requireMarketDoesNotExist(facility_, market.collateralToken, market.debtToken);
 
-        delete _marketIds[oldFacility][market.collateralToken][market.debtToken];
-        _marketIds[facility_][market.collateralToken][market.debtToken] = marketId_ + 1;
+        _marketIds[oldFacility][market.collateralToken][market.debtToken].remove(marketId_);
+        _marketIds[facility_][market.collateralToken][market.debtToken].add(marketId_);
 
         uint128 principalDue = _marketPrincipalDue[marketId_];
         if (principalDue != 0) {
@@ -412,17 +409,6 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requirePosition(positionId_);
         position = _positions[positionId_];
         _requireFacility(position.marketId);
-    }
-
-    function _requireMarketDoesNotExist(
-        address facility_,
-        address collateralToken_,
-        address debtToken_
-    ) internal view {
-        (bool exists, ) = getMarketId(facility_, collateralToken_, debtToken_);
-        if (exists) {
-            revert FLOAN_MarketAlreadyExists(facility_, collateralToken_, debtToken_);
-        }
     }
 
     function _toUint32(uint256 value_) internal pure returns (uint32 result) {

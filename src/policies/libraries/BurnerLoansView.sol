@@ -45,6 +45,20 @@ library BurnerLoansView {
             });
     }
 
+    function assetActiveDebtOhm(
+        IFLOANv1 floan_,
+        address facility_,
+        address debtToken_,
+        address asset_
+    ) public view returns (uint256) {
+        uint256[] memory marketIds = floan_.getMarketIds(facility_, asset_, debtToken_);
+        if (marketIds.length == 0) return 0;
+        if (marketIds.length != 1) {
+            revert IBurnerLoans.BurnerLoans_AmbiguousMarket(asset_, marketIds.length);
+        }
+        return floan_.marketPrincipalDue(uint32(marketIds[0]));
+    }
+
     function previewDepositCollateral(
         Dependencies memory dependencies_,
         address asset_,
@@ -139,14 +153,12 @@ library BurnerLoansView {
         Dependencies memory dependencies_,
         address asset_
     ) private view returns (IBurnerLoans.AssetConfig memory config) {
-        (bool exists, uint32 marketId_) = dependencies_.floan.getMarketId(
+        uint32 marketId_ = BurnerLoansMarketConfig.marketId(
+            dependencies_.floan,
             dependencies_.facility,
             asset_,
             address(dependencies_.ohm)
         );
-        if (!exists) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
         IFLOANv1.Market memory market = dependencies_.floan.getMarket(marketId_);
         if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);

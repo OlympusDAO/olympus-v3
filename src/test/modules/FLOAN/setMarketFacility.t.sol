@@ -2,9 +2,18 @@
 pragma solidity >=0.8.24;
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketFacilityTest is FLOANTest {
+    function test_givenCallerWithoutKernelPermission_setMarketFacility_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
+        );
+        floan.setMarketFacility(marketId, otherFacility);
+    }
+
     function test_setMarketFacility_movesLookupAuthorityAndPrincipal() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -12,15 +21,15 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         vm.prank(manager);
         floan.setMarketFacility(marketId, otherFacility);
 
-        (bool oldExists, ) = floan.getMarketId(facility, collateralToken, debtToken);
-        (bool newExists, uint32 newMarketId) = floan.getMarketId(
+        uint256[] memory oldMarketIds = floan.getMarketIds(facility, collateralToken, debtToken);
+        uint256[] memory newMarketIds = floan.getMarketIds(
             otherFacility,
             collateralToken,
             debtToken
         );
-        assertFalse(oldExists, "old lookup should be cleared");
-        assertTrue(newExists, "new lookup should exist");
-        assertEq(newMarketId, marketId, "new lookup market id");
+        assertEq(oldMarketIds.length, 0, "old lookup should be cleared");
+        assertEq(newMarketIds.length, 1, "new lookup market count");
+        assertEq(newMarketIds[0], marketId, "new lookup market id");
         assertEq(floan.facilityPrincipalDue(facility, debtToken), 0, "old facility principal");
         assertEq(
             floan.facilityPrincipalDue(otherFacility, debtToken),
@@ -40,20 +49,29 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         assertEq(floan.addCollateral(positionId, 1), 1, "new facility collateral mutation");
     }
 
-    function test_setMarketFacility_givenDuplicateTargetPair_reverts() public {
+    function test_setMarketFacility_givenDuplicateTargetPair_indexesBothMarkets() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        _createMarket(manager, otherFacility, collateralToken, debtToken, 1_000e9);
+        uint32 existingMarketId = _createMarket(
+            manager,
+            otherFacility,
+            collateralToken,
+            debtToken,
+            1_000e9
+        );
 
         vm.prank(manager);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IFLOANv1.FLOAN_MarketAlreadyExists.selector,
-                otherFacility,
-                collateralToken,
-                debtToken
-            )
-        );
         floan.setMarketFacility(marketId, otherFacility);
+
+        uint256[] memory oldMarketIds = floan.getMarketIds(facility, collateralToken, debtToken);
+        uint256[] memory newMarketIds = floan.getMarketIds(
+            otherFacility,
+            collateralToken,
+            debtToken
+        );
+        assertEq(oldMarketIds.length, 0, "old lookup should be cleared");
+        assertEq(newMarketIds.length, 2, "new lookup market count");
+        assertEq(newMarketIds[0], existingMarketId, "existing lookup market id");
+        assertEq(newMarketIds[1], marketId, "moved lookup market id");
     }
 
     function test_setMarketFacility_givenZeroPrincipal_movesLookupWithoutDebtDust() public {

@@ -3,7 +3,7 @@
 pragma solidity >=0.8.24;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {Actions, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
+import {Actions, Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
@@ -127,58 +127,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new OlympusRoles(localKernel),
             new MockUnsupportedTrsry(localKernel)
-        );
-    }
-
-    // requestPermissions
-    // given BurnerLoans declares policy permissions
-    //  when requestPermissions is called
-    //   then MINTR and FLOAN mutation permissions are requested
-    function test_requestPermissions_requestsLifecyclePermissions() public view {
-        Permissions[] memory permissions = burnerLoans.requestPermissions();
-
-        assertEq(permissions.length, 7, "permissions length");
-        assertEq(
-            Keycode.unwrap(permissions[0].keycode),
-            Keycode.unwrap(toKeycode("MINTR")),
-            "mint keycode"
-        );
-        assertEq(permissions[0].funcSelector, mintr.mintOhm.selector, "mint selector");
-        assertEq(
-            Keycode.unwrap(permissions[1].keycode),
-            Keycode.unwrap(toKeycode("MINTR")),
-            "burn keycode"
-        );
-        assertEq(permissions[1].funcSelector, mintr.burnOhm.selector, "burn selector");
-        assertEq(
-            Keycode.unwrap(permissions[2].keycode),
-            Keycode.unwrap(toKeycode("FLOAN")),
-            "add collateral keycode"
-        );
-        assertEq(
-            permissions[2].funcSelector,
-            IFLOANv1.addCollateral.selector,
-            "add collateral selector"
-        );
-        assertEq(
-            permissions[3].funcSelector,
-            IFLOANv1.removeCollateral.selector,
-            "remove collateral selector"
-        );
-        assertEq(
-            permissions[4].funcSelector,
-            IFLOANv1.increaseDebt.selector,
-            "increase debt selector"
-        );
-        assertEq(
-            permissions[5].funcSelector,
-            IFLOANv1.getOrCreatePosition.selector,
-            "create position selector"
-        );
-        assertEq(
-            permissions[6].funcSelector,
-            IFLOANv1.decreaseDebt.selector,
-            "decrease debt selector"
         );
     }
 

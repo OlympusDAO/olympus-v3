@@ -2,9 +2,68 @@
 pragma solidity >=0.8.24;
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANIncreaseDebtTest is FLOANTest {
+    function test_givenCallerWithoutKernelPermission_increaseDebt_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
+        );
+        floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 1));
+    }
+
+    function test_givenPermissionedNonFacility_increaseDebt_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+        vm.prank(otherFacility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, marketId, otherFacility)
+        );
+        floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 1));
+    }
+
+    function test_givenOriginationsDisabled_increaseDebt_revertsWithoutStateChange() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+        vm.prank(manager);
+        floan.setMarketOriginationsEnabled(marketId, false);
+
+        vm.prank(facility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_OriginationsDisabled.selector, marketId)
+        );
+        floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 1));
+        assertEq(floan.getPosition(positionId).principalDue, 0, "principal unchanged");
+        assertEq(floan.marketPrincipalDue(marketId), 0, "market principal unchanged");
+    }
+
+    function test_givenInvalidAmountOrMaturity_increaseDebt_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+        vm.startPrank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.increaseDebt(positionId, 0, 1, uint48(block.timestamp + 1));
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp));
+        vm.stopPrank();
+    }
+
+    function test_givenActiveDebt_increaseDebt_requiresExistingMaturity() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        uint48 maturity = floan.getPosition(positionId).maturity;
+
+        vm.prank(facility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMaturity.selector, maturity, maturity + 1)
+        );
+        floan.increaseDebt(positionId, 1, 0, maturity + 1);
+        assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
+    }
+
     function test_updatesMarketFacilityAndTokenPrincipalTotals() public {
         uint32 firstMarket = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 secondMarket = _createMarket(

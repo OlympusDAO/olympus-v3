@@ -69,9 +69,7 @@ abstract contract BurnerLoansLifecycle is
     }
 
     function _marketId(address asset_) internal view returns (uint32) {
-        (bool exists, uint32 marketId_) = _FLOAN.getMarketId(address(this), asset_, address(_OHM));
-        if (!exists) revert BurnerLoans_AssetNotConfigured(asset_);
-        return marketId_;
+        return BurnerLoansMarketConfig.marketId(_FLOAN, address(this), asset_, address(_OHM));
     }
 
     function _positionId(address asset_, address borrower_) internal view returns (uint64) {
