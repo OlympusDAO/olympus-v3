@@ -10,11 +10,8 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
@@ -32,8 +29,6 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
 /// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
 contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
-    using TransferHelper for ERC20;
-
     uint128 public globalDebtCapOhm;
     address public backingOracle;
 
@@ -129,33 +124,15 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireAssetEnabled(asset_);
         if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody
-            .validateCustodySupport(
+        return
+            BurnerLoansCustody.depositCollateral(
+                _FLOAN,
                 _DEPOSIT_MANAGER,
+                _marketId(asset_),
                 asset_,
-                BurnerLoansConstants.DEPOSIT_PERIOD,
-                true
+                amount_,
+                onBehalfOf_
             );
-        BurnerLoansCustody.validateDepositAmount(
-            _DEPOSIT_MANAGER,
-            asset_,
-            assetConfiguration,
-            amount_
-        );
-
-        uint128 depositedCollateral = BurnerLoansCustody.deposit(
-            _DEPOSIT_MANAGER,
-            asset_,
-            BurnerLoansConstants.DEPOSIT_PERIOD,
-            amount_
-        );
-        if (depositedCollateral == 0) revert BurnerLoans_ZeroCollateralCredit();
-        uint64 positionId = _FLOAN.getOrCreatePosition(_marketId(asset_), onBehalfOf_);
-        uint128 totalCollateral = _FLOAN.addCollateral(positionId, depositedCollateral);
-
-        emit CollateralDeposited(msg.sender, asset_, onBehalfOf_, amount_, depositedCollateral);
-
-        return (depositedCollateral, totalCollateral);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -182,36 +159,15 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     {
         _requireEnabled();
         _requireAssetConfigured(asset_);
-        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
-        IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody
-            .validateCustodySupport(
-                _DEPOSIT_MANAGER,
-                asset_,
-                BurnerLoansConstants.DEPOSIT_PERIOD,
-                false
-            );
-        if (BurnerLoansCustody.previewWithdrawAmount(assetConfiguration.vault, amount_) == 0)
-            revert BurnerLoans_ZeroCollateralWithdrawal();
-
-        (remainingDepositedCollateral, healthFactor_) = _debitCollateral(
-            asset_,
-            amount_,
-            onBehalfOf_
-        );
-        amountOut = BurnerLoansCustody.withdraw(
-            _DEPOSIT_MANAGER,
-            asset_,
-            BurnerLoansConstants.DEPOSIT_PERIOD,
-            amount_,
-            recipient_
-        );
-        if (amountOut == 0) revert BurnerLoans_ZeroCollateralWithdrawal();
-
-        emit CollateralWithdrawn(msg.sender, asset_, onBehalfOf_, recipient_, amount_);
-
-        tokenOut = asset_;
+        BurnerLoansCustody.WithdrawParams memory params;
+        params.marketId = _marketId(asset_);
+        params.asset = asset_;
+        params.onBehalfOf = onBehalfOf_;
+        params.recipient = recipient_;
+        params.amount = amount_;
+        return
+            BurnerLoansCustody.withdrawCollateral(_quoteDependencies(), _DEPOSIT_MANAGER, params);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -232,12 +188,21 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address recipient_,
         uint256 maxFee_
     ) external nonReentrant returns (uint256, uint256, uint256, uint48, uint256) {
-        BorrowPreview memory quote = _executeBorrow(
-            asset_,
-            ohmAmount_,
-            onBehalfOf_,
-            recipient_,
-            maxFee_
+        _requireEnabled();
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
+        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
+        BurnerLoansCustody.BorrowParams memory params;
+        params.marketId = _marketId(asset_);
+        params.asset = asset_;
+        params.onBehalfOf = onBehalfOf_;
+        params.recipient = recipient_;
+        params.ohmAmount = ohmAmount_;
+        params.maxFee = maxFee_;
+        BorrowPreview memory quote = BurnerLoansCustody.borrow(
+            _quoteDependencies(),
+            _MINTR,
+            _TRSRY,
+            params
         );
         return (
             ohmAmount_,
@@ -246,6 +211,57 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             quote.maturity,
             quote.resultingHealthFactor
         );
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Partial repayments return zero as a conservative unknown-health sentinel so repayment
+    ///      never depends on PRICE freshness. Full repayment returns the debt-free max value.
+    function repay(
+        address asset_,
+        uint128 repayOhm_,
+        address onBehalfOf_
+    ) external override nonReentrant returns (uint256 healthFactor) {
+        _requireEnabled();
+        if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
+        uint64 positionId = _positionId(asset_, onBehalfOf_);
+        RepayPreview memory preview = BurnerLoansView.previewRepay(
+            repayOhm_,
+            _FLOAN.getPosition(positionId)
+        );
+
+        BurnerLoansCustody.repay(
+            _FLOAN,
+            _MINTR,
+            _OHM,
+            positionId,
+            asset_,
+            onBehalfOf_,
+            repayOhm_,
+            preview.remainingDebtOhm
+        );
+        return preview.resultingHealthFactor;
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    function extend(
+        address asset_,
+        address onBehalfOf_,
+        uint16 termCount_,
+        uint256 maxFee_
+    ) external override nonReentrant returns (uint256 fee, uint48 maturity, uint256 healthFactor) {
+        _requireEnabled();
+        _requireSenderAuthorized(msg.sender, onBehalfOf_);
+        uint64 positionId = _positionId(asset_, onBehalfOf_);
+        ExtendPreview memory preview = BurnerLoansCustody.extend(
+            _quoteDependencies(),
+            _TRSRY,
+            positionId,
+            asset_,
+            onBehalfOf_,
+            termCount_,
+            maxFee_
+        );
+        return (preview.fee, preview.maturity, preview.healthFactor);
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -326,6 +342,31 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             );
     }
 
+    function previewRepay(
+        address asset_,
+        uint128 repayOhm_,
+        address onBehalfOf_
+    ) external view override returns (RepayPreview memory) {
+        _requireEnabled();
+        if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
+        return BurnerLoansView.previewRepay(repayOhm_, _position(asset_, onBehalfOf_));
+    }
+
+    function previewExtend(
+        address asset_,
+        address onBehalfOf_,
+        uint16 termCount_
+    ) external view override returns (ExtendPreview memory) {
+        _requireEnabled();
+        return
+            BurnerLoansQuote.quoteExtend(
+                _quoteDependencies(),
+                asset_,
+                termCount_,
+                _position(asset_, onBehalfOf_)
+            );
+    }
+
     function positionHealthFactor(
         address asset_,
         uint256 collateral_,
@@ -338,63 +379,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
                 collateral_,
                 debtOhm_
             );
-    }
-
-    // ========== INTERNAL BORROW HELPERS ========== //
-
-    /// @notice Executes a validated borrow with effects before fee collection and OHM minting.
-    function _executeBorrow(
-        address asset_,
-        uint128 ohmAmount_,
-        address onBehalfOf_,
-        address recipient_,
-        uint256 maxFee_
-    ) internal returns (BorrowPreview memory quote) {
-        _requireEnabled();
-        _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
-
-        quote = BurnerLoansQuote.quoteBorrow(
-            _quoteDependencies(),
-            asset_,
-            ohmAmount_,
-            _position(asset_, onBehalfOf_)
-        );
-        if (quote.fee > maxFee_) revert BurnerLoans_FeeExceedsMax(quote.fee, maxFee_);
-
-        _FLOAN.increaseDebt(_positionId(asset_, onBehalfOf_), ohmAmount_, 0, quote.maturity);
-
-        if (quote.fee != 0) {
-            ERC20(asset_).safeTransferFrom(msg.sender, address(_TRSRY), quote.fee);
-        }
-        _MINTR.mintOhm(recipient_, ohmAmount_);
-
-        emit Borrowed(msg.sender, asset_, onBehalfOf_, recipient_, ohmAmount_, quote.fee);
-    }
-
-    /// @notice Debits position collateral after validating resulting health.
-    function _debitCollateral(
-        address asset_,
-        uint128 amount_,
-        address onBehalfOf_
-    ) internal returns (uint256 remainingCollateral, uint256 resultingHealthFactor) {
-        IFLOANv1.Position memory position = _position(asset_, onBehalfOf_);
-        if (amount_ > position.collateral) {
-            revert BurnerLoans_InsufficientCollateral(amount_, position.collateral);
-        }
-
-        remainingCollateral = position.collateral - amount_;
-        resultingHealthFactor = BurnerLoansQuote.positionHealthFactor(
-            _quoteDependencies(),
-            asset_,
-            remainingCollateral,
-            position.principalDue
-        );
-        if (position.principalDue != 0 && resultingHealthFactor < _WAD) {
-            revert BurnerLoans_UnhealthyWithdrawal(resultingHealthFactor);
-        }
-
-        _FLOAN.removeCollateral(_positionId(asset_, onBehalfOf_), amount_);
     }
 
     function _quoteDependencies()

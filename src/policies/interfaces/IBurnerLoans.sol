@@ -20,6 +20,10 @@ interface IBurnerLoans {
     error BurnerLoans_InsufficientCollateral(uint256 requested, uint256 available);
     error BurnerLoans_UnhealthyWithdrawal(uint256 healthFactor);
     error BurnerLoans_NoCollateral();
+    error BurnerLoans_NoDebt();
+    error BurnerLoans_RepayExceedsDebt(uint256 requested, uint256 debt);
+    error BurnerLoans_SameBlockRepay(uint48 borrowBlock);
+    error BurnerLoans_MaturityHorizonExceeded(uint256 requested, uint256 maximum);
     error BurnerLoans_UnhealthyPosition(uint256 healthFactor);
     error BurnerLoans_UnhealthyBorrow(uint256 healthFactor);
     error BurnerLoans_PositionMatured(uint48 maturity);
@@ -94,6 +98,13 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    struct RepayPreview {
+        uint256 repayAmount;
+        uint256 remainingDebtOhm;
+        uint256 resultingHealthFactor;
+        bool executable;
+    }
+
     struct WithdrawPreview {
         address returnToken;
         uint256 returnAmount;
@@ -143,6 +154,14 @@ interface IBurnerLoans {
         address recipient,
         uint256 ohmAmount,
         uint256 fee
+    );
+
+    event Repaid(
+        address indexed caller,
+        address indexed asset,
+        address indexed onBehalfOf,
+        uint256 repaidOhm,
+        uint256 remainingDebtOhm
     );
     event Repaid(
         address indexed caller,

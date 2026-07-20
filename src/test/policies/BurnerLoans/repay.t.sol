@@ -1,27 +1,285 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
-import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 
-contract BurnerLoansRepayTest is BurnerLoansTest {
-    address internal operator;
+contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
+    address internal bob;
+
+    function _collateralDecimals() internal pure override returns (uint8) {
+        return 18;
+    }
 
     function setUp() public override {
         super.setUp();
-        operator = makeAddr("operator");
-        _addDefaultUsdsAsset();
+        bob = makeAddr("bob");
     }
 
-    // Condition tree:
-    // - Caller: any payer (`operator`)
-    // - Authorization state: repayment does not require borrower authorization
-    // - Parameters: asset is configured, borrower is owner
-    // - Expected branch: no authorization check blocks repayment, then placeholder reverts
-    function test_repay_givenDifferentCaller_reachesPlaceholder() public {
-        vm.prank(operator);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_NotImplemented.selector);
+    function test_givenPartialRepayment_repayBurnsOhmAndReducesOnlyDebt() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 40e9);
+        uint256 supplyBefore = ohm.totalSupply();
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.Repaid(alice, address(usds), alice, 40e9, 60e9);
+        vm.prank(alice);
+        uint256 health = burnerLoans.repay(address(usds), 40e9, alice);
+
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        assertEq(ohm.totalSupply(), supplyBefore - 40e9, "OHM supply");
+        assertEq(position.debtOhm, 60e9, "position debt");
+        assertEq(position.depositedCollateral, 2_000e18, "position collateral");
+        assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 60e9, "asset debt");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 60e9, "facility debt");
+        assertEq(health, 0, "unknown partial health sentinel");
+    }
+
+    function test_givenFuzzedPartialRepayment_repayBurnsExactlyDebtReduction(
+        uint128 repayOhm_
+    ) public {
+        repayOhm_ = uint128(bound(repayOhm_, 1, 100e9 - 1));
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, repayOhm_);
+        uint256 supplyBefore = ohm.totalSupply();
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), repayOhm_, alice);
+
+        assertEq(ohm.totalSupply(), supplyBefore - repayOhm_, "OHM burned");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            100e9 - repayOhm_,
+            "debt reduction"
+        );
+    }
+
+    function test_givenFullRepayment_repayClearsDebtAndActiveBorrowerOnly() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 100e9);
+
+        vm.prank(alice);
+        uint256 health = burnerLoans.repay(address(usds), 100e9, alice);
+
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        assertEq(position.debtOhm, 0, "position debt");
+        assertEq(position.depositedCollateral, 2_000e18, "position collateral");
+        assertEq(position.maturity, 0, "maturity");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "facility debt");
+        assertEq(health, type(uint256).max, "debt-free health");
+    }
+
+    function test_givenSameBorrowBlock_repayReverts() public {
+        _borrowForAlice(100e9);
+        _approveOhm(alice, 1e9);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_SameBlockRepay.selector,
+                uint48(block.number)
+            )
+        );
         burnerLoans.repay(address(usds), 1e9, alice);
+    }
+
+    function test_givenRepayAmountExceedsDebt_repayReverts(uint128 surplus_) public {
+        surplus_ = uint128(bound(surplus_, 1, type(uint128).max - 100e9));
+        uint128 requested = 100e9 + surplus_;
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, requested);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_RepayExceedsDebt.selector,
+                requested,
+                100e9
+            )
+        );
+        burnerLoans.repay(address(usds), requested, alice);
+    }
+
+    function test_givenZeroAmount_repayReverts() public {
+        vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
+        burnerLoans.repay(address(usds), 0, alice);
+    }
+
+    function test_givenNoDebt_repayReverts() public {
+        burnerLoans.setPositionForTest(
+            address(usds),
+            alice,
+            IBurnerLoans.Position({
+                depositedCollateral: 1e18,
+                debtOhm: 0,
+                maturity: 0,
+                lastBorrowBlock: 0,
+                status: IBurnerLoans.PositionStatus.NoDebt
+            })
+        );
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
+        burnerLoans.repay(address(usds), 1, alice);
+    }
+
+    function test_givenGlobalPolicyDisabled_repayReverts() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.repay(address(usds), 1e9, alice);
+    }
+
+    function test_givenAssetDisabledAndPriceStale_repaySucceeds() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        vm.prank(burnerLoansAdmin);
+        burnerLoans.disableAsset(address(usds));
+        vm.warp(block.timestamp + 10 days);
+        price.setTimestamp(uint48(block.timestamp - 9 hours));
+        _approveOhm(alice, 1e9);
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 1e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
+    }
+
+    function test_givenMaturedUnhealthyPosition_repaySucceedsWithoutPrice() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        vm.warp(block.timestamp + 31 days);
+        price.setPrice(address(usds), 0);
+        _approveOhm(alice, 1e9);
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 1e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
+    }
+
+    function test_givenUnrelatedCaller_repayCanPayAnotherBorrowerDebt() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        ohm.mint(bob, 25e9);
+        _approveOhm(bob, 25e9);
+
+        vm.prank(bob);
+        burnerLoans.repay(address(usds), 25e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 75e9, "alice debt");
+        assertEq(usds.balanceOf(bob), 0, "caller collateral");
+    }
+
+    function test_givenMissingAllowance_repayRevertsAndPreservesDebt() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+
+        vm.prank(alice);
+        vm.expectRevert();
+        burnerLoans.repay(address(usds), 1e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
+    }
+
+    function test_givenMissingBalance_repayRevertsAndPreservesDebt() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(bob, 1e9);
+
+        vm.prank(bob);
+        vm.expectRevert();
+        burnerLoans.repay(address(usds), 1e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
+    }
+
+    function test_givenMissingMarket_repayRevertsBeforeBurn() public {
+        address unsupported = makeAddr("unsupported");
+        ohm.mint(alice, 1e9);
+        _approveOhm(alice, 1e9);
+        uint256 balanceBefore = ohm.balanceOf(alice);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                unsupported
+            )
+        );
+        burnerLoans.repay(unsupported, 1e9, alice);
+        assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
+    }
+
+    function test_givenAmbiguousMarket_repayRevertsBeforeBurn() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _createDuplicateUsdsMarketForTest();
+        _approveOhm(alice, 1e9);
+        uint256 balanceBefore = ohm.balanceOf(alice);
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
+                address(usds),
+                2
+            )
+        );
+        burnerLoans.repay(address(usds), 1e9, alice);
+        assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
+    }
+
+    function test_givenMultipleBorrowers_repayUpdatesOnlyTargetPosition() public {
+        _borrowForAlice(100e9);
+        _borrowFor(bob, 50e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 10e9);
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 10e9, alice);
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 90e9, "alice debt");
+        assertEq(burnerLoans.getPosition(address(usds), bob).debtOhm, 50e9, "bob debt");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 140e9, "facility debt");
+    }
+
+    function test_givenDebtInAnotherMarket_repayPreservesOtherMarketDebt() public {
+        _borrowForAlice(100e9);
+        MockERC20 otherAsset = _setOtherMarketDebtForTest(50e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 10e9);
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 10e9, alice);
+        assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 90e9, "USDS debt");
+        assertEq(burnerLoans.assetActiveDebtOhm(address(otherAsset)), 50e9, "other debt");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 140e9, "facility debt");
+    }
+
+    function _borrowForAlice(uint128 amount_) internal {
+        _borrowFor(alice, amount_);
+    }
+
+    function _borrowFor(address account_, uint128 amount_) internal {
+        usds.mint(account_, 2_100e18);
+        vm.startPrank(account_);
+        usds.approve(address(burnerLoans), type(uint256).max);
+        burnerLoans.depositCollateral(address(usds), 2_000e18, account_);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            amount_,
+            account_
+        );
+        burnerLoans.borrow(address(usds), amount_, account_, account_, preview.fee);
+        vm.stopPrank();
+    }
+
+    function _approveOhm(address account_, uint256 amount_) internal {
+        vm.prank(account_);
+        ohm.approve(address(burnerLoans), amount_);
     }
 }

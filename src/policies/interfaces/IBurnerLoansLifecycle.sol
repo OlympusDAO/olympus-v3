@@ -23,4 +23,13 @@ interface IBurnerLoansLifecycle is IBurnerLoans {
         address,
         uint256
     ) external returns (uint256, uint256, uint256, uint48, uint256);
+
+    function repay(address, uint128, address) external returns (uint256 healthFactor);
+
+    function extend(
+        address,
+        address,
+        uint16,
+        uint256
+    ) external returns (uint256 fee, uint48 maturity, uint256 healthFactor);
 }

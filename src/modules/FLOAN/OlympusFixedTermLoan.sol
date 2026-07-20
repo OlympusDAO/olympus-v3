@@ -74,6 +74,11 @@ contract OlympusFixedTermLoan is FLOANv1 {
         return _positions[positionId_];
     }
 
+    function isPositionDefaulted(uint64 positionId_) external view override returns (bool) {
+        _requirePosition(positionId_);
+        return _positions[positionId_].defaulted;
+    }
+
     function getPositionId(
         uint32 marketId_,
         address borrower_
@@ -99,7 +104,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
                     principalDue: 0,
                     interestDue: 0,
                     maturity: 0,
-                    lastBorrowBlock: 0
+                    lastBorrowBlock: 0,
+                    defaulted: false
                 });
     }
 
@@ -337,6 +343,67 @@ contract OlympusFixedTermLoan is FLOANv1 {
         return stored;
     }
 
+    function extendMaturity(
+        uint64 positionId_,
+        uint48 newMaturity_
+    ) external override permissioned returns (Position memory position) {
+        Position storage stored = _requireServicedPosition(positionId_);
+        if (stored.principalDue == 0 && stored.interestDue == 0) revert FLOAN_InvalidAmount();
+
+        Market storage market = _markets[stored.marketId];
+        if (!market.originationsEnabled) revert FLOAN_OriginationsDisabled(stored.marketId);
+        uint48 oldMaturity = stored.maturity;
+        if (newMaturity_ <= oldMaturity || newMaturity_ <= block.timestamp) {
+            revert FLOAN_InvalidMaturity(oldMaturity, newMaturity_);
+        }
+
+        stored.maturity = newMaturity_;
+        emit PositionMaturityExtended(positionId_, oldMaturity, newMaturity_);
+        return stored;
+    }
+
+    function defaultPosition(
+        uint64 positionId_
+    )
+        external
+        override
+        permissioned
+        returns (uint128 principalDefaulted, uint128 interestDefaulted, uint128 collateralSeized)
+    {
+        _requirePosition(positionId_);
+        Position storage stored = _positions[positionId_];
+        _requireFacility(stored.marketId);
+        if (stored.defaulted) revert FLOAN_PositionDefaulted(positionId_);
+        if (stored.principalDue == 0 && stored.interestDue == 0) revert FLOAN_InvalidAmount();
+
+        principalDefaulted = stored.principalDue;
+        interestDefaulted = stored.interestDue;
+        collateralSeized = stored.collateral;
+
+        stored.principalDue = 0;
+        stored.interestDue = 0;
+        stored.collateral = 0;
+        stored.defaulted = true;
+
+        _marketPrincipalDue[stored.marketId] -= principalDefaulted;
+        Market storage market = _markets[stored.marketId];
+        _facilityPrincipalDue[market.facility][market.debtToken] -= principalDefaulted;
+        _debtTokenPrincipalDue[market.debtToken] -= principalDefaulted;
+        uint32 activeCount = --_activePositionCount[stored.marketId][stored.borrower];
+        if (activeCount == 0) {
+            _activeBorrowersByMarket[stored.marketId].remove(stored.borrower);
+        }
+
+        emit PositionDebtDecreased(positionId_, 0, 0);
+        emit PositionCollateralChanged(positionId_, 0);
+        emit PositionDefaulted(
+            positionId_,
+            principalDefaulted,
+            interestDefaulted,
+            collateralSeized
+        );
+    }
+
     function _validateNewMarket(Market calldata market_) internal pure {
         if (
             market_.collateralToken == address(0) ||
@@ -361,7 +428,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
             principalDue: 0,
             interestDue: 0,
             maturity: 0,
-            lastBorrowBlock: 0
+            lastBorrowBlock: 0,
+            defaulted: false
         });
         _positionIdsByMarket[marketId_].add(positionId);
         _positionIdsByBorrower[borrower_].add(positionId);
@@ -409,6 +477,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requirePosition(positionId_);
         position = _positions[positionId_];
         _requireFacility(position.marketId);
+        if (position.defaulted) revert FLOAN_PositionDefaulted(positionId_);
     }
 
     function _toUint32(uint256 value_) internal pure returns (uint32 result) {

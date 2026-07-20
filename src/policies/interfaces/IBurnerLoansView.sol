@@ -27,5 +27,9 @@ interface IBurnerLoansView is IBurnerLoans {
 
     function previewBorrow(address, uint128, address) external view returns (BorrowPreview memory);
 
+    function previewRepay(address, uint128, address) external view returns (RepayPreview memory);
+
+    function previewExtend(address, address, uint16) external view returns (ExtendPreview memory);
+
     function positionHealthFactor(address, uint256, uint256) external view returns (uint256);
 }

@@ -10,7 +10,7 @@ contract BurnerLoansRequestPermissionsTest is BurnerLoansTest {
     function test_requestPermissions_requestsLifecyclePermissions() public view {
         Permissions[] memory permissions = burnerLoans.requestPermissions();
 
-        assertEq(permissions.length, 7, "permissions length");
+        assertEq(permissions.length, 8, "permissions length");
         assertEq(
             Keycode.unwrap(permissions[0].keycode),
             Keycode.unwrap(toKeycode("MINTR")),
@@ -36,5 +36,6 @@ contract BurnerLoansRequestPermissionsTest is BurnerLoansTest {
             "create position"
         );
         assertEq(permissions[6].funcSelector, IFLOANv1.decreaseDebt.selector, "decrease debt");
+        assertEq(permissions[7].funcSelector, IFLOANv1.extendMaturity.selector, "extend maturity");
     }
 }

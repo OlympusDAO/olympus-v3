@@ -36,6 +36,16 @@ library BurnerLoansQuote {
         IPRICEv2 price;
     }
 
+    struct ExtensionContext {
+        Pricing pricing;
+        IBurnerLoans.AssetConfig config;
+        uint256 health;
+        uint128 debtOhm;
+        uint48 currentMaturity;
+        uint32 marketId;
+        uint16 termCount;
+    }
+
     function quoteBorrow(
         Dependencies memory dependencies_,
         address asset_,
@@ -143,6 +153,48 @@ library BurnerLoansQuote {
                 ),
                 config
             );
+    }
+
+    function quoteExtend(
+        Dependencies memory dependencies_,
+        address asset_,
+        uint16 termCount_,
+        IFLOANv1.Position memory position_
+    ) public view returns (IBurnerLoans.ExtendPreview memory) {
+        (uint32 marketId, IBurnerLoans.AssetConfig memory config) = _requireAssetEnabled(
+            dependencies_.floan,
+            dependencies_.facility,
+            address(dependencies_.ohm),
+            asset_
+        );
+        if (termCount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
+        if (position_.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
+
+        Pricing memory pricing = _pricing(
+            dependencies_.ohm,
+            dependencies_.backingOracle,
+            dependencies_.price,
+            asset_,
+            position_.collateral,
+            config
+        );
+        uint256 health = _health(
+            dependencies_.ohmDecimals,
+            position_.principalDue,
+            pricing,
+            config
+        );
+        if (health < _WAD) revert IBurnerLoans.BurnerLoans_UnhealthyPosition(health);
+
+        ExtensionContext memory context;
+        context.pricing = pricing;
+        context.config = config;
+        context.health = health;
+        context.debtOhm = position_.principalDue;
+        context.currentMaturity = position_.maturity;
+        context.marketId = marketId;
+        context.termCount = termCount_;
+        return _quoteExtensionTerms(dependencies_, context);
     }
 
     function _validateCaps(
@@ -258,6 +310,89 @@ library BurnerLoansQuote {
             feeConfig.postKinkSlopeBps
         );
         return BurnerLoansCalculator.borrowFee(requiredAsset, feeRate);
+    }
+
+    function _feeRate(
+        IFLOANv1 floan_,
+        uint32 marketId_,
+        uint256 assetDebt_,
+        uint256 debtCap_
+    ) private view returns (uint256) {
+        uint256 utilization = BurnerLoansCalculator.assetUtilizationWad(assetDebt_, debtCap_);
+        if (utilization == type(uint256).max || utilization > _WAD) {
+            revert IBurnerLoans.BurnerLoans_InvalidCap();
+        }
+        IBurnerLoans.AssetFeeConfig memory feeConfig = BurnerLoansMarketConfig.feeConfig(
+            floan_.getMarket(marketId_),
+            floan_.getMarketConfigData(marketId_)
+        );
+        return
+            BurnerLoansCalculator.feeRateWad(
+                utilization,
+                feeConfig.baseFeeBps,
+                feeConfig.kinkBps,
+                feeConfig.preKinkSlopeBps,
+                feeConfig.postKinkSlopeBps
+            );
+    }
+
+    function _quoteExtensionTerms(
+        Dependencies memory dependencies_,
+        ExtensionContext memory context_
+    ) private view returns (IBurnerLoans.ExtendPreview memory) {
+        uint256 maturityBase = context_.currentMaturity > block.timestamp
+            ? context_.currentMaturity
+            : block.timestamp;
+        uint256 requestedMaturity = maturityBase +
+            uint256(context_.config.termLength) *
+            context_.termCount;
+        uint256 maximumMaturity = block.timestamp + uint256(context_.config.maxMaturityHorizon);
+        if (maximumMaturity > type(uint48).max) maximumMaturity = type(uint48).max;
+        if (requestedMaturity > maximumMaturity) {
+            revert IBurnerLoans.BurnerLoans_MaturityHorizonExceeded(
+                requestedMaturity,
+                maximumMaturity
+            );
+        }
+
+        return
+            IBurnerLoans.ExtendPreview({
+                fee: _extensionFee(dependencies_, context_),
+                // forge-lint: disable-next-line(unsafe-typecast)
+                maturity: uint48(requestedMaturity),
+                healthFactor: context_.health,
+                executable: true
+            });
+    }
+
+    function _extensionFee(
+        Dependencies memory dependencies_,
+        ExtensionContext memory context_
+    ) private view returns (uint256) {
+        uint256 requiredUsd = BurnerLoansCalculator.requiredCollateralUsd(
+            BurnerLoansCalculator.debtValueUsd(
+                context_.debtOhm,
+                context_.pricing.ohmUsdPrice,
+                dependencies_.ohmDecimals
+            ),
+            context_.debtOhm,
+            context_.pricing.backingPerOhmUsd,
+            dependencies_.ohmDecimals,
+            context_.config.minCollateralRatioBps,
+            context_.config.backingMultiplierBps
+        );
+        uint256 requiredAsset = BurnerLoansCalculator.requiredCollateralAsset(
+            requiredUsd,
+            context_.pricing.collateralUsdPrice,
+            context_.config.collateralDecimals
+        );
+        uint256 feeRate = _feeRate(
+            dependencies_.floan,
+            context_.marketId,
+            dependencies_.floan.marketPrincipalDue(context_.marketId),
+            context_.config.debtCap
+        );
+        return BurnerLoansCalculator.borrowFee(requiredAsset, feeRate) * context_.termCount;
     }
 
     function _freshPrice(

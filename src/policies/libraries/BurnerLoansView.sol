@@ -92,6 +92,28 @@ library BurnerLoansView {
         totalCollateral = position.collateral + depositedCollateral;
     }
 
+    function previewRepay(
+        uint128 repayOhm_,
+        IFLOANv1.Position memory position
+    ) public view returns (IBurnerLoans.RepayPreview memory preview) {
+        uint256 debtOhm = position.principalDue;
+        if (debtOhm == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
+        if (repayOhm_ > debtOhm) {
+            revert IBurnerLoans.BurnerLoans_RepayExceedsDebt(repayOhm_, debtOhm);
+        }
+        if (block.number <= position.lastBorrowBlock) {
+            revert IBurnerLoans.BurnerLoans_SameBlockRepay(position.lastBorrowBlock);
+        }
+
+        uint256 remainingDebtOhm = debtOhm - repayOhm_;
+        preview = IBurnerLoans.RepayPreview({
+            repayAmount: repayOhm_,
+            remainingDebtOhm: remainingDebtOhm,
+            resultingHealthFactor: remainingDebtOhm == 0 ? type(uint256).max : 0,
+            executable: true
+        });
+    }
+
     function previewWithdrawCollateral(
         Dependencies memory dependencies_,
         address asset_,

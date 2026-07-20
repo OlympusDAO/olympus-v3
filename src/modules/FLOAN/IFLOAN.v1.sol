@@ -9,6 +9,7 @@ interface IFLOANv1 {
     error FLOAN_InvalidMarket(uint32 marketId);
     error FLOAN_InvalidMaturity(uint48 expected, uint48 actual);
     error FLOAN_InvalidPosition(uint64 positionId);
+    error FLOAN_PositionDefaulted(uint64 positionId);
     error FLOAN_NotManager(uint32 marketId, address caller);
     error FLOAN_NotFacility(uint32 marketId, address caller);
     error FLOAN_OriginationsDisabled(uint32 marketId);
@@ -41,6 +42,7 @@ interface IFLOANv1 {
         uint128 interestDue;
         uint48 maturity;
         uint32 lastBorrowBlock;
+        bool defaulted;
     }
 
     event MarketCreated(
@@ -81,6 +83,17 @@ interface IFLOANv1 {
         uint128 principalDue,
         uint128 interestDue
     );
+    event PositionMaturityExtended(
+        uint64 indexed positionId,
+        uint48 oldMaturity,
+        uint48 newMaturity
+    );
+    event PositionDefaulted(
+        uint64 indexed positionId,
+        uint128 principalDefaulted,
+        uint128 interestDefaulted,
+        uint128 collateralSeized
+    );
 
     function marketCount() external view returns (uint32);
 
@@ -108,6 +121,8 @@ interface IFLOANv1 {
     function getMarketConfigData(uint32 marketId_) external view returns (bytes memory);
 
     function getPosition(uint64 positionId_) external view returns (Position memory);
+
+    function isPositionDefaulted(uint64 positionId_) external view returns (bool);
 
     function getPositionId(
         uint32 marketId_,
@@ -179,4 +194,18 @@ interface IFLOANv1 {
         uint128 principal_,
         uint128 interest_
     ) external returns (Position memory position);
+
+    function extendMaturity(
+        uint64 positionId_,
+        uint48 newMaturity_
+    ) external returns (Position memory position);
+
+    /// @notice Closes a defaulted position and removes its debt and collateral from active totals.
+    /// @dev Preserves origination and maturity fields as historical facts. The servicing facility
+    ///      is responsible for custody settlement using the returned amounts.
+    function defaultPosition(
+        uint64 positionId_
+    )
+        external
+        returns (uint128 principalDefaulted, uint128 interestDefaulted, uint128 collateralSeized);
 }
