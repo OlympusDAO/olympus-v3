@@ -52,6 +52,7 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
+| legacy_migration_admin | V1Migrator | Set the merkle root and rescue tokens |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
