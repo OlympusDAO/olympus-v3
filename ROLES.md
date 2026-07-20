@@ -19,6 +19,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, queue timelock delay changes, install submodules, store observations, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
+| admin | YieldDepositFacility | Set yield fee, enable/disable contract |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | callback_admin | BondCallback | Administers the policy |
@@ -43,6 +44,7 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
 | emergency | PriceConfig v2 | Disable contract, cancel queued timelock actions |
 | emergency | ReserveWrapper | Disable contract |
+| emergency | YieldDepositFacility | Disable the contract |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
@@ -51,6 +53,7 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
+| heart | YieldDepositFacility | Calls the execute() function |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
 | legacy_migration_admin | V1Migrator | Set the merkle root and rescue tokens |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
@@ -58,6 +61,7 @@ This document describes the roles that are used in the Olympus protocol.
 | manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
 | manager | Heart | Reset the heartbeat |
+| manager | YieldDepositFacility | Set yield fee |
 | operator_admin | Operator | Activate/deactivate the functionality |
 | operator_policy | Operator | Set spreads, threshold factor, and cushion factor |
 | operator_reporter | Operator | Report bond purchases |
