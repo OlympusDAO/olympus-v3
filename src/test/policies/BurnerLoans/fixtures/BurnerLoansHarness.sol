@@ -5,17 +5,107 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {Kernel} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract BurnerLoansHarness is BurnerLoans {
+    IBurnerLoansConfig internal _testConfig;
+
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
         IDepositManager depositManager_
     ) BurnerLoans(kernel_, ohm_, depositManager_) {}
+
+    function setConfigForTest(IBurnerLoansConfig config_) external {
+        _testConfig = config_;
+    }
+
+    function floanForTest() external view returns (IFLOANv1) {
+        return _FLOAN;
+    }
+
+    function addAsset(
+        address asset_,
+        uint256 debtCapOhm_,
+        IBurnerLoans.AssetRiskConfigInput calldata riskConfig_,
+        IBurnerLoans.AssetFeeConfig calldata feeConfig_
+    ) external {
+        if (debtCapOhm_ > type(uint128).max) revert BurnerLoans_InvalidCap();
+        _testConfig.addAsset(address(this), asset_, uint128(debtCapOhm_), riskConfig_, feeConfig_);
+    }
+
+    function getAssetConfig(
+        address asset_
+    ) external view returns (IBurnerLoans.AssetConfig memory) {
+        return _testConfig.getAssetConfig(address(this), asset_);
+    }
+
+    function getAssetFeeConfig(
+        address asset_
+    ) external view returns (IBurnerLoans.AssetFeeConfig memory) {
+        return _testConfig.getAssetFeeConfig(address(this), asset_);
+    }
+
+    function isAssetConfigured(address asset_) external view returns (bool) {
+        return _testConfig.isAssetConfigured(address(this), asset_);
+    }
+
+    function marketId(address asset_) external view returns (uint32) {
+        return _testConfig.marketId(address(this), asset_);
+    }
+
+    function enableAsset(address asset_) external {
+        _testConfig.enableAsset(address(this), asset_);
+    }
+
+    function disableAsset(address asset_) external {
+        _testConfig.disableAsset(address(this), asset_);
+    }
+
+    function setAssetDebtCap(address asset_, uint256 debtCapOhm_) external {
+        if (debtCapOhm_ > type(uint128).max) revert BurnerLoans_InvalidCap();
+        _testConfig.setAssetDebtCap(address(this), asset_, uint128(debtCapOhm_));
+    }
+
+    function setAssetRiskConfig(
+        address asset_,
+        IBurnerLoans.AssetRiskConfigInput calldata config_
+    ) external {
+        _testConfig.setAssetRiskConfig(address(this), asset_, config_);
+    }
+
+    function setAssetFeeConfig(
+        address asset_,
+        IBurnerLoans.AssetFeeConfig calldata config_
+    ) external {
+        _testConfig.setAssetFeeConfig(address(this), asset_, config_);
+    }
+
+    function setConfigurator(address configurator_) external {
+        _testConfig.setConfigurator(configurator_);
+    }
+
+    function configurator() external view returns (address) {
+        return _testConfig.configurator();
+    }
+
+    function validateAssetDebtCap(address asset_, uint256 debtCapOhm_) external view {
+        if (debtCapOhm_ > type(uint128).max) revert BurnerLoans_InvalidCap();
+        _testConfig.validateAssetDebtCap(address(this), asset_, uint128(debtCapOhm_));
+    }
+
+    function validateAssetRiskConfig(IBurnerLoans.AssetConfig calldata config_) external view {
+        _testConfig.validateAssetRiskConfig(config_);
+    }
+
+    function validateFeeConfig(IBurnerLoans.AssetFeeConfig calldata config_) external view {
+        _testConfig.validateFeeConfig(config_);
+    }
 
     function debtValueUsd(
         uint256 debtOhm_,
@@ -118,13 +208,27 @@ contract BurnerLoansHarness is BurnerLoans {
         return _keeperRewardAsset(inputs_);
     }
 
-    function setActiveDebtForTest(
-        address asset_,
-        uint256 totalActiveDebtOhm_,
-        uint256 assetActiveDebtOhm_
-    ) external {
-        totalActiveDebtOhm = totalActiveDebtOhm_;
-        assetActiveDebtOhm[asset_] = assetActiveDebtOhm_;
+    function setActiveDebtForTest(address asset_, uint256, uint256 assetActiveDebtOhm_) external {
+        uint64 positionId = _FLOAN.getOrCreatePosition(
+            _marketId(asset_),
+            address(uint160(uint256(keccak256(abi.encode(asset_, "accounting")))))
+        );
+        IFLOANv1.Position memory position = _FLOAN.getPosition(positionId);
+        uint256 marketDebt = _FLOAN.marketPrincipalDue(_marketId(asset_));
+        uint256 positionDebt = position.principalDue;
+        uint256 debtWithoutPosition = marketDebt - positionDebt;
+        if (assetActiveDebtOhm_ < debtWithoutPosition) revert BurnerLoans_InvalidCap();
+        uint256 targetPositionDebt = assetActiveDebtOhm_ - debtWithoutPosition;
+        if (targetPositionDebt > positionDebt) {
+            _FLOAN.increaseDebt(
+                positionId,
+                uint128(targetPositionDebt - positionDebt),
+                0,
+                uint48(block.timestamp + 30 days)
+            );
+        } else if (targetPositionDebt < positionDebt) {
+            _FLOAN.decreaseDebt(positionId, uint128(positionDebt - targetPositionDebt), 0);
+        }
     }
 
     function setPositionForTest(
@@ -132,7 +236,29 @@ contract BurnerLoansHarness is BurnerLoans {
         address owner_,
         IBurnerLoans.Position memory position_
     ) external {
-        _positions[owner_][asset_] = position_;
+        uint64 positionId = _FLOAN.getOrCreatePosition(_marketId(asset_), owner_);
+        IFLOANv1.Position memory current = _FLOAN.getPosition(positionId);
+        if (position_.depositedCollateral > current.collateral) {
+            _FLOAN.addCollateral(
+                positionId,
+                uint128(position_.depositedCollateral - current.collateral)
+            );
+        } else if (position_.depositedCollateral < current.collateral) {
+            _FLOAN.removeCollateral(
+                positionId,
+                uint128(current.collateral - position_.depositedCollateral)
+            );
+        }
+        if (position_.debtOhm > current.principalDue) {
+            _FLOAN.increaseDebt(
+                positionId,
+                uint128(position_.debtOhm - current.principalDue),
+                0,
+                position_.maturity
+            );
+        } else if (position_.debtOhm < current.principalDue) {
+            _FLOAN.decreaseDebt(positionId, uint128(current.principalDue - position_.debtOhm), 0);
+        }
     }
 
     function MINTR() external view returns (MINTRv1) {

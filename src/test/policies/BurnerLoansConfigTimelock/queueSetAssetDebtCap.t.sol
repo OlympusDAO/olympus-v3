@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -16,8 +17,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     //  when queueing an asset debt cap update
     //   then it reverts before validating the cap
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(caller_ != admin);
-        vm.assume(caller_ != burnerLoansAdmin);
+        vm.assume(caller_ != admin && caller_ != burnerLoansAdmin);
 
         vm.prank(caller_);
         vm.expectRevert(
@@ -27,7 +27,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     }
 
     // queueSetAssetDebtCap
-    // given asset is not configured
+    // given asset is not configured for this facility
     //  when queueing an asset debt cap update
     //   then it reverts
     function test_givenUnconfiguredAsset_reverts() public {
@@ -57,29 +57,40 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     }
 
     // queueSetAssetDebtCap
-    // given new asset debt cap is zero
-    //  when queueing an asset debt cap update
-    //   then the action is queued because active asset debt is zero
-    function test_givenActiveDebtIsZero_allowsZeroCap() public {
+    // given market principal due is zero
+    //  when zero is queued and executed
+    //   then the market cap is set to zero
+    function test_givenMarketPrincipalDueIsZero_allowsZeroCap() public {
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), 0);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), 0);
-        _expectSingleActionExecuted(actionId, IBurnerLoans.setAssetDebtCap.selector, address(this));
+        _expectSingleActionExecuted(
+            actionId,
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            address(this)
+        );
         configTimelock.executeQueuedAction(actionId);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, 0, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            0,
+            "asset debt cap"
+        );
     }
 
     // queueSetAssetDebtCap
-    // given new asset debt cap is below active asset debt
-    //  when queueing an asset debt cap update
+    // given market principal due exceeds the proposed cap
+    //  when queueing the cap
     //   then it reverts
-    function test_givenCapBelowActiveDebt_reverts(uint256 activeDebtOhm_, uint256 cap_) public {
-        activeDebtOhm_ = bound(activeDebtOhm_, 1, burnerLoans.globalDebtCapOhm());
-        cap_ = bound(cap_, 0, activeDebtOhm_ - 1);
+    function test_givenCapBelowMarketPrincipalDue_reverts(
+        uint128 activeDebtOhm_,
+        uint128 cap_
+    ) public {
+        activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
+        cap_ = uint128(bound(cap_, 0, activeDebtOhm_ - 1));
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
         vm.prank(burnerLoansAdmin);
@@ -88,29 +99,14 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     }
 
     // queueSetAssetDebtCap
-    // given new asset debt cap is above the global debt cap
-    //  when queueing an asset debt cap update
-    //   then it reverts
-    function test_givenCapAboveGlobalCap_reverts(uint256 cap_) public {
-        uint256 globalDebtCap = burnerLoans.globalDebtCapOhm();
-        cap_ = bound(cap_, globalDebtCap + 1, type(uint128).max);
+    // given market principal due rises above a queued cap
+    //  when executing the update
+    //   then live validation reverts and preserves the old cap
+    function test_givenMarketPrincipalDueRisesAboveQueuedCap_reverts() public {
+        uint128 debtCapOhm = 50_000e9;
 
         vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
-        configTimelock.queueSetAssetDebtCap(address(usds), cap_);
-    }
-
-    // queueSetAssetDebtCap
-    // given asset active debt rises above the queued debt cap after queueing
-    //  when executing the asset debt cap update
-    //   then it reverts because the live cap invariant is broken
-    function test_givenAssetActiveDebtRisesAboveQueuedCap_reverts() public {
-        uint256 debtCapOhm = 50_000e9;
-        uint64 actionId;
-
-        vm.prank(burnerLoansAdmin);
-        actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
         burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm + 1, debtCapOhm + 1);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
@@ -118,96 +114,47 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).debtCap,
-            100_000e9,
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            _defaultAssetDebtCap(),
             "asset debt cap unchanged"
         );
     }
 
     // queueSetAssetDebtCap
-    // given global debt cap falls below the queued asset debt cap after queueing
-    //  when executing the asset debt cap update
-    //   then it reverts because the live cap invariant is broken
-    function test_givenGlobalDebtCapFallsBelowQueuedCap_reverts() public {
-        uint256 debtCapOhm = 900_000e9;
-        uint64 actionId;
+    // given market principal due changes but remains within a queued cap
+    //  when executing the update
+    //   then it succeeds
+    function test_givenMarketPrincipalDueRemainsWithinQueuedCap_executesAction() public {
+        uint128 debtCapOhm = 50_000e9;
 
         vm.prank(burnerLoansAdmin);
-        actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-
-        // The old asset cap is 100,000 OHM, so governance can still lower the global cap
-        // below the queued 900,000 OHM cap without violating the current stored asset cap.
-        vm.prank(admin);
-        burnerLoans.setGlobalDebtCap(500_000e9);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(
-            burnerLoans.getAssetConfig(address(usds)).debtCap,
-            100_000e9,
-            "asset debt cap unchanged"
-        );
-    }
-
-    // queueSetAssetDebtCap
-    // given global debt cap changes after queueing but remains above the queued asset debt cap
-    //  when executing the asset debt cap update
-    //   then the action executes because live validation still passes
-    function test_givenGlobalDebtCapChangesWithinQueuedCap_executesAction() public {
-        uint256 debtCapOhm = 900_000e9;
-        uint64 actionId;
-
-        vm.prank(burnerLoansAdmin);
-        actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-
-        vm.prank(admin);
-        burnerLoans.setGlobalDebtCap(950_000e9);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
-        emit AssetDebtCapSet(address(usds), debtCapOhm);
-        _expectSingleActionExecuted(actionId, IBurnerLoans.setAssetDebtCap.selector, address(this));
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, debtCapOhm, "asset debt cap");
-    }
-
-    // queueSetAssetDebtCap
-    // given active debt changes after queueing but remains below the queued debt cap
-    //  when executing the asset debt cap update
-    //   then the action executes because live validation still passes
-    function test_givenAssetActiveDebtChangesWithinQueuedCap_executesAction() public {
-        uint256 debtCapOhm = 50_000e9;
-        uint64 actionId;
-
-        vm.prank(burnerLoansAdmin);
-        actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
         burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm - 1, debtCapOhm - 1);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), debtCapOhm);
-        _expectSingleActionExecuted(actionId, IBurnerLoans.setAssetDebtCap.selector, address(this));
         configTimelock.executeQueuedAction(actionId);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, debtCapOhm, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            debtCapOhm,
+            "asset debt cap"
+        );
     }
 
     // queueSetAssetDebtCap
-    // given caller has admin role
-    //  when asset debt cap is valid
-    //   then the action is queued and stores the expected sub-action
-    function test_givenAdminCaller_whenCapIsValid_queuesAction(uint256 debtCapOhm_) public {
-        debtCapOhm_ = bound(debtCapOhm_, 1, burnerLoans.globalDebtCapOhm());
+    // given caller has admin role and cap is valid
+    //  when queueing the update
+    //   then the facility-scoped Config action is stored
+    function test_givenAdminCaller_whenCapIsValid_queuesAction(uint128 debtCapOhm_) public {
+        debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
         uint64 nextActionId = configTimelock.nextActionId();
         bytes memory payload = abi.encode(address(usds), debtCapOhm_);
         _expectSingleActionQueued(
             nextActionId,
             admin,
-            IBurnerLoans.setAssetDebtCap.selector,
+            IBurnerLoansConfig.setAssetDebtCap.selector,
             payload
         );
 
@@ -217,19 +164,19 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         assertEq(actionId, nextActionId, "action id");
         (address target, bytes4 selector, bytes memory storedPayload) = configTimelock
             .getQueuedSubAction(actionId, 0);
-        assertEq(target, address(burnerLoans), "target");
-        assertEq(selector, IBurnerLoans.setAssetDebtCap.selector, "selector");
+        assertEq(target, address(burnerLoansConfig), "target");
+        assertEq(selector, IBurnerLoansConfig.setAssetDebtCap.selector, "selector");
         assertEq(storedPayload, payload, "payload");
     }
 
     // queueSetAssetDebtCap
-    // given caller has burner_loans_admin role
-    //  when asset debt cap is valid
+    // given caller has burner_loans_admin role and cap is valid
+    //  when queueing the update
     //   then the action is queued
     function test_givenBurnerLoansAdminCaller_whenCapIsValid_queuesAction(
-        uint256 debtCapOhm_
+        uint128 debtCapOhm_
     ) public {
-        debtCapOhm_ = bound(debtCapOhm_, 1, burnerLoans.globalDebtCapOhm());
+        debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm_);
@@ -238,21 +185,29 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     }
 
     // queueSetAssetDebtCap
-    // given a valid queued asset debt cap update
-    //  when the action executes after the delay
-    //   then BurnerLoans stores the new cap
-    function test_givenDelayElapsed_executesAction(uint256 debtCapOhm_) public {
-        debtCapOhm_ = bound(debtCapOhm_, 1, burnerLoans.globalDebtCapOhm());
+    // given a valid queued cap update and elapsed delay
+    //  when executing the action
+    //   then Config stores it on the Burner Loans market
+    function test_givenDelayElapsed_executesAction(uint128 debtCapOhm_) public {
+        debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm_);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), debtCapOhm_);
-        _expectSingleActionExecuted(actionId, IBurnerLoans.setAssetDebtCap.selector, address(this));
+        _expectSingleActionExecuted(
+            actionId,
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            address(this)
+        );
         configTimelock.executeQueuedAction(actionId);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, debtCapOhm_, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            debtCapOhm_,
+            "asset debt cap"
+        );
     }
 }

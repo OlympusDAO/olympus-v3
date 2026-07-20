@@ -23,8 +23,8 @@ contract BurnerLoansBorrowPriceIntegrationTest is BurnerLoansBorrowTestBase {
     address internal _moduleWriter;
     address internal _priceWriter;
 
-    uint256 internal constant _BORROW_AMOUNT = 100e9;
-    uint256 internal constant _EXACT_BOUNDARY_COLLATERAL = 1_150e6;
+    uint128 internal constant _BORROW_AMOUNT = 100e9;
+    uint128 internal constant _EXACT_BOUNDARY_COLLATERAL = 1_150e6;
     uint48 internal constant _FEED_UPDATE_THRESHOLD = 24 hours;
 
     function setUp() public override {

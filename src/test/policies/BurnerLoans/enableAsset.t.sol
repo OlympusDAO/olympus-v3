@@ -24,7 +24,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
         );
-        burnerLoans.enableAsset(asset_);
+        burnerLoansConfig.enableAsset(address(burnerLoans), asset_);
     }
 
     // enableAsset
@@ -37,7 +37,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -48,7 +48,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
 
         vm.mockCall(
             address(price),
@@ -58,7 +58,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -69,12 +69,12 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
         _configurePrice(address(usds), 0);
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -85,7 +85,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
 
         vm.mockCall(
             address(depositManager),
@@ -110,7 +110,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
                 address(depositManager)
             )
         );
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -121,7 +121,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
 
         vm.mockCall(
             address(depositManager),
@@ -141,7 +141,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
                 address(depositManager)
             )
         );
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -152,7 +152,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
         depositManager.disableAssetPeriod(
             IERC20(address(usds)),
             BurnerLoansConstants.DEPOSIT_PERIOD,
@@ -166,7 +166,7 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
                 address(depositManager)
             )
         );
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
     }
 
     // enableAsset
@@ -178,7 +178,8 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _setDefaultGlobalDebtCap();
 
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
+            address(burnerLoans),
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
@@ -186,14 +187,17 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         );
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetEnabled(address(usds));
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
 
-        assertTrue(burnerLoans.getAssetConfig(address(usds)).enabled, "enabled");
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).enabled,
+            "enabled"
+        );
     }
 
     // enableAsset
@@ -204,13 +208,16 @@ contract BurnerLoansEnableAssetTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.disableAsset(address(burnerLoans), address(usds));
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetEnabled(address(usds));
-        burnerLoans.enableAsset(address(usds));
+        burnerLoansConfig.enableAsset(address(burnerLoans), address(usds));
 
-        assertTrue(burnerLoans.getAssetConfig(address(usds)).enabled, "enabled");
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).enabled,
+            "enabled"
+        );
     }
 }

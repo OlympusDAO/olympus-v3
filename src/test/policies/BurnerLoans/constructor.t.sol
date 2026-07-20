@@ -7,6 +7,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -72,7 +73,7 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
     //   then it reverts
     function test_configTimelockConstructor_givenBurnerLoansIsZero_reverts() public {
         vm.expectRevert(IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ZeroAddress.selector);
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoans(address(0)));
+        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(0)), address(burnerLoans));
     }
 }
 

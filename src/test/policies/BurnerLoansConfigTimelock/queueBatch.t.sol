@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -203,8 +204,8 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection;
         riskSelection.collateralFactorBps = true;
         actions[0] = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetRiskConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetRiskConfig.selector,
             payload: abi.encode(address(usds), riskUpdate, riskSelection)
         });
 
@@ -213,8 +214,8 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection;
         feeSelection.baseFeeBps = true;
         actions[1] = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetFeeConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetFeeConfig.selector,
             payload: abi.encode(address(usds), feeUpdate, feeSelection)
         });
     }

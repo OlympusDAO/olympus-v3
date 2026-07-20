@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -66,43 +65,5 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.borrow(address(usds), 1e9, alice, alice, 0);
-    }
-
-    // extend
-    // given the policy is disabled
-    //  when extend is called
-    //   then it reverts before reaching the placeholder implementation
-    function test_extend_givenDisabled_revertsBeforePlaceholder() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
-
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.extend(address(usds), alice, 1, 0);
-    }
-
-    // repay
-    // given the policy is disabled
-    //  when repay is called
-    //   then it reaches the placeholder implementation
-    function test_repay_givenDisabled_reachesPlaceholder() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
-
-        vm.expectRevert(IBurnerLoans.BurnerLoans_NotImplemented.selector);
-        burnerLoans.repay(address(usds), 1e9, alice);
-    }
-
-    // seize
-    // given the policy is disabled
-    //  when seize is called
-    //   then it reaches the placeholder implementation
-    function test_seize_givenDisabled_reachesPlaceholder() public {
-        address[] memory borrowers = new address[](1);
-        borrowers[0] = alice;
-        vm.prank(admin);
-        burnerLoans.disable("");
-
-        vm.expectRevert(IBurnerLoans.BurnerLoans_NotImplemented.selector);
-        burnerLoans.seize(address(usds), borrowers);
     }
 }

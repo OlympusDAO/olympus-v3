@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -148,7 +149,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then stale pre-state and post-state storage is cleared
     function test_givenQueuedAction_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
@@ -156,8 +157,8 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         ) = _collateralFactorUpdate();
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), update, selection)
         );
 
@@ -192,7 +193,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then stale pre-state and fee post-state storage is cleared
     function test_givenQueuedFeeAction_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         IBurnerLoans.AssetFeeConfig memory update;
         update.baseFeeBps = 50;
@@ -201,8 +202,8 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetFeeConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
             abi.encode(address(usds), update, selection)
         );
 
@@ -240,7 +241,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then validation uses the earlier pending projection, not the cancelled batch post-state
     function test_givenCancelledRiskBatch_laterRiskActionUsesEarlierPendingProjection() public {
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
         termUpdate.termLength = 14 days;
@@ -249,8 +250,8 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
 
         vm.prank(burnerLoansAdmin);
         uint64 termActionId = configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), termUpdate, termSelection)
         );
 
@@ -264,11 +265,11 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory minCrSelection;
         minCrSelection.minCollateralRatioBps = true;
         actions[0] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), collateralFactorUpdate, collateralFactorSelection)
         );
         actions[1] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), minCrUpdate, minCrSelection)
         );
 
@@ -285,8 +286,8 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
 
         vm.prank(burnerLoansAdmin);
         uint64 horizonActionId = configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), horizonUpdate, horizonSelection)
         );
 

@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 
 import {Actions} from "src/Kernel.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -48,12 +49,20 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         super.setUp();
         _addDefaultUsdsAsset();
         vm.prank(admin);
-        burnerLoans.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
+        burnerLoansConfig.setAssetFeeConfig(
+            address(burnerLoans),
+            address(usds),
+            _defaultAssetFeeConfig()
+        );
         _setDefaultConfigurator();
         _enableConfigTimelock();
 
         vm.startPrank(admin);
-        configTimelockHarness = new BurnerLoansConfigTimelockHarness(kernel, burnerLoans);
+        configTimelockHarness = new BurnerLoansConfigTimelockHarness(
+            kernel,
+            burnerLoansConfig,
+            address(burnerLoans)
+        );
         kernel.executeAction(Actions.ActivatePolicy, address(configTimelockHarness));
         configTimelockHarness.enable("");
         vm.stopPrank();
@@ -64,7 +73,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         bytes memory payload_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
+            target: address(burnerLoansConfig),
             selector: selector_,
             payload: payload_
         });
@@ -84,7 +93,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         vm.expectEmit(true, true, true, true, address(configTimelock));
         emit TimelockSubActionQueued(
             actionId_,
-            address(burnerLoans),
+            address(burnerLoansConfig),
             selector_,
             0,
             keccak256(payload_)
@@ -105,7 +114,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         address executor_
     ) internal {
         vm.expectEmit(true, true, true, true, address(configTimelock));
-        emit TimelockSubActionExecuted(actionId_, address(burnerLoans), selector_, 0);
+        emit TimelockSubActionExecuted(actionId_, address(burnerLoansConfig), selector_, 0);
         vm.expectEmit(true, true, false, true, address(configTimelock));
         emit TimelockActionExecuted(actionId_, executor_);
     }

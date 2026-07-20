@@ -630,7 +630,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Expected branch: credited collateral equals DepositManager actual amount
     function test_depositCollateral_givenVaultCustody_creditsActualAmount() public {
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAssetWithYield();
-        uint256 amount = 1_000e6;
+        uint128 amount = 1_000e6;
         _mintAndApprove(address(vaultAsset), alice, amount);
         (uint256 receiptTokenId, ) = depositManager.getReceiptToken(
             IERC20(address(vaultAsset)),
@@ -685,8 +685,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Amount: fuzzed positive direct-custody deposit
     // - Parameters: asset is configured, onBehalfOf is owner
     // - Expected branch: credited collateral tracks amount exactly for direct custody
-    function test_depositCollateral_givenDirectCustodyAmount_creditsAmount(uint256 amount_) public {
-        amount_ = bound(amount_, 1, 1_000_000e6);
+    function test_depositCollateral_givenDirectCustodyAmount_creditsAmount(uint128 amount_) public {
+        amount_ = uint128(bound(amount_, 1, 1_000_000e6));
         _mintAndApprove(address(usds), alice, amount_);
         (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
             address(usds),
@@ -714,10 +714,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Amount: fuzzed positive deposit
     // - Expected branch: write credits the actual DepositManager amount, which can differ from the view quote
     function test_depositCollateral_givenVaultShareRate_creditsWithdrawableAmount(
-        uint256 amount_,
+        uint128 amount_,
         uint256 yield_
     ) public {
-        amount_ = bound(amount_, 1, 1_000_000e6);
+        amount_ = uint128(bound(amount_, 1, 1_000_000e6));
         yield_ = bound(yield_, 1, 10_000_000e6);
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _seedVault(vaultAsset, vault, 1_000_000e6);
@@ -776,7 +776,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenVaultYieldAfterPreview_creditsCurrentActualAmount(
         uint256 yield_
     ) public {
-        uint256 amount = 1e6;
+        uint128 amount = 1e6;
         yield_ = bound(yield_, 1, 1_000_000e6);
         uint256 seededAssets = yield_ * amount + 1;
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
@@ -824,9 +824,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Rounding: previewDeposit(amount) rounds to zero shares, so withdrawable credit is zero
     // - Expected branch: preview rejects the deposit before state-changing custody can create accounting drift
     function test_depositCollateral_givenVaultShareRateRoundsCreditToZero_reverts(
-        uint256 amount_
+        uint128 amount_
     ) public {
-        amount_ = bound(amount_, 1, 1_000e6);
+        amount_ = uint128(bound(amount_, 1, 1_000e6));
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         uint256 seedAmount = 1_000_000e6;
         _seedVault(vaultAsset, vault, seedAmount);
@@ -922,9 +922,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Parameters: direct custody transfer would otherwise succeed
     // - Expected branch: no BurnerLoans or DepositManager accounting is retained
     function test_depositCollateral_givenInjectedZeroWithdrawableCreditAmount_reverts(
-        uint256 amount_
+        uint128 amount_
     ) public givenMockDepositManager {
-        amount_ = bound(amount_, 1, 1_000_000e6);
+        amount_ = uint128(bound(amount_, 1, 1_000_000e6));
         _mintAndApprove(address(usds), alice, amount_);
         mockDepositManager.setDepositActualAmountOverride(true, 0);
 

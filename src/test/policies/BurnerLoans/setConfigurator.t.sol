@@ -20,7 +20,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        burnerLoans.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
     }
 
     // setConfigurator
@@ -29,11 +29,11 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     //   then it reverts
     function test_givenDisabled_reverts() public {
         vm.prank(admin);
-        burnerLoans.disable("");
+        burnerLoansConfig.disable("");
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
     }
 
     // setConfigurator
@@ -43,7 +43,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     function test_givenZeroAddress_reverts() public {
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
-        burnerLoans.setConfigurator(address(0));
+        burnerLoansConfig.setConfigurator(address(0));
     }
 
     // setConfigurator
@@ -54,10 +54,10 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         address newConfigurator = makeAddr("newConfigurator");
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit ConfiguratorSet(newConfigurator);
-        burnerLoans.setConfigurator(newConfigurator);
+        burnerLoansConfig.setConfigurator(newConfigurator);
 
-        assertEq(burnerLoans.configurator(), newConfigurator, "configurator");
+        assertEq(burnerLoansConfig.configurator(), newConfigurator, "configurator");
     }
 }

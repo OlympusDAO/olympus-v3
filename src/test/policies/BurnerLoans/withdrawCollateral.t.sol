@@ -395,13 +395,13 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Withdrawal amount: greater than credited collateral
     // - Expected branch: debit validation reverts before custody
     function test_withdrawCollateral_givenAmountExceedsCollateral_reverts(
-        uint256 collateral_,
-        uint256 excess_
+        uint128 collateral_,
+        uint128 excess_
     ) public {
-        collateral_ = bound(collateral_, 1, 1_000_000e6);
-        excess_ = bound(excess_, 1, 1_000_000e6);
+        collateral_ = uint128(bound(collateral_, 1, 1_000_000e6));
+        excess_ = uint128(bound(excess_, 1, 1_000_000e6));
         _depositForAlice(collateral_);
-        uint256 amount = collateral_ + excess_;
+        uint128 amount = collateral_ + excess_;
 
         vm.prank(alice);
         vm.expectRevert(
@@ -420,10 +420,10 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Withdrawal amount: fuzzed positive amount whose vault share conversion rounds to zero after yield
     // - Expected branch: preview marks withdrawal non-executable and write reverts before debiting accounting
     function test_withdrawCollateral_givenVaultShareRateRoundsOutputToZero_reverts(
-        uint256 amount_
+        uint128 amount_
     ) public {
-        amount_ = bound(amount_, 1, 1_000e6);
-        uint256 depositedAmount = 1_000_000e6;
+        amount_ = uint128(bound(amount_, 1, 1_000e6));
+        uint128 depositedAmount = 1_000_000e6;
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _depositVaultForAlice(vaultAsset, depositedAmount);
         vaultAsset.mint(address(vault), amount_ * depositedAmount);
@@ -500,9 +500,9 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     function test_withdrawCollateral_givenVaultYieldAfterPreview_returnsCurrentActualAmount(
         uint256 yield_
     ) public {
-        uint256 withdrawalAmount = 1e6;
+        uint128 withdrawalAmount = 1e6;
         yield_ = bound(yield_, 1, 1_000_000e6);
-        uint256 depositedAmount = yield_ * withdrawalAmount + 1;
+        uint128 depositedAmount = uint128(yield_ * withdrawalAmount + 1);
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _depositVaultForAlice(vaultAsset, depositedAmount);
 
@@ -622,10 +622,10 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Withdrawal amount: fuzzed around zero through full collateral
     // - Expected branch: valid positive amounts reduce credited collateral exactly
     function test_withdrawCollateral_givenZeroThroughFullCollateral_succeeds(
-        uint256 amount_
+        uint128 amount_
     ) public {
         _depositForAlice(1_000e6);
-        amount_ = bound(amount_, 1, 1_000e6);
+        amount_ = uint128(bound(amount_, 1, 1_000e6));
 
         IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
             address(usds),
@@ -649,25 +649,23 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Position state: debt-free, so stale PRICE cannot gate the cleanup withdrawal
     // - Expected branch: each preview matches its write and the final reported remainder clears all custody accounting
     function test_withdrawCollateral_givenMultiplePartialWithdrawals_clearsFullReportedRemainder(
-        uint256 depositedAmount_,
-        uint256 firstWithdrawal_,
-        uint256 secondWithdrawal_
+        uint128 depositedAmount_,
+        uint128 firstWithdrawal_,
+        uint128 secondWithdrawal_
     ) public {
-        depositedAmount_ = bound(depositedAmount_, 4, 1_000_000e6);
-        firstWithdrawal_ = bound(firstWithdrawal_, 1, depositedAmount_ / 3);
-        secondWithdrawal_ = bound(
-            secondWithdrawal_,
-            firstWithdrawal_ + 1,
-            depositedAmount_ - firstWithdrawal_ - 1
+        depositedAmount_ = uint128(bound(depositedAmount_, 4, 1_000_000e6));
+        firstWithdrawal_ = uint128(bound(firstWithdrawal_, 1, depositedAmount_ / 3));
+        secondWithdrawal_ = uint128(
+            bound(secondWithdrawal_, firstWithdrawal_ + 1, depositedAmount_ - firstWithdrawal_ - 1)
         );
         _depositForAlice(depositedAmount_);
 
         _withdrawAndAssertPreview(firstWithdrawal_);
         _withdrawAndAssertPreview(secondWithdrawal_);
 
-        uint256 reportedRemainder = burnerLoans
-            .getPosition(address(usds), alice)
-            .depositedCollateral;
+        uint128 reportedRemainder = uint128(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral
+        );
         uint256 finalRemaining = _withdrawAndAssertPreview(reportedRemainder);
         assertEq(finalRemaining, 0, "final remaining");
         assertEq(
@@ -701,20 +699,18 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Position state: debt-free, so vault-share rounding cannot leave credited collateral dust
     // - Expected branch: each preview matches its write and the final reported remainder clears all liabilities
     function test_withdrawCollateral_givenVaultYieldAndMultiplePartialWithdrawals_clearsFullReportedRemainder(
-        uint256 depositedAmount_,
+        uint128 depositedAmount_,
         uint256 firstYield_,
-        uint256 firstWithdrawal_,
-        uint256 secondWithdrawal_,
+        uint128 firstWithdrawal_,
+        uint128 secondWithdrawal_,
         uint256 secondYield_
     ) public {
-        depositedAmount_ = bound(depositedAmount_, 6e6, 1_000_000e6);
+        depositedAmount_ = uint128(bound(depositedAmount_, 6e6, 1_000_000e6));
         firstYield_ = bound(firstYield_, 1, depositedAmount_ - 1);
         secondYield_ = bound(secondYield_, 1, depositedAmount_ - 1);
-        firstWithdrawal_ = bound(firstWithdrawal_, 1e6, depositedAmount_ / 3);
-        secondWithdrawal_ = bound(
-            secondWithdrawal_,
-            1e6,
-            (depositedAmount_ - firstWithdrawal_) / 2
+        firstWithdrawal_ = uint128(bound(firstWithdrawal_, 1e6, depositedAmount_ / 3));
+        secondWithdrawal_ = uint128(
+            bound(secondWithdrawal_, 1e6, (depositedAmount_ - firstWithdrawal_) / 2)
         );
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _depositVaultForAlice(vaultAsset, depositedAmount_);
@@ -724,9 +720,9 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         _withdrawAndAssertPreview(address(vaultAsset), secondWithdrawal_);
         vaultAsset.mint(address(vault), secondYield_);
 
-        uint256 reportedRemainder = burnerLoans
-            .getPosition(address(vaultAsset), alice)
-            .depositedCollateral;
+        uint128 reportedRemainder = uint128(
+            burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral
+        );
         uint256 finalRemaining = _withdrawAndAssertPreview(address(vaultAsset), reportedRemainder);
         assertEq(finalRemaining, 0, "final remaining");
         assertEq(
@@ -765,7 +761,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     ) public {
         debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
         uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint256 requiredCollateral = debtWholeOhm_ * 115e6;
+        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
         _depositForAlice(requiredCollateral + 2e6);
         _setActiveDebtPosition(requiredCollateral + 2e6, debtOhm);
         _setFreshPrices(100e18, 1e18);
@@ -798,7 +794,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     ) public {
         debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
         uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint256 requiredCollateral = debtWholeOhm_ * 115e6;
+        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
         _depositForAlice(requiredCollateral + 1e6);
         _setActiveDebtPosition(requiredCollateral + 1e6, debtOhm);
         _setFreshPrices(100e18, 1e18);
@@ -831,7 +827,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     ) public {
         debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
         uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint256 requiredCollateral = debtWholeOhm_ * 115e6;
+        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
         _depositForAlice(requiredCollateral + 1e6);
         _setActiveDebtPosition(requiredCollateral + 1e6, debtOhm);
         _setFreshPrices(100e18, 1e18);
@@ -914,13 +910,13 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         assertEq(usds.balanceOf(alice), 0, "alice balance");
     }
 
-    function _withdrawAndAssertPreview(uint256 amount_) internal returns (uint256 remaining_) {
+    function _withdrawAndAssertPreview(uint128 amount_) internal returns (uint256 remaining_) {
         return _withdrawAndAssertPreview(address(usds), amount_);
     }
 
     function _withdrawAndAssertPreview(
         address asset_,
-        uint256 amount_
+        uint128 amount_
     ) internal returns (uint256 remaining_) {
         IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
             asset_,
@@ -942,7 +938,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining_, health);
     }
 
-    function _depositForAlice(uint256 amount_) internal {
+    function _depositForAlice(uint128 amount_) internal {
         usds.mint(alice, amount_);
         vm.prank(alice);
         usds.approve(address(burnerLoans), amount_);
@@ -950,7 +946,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         burnerLoans.depositCollateral(address(usds), amount_, alice);
     }
 
-    function _depositVaultForAlice(MockERC20 asset_, uint256 amount_) internal {
+    function _depositVaultForAlice(MockERC20 asset_, uint128 amount_) internal {
         asset_.mint(alice, amount_);
         vm.prank(alice);
         asset_.approve(address(burnerLoans), amount_);

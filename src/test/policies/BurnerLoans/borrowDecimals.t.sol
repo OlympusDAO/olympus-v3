@@ -29,7 +29,7 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     ) public {
         uint8 ohmDecimals = _ohmDecimals();
         uint256 ohmScale = 10 ** ohmDecimals;
-        uint256 borrowAmount = bound(uint256(borrowAmount_), 1, 100 * ohmScale);
+        uint128 borrowAmount = uint128(bound(uint256(borrowAmount_), 1, 100 * ohmScale));
 
         _assertBorrowUsesConfiguredDecimalScales(borrowAmount);
     }
@@ -47,7 +47,7 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     // - Collateral: exactly 1,150 units against a 1,150 USD requirement
     // - Expected branch: preview and borrow return exactly 1e18 health
     function test_givenExactHealthBoundary_borrowReturnsOneWad() public {
-        _assertSuccessfulHealthBoundaryBorrow(1_150 * 10 ** _collateralDecimals(), 1e18);
+        _assertSuccessfulHealthBoundaryBorrow(uint128(1_150 * 10 ** _collateralDecimals()), 1e18);
     }
 
     // Condition tree:
@@ -57,7 +57,7 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     function test_givenOneCollateralUnitBelowHealthBoundary_borrowReverts() public {
         _configureBoundaryPrices();
         uint8 collateralDecimals = _collateralDecimals();
-        uint256 collateralAmount = 1_150 * 10 ** collateralDecimals - 1;
+        uint128 collateralAmount = uint128(1_150 * 10 ** collateralDecimals - 1);
         _depositBoundaryCollateral(collateralAmount);
 
         (uint256 expectedHealth, ) = _boundaryHealthExpectations();
@@ -65,7 +65,7 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
             expectedHealth
         );
-        uint256 borrowAmount = 100 * 10 ** _ohmDecimals();
+        uint128 borrowAmount = uint128(100 * 10 ** _ohmDecimals());
 
         vm.expectRevert(error);
         burnerLoans.previewBorrow(address(usds), borrowAmount, alice);
@@ -82,13 +82,16 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     function test_givenOneCollateralUnitAboveHealthBoundary_borrowReturnsExpectedHealth() public {
         uint8 collateralDecimals = _collateralDecimals();
         (, uint256 expectedHealth) = _boundaryHealthExpectations();
-        _assertSuccessfulHealthBoundaryBorrow(1_150 * 10 ** collateralDecimals + 1, expectedHealth);
+        _assertSuccessfulHealthBoundaryBorrow(
+            uint128(1_150 * 10 ** collateralDecimals + 1),
+            expectedHealth
+        );
     }
 
-    function _assertBorrowUsesConfiguredDecimalScales(uint256 borrowAmount_) internal {
+    function _assertBorrowUsesConfiguredDecimalScales(uint128 borrowAmount_) internal {
         uint8 collateralDecimals = _collateralDecimals();
         uint256 collateralScale = 10 ** collateralDecimals;
-        uint256 collateralAmount = _configurePricesAndRequiredCollateral(borrowAmount_);
+        uint128 collateralAmount = _configurePricesAndRequiredCollateral(borrowAmount_);
 
         usds.mint(alice, collateralAmount + 100 * collateralScale);
         vm.startPrank(alice);
@@ -136,8 +139,8 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     }
 
     function _configurePricesAndRequiredCollateral(
-        uint256 borrowAmount_
-    ) internal returns (uint256 collateralAmount) {
+        uint128 borrowAmount_
+    ) internal returns (uint128 collateralAmount) {
         uint8 ohmDecimals = _ohmDecimals();
         uint8 collateralDecimals = _collateralDecimals();
         uint8 priceDecimals = _priceDecimals();
@@ -155,10 +158,8 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         // requiredUsd = ceil(debtValueUsd * 115% / 100%), in PRICE-native USD units.
         uint256 requiredUsd = (debtValueUsd * 11_500 + 9_999) / 10_000;
         // collateralAmount = ceil(requiredUsd * collateral scale / $0.75), in native units.
-        collateralAmount = burnerLoans.requiredCollateralAsset(
-            requiredUsd,
-            collateralUsdPrice,
-            collateralDecimals
+        collateralAmount = uint128(
+            burnerLoans.requiredCollateralAsset(requiredUsd, collateralUsdPrice, collateralDecimals)
         );
 
         assertGt(debtValueUsd, 0, "nonzero debt retains PRICE-native value");
@@ -167,12 +168,12 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     }
 
     function _assertSuccessfulHealthBoundaryBorrow(
-        uint256 collateralAmount_,
+        uint128 collateralAmount_,
         uint256 expectedHealth_
     ) internal {
         _configureBoundaryPrices();
         _depositBoundaryCollateral(collateralAmount_);
-        uint256 borrowAmount = 100 * 10 ** _ohmDecimals();
+        uint128 borrowAmount = uint128(100 * 10 ** _ohmDecimals());
 
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
             address(usds),
@@ -206,7 +207,7 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         _configurePrice(address(usds), priceScale);
     }
 
-    function _depositBoundaryCollateral(uint256 collateralAmount_) internal {
+    function _depositBoundaryCollateral(uint128 collateralAmount_) internal {
         usds.mint(alice, collateralAmount_ + 100 * 10 ** _collateralDecimals());
         vm.startPrank(alice);
         usds.approve(address(burnerLoans), type(uint256).max);
@@ -321,7 +322,7 @@ contract BurnerLoansBorrowOhm6Collateral18Price6DecimalsTest is BurnerLoansBorro
 
         // Backing rounds up to $10.000001 at 6 PRICE decimals.
         // 100 OHM therefore requires 1,000.0001 USDS = 1_000_000_100e12 native units.
-        uint256 collateralAmount = 1_000_000_100e12;
+        uint128 collateralAmount = 1_000_000_100e12;
         usds.mint(alice, collateralAmount + 100e18);
         vm.startPrank(alice);
         usds.approve(address(burnerLoans), type(uint256).max);

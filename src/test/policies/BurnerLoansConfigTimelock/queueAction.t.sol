@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -13,7 +14,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
     //  when queueing through the raw harness
     //   then validation rejects the action
     function test_givenWrongTarget_reverts(address target_) public {
-        vm.assume(target_ != address(burnerLoans));
+        vm.assume(target_ != address(burnerLoansConfig));
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
@@ -25,12 +26,12 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
                 target_,
-                IBurnerLoans.setAssetRiskConfig.selector
+                IBurnerLoansConfig.setAssetRiskConfig.selector
             )
         );
         configTimelockHarness.queueAction(
             target_,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), update, selection)
         );
     }
@@ -47,12 +48,12 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(burnerLoans),
+                address(burnerLoansConfig),
                 unsupportedSelector
             )
         );
         configTimelockHarness.queueAction(
-            address(burnerLoans),
+            address(burnerLoansConfig),
             unsupportedSelector,
             abi.encode(1_000_000e9)
         );
@@ -70,12 +71,12 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
                 address(0),
-                IBurnerLoans.setAssetRiskConfig.selector
+                IBurnerLoansConfig.setAssetRiskConfig.selector
             )
         );
         configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds))
         );
     }
@@ -92,12 +93,12 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
                 address(0),
-                IBurnerLoans.setAssetFeeConfig.selector
+                IBurnerLoansConfig.setAssetFeeConfig.selector
             )
         );
         configTimelockHarness.queueAction(
-            address(burnerLoans),
-            IBurnerLoans.setAssetFeeConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
             abi.encode(address(usds))
         );
     }
@@ -220,7 +221,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
 
     function _authorizeHarness() internal {
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
     }
 
     function _riskAction(
@@ -228,8 +229,8 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetRiskConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetRiskConfig.selector,
             payload: abi.encode(address(usds), update_, selection_)
         });
     }
@@ -239,8 +240,8 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetFeeConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetFeeConfig.selector,
             payload: abi.encode(address(usds), update_, selection_)
         });
     }

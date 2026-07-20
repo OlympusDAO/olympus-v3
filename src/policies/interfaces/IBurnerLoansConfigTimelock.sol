@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock
@@ -87,7 +87,9 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     /// @notice Returns the Burner Loans policy configured by this timelock.
     /// @return burnerLoans_ The Burner Loans policy.
-    function burnerLoans() external view returns (IBurnerLoans burnerLoans_);
+    function burnerLoans() external view returns (IBurnerLoansConfig burnerLoans_);
+
+    function FACILITY() external view returns (address facility_);
 
     /// @notice Returns the minimum supported timelock delay.
     /// @return delay_ The minimum delay, in seconds.
@@ -111,7 +113,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueSetAssetFeeConfig(
         address asset_,
-        IBurnerLoans.AssetFeeConfig calldata config_,
+        IBurnerLoansConfig.AssetFeeConfig calldata config_,
         FeeConfigUpdateSelection calldata selection_
     ) external returns (uint64 actionId);
 
@@ -122,7 +124,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueSetAssetDebtCap(
         address asset_,
-        uint256 debtCapOhm_
+        uint128 debtCapOhm_
     ) external returns (uint64 actionId);
 
     /// @notice Queues a partial asset risk-configuration update.

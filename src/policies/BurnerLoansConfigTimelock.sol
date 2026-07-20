@@ -5,11 +5,13 @@ pragma solidity >=0.8.24;
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {BurnerLoansConfigTimelockLib} from "src/policies/libraries/BurnerLoansConfigTimelockLib.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -28,7 +30,7 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///      BurnerLoans are enabled, that this policy is still the configured BurnerLoans
 ///      configurator, and that the queued sub-action's expected config pre-state still matches
 ///      live BurnerLoans state. Value invariants that can legitimately move during the delay,
-///      such as active debt and global debt cap, are rechecked by the BurnerLoans setter at
+///      such as active market debt, are rechecked by the BurnerLoansConfig setter at
 ///      execution rather than encoded into the pre-state hash.
 contract BurnerLoansConfigTimelock is
     Policy,
@@ -71,7 +73,8 @@ contract BurnerLoansConfigTimelock is
         IBurnerLoans.AssetConfig config;
     }
 
-    IBurnerLoans internal immutable BURNER_LOANS;
+    IBurnerLoansConfig internal immutable BURNER_LOANS;
+    address public immutable FACILITY;
     mapping(uint64 actionId => mapping(uint256 index => bytes32 expectedHash))
         internal _expectedPreStateHashes;
     mapping(uint64 actionId => mapping(uint256 index => FeeConfigPostState state))
@@ -90,22 +93,27 @@ contract BurnerLoansConfigTimelock is
     /// @param burnerLoans_ Burner Loans policy that receives executed config updates.
     constructor(
         Kernel kernel_,
-        IBurnerLoans burnerLoans_
+        IBurnerLoansConfig burnerLoans_,
+        address facility_
     )
         Policy(kernel_)
         ReEnablerGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD)
         TimelockBatchQueue(MIN_TIMELOCK_DELAY)
     {
-        if (address(burnerLoans_) == address(0)) {
+        if (address(burnerLoans_) == address(0) || facility_ == address(0)) {
             revert BurnerLoansConfigTimelock_ZeroAddress();
         }
         if (
-            !ERC165Checker.supportsInterface(address(burnerLoans_), type(IBurnerLoans).interfaceId)
+            !ERC165Checker.supportsInterface(
+                address(burnerLoans_),
+                type(IBurnerLoansConfig).interfaceId
+            )
         ) {
             revert BurnerLoansConfigTimelock_InvalidBurnerLoans(address(burnerLoans_));
         }
 
         BURNER_LOANS = burnerLoans_;
+        FACILITY = facility_;
     }
 
     // ========== POLICY SETUP ========== //
@@ -135,7 +143,7 @@ contract BurnerLoansConfigTimelock is
 
     /// @notice Returns the Burner Loans policy configured by this timelock.
     /// @return IBurnerLoans The Burner Loans policy.
-    function burnerLoans() external view override returns (IBurnerLoans) {
+    function burnerLoans() external view override returns (IBurnerLoansConfig) {
         return BURNER_LOANS;
     }
 
@@ -165,7 +173,7 @@ contract BurnerLoansConfigTimelock is
         return
             _queueAction(
                 address(BURNER_LOANS),
-                IBurnerLoans.setAssetFeeConfig.selector,
+                IBurnerLoansConfig.setAssetFeeConfig.selector,
                 abi.encode(asset_, config_, selection_)
             );
     }
@@ -186,12 +194,12 @@ contract BurnerLoansConfigTimelock is
     /// @return actionId The queued action ID.
     function queueSetAssetDebtCap(
         address asset_,
-        uint256 debtCapOhm_
+        uint128 debtCapOhm_
     ) external returns (uint64 actionId) {
         return
             _queueAction(
                 address(BURNER_LOANS),
-                IBurnerLoans.setAssetDebtCap.selector,
+                IBurnerLoansConfig.setAssetDebtCap.selector,
                 abi.encode(asset_, debtCapOhm_)
             );
     }
@@ -220,7 +228,7 @@ contract BurnerLoansConfigTimelock is
         return
             _queueAction(
                 address(BURNER_LOANS),
-                IBurnerLoans.setAssetRiskConfig.selector,
+                IBurnerLoansConfig.setAssetRiskConfig.selector,
                 abi.encode(asset_, update_, selection_)
             );
     }
@@ -312,7 +320,7 @@ contract BurnerLoansConfigTimelock is
         bytes4 selector = action_.selector;
         bool success;
         bytes memory returnData;
-        if (selector == IBurnerLoans.setAssetRiskConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             (
                 address asset,
                 AssetRiskConfigUpdate memory update,
@@ -321,15 +329,21 @@ contract BurnerLoansConfigTimelock is
                     action_.payload,
                     (address, AssetRiskConfigUpdate, AssetRiskConfigUpdateSelection)
                 );
-            IBurnerLoans.AssetConfig memory config = _applyAssetRiskConfigUpdate(
-                BURNER_LOANS.getAssetConfig(asset),
-                update,
-                selection
-            );
+            IBurnerLoans.AssetConfig memory config = BurnerLoansConfigTimelockLib
+                .applyAssetRiskConfigUpdate(
+                    BURNER_LOANS.getAssetConfig(FACILITY, asset),
+                    update,
+                    selection
+                );
             (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(selector, asset, _toRiskConfig(config))
+                abi.encodeWithSelector(
+                    selector,
+                    FACILITY,
+                    asset,
+                    BurnerLoansConfigTimelockLib.toRiskConfig(config)
+                )
             );
-        } else if (selector == IBurnerLoans.setAssetFeeConfig.selector) {
+        } else if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             (
                 address asset,
                 IBurnerLoans.AssetFeeConfig memory update,
@@ -338,18 +352,19 @@ contract BurnerLoansConfigTimelock is
                     action_.payload,
                     (address, IBurnerLoans.AssetFeeConfig, FeeConfigUpdateSelection)
                 );
-            IBurnerLoans.AssetFeeConfig memory config = _applyFeeConfigUpdate(
-                BURNER_LOANS.getAssetFeeConfig(asset),
-                update,
-                selection
-            );
+            IBurnerLoans.AssetFeeConfig memory config = BurnerLoansConfigTimelockLib
+                .applyFeeConfigUpdate(
+                    BURNER_LOANS.getAssetFeeConfig(FACILITY, asset),
+                    update,
+                    selection
+                );
             (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(selector, asset, config)
+                abi.encodeWithSelector(selector, FACILITY, asset, config)
             );
-        } else if (selector == IBurnerLoans.setAssetDebtCap.selector) {
-            (address asset, uint256 debtCapOhm) = abi.decode(action_.payload, (address, uint256));
+        } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
+            (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
             (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(selector, asset, debtCapOhm)
+                abi.encodeWithSelector(selector, FACILITY, asset, debtCapOhm)
             );
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
@@ -392,7 +407,7 @@ contract BurnerLoansConfigTimelock is
         }
 
         bytes4 selector = action_.selector;
-        if (selector == IBurnerLoans.setAssetFeeConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS_FEE_CONFIG_SELECTION, selector);
             (
                 address feeAsset,
@@ -405,13 +420,17 @@ contract BurnerLoansConfigTimelock is
             _requireAssetConfigured(feeAsset);
             IBurnerLoans.AssetFeeConfig memory config = _projectFeeConfig(feeAsset);
             _expectedPreStateHashes[actionId_][index_] = _hashFeeConfig(feeAsset, config);
-            config = _applyFeeConfigUpdate(config, feeConfig, feeSelection);
+            config = BurnerLoansConfigTimelockLib.applyFeeConfigUpdate(
+                config,
+                feeConfig,
+                feeSelection
+            );
             BURNER_LOANS.validateFeeConfig(config);
             _storeFeeConfigPostState(actionId_, index_, feeAsset, config);
             return;
         }
 
-        if (selector == IBurnerLoans.setAssetRiskConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             _requirePayloadLength(
                 action_.payload,
                 _LEN_ADDRESS_ASSET_RISK_CONFIG_SELECTION,
@@ -427,18 +446,22 @@ contract BurnerLoansConfigTimelock is
                 );
             IBurnerLoans.AssetConfig memory config = _projectAssetConfig(asset);
             _expectedPreStateHashes[actionId_][index_] = _hashAssetConfig(asset, config);
-            config = _applyAssetRiskConfigUpdate(config, update, selection);
+            config = BurnerLoansConfigTimelockLib.applyAssetRiskConfigUpdate(
+                config,
+                update,
+                selection
+            );
             BURNER_LOANS.validateAssetRiskConfig(config);
             _storeAssetConfigPostState(actionId_, index_, asset, config);
             return;
         }
 
-        if (selector == IBurnerLoans.setAssetDebtCap.selector) {
+        if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS_UINT256, selector);
-            (address asset, uint256 debtCapOhm) = abi.decode(action_.payload, (address, uint256));
+            (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
             IBurnerLoans.AssetConfig memory config = _projectAssetConfig(asset);
             _expectedPreStateHashes[actionId_][index_] = _hashAssetConfig(asset, config);
-            BURNER_LOANS.validateAssetDebtCap(asset, debtCapOhm);
+            BURNER_LOANS.validateAssetDebtCap(FACILITY, asset, debtCapOhm);
             config.debtCap = debtCapOhm;
             _storeAssetConfigPostState(actionId_, index_, asset, config);
             return;
@@ -466,10 +489,10 @@ contract BurnerLoansConfigTimelock is
     function _requireAssetConfigured(
         address asset_
     ) internal view returns (IBurnerLoans.AssetConfig memory config) {
-        if (!BURNER_LOANS.isAssetConfigured(asset_)) {
+        if (!BURNER_LOANS.isAssetConfigured(FACILITY, asset_)) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
         }
-        return BURNER_LOANS.getAssetConfig(asset_);
+        return BURNER_LOANS.getAssetConfig(FACILITY, asset_);
     }
 
     function _requireAssetEnabled(
@@ -485,129 +508,6 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
-    function _applyAssetRiskConfig(
-        IBurnerLoans.AssetConfig memory config,
-        IBurnerLoans.AssetRiskConfigInput memory riskConfig_
-    ) internal pure returns (IBurnerLoans.AssetConfig memory) {
-        config.collateralFactorBps = riskConfig_.collateralFactorBps;
-        config.minCollateralRatioBps = riskConfig_.minCollateralRatioBps;
-        config.backingMultiplierBps = riskConfig_.backingMultiplierBps;
-        config.keeperRewardBps = riskConfig_.keeperRewardBps;
-        config.termLength = riskConfig_.termLength;
-        config.maxMaturityHorizon = riskConfig_.maxMaturityHorizon;
-        config.maxKeeperReward = riskConfig_.maxKeeperReward;
-        return config;
-    }
-
-    function _applyAssetRiskConfigUpdate(
-        IBurnerLoans.AssetConfig memory config,
-        AssetRiskConfigUpdate memory update_,
-        AssetRiskConfigUpdateSelection memory selection_
-    ) internal pure returns (IBurnerLoans.AssetConfig memory) {
-        if (
-            !selection_.collateralFactorBps &&
-            !selection_.minCollateralRatioBps &&
-            !selection_.backingMultiplierBps &&
-            !selection_.keeperRewardBps &&
-            !selection_.termLength &&
-            !selection_.maxMaturityHorizon &&
-            !selection_.maxKeeperReward
-        ) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-
-        if (selection_.collateralFactorBps) {
-            config.collateralFactorBps = update_.collateralFactorBps;
-        } else if (update_.collateralFactorBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.minCollateralRatioBps) {
-            config.minCollateralRatioBps = update_.minCollateralRatioBps;
-        } else if (update_.minCollateralRatioBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.backingMultiplierBps) {
-            config.backingMultiplierBps = update_.backingMultiplierBps;
-        } else if (update_.backingMultiplierBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.keeperRewardBps) {
-            config.keeperRewardBps = update_.keeperRewardBps;
-        } else if (update_.keeperRewardBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.termLength) {
-            config.termLength = update_.termLength;
-        } else if (update_.termLength != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.maxMaturityHorizon) {
-            config.maxMaturityHorizon = update_.maxMaturityHorizon;
-        } else if (update_.maxMaturityHorizon != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.maxKeeperReward) {
-            config.maxKeeperReward = update_.maxKeeperReward;
-        } else if (update_.maxKeeperReward != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-
-        return config;
-    }
-
-    function _toRiskConfig(
-        IBurnerLoans.AssetConfig memory config_
-    ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
-        return
-            IBurnerLoans.AssetRiskConfigInput({
-                collateralFactorBps: config_.collateralFactorBps,
-                minCollateralRatioBps: config_.minCollateralRatioBps,
-                backingMultiplierBps: config_.backingMultiplierBps,
-                keeperRewardBps: config_.keeperRewardBps,
-                termLength: config_.termLength,
-                maxMaturityHorizon: config_.maxMaturityHorizon,
-                maxKeeperReward: config_.maxKeeperReward
-            });
-    }
-
-    function _applyFeeConfigUpdate(
-        IBurnerLoans.AssetFeeConfig memory config,
-        IBurnerLoans.AssetFeeConfig memory update_,
-        FeeConfigUpdateSelection memory selection_
-    ) internal pure returns (IBurnerLoans.AssetFeeConfig memory) {
-        if (
-            !selection_.baseFeeBps &&
-            !selection_.kinkBps &&
-            !selection_.preKinkSlopeBps &&
-            !selection_.postKinkSlopeBps
-        ) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-
-        if (selection_.baseFeeBps) {
-            config.baseFeeBps = update_.baseFeeBps;
-        } else if (update_.baseFeeBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.kinkBps) {
-            config.kinkBps = update_.kinkBps;
-        } else if (update_.kinkBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.preKinkSlopeBps) {
-            config.preKinkSlopeBps = update_.preKinkSlopeBps;
-        } else if (update_.preKinkSlopeBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.postKinkSlopeBps) {
-            config.postKinkSlopeBps = update_.postKinkSlopeBps;
-        } else if (update_.postKinkSlopeBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-
-        return config;
-    }
-
     function _projectFeeConfig(
         address asset_
     ) internal view returns (IBurnerLoans.AssetFeeConfig memory config) {
@@ -617,7 +517,7 @@ contract BurnerLoansConfigTimelock is
             if (state.exists && state.asset == asset_) return state.config;
         }
 
-        return BURNER_LOANS.getAssetFeeConfig(asset_);
+        return BURNER_LOANS.getAssetFeeConfig(FACILITY, asset_);
     }
 
     function _projectAssetConfig(
@@ -776,21 +676,21 @@ contract BurnerLoansConfigTimelock is
 
         bytes4 selector = action_.selector;
         bytes32 currentHash;
-        if (selector == IBurnerLoans.setAssetFeeConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             (address asset, , ) = abi.decode(
                 action_.payload,
                 (address, IBurnerLoans.AssetFeeConfig, FeeConfigUpdateSelection)
             );
             _requireAssetEnabled(asset);
-            currentHash = _hashFeeConfig(asset, BURNER_LOANS.getAssetFeeConfig(asset));
-        } else if (selector == IBurnerLoans.setAssetRiskConfig.selector) {
+            currentHash = _hashFeeConfig(asset, BURNER_LOANS.getAssetFeeConfig(FACILITY, asset));
+        } else if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             (address asset, , ) = abi.decode(
                 action_.payload,
                 (address, AssetRiskConfigUpdate, AssetRiskConfigUpdateSelection)
             );
             currentHash = _hashAssetConfig(asset, _requireAssetEnabled(asset));
-        } else if (selector == IBurnerLoans.setAssetDebtCap.selector) {
-            (address asset, ) = abi.decode(action_.payload, (address, uint256));
+        } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
+            (address asset, ) = abi.decode(action_.payload, (address, uint128));
             currentHash = _hashAssetConfig(asset, _requireAssetEnabled(asset));
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);

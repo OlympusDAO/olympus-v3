@@ -26,7 +26,7 @@ contract BurnerLoansSetAssetDebtCapTest is BurnerLoansTest {
                 caller_
             )
         );
-        burnerLoans.setAssetDebtCap(address(usds), 200_000e9);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), 200_000e9);
     }
 
     // setAssetDebtCap
@@ -36,56 +36,64 @@ contract BurnerLoansSetAssetDebtCapTest is BurnerLoansTest {
     function test_givenDisabled_reverts() public {
         _addDefaultUsdsAsset();
         vm.prank(admin);
-        burnerLoans.disable("");
+        burnerLoansConfig.disable("");
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.setAssetDebtCap(address(usds), 200_000e9);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), 200_000e9);
     }
 
     // setAssetDebtCap
     // given new asset debt cap is below active asset debt
     //  when setAssetDebtCap is called by admin
     //   then it reverts
-    function test_givenCapBelowActiveDebt_reverts(uint256 activeDebtOhm_, uint256 cap_) public {
+    function test_givenCapBelowActiveDebt_reverts(uint128 activeDebtOhm_, uint128 cap_) public {
         _addDefaultUsdsAsset();
-        activeDebtOhm_ = bound(activeDebtOhm_, 1, burnerLoans.globalDebtCapOhm());
-        cap_ = bound(cap_, 0, activeDebtOhm_ - 1);
+        activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
+        cap_ = uint128(bound(cap_, 0, activeDebtOhm_ - 1));
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
-        burnerLoans.setAssetDebtCap(address(usds), cap_);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), cap_);
     }
 
     // setAssetDebtCap
-    // given new asset debt cap is above the global debt cap
+    // given new asset debt cap is above the facility's global debt cap
     //  when setAssetDebtCap is called by admin
-    //   then it reverts
-    function test_givenCapAboveGlobalCap_reverts(uint256 cap_) public {
+    //   then the independent market cap is still accepted
+    function test_givenCapAboveGlobalCap_setsIndependentMarketCap(uint128 cap_) public {
         _addDefaultUsdsAsset();
-        uint256 globalDebtCap = burnerLoans.globalDebtCapOhm();
-        cap_ = bound(cap_, globalDebtCap + 1, type(uint128).max);
+        cap_ = uint128(bound(cap_, burnerLoans.globalDebtCapOhm() + 1, type(uint128).max));
 
         vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
-        burnerLoans.setAssetDebtCap(address(usds), cap_);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), cap_);
+
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            cap_,
+            "asset debt cap"
+        );
     }
 
     // setAssetDebtCap
     // given new asset debt cap is within bounds
     //  when setAssetDebtCap is called by admin
     //   then it stores the cap
-    function test_givenAdminCaller_setsCap(uint256 debtCapOhm_) public {
+    function test_givenAdminCaller_setsCap(uint128 debtCapOhm_) public {
         _addDefaultUsdsAsset();
-        debtCapOhm_ = bound(debtCapOhm_, 1, burnerLoans.globalDebtCapOhm());
+        debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), debtCapOhm_);
-        burnerLoans.setAssetDebtCap(address(usds), debtCapOhm_);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), debtCapOhm_);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, debtCapOhm_, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            debtCapOhm_,
+            "asset debt cap"
+        );
     }
 
     // setAssetDebtCap
@@ -96,46 +104,54 @@ contract BurnerLoansSetAssetDebtCapTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), 0);
-        burnerLoans.setAssetDebtCap(address(usds), 0);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), 0);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, 0, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            0,
+            "asset debt cap"
+        );
     }
 
     // setAssetDebtCap
     // given caller is the configurator
     //  when new asset debt cap is within bounds
     //   then it stores the cap
-    function test_givenConfiguratorCaller_setsCap(uint256 debtCapOhm_) public {
+    function test_givenConfiguratorCaller_setsCap(uint128 debtCapOhm_) public {
         _addDefaultUsdsAsset();
         _setDefaultConfigurator();
-        debtCapOhm_ = bound(debtCapOhm_, 1, burnerLoans.globalDebtCapOhm());
+        debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
 
         vm.prank(address(configTimelock));
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), debtCapOhm_);
-        burnerLoans.setAssetDebtCap(address(usds), debtCapOhm_);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), debtCapOhm_);
 
-        assertEq(burnerLoans.getAssetConfig(address(usds)).debtCap, debtCapOhm_, "asset debt cap");
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            debtCapOhm_,
+            "asset debt cap"
+        );
     }
 
     // setAssetDebtCap
     // given new asset debt cap equals active asset debt
     //  when setAssetDebtCap is called by admin
     //   then it stores the cap
-    function test_givenCapEqualsActiveDebt_setsCap(uint256 activeDebtOhm_) public {
+    function test_givenCapEqualsActiveDebt_setsCap(uint128 activeDebtOhm_) public {
         _addDefaultUsdsAsset();
-        activeDebtOhm_ = bound(activeDebtOhm_, 1, burnerLoans.globalDebtCapOhm());
+        activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetDebtCapSet(address(usds), activeDebtOhm_);
-        burnerLoans.setAssetDebtCap(address(usds), activeDebtOhm_);
+        burnerLoansConfig.setAssetDebtCap(address(burnerLoans), address(usds), activeDebtOhm_);
 
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).debtCap,
+            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
             activeDebtOhm_,
             "asset debt cap"
         );

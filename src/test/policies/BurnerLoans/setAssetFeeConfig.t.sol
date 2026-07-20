@@ -18,7 +18,11 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         _enableConfigTimelock();
 
         vm.prank(admin);
-        burnerLoans.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
+        burnerLoansConfig.setAssetFeeConfig(
+            address(burnerLoans),
+            address(usds),
+            _defaultAssetFeeConfig()
+        );
     }
 
     // setAssetFeeConfig
@@ -38,7 +42,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
                 caller_
             )
         );
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -47,11 +51,15 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
     //   then it reverts
     function test_givenDisabled_reverts() public {
         vm.prank(admin);
-        burnerLoans.disable("");
+        burnerLoansConfig.disable("");
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
+        burnerLoansConfig.setAssetFeeConfig(
+            address(burnerLoans),
+            address(usds),
+            _defaultAssetFeeConfig()
+        );
     }
 
     // setAssetFeeConfig
@@ -68,7 +76,11 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
                 unknownAsset
             )
         );
-        burnerLoans.setAssetFeeConfig(unknownAsset, _defaultAssetFeeConfig());
+        burnerLoansConfig.setAssetFeeConfig(
+            address(burnerLoans),
+            unknownAsset,
+            _defaultAssetFeeConfig()
+        );
     }
 
     // setAssetFeeConfig
@@ -84,7 +96,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, baseFeeBps_)
         );
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -101,7 +113,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidFeeConfig.selector);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -115,7 +127,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidFeeConfig.selector);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -131,7 +143,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, preKinkSlopeBps_)
         );
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -147,7 +159,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, postKinkSlopeBps_)
         );
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -173,7 +185,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidFeeConfig.selector);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -195,7 +207,7 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidFeeConfig.selector);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
     }
 
     // setAssetFeeConfig
@@ -226,11 +238,14 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         });
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetFeeConfigSet(address(usds), config);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
 
-        IBurnerLoans.AssetFeeConfig memory stored = burnerLoans.getAssetFeeConfig(address(usds));
+        IBurnerLoans.AssetFeeConfig memory stored = burnerLoansConfig.getAssetFeeConfig(
+            address(burnerLoans),
+            address(usds)
+        );
         assertEq(stored.baseFeeBps, baseFeeBps_, "base fee");
         assertEq(stored.kinkBps, kinkBps_, "kink");
         assertEq(stored.preKinkSlopeBps, preKinkSlopeBps_, "pre-kink slope");
@@ -247,17 +262,21 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         config.postKinkSlopeBps = 100;
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetFeeConfigSet(address(usds), config);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
 
         assertEq(
-            burnerLoans.getAssetFeeConfig(address(usds)).preKinkSlopeBps,
+            burnerLoansConfig
+                .getAssetFeeConfig(address(burnerLoans), address(usds))
+                .preKinkSlopeBps,
             900,
             "pre-kink slope"
         );
         assertEq(
-            burnerLoans.getAssetFeeConfig(address(usds)).postKinkSlopeBps,
+            burnerLoansConfig
+                .getAssetFeeConfig(address(burnerLoans), address(usds))
+                .postKinkSlopeBps,
             100,
             "post-kink slope"
         );
@@ -273,7 +292,8 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         _configureDepositManagerAsset(address(otherAsset));
 
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
+            address(burnerLoans),
             address(otherAsset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
@@ -287,7 +307,11 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
             postKinkSlopeBps: 700
         });
         vm.prank(admin);
-        burnerLoans.setAssetFeeConfig(address(otherAsset), otherFeeConfig);
+        burnerLoansConfig.setAssetFeeConfig(
+            address(burnerLoans),
+            address(otherAsset),
+            otherFeeConfig
+        );
 
         IBurnerLoans.AssetFeeConfig memory targetConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 75,
@@ -297,9 +321,10 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         });
 
         vm.prank(admin);
-        burnerLoans.setAssetFeeConfig(address(usds), targetConfig);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), targetConfig);
 
-        IBurnerLoans.AssetFeeConfig memory targetStored = burnerLoans.getAssetFeeConfig(
+        IBurnerLoans.AssetFeeConfig memory targetStored = burnerLoansConfig.getAssetFeeConfig(
+            address(burnerLoans),
             address(usds)
         );
         assertEq(targetStored.baseFeeBps, targetConfig.baseFeeBps, "target base fee");
@@ -315,7 +340,8 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
             "target post-kink slope"
         );
 
-        IBurnerLoans.AssetFeeConfig memory otherStored = burnerLoans.getAssetFeeConfig(
+        IBurnerLoans.AssetFeeConfig memory otherStored = burnerLoansConfig.getAssetFeeConfig(
+            address(burnerLoans),
             address(otherAsset)
         );
         assertEq(otherStored.baseFeeBps, otherFeeConfig.baseFeeBps, "other base fee");
@@ -345,11 +371,14 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         });
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetFeeConfigSet(address(usds), config);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
 
-        IBurnerLoans.AssetFeeConfig memory stored = burnerLoans.getAssetFeeConfig(address(usds));
+        IBurnerLoans.AssetFeeConfig memory stored = burnerLoansConfig.getAssetFeeConfig(
+            address(burnerLoans),
+            address(usds)
+        );
         assertEq(stored.kinkBps, 0, "kink");
         assertEq(stored.preKinkSlopeBps, 10_000, "pre-kink slope");
         assertEq(stored.postKinkSlopeBps, 0, "post-kink slope");
@@ -364,10 +393,14 @@ contract BurnerLoansSetAssetFeeConfigTest is BurnerLoansTest {
         config.baseFeeBps = 30;
 
         vm.prank(address(configTimelock));
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetFeeConfigSet(address(usds), config);
-        burnerLoans.setAssetFeeConfig(address(usds), config);
+        burnerLoansConfig.setAssetFeeConfig(address(burnerLoans), address(usds), config);
 
-        assertEq(burnerLoans.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "base fee");
+        assertEq(
+            burnerLoansConfig.getAssetFeeConfig(address(burnerLoans), address(usds)).baseFeeBps,
+            30,
+            "base fee"
+        );
     }
 }

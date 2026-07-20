@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -17,7 +18,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     //   then it reverts
     function test_constructor_givenBurnerLoansIsZero_reverts() public {
         vm.expectRevert(IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ZeroAddress.selector);
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoans(address(0)));
+        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(0)), address(burnerLoans));
     }
 
     // constructor
@@ -31,7 +32,11 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
                 address(usds)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoans(address(usds)));
+        new BurnerLoansConfigTimelock(
+            kernel,
+            IBurnerLoansConfig(address(usds)),
+            address(burnerLoans)
+        );
     }
 
     // constructor
@@ -47,7 +52,11 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
                 address(invalidBurnerLoans)
             )
         );
-        new BurnerLoansConfigTimelock(kernel, IBurnerLoans(address(invalidBurnerLoans)));
+        new BurnerLoansConfigTimelock(
+            kernel,
+            IBurnerLoansConfig(address(invalidBurnerLoans)),
+            address(burnerLoans)
+        );
     }
 
     // constructor
@@ -55,7 +64,8 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     //  when the deployed timelock is inspected
     //   then immutable dependencies and defaults are set
     function test_constructor_givenValidParams_setsImmutableDependencies() public view {
-        assertEq(address(configTimelock.burnerLoans()), address(burnerLoans), "burner loans");
+        assertEq(address(configTimelock.burnerLoans()), address(burnerLoansConfig), "config");
+        assertEq(configTimelock.FACILITY(), address(burnerLoans), "facility");
         assertEq(
             configTimelock.gracePeriod(),
             BurnerLoansConstants.REENABLE_GRACE_PERIOD,

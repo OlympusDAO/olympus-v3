@@ -4,12 +4,14 @@ pragma solidity >=0.8.24;
 import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 
 contract BurnerLoansConfigTimelockHarness is BurnerLoansConfigTimelock {
     constructor(
         Kernel kernel_,
-        IBurnerLoans burnerLoans_
-    ) BurnerLoansConfigTimelock(kernel_, burnerLoans_) {}
+        IBurnerLoansConfig config_,
+        address facility_
+    ) BurnerLoansConfigTimelock(kernel_, config_, facility_) {}
 
     function queueAction(
         address target_,

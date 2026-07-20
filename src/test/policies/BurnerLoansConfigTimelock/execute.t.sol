@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -69,12 +70,12 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
     // executeQueuedAction
     // given a queued action
-    //  when BurnerLoans has been disabled
+    //  when BurnerLoansConfig has been disabled
     //   then execution reverts
-    function test_givenBurnerLoansDisabled_reverts() public {
+    function test_givenBurnerLoansConfigDisabled_reverts() public {
         uint64 actionId = _queueCollateralFactorUpdate();
         vm.prank(emergency);
-        burnerLoans.disable("");
+        burnerLoansConfig.disable("");
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -119,7 +120,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         uint64 actionId = _queueCollateralFactorUpdate();
 
         vm.prank(admin);
-        burnerLoans.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(
@@ -204,9 +205,13 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoans.AssetConfig memory resultingConfig = _defaultAssetConfig(USDS_DECIMALS);
         resultingConfig.collateralFactorBps = 9_500;
 
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfig));
-        _expectSingleActionExecuted(actionId, IBurnerLoans.setAssetRiskConfig.selector, executor_);
+        _expectSingleActionExecuted(
+            actionId,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            executor_
+        );
 
         vm.prank(executor_);
         configTimelock.executeQueuedAction(actionId);
@@ -272,7 +277,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         // Executing in order should apply each selected field without overwriting the other.
         _expectSingleActionExecuted(
             collateralFactorActionId,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             address(this)
         );
         configTimelock.executeQueuedAction(collateralFactorActionId);
@@ -284,7 +289,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         // The later action should preserve the collateral factor that was already applied.
         _expectSingleActionExecuted(
             minCollateralRatioActionId,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             address(this)
         );
         configTimelock.executeQueuedAction(minCollateralRatioActionId);
@@ -338,7 +343,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         // Both actions target the same field, so the first execution is valid but temporary.
         _expectSingleActionExecuted(
             firstActionId,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             address(this)
         );
         configTimelock.executeQueuedAction(firstActionId);
@@ -352,7 +357,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         // value, and it intentionally becomes the final value.
         _expectSingleActionExecuted(
             secondActionId,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             address(this)
         );
         configTimelock.executeQueuedAction(secondActionId);
@@ -1219,24 +1224,24 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         // resulting config includes the first sub-action's collateral factor update.
         IBurnerLoans.AssetConfig memory resultingConfigOne = _defaultAssetConfig(USDS_DECIMALS);
         resultingConfigOne.collateralFactorBps = 9_500;
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfigOne));
         vm.expectEmit(true, true, true, true, address(configTimelockHarness));
         emit TimelockSubActionExecuted(
             actionId,
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             0
         );
         IBurnerLoans.AssetConfig memory resultingConfigTwo = resultingConfigOne;
         resultingConfigTwo.minCollateralRatioBps = 12_000;
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
+        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfigTwo));
         vm.expectEmit(true, true, true, true, address(configTimelockHarness));
         emit TimelockSubActionExecuted(
             actionId,
-            address(burnerLoans),
-            IBurnerLoans.setAssetRiskConfig.selector,
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             1
         );
         vm.expectEmit(true, true, false, true, address(configTimelockHarness));
@@ -1405,16 +1410,16 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selectionTwo;
         selectionTwo.minCollateralRatioBps = true;
         actions[0] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), updateOne, selectionOne)
         );
         actions[1] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), updateTwo, selectionTwo)
         );
 
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);
@@ -1432,16 +1437,16 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         selectionTwo.maxMaturityHorizon = true;
 
         actions[0] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), updateOne, selectionOne)
         );
         actions[1] = _singleAction(
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             abi.encode(address(usds), updateTwo, selectionTwo)
         );
 
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);
@@ -1465,16 +1470,16 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         selectionTwo.preKinkSlopeBps = true;
 
         actions[0] = _singleAction(
-            IBurnerLoans.setAssetFeeConfig.selector,
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
             abi.encode(address(usds), updateOne, selectionOne)
         );
         actions[1] = _singleAction(
-            IBurnerLoans.setAssetFeeConfig.selector,
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
             abi.encode(address(usds), updateTwo, selectionTwo)
         );
 
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);

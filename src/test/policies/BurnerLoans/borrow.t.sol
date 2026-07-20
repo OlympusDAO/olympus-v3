@@ -26,8 +26,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     );
 
     address internal operator;
-    uint256 internal constant DEFAULT_BORROW_AMOUNT = 100e9;
-    uint256 internal constant DEFAULT_COLLATERAL_AMOUNT = 2_000e18;
+    uint128 internal constant DEFAULT_BORROW_AMOUNT = 100e9;
+    uint128 internal constant DEFAULT_COLLATERAL_AMOUNT = 2_000e18;
 
     function _collateralDecimals() internal pure override returns (uint8) {
         return 18;
@@ -47,7 +47,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         vm.stopPrank();
     }
 
-    function _depositCollateral(address account_, uint256 collateralAmount_) internal {
+    function _depositCollateral(address account_, uint128 collateralAmount_) internal {
         usds.mint(account_, collateralAmount_ + 100e18);
 
         vm.startPrank(account_);
@@ -59,7 +59,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function _addAssetAndDepositCollateral(
         MockERC20 asset_,
         address account_,
-        uint256 collateralAmount_
+        uint128 collateralAmount_
     ) internal {
         _configurePrice(address(asset_), 1e18);
         _configureDepositManagerAsset(address(asset_));
@@ -90,7 +90,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         address caller_,
         address onBehalfOf_,
         address recipient_,
-        uint256 ohmAmount_
+        uint128 ohmAmount_
     ) internal returns (IBurnerLoans.BorrowPreview memory preview) {
         preview = burnerLoans.previewBorrow(address(usds), ohmAmount_, onBehalfOf_);
 
@@ -114,7 +114,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function _borrowAssetWithPreview(
         address asset_,
         address borrower_,
-        uint256 ohmAmount_
+        uint128 ohmAmount_
     ) internal returns (IBurnerLoans.BorrowPreview memory preview) {
         preview = burnerLoans.previewBorrow(asset_, ohmAmount_, borrower_);
 
@@ -135,7 +135,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertTrue(preview.executable, "preview executable");
     }
 
-    function _expectBorrowAndPreviewRevert(bytes memory error_, uint256 ohmAmount_) internal {
+    function _expectBorrowAndPreviewRevert(bytes memory error_, uint128 ohmAmount_) internal {
         vm.expectRevert(error_);
         burnerLoans.previewBorrow(address(usds), ohmAmount_, alice);
 
@@ -144,7 +144,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.borrow(address(usds), ohmAmount_, alice, alice, type(uint256).max);
     }
 
-    function _expectBorrowAndPreviewPartialRevert(bytes4 selector_, uint256 ohmAmount_) internal {
+    function _expectBorrowAndPreviewPartialRevert(bytes4 selector_, uint128 ohmAmount_) internal {
         vm.expectPartialRevert(selector_);
         burnerLoans.previewBorrow(address(usds), ohmAmount_, alice);
 
@@ -230,7 +230,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Collateral: sufficient across the full range
     // - Expected branch: exact OHM mint, positive fee, and preview/write consistency
     function test_givenFuzzedBorrowAmount_borrowMintsExactAndChargesFee(uint96 ohmAmount_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(alice, alice, alice, amount);
@@ -399,8 +399,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint64 firstAmount_,
         uint64 secondAmount_
     ) public {
-        uint256 firstAmount = bound(uint256(firstAmount_), 1, 50e9);
-        uint256 secondAmount = bound(uint256(secondAmount_), 1, 50e9);
+        uint128 firstAmount = uint128(bound(uint256(firstAmount_), 1, 50e9));
+        uint128 secondAmount = uint128(bound(uint256(secondAmount_), 1, 50e9));
         _depositDefaultCollateral(alice);
         uint256 borrowBlock = block.number;
 
@@ -435,8 +435,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 bobAmount_
     ) public {
         address bob = makeAddr("bob");
-        uint256 aliceAmount = bound(uint256(aliceAmount_), 1, DEFAULT_BORROW_AMOUNT);
-        uint256 bobAmount = bound(uint256(bobAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 aliceAmount = uint128(bound(uint256(aliceAmount_), 1, DEFAULT_BORROW_AMOUNT));
+        uint128 bobAmount = uint128(bound(uint256(bobAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         _depositDefaultCollateral(bob);
 
@@ -484,8 +484,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 secondAssetAmount_
     ) public {
         MockERC20 secondAsset = new MockERC20("Second Asset", "ASSET2", 18);
-        uint256 usdsAmount = bound(uint256(usdsAmount_), 1, DEFAULT_BORROW_AMOUNT);
-        uint256 secondAssetAmount = bound(uint256(secondAssetAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 usdsAmount = uint128(bound(uint256(usdsAmount_), 1, DEFAULT_BORROW_AMOUNT));
+        uint128 secondAssetAmount = uint128(
+            bound(uint256(secondAssetAmount_), 1, DEFAULT_BORROW_AMOUNT)
+        );
         _depositDefaultCollateral(alice);
         _addAssetAndDepositCollateral(secondAsset, alice, DEFAULT_COLLATERAL_AMOUNT);
 
@@ -547,8 +549,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     ) public {
         address bob = makeAddr("bob");
         MockERC20 secondAsset = new MockERC20("Second Asset", "ASSET2", 18);
-        uint256 aliceAmount = bound(uint256(aliceAmount_), 1, DEFAULT_BORROW_AMOUNT);
-        uint256 bobAmount = bound(uint256(bobAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 aliceAmount = uint128(bound(uint256(aliceAmount_), 1, DEFAULT_BORROW_AMOUNT));
+        uint128 bobAmount = uint128(bound(uint256(bobAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         _addAssetAndDepositCollateral(secondAsset, bob, DEFAULT_COLLATERAL_AMOUNT);
 
@@ -635,11 +637,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 ohmAmount_,
         uint96 availableRoom_
     ) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 availableRoom = bound(uint256(availableRoom_), 0, amount - 1);
         _depositDefaultCollateral(alice);
         uint256 existingGlobalDebt = burnerLoans.globalDebtCapOhm() - availableRoom;
-        burnerLoans.setActiveDebtForTest(address(usds), existingGlobalDebt, 0);
+        _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded.selector,
@@ -657,7 +659,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 ohmAmount_,
         uint96 availableRoom_
     ) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 availableRoom = bound(uint256(availableRoom_), 0, amount - 1);
         _depositDefaultCollateral(alice);
         uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
@@ -715,22 +717,24 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Expected branch: maturity-seizable position cannot increase debt
     function test_givenMaturedActivePosition_borrowAndPreviewRevert() public {
         _depositDefaultCollateral(alice);
+        uint48 maturity = uint48(block.timestamp + 1);
         burnerLoans.setPositionForTest(
             address(usds),
             alice,
             IBurnerLoans.Position({
                 depositedCollateral: DEFAULT_COLLATERAL_AMOUNT,
                 debtOhm: 10e9,
-                maturity: uint48(block.timestamp),
+                maturity: maturity,
                 lastBorrowBlock: uint48(block.number - 1),
                 status: IBurnerLoans.PositionStatus.Active
             })
         );
         burnerLoans.setActiveDebtForTest(address(usds), 10e9, 10e9);
+        vm.warp(maturity);
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_PositionMatured.selector,
-            uint48(block.timestamp)
+            maturity
         );
         vm.expectRevert(error);
         burnerLoans.previewBorrow(address(usds), 1e9, alice);
@@ -747,7 +751,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function test_givenCurrentlyUnhealthyActivePosition_borrowAndPreviewRevert(
         uint96 ohmAmount_
     ) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         burnerLoans.setPositionForTest(
             address(usds),
             alice,
@@ -835,7 +839,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         // At a 1,150 USDS denominator, 1,150 wei is the smallest surplus that
         // increases the 18-decimal health factor above 1e18 after rounding down.
         uint256 collateralSurplus = bound(uint256(collateralSurplus_), 1_150, 100e18);
-        _depositCollateral(alice, 1_150e18 + collateralSurplus);
+        _depositCollateral(alice, uint128(1_150e18 + collateralSurplus));
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -871,36 +875,12 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint128 collateralShortfall_
     ) public {
         uint256 collateralShortfall = bound(uint256(collateralShortfall_), 1, 1_150e18 - 1);
-        _depositCollateral(alice, 1_150e18 - collateralShortfall);
+        _depositCollateral(alice, uint128(1_150e18 - collateralShortfall));
 
         _expectBorrowAndPreviewPartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
             DEFAULT_BORROW_AMOUNT
         );
-    }
-
-    // Condition tree:
-    // - Position status: previously seized
-    // - Expected branch: seized lifecycle state cannot start a new debt episode
-    function test_givenSeizedPosition_borrowAndPreviewRevert() public {
-        burnerLoans.setPositionForTest(
-            address(usds),
-            alice,
-            IBurnerLoans.Position({
-                depositedCollateral: 1_150e18,
-                debtOhm: 0,
-                maturity: 0,
-                lastBorrowBlock: 0,
-                status: IBurnerLoans.PositionStatus.Seized
-            })
-        );
-
-        vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
-        burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice);
-
-        vm.prank(alice);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
-        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, type(uint256).max);
     }
 
     // Condition tree:
@@ -911,7 +891,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 ohmAmount_,
         uint32 staleBy_
     ) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 staleBy = bound(uint256(staleBy_), 1, 30 days);
         _depositDefaultCollateral(alice);
         vm.warp(31 days);
@@ -927,7 +907,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - PRICE timestamp: exactly one observation-frequency window old
     // - Expected branch: boundary timestamp remains fresh and borrowing succeeds
     function test_givenPriceAtFreshnessBoundary_borrowSucceeds(uint96 ohmAmount_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         vm.warp(8 hours + 1);
         price.setTimestamp(uint48(block.timestamp - 8 hours));
@@ -1099,7 +1079,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _configurePrice(address(ohm), 1e18);
         backingOracle.setBacking(10e18);
         uint256 shortfall = bound(uint256(collateralShortfall_), 1, 1_000e18 - 1);
-        _depositCollateral(alice, 1_000e18 - shortfall);
+        _depositCollateral(alice, uint128(1_000e18 - shortfall));
 
         _expectBorrowAndPreviewPartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
@@ -1126,7 +1106,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Other eligibility: valid
     // - Expected branch: write rejects the fee cap and leaves preview available
     function test_givenFeeAboveMax_borrowReverts(uint96 ohmAmount_, uint96 maxFee_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
             address(usds),
@@ -1486,7 +1466,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Global cap: sufficient
     // - Expected branch: exact cap boundary succeeds without one-unit headroom
     function test_givenBorrowAtAssetCap_borrowSucceeds(uint96 ohmAmount_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         vm.prank(admin);
         burnerLoans.setAssetDebtCap(address(usds), amount);
@@ -1501,7 +1481,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Asset cap: reduced first so it remains compatible with the global cap
     // - Expected branch: exact global-cap boundary succeeds without one-unit headroom
     function test_givenBorrowAtGlobalCap_borrowSucceeds(uint96 ohmAmount_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         vm.startPrank(admin);
         burnerLoans.setAssetDebtCap(address(usds), amount);
@@ -1524,7 +1504,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     ) public {
         uint256 remainingCapacity = bound(uint256(remainingCapacity_), 1, DEFAULT_BORROW_AMOUNT);
         uint256 excess = bound(uint256(excess_), 1, DEFAULT_BORROW_AMOUNT);
-        uint256 borrowAmount = remainingCapacity + excess;
+        uint128 borrowAmount = uint128(remainingCapacity + excess);
         uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
         uint256 existingAssetDebt = assetCap - remainingCapacity;
         _depositDefaultCollateral(alice);
@@ -1545,7 +1525,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Global capacity: sufficient
     // - Expected branch: resulting asset debt equals, but never exceeds, the asset cap
     function test_givenExistingAssetDebt_borrowRemainingAssetCapSucceeds(uint96 ohmAmount_) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
         uint256 existingDebt = assetCap - amount;
         _depositDefaultCollateral(alice);
@@ -1570,11 +1550,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     ) public {
         uint256 remainingCapacity = bound(uint256(remainingCapacity_), 1, DEFAULT_BORROW_AMOUNT);
         uint256 excess = bound(uint256(excess_), 1, DEFAULT_BORROW_AMOUNT);
-        uint256 borrowAmount = remainingCapacity + excess;
+        uint128 borrowAmount = uint128(remainingCapacity + excess);
         uint256 globalCap = burnerLoans.globalDebtCapOhm();
         uint256 existingGlobalDebt = globalCap - remainingCapacity;
         _depositDefaultCollateral(alice);
-        burnerLoans.setActiveDebtForTest(address(usds), existingGlobalDebt, 0);
+        _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded.selector,
@@ -1592,11 +1572,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function test_givenExistingGlobalDebt_borrowRemainingGlobalCapSucceeds(
         uint96 ohmAmount_
     ) public {
-        uint256 amount = bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT);
+        uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 globalCap = burnerLoans.globalDebtCapOhm();
         uint256 existingGlobalDebt = globalCap - amount;
         _depositDefaultCollateral(alice);
-        burnerLoans.setActiveDebtForTest(address(usds), existingGlobalDebt, 0);
+        _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
         _borrowWithPreview(alice, alice, alice, amount);
 
@@ -1633,8 +1613,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint64 firstAmount_,
         uint64 secondAmount_
     ) public {
-        uint256 firstAmount = bound(uint256(firstAmount_), 1, 50e9);
-        uint256 secondAmount = bound(uint256(secondAmount_), 1, 50e9);
+        uint128 firstAmount = uint128(bound(uint256(firstAmount_), 1, 50e9));
+        uint128 secondAmount = uint128(bound(uint256(secondAmount_), 1, 50e9));
         _depositDefaultCollateral(alice);
 
         IBurnerLoans.BorrowPreview memory firstPreview = _borrowWithPreview(

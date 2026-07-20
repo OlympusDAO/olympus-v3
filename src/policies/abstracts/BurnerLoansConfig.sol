@@ -6,32 +6,28 @@ import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Check
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
-import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Config
-/// @notice Shared storage, configuration, and timelock administration for Burner Loans.
-abstract contract BurnerLoansConfig is
+/// @notice Opinionated configuration policy for Burner Loans markets stored in FLOAN.
+abstract contract BurnerLoansConfigBase is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
-    OperatorAuth,
-    IBurnerLoans,
+    IBurnerLoansConfig,
     IVersioned
 {
     // ========== CONSTANTS ========== //
@@ -48,24 +44,12 @@ abstract contract BurnerLoansConfig is
 
     // ========== MODULES ========== //
 
-    MINTRv1 internal _MINTR;
+    IFLOANv1 internal _FLOAN;
     IPRICEv2 internal _PRICE;
-    TRSRYv1 internal _TRSRY;
 
     // ========== STATE ========== //
 
-    uint256 public override globalDebtCapOhm;
-    uint256 public override totalActiveDebtOhm;
     address public override configurator;
-    address public override backingOracle;
-
-    mapping(address asset => uint256 debtOhm) public override assetActiveDebtOhm;
-    mapping(address asset => bool configured) public override isAssetConfigured;
-    mapping(address asset => AssetConfig config) internal _assetConfigs;
-    mapping(address asset => AssetFeeConfig config) internal _assetFeeConfigs;
-    mapping(address owner => mapping(address asset => Position position)) internal _positions;
-    mapping(address asset => EnumerableSet.AddressSet borrowers) internal _activeBorrowersByAsset;
-    address[] internal _configuredAssets;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -93,41 +77,9 @@ abstract contract BurnerLoansConfig is
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice Sets the oracle supplying canonical OHM backing.
-    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
-    ///      function is effectively timelocked by governance.
-    /// @dev Reverts if:
-    ///      - The contract is disabled.
-    ///      - The caller does not have the admin role.
-    ///      - `backingOracle_` is zero.
-    /// @param backingOracle_ New backing oracle address.
-    function setBackingOracle(address backingOracle_) external givenEnabled onlyAdminRole {
-        if (backingOracle_ == address(0)) revert BurnerLoans_ZeroAddress();
-
-        backingOracle = backingOracle_;
-        emit BackingOracleSet(backingOracle_);
-    }
-
-    /// @notice Sets the global active debt cap.
-    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
-    ///      function is effectively timelocked by governance.
-    /// @dev Reverts if:
-    ///      - The contract is disabled.
-    ///      - The caller does not have the admin role.
-    ///      - `debtCapOhm_` is below current total active debt.
-    ///      - `debtCapOhm_` is below any configured asset debt cap.
-    /// @param debtCapOhm_ New global cap, in OHM decimals.
-    function setGlobalDebtCap(uint256 debtCapOhm_) external givenEnabled onlyAdminRole {
-        _validateDebtCap(debtCapOhm_, totalActiveDebtOhm);
-        uint256 len = _configuredAssets.length;
-        for (uint256 i; i < len; ++i) {
-            if (_assetConfigs[_configuredAssets[i]].debtCap > debtCapOhm_) {
-                revert BurnerLoans_InvalidCap();
-            }
-        }
-
-        globalDebtCapOhm = debtCapOhm_;
-        emit GlobalDebtCapSet(debtCapOhm_);
+    function setMarketFacility(uint32 marketId_, address facility_) external onlyAdminRole {
+        if (facility_ == address(0)) revert BurnerLoans_ZeroAddress();
+        _FLOAN.setMarketFacility(marketId_, facility_);
     }
 
     /// @notice Adds a whitelisted collateral asset.
@@ -141,7 +93,6 @@ abstract contract BurnerLoansConfig is
     ///      - `asset_` is already configured.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - `debtCapOhm_` is below current active debt for `asset_`.
-    ///      - `debtCapOhm_` is above the global debt cap.
     ///      - Risk, bps, maturity, or fee parameters violate configured bounds.
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager does not configure the asset or BurnerLoans deposit period.
@@ -151,25 +102,43 @@ abstract contract BurnerLoansConfig is
     /// @param riskConfig_ Initial risk and term configuration.
     /// @param feeConfig_ Initial utilization fee curve.
     function addAsset(
+        address facility_,
         address asset_,
-        uint256 debtCapOhm_,
+        uint128 debtCapOhm_,
         AssetRiskConfigInput calldata riskConfig_,
         AssetFeeConfig calldata feeConfig_
     ) external givenEnabled onlyAdminRole {
-        if (isAssetConfigured[asset_]) {
+        if (facility_ == address(0)) revert BurnerLoans_ZeroAddress();
+        if (_isAssetConfigured(facility_, asset_)) {
             revert BurnerLoans_AssetAlreadyConfigured(asset_);
         }
         AssetConfig memory assetConfig = _validateAndBuildAssetConfig(
+            facility_,
             asset_,
             debtCapOhm_,
             riskConfig_
         );
         _validateFeeConfig(feeConfig_);
 
-        isAssetConfigured[asset_] = true;
-        _configuredAssets.push(asset_);
-        _assetConfigs[asset_] = assetConfig;
-        _assetFeeConfigs[asset_] = feeConfig_;
+        _FLOAN.createMarket(
+            IFLOANv1.Market({
+                collateralToken: asset_,
+                debtToken: address(_OHM),
+                manager: address(this),
+                facility: facility_,
+                configId: BurnerLoansMarketConfig.CONFIG_ID,
+                principalCap: debtCapOhm_,
+                termLength: riskConfig_.termLength,
+                maxMaturityHorizon: riskConfig_.maxMaturityHorizon,
+                collateralFactorBps: riskConfig_.collateralFactorBps,
+                minCollateralRatioBps: riskConfig_.minCollateralRatioBps,
+                baseFeeBps: feeConfig_.baseFeeBps,
+                collateralDecimals: assetConfig.collateralDecimals,
+                debtDecimals: _OHM_DECIMALS,
+                originationsEnabled: true
+            }),
+            BurnerLoansMarketConfig.encode(assetConfig, feeConfig_)
+        );
 
         emit AssetAdded(asset_, assetConfig);
         emit AssetFeeConfigSet(asset_, feeConfig_);
@@ -184,16 +153,19 @@ abstract contract BurnerLoansConfig is
     ///      - The caller is neither admin nor the configurator.
     ///      - `asset_` is not configured.
     ///      - `debtCapOhm_` is below current active debt for `asset_`.
-    ///      - `debtCapOhm_` is above the global debt cap.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New asset cap, in OHM decimals.
     function setAssetDebtCap(
+        address facility_,
         address asset_,
-        uint256 debtCapOhm_
+        uint128 debtCapOhm_
     ) external givenEnabled onlyConfiguratorOrAdmin {
-        _validateAssetDebtCap(asset_, debtCapOhm_);
+        _validateAssetDebtCap(facility_, asset_, debtCapOhm_);
 
-        _assetConfigs[asset_].debtCap = debtCapOhm_;
+        uint32 marketId_ = _marketId(facility_, asset_);
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        market.principalCap = debtCapOhm_;
+        _FLOAN.setMarketConfig(marketId_, market, _FLOAN.getMarketConfigData(marketId_));
         emit AssetDebtCapSet(asset_, debtCapOhm_);
     }
 
@@ -222,11 +194,11 @@ abstract contract BurnerLoansConfig is
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager does not configure and enable the asset period for BurnerLoans.
     /// @param asset_ Collateral asset to enable.
-    function enableAsset(address asset_) external onlyAdminRole {
-        AssetConfig storage config = _requireAssetConfigured(asset_);
-        _validateAssetDependencies(asset_, true);
+    function enableAsset(address facility_, address asset_) external onlyAdminRole {
+        _requireAssetConfigured(facility_, asset_);
+        _validateAssetDependencies(facility_, asset_, true);
 
-        config.enabled = true;
+        _FLOAN.setMarketOriginationsEnabled(_marketId(facility_, asset_), true);
         emit AssetEnabled(asset_);
     }
 
@@ -238,13 +210,13 @@ abstract contract BurnerLoansConfig is
     ///      - `asset_` is not configured.
     ///      - `asset_` is already disabled.
     /// @param asset_ Collateral asset to disable.
-    function disableAsset(address asset_) external {
+    function disableAsset(address facility_, address asset_) external {
         _onlyBurnerLoansAdminOrAdmin();
 
-        AssetConfig storage config = _requireAssetConfigured(asset_);
+        AssetConfig memory config = _requireAssetConfigured(facility_, asset_);
         if (!config.enabled) revert BurnerLoans_AssetNotEnabled(asset_);
 
-        config.enabled = false;
+        _FLOAN.setMarketOriginationsEnabled(_marketId(facility_, asset_), false);
         emit AssetDisabled(asset_);
     }
 
@@ -262,10 +234,11 @@ abstract contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete fee curve.
     function setAssetFeeConfig(
+        address facility_,
         address asset_,
         AssetFeeConfig calldata config_
     ) external givenEnabled onlyConfiguratorOrAdmin {
-        _setAssetFeeConfig(asset_, config_);
+        _setAssetFeeConfig(facility_, asset_, config_);
     }
 
     /// @notice Sets asset risk and term fields.
@@ -285,10 +258,11 @@ abstract contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete risk and term configuration.
     function setAssetRiskConfig(
+        address facility_,
         address asset_,
         AssetRiskConfigInput calldata config_
     ) external givenEnabled onlyConfiguratorOrAdmin {
-        _setAssetRiskConfig(asset_, config_);
+        _setAssetRiskConfig(facility_, asset_, config_);
     }
 
     /// @notice Validates a complete asset risk configuration.
@@ -313,8 +287,12 @@ abstract contract BurnerLoansConfig is
     ///      debt for `asset_`, or `debtCapOhm_` is above the global debt cap.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
-    function validateAssetDebtCap(address asset_, uint256 debtCapOhm_) external view {
-        _validateAssetDebtCap(asset_, debtCapOhm_);
+    function validateAssetDebtCap(
+        address facility_,
+        address asset_,
+        uint128 debtCapOhm_
+    ) external view {
+        _validateAssetDebtCap(facility_, asset_, debtCapOhm_);
     }
 
     // ========== CONFIGURATION HELPERS ========== //
@@ -359,10 +337,11 @@ abstract contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to look up.
     /// @return config Storage pointer to the asset configuration.
     function _requireAssetConfigured(
+        address facility_,
         address asset_
-    ) internal view returns (AssetConfig storage config) {
-        if (!isAssetConfigured[asset_]) revert BurnerLoans_AssetNotConfigured(asset_);
-        return _assetConfigs[asset_];
+    ) internal view returns (AssetConfig memory config) {
+        uint32 marketId_ = _marketId(facility_, asset_);
+        return _getAssetConfig(marketId_);
     }
 
     /// @notice Returns the stored configuration for an enabled collateral asset.
@@ -371,9 +350,10 @@ abstract contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to look up.
     /// @return config Storage pointer to the asset configuration.
     function _requireAssetEnabled(
+        address facility_,
         address asset_
-    ) internal view returns (AssetConfig storage config) {
-        config = _requireAssetConfigured(asset_);
+    ) internal view returns (AssetConfig memory config) {
+        config = _requireAssetConfigured(facility_, asset_);
         if (!config.enabled) revert BurnerLoans_AssetNotEnabled(asset_);
     }
 
@@ -381,10 +361,20 @@ abstract contract BurnerLoansConfig is
     /// @dev Reverts if `asset_` is not configured or if `config_` violates fee bounds.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete utilization fee curve.
-    function _setAssetFeeConfig(address asset_, AssetFeeConfig memory config_) internal {
-        _requireAssetConfigured(asset_);
+    function _setAssetFeeConfig(
+        address facility_,
+        address asset_,
+        AssetFeeConfig memory config_
+    ) internal {
+        uint32 marketId_ = _marketId(facility_, asset_);
         _validateFeeConfig(config_);
-        _assetFeeConfigs[asset_] = config_;
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
+        market.baseFeeBps = config_.baseFeeBps;
+        marketData.kinkBps = config_.kinkBps;
+        marketData.preKinkSlopeBps = config_.preKinkSlopeBps;
+        marketData.postKinkSlopeBps = config_.postKinkSlopeBps;
+        _FLOAN.setMarketConfig(marketId_, market, abi.encode(marketData));
         emit AssetFeeConfigSet(asset_, config_);
     }
 
@@ -393,18 +383,23 @@ abstract contract BurnerLoansConfig is
     ///      or keeper reward bounds.
     /// @param asset_ Collateral asset to update.
     /// @param riskConfig_ Complete risk and term configuration.
-    function _setAssetRiskConfig(address asset_, AssetRiskConfigInput memory riskConfig_) internal {
+    function _setAssetRiskConfig(
+        address facility_,
+        address asset_,
+        AssetRiskConfigInput memory riskConfig_
+    ) internal {
         _validateRiskConfig(riskConfig_);
-        AssetConfig storage storedConfig = _requireAssetConfigured(asset_);
-        AssetConfig memory config = storedConfig;
-        config.collateralFactorBps = riskConfig_.collateralFactorBps;
-        config.minCollateralRatioBps = riskConfig_.minCollateralRatioBps;
-        config.backingMultiplierBps = riskConfig_.backingMultiplierBps;
-        config.keeperRewardBps = riskConfig_.keeperRewardBps;
-        config.termLength = riskConfig_.termLength;
-        config.maxMaturityHorizon = riskConfig_.maxMaturityHorizon;
-        config.maxKeeperReward = riskConfig_.maxKeeperReward;
-        _assetConfigs[asset_] = config;
+        uint32 marketId_ = _marketId(facility_, asset_);
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
+        market.collateralFactorBps = riskConfig_.collateralFactorBps;
+        market.minCollateralRatioBps = riskConfig_.minCollateralRatioBps;
+        market.termLength = riskConfig_.termLength;
+        market.maxMaturityHorizon = riskConfig_.maxMaturityHorizon;
+        marketData.backingMultiplierBps = riskConfig_.backingMultiplierBps;
+        marketData.keeperRewardBps = riskConfig_.keeperRewardBps;
+        marketData.maxKeeperReward = _toUint128(riskConfig_.maxKeeperReward);
+        _FLOAN.setMarketConfig(marketId_, market, abi.encode(marketData));
         emit AssetRiskConfigSet(asset_, riskConfig_);
     }
 
@@ -424,8 +419,9 @@ abstract contract BurnerLoansConfig is
     /// @param riskConfig_ Initial risk and term configuration.
     /// @return assetConfig Initial stored configuration for `asset_`.
     function _validateAndBuildAssetConfig(
+        address facility_,
         address asset_,
-        uint256 debtCapOhm_,
+        uint128 debtCapOhm_,
         AssetRiskConfigInput memory riskConfig_
     ) internal view returns (AssetConfig memory assetConfig) {
         if (asset_ == address(0)) revert BurnerLoans_ZeroAddress();
@@ -446,10 +442,8 @@ abstract contract BurnerLoansConfig is
             maxKeeperReward: riskConfig_.maxKeeperReward
         });
 
-        _validateDebtCap(debtCapOhm_, assetActiveDebtOhm[asset_]);
-        if (debtCapOhm_ > globalDebtCapOhm) revert BurnerLoans_InvalidCap();
         _validateRiskConfig(assetConfig);
-        _validateAssetDependencies(asset_, true);
+        _validateAssetDependencies(facility_, asset_, true);
     }
 
     /// @notice Validates a stored asset risk configuration.
@@ -569,10 +563,51 @@ abstract contract BurnerLoansConfig is
     ///      debt for `asset_` or above the global debt cap.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
-    function _validateAssetDebtCap(address asset_, uint256 debtCapOhm_) internal view {
-        _requireAssetConfigured(asset_);
-        _validateDebtCap(debtCapOhm_, assetActiveDebtOhm[asset_]);
-        if (debtCapOhm_ > globalDebtCapOhm) revert BurnerLoans_InvalidCap();
+    function _validateAssetDebtCap(
+        address facility_,
+        address asset_,
+        uint128 debtCapOhm_
+    ) internal view {
+        uint32 marketId_ = _marketId(facility_, asset_);
+        _validateDebtCap(debtCapOhm_, _FLOAN.marketPrincipalDue(marketId_));
+    }
+
+    function _isAssetConfigured(address facility_, address asset_) internal view returns (bool) {
+        (bool exists, ) = _FLOAN.getMarketId(facility_, asset_, address(_OHM));
+        return exists;
+    }
+
+    function _marketId(address facility_, address asset_) internal view returns (uint32 marketId_) {
+        bool exists;
+        (exists, marketId_) = _FLOAN.getMarketId(facility_, asset_, address(_OHM));
+        if (!exists) revert BurnerLoans_AssetNotConfigured(asset_);
+    }
+
+    function _getAssetConfig(uint32 marketId_) internal view returns (AssetConfig memory config) {
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
+            revert BurnerLoans_AssetNotConfigured(market.collateralToken);
+        }
+        return BurnerLoansMarketConfig.assetConfig(market, _FLOAN.getMarketConfigData(marketId_));
+    }
+
+    function _getAssetFeeConfig(uint32 marketId_) internal view returns (AssetFeeConfig memory) {
+        return
+            BurnerLoansMarketConfig.feeConfig(
+                _FLOAN.getMarket(marketId_),
+                _FLOAN.getMarketConfigData(marketId_)
+            );
+    }
+
+    function _getMarketData(
+        uint32 marketId_
+    ) internal view returns (BurnerLoansMarketConfig.Data memory) {
+        return BurnerLoansMarketConfig.decode(_FLOAN.getMarketConfigData(marketId_));
+    }
+
+    function _toUint128(uint256 value_) internal pure returns (uint128 result) {
+        result = uint128(value_);
+        if (result != value_) revert BurnerLoans_InvalidCap();
     }
 
     /// @notice Validates the maximum keeper reward amount.
@@ -591,7 +626,11 @@ abstract contract BurnerLoansConfig is
     ///      configured, or the period is disabled while `requirePeriodEnabled_` is true.
     /// @param asset_ Collateral asset to validate.
     /// @param requirePeriodEnabled_ Whether the Burner Loans deposit period must be enabled.
-    function _validateAssetDependencies(address asset_, bool requirePeriodEnabled_) internal view {
+    function _validateAssetDependencies(
+        address facility_,
+        address asset_,
+        bool requirePeriodEnabled_
+    ) internal view {
         if (!_PRICE.isAssetApproved(asset_)) revert BurnerLoans_InvalidPrice();
         if (_PRICE.getPrice(asset_) == 0) revert BurnerLoans_InvalidPrice();
 
@@ -604,7 +643,7 @@ abstract contract BurnerLoansConfig is
         IDepositManager.AssetPeriodStatus memory assetPeriod = _DEPOSIT_MANAGER.isAssetPeriod(
             IERC20(asset_),
             BurnerLoansConstants.DEPOSIT_PERIOD,
-            address(this)
+            facility_
         );
         if (!assetPeriod.isConfigured || (requirePeriodEnabled_ && !assetPeriod.isEnabled)) {
             revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
@@ -650,8 +689,7 @@ abstract contract BurnerLoansConfig is
         bytes4 interfaceId_
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
-            interfaceId_ == type(IBurnerLoans).interfaceId ||
-            interfaceId_ == type(IOperatorAuth).interfaceId ||
+            interfaceId_ == type(IBurnerLoansConfig).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

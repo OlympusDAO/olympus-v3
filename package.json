@@ -37,7 +37,7 @@
         "test:crosschainfork": "forge test --match-contract 'TokenPoolFork' -vvv",
         "test:deprecated": "forge test --match-path 'src/test/deprecated/**' -vvv",
         "test:coverage": "./shell/test_coverage.sh",
-        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --skip 'src/test/*' --skip 'Operator.sol' --skip 'MonoCooler.sol'",
+        "size": "forge clean && forge build --sizes --optimizer-runs 10 --contracts src/policies/Operator.sol && forge build --sizes --optimizer-runs 10 --contracts src/policies/BurnerLoans.sol && forge build --sizes --optimizer-runs 10 --via-ir --contracts src/policies/BurnerLoansConfigTimelock.sol && forge build --sizes --optimizer-runs 5000 --contracts src/policies/cooler/MonoCooler.sol && forge build --sizes --skip 'src/test/*' --skip 'Operator.sol' --skip 'BurnerLoans.sol' --skip 'BurnerLoansConfigTimelock.sol' --skip 'MonoCooler.sol'",
         "metrics": "node shell/metrics.js",
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },

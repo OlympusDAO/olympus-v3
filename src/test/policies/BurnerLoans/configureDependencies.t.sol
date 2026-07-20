@@ -4,6 +4,8 @@ pragma solidity >=0.8.24;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {Actions, Kernel, Keycode, Module, Permissions, toKeycode} from "src/Kernel.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -20,9 +22,27 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
     //   then expected module references are stored
     function test_configureDependencies_setsModules() public view {
         assertEq(address(burnerLoans.MINTR()), address(mintr), "MINTR");
+        assertEq(address(burnerLoans.floanForTest()), address(floan), "FLOAN");
         assertEq(address(burnerLoans.PRICE()), address(price), "PRICE");
         assertEq(address(burnerLoans.ROLES()), address(roles), "ROLES");
         assertEq(address(burnerLoans.TRSRY()), address(trsry), "TRSRY");
+    }
+
+    // configureDependencies
+    // given the FLOAN module uses an unsupported major version
+    //  when BurnerLoans is activated by the kernel
+    //   then activation reverts with InvalidModuleVersion
+    function test_givenFloanModuleVersionUnsupported_configureDependenciesReverts() public {
+        Kernel localKernel = new Kernel();
+
+        _expectActivatePolicyWithModulesReverts(
+            localKernel,
+            new MockUnsupportedFloan(localKernel),
+            new OlympusMinter(localKernel, address(ohm)),
+            new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
+            new OlympusRoles(localKernel),
+            new OlympusTreasury(localKernel)
+        );
     }
 
     // configureDependencies
@@ -34,6 +54,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         _expectActivatePolicyWithModulesReverts(
             localKernel,
+            new OlympusFixedTermLoan(localKernel),
             new MockUnsupportedMintr(localKernel),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new OlympusRoles(localKernel),
@@ -50,6 +71,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         _expectActivatePolicyWithModulesReverts(
             localKernel,
+            new OlympusFixedTermLoan(localKernel),
             new OlympusMinter(localKernel, address(ohm)),
             new MockUnsupportedPrice(localKernel),
             new OlympusRoles(localKernel),
@@ -66,6 +88,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         _expectActivatePolicyWithModulesReverts(
             localKernel,
+            new OlympusFixedTermLoan(localKernel),
             new OlympusMinter(localKernel, address(ohm)),
             new MockPriceWithoutV2(localKernel),
             new OlympusRoles(localKernel),
@@ -82,6 +105,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         _expectActivatePolicyWithModulesReverts(
             localKernel,
+            new OlympusFixedTermLoan(localKernel),
             new OlympusMinter(localKernel, address(ohm)),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new MockUnsupportedRoles(localKernel),
@@ -98,6 +122,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         _expectActivatePolicyWithModulesReverts(
             localKernel,
+            new OlympusFixedTermLoan(localKernel),
             new OlympusMinter(localKernel, address(ohm)),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new OlympusRoles(localKernel),
@@ -108,11 +133,11 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
     // requestPermissions
     // given BurnerLoans declares policy permissions
     //  when requestPermissions is called
-    //   then MINTR mint and burn permissions are requested
-    function test_requestPermissions_requestsMinterPermissions() public view {
+    //   then MINTR and FLOAN mutation permissions are requested
+    function test_requestPermissions_requestsLifecyclePermissions() public view {
         Permissions[] memory permissions = burnerLoans.requestPermissions();
 
-        assertEq(permissions.length, 2, "permissions length");
+        assertEq(permissions.length, 7, "permissions length");
         assertEq(
             Keycode.unwrap(permissions[0].keycode),
             Keycode.unwrap(toKeycode("MINTR")),
@@ -125,10 +150,41 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
             "burn keycode"
         );
         assertEq(permissions[1].funcSelector, mintr.burnOhm.selector, "burn selector");
+        assertEq(
+            Keycode.unwrap(permissions[2].keycode),
+            Keycode.unwrap(toKeycode("FLOAN")),
+            "add collateral keycode"
+        );
+        assertEq(
+            permissions[2].funcSelector,
+            IFLOANv1.addCollateral.selector,
+            "add collateral selector"
+        );
+        assertEq(
+            permissions[3].funcSelector,
+            IFLOANv1.removeCollateral.selector,
+            "remove collateral selector"
+        );
+        assertEq(
+            permissions[4].funcSelector,
+            IFLOANv1.increaseDebt.selector,
+            "increase debt selector"
+        );
+        assertEq(
+            permissions[5].funcSelector,
+            IFLOANv1.getOrCreatePosition.selector,
+            "create position selector"
+        );
+        assertEq(
+            permissions[6].funcSelector,
+            IFLOANv1.decreaseDebt.selector,
+            "decrease debt selector"
+        );
     }
 
     function _expectActivatePolicyWithModulesReverts(
         Kernel kernel_,
+        Module floan_,
         Module mintr_,
         Module price_,
         Module roles_,
@@ -140,6 +196,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
             depositManager
         );
 
+        kernel_.executeAction(Actions.InstallModule, address(floan_));
         kernel_.executeAction(Actions.InstallModule, address(mintr_));
         kernel_.executeAction(Actions.InstallModule, address(price_));
         kernel_.executeAction(Actions.InstallModule, address(roles_));
@@ -147,6 +204,19 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidModuleVersion.selector);
         kernel_.executeAction(Actions.ActivatePolicy, address(localBurnerLoans));
+    }
+}
+
+contract MockUnsupportedFloan is Module {
+    constructor(Kernel kernel_) Module(kernel_) {}
+
+    function KEYCODE() public pure override returns (Keycode) {
+        return toKeycode("FLOAN");
+    }
+
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        major = 2;
+        minor = 0;
     }
 }
 

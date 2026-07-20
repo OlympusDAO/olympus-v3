@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -56,7 +57,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
     //   then pre-state and projected post-state storage is cleared for every sub-action
     function test_givenQueuedBatch_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoans.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
 
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedStateBatch();
 
@@ -225,8 +226,8 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetRiskConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetRiskConfig.selector,
             payload: abi.encode(address(usds), update_, selection_)
         });
     }
@@ -236,8 +237,8 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetFeeConfig.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetFeeConfig.selector,
             payload: abi.encode(address(usds), update_, selection_)
         });
     }
@@ -246,8 +247,8 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
         uint256 debtCapOhm_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory action) {
         action = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoans),
-            selector: IBurnerLoans.setAssetDebtCap.selector,
+            target: address(burnerLoansConfig),
+            selector: IBurnerLoansConfig.setAssetDebtCap.selector,
             payload: abi.encode(address(usds), debtCapOhm_)
         });
     }

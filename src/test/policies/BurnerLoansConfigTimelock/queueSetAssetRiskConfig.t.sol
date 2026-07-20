@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -70,7 +71,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         _expectSingleActionQueued(
             nextActionId,
             burnerLoansAdmin,
-            IBurnerLoans.setAssetRiskConfig.selector,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
             payload
         );
 
@@ -82,8 +83,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
         (address target, bytes4 selector, bytes memory storedPayload) = configTimelock
             .getQueuedSubAction(actionId, 0);
-        assertEq(target, address(burnerLoans), "target");
-        assertEq(selector, IBurnerLoans.setAssetRiskConfig.selector, "selector");
+        assertEq(target, address(burnerLoansConfig), "target");
+        assertEq(selector, IBurnerLoansConfig.setAssetRiskConfig.selector, "selector");
         assertEq(storedPayload, payload, "payload");
     }
 
@@ -114,7 +115,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
         ) = _collateralFactorUpdate();
         vm.prank(admin);
-        burnerLoans.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
