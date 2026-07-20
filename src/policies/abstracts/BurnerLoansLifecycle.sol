@@ -122,11 +122,6 @@ abstract contract BurnerLoansLifecycle is
 
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    function _feeRateWad(
-        uint256 utilizationWad_,
-        AssetFeeConfig memory feeConfig_
-    ) internal pure virtual returns (uint256);
-
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         return (1, 0);
     }

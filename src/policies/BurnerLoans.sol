@@ -3,19 +3,17 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
-import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
+import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
-import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
+import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";
 import {BurnerLoansView} from "src/policies/libraries/BurnerLoansView.sol";
 
 // Contracts
@@ -166,8 +164,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         params.onBehalfOf = onBehalfOf_;
         params.recipient = recipient_;
         params.amount = amount_;
-        return
-            BurnerLoansCustody.withdrawCollateral(_quoteDependencies(), _DEPOSIT_MANAGER, params);
+        return BurnerLoansCustody.withdrawCollateral(this.context(), _DEPOSIT_MANAGER, params);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -199,7 +196,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         params.ohmAmount = ohmAmount_;
         params.maxFee = maxFee_;
         BorrowPreview memory quote = BurnerLoansCustody.borrow(
-            _quoteDependencies(),
+            this.context(),
             _MINTR,
             _TRSRY,
             params
@@ -253,7 +250,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         uint64 positionId = _positionId(asset_, onBehalfOf_);
         ExtendPreview memory preview = BurnerLoansCustody.extend(
-            _quoteDependencies(),
+            this.context(),
             _TRSRY,
             positionId,
             asset_,
@@ -264,18 +261,37 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return (preview.fee, preview.maturity, preview.healthFactor);
     }
 
+    /// @inheritdoc IBurnerLoansLifecycle
+    function seize(
+        address asset_,
+        address[] calldata borrowers_
+    ) external override nonReentrant returns (uint256, uint256) {
+        _requireEnabled();
+        SeizePreview memory preview = BurnerLoansSeizure.seize(asset_, borrowers_);
+        return (preview.keeperReward, preview.collateralToTreasury);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Asset disable does not block safe surplus collection. Reverts if Burner Loans or
+    ///      DepositManager is disabled, custody is unsupported, or custody is insolvent.
+    function harvestYield(
+        address asset_
+    ) external override nonReentrant returns (uint256 yieldClaimed) {
+        _requireEnabled();
+        _requireAssetConfigured(asset_);
+        return
+            BurnerLoansCustody.harvestYield(
+                _DEPOSIT_MANAGER,
+                asset_,
+                address(this),
+                address(_TRSRY)
+            );
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
     function floan() external view override returns (address) {
         return address(_FLOAN);
-    }
-
-    function ohm() external view returns (address) {
-        return address(_OHM);
-    }
-
-    function depositManager() external view returns (address) {
-        return address(_DEPOSIT_MANAGER);
     }
 
     function totalActiveDebtOhm() public view returns (uint256) {
@@ -283,7 +299,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function assetActiveDebtOhm(address asset_) external view returns (uint256) {
-        return BurnerLoansView.assetActiveDebtOhm(_FLOAN, address(this), address(_OHM), asset_);
+        return _FLOAN.marketPrincipalDue(_marketId(asset_));
     }
 
     function getPosition(
@@ -297,6 +313,36 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return _FLOAN.getActiveBorrowers(_marketId(asset_));
     }
 
+    function isSeizable(address asset_, address borrower_) external view override returns (bool) {
+        return BurnerLoansView.isSeizable(this.context(), asset_, _position(asset_, borrower_));
+    }
+
+    function previewSeize(
+        address asset_,
+        address[] calldata borrowers_
+    ) external view override returns (SeizePreview memory) {
+        _requireEnabled();
+        return BurnerLoansSeizure.previewSeize(asset_, borrowers_);
+    }
+
+    function getSeizableBorrowers(
+        address asset_,
+        uint256 startIndex_,
+        uint256 maxBorrowersToCheck_,
+        uint256 maxBorrowersToReturn_
+    ) external view override returns (address[] memory, uint256, uint256) {
+        _requireEnabled();
+        return
+            BurnerLoansSeizure.getSeizableBorrowers(
+                BurnerLoansSeizure.ScanRequest({
+                    asset: asset_,
+                    startIndex: startIndex_,
+                    maxBorrowersToCheck: maxBorrowersToCheck_,
+                    maxBorrowersToReturn: maxBorrowersToReturn_
+                })
+            );
+    }
+
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
@@ -305,7 +351,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansView.previewDepositCollateral(
-                _viewDependencies(),
+                this.context(),
                 asset_,
                 amount_,
                 _position(asset_, onBehalfOf_)
@@ -320,7 +366,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansView.previewWithdrawCollateral(
-                _viewDependencies(),
+                this.context(),
                 asset_,
                 amount_,
                 _position(asset_, onBehalfOf_)
@@ -335,7 +381,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansQuote.quoteBorrow(
-                _quoteDependencies(),
+                this.context(),
                 asset_,
                 ohmAmount_,
                 _position(asset_, onBehalfOf_)
@@ -360,7 +406,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansQuote.quoteExtend(
-                _quoteDependencies(),
+                this.context(),
                 asset_,
                 termCount_,
                 _position(asset_, onBehalfOf_)
@@ -372,39 +418,33 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         uint256 collateral_,
         uint256 debtOhm_
     ) external view override returns (uint256) {
-        return
-            BurnerLoansQuote.positionHealthFactor(
-                _quoteDependencies(),
-                asset_,
-                collateral_,
-                debtOhm_
-            );
+        return BurnerLoansQuote.positionHealthFactor(this.context(), asset_, collateral_, debtOhm_);
     }
 
-    function _quoteDependencies()
-        internal
-        view
-        returns (BurnerLoansQuote.Dependencies memory dependencies)
-    {
+    /// @notice Quotes currently claimable custody yield for an asset.
+    function previewHarvestYield(
+        address asset_
+    ) external view override returns (HarvestPreview memory) {
+        _requireEnabled();
+        AssetCollateralStatus memory collateralStatus = this.getAssetCollateralStatus(asset_);
         return
-            BurnerLoansQuote.Dependencies({
-                ohm: _OHM,
-                ohmDecimals: _OHM_DECIMALS,
-                facility: address(this),
-                globalDebtCapOhm: globalDebtCapOhm,
-                backingOracle: backingOracle,
-                floan: _FLOAN,
-                price: _PRICE
+            HarvestPreview({
+                amount: collateralStatus.claimableYield,
+                executable: collateralStatus.solvent
             });
     }
 
-    function _viewDependencies()
-        internal
-        view
-        returns (BurnerLoansView.Dependencies memory dependencies)
-    {
+    /// @notice Returns DepositManager accounting for this facility and asset.
+    function getAssetCollateralStatus(
+        address asset_
+    ) external view override returns (AssetCollateralStatus memory) {
+        _requireAssetConfigured(asset_);
+        return BurnerLoansCustody.getAssetCollateralStatus(_DEPOSIT_MANAGER, asset_, address(this));
+    }
+
+    function context() external view returns (BurnerLoansContext memory dependencies) {
         return
-            BurnerLoansView.Dependencies({
+            BurnerLoansContext({
                 ohm: _OHM,
                 ohmDecimals: _OHM_DECIMALS,
                 depositManager: _DEPOSIT_MANAGER,
@@ -412,290 +452,9 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
                 globalDebtCapOhm: globalDebtCapOhm,
                 backingOracle: backingOracle,
                 floan: _FLOAN,
-                price: _PRICE
+                price: _PRICE,
+                treasury: address(_TRSRY),
+                roles: ROLES
             });
-    }
-
-    /// @notice Calculates health for a prospective position state using fresh PRICE data.
-    /// @dev Debt-free positions deliberately do not require PRICE freshness.
-    function _positionHealthFactor(
-        address asset_,
-        AssetConfig memory config_,
-        uint256 depositedCollateral_,
-        uint256 debtOhm_
-    ) internal view returns (uint256) {
-        if (debtOhm_ == 0) return type(uint256).max;
-
-        uint48 observationFrequency = _PRICE.observationFrequency();
-        (uint256 ohmUsdPrice, ) = _getFreshPrice(address(_OHM), observationFrequency);
-        uint256 backingPerOhmUsd = _getBackingPerOhmUsd();
-        (uint256 collateralUsdPrice, ) = _getFreshPrice(asset_, observationFrequency);
-
-        uint256 riskAdjustedCollateralUsd = _riskAdjustedCollateralUsd(
-            _collateralValueUsd(
-                depositedCollateral_,
-                collateralUsdPrice,
-                config_.collateralDecimals
-            ),
-            config_.collateralFactorBps
-        );
-        uint256 requiredCollateralUsd = _requiredCollateralUsd(
-            RequiredCollateralUsdInputs({
-                debtValueUsd: _debtValueUsd(debtOhm_, ohmUsdPrice, _OHM_DECIMALS),
-                debtOhm: debtOhm_,
-                backingPerOhmUsd: backingPerOhmUsd,
-                minCollateralRatioBps: config_.minCollateralRatioBps,
-                backingMultiplierBps: config_.backingMultiplierBps
-            })
-        );
-
-        return _healthFactor(riskAdjustedCollateralUsd, requiredCollateralUsd);
-    }
-
-    /// @notice Reads a non-zero PRICE value whose timestamp is within one observation window.
-    function _getFreshPrice(
-        address asset_,
-        uint48 observationFrequency_
-    ) internal view returns (uint256 price, uint48 timestamp) {
-        (price, timestamp) = _PRICE.getPrice(asset_, IPRICEv2.Variant.CURRENT);
-        if (price == 0 || timestamp == 0) revert BurnerLoans_InvalidPrice();
-
-        if (block.timestamp > uint256(timestamp) + uint256(observationFrequency_)) {
-            revert BurnerLoans_InvalidPrice();
-        }
-    }
-
-    /// @notice Reads canonical OHM backing and converts it from 18 decimals to PRICE decimals.
-    /// @dev Conversion rounds up so reducing decimal precision cannot weaken the backing floor.
-    function _getBackingPerOhmUsd() internal view returns (uint256 backingPerOhmUsd) {
-        address backingOracle_ = backingOracle;
-        if (backingOracle_ == address(0)) revert BurnerLoans_ZeroAddress();
-
-        uint256 backing18 = IOlympusBackingOracle(backingOracle_).backing();
-        if (backing18 == 0) revert BurnerLoans_InvalidPrice();
-
-        backingPerOhmUsd = FullMath.mulDivUp(backing18, _scale(_PRICE.decimals()), _WAD);
-    }
-
-    // ========== INTERNAL MATH HELPERS ========== //
-
-    /// @notice Returns 10 ** decimals_.
-    /// @dev Input: decimal count. Output: integer scale.
-    function _scale(uint8 decimals_) internal pure returns (uint256) {
-        return BurnerLoansCalculator.scale(decimals_);
-    }
-
-    /// @notice Converts OHM debt to USD value, rounding up.
-    /// @dev Inputs: `debtOhm_` in OHM decimals, `ohmUsdPrice_` in PRICE decimals.
-    ///      Output: USD value in PRICE decimals.
-    function _debtValueUsd(
-        uint256 debtOhm_,
-        uint256 ohmUsdPrice_,
-        uint8 ohmDecimals_
-    ) internal pure returns (uint256) {
-        if (ohmUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        return BurnerLoansCalculator.debtValueUsd(debtOhm_, ohmUsdPrice_, ohmDecimals_);
-    }
-
-    /// @notice Converts collateral to USD value, rounding down.
-    /// @dev Inputs: `collateralAmount_` in collateral token decimals,
-    ///      `collateralUsdPrice_` in PRICE decimals. Output: USD value in PRICE decimals.
-    function _collateralValueUsd(
-        uint256 collateralAmount_,
-        uint256 collateralUsdPrice_,
-        uint8 collateralDecimals_
-    ) internal pure returns (uint256) {
-        if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        return
-            BurnerLoansCalculator.collateralValueUsd(
-                collateralAmount_,
-                collateralUsdPrice_,
-                collateralDecimals_
-            );
-    }
-
-    /// @notice Applies the collateral factor to collateral USD value, rounding down.
-    /// @dev Inputs and output are PRICE decimals.
-    function _riskAdjustedCollateralUsd(
-        uint256 collateralValueUsd_,
-        uint256 collateralFactorBps_
-    ) internal pure returns (uint256) {
-        return
-            BurnerLoansCalculator.riskAdjustedCollateralUsd(
-                collateralValueUsd_,
-                collateralFactorBps_
-            );
-    }
-
-    /// @notice Calculates the backing floor for active or seized OHM debt, rounding up.
-    /// @dev Inputs: `debtOhm_` in OHM decimals, `backingPerOhmUsd_` in PRICE decimals.
-    ///      Output: required backing in PRICE decimals.
-    function _requiredBackingUsd(
-        uint256 debtOhm_,
-        uint256 backingPerOhmUsd_,
-        uint8 ohmDecimals_,
-        uint256 backingMultiplierBps_
-    ) internal pure returns (uint256) {
-        if (backingPerOhmUsd_ == 0) revert BurnerLoans_InvalidPrice();
-
-        return
-            BurnerLoansCalculator.requiredBackingUsd(
-                debtOhm_,
-                backingPerOhmUsd_,
-                ohmDecimals_,
-                backingMultiplierBps_
-            );
-    }
-
-    /// @notice Calculates the collateral requirement in USD, rounding requirements up.
-    /// @dev Inputs and output are PRICE decimals except `debtOhm_`, which is OHM decimals.
-    function _requiredCollateralUsd(
-        RequiredCollateralUsdInputs memory inputs_
-    ) internal view returns (uint256) {
-        return
-            BurnerLoansCalculator.requiredCollateralUsd(
-                inputs_.debtValueUsd,
-                inputs_.debtOhm,
-                inputs_.backingPerOhmUsd,
-                _OHM_DECIMALS,
-                inputs_.minCollateralRatioBps,
-                inputs_.backingMultiplierBps
-            );
-    }
-
-    /// @notice Converts required USD collateral to collateral token units, rounding up.
-    /// @dev Input: USD in PRICE decimals. Output: collateral amount in token-native decimals.
-    function _requiredCollateralAsset(
-        uint256 requiredCollateralUsd_,
-        uint256 collateralUsdPrice_,
-        uint8 collateralDecimals_
-    ) internal pure returns (uint256) {
-        if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
-        return
-            BurnerLoansCalculator.requiredCollateralAsset(
-                requiredCollateralUsd_,
-                collateralUsdPrice_,
-                collateralDecimals_
-            );
-    }
-
-    /// @notice Calculates borrower health, rounding down.
-    /// @dev Inputs: `riskAdjustedCollateralUsd_` and `requiredCollateralUsd_` in PRICE decimals.
-    ///      Output: WAD health factor; 1e18 is the seizure boundary.
-    function _healthFactor(
-        uint256 riskAdjustedCollateralUsd_,
-        uint256 requiredCollateralUsd_
-    ) internal pure returns (uint256) {
-        return
-            BurnerLoansCalculator.healthFactor(riskAdjustedCollateralUsd_, requiredCollateralUsd_);
-    }
-
-    /// @notice Calculates utilization, rounding up.
-    /// @dev Inputs: debt and cap use the same units. Output: bps.
-    function _utilizationBps(uint256 debt_, uint256 cap_) internal pure returns (uint256) {
-        if (cap_ == 0) {
-            if (debt_ == 0) return 0;
-            revert BurnerLoans_InvalidCap();
-        }
-
-        return FullMath.mulDivUp(debt_, _BPS, cap_);
-    }
-
-    /// @notice Calculates asset utilization, rounding up.
-    /// @dev Inputs: debt and cap use the same units. Output: WAD.
-    function _assetUtilizationWad(uint256 debt_, uint256 cap_) internal pure returns (uint256) {
-        uint256 utilization = BurnerLoansCalculator.assetUtilizationWad(debt_, cap_);
-        if (utilization == type(uint256).max) revert BurnerLoans_InvalidCap();
-        return utilization;
-    }
-
-    /// @notice Calculates fee utilization from asset open interest only.
-    /// @dev Global utilization is a capacity constraint, not a fee input. Output: WAD.
-    function _effectiveUtilizationWad(
-        UtilizationInputs memory inputs_
-    ) internal pure returns (uint256) {
-        return _assetUtilizationWad(inputs_.assetDebtOhm, inputs_.assetDebtCapOhm);
-    }
-
-    /// @notice Calculates utilization fee rate from the piecewise linear kink curve.
-    /// @dev Uses Aave-style slope semantics. `preKinkSlopeBps` is the full increase from 0 utilization to the
-    /// kink. `postKinkSlopeBps` is the additional increase from the kink to 100% utilization. `utilizationWad_`
-    /// is WAD. Fee config values are bps. Output is WAD.
-    function _feeRateWad(
-        uint256 utilizationWad_,
-        AssetFeeConfig memory feeConfig_
-    ) internal pure override returns (uint256) {
-        if (utilizationWad_ > _WAD) revert BurnerLoans_InvalidParam();
-
-        return
-            BurnerLoansCalculator.feeRateWad(
-                utilizationWad_,
-                feeConfig_.baseFeeBps,
-                feeConfig_.kinkBps,
-                feeConfig_.preKinkSlopeBps,
-                feeConfig_.postKinkSlopeBps
-            );
-    }
-
-    /// @notice Calculates the borrow fee in collateral units, rounding value transfers up.
-    /// @dev Output is in collateral token decimals.
-    function _borrowFee(
-        uint256 incrementalRequiredCollateral_,
-        uint256 feeRateWad_
-    ) internal pure returns (uint256) {
-        return BurnerLoansCalculator.borrowFee(incrementalRequiredCollateral_, feeRateWad_);
-    }
-
-    /// @notice Calculates the extension fee in collateral units, rounding the single-term fee up.
-    /// @dev Output is in collateral token decimals and scales linearly with `termCount_`.
-    function _extensionFee(
-        uint256 currentRequiredCollateral_,
-        uint256 feeRateWad_,
-        uint256 termCount_
-    ) internal pure returns (uint256) {
-        uint256 singleTermFee = FullMath.mulDivUp(currentRequiredCollateral_, feeRateWad_, _WAD);
-        return singleTermFee * termCount_;
-    }
-
-    /// @notice Calculates the keeper reward for a seizure batch.
-    /// @dev All collateral amounts are token-native decimals. Price and backing inputs use PRICE decimals.
-    function _keeperRewardAsset(KeeperRewardInputs memory inputs_) internal view returns (uint256) {
-        if (
-            inputs_.isProtocolSeizureCaller ||
-            inputs_.rewardBps == 0 ||
-            inputs_.maxKeeperRewardAsset == 0
-        ) {
-            return 0;
-        }
-
-        uint256 configuredRewardAsset = FullMath.mulDiv(
-            inputs_.seizedCollateralAmount,
-            inputs_.rewardBps,
-            _BPS
-        );
-        if (configuredRewardAsset > inputs_.maxKeeperRewardAsset) {
-            configuredRewardAsset = inputs_.maxKeeperRewardAsset;
-        }
-
-        uint256 requiredBackingUsd = _requiredBackingUsd(
-            inputs_.seizedUnrepaidDebtOhm,
-            inputs_.backingPerOhmUsd,
-            _OHM_DECIMALS,
-            inputs_.backingMultiplierBps
-        );
-        uint256 requiredBackingAsset = _requiredCollateralAsset(
-            requiredBackingUsd,
-            inputs_.collateralUsdPrice,
-            inputs_.collateralDecimals
-        );
-
-        uint256 surplusAfterBackingAsset = inputs_.seizedCollateralAmount > requiredBackingAsset
-            ? inputs_.seizedCollateralAmount - requiredBackingAsset
-            : 0;
-
-        return
-            configuredRewardAsset < surplusAfterBackingAsset
-                ? configuredRewardAsset
-                : surplusAfterBackingAsset;
     }
 }

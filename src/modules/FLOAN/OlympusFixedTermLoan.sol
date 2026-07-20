@@ -51,6 +51,24 @@ contract OlympusFixedTermLoan is FLOANv1 {
         return _debtTokenPrincipalDue[debtToken_];
     }
 
+    function marketPrincipalDefaulted(uint32 marketId_) external view override returns (uint256) {
+        _requireMarket(marketId_);
+        return _marketPrincipalDefaulted[marketId_];
+    }
+
+    function facilityPrincipalDefaulted(
+        address facility_,
+        address debtToken_
+    ) external view override returns (uint256) {
+        return _facilityPrincipalDefaulted[facility_][debtToken_];
+    }
+
+    function debtTokenPrincipalDefaulted(
+        address debtToken_
+    ) external view override returns (uint256) {
+        return _debtTokenPrincipalDefaulted[debtToken_];
+    }
+
     function getMarketIds(
         address facility_,
         address collateralToken_,
@@ -135,6 +153,19 @@ contract OlympusFixedTermLoan is FLOANv1 {
     ) external view override returns (address[] memory) {
         _requireMarket(marketId_);
         return _activeBorrowersByMarket[marketId_].values();
+    }
+
+    function activeBorrowerCount(uint32 marketId_) external view override returns (uint256) {
+        _requireMarket(marketId_);
+        return _activeBorrowersByMarket[marketId_].length();
+    }
+
+    function activeBorrowerAt(
+        uint32 marketId_,
+        uint256 index_
+    ) external view override returns (address) {
+        _requireMarket(marketId_);
+        return _activeBorrowersByMarket[marketId_].at(index_);
     }
 
     function createMarket(
@@ -389,6 +420,9 @@ contract OlympusFixedTermLoan is FLOANv1 {
         Market storage market = _markets[stored.marketId];
         _facilityPrincipalDue[market.facility][market.debtToken] -= principalDefaulted;
         _debtTokenPrincipalDue[market.debtToken] -= principalDefaulted;
+        _marketPrincipalDefaulted[stored.marketId] += principalDefaulted;
+        _facilityPrincipalDefaulted[market.facility][market.debtToken] += principalDefaulted;
+        _debtTokenPrincipalDefaulted[market.debtToken] += principalDefaulted;
         uint32 activeCount = --_activePositionCount[stored.marketId][stored.borrower];
         if (activeCount == 0) {
             _activeBorrowersByMarket[stored.marketId].remove(stored.borrower);

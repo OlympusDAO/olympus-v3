@@ -40,7 +40,7 @@ library BurnerLoansDependencies {
 
     /// @notice Returns the MINTR and FLOAN permissions required by the lifecycle policy.
     function permissions() public pure returns (Permissions[] memory requests) {
-        requests = new Permissions[](8);
+        requests = new Permissions[](9);
         requests[0] = Permissions({
             keycode: _MINTR_KEYCODE,
             funcSelector: MINTRv1.mintOhm.selector
@@ -72,6 +72,10 @@ library BurnerLoansDependencies {
         requests[7] = Permissions({
             keycode: _FLOAN_KEYCODE,
             funcSelector: IFLOANv1.extendMaturity.selector
+        });
+        requests[8] = Permissions({
+            keycode: _FLOAN_KEYCODE,
+            funcSelector: IFLOANv1.defaultPosition.selector
         });
     }
 

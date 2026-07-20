@@ -5,6 +5,6 @@ import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansOhmTest is BurnerLoansTest {
     function test_givenPolicyDeployed_ohm_returnsImmutableToken() public view {
-        assertEq(burnerLoans.ohm(), address(ohm), "OHM");
+        assertEq(address(burnerLoans.context().ohm), address(ohm), "OHM");
     }
 }

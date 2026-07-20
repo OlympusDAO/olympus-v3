@@ -45,6 +45,15 @@ interface IBurnerLoans {
     error BurnerLoans_InvalidFeeConfig();
     error BurnerLoans_UnauthorizedConfigurator(address caller);
     error BurnerLoans_InvalidModuleVersion();
+    error BurnerLoans_InvalidBatch();
+    error BurnerLoans_DuplicateBorrower(address borrower);
+    error BurnerLoans_PositionNotSeizable(address borrower);
+    error BurnerLoans_CustodyShortfall(
+        address asset,
+        uint256 liabilities,
+        uint256 assets,
+        uint256 borrowed
+    );
 
     enum PositionStatus {
         NoDebt,
@@ -133,6 +142,15 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    struct AssetCollateralStatus {
+        uint256 shares;
+        uint256 assets;
+        uint256 borrowed;
+        uint256 liabilities;
+        uint256 claimableYield;
+        bool solvent;
+    }
+
     event CollateralDeposited(
         address indexed caller,
         address indexed asset,
@@ -181,8 +199,16 @@ interface IBurnerLoans {
         address indexed asset,
         address indexed borrower,
         uint256 debtOhm,
-        uint256 collateral,
-        uint256 keeperReward
+        uint256 collateral
+    );
+    event SeizureBatchSettled(
+        address indexed caller,
+        address indexed asset,
+        uint256 borrowerCount,
+        uint256 seizedDebtOhm,
+        uint256 seizedCollateral,
+        uint256 keeperReward,
+        uint256 collateralToTreasury
     );
     event YieldHarvested(address indexed asset, uint256 amount);
     event GlobalDebtCapSet(uint256 debtCapOhm);

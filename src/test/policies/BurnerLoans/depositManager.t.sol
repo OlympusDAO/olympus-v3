@@ -5,6 +5,10 @@ import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansDepositManagerTest is BurnerLoansTest {
     function test_givenPolicyDeployed_depositManager_returnsImmutablePolicy() public view {
-        assertEq(burnerLoans.depositManager(), address(depositManager), "deposit manager");
+        assertEq(
+            address(burnerLoans.context().depositManager),
+            address(depositManager),
+            "deposit manager"
+        );
     }
 }

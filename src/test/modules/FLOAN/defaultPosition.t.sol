@@ -65,6 +65,13 @@ contract FLOANDefaultPositionTest is FLOANTest {
         assertEq(floan.marketPrincipalDue(marketId), 0, "market principal cleared");
         assertEq(floan.facilityPrincipalDue(facility, debtToken), 0, "facility principal cleared");
         assertEq(floan.debtTokenPrincipalDue(debtToken), 0, "token principal cleared");
+        assertEq(floan.marketPrincipalDefaulted(marketId), 100e9, "market principal defaulted");
+        assertEq(
+            floan.facilityPrincipalDefaulted(facility, debtToken),
+            100e9,
+            "facility principal defaulted"
+        );
+        assertEq(floan.debtTokenPrincipalDefaulted(debtToken), 100e9, "token principal defaulted");
     }
 
     function test_givenDefaultedPosition_mutatingFunctionsRevert() public {
@@ -83,11 +90,23 @@ contract FLOANDefaultPositionTest is FLOANTest {
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
         );
+        floan.removeCollateral(positionId, 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
+        );
         floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 30 days));
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
         );
+        floan.decreaseDebt(positionId, 1, 0);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
+        );
         floan.extendMaturity(positionId, uint48(block.timestamp + 60 days));
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
+        );
+        floan.defaultPosition(positionId);
         vm.stopPrank();
     }
 

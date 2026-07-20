@@ -12,6 +12,9 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
+import {FullMath} from "src/libraries/FullMath.sol";
+import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
+
 contract BurnerLoansHarness is BurnerLoans {
     IBurnerLoansConfig internal _testConfig;
 
@@ -112,7 +115,8 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 ohmUsdPrice_,
         uint8 ohmDecimals_
     ) external pure returns (uint256) {
-        return _debtValueUsd(debtOhm_, ohmUsdPrice_, ohmDecimals_);
+        if (ohmUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
+        return BurnerLoansCalculator.debtValueUsd(debtOhm_, ohmUsdPrice_, ohmDecimals_);
     }
 
     function collateralValueUsd(
@@ -120,14 +124,24 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 collateralUsdPrice_,
         uint8 collateralDecimals_
     ) external pure returns (uint256) {
-        return _collateralValueUsd(collateralAmount_, collateralUsdPrice_, collateralDecimals_);
+        if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
+        return
+            BurnerLoansCalculator.collateralValueUsd(
+                collateralAmount_,
+                collateralUsdPrice_,
+                collateralDecimals_
+            );
     }
 
     function riskAdjustedCollateralUsd(
         uint256 collateralValueUsd_,
         uint256 collateralFactorBps_
     ) external pure returns (uint256) {
-        return _riskAdjustedCollateralUsd(collateralValueUsd_, collateralFactorBps_);
+        return
+            BurnerLoansCalculator.riskAdjustedCollateralUsd(
+                collateralValueUsd_,
+                collateralFactorBps_
+            );
     }
 
     function requiredBackingUsd(
@@ -136,14 +150,28 @@ contract BurnerLoansHarness is BurnerLoans {
         uint8 ohmDecimals_,
         uint256 backingMultiplierBps_
     ) external pure returns (uint256) {
+        if (backingPerOhmUsd_ == 0) revert BurnerLoans_InvalidPrice();
         return
-            _requiredBackingUsd(debtOhm_, backingPerOhmUsd_, ohmDecimals_, backingMultiplierBps_);
+            BurnerLoansCalculator.requiredBackingUsd(
+                debtOhm_,
+                backingPerOhmUsd_,
+                ohmDecimals_,
+                backingMultiplierBps_
+            );
     }
 
     function requiredCollateralUsd(
         RequiredCollateralUsdInputs calldata inputs_
     ) external view returns (uint256) {
-        return _requiredCollateralUsd(inputs_);
+        return
+            BurnerLoansCalculator.requiredCollateralUsd(
+                inputs_.debtValueUsd,
+                inputs_.debtOhm,
+                inputs_.backingPerOhmUsd,
+                _OHM_DECIMALS,
+                inputs_.minCollateralRatioBps,
+                inputs_.backingMultiplierBps
+            );
     }
 
     function requiredCollateralAsset(
@@ -151,8 +179,9 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 collateralUsdPrice_,
         uint8 collateralDecimals_
     ) external pure returns (uint256) {
+        if (collateralUsdPrice_ == 0) revert BurnerLoans_InvalidPrice();
         return
-            _requiredCollateralAsset(
+            BurnerLoansCalculator.requiredCollateralAsset(
                 requiredCollateralUsd_,
                 collateralUsdPrice_,
                 collateralDecimals_
@@ -163,35 +192,55 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 riskAdjustedCollateralUsd_,
         uint256 requiredCollateralUsd_
     ) external pure returns (uint256) {
-        return _healthFactor(riskAdjustedCollateralUsd_, requiredCollateralUsd_);
+        return
+            BurnerLoansCalculator.healthFactor(riskAdjustedCollateralUsd_, requiredCollateralUsd_);
     }
 
     function utilizationBps(uint256 debt_, uint256 cap_) external pure returns (uint256) {
-        return _utilizationBps(debt_, cap_);
+        if (cap_ == 0) {
+            if (debt_ == 0) return 0;
+            revert BurnerLoans_InvalidCap();
+        }
+        return FullMath.mulDivUp(debt_, _BPS, cap_);
     }
 
     function assetUtilizationWad(uint256 debt_, uint256 cap_) external pure returns (uint256) {
-        return _assetUtilizationWad(debt_, cap_);
+        uint256 utilization = BurnerLoansCalculator.assetUtilizationWad(debt_, cap_);
+        if (utilization == type(uint256).max) revert BurnerLoans_InvalidCap();
+        return utilization;
     }
 
     function effectiveUtilizationWad(
         UtilizationInputs calldata inputs_
     ) external pure returns (uint256) {
-        return _effectiveUtilizationWad(inputs_);
+        uint256 utilization = BurnerLoansCalculator.assetUtilizationWad(
+            inputs_.assetDebtOhm,
+            inputs_.assetDebtCapOhm
+        );
+        if (utilization == type(uint256).max) revert BurnerLoans_InvalidCap();
+        return utilization;
     }
 
     function feeRateWad(
         uint256 utilizationWad_,
         IBurnerLoans.AssetFeeConfig memory feeConfig_
     ) external pure returns (uint256) {
-        return _feeRateWad(utilizationWad_, feeConfig_);
+        if (utilizationWad_ > _WAD) revert BurnerLoans_InvalidParam();
+        return
+            BurnerLoansCalculator.feeRateWad(
+                utilizationWad_,
+                feeConfig_.baseFeeBps,
+                feeConfig_.kinkBps,
+                feeConfig_.preKinkSlopeBps,
+                feeConfig_.postKinkSlopeBps
+            );
     }
 
     function borrowFee(
         uint256 incrementalRequiredCollateral_,
         uint256 feeRateWad_
     ) external pure returns (uint256) {
-        return _borrowFee(incrementalRequiredCollateral_, feeRateWad_);
+        return BurnerLoansCalculator.borrowFee(incrementalRequiredCollateral_, feeRateWad_);
     }
 
     function extensionFee(
@@ -199,13 +248,41 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 feeRateWad_,
         uint256 termCount_
     ) external pure returns (uint256) {
-        return _extensionFee(currentRequiredCollateral_, feeRateWad_, termCount_);
+        return FullMath.mulDivUp(currentRequiredCollateral_, feeRateWad_, _WAD) * termCount_;
     }
 
     function keeperRewardAsset(
         KeeperRewardInputs calldata inputs_
     ) external view returns (uint256) {
-        return _keeperRewardAsset(inputs_);
+        if (
+            inputs_.isProtocolSeizureCaller ||
+            inputs_.rewardBps == 0 ||
+            inputs_.maxKeeperRewardAsset == 0
+        ) return 0;
+
+        uint256 configuredReward = FullMath.mulDiv(
+            inputs_.seizedCollateralAmount,
+            inputs_.rewardBps,
+            _BPS
+        );
+        if (configuredReward > inputs_.maxKeeperRewardAsset) {
+            configuredReward = inputs_.maxKeeperRewardAsset;
+        }
+        uint256 backingRequirementUsd = BurnerLoansCalculator.requiredBackingUsd(
+            inputs_.seizedUnrepaidDebtOhm,
+            inputs_.backingPerOhmUsd,
+            _OHM_DECIMALS,
+            inputs_.backingMultiplierBps
+        );
+        uint256 requiredBackingAsset = BurnerLoansCalculator.requiredCollateralAsset(
+            backingRequirementUsd,
+            inputs_.collateralUsdPrice,
+            inputs_.collateralDecimals
+        );
+        uint256 surplus = inputs_.seizedCollateralAmount > requiredBackingAsset
+            ? inputs_.seizedCollateralAmount - requiredBackingAsset
+            : 0;
+        return configuredReward < surplus ? configuredReward : surplus;
     }
 
     function setActiveDebtForTest(address asset_, uint256, uint256 assetActiveDebtOhm_) external {

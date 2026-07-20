@@ -6,11 +6,13 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
+import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 
 /// @title Burner Loans Quote Library
@@ -26,16 +28,6 @@ library BurnerLoansQuote {
         uint256 riskAdjustedCollateralUsd;
     }
 
-    struct Dependencies {
-        IERC20 ohm;
-        uint8 ohmDecimals;
-        address facility;
-        uint128 globalDebtCapOhm;
-        address backingOracle;
-        IFLOANv1 floan;
-        IPRICEv2 price;
-    }
-
     struct ExtensionContext {
         Pricing pricing;
         IBurnerLoans.AssetConfig config;
@@ -47,7 +39,7 @@ library BurnerLoansQuote {
     }
 
     function quoteBorrow(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 ohmAmount_,
         IFLOANv1.Position memory position
@@ -59,6 +51,12 @@ library BurnerLoansQuote {
             asset_
         );
         if (ohmAmount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
+
+        BurnerLoansCustodyAccounting.requireSolvent(
+            dependencies_.depositManager,
+            asset_,
+            dependencies_.facility
+        );
 
         if (position.collateral == 0) revert IBurnerLoans.BurnerLoans_NoCollateral();
         if (position.principalDue != 0 && block.timestamp >= position.maturity) {
@@ -127,7 +125,7 @@ library BurnerLoansQuote {
     }
 
     function positionHealthFactor(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint256 collateral_,
         uint256 debtOhm_
@@ -156,7 +154,7 @@ library BurnerLoansQuote {
     }
 
     function quoteExtend(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint16 termCount_,
         IFLOANv1.Position memory position_
@@ -169,6 +167,12 @@ library BurnerLoansQuote {
         );
         if (termCount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
         if (position_.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
+
+        BurnerLoansCustodyAccounting.requireSolvent(
+            dependencies_.depositManager,
+            asset_,
+            dependencies_.facility
+        );
 
         Pricing memory pricing = _pricing(
             dependencies_.ohm,
@@ -337,7 +341,7 @@ library BurnerLoansQuote {
     }
 
     function _quoteExtensionTerms(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         ExtensionContext memory context_
     ) private view returns (IBurnerLoans.ExtendPreview memory) {
         uint256 maturityBase = context_.currentMaturity > block.timestamp
@@ -366,7 +370,7 @@ library BurnerLoansQuote {
     }
 
     function _extensionFee(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         ExtensionContext memory context_
     ) private view returns (uint256) {
         uint256 requiredUsd = BurnerLoansCalculator.requiredCollateralUsd(

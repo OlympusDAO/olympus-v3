@@ -5,6 +5,8 @@ pragma solidity >=0.8.24;
 import {Test} from "forge-std/Test.sol";
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -206,6 +208,31 @@ abstract contract BurnerLoansTest is Test {
         vm.stopPrank();
     }
 
+    function _addVaultAssetForTest() internal returns (MockERC20 asset, MockERC4626 vault) {
+        asset = new MockERC20("Vault Collateral", "vCOLL", _collateralDecimals());
+        vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
+        _configurePrice(address(asset), 1e18);
+        depositManager.addAsset(
+            IERC20(address(asset)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+
+        vm.prank(admin);
+        burnerLoans.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+    }
+
     function _configureUsdsDependencies() internal {
         _configurePrice(address(usds), 1e18);
         _configureDepositManagerAsset(address(usds));
@@ -230,7 +257,11 @@ abstract contract BurnerLoansTest is Test {
     }
 
     function _createDuplicateUsdsMarketForTest() internal returns (uint32 marketId) {
-        uint32 existingMarketId = burnerLoansConfig.marketId(address(burnerLoans), address(usds));
+        return _createDuplicateMarketForTest(address(usds));
+    }
+
+    function _createDuplicateMarketForTest(address asset_) internal returns (uint32 marketId) {
+        uint32 existingMarketId = burnerLoansConfig.marketId(address(burnerLoans), asset_);
         IFLOANv1.Market memory market = floan.getMarket(existingMarketId);
         bytes memory configData = floan.getMarketConfigData(existingMarketId);
 

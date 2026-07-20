@@ -10,6 +10,7 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
@@ -18,6 +19,7 @@ import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 
 /// @title Burner Loans Custody Library
@@ -46,7 +48,7 @@ library BurnerLoansCustody {
     }
 
     function borrow(
-        BurnerLoansQuote.Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         MINTRv1 mintr_,
         TRSRYv1 treasury_,
         BorrowParams memory params_
@@ -118,7 +120,7 @@ library BurnerLoansCustody {
     }
 
     function withdrawCollateral(
-        BurnerLoansQuote.Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         IDepositManager depositManager_,
         WithdrawParams memory params_
     )
@@ -283,7 +285,7 @@ library BurnerLoansCustody {
         return shares == 0 ? 0 : SafeCast.toUint128(vault.previewRedeem(shares));
     }
 
-    function previewWithdrawAmount(address vault_, uint128 amount_) public view returns (uint256) {
+    function previewWithdrawAmount(address vault_, uint256 amount_) public view returns (uint256) {
         if (vault_ == address(0)) return amount_;
         IERC4626 vault = IERC4626(vault_);
         return vault.previewRedeem(vault.convertToShares(amount_));
@@ -326,7 +328,7 @@ library BurnerLoansCustody {
         IDepositManager depositManager_,
         address asset_,
         uint8 depositPeriod_,
-        uint128 amount_,
+        uint256 amount_,
         address recipient_
     ) public returns (uint256) {
         return
@@ -340,6 +342,54 @@ library BurnerLoansCustody {
                     isWrapped: false
                 })
             );
+    }
+
+    function getAssetCollateralStatus(
+        IDepositManager depositManager_,
+        address asset_,
+        address operator_
+    ) public view returns (IBurnerLoans.AssetCollateralStatus memory) {
+        validateCustodySupportFor(
+            depositManager_,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            false,
+            operator_
+        );
+        return BurnerLoansCustodyAccounting.status(depositManager_, asset_, operator_);
+    }
+
+    function harvestYield(
+        IDepositManager depositManager_,
+        address asset_,
+        address operator_,
+        address recipient_
+    ) public returns (uint256 claimed) {
+        validateCustodySupportFor(
+            depositManager_,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            false,
+            operator_
+        );
+        IBurnerLoans.AssetCollateralStatus memory collateralStatus = BurnerLoansCustodyAccounting
+            .status(depositManager_, asset_, operator_);
+        if (!collateralStatus.solvent) {
+            revert IBurnerLoans.BurnerLoans_CustodyShortfall(
+                asset_,
+                collateralStatus.liabilities,
+                collateralStatus.assets,
+                collateralStatus.borrowed
+            );
+        }
+        if (collateralStatus.claimableYield == 0) return 0;
+
+        claimed = depositManager_.claimYield(
+            IERC20(asset_),
+            recipient_,
+            collateralStatus.claimableYield
+        );
+        emit IBurnerLoans.YieldHarvested(asset_, claimed);
     }
 
     function repay(
@@ -360,7 +410,7 @@ library BurnerLoansCustody {
     }
 
     function extend(
-        BurnerLoansQuote.Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         TRSRYv1 treasury_,
         uint64 positionId_,
         address asset_,

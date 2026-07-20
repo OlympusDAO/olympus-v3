@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -18,6 +21,40 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     function setUp() public override {
         super.setUp();
         operator = makeAddr("operator");
+    }
+
+    // given an active position whose collateral vault has fallen below borrower liabilities
+    //  when previewing or executing an extension
+    //   then the asset-level custody shortfall blocks the extension
+    function test_givenCustodyShortfall_reverts() public {
+        (MockERC20 asset, MockERC4626 vault) = _addVaultAssetForTest();
+        uint128 collateral = 2_000e18;
+        asset.mint(alice, collateral + 100e18);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), type(uint256).max);
+        burnerLoans.depositCollateral(address(asset), collateral, alice);
+        IBurnerLoans.BorrowPreview memory borrowPreview = burnerLoans.previewBorrow(
+            address(asset),
+            100e9,
+            alice
+        );
+        burnerLoans.borrow(address(asset), 100e9, alice, alice, borrowPreview.fee);
+        vm.stopPrank();
+        asset.burn(address(vault), 1);
+
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_CustodyShortfall.selector,
+            address(asset),
+            collateral,
+            collateral - 1,
+            0
+        );
+        vm.expectRevert(expectedError);
+        burnerLoans.previewExtend(address(asset), alice, 1);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.extend(address(asset), alice, 1, type(uint256).max);
     }
 
     function test_givenHealthyActivePosition_extendAddsOneTermAndChargesCollateralFee() public {

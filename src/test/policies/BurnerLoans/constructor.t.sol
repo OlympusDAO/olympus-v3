@@ -55,8 +55,12 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
     //  when the deployed BurnerLoans instance is inspected
     //   then immutable dependencies and defaults are set
     function test_constructor_givenValidParams_setsImmutableDependencies() public view {
-        assertEq(burnerLoans.ohm(), address(ohm), "ohm");
-        assertEq(burnerLoans.depositManager(), address(depositManager), "deposit manager");
+        assertEq(address(burnerLoans.context().ohm), address(ohm), "ohm");
+        assertEq(
+            address(burnerLoans.context().depositManager),
+            address(depositManager),
+            "deposit manager"
+        );
         assertEq(
             burnerLoans.gracePeriod(),
             BurnerLoansConstants.REENABLE_GRACE_PERIOD,

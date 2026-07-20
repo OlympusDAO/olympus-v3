@@ -32,4 +32,8 @@ interface IBurnerLoansLifecycle is IBurnerLoans {
         uint16,
         uint256
     ) external returns (uint256 fee, uint48 maturity, uint256 healthFactor);
+
+    function seize(address, address[] calldata) external returns (uint256, uint256);
+
+    function harvestYield(address) external returns (uint256 yieldClaimed);
 }

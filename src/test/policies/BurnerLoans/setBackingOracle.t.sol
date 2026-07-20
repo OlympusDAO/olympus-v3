@@ -18,6 +18,7 @@ contract BurnerLoansSetBackingOracleTest is BurnerLoansTest {
     //   then it reverts
     function test_givenNonAdminCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
+        vm.assume(caller_ != address(burnerLoans));
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));

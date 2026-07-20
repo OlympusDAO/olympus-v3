@@ -13,6 +13,17 @@ interface IBurnerLoansView is IBurnerLoans {
 
     function getActiveBorrowers(address) external view returns (address[] memory);
 
+    function isSeizable(address, address) external view returns (bool);
+
+    function previewSeize(address, address[] calldata) external view returns (SeizePreview memory);
+
+    function getSeizableBorrowers(
+        address,
+        uint256,
+        uint256,
+        uint256
+    ) external view returns (address[] memory, uint256, uint256);
+
     function previewDepositCollateral(
         address,
         uint128,
@@ -32,4 +43,8 @@ interface IBurnerLoansView is IBurnerLoans {
     function previewExtend(address, address, uint16) external view returns (ExtendPreview memory);
 
     function positionHealthFactor(address, uint256, uint256) external view returns (uint256);
+
+    function previewHarvestYield(address) external view returns (HarvestPreview memory);
+
+    function getAssetCollateralStatus(address) external view returns (AssetCollateralStatus memory);
 }

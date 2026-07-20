@@ -108,6 +108,15 @@ interface IFLOANv1 {
 
     function debtTokenPrincipalDue(address debtToken_) external view returns (uint256);
 
+    function marketPrincipalDefaulted(uint32 marketId_) external view returns (uint256);
+
+    function facilityPrincipalDefaulted(
+        address facility_,
+        address debtToken_
+    ) external view returns (uint256);
+
+    function debtTokenPrincipalDefaulted(address debtToken_) external view returns (uint256);
+
     /// @notice Returns every market matching a facility and token pair.
     /// @dev A facility may own more than one market for the same collateral and debt tokens.
     function getMarketIds(
@@ -144,6 +153,10 @@ interface IFLOANv1 {
     ) external view returns (uint256[] memory);
 
     function getActiveBorrowers(uint32 marketId_) external view returns (address[] memory);
+
+    function activeBorrowerCount(uint32 marketId_) external view returns (uint256);
+
+    function activeBorrowerAt(uint32 marketId_, uint256 index_) external view returns (address);
 
     function createMarket(
         Market calldata market_,

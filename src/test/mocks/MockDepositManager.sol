@@ -25,6 +25,11 @@ contract MockDepositManager is IDepositManager {
     bool public withdrawReverts;
     bool public depositActualAmountOverrideEnabled;
     uint256 public depositActualAmountOverride;
+    uint256 public claimableYield;
+    uint256 public claimYieldCalls;
+    address public claimYieldCallbackTarget;
+    bytes public claimYieldCallbackData;
+    bool public claimYieldCallbackSucceeded;
 
     mapping(IERC20 asset => AssetConfiguration config) internal _assetConfigurations;
     mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
@@ -123,12 +128,25 @@ contract MockDepositManager is IDepositManager {
         return actualAmount;
     }
 
-    function maxClaimYield(IERC20, address) external pure override returns (uint256) {
-        return 0;
+    function maxClaimYield(IERC20, address) external view override returns (uint256) {
+        return claimableYield;
     }
 
-    function claimYield(IERC20, address, uint256) external pure override returns (uint256) {
-        return 0;
+    function claimYield(
+        IERC20 asset_,
+        address recipient_,
+        uint256 amount_
+    ) external override returns (uint256 actualAmount) {
+        claimYieldCalls++;
+        if (claimYieldCallbackTarget != address(0)) {
+            (claimYieldCallbackSucceeded, ) = claimYieldCallbackTarget.call(claimYieldCallbackData);
+        }
+
+        actualAmount = amount_ > claimableYield ? claimableYield : amount_;
+        claimableYield -= actualAmount;
+        if (!asset_.transfer(recipient_, actualAmount)) {
+            revert MockDepositManager_TransferFailed();
+        }
     }
 
     function getOperatorLiabilities(
@@ -379,6 +397,15 @@ contract MockDepositManager is IDepositManager {
     function setDepositActualAmountOverride(bool enabled_, uint256 amount_) external {
         depositActualAmountOverrideEnabled = enabled_;
         depositActualAmountOverride = amount_;
+    }
+
+    function setClaimableYield(uint256 claimableYield_) external {
+        claimableYield = claimableYield_;
+    }
+
+    function setClaimYieldCallback(address target_, bytes calldata data_) external {
+        claimYieldCallbackTarget = target_;
+        claimYieldCallbackData = data_;
     }
 
     function _requireConfiguredPeriod(

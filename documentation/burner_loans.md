@@ -218,7 +218,7 @@ sequenceDiagram
     BurnerLoans->>DepositManager: maxClaimYield(asset, BurnerLoans)
     DepositManager->>Vault: previewRedeem(operatorShares)
     DepositManager-->>BurnerLoans: claimable yield assets
-    BurnerLoans->>BurnerLoans: record harvest accounting
+    BurnerLoans->>BurnerLoans: validate solvency and emit harvest accounting
     BurnerLoans->>DepositManager: claimYield(asset, TRSRY, amount)
     DepositManager->>Vault: redeem shares for assets
     DepositManager-->>TRSRY: transfer yield assets
@@ -439,7 +439,7 @@ isSeizable(asset, borrower) -> bool
 getSeizableBorrowers(asset, startIndex, maxBorrowersToCheck, maxBorrowersToReturn)
     -> borrowers, nextIndex, expectedKeeperReward
 previewSeize(asset, borrowers) -> keeperReward, collateralToTreasury, executable
-seize(asset, borrowers) -> seizedBorrowers, keeperReward, collateralToTreasury
+seize(asset, borrowers) -> keeperReward, collateralToTreasury
 ```
 
 `previewSeize` should not return a single `healthFactor` because a batch can contain multiple borrowers with different health. For per-position diagnostics, callers can query `isSeizable(asset, borrower)` or `getPosition(owner, asset)`. `previewSeize` should return batch-level execution outputs: keeper reward, collateral routed to `TRSRY`, and whether execution would revert.
@@ -633,28 +633,28 @@ The single-term fee rounds up so fee dust cannot be avoided. The total extension
 
 ## Scenario Analysis
 
-| Scenario                                    | Position                                                                                                                                                                                | Protocol Impact                                                                                                                    | Desired Outcome                                                                                   |
-| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| User deposits collateral                    | Credited collateral increases in the owner's FLOAN market position; debt and maturity do not change.                                                                                   | Health improves if debt is active, but custody exposure to the asset increases. No new OHM is minted.                              | Yes while the global policy and asset are enabled.                                                |
-| User withdraws collateral                   | Credited collateral decreases only if the position remains healthy or has no debt.                                                                                                      | Borrower claim falls; backing-eligible collateral may fall but must remain sufficient for active debt.                             | Yes while globally enabled, including when the asset is disabled for new exposure.                 |
-| User partially repays                       | Repaid OHM is burned. Debt decreases and credited collateral stays posted.                                                                                                              | Active debt and capacity usage fall. Backing requirement falls with remaining OHM debt.                                            | Yes. Repayment should improve health and not depend on current prices.                            |
-| User fully repays                           | All remaining OHM debt is burned. Position exits the active borrower index but collateral remains withdrawable.                                                                         | Active debt falls by the full remaining debt. No seized unrepaid OHM remains.                                                      | Yes. Debt close and collateral withdrawal are separate actions.                                   |
-| OHM/USDS rises to seizure boundary          | `healthFactor` falls below `1e18`; position becomes seizable if PRICE is fresh. Borrower can still repay or deposit collateral before seizure.                                          | Seizure moves collateral to `TRSRY`; unrepaid OHM remains circulating but should be backed by seized collateral.                   | Yes, if backing preservation still holds and maintenance actions remain available before seizure. |
-| OHM/USDS falls                              | `healthFactor` improves. Borrower can repay cheaper OHM and later withdraw collateral subject to health checks.                                                                         | Repaid OHM is burned; fees and harvested surplus remain protocol benefit.                                                          | Yes. This is the intended short payoff.                                                           |
-| OHM/USDS falls and borrower wants more debt | Borrower can borrow more against the same asset position if health, maturity, capacity, and fees permit. The new borrow pays the current borrow fee and does not extend maturity.       | Additional borrowing is exposed to current utilization fees and capacity checks.                                                   | Yes. Repricing happens at each borrow and extension.                                              |
-| OHM/USDS falls below backing                | Market requirement may fall, but backing requirement should dominate.                                                                                                                   | Prevents below-backing OHM from being minted without backing-eligible collateral.                                                  | Yes. Backing floor must remain binding.                                                           |
-| User borrows while OHM is below backing     | Borrow succeeds only if collateral covers the backing requirement.                                                                                                                      | Mints OHM but adds enough backing-eligible collateral to avoid reducing backing per backed OHM.                                    | Yes, if backing-eligible accounting caps counted collateral.                                      |
-| Collateral asset depegs or falls            | Collateral USD value falls; `healthFactor` can fall below `1e18` even if OHM price is unchanged.                                                                                        | Seizure may deliver impaired collateral to `TRSRY`; asset caps and haircuts absorb this risk.                                      | Desired only with conservative asset parameters and fresh PRICE.                                  |
-| Collateral asset rallies                    | `healthFactor` improves. Borrower remains entitled only to credited principal plus price exposure of their collateral claim, not vault surplus.                                         | Seizure becomes less likely. Protocol should not count all excess active collateral as backing.                                    | Yes. Excess borrower collateral is not free protocol backing.                                     |
-| Vault earns yield                           | Borrower `healthFactor` does not improve from vault yield. Surplus can be claimed to `TRSRY` through the custody layer.                                                                 | Protocol captures surplus without weakening borrower collateral accounting.                                                        | Yes.                                                                                              |
-| Vault suffers loss                          | Non-monotonic vault losses are out of v1 scope. The affected collateral asset should be disabled until custody accounting supports losses.                                              | Hidden insolvency risk if loss-making vaults are enabled under monotonic assumptions.                                              | Not desired for v1.                                                                               |
-| Vault has async underlying withdrawals      | Burner Loans should require synchronous custody actions. If the underlying asset cannot be withdrawn synchronously, DepositManager may synchronously return the vault token instead.    | Keeps position state transitions synchronous while leaving async withdrawal handling to the custody/YRF layer.                     | Yes, if the returned holding token is explicitly supported.                                       |
-| Active debt position reaches maturity       | If not repaid or extended, it becomes seizable. Repayment, collateral deposits, and extension remain available until seizure if the position is otherwise healthy; new borrow does not. | Prevents indefinite 0% capacity usage while still allowing a borrower to rescue a healthy matured position before automation acts. | Yes.                                                                                              |
-| Debt-free position passes old maturity      | No seizure is allowed because `debtOhm == 0`. Collateral remains withdrawable.                                                                                                          | No protocol debt remains, so there is no default to resolve.                                                                       | Yes.                                                                                              |
-| PRICE is stale or unavailable               | Opens, extensions, withdrawals with debt, and seizures should revert. Repayment remains available because it does not require a price.                                                  | Protocol risk-taking pauses without trapping borrowers.                                                                             | Yes.                                                                                              |
-| Global policy is disabled                   | New exposure, collateral movement, extension, seizure, and harvest actions are blocked until re-enabled. Repayment remains available because it only reduces protocol exposure.          | Emergency pause contains external interactions without preventing debt reduction.                                                   | Yes. This is the contract-level emergency brake.                                                  |
+| Scenario                                    | Position                                                                                                                                                                                   | Protocol Impact                                                                                                                    | Desired Outcome                                                                                   |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| User deposits collateral                    | Credited collateral increases in the owner's FLOAN market position; debt and maturity do not change.                                                                                       | Health improves if debt is active, but custody exposure to the asset increases. No new OHM is minted.                              | Yes while the global policy and asset are enabled.                                                |
+| User withdraws collateral                   | Credited collateral decreases only if the position remains healthy or has no debt.                                                                                                         | Borrower claim falls; backing-eligible collateral may fall but must remain sufficient for active debt.                             | Yes while globally enabled, including when the asset is disabled for new exposure.                |
+| User partially repays                       | Repaid OHM is burned. Debt decreases and credited collateral stays posted.                                                                                                                 | Active debt and capacity usage fall. Backing requirement falls with remaining OHM debt.                                            | Yes. Repayment should improve health and not depend on current prices.                            |
+| User fully repays                           | All remaining OHM debt is burned. Position exits the active borrower index but collateral remains withdrawable.                                                                            | Active debt falls by the full remaining debt. No seized unrepaid OHM remains.                                                      | Yes. Debt close and collateral withdrawal are separate actions.                                   |
+| OHM/USDS rises to seizure boundary          | `healthFactor` falls below `1e18`; position becomes seizable if PRICE is fresh. Borrower can still repay or deposit collateral before seizure.                                             | Seizure moves collateral to `TRSRY`; unrepaid OHM remains circulating but should be backed by seized collateral.                   | Yes, if backing preservation still holds and maintenance actions remain available before seizure. |
+| OHM/USDS falls                              | `healthFactor` improves. Borrower can repay cheaper OHM and later withdraw collateral subject to health checks.                                                                            | Repaid OHM is burned; fees and harvested surplus remain protocol benefit.                                                          | Yes. This is the intended short payoff.                                                           |
+| OHM/USDS falls and borrower wants more debt | Borrower can borrow more against the same asset position if health, maturity, capacity, and fees permit. The new borrow pays the current borrow fee and does not extend maturity.          | Additional borrowing is exposed to current utilization fees and capacity checks.                                                   | Yes. Repricing happens at each borrow and extension.                                              |
+| OHM/USDS falls below backing                | Market requirement may fall, but backing requirement should dominate.                                                                                                                      | Prevents below-backing OHM from being minted without backing-eligible collateral.                                                  | Yes. Backing floor must remain binding.                                                           |
+| User borrows while OHM is below backing     | Borrow succeeds only if collateral covers the backing requirement.                                                                                                                         | Mints OHM but adds enough backing-eligible collateral to avoid reducing backing per backed OHM.                                    | Yes, if backing-eligible accounting caps counted collateral.                                      |
+| Collateral asset depegs or falls            | Collateral USD value falls; `healthFactor` can fall below `1e18` even if OHM price is unchanged.                                                                                           | Seizure may deliver impaired collateral to `TRSRY`; asset caps and haircuts absorb this risk.                                      | Desired only with conservative asset parameters and fresh PRICE.                                  |
+| Collateral asset rallies                    | `healthFactor` improves. Borrower remains entitled only to credited principal plus price exposure of their collateral claim, not vault surplus.                                            | Seizure becomes less likely. Protocol should not count all excess active collateral as backing.                                    | Yes. Excess borrower collateral is not free protocol backing.                                     |
+| Vault earns yield                           | Borrower `healthFactor` does not improve from vault yield. Surplus can be claimed to `TRSRY` through the custody layer.                                                                    | Protocol captures surplus without weakening borrower collateral accounting.                                                        | Yes.                                                                                              |
+| Vault suffers loss                          | Non-monotonic vault losses are out of v1 scope. The affected collateral asset should be disabled until custody accounting supports losses.                                                 | Hidden insolvency risk if loss-making vaults are enabled under monotonic assumptions.                                              | Not desired for v1.                                                                               |
+| Vault has async underlying withdrawals      | Burner Loans should require synchronous custody actions. If the underlying asset cannot be withdrawn synchronously, DepositManager may synchronously return the vault token instead.       | Keeps position state transitions synchronous while leaving async withdrawal handling to the custody/YRF layer.                     | Yes, if the returned holding token is explicitly supported.                                       |
+| Active debt position reaches maturity       | If not repaid or extended, it becomes seizable. Repayment, collateral deposits, and extension remain available until seizure if the position is otherwise healthy; new borrow does not.    | Prevents indefinite 0% capacity usage while still allowing a borrower to rescue a healthy matured position before automation acts. | Yes.                                                                                              |
+| Debt-free position passes old maturity      | No seizure is allowed because `debtOhm == 0`. Collateral remains withdrawable.                                                                                                             | No protocol debt remains, so there is no default to resolve.                                                                       | Yes.                                                                                              |
+| PRICE is stale or unavailable               | Opens, extensions, withdrawals with debt, and seizures should revert. Repayment remains available because it does not require a price.                                                     | Protocol risk-taking pauses without trapping borrowers.                                                                            | Yes.                                                                                              |
+| Global policy is disabled                   | New exposure, collateral movement, extension, seizure, and harvest actions are blocked until re-enabled. Repayment remains available because it only reduces protocol exposure.            | Emergency pause contains external interactions without preventing debt reduction.                                                  | Yes. This is the contract-level emergency brake.                                                  |
 | Collateral asset is disabled                | New exposure to that asset is blocked: deposits, new borrows, and extensions revert. Repayment, withdrawals, seizure, and safe accounting cleanup remain available while globally enabled. | Existing exposure can be reduced or resolved without increasing protocol exposure to the disabled asset.                           | Yes. This is an asset-level freeze, not a contract pause.                                         |
-| Large borrower consumes debt cap            | New borrows and extensions are constrained by global and asset caps.                                                                                                                    | Limits market, governance, and Cooler side effects.                                                                                | Yes.                                                                                              |
+| Large borrower consumes debt cap            | New borrows and extensions are constrained by global and asset caps.                                                                                                                       | Limits market, governance, and Cooler side effects.                                                                                | Yes.                                                                                              |
 
 ## Interaction Ordering
 
@@ -662,7 +662,7 @@ All user-facing state-changing functions should follow checks-effects-interactio
 
 - Validate authorization, enabled state, asset support, maturity, capacity, price freshness, and `healthFactor` first where relevant. Risk-increasing actions need current PRICE checks; `repay` should not be blocked solely by missing price freshness. `depositCollateral` also does not need PRICE, but it does require global and asset enabled state because it increases collateral-asset custody exposure.
 - Apply collateral, position debt, per-market principal, debt-token principal, and active-borrower
-  updates through FLOAN before external token, DepositManager, or MINTR calls.
+    updates through FLOAN before external token, DepositManager, or MINTR calls.
 - Perform token, MINTR, DepositManager, and vault interactions last.
 
 This applies to `depositCollateral`, `withdrawCollateral`, `borrow`, `repay`, `extend`, `seize`, and `harvestYield`. If an external call fails, the transaction reverts and the state update is rolled back.
@@ -726,7 +726,9 @@ getSeizableBorrowers(asset, startIndex, maxBorrowersToCheck, maxBorrowersToRetur
     -> borrowers, nextIndex, expectedKeeperReward
 getActiveBorrowers(asset) -> borrowers
 isSenderAuthorized(sender, owner) -> bool
-previewHarvestYield(asset) -> claimableYield
+previewHarvestYield(asset) -> claimableYield, executable
+getAssetCollateralStatus(asset)
+    -> shares, assets, borrowed, liabilities, claimableYield, solvent
 ```
 
 Parameter ordering should follow these conventions:
@@ -737,7 +739,7 @@ Parameter ordering should follow these conventions:
 - Slippage or spend caps last. `maxFee` is a caller protection value denominated in the collateral asset.
 - Return primary action data first, pagination state next, and ancillary economics last. For example, `getSeizableBorrowers` returns `(borrowers, nextIndex, expectedKeeperReward)`.
 
-Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is locally executable when the preview return type includes an executable flag. `previewDepositCollateral` composes the vault's current `previewDeposit` and `previewRedeem` values to quote custody credit and the resulting total; the actual credit returned by `depositCollateral` is authoritative because vault state can change between the preview call and transaction and a generic ERC4626 vault does not expose its post-deposit accounting in a view call. It should reject a disabled Burner Loans policy, disabled collateral asset, disabled DepositManager, or unsupported custody configuration. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, resulting debt, maturity, and resulting health using current PRICE and asset configuration. Its `executable` flag covers deterministic local protocol eligibility only. Because the preview signature has no caller, recipient, or `maxFee`, it cannot promise owner/operator authorization, recipient validity, fee-token approval or balance, or max-fee acceptance. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject a disabled Burner Loans policy, disabled DepositManager, stale PRICE when debt remains, or unsupported custody configuration. Its `executable` flag is false for a zero local custody quote or unhealthy debt-bearing position, and true only means those local checks pass; it does not promise that a vault redeem or DepositManager solvency check will succeed at execution. Asset disable remains a new-exposure freeze, so it does not block withdrawal previews or writes. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. Previews should surface the same deterministic eligibility failures that the write path would hit.
+Previews should return quoted amounts, fees, token-transfer totals, resulting `healthFactor` where applicable, capacity usage, and whether the action is locally executable when the preview return type includes an executable flag. `previewDepositCollateral` composes the vault's current `previewDeposit` and `previewRedeem` values to quote custody credit and the resulting total; the actual credit returned by `depositCollateral` is authoritative because vault state can change between the preview call and transaction and a generic ERC4626 vault does not expose its post-deposit accounting in a view call. It should reject a disabled Burner Loans policy, disabled collateral asset, disabled DepositManager, or unsupported custody configuration. `previewBorrow(collateralAsset, ohmAmount, onBehalfOf)` should return the borrow fee, resulting debt, maturity, and resulting health using current PRICE and asset configuration. Its `executable` flag covers deterministic local protocol eligibility only. Because the preview signature has no caller, recipient, or `maxFee`, it cannot promise owner/operator authorization, recipient validity, fee-token approval or balance, or max-fee acceptance. `previewWithdrawCollateral` should return the token and amount expected from custody, which may be the underlying collateral asset or the vault/holding token. It should also show the resulting health and reject a disabled Burner Loans policy, disabled DepositManager, stale PRICE when debt remains, or unsupported custody configuration. Its `executable` flag is false for a zero local custody quote or unhealthy debt-bearing position, and true only means those local checks pass; it does not promise that a vault redeem or DepositManager solvency check will succeed at execution. Asset disable remains a new-exposure freeze, so it does not block withdrawal previews or writes. `previewExtend(collateralAsset, onBehalfOf, termCount)` should return the extension fee, new maturity, and non-executable status when the position is health-seizable or already seized; maturity alone should not make extension non-executable. `previewSeize(asset, borrowers)` should return batch-level reward and treasury amounts, not a single `healthFactor`. `previewHarvestYield(asset)` returns DepositManager's theoretical maximum claim and marks a custody shortfall non-executable. ERC4626 share rounding can make the amount actually returned by `harvestYield` slightly smaller, so the write result and `YieldHarvested` event are authoritative. Previews should surface the same deterministic eligibility failures that the write path would hit.
 
 `borrow` and `withdrawCollateral` return a resulting `healthFactor` because both require current PRICE data to execute. `depositCollateral` and `repay` deliberately do not return one: they must remain usable when PRICE is stale because they reduce risk. Returning a quoted health factor would either add an unwanted PRICE dependency or require an ambiguous sentinel. Callers that need a health quote must request it separately once current PRICE is available.
 
@@ -808,6 +810,12 @@ Round harvestable surplus down because the value is transferred to `TRSRY`. No h
 Surplus should always be collectible to `TRSRY` when it exists. There should not be a per-asset `yieldEnabled` switch; if an asset has no yield-bearing custody path, its surplus will normally be zero.
 
 With the current `DepositManager`, Burner Loans should call `maxClaimYield(asset, address(this))` to preview claimable yield and `claimYield(asset, TRSRY, amount)` to claim it. `DepositManager` calculates operator surplus from assets, liabilities, and borrowed amount, then validates solvency after withdrawal. Burner Loans should not duplicate that current-asset calculation in `harvestYield`.
+
+`getAssetCollateralStatus(asset)` exposes the same DepositManager operator namespace as a single
+diagnostic tuple: shares, redeemable assets, borrowed assets, receipt liabilities, theoretical
+claimable yield, and the derived solvency predicate. New borrows and extensions check that
+predicate before adding or prolonging exposure. Harvest checks it before asking DepositManager to
+withdraw surplus. Repayment and collateral exits remain available because they reduce exposure.
 
 The current `DepositManager` claim path transfers underlying assets to `TRSRY`. A future share-aware DepositManager may instead transfer surplus vault tokens to `TRSRY`; if so, Burner Loans should continue to delegate surplus calculation and claim execution to the custody layer rather than implementing vault-specific harvest logic.
 
@@ -1039,7 +1047,7 @@ Parameter changes should be split by blast radius.
 Admin-only direct functions are split across the lifecycle and configuration policies:
 
 - `BurnerLoansConfig.addAsset(facility, asset, debtCap, riskConfigInput, feeConfig)`, which creates
-  and enables a FLOAN market for the nominated facility.
+    and enables a FLOAN market for the nominated facility.
 - `BurnerLoans.setGlobalDebtCap(cap)`.
 - `BurnerLoans.setBackingOracle(oracle)`.
 - `setConfigurator(configurator)`.
@@ -1050,24 +1058,24 @@ Whitelisting assets, changing the global cap, rotating the configurator, changin
 
 Debt caps are denominated in the debt token, OHM, using OHM's native decimals.
 
-| Contract                    | Configuration group       | Parameters or actions                                                                                                                         | `admin`             | `burner_loans_admin` | `emergency`    |
-| --------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- | -------------------- | -------------- |
-| `BurnerLoansConfig`         | Asset whitelist           | `addAsset(facility, asset, debtCap, riskConfigInput, feeConfig)`                                                                              | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoans`               | Global debt cap           | `setGlobalDebtCap(cap)`                                                                                                                       | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoans`               | Backing oracle            | `setBackingOracle(oracle)`                                                                                                                    | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoansConfig`         | Asset debt cap            | `setAssetDebtCap(facility, asset, cap)`                                                                                                       | Yes, direct         | Config timelock only | No             |
-| `BurnerLoansConfig`         | Asset risk config         | collateral factor, min collateral ratio, backing multiplier, term length, max maturity horizon, keeper reward bps, and max keeper reward      | Yes, direct         | Config timelock only | No             |
-| `BurnerLoansConfig`         | Asset fee config          | base fee, kink, pre-kink slope, and post-kink slope                                                                                           | Yes, direct         | Config timelock only | No             |
-| `BurnerLoansConfig`         | Config timelock pointer   | `setConfigurator(configurator)`                                                                                                               | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoans`               | Global re-enable grace    | `setGracePeriod(gracePeriod)`                                                                                                                 | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoansConfig`         | Asset enable              | `enableAsset(facility, asset)`                                                                                                                | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoansConfig`         | Asset disable             | `disableAsset(facility, asset)`                                                                                                               | Yes, immediate      | Yes, immediate       | No             |
-| `BurnerLoans`               | Global enable             | `enable()`                                                                                                                                    | Yes, OCG timelock   | No                   | No             |
-| `BurnerLoans`               | Global disable            | `disable()`                                                                                                                                   | Yes, immediate      | No                   | Yes, immediate |
-| `BurnerLoans`               | Global re-enable          | `reEnable()` inside grace period                                                                                                              | Yes, grace-period   | Yes, grace-period    | No             |
-| `BurnerLoansConfigTimelock` | Config timelock queue     | `queueSetAssetDebtCap`, `queueSetAssetRiskConfig`, `queueSetAssetFeeConfig`, and `queueBatch`                                                 | Yes                 | Yes                  | No             |
-| `BurnerLoansConfigTimelock` | Config timelock execute   | `executeQueuedAction(actionId)` after the timelock delay and before expiry                                                                    | No role required    | No role required     | No role required |
-| `BurnerLoansConfigTimelock` | Config timelock cancel    | `cancelQueuedAction(actionId)`                                                                                                                | No                  | No                   | Yes            |
+| Contract                    | Configuration group     | Parameters or actions                                                                                                                    | `admin`           | `burner_loans_admin` | `emergency`      |
+| --------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | -------------------- | ---------------- |
+| `BurnerLoansConfig`         | Asset whitelist         | `addAsset(facility, asset, debtCap, riskConfigInput, feeConfig)`                                                                         | Yes, OCG timelock | No                   | No               |
+| `BurnerLoans`               | Global debt cap         | `setGlobalDebtCap(cap)`                                                                                                                  | Yes, OCG timelock | No                   | No               |
+| `BurnerLoans`               | Backing oracle          | `setBackingOracle(oracle)`                                                                                                               | Yes, OCG timelock | No                   | No               |
+| `BurnerLoansConfig`         | Asset debt cap          | `setAssetDebtCap(facility, asset, cap)`                                                                                                  | Yes, direct       | Config timelock only | No               |
+| `BurnerLoansConfig`         | Asset risk config       | collateral factor, min collateral ratio, backing multiplier, term length, max maturity horizon, keeper reward bps, and max keeper reward | Yes, direct       | Config timelock only | No               |
+| `BurnerLoansConfig`         | Asset fee config        | base fee, kink, pre-kink slope, and post-kink slope                                                                                      | Yes, direct       | Config timelock only | No               |
+| `BurnerLoansConfig`         | Config timelock pointer | `setConfigurator(configurator)`                                                                                                          | Yes, OCG timelock | No                   | No               |
+| `BurnerLoans`               | Global re-enable grace  | `setGracePeriod(gracePeriod)`                                                                                                            | Yes, OCG timelock | No                   | No               |
+| `BurnerLoansConfig`         | Asset enable            | `enableAsset(facility, asset)`                                                                                                           | Yes, OCG timelock | No                   | No               |
+| `BurnerLoansConfig`         | Asset disable           | `disableAsset(facility, asset)`                                                                                                          | Yes, immediate    | Yes, immediate       | No               |
+| `BurnerLoans`               | Global enable           | `enable()`                                                                                                                               | Yes, OCG timelock | No                   | No               |
+| `BurnerLoans`               | Global disable          | `disable()`                                                                                                                              | Yes, immediate    | No                   | Yes, immediate   |
+| `BurnerLoans`               | Global re-enable        | `reEnable()` inside grace period                                                                                                         | Yes, grace-period | Yes, grace-period    | No               |
+| `BurnerLoansConfigTimelock` | Config timelock queue   | `queueSetAssetDebtCap`, `queueSetAssetRiskConfig`, `queueSetAssetFeeConfig`, and `queueBatch`                                            | Yes               | Yes                  | No               |
+| `BurnerLoansConfigTimelock` | Config timelock execute | `executeQueuedAction(actionId)` after the timelock delay and before expiry                                                               | No role required  | No role required     | No role required |
+| `BurnerLoansConfigTimelock` | Config timelock cancel  | `cancelQueuedAction(actionId)`                                                                                                           | No                | No                   | Yes              |
 
 Timelocked risk-parameter queue functions callable by `admin` or `burner_loans_admin` live on a
 dedicated config timelock contract. The config timelock queues calls to normal restricted setters
@@ -1138,16 +1146,19 @@ The spike instead externalizes storage, configuration, and bytecode-heavy helper
 Decided v1 split:
 
 - Keep `BurnerLoans` as the user-facing lifecycle and preview policy, DepositManager operator, and
-  OHM mint/burn coordinator.
+    OHM mint/burn coordinator.
 - Store typed fixed-term market configuration, positions, indexes, and market/facility/debt-token
-  debt totals in FLOAN.
+    debt totals in FLOAN.
 - Store Burner Loans-specific extension data and market registration through `BurnerLoansConfig`.
 - Keep timed risk-parameter queueing in `BurnerLoansConfigTimelock`.
-- Link `BurnerLoansQuote`, `BurnerLoansView`, `BurnerLoansCalculator`,
-  `BurnerLoansCustody`, and `BurnerLoansDependencies` rather than deploying a second Lens policy.
-  `BurnerLoansDependencies` contains activation-only keycode construction, permission construction,
-  interface checks, and module-version checks so that this rarely executed wiring does not consume
-  lifecycle-policy runtime bytecode.
+- Link `BurnerLoansQuote`, `BurnerLoansView`, `BurnerLoansSeizure`,
+    `BurnerLoansCalculator`, `BurnerLoansCustody`, and `BurnerLoansDependencies` rather than
+    deploying a second Lens policy.
+    `BurnerLoansDependencies` contains activation-only keycode construction, permission construction,
+    interface checks, and module-version checks so that this rarely executed wiring does not consume
+    lifecycle-policy runtime bytecode. Its shared `Context` also replaces separate quote, view, and
+    seizure dependency getters, avoiding duplicate policy-side ABI encoding while keeping one
+    canonical dependency snapshot for every linked library.
 - Keep `BurnerLoansComposites` as periphery for batched UX flows.
 - Keep periodic seizure scanning in `BurnerLoansSeizer`.
 
@@ -1177,12 +1188,12 @@ libraries each have their own 24,576-byte limit.
 
 The facility-market rewrite currently measures as follows under the repository compiler profiles:
 
-| Contract | Runtime bytes | EIP-170 margin |
-| --- | ---: | ---: |
-| `BurnerLoans` | 22,969 | 1,607 |
-| `BurnerLoansConfig` | 19,817 | 4,759 |
-| `BurnerLoansConfigTimelock` | 18,092 | 6,484 |
-| `OlympusFixedTermLoan` | 19,797 | 4,779 |
+| Contract                    | Runtime bytes | EIP-170 margin |
+| --------------------------- | ------------: | -------------: |
+| `BurnerLoans`               |        23,478 |          1,098 |
+| `BurnerLoansConfig`         |        19,817 |          4,759 |
+| `BurnerLoansConfigTimelock` |        18,092 |          6,484 |
+| `OlympusFixedTermLoan`      |        21,909 |          2,667 |
 
 `BurnerLoansConfigTimelock` uses the 10-run IR profile and delegates pure partial-update
 transformations to `BurnerLoansConfigTimelockLib`. This creates a link-time dependency but avoids
@@ -1232,7 +1243,7 @@ Asset-level bounds should be at least as strict as global bounds. Disabling an a
 
 ```text
 mintedOhmByBurnerLoans - burnedOhmByBurnerLoans
-    == totalActiveDebtOhm + seizedUnrepaidDebtOhm
+    == totalActiveDebtOhm + FLOAN.facilityPrincipalDefaulted(BurnerLoans, OHM)
 ```
 
 Every OHM minted by the facility is owed, burned, or permanently circulating after seizure.
@@ -1358,7 +1369,8 @@ if position is seized:
     debtOhmAfter == 0
     depositedCollateralAfter == 0
     floan.getActiveBorrowers(marketId(asset)) excludes owner when no other position is active
-    seizedUnrepaidDebtOhm increases by debtOhmBefore
+    FLOAN.marketPrincipalDefaulted(marketId) increases by debtOhmBefore
+    FLOAN.facilityPrincipalDefaulted(BurnerLoans, OHM) increases by debtOhmBefore
 ```
 
 Seizure is not partial liquidation. It resolves the entire debt position, transfers collateral to `TRSRY` and any keeper reward recipient, and leaves no borrower claim against the seized position.

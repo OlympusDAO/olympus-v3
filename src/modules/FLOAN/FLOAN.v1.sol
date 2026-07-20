@@ -38,6 +38,10 @@ abstract contract FLOANv1 is Module, IFLOANv1 {
     mapping(address facility => mapping(address debtToken => uint256 principalDue))
         internal _facilityPrincipalDue;
     mapping(address debtToken => uint256 principalDue) internal _debtTokenPrincipalDue;
+    mapping(uint32 marketId => uint256 principalDefaulted) internal _marketPrincipalDefaulted;
+    mapping(address facility => mapping(address debtToken => uint256 principalDefaulted))
+        internal _facilityPrincipalDefaulted;
+    mapping(address debtToken => uint256 principalDefaulted) internal _debtTokenPrincipalDefaulted;
 
     constructor(Kernel kernel_) Module(kernel_) {}
 }

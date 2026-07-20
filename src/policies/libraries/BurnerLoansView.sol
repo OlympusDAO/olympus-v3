@@ -2,10 +2,9 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
@@ -19,17 +18,6 @@ import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketC
 library BurnerLoansView {
     uint256 internal constant _WAD = 1e18;
 
-    struct Dependencies {
-        IERC20 ohm;
-        uint8 ohmDecimals;
-        IDepositManager depositManager;
-        address facility;
-        uint128 globalDebtCapOhm;
-        address backingOracle;
-        IFLOANv1 floan;
-        IPRICEv2 price;
-    }
-
     function getPosition(
         IFLOANv1.Position memory position
     ) public pure returns (IBurnerLoans.Position memory) {
@@ -39,10 +27,29 @@ library BurnerLoansView {
                 debtOhm: position.principalDue,
                 maturity: position.maturity,
                 lastBorrowBlock: position.lastBorrowBlock,
-                status: position.principalDue == 0
+                status: position.defaulted
+                    ? IBurnerLoans.PositionStatus.Seized
+                    : position.principalDue == 0
                     ? IBurnerLoans.PositionStatus.NoDebt
                     : IBurnerLoans.PositionStatus.Active
             });
+    }
+
+    function isSeizable(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        IFLOANv1.Position memory position
+    ) public view returns (bool) {
+        _requireAssetConfigured(dependencies_, asset_);
+        if (position.principalDue == 0 || position.defaulted) return false;
+        if (block.timestamp >= position.maturity) return true;
+        return
+            BurnerLoansQuote.positionHealthFactor(
+                dependencies_,
+                asset_,
+                position.collateral,
+                position.principalDue
+            ) < _WAD;
     }
 
     function assetActiveDebtOhm(
@@ -60,7 +67,7 @@ library BurnerLoansView {
     }
 
     function previewDepositCollateral(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 amount_,
         IFLOANv1.Position memory position
@@ -115,7 +122,7 @@ library BurnerLoansView {
     }
 
     function previewWithdrawCollateral(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 amount_,
         IFLOANv1.Position memory position
@@ -136,7 +143,7 @@ library BurnerLoansView {
 
         uint256 remainingCollateral = position.collateral - amount_;
         uint256 resultingHealthFactor = BurnerLoansQuote.positionHealthFactor(
-            _quoteDependencies(dependencies_),
+            dependencies_,
             asset_,
             remainingCollateral,
             position.principalDue
@@ -156,23 +163,8 @@ library BurnerLoansView {
             });
     }
 
-    function _quoteDependencies(
-        Dependencies memory dependencies_
-    ) private pure returns (BurnerLoansQuote.Dependencies memory) {
-        return
-            BurnerLoansQuote.Dependencies({
-                ohm: dependencies_.ohm,
-                ohmDecimals: dependencies_.ohmDecimals,
-                facility: dependencies_.facility,
-                globalDebtCapOhm: dependencies_.globalDebtCapOhm,
-                backingOracle: dependencies_.backingOracle,
-                floan: dependencies_.floan,
-                price: dependencies_.price
-            });
-    }
-
     function _requireAssetConfigured(
-        Dependencies memory dependencies_,
+        BurnerLoansContext memory dependencies_,
         address asset_
     ) private view returns (IBurnerLoans.AssetConfig memory config) {
         uint32 marketId_ = BurnerLoansMarketConfig.marketId(

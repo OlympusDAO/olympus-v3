@@ -19,6 +19,7 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
     function test_givenNonAdminOrBurnerLoansAdminCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != burnerLoansAdmin);
+        vm.assume(caller_ != address(burnerLoans));
 
         vm.prank(emergency);
         burnerLoans.disable("");

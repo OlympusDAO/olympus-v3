@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -84,6 +85,34 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
         vm.prank(admin);
         burnerLoans.setAssetRiskConfig(address(usds), config);
+    }
+
+    // given a configured collateral vault has lost one unit below borrower liabilities
+    //  when previewing or executing a new borrow
+    //   then the asset-level custody shortfall blocks new exposure
+    function test_givenCustodyShortfall_reverts() public {
+        (MockERC20 asset, MockERC4626 vault) = _addVaultAssetForTest();
+        uint128 collateral = 2_000e18;
+        asset.mint(alice, collateral);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), collateral);
+        burnerLoans.depositCollateral(address(asset), collateral, alice);
+        vm.stopPrank();
+        asset.burn(address(vault), 1);
+
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_CustodyShortfall.selector,
+            address(asset),
+            collateral,
+            collateral - 1,
+            0
+        );
+        vm.expectRevert(expectedError);
+        burnerLoans.previewBorrow(address(asset), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.borrow(address(asset), 1e9, alice, alice, type(uint256).max);
     }
 
     function _borrowWithPreview(

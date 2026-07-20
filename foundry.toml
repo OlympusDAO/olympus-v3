@@ -29,7 +29,6 @@ additional_compiler_profiles = [
 ]
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
-    { paths = "src/policies/BurnerLoans.sol", profile = "ten-runs" },
     { paths = "src/policies/BurnerLoansConfigTimelock.sol", optimizer_runs = 10, via_ir = true },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
