@@ -937,6 +937,57 @@ contract YieldRepurchaseFacilityV2 is
         emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
     }
 
+    // ============ CONTRIBUTIONS ============ //
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The contribution is measured through balance deltas. A reserve contribution
+    ///      is wrapped into vault shares through the vault's `deposit`. The tracked
+    ///      holdings grow by the added shares, and the weekly budget grows by their
+    ///      redeemable value (floor), so the budget does not exceed the value of the held
+    ///      pool and the weekly reset's pool-value sync cannot inject the contribution a
+    ///      second time.
+    ///
+    ///      Reverts if:
+    ///      - The contract is disabled.
+    ///      - The vault is not registered.
+    ///      - The vault's asset is disabled.
+    ///      - `amount_` is zero, or the contribution adds zero shares.
+    ///      - The token transfer or the vault deposit reverts.
+    function contribute(
+        address vault_,
+        uint256 amount_,
+        bool inShares_
+    ) external override nonReentrant {
+        _requireEnabled();
+        ReserveAsset storage config = _requireRegistered(vault_);
+        _requireAssetEnabled(config);
+        _requireNonzeroAmount(amount_);
+
+        uint256 sharesAdded;
+        if (inShares_) {
+            uint256 sharesBefore = _selfBalance(vault_);
+            IERC20(vault_).safeTransferFrom(msg.sender, address(this), amount_);
+            sharesAdded = _selfBalance(vault_) - sharesBefore;
+        } else {
+            address reserve_ = config.reserve;
+            uint256 reserveBefore = _selfBalance(reserve_);
+            IERC20(reserve_).safeTransferFrom(msg.sender, address(this), amount_);
+            uint256 received = _selfBalance(reserve_) - reserveBefore;
+
+            uint256 sharesBefore = _selfBalance(vault_);
+            IERC20(reserve_).forceApprove(vault_, received);
+            IERC4626(vault_).deposit(received, address(this));
+            sharesAdded = _selfBalance(vault_) - sharesBefore;
+        }
+        _requireNonzeroAmount(sharesAdded);
+
+        uint256 budgetAdded = _previewRedeem(vault_, sharesAdded);
+        config.prefundedShares += sharesAdded;
+        config.weeklyBudgetRemaining += budgetAdded;
+
+        emit Contributed(vault_, msg.sender, sharesAdded, budgetAdded);
+    }
+
     // ============ BOND CALLBACK ============ //
 
     /// @inheritdoc IBondCallback
@@ -1522,6 +1573,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Reverts with `Errors.BadInput` when `value_` is the zero address.
     function _requireNonzeroAddress(address value_, string memory parameter_) private pure {
         if (value_ == address(0)) revert Errors.BadInput(parameter_);
+    }
+
+    /// @notice Reverts with `Errors.BadInput` when the amount is zero.
+    function _requireNonzeroAmount(uint256 amount_) private pure {
+        if (amount_ == 0) revert Errors.BadInput("amount");
     }
 
     /// @notice Returns the vault's share amount for an exact `assets_` withdrawal

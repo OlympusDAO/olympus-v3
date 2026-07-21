@@ -150,6 +150,19 @@ interface IYieldRepurchaseFacilityV2 {
     ///         the accumulated OHM is retried on the following beats.
     event OhmPurchasesProcessingSkipped();
 
+    /// @notice Emitted when a contribution adds funds to a vault's weekly budget.
+    /// @param vault The vault contributed to.
+    /// @param contributor The caller that supplied the funds.
+    /// @param sharesAdded The vault shares added to the tracked holdings.
+    /// @param budgetAdded The redeemable value of the added shares credited to the weekly
+    ///        budget, in reserve units.
+    event Contributed(
+        address indexed vault,
+        address indexed contributor,
+        uint256 sharesAdded,
+        uint256 budgetAdded
+    );
+
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the `enable` payload is shorter than the minimum
@@ -492,6 +505,20 @@ interface IYieldRepurchaseFacilityV2 {
     ///      skipped with `FundsReturnSkipped`, keeping its balances and accounting, and
     ///      is retried by the next call. Emits `FundsReturnedToTreasury`.
     function returnFundsToTreasury() external;
+
+    /// @notice Contributes funds to a vault's weekly buyback budget: the supplied amount
+    ///         is added to the tracked holdings, and its redeemable value is credited to
+    ///         the budget and spent over the remaining daily cycles of the running week.
+    /// @dev Callable by anyone; a contribution is an irreversible donation drawn from the
+    ///      caller. A reserve contribution is wrapped into vault shares through the
+    ///      vault's `deposit`, so the caller must approve the facility for the reserve;
+    ///      a share contribution requires an approval for the vault shares. The vault's
+    ///      own deposit restrictions apply to the wrap. Emits `Contributed`.
+    /// @param vault_ The registered vault to contribute to; its asset must be enabled.
+    /// @param amount_ The contribution amount: vault shares when `inShares_` is set, and
+    ///        reserve units otherwise.
+    /// @param inShares_ Whether `amount_` is denominated in vault shares.
+    function contribute(address vault_, uint256 amount_, bool inShares_) external;
 
     // ============ VIEW FUNCTIONS ============ //
 
