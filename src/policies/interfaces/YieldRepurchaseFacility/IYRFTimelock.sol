@@ -62,6 +62,10 @@ interface IYRFTimelock is ITimelockBatchQueue {
     /// @param pendingActionId The queued action holding the parameter's pending slot.
     error IYRFTimelock_ConflictingActionPending(bytes4 selector, uint64 pendingActionId);
 
+    /// @notice Thrown when the re-enable grace window is configured with a length at or
+    ///         above `MAX_GRACE_PERIOD`.
+    error IYRFTimelock_GracePeriodTooLong();
+
     // ========== EVENTS ========== //
 
     /// @notice Emitted when the facility slot is set by the admin.

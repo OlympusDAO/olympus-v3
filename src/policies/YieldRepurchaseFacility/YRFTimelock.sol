@@ -800,7 +800,7 @@ contract YRFTimelock is
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.
     function _requireValidGracePeriod(uint32 period_) private pure {
-        if (period_ >= MAX_GRACE_PERIOD) revert GracePeriod_TooLong();
+        if (period_ >= MAX_GRACE_PERIOD) revert IYRFTimelock_GracePeriodTooLong();
     }
 
     /// @notice Reverts for an unsupported action.

@@ -1711,7 +1711,7 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.
     function _requireValidGracePeriod(uint32 period_) private pure {
-        if (period_ >= MAX_GRACE_PERIOD) revert GracePeriod_TooLong();
+        if (period_ >= MAX_GRACE_PERIOD) revert IYieldRepurchaseFacilityV2_GracePeriodTooLong();
     }
 
     /// @notice Transfers the facility's balances of the vault shares and the reserve to

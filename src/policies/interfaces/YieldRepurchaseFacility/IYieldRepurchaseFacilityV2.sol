@@ -188,6 +188,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the yield buyback share exceeds 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
 
+    /// @notice Thrown when the re-enable grace window is configured with a length at or
+    ///         above `MAX_GRACE_PERIOD`.
+    error IYieldRepurchaseFacilityV2_GracePeriodTooLong();
+
     /// @notice Thrown when a receivables offset exceeds the Clearinghouse's current
     ///         `principalReceivables`.
     /// @param clearinghouse The Clearinghouse address.
