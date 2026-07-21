@@ -9,8 +9,6 @@ import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
-import {IClearinghouseReserve} from "src/policies/interfaces/IClearinghouseReserve.sol";
-import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
@@ -22,6 +20,8 @@ import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol";
+import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -104,24 +104,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Three 32-byte words: `initialDiscount`, the seed array offset, and the seed
     ///      array length.
     uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 96;
-
-    /// @notice Numerator of the Clearinghouse annual interest rate (0.5%).
-    uint256 private constant _CH_RATE_NUMERATOR = 5;
-
-    /// @notice Denominator of the Clearinghouse annual interest rate (`5 / 1000` = 0.5%).
-    uint256 private constant _CH_RATE_DENOMINATOR = 1000;
-
-    /// @notice Number of weeks per year used for the Clearinghouse annual rate.
-    uint256 private constant _WEEKS_PER_YEAR = 52;
-
-    /// @notice Bond market debt buffer (`100_000` = 100%).
-    uint32 private constant _BOND_DEBT_BUFFER = 100_000;
-
-    /// @notice Bond market deposit interval (4 hours).
-    uint32 private constant _BOND_DEPOSIT_INTERVAL = 4 hours;
-
-    /// @notice Bond market duration (24 hours).
-    uint48 private constant _BOND_MARKET_DURATION = 1 days;
 
     /// @notice Maximum reserve token decimals supported when adding a vault.
     uint8 private constant _MAX_RESERVE_DECIMALS = 18;
@@ -389,14 +371,14 @@ contract YieldRepurchaseFacilityV2 is
         for (uint256 i = 0; i < seedsLength; ++i) {
             NextYieldSeed memory seed = nextYieldSeeds_[i];
             ReserveAsset storage config = _requireRegistered(seed.vault);
-            if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
+            _requireAssetEnabled(config);
             config.nextYield = seed.nextYield;
         }
 
         for (uint256 i = 0; i < vaultsLength; ++i) {
             ReserveAsset storage config = _assetConfigs[vaults[i]];
             if (!config.isAssetEnabled) continue;
-            emit NextYieldSet(config.reserve, config.nextYield);
+            _setNextYield(config, config.nextYield);
         }
 
         _epoch = _EPOCH_LENGTH - 1;
@@ -477,8 +459,7 @@ contract YieldRepurchaseFacilityV2 is
         }
 
         // The OHM remaining after the burn is untracked (donated) balance
-        uint256 ohmBalance = _OHM.balanceOf(address(this));
-        if (ohmBalance != 0) _OHM.safeTransfer(address(TRSRY), ohmBalance);
+        _sweepToTrsry(address(_OHM));
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
@@ -550,7 +531,7 @@ contract YieldRepurchaseFacilityV2 is
         // is skipped for every vault. Skipping before any redeem also keeps the reserve
         // in the yield-earning vaults; the unspent budget rolls into the following days.
         uint256 oraclePrice = PRICE.getLastPrice();
-        uint256 backing = IBackingOracle(backingOracle).backing();
+        uint256 backing = _backing();
         if (oraclePrice == 0 || oraclePrice < backing) return;
 
         // In the range [1, 7]: the weekly reset has wrapped the epoch to zero
@@ -608,8 +589,18 @@ contract YieldRepurchaseFacilityV2 is
     function _weeklyReset() private {
         _epoch = 0;
 
-        uint256 clearinghouseYield = _clearinghouseYield();
-        _emitClearinghouseMismatches();
+        address backingReserve = _backingReserve();
+        uint256 clearinghouseYield = YRFClearinghouseLib.clearinghouseYield(
+            CHREG,
+            backingReserve,
+            _receivablesOffsets,
+            _includedClearinghouses
+        );
+        YRFClearinghouseLib.emitClearinghouseMismatches(
+            CHREG,
+            backingReserve,
+            _includedClearinghouses
+        );
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
@@ -642,7 +633,7 @@ contract YieldRepurchaseFacilityV2 is
         // The re-mark commits the appreciation of the facility-held pool to buybacks. It
         // never lowers the budget, so an unfunded prefund shortfall is preserved and
         // retried by the prefund below.
-        uint256 poolValue = IERC4626(vault_).previewRedeem(config.prefundedShares) +
+        uint256 poolValue = _previewRedeem(vault_, config.prefundedShares) +
             config.prefundedReserve;
         if (poolValue > config.weeklyBudgetRemaining) {
             config.weeklyBudgetRemaining = poolValue;
@@ -654,8 +645,7 @@ contract YieldRepurchaseFacilityV2 is
         // run before the snapshots are refreshed below.
         uint256 newNextYield = _projectNextYield(config, clearinghouseYield_);
 
-        config.nextYield = newNextYield;
-        emit NextYieldSet(config.reserve, newNextYield);
+        _setNextYield(config, newNextYield);
 
         config.lastConversionRate = _conversionRate(config);
 
@@ -680,12 +670,12 @@ contract YieldRepurchaseFacilityV2 is
         uint256 heldReserve = config_.prefundedReserve;
         if (heldReserve >= budget) return;
 
-        uint256 targetShares = IERC4626(vault_).previewWithdraw(budget - heldReserve);
+        uint256 targetShares = _previewWithdraw(vault_, budget - heldReserve);
         uint256 currentShares = config_.prefundedShares;
         if (targetShares <= currentShares) return;
 
         uint256 sharesToWithdraw = targetShares - currentShares;
-        uint256 trsryBalance = IERC20(vault_).balanceOf(address(TRSRY));
+        uint256 trsryBalance = _trsryBalance(vault_);
         if (sharesToWithdraw > trsryBalance) {
             // The unfunded gap stays in the budget and is retried at the next reset
             emit PrefundShortfall(vault_, sharesToWithdraw, trsryBalance);
@@ -718,7 +708,7 @@ contract YieldRepurchaseFacilityV2 is
 
         if (config_.sellShares) {
             uint256 capacityShares = Math.min(
-                IERC4626(vault_).previewWithdraw(bidAmount),
+                _previewWithdraw(vault_, bidAmount),
                 config_.prefundedShares
             );
             if (capacityShares == 0) return;
@@ -726,7 +716,7 @@ contract YieldRepurchaseFacilityV2 is
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
         } else {
             address reserve_ = config_.reserve;
-            uint256 currentReserve = IERC20(reserve_).balanceOf(address(this));
+            uint256 currentReserve = _selfBalance(reserve_);
 
             if (currentReserve < bidAmount) {
                 uint256 deficit = bidAmount - currentReserve;
@@ -785,10 +775,10 @@ contract YieldRepurchaseFacilityV2 is
     ) external returns (uint256 received) {
         _requireCaller(address(this));
 
-        uint256 expected = IERC4626(vault_).previewRedeem(shares_);
-        uint256 reserveBefore = IERC20(reserve_).balanceOf(address(this));
+        uint256 expected = _previewRedeem(vault_, shares_);
+        uint256 reserveBefore = _selfBalance(reserve_);
         IERC4626(vault_).redeem(shares_, address(this), address(this));
-        received = IERC20(reserve_).balanceOf(address(this)) - reserveBefore;
+        received = _selfBalance(reserve_) - reserveBefore;
 
         if (received < expected)
             revert IYieldRepurchaseFacilityV2_InsufficientRedeem(vault_, expected, received);
@@ -806,7 +796,7 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 redeemed) {
         if (deficit_ == 0) return 0;
 
-        uint256 sharesNeeded = IERC4626(vault_).previewWithdraw(deficit_);
+        uint256 sharesNeeded = _previewWithdraw(vault_, deficit_);
         uint256 available = config_.prefundedShares;
         uint256 sharesToRedeem = sharesNeeded > available ? available : sharesNeeded;
 
@@ -827,8 +817,8 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 received) {
         if (amount_ == 0) return 0;
 
-        uint256 shares = IERC4626(vault_).previewWithdraw(amount_);
-        uint256 trsryBalance = IERC20(vault_).balanceOf(address(TRSRY));
+        uint256 shares = _previewWithdraw(vault_, amount_);
+        uint256 trsryBalance = _trsryBalance(vault_);
         if (shares > trsryBalance) shares = trsryBalance;
         if (shares == 0) return 0;
 
@@ -839,9 +829,7 @@ contract YieldRepurchaseFacilityV2 is
 
         // Unredeemed shares would sit untracked on the facility, so they go back to the
         // treasury.
-        if (shares > used) {
-            IERC20(vault_).safeTransfer(address(TRSRY), shares - used);
-        }
+        _transferToTrsry(vault_, shares - used);
     }
 
     /// @notice Burns the purchased OHM against a fresh backing withdrawal and credits the
@@ -864,7 +852,7 @@ contract YieldRepurchaseFacilityV2 is
         if (backingVault_ == address(0)) return;
 
         ReserveAsset storage backingConfig = _assetConfigs[backingVault_];
-        uint256 backingPerOhm = IBackingOracle(backingOracle).backing();
+        uint256 backingPerOhm = _backing();
 
         // backingAmount18 = purchased (9 dec) * backingPerOhm (18 dec) / 10^9
         // backingAmount   = scaleFrom18(backingAmount18, reserveDecimals).
@@ -897,7 +885,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Creates a bond market that sells the vault's payout token for OHM.
-    /// @dev For a sell-shares asset the payout token is the vault share and the oracle
+    /// @dev The pricing and the submission are performed by the linked `YRFBondMarketLib`
+    ///      through a delegatecall, so the facility is the market owner and callback.
+    ///      For a sell-shares asset the payout token is the vault share and the oracle
     ///      price is converted to a per-share price through the conversion rate (floor).
     ///      Failures are absorbed: a zero conversion rate or a rejected market submission
     ///      emits `MarketCreationFailed` and keeps the funds with the facility. A created
@@ -921,18 +911,18 @@ contract YieldRepurchaseFacilityV2 is
             payoutToken = vault_;
         }
 
-        (
-            uint256 formattedInitialPrice,
-            uint256 formattedMinimumPrice,
-            int8 scaleAdjustment
-        ) = _computeMarketPricing(marketOraclePrice, config_.reserveDecimals);
-
-        (bool success, uint256 marketId) = _submitMarket(
-            payoutToken,
-            bidAmount_,
-            formattedInitialPrice,
-            formattedMinimumPrice,
-            scaleAdjustment
+        (bool success, uint256 marketId) = YRFBondMarketLib.createMarket(
+            YRFBondMarketLib.MarketConfig({
+                auctioneer: IBondSDA(bondAuctioneer),
+                payoutToken: payoutToken,
+                quoteToken: address(_OHM),
+                capacity: bidAmount_,
+                oraclePrice: marketOraclePrice,
+                initialDiscount: initialDiscount,
+                oracleDecimals: _oracleDecimals,
+                quoteDecimals: _OHM_DECIMALS,
+                payoutDecimals: config_.reserveDecimals
+            })
         );
 
         // The funds stay with the facility and the budget is untouched (only the
@@ -945,90 +935,6 @@ contract YieldRepurchaseFacilityV2 is
         _marketVaults[marketId] = vault_;
 
         emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
-    }
-
-    /// @notice Computes the Bond SDA price parameters for a market quoted in OHM.
-    /// @dev The market quotes OHM per payout unit, so the prices are inverses of the
-    ///      oracle price: the initial price applies the `initialDiscount` to the oracle
-    ///      price, and the minimum price corresponds to the undiscounted oracle price,
-    ///      capping the payout per OHM at the oracle-priced amount. The inversions floor,
-    ///      and the scale factors follow the Bond SDA `scaleAdjustment` convention.
-    function _computeMarketPricing(
-        uint256 oraclePrice_,
-        uint8 reserveDecimals_
-    )
-        private
-        view
-        returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
-    {
-        // discount = 1e18 - initialDiscount; e.g. 1e18 - 3e16 = 0.97e18
-        uint256 discountFactor = _ONE_HUNDRED_PERCENT - initialDiscount;
-        uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, _ONE_HUNDRED_PERCENT);
-        uint256 oracleSquare = 10 ** (uint256(_oracleDecimals) * 2);
-
-        uint256 initialPrice = oracleSquare / effectivePrice;
-        uint256 minPrice = oracleSquare / oraclePrice_;
-
-        int8 priceDecimals = _getPriceDecimals(initialPrice);
-        scaleAdjustment = int8(reserveDecimals_) - int8(_OHM_DECIMALS) + (priceDecimals / 2);
-
-        uint256 oracleScale = 10 ** uint8(int8(_oracleDecimals) - priceDecimals);
-        uint256 bondScale = 10 **
-            uint8(
-                36 + scaleAdjustment + int8(_OHM_DECIMALS) - int8(reserveDecimals_) - priceDecimals
-            );
-
-        formattedInitialPrice = initialPrice.mulDiv(bondScale, oracleScale);
-        formattedMinimumPrice = minPrice.mulDiv(bondScale, oracleScale);
-    }
-
-    /// @notice Submits the market to the SDA auctioneer.
-    /// @dev The market runs for 24 hours with instant vesting, a 4 hour deposit interval,
-    ///      a 100% debt buffer, and the capacity denominated in the payout token; the
-    ///      facility is the market callback. A revert of the auctioneer is reported as a
-    ///      failure instead of bubbling.
-    function _submitMarket(
-        address reserve_,
-        uint256 bidAmount_,
-        uint256 formattedInitialPrice_,
-        uint256 formattedMinimumPrice_,
-        int8 scaleAdjustment_
-    ) private returns (bool success, uint256 marketId) {
-        try
-            IBondSDA(bondAuctioneer).createMarket(
-                abi.encode(
-                    IBondSDA.MarketParams({
-                        payoutToken: SolmateERC20(reserve_),
-                        quoteToken: SolmateERC20(address(_OHM)),
-                        callbackAddr: address(this),
-                        capacityInQuote: false,
-                        capacity: bidAmount_,
-                        formattedInitialPrice: formattedInitialPrice_,
-                        formattedMinimumPrice: formattedMinimumPrice_,
-                        debtBuffer: _BOND_DEBT_BUFFER,
-                        vesting: uint48(0),
-                        conclusion: uint48(block.timestamp + _BOND_MARKET_DURATION),
-                        depositInterval: _BOND_DEPOSIT_INTERVAL,
-                        scaleAdjustment: scaleAdjustment_
-                    })
-                )
-            )
-        returns (uint256 marketId_) {
-            return (true, marketId_);
-        } catch {
-            return (false, 0);
-        }
-    }
-
-    /// @notice Returns the order of magnitude of `price_` relative to the oracle
-    ///         decimals.
-    function _getPriceDecimals(uint256 price_) private view returns (int8 relativeDecimals) {
-        int8 decimals;
-        while (price_ >= 10) {
-            price_ = price_ / 10;
-            ++decimals;
-        }
-        return decimals - int8(_oracleDecimals);
     }
 
     // ============ BOND CALLBACK ============ //
@@ -1063,9 +969,9 @@ contract YieldRepurchaseFacilityV2 is
         if (vault == address(0)) revert IYieldRepurchaseFacilityV2_UnknownMarket();
 
         ReserveAsset storage config = _assetConfigs[vault];
-        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
+        _requireAssetEnabled(config);
 
-        if (_OHM.balanceOf(address(this)) < _ohmPurchased + inputAmount_)
+        if (_selfBalance(address(_OHM)) < _ohmPurchased + inputAmount_)
             revert IYieldRepurchaseFacilityV2_QuoteNotReceived();
 
         address reserve_ = config.reserve;
@@ -1201,7 +1107,7 @@ contract YieldRepurchaseFacilityV2 is
         vaults.push(vault_);
 
         emit AssetAdded(vault_, reserve_, yieldBuybackShare_);
-        emit NextYieldSet(reserve_, nextYield_);
+        _setNextYield(_assetConfigs[vault_], nextYield_);
 
         if (setAsBackingVault_) _setBackingVault(vault_, _assetConfigs[vault_]);
     }
@@ -1217,8 +1123,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is currently set as the `backingVault`.
     function removeAsset(address vault_) external override onlyAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled();
-        if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+        _requireAssetDisabled(config);
+        _requireNotBackingVault(vault_);
 
         _returnBalancesToTrsry(vault_, config.reserve);
 
@@ -1275,7 +1181,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The asset is disabled.
     ///      - The asset sells vault shares.
     function _setBackingVault(address vault_, ReserveAsset storage config_) private {
-        if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
+        _requireAssetEnabled(config_);
         if (config_.sellShares) revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
 
         backingVault = vault_;
@@ -1423,8 +1329,7 @@ contract YieldRepurchaseFacilityV2 is
                 currentNextYield
             );
 
-        config.nextYield = newNextYield_;
-        emit NextYieldSet(config.reserve, newNextYield_);
+        _setNextYield(config, newNextYield_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1484,14 +1389,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyTimelockOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled();
+        _requireAssetDisabled(config);
 
         config.isAssetEnabled = true;
-        config.nextYield = 0;
         _refreshSnapshots(vault_, config);
 
         emit AssetEnabled(vault_);
-        emit NextYieldSet(config.reserve, 0);
+        _setNextYield(config, 0);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1506,8 +1410,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is the backing vault.
     function disableAsset(address vault_) external override onlyTimelockOrAdminRole {
         ReserveAsset storage config = _requireRegistered(vault_);
-        if (!config.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
-        if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+        _requireAssetEnabled(config);
+        _requireNotBackingVault(vault_);
 
         config.isAssetEnabled = false;
         emit AssetDisabled(vault_);
@@ -1520,7 +1424,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The probe amount `10 ** reserveDecimals` is one whole share because `addAsset`
     ///      requires the vault's share decimals to equal its reserve decimals.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
-        return IERC4626(config_.vault).previewRedeem(10 ** config_.reserveDecimals);
+        return _previewRedeem(config_.vault, 10 ** config_.reserveDecimals);
     }
 
     /// @notice Refreshes the vault's conversion-rate and reserve-balance snapshots.
@@ -1564,98 +1468,20 @@ contract YieldRepurchaseFacilityV2 is
         return _assetConfigs[backingVault_].reserve;
     }
 
-    /// @notice Returns one week of interest on the effective receivables.
-    /// @dev The offset is subtracted with saturation; the rate is 0.5% per year divided
-    ///      over 52 weeks, floored at each division.
-    function _clearinghouseInterest(
-        uint256 receivables_,
-        uint256 offset_
-    ) private pure returns (uint256) {
-        uint256 effective = Math.saturatingSub(receivables_, offset_);
-        return (effective * _CH_RATE_NUMERATOR) / _CH_RATE_DENOMINATOR / _WEEKS_PER_YEAR;
-    }
-
-    /// @notice Returns whether a Clearinghouse counts toward the backing yield: either its
-    ///         reserve matches the backing reserve, or it has been explicitly included.
-    function _countsTowardBackingYield(
-        address clearinghouse_,
-        address backingReserve_
-    ) private view returns (bool) {
-        return
-            _includedClearinghouses[clearinghouse_] ||
-            _readClearinghouseReserve(clearinghouse_) == backingReserve_;
-    }
-
-    /// @notice Sums the weekly interest of every registry Clearinghouse that counts
-    ///         toward the backing yield.
-    /// @dev Zero without a backing vault. The reads go through the tolerant helpers, so
-    ///      an incompatible registry entry contributes nothing.
-    function _clearinghouseYield() private view returns (uint256 yield) {
-        address backingReserve = _backingReserve();
-        if (backingReserve == address(0)) return 0;
-
-        uint256 len = CHREG.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
-            address ch = CHREG.registry(i);
-            if (!_countsTowardBackingYield(ch, backingReserve)) continue;
-            yield += _clearinghouseInterest(
-                _readClearinghousePrincipal(ch),
-                _receivablesOffsets[ch]
-            );
-        }
-    }
-
-    /// @notice Emits `ClearinghouseDebtTokenMismatch` for every registry Clearinghouse
-    ///         that does not count toward the backing yield.
-    /// @dev A no-op without a backing vault.
-    function _emitClearinghouseMismatches() private {
-        address backingReserve = _backingReserve();
-        if (backingReserve == address(0)) return;
-
-        uint256 len = CHREG.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
-            address ch = CHREG.registry(i);
-            if (!_countsTowardBackingYield(ch, backingReserve))
-                emit ClearinghouseDebtTokenMismatch(ch);
-        }
-    }
-
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
     /// @dev Counts the treasury balance, and for the backing vault also the balances of
     ///      the active Clearinghouses, valued through `previewRedeem` (floor).
     function _getProtocolReserveBalance(address vault_) private view returns (uint256 balance) {
-        uint256 totalShares = IERC20(vault_).balanceOf(address(TRSRY));
+        uint256 totalShares = _trsryBalance(vault_);
 
         if (vault_ == backingVault) {
             uint256 activeCount = CHREG.activeCount();
             for (uint256 i = 0; i < activeCount; ++i) {
-                totalShares += IERC20(vault_).balanceOf(CHREG.active(i));
+                totalShares += _balanceOf(vault_, CHREG.active(i));
             }
         }
 
-        balance = IERC4626(vault_).previewRedeem(totalShares);
-    }
-
-    /// @notice Reads the Clearinghouse's reserve token, treating a revert as the zero
-    ///         address.
-    function _readClearinghouseReserve(address clearinghouse_) private view returns (address) {
-        try IClearinghouseReserve(clearinghouse_).reserve() returns (address reserve) {
-            return reserve;
-        } catch {
-            return address(0);
-        }
-    }
-
-    /// @notice Reads the Clearinghouse's `principalReceivables`, treating a revert as
-    ///         zero.
-    function _readClearinghousePrincipal(address clearinghouse_) private view returns (uint256) {
-        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
-            uint256 receivables
-        ) {
-            return receivables;
-        } catch {
-            return 0;
-        }
+        balance = _previewRedeem(vault_, totalShares);
     }
 
     /// @notice Sets the cumulative receivables offset of a Clearinghouse.
@@ -1665,7 +1491,7 @@ contract YieldRepurchaseFacilityV2 is
     function _setClearinghouseOffset(address clearinghouse_, uint256 offset_) internal {
         _requireNonzeroAddress(clearinghouse_, "clearinghouse");
 
-        uint256 receivables = _readClearinghousePrincipal(clearinghouse_);
+        uint256 receivables = YRFClearinghouseLib.readPrincipalReceivables(clearinghouse_);
         if (offset_ > receivables)
             revert IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
                 clearinghouse_,
@@ -1698,6 +1524,70 @@ contract YieldRepurchaseFacilityV2 is
         if (value_ == address(0)) revert Errors.BadInput(parameter_);
     }
 
+    /// @notice Returns the vault's share amount for an exact `assets_` withdrawal
+    ///         (rounded up by the vault).
+    function _previewWithdraw(address vault_, uint256 assets_) private view returns (uint256) {
+        return IERC4626(vault_).previewWithdraw(assets_);
+    }
+
+    /// @notice Returns the vault's reserve amount for a `shares_` redemption (rounded
+    ///         down by the vault).
+    function _previewRedeem(address vault_, uint256 shares_) private view returns (uint256) {
+        return IERC4626(vault_).previewRedeem(shares_);
+    }
+
+    /// @notice Returns the facility's own `token_` balance.
+    function _selfBalance(address token_) private view returns (uint256) {
+        return _balanceOf(token_, address(this));
+    }
+
+    /// @notice Returns the treasury's `token_` balance.
+    function _trsryBalance(address token_) private view returns (uint256) {
+        return _balanceOf(token_, address(TRSRY));
+    }
+
+    /// @notice Transfers `amount_` of `token_` to the treasury; a no-op for a zero
+    ///         amount.
+    function _transferToTrsry(address token_, uint256 amount_) private {
+        if (amount_ != 0) IERC20(token_).safeTransfer(address(TRSRY), amount_);
+    }
+
+    /// @notice Transfers the facility's full `token_` balance to the treasury.
+    function _sweepToTrsry(address token_) private {
+        _transferToTrsry(token_, _selfBalance(token_));
+    }
+
+    /// @notice Stores the vault's next yield and emits `NextYieldSet`.
+    function _setNextYield(ReserveAsset storage config_, uint256 nextYield_) private {
+        config_.nextYield = nextYield_;
+        emit NextYieldSet(config_.reserve, nextYield_);
+    }
+
+    /// @notice Reverts unless the asset is enabled.
+    function _requireAssetEnabled(ReserveAsset storage config_) private view {
+        if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
+    }
+
+    /// @notice Reverts unless the asset is disabled.
+    function _requireAssetDisabled(ReserveAsset storage config_) private view {
+        if (config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled();
+    }
+
+    /// @notice Reverts when the vault is the backing vault.
+    function _requireNotBackingVault(address vault_) private view {
+        if (vault_ == backingVault) revert IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+    }
+
+    /// @notice Reads the backing value from the backing oracle, in 18 decimals.
+    function _backing() private view returns (uint256) {
+        return IBackingOracle(backingOracle).backing();
+    }
+
+    /// @notice Returns the `token_` balance of `account_`.
+    function _balanceOf(address token_, address account_) private view returns (uint256) {
+        return IERC20(token_).balanceOf(account_);
+    }
+
     /// @notice Reverts unless the caller is `caller_`.
     function _requireCaller(address caller_) private view {
         if (msg.sender != caller_) revert IYieldRepurchaseFacilityV2_InvalidCaller();
@@ -1717,10 +1607,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Transfers the facility's balances of the vault shares and the reserve to
     ///         the treasury.
     function _returnBalancesToTrsry(address vault_, address reserve_) private {
-        uint256 vaultBalance = IERC20(vault_).balanceOf(address(this));
-        if (vaultBalance != 0) IERC20(vault_).safeTransfer(address(TRSRY), vaultBalance);
-        uint256 reserveBalance = IERC20(reserve_).balanceOf(address(this));
-        if (reserveBalance != 0) IERC20(reserve_).safeTransfer(address(TRSRY), reserveBalance);
+        _sweepToTrsry(vault_);
+        _sweepToTrsry(reserve_);
     }
 
     /// @notice Withdraws vault shares from the treasury under a just-in-time approval.
@@ -1747,7 +1635,15 @@ contract YieldRepurchaseFacilityV2 is
     function getNextYield(address vault_) external view override returns (uint256 yield) {
         ReserveAsset storage config = _requireRegistered(vault_);
 
-        yield = _projectNextYield(config, _clearinghouseYield());
+        yield = _projectNextYield(
+            config,
+            YRFClearinghouseLib.clearinghouseYield(
+                CHREG,
+                _backingReserve(),
+                _receivablesOffsets,
+                _includedClearinghouses
+            )
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1819,8 +1715,7 @@ contract YieldRepurchaseFacilityV2 is
             if (token_ == config.reserve) tracked += config.prefundedReserve;
         }
 
-        uint256 amount = Math.saturatingSub(IERC20(token_).balanceOf(address(this)), tracked);
-        if (amount != 0) IERC20(token_).safeTransfer(address(TRSRY), amount);
+        _transferToTrsry(token_, Math.saturatingSub(_selfBalance(token_), tracked));
     }
 
     // ============ ERC165 ============ //

@@ -115,9 +115,9 @@ interface IOhmLike is IERC20 {
 ///         configuration), migrates the state of the deployed YRF v1.2 into the v2 seeds,
 ///         swaps the Heart periodic task, and maintains an exact mirror model of the
 ///         expected facility state that is asserted after every heart beat.
-/// @dev The mirror model replicates the arithmetic of `YieldRepurchaseFacilityV2` (same
-///      formulas, same rounding, same ordering) using ERC4626 previews evaluated at the
-///      beat timestamp, so all assertions are exact (`assertEq`).
+/// @dev    The mirror model replicates the arithmetic of `YieldRepurchaseFacilityV2` (same
+///         formulas, same rounding, same ordering) using ERC4626 previews evaluated at the
+///         beat timestamp, so all assertions are exact (`assertEq`).
 // solhint-disable max-states-count
 abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     using FullMath for uint256;
@@ -834,7 +834,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         modelPendingMarkets += 1;
     }
 
-    /// @notice Mirrors `_computeMarketPricing` for 18-decimal payout tokens and the
+    /// @notice Mirrors the `YRFBondMarketLib` market pricing for 18-decimal payout tokens and the
     ///         18-decimal oracle.
     function _mirrorMarketPricing(
         uint256 oraclePrice_
