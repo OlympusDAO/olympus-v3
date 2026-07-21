@@ -275,6 +275,36 @@
         "name": "external-tokens-tempohm"
     },
     {
+        "addr": "0x45e563c39cDdbA8699A90078F42353A57509543a",
+        "chainId": 1,
+        "name": "olympus-policy-cross-chain-bridge"
+    },
+    {
+        "addr": "0x23dDFccdd5C573B9Fd7fC0fcD70B687A0D0C5f23",
+        "chainId": 1,
+        "name": "olympus-policy-lz-bridge-gateway"
+    },
+    {
+        "addr": "0xb218Eb347218031B2B9d17a19B040bD3509EFAc0",
+        "chainId": 1,
+        "name": "olympus-policy-lz-endpoint-delegate"
+    },
+    {
+        "addr": "0x9AD85D2f5EfC076Bb321dca425e67cf2E6829330",
+        "chainId": 1,
+        "name": "olympus-periphery-lz-cross-chain-bridge"
+    },
+    {
+        "addr": "0x946B739a26A8e7f035B27B075eb0cE8a54bF2f12",
+        "chainId": 1,
+        "name": "olympus-policy-lz-bridge-and-delegate-config"
+    },
+    {
+        "addr": "0x0f8Cc53Ac14dda2f9aebfCcB6cc3A4426BfF4Af7",
+        "chainId": 1,
+        "name": "olympus-lz-bridge-activator"
+    },
+    {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
         "name": "olympus-module-price-1_2"

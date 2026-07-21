@@ -911,12 +911,16 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         // Validate heart beat
         if (_skipHeartbeatValidation) {
-            console2.log(
-                "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
-            );
-            console2.log(
-                "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
-            );
+            if (ChainUtils._isCanonicalChain(chain)) {
+                console2.log(
+                    "\n!!! HEARTBEAT VALIDATION DISABLED - PROCEED AT YOUR OWN RISK !!!"
+                );
+                console2.log(
+                    "!!! Skipping heartbeat check means the batch may break protocol operations !!!"
+                );
+            } else {
+                console2.log("\n=== Skipping heart beat validation (non-canonical chain:", chain, ") ===");
+            }
         } else {
             _validateHeartBeat();
         }

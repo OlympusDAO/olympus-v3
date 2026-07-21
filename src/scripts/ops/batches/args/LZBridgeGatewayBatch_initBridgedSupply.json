@@ -1,0 +1,10 @@
+{
+    "functions": [
+        {
+            "args": {
+                "initialBridgedSupply": 0
+            },
+            "name": "initBridgedSupply"
+        }
+    ]
+}

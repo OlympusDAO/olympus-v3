@@ -1,0 +1,287 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity >=0.8.30;
+
+// Interfaces
+import {MessagingFee} from "@lz-evm-protocol-v2-3.0.162/interfaces/ILayerZeroEndpointV2.sol";
+import {EnforcedOptionParam} from "@lz-oapp-evm-0.4.1/oapp/interfaces/IOAppOptionsType3.sol";
+import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
+
+// Libraries
+import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
+import {TestHelperOz5} from "@lz-test-devtools-8.0.1/TestHelperOz5.sol";
+
+// Contracts
+import {Kernel, Actions} from "src/Kernel.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {LZEndpointDelegate} from "src/policies/bridge/LZEndpointDelegate.sol";
+import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
+import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_CONFIGURATOR_ROLE, BRIDGE_FACILITATOR_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+
+// solhint-disable max-states-count
+
+contract LZBridgeGatewayTestBase is TestHelperOz5 {
+    uint32 constant CANONICAL_EID = 1;
+    uint32 constant NONCANONICAL_EID = 2;
+    uint256 constant INITIAL_AMOUNT = 100_000e9;
+    uint256 constant SUPPLY_CAP = 1_000_000e9;
+    uint32 constant GRACE_SECONDS = 1 days;
+
+    /// @dev Default rate limit applied per direction in the test base. Chosen well above
+    ///      any individual test amount so existing flow tests are not throttled. Tests
+    ///      that exercise rate limiting itself override these via `_setOutRateLimit` /
+    ///      `_setInRateLimit`.
+    uint256 constant DEFAULT_RATE_LIMIT = 1_000_000e9;
+    uint32 constant DEFAULT_RATE_WINDOW = 1 days;
+
+    // Canonical stack (eid=1)
+    Kernel kernel;
+    OlympusMinter mintr;
+    OlympusRoles roles;
+    RolesAdmin rolesAdmin;
+    LZBridgeGateway gateway;
+    LZEndpointDelegate lzDelegate;
+
+    // Non-canonical stack (eid=2)
+    Kernel kernel2;
+    OlympusMinter mintr2;
+    OlympusRoles roles2;
+    RolesAdmin rolesAdmin2;
+    LZBridgeGateway gateway2;
+    LZEndpointDelegate lzDelegate2;
+
+    MockOhm ohm;
+
+    address admin = makeAddr("admin");
+    address bridgeAdmin = makeAddr("bridgeAdmin");
+    address bridgeRateLimiter = makeAddr("bridgeRateLimiter");
+    address bridgeConfigurator = makeAddr("bridgeConfigurator");
+    address manager = makeAddr("manager");
+    address emergency = makeAddr("emergency");
+    address facilitator = makeAddr("facilitator");
+    address user = makeAddr("user");
+    address recipient = makeAddr("recipient");
+
+    /// @dev Type 3 options with 200k gas for lzReceive:
+    ///      WORKER_ID=1, size=17 (16 bytes gas + 1 byte optionType), OPTION_TYPE_LZRECEIVE=1, gas=200k
+    bytes constant DEFAULT_OPTIONS =
+        abi.encodePacked(uint16(3), uint8(1), uint16(17), uint8(1), uint128(200_000));
+
+    function setUp() public virtual override {
+        super.setUp();
+
+        // Create 2 LZ V2 mock endpoints (eid=1, eid=2)
+        setUpEndpoints(2, LibraryType.UltraLightNode);
+
+        // Deploy mock OHM token
+        ohm = new MockOhm("Olympus", "OHM", 9);
+
+        // ---- Canonical stack (endpoint 1) ----
+        kernel = new Kernel();
+        mintr = new OlympusMinter(kernel, address(ohm));
+        roles = new OlympusRoles(kernel);
+        rolesAdmin = new RolesAdmin(kernel);
+        gateway = new LZBridgeGateway(
+            kernel,
+            address(endpointSetup.endpointList[0]),
+            true,
+            GRACE_SECONDS
+        );
+        lzDelegate = new LZEndpointDelegate(kernel, address(gateway));
+
+        kernel.executeAction(Actions.InstallModule, address(mintr));
+        kernel.executeAction(Actions.InstallModule, address(roles));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(gateway));
+        kernel.executeAction(Actions.ActivatePolicy, address(lzDelegate));
+
+        rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        rolesAdmin.grantRole(BRIDGE_RATE_LIMITER_ROLE, bridgeRateLimiter);
+        rolesAdmin.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
+        rolesAdmin.grantRole(MANAGER_ROLE, manager);
+        rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin.grantRole(BRIDGE_FACILITATOR_ROLE, facilitator);
+
+        // ---- Non-canonical stack (endpoint 2) ----
+        kernel2 = new Kernel();
+        mintr2 = new OlympusMinter(kernel2, address(ohm));
+        roles2 = new OlympusRoles(kernel2);
+        rolesAdmin2 = new RolesAdmin(kernel2);
+        gateway2 = new LZBridgeGateway(
+            kernel2,
+            address(endpointSetup.endpointList[1]),
+            false,
+            GRACE_SECONDS
+        );
+        lzDelegate2 = new LZEndpointDelegate(kernel2, address(gateway2));
+
+        kernel2.executeAction(Actions.InstallModule, address(mintr2));
+        kernel2.executeAction(Actions.InstallModule, address(roles2));
+        kernel2.executeAction(Actions.ActivatePolicy, address(rolesAdmin2));
+        kernel2.executeAction(Actions.ActivatePolicy, address(gateway2));
+        kernel2.executeAction(Actions.ActivatePolicy, address(lzDelegate2));
+
+        rolesAdmin2.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin2.grantRole(BRIDGE_ADMIN_ROLE, bridgeAdmin);
+        rolesAdmin2.grantRole(BRIDGE_RATE_LIMITER_ROLE, bridgeRateLimiter);
+        rolesAdmin2.grantRole(BRIDGE_CONFIGURATOR_ROLE, bridgeConfigurator);
+        rolesAdmin2.grantRole(MANAGER_ROLE, manager);
+        rolesAdmin2.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin2.grantRole(BRIDGE_FACILITATOR_ROLE, facilitator);
+
+        // Wire peers and enforced options as admin; gateway lifecycle stays under admin too
+        vm.startPrank(admin);
+        gateway.setPeer(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+        gateway2.setPeer(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
+
+        // Set enforced options
+        EnforcedOptionParam[] memory enforcedOpts = new EnforcedOptionParam[](1);
+        enforcedOpts[0] = EnforcedOptionParam({
+            eid: NONCANONICAL_EID,
+            msgType: gateway.MSG_BRIDGE_OHM(),
+            options: DEFAULT_OPTIONS
+        });
+        gateway.setEnforcedOptions(enforcedOpts);
+
+        EnforcedOptionParam[] memory enforcedOpts2 = new EnforcedOptionParam[](1);
+        enforcedOpts2[0] = EnforcedOptionParam({
+            eid: CANONICAL_EID,
+            msgType: gateway2.MSG_BRIDGE_OHM(),
+            options: DEFAULT_OPTIONS
+        });
+        gateway2.setEnforcedOptions(enforcedOpts2);
+
+        // Enable gateways
+        gateway.enable(bytes(""));
+        gateway2.enable(bytes(""));
+        vm.stopPrank();
+
+        vm.startPrank(admin);
+        lzDelegate.enable(bytes(""));
+        lzDelegate2.enable(bytes(""));
+        vm.stopPrank();
+
+        vm.startPrank(bridgeConfigurator);
+        gateway.setDelegate(address(lzDelegate));
+        gateway2.setDelegate(address(lzDelegate2));
+        vm.stopPrank();
+
+        // Configure default bidirectional rate limits on both gateways so flow tests
+        // are not blocked by mandatory rate limiting. Helpers prank `bridgeRateLimiter`
+        // internally, so they must run outside the admin startPrank above.
+        _setRateLimitsBoth(
+            gateway,
+            NONCANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+        _setRateLimitsBoth(
+            gateway2,
+            CANONICAL_EID,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_LIMIT,
+            DEFAULT_RATE_WINDOW
+        );
+
+        // Mint OHM and fund facilitator
+        ohm.mint(facilitator, INITIAL_AMOUNT);
+        vm.deal(facilitator, 100 ether);
+    }
+
+    /// @dev Sets the outbound rate limit for `eid_` on `gateway_` as `bridgeConfigurator`.
+    function _setOutRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeConfigurator);
+        gateway_.setOutRateLimits(configs);
+    }
+
+    /// @dev Sets the inbound rate limit for `eid_` on `gateway_` as `bridgeConfigurator`.
+    function _setInRateLimit(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 limit_,
+        uint32 window_
+    ) internal {
+        IOffsettingRateLimiter.RateLimitConfig[]
+            memory configs = new IOffsettingRateLimiter.RateLimitConfig[](1);
+        configs[0] = IOffsettingRateLimiter.RateLimitConfig({
+            eid: eid_,
+            limit: limit_,
+            window: window_
+        });
+        vm.prank(bridgeConfigurator);
+        gateway_.setInRateLimits(configs);
+    }
+
+    /// @dev Sets both outbound and inbound rate limits in one call as `bridgeConfigurator`.
+    function _setRateLimitsBoth(
+        LZBridgeGateway gateway_,
+        uint32 eid_,
+        uint256 outLimit_,
+        uint256 inLimit_,
+        uint32 window_
+    ) internal {
+        _setOutRateLimit(gateway_, eid_, outLimit_, window_);
+        _setInRateLimit(gateway_, eid_, inLimit_, window_);
+    }
+
+    /// @dev Get fee + send from canonical to non-canonical
+    function _sendCanonicalToNonCanonical(
+        address to_,
+        uint256 amount_
+    ) internal returns (MessagingFee memory fee) {
+        fee = gateway.estimateSendFee(NONCANONICAL_EID, to_, amount_, bytes(""));
+
+        // Transfer OHM to gateway, then call burnAndSend
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway), amount_);
+        gateway.burnAndSend{value: fee.nativeFee}(
+            NONCANONICAL_EID,
+            to_,
+            amount_,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // Deliver packet
+        verifyPackets(NONCANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway2)));
+    }
+
+    /// @dev Get fee + send from non-canonical to canonical
+    function _sendNonCanonicalToCanonical(
+        address to_,
+        uint256 amount_
+    ) internal returns (MessagingFee memory fee) {
+        fee = gateway2.estimateSendFee(CANONICAL_EID, to_, amount_, bytes(""));
+
+        vm.startPrank(facilitator);
+        ohm.transfer(address(gateway2), amount_);
+        gateway2.burnAndSend{value: fee.nativeFee}(
+            CANONICAL_EID,
+            to_,
+            amount_,
+            payable(facilitator),
+            bytes("")
+        );
+        vm.stopPrank();
+
+        // Deliver packet
+        verifyPackets(CANONICAL_EID, LZConfigLib.addressToBytes32(address(gateway)));
+    }
+}

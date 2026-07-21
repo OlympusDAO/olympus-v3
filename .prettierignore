@@ -13,3 +13,6 @@ pnpm-lock.yaml
 
 # Skip deployment sequences, as order is important
 src/scripts/deploy/savedDeployments/
+
+# Shell scripts with bash-specific syntax that prettier cannot parse
+shell/calc_bridged_supply.sh

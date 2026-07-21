@@ -1,4 +1,39 @@
 [[dependencies]]
+name = "@layerzerolabs-lz-evm-messagelib-v2"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-messagelib-v2/3_0_162_27-02-2026_07:58:25_lz-evm-messagelib-v2.zip"
+checksum = "d8e9ae05e8c2a4a724a2fe1f27ed3cfc61aaf53cf261e2773f1c00b941d272df"
+integrity = "99e3b03d29b10f03c0be71d845cdef46ff6cd6976f46b4e9928c38a0c5471913"
+
+[[dependencies]]
+name = "@layerzerolabs-lz-evm-protocol-v2"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-protocol-v2/3_0_162_27-02-2026_07:58:39_lz-evm-protocol-v2.zip"
+checksum = "f894ed1e56d1fd6b7544bcd9db6d5178229b4e9911a815a23657b9e4b9a0ca32"
+integrity = "0f98e284369a98c633555df720e90f5a2cf420419b93643da9f016722d12cf90"
+
+[[dependencies]]
+name = "@layerzerolabs-lz-evm-v1-0-7"
+version = "3.0.162"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-lz-evm-v1-0-7/3_0_162_27-02-2026_07:58:49_lz-evm-v1-0.zip"
+checksum = "6d531ce4160937fd1aa65db9b15a903caed78ee8ac062554ad93871f63c2a3b8"
+integrity = "451ddd49deb58410cdb08c3412ca784628b4d1bb37e3f3ef2542681d87ccd3fd"
+
+[[dependencies]]
+name = "@layerzerolabs-oapp-evm"
+version = "0.4.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-oapp-evm/0_4_1_14-12-2025_22:00:19_oapp-evm.zip"
+checksum = "65bf469656c64d3f448d5c23798376d3b399e55b3cee0d1838fe42cfc70a361b"
+integrity = "9b5962846e82481219ab5592bcc38c3b9966d978a79615e3e8eb98d28373b266"
+
+[[dependencies]]
+name = "@layerzerolabs-test-devtools-evm-foundry"
+version = "8.0.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/@layerzerolabs-test-devtools-evm-foundry/8_0_1_14-12-2025_21:59:24_test-devtools-evm-foundry.zip"
+checksum = "e44c198c917aff47f8ce4b7469d3fd0dc84dc05ffdee28f0136c64f400a2bc93"
+integrity = "cb2acf42ee18ae51488af7fb9779a73c9e3984be82e695afcae336a694183178"
+
+[[dependencies]]
 name = "base58-solidity"
 version = "1.0.3"
 git = "https://github.com/storyicon/base58-solidity.git"
@@ -42,10 +77,10 @@ checksum = "55f341818321b3f925161a72fd0dcd62e4a0a4b66785a7a932bf2bfaf96fb9d1"
 integrity = "e9ecdc364d152157431e5df5aa041ffddbe9bb1c1ad81634b1e72df9e23814e8"
 
 [[dependencies]]
-name = "layer-zero-endpoint-v1"
-version = "0.0.6"
+name = "layer-zero-endpoint-v1-110"
+version = "1.1.0"
 git = "https://github.com/LayerZero-Labs/endpoint-v1-solidity-examples.git"
-rev = "a4954e5747baca5e7fd2b62c639e7600ad388a5f"
+rev = "cdc93994911829b1348f6ac18000000a43432ef1"
 
 [[dependencies]]
 name = "openzeppelin"
