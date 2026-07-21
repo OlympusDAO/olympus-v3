@@ -19,10 +19,10 @@ import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 import {OlympusHeart} from "src/policies/Heart.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {OlympusBackingOracle} from "src/policies/OlympusBackingOracle.sol";
-import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/IYieldRepurchaseFacilityV2.sol";
-import {YRFManagerTimelock} from "src/policies/YRFManagerTimelock.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
 
 // ============ MINIMAL MAINNET INTERFACES ============ //
 
@@ -173,8 +173,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint256 internal constant BACKING = 11.33e18;
     /// @notice The initial bond market discount (3%, 18 decimals), matching YRF v1.2.
     uint256 internal constant INITIAL_DISCOUNT = 3e16;
-    uint32 internal constant GRACE_PERIOD = 7 days;
-    uint48 internal constant MANAGER_TIMELOCK_DELAY = 1 days;
+    uint32 internal constant GRACE_PERIOD = 5 days;
+    uint48 internal constant YRF_TIMELOCK_DELAY = 1 days;
 
     /// @notice The sUSDS yield buyback share (100%, matching the v1.2 behaviour).
     uint256 internal constant SUSDS_BUYBACK_SHARE = 1e18;
@@ -218,16 +218,16 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
     // ============ DEPLOYED V2 STACK ============ //
 
-    OlympusBackingOracle internal backingOracle;
-    YRFManagerTimelock internal yrfTimelock;
+    BackingOracle internal backingOracle;
+    YRFTimelock internal yrfTimelock;
     YieldRepurchaseFacilityV2 internal yieldRepo;
 
     // ============ TEST ACCOUNTS ============ //
 
     address internal keeper;
     address internal buyer;
-    address internal yrfManager;
-    address internal backingManager;
+    address internal yrfAdmin;
+    address internal backingAdmin;
     address internal coolerRecipient;
 
     // ============ SEEDS (COMPUTED IN setUp) ============ //
@@ -298,12 +298,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     function setUp() public virtual {
         vm.createSelectFork("mainnet", FORK_BLOCK);
 
-        keeper = makeAddr("keeper");
-        buyer = makeAddr("buyer");
-        yrfManager = makeAddr("yrfManager");
-        backingManager = makeAddr("backingManager");
-        coolerRecipient = makeAddr("coolerRecipient");
-
+        _setupActors();
         _loadMainnetContracts();
         _deployV2Stack();
         _installV2Stack();
@@ -314,6 +309,14 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         _swapHeartTask();
         _initializeOracleState();
         _initializeModel();
+    }
+
+    function _setupActors() internal {
+        keeper = makeAddr("keeper");
+        buyer = makeAddr("buyer");
+        yrfAdmin = makeAddr("yrfAdmin");
+        backingAdmin = makeAddr("backingAdmin");
+        coolerRecipient = makeAddr("coolerRecipient");
     }
 
     function _loadMainnetContracts() internal {
@@ -370,13 +373,13 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _deployV2Stack() internal {
-        backingOracle = new OlympusBackingOracle(kernel);
+        backingOracle = new BackingOracle(kernel);
         vm.label(address(backingOracle), "BackingOracle");
 
-        // The facility pins the timelock as its immutable manager timelock, so the
-        // timelock is deployed first and wired to the facility afterwards.
-        yrfTimelock = new YRFManagerTimelock(kernel, MANAGER_TIMELOCK_DELAY);
-        vm.label(address(yrfTimelock), "YRFManagerTimelock");
+        // The facility pins the YRF timelock as an immutable address, so the timelock is
+        // deployed first and wired to the facility afterwards.
+        yrfTimelock = new YRFTimelock(kernel, YRF_TIMELOCK_DELAY, GRACE_PERIOD);
+        vm.label(address(yrfTimelock), "YRFTimelock");
 
         yieldRepo = new YieldRepurchaseFacilityV2(
             kernel,
@@ -399,10 +402,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         vm.stopPrank();
 
         // Roles are granted by the RolesAdmin admin (the OCG timelock). The admin,
-        // emergency, manager, and heart roles already exist on the live actors.
+        // emergency, and heart roles already exist on the live actors.
         vm.startPrank(TIMELOCK);
-        rolesAdmin.grantRole("yrf_manager", yrfManager);
-        rolesAdmin.grantRole("backing_manager", backingManager);
+        rolesAdmin.grantRole("yrf_admin", yrfAdmin);
+        rolesAdmin.grantRole("backing_admin", backingAdmin);
         vm.stopPrank();
 
         // The v2 markets use the facility as their callback, which requires the market
@@ -410,7 +413,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         vm.prank(BOND_OWNER);
         auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
 
-        // Wire and enable the manager timelock, enable the backing oracle (before the
+        // Wire and enable the YRF timelock, enable the backing oracle (before the
         // facility, so that the price gate never sees a zero backing), and enable the
         // facility itself. `enable` is called before the assets are registered, so that
         // its cycle reset does not overwrite the migration seeds below.

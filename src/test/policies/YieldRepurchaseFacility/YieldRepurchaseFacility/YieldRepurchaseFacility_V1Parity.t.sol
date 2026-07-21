@@ -12,7 +12,7 @@ import {FullMath} from "libraries/FullMath.sol";
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {IPolicyAdmin} from "policies/interfaces/utils/IPolicyAdmin.sol";
-import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2} from "policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // This file is a copy of the V1 YieldRepurchaseFacility tests, updated to run against
 // the multi-asset YieldRepurchaseFacilityV2 with a single sUSDS-like reserve asset.
@@ -554,7 +554,7 @@ contract YieldRepurchaseFacilityV1ParityTest is YieldRepurchaseFacilityV2TestBas
         // Call shutdown with a valid caller
         // Expect it to succeed
         // V2 DIFFERENCE: disable only halts operation and leaves the funds in place (so
-        // that the manager can resume the week via reEnable); the V1 shutdown sweep is
+        // that the yrf_admin can resume the week via reEnable); the V1 shutdown sweep is
         // performed by the separate returnFundsToTreasury function, the payload with the
         // token list is no longer used
         vm.prank(guardian);

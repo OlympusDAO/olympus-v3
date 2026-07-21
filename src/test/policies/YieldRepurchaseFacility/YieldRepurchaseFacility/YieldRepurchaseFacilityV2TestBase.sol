@@ -21,10 +21,10 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {OlympusBackingOracle} from "policies/OlympusBackingOracle.sol";
-import {YieldRepurchaseFacilityV2} from "policies/YieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2} from "policies/interfaces/IYieldRepurchaseFacilityV2.sol";
-import {YRFManagerTimelock} from "policies/YRFManagerTimelock.sol";
+import {BackingOracle} from "policies/BackingOracle.sol";
+import {YieldRepurchaseFacilityV2} from "policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2} from "policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {YRFTimelock} from "policies/YieldRepurchaseFacility/YRFTimelock.sol";
 
 /// @notice Shared harness for the multi-asset YRF v2 tests. It deploys the common stack (the bond
 ///         system, OHM, the USDS-like backing reserve and its vault, the kernel and modules, the
@@ -36,7 +36,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
     address internal guardian;
     address internal heart;
     address internal manager;
-    address internal yrfManager;
+    address internal yrfAdmin;
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
@@ -56,24 +56,25 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
 
     MockClearinghouse internal clearinghouse;
     YieldRepurchaseFacilityV2 internal yieldRepo;
-    YRFManagerTimelock internal yrfTimelock;
-    OlympusBackingOracle internal backingOracle;
+    YRFTimelock internal yrfTimelock;
+    BackingOracle internal backingOracle;
     RolesAdmin internal rolesAdmin;
 
     // Backing value: 11.33 per OHM at 18 decimals.
     uint256 internal backingPerToken = 1133 * 1e16;
     // 3% initial bond discount (18 decimals).
     uint256 internal initialDiscount = 3e16;
-    // Grace window for the manager reEnable after a disable.
-    uint32 internal gracePeriod = 7 days;
-    // Timelock delay applied to the manager timelock queue.
-    uint48 internal managerTimelockDelay = 1 days;
+    // Grace window for the yrf_admin reEnable after a disable, shared by the facility and
+    // the YRF timelock.
+    uint32 internal gracePeriod = 5 days;
+    // Timelock delay applied to the YRF timelock queue.
+    uint48 internal yrfTimelockDelay = 1 days;
 
     /// @notice Deploys the common stack: bond system, tokens, kernel and modules, the facility, the
     ///         backing oracle and the roles. Sets the oracle price to 10e18 and authorizes the
     ///         facility callback. Does not fund the treasury or register any reserve asset.
     function _deployStack() internal {
-        // Set an absolute starting timestamp (the PRICE/Heart cadence is epoch-count based).
+        // Set an absolute starting timestamp.
         vm.warp(51 * 365 * 24 * 60 * 60);
 
         userCreator = new UserFactory();
@@ -82,7 +83,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
             guardian = users[0];
             heart = users[1];
             manager = makeAddr("manager");
-            yrfManager = makeAddr("yrfManager");
+            yrfAdmin = makeAddr("yrfAdmin");
             vm.label(guardian, "guardian");
             vm.label(heart, "heart");
             auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
@@ -137,11 +138,11 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
         }
 
         {
-            backingOracle = new OlympusBackingOracle(kernel);
+            backingOracle = new BackingOracle(kernel);
             vm.label(address(backingOracle), "backingOracle");
-            // The facility pins the timelock as its immutable manager timelock, so the timelock
-            // is deployed first and wired to the facility afterwards via `setFacility`.
-            yrfTimelock = new YRFManagerTimelock(kernel, managerTimelockDelay);
+            // The facility pins the YRF timelock as an immutable address, so the timelock is
+            // deployed first and wired to the facility afterwards via `setFacility`.
+            yrfTimelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
             vm.label(address(yrfTimelock), "yrfTimelock");
             yieldRepo = new YieldRepurchaseFacilityV2(
                 kernel,
@@ -173,10 +174,10 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
         rolesAdmin.grantRole("heart", address(heart));
         rolesAdmin.grantRole("admin", guardian);
         rolesAdmin.grantRole("manager", manager);
-        rolesAdmin.grantRole("yrf_manager", yrfManager);
+        rolesAdmin.grantRole("yrf_admin", yrfAdmin);
         rolesAdmin.grantRole("emergency", guardian);
 
-        // Wire the manager timelock to the facility and enable it so that timelocked manager
+        // Wire the YRF timelock to the facility and enable it so that timelocked operational
         // actions can be queued.
         vm.startPrank(guardian);
         yrfTimelock.setFacility(address(yieldRepo));

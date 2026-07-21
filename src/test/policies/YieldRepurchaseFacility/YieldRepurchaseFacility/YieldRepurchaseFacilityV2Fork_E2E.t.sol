@@ -7,7 +7,8 @@ import {Vm} from "@forge-std-1.9.6/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/IYieldRepurchaseFacilityV2.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_E2E
 /// @notice End-to-end mainnet-fork test of the YRF v2: migrates from the deployed
@@ -122,8 +123,12 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     ///         shares.
     uint256 internal constant TRSRY_OUTFLOW_SUSDS_SHARES = 1_400_000e18;
 
-    /// @notice The additional receivables offset applied by the yrf_manager on day 5.
+    /// @notice The additional receivables offset queued by the yrf_admin through the
+    ///         YRF timelock on day 5 and executed on day 6, one timelock delay later.
     uint256 internal constant DAI_V1_1_OFFSET_INCREASE = 2_000_000e18;
+
+    /// @notice The queued offset increase, pending between day 5 and day 6.
+    uint64 internal offsetActionId;
 
     // ============ SETUP VALIDATION ============ //
 
@@ -156,7 +161,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.backingOracle(), address(backingOracle), "backing oracle");
         assertEq(yieldRepo.teller(), BOND_TELLER, "teller");
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
-        assertEq(yieldRepo.managerTimelock(), address(yrfTimelock), "manager timelock");
+        assertEq(yieldRepo.timelock(), address(yrfTimelock), "timelock");
         assertEq(yieldRepo.initialDiscount(), INITIAL_DISCOUNT, "initial discount");
         assertEq(backingOracle.backing(), BACKING, "backing value");
 
@@ -198,8 +203,8 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(chreg.registryCount(), 3, "registry count");
 
         // The roles.
-        assertTrue(roles.hasRole(yrfManager, "yrf_manager"), "yrf_manager role");
-        assertTrue(roles.hasRole(backingManager, "backing_manager"), "backing_manager role");
+        assertTrue(roles.hasRole(yrfAdmin, "yrf_admin"), "yrf_admin role");
+        assertTrue(roles.hasRole(backingAdmin, "backing_admin"), "backing_admin role");
     }
 
     // ============ TWO-WEEK END-TO-END ============ //
@@ -225,7 +230,8 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
             // Scenario events.
             if (day == 2) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
-            if (day == 4) _increaseOffsetAndAssert();
+            if (day == 4) _queueOffsetIncrease();
+            if (day == 5) _executeOffsetIncreaseAndAssert();
             if (day == 9) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
 
             // The two intra-day beats: the facility only advances its epoch.
@@ -299,14 +305,28 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertGt(yieldRepo.getAssetConfig(SUSDE).weeklyBudgetRemaining, 0, "week 2: sUSDe budget");
     }
 
-    /// @notice Day 5: the yrf_manager raises the DAI v1.1 receivables offset. The offset
-    ///         is applied to the projection immediately (and therefore to the next weekly
-    ///         reset), reducing it by the interest on the offset delta.
-    function _increaseOffsetAndAssert() internal {
+    /// @notice Day 5: the yrf_admin queues the DAI v1.1 offset increase through the
+    ///         YRF timelock; the direct facility path is closed for the yrf_admin.
+    function _queueOffsetIncrease() internal {
+        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.prank(yrfAdmin);
+        yieldRepo.increaseClearinghouseOffset(CLEARINGHOUSE_DAI_V1_1, DAI_V1_1_OFFSET_INCREASE);
+
+        vm.prank(yrfAdmin);
+        offsetActionId = yrfTimelock.queueIncreaseClearinghouseOffset(
+            CLEARINGHOUSE_DAI_V1_1,
+            DAI_V1_1_OFFSET_INCREASE
+        );
+    }
+
+    /// @notice Day 6: the queued offset increase executes (the day-5 queueing is exactly
+    ///         one timelock delay in the past) and is applied to the projection
+    ///         immediately, and therefore to the next weekly reset, reducing it by the
+    ///         interest on the offset delta.
+    function _executeOffsetIncreaseAndAssert() internal {
         uint256 projectionBefore = yieldRepo.getNextYield(SUSDS);
 
-        vm.prank(yrfManager);
-        yieldRepo.increaseClearinghouseOffset(CLEARINGHOUSE_DAI_V1_1, DAI_V1_1_OFFSET_INCREASE);
+        yrfTimelock.executeQueuedAction(offsetActionId);
 
         assertEq(
             yieldRepo.clearinghouseOffset(CLEARINGHOUSE_DAI_V1_1),
@@ -388,4 +408,3 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         return (vaultYield + clearinghouseYield).mulDiv(config.yieldBuybackShare, 1e18);
     }
 }
-
