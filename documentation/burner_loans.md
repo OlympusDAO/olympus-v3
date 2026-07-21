@@ -498,7 +498,9 @@ if borrowers.length > 0:
     seize(asset, borrowers)
 ```
 
-When `nextIndex` reaches the active set length, the seizer should wrap to zero. The seizer should keep a cursor per asset or scan one asset per execution. `BurnerLoansSeizer` should be granted `burner_loans_seizer` so it receives no keeper reward. Off-chain keepers can still prefer event/indexer-driven discovery plus `isSeizable(asset, borrower)` checks and may receive the capped keeper reward.
+`BurnerLoansSeizer` stores a cursor per asset and scans one admin-managed asset per Heart execution in round-robin order. Its configurable check and seizure limits must be non-zero, the seizure limit cannot exceed the check limit or Burner Loans' 50-borrower batch maximum, and the check limit is capped at 500. When `nextIndex` reaches the active set length, the stored cursor wraps to zero.
+
+The policy must be granted both `heart` (for the caller that invokes `execute`) and `burner_loans_seizer` (to the seizer contract itself). It refuses to scan or seize without the latter role, ensuring it cannot accidentally accrue a keeper reward. A scan failure emits `ScanFailed` and moves round-robin processing to the next asset without advancing the failed asset's borrower cursor. A seizure failure emits `SeizureFailed`, also leaves that borrower cursor unchanged, and does not revert the Heart's other periodic tasks. Successful or empty scans commit the returned cursor. Off-chain keepers can still prefer event/indexer-driven discovery plus `isSeizable(asset, borrower)` checks and may receive the capped keeper reward.
 
 `seize` should accept multiple borrowers by default and be asset-specific. A single-position seizure is `seize(asset, [borrower])`. Batch size should be capped to avoid griefing. All borrowers in the batch must have active, seizable positions for the `asset` parameter; otherwise the batch should revert. Zero addresses, duplicate borrowers, borrowers for a different collateral asset, debt-free or previously closed positions, and active-but-not-seizable positions should all revert the whole batch. Because the batch is single-asset, `BurnerLoans` should fetch OHM/USD, collateral/USD, and backing inputs once before the loop, then reuse those values for every position in the batch. Prefer reverting the batch for invalid or no-longer-seizable borrowers unless partial execution is explicitly required.
 
@@ -543,14 +545,18 @@ This ensures a new borrow can always receive at least one full term under the as
 
 ### Composites
 
-The core `BurnerLoans` policy should keep the primitive surface small. One-transaction UX should live in a periphery contract, similar to `CoolerComposites`:
+The core `BurnerLoans` policy keeps the primitive surface small. One-transaction UX lives in the stateless `BurnerLoansComposites` periphery:
 
 ```text
-BurnerLoansComposites.depositAndBorrow(...)
-BurnerLoansComposites.repayAndWithdraw(...)
+depositAndBorrow(authorization, signature, params)
+repayAndWithdraw(authorization, signature, params)
 ```
 
-`depositAndBorrow` can pull collateral and fee from the caller, deposit collateral into `BurnerLoans`, then borrow OHM to the allowed recipient. `repayAndWithdraw` can pull OHM from the caller, repay debt, then withdraw collateral if the resulting position remains healthy. Future composites can add wrapping and unwrapping paths, such as accepting an underlying asset, wrapping into the supported holding token, depositing it, and borrowing in one transaction.
+The composite only operates on `msg.sender`'s position. The caller must either authorize the composite through `BurnerLoans` before the call or supply a signed `OperatorAuth` authorization naming both the caller and the composite. The composite cannot use a signature for another account, so authorizing the shared periphery does not let an unrelated caller choose the owner or recipient of someone else's flow.
+
+`depositAndBorrow` pulls `collateralAmount + maxFee` of the collateral token, deposits the collateral, and borrows OHM to the explicit recipient. The actual fee is bounded by `maxFee`; unused fee input is refunded to the caller. `repayAndWithdraw` pulls at most `maxRepayOhm`, caps the actual repayment at the position's outstanding debt, withdraws collateral to the explicit recipient, and refunds excess OHM. If repayment succeeds but withdrawal fails its health or authorization checks, the entire transaction reverts. Neither flow intentionally retains user-token balances or allowances after it succeeds.
+
+Future composites can add wrapping and unwrapping paths, such as accepting an underlying asset, wrapping into the supported holding token, depositing it, and borrowing in one transaction. A whitelisted vault token already works as ordinary collateral and is returned as that vault token on withdrawal.
 
 Keeping composites outside the core policy saves bytecode and avoids turning `BurnerLoans` into a routing contract. The core policy should expose the primitives and safety checks; composites should compose them.
 
