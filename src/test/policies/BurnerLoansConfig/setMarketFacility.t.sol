@@ -7,6 +7,10 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigSetMarketFacilityTest is BurnerLoansTest {
+    // setMarketFacility
+    // given admin
+    //  when setMarketFacility is called
+    //   then it moves market to new facility
     function test_givenAdmin_setMarketFacility_movesMarketToNewFacility() public {
         _addDefaultUsdsAsset();
         uint32 marketId = burnerLoansConfig.marketId(address(burnerLoans), address(usds));
@@ -26,6 +30,10 @@ contract BurnerLoansConfigSetMarketFacilityTest is BurnerLoansTest {
         );
     }
 
+    // setMarketFacility
+    // given non admin
+    //  when setMarketFacility is called
+    //   then it reverts
     function test_givenNonAdmin_setMarketFacility_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         _addDefaultUsdsAsset();
@@ -36,6 +44,10 @@ contract BurnerLoansConfigSetMarketFacilityTest is BurnerLoansTest {
         burnerLoansConfig.setMarketFacility(marketId, makeAddr("newFacility"));
     }
 
+    // setMarketFacility
+    // given zero facility
+    //  when setMarketFacility is called
+    //   then it reverts
     function test_givenZeroFacility_setMarketFacility_reverts() public {
         _addDefaultUsdsAsset();
         uint32 marketId = burnerLoansConfig.marketId(address(burnerLoans), address(usds));

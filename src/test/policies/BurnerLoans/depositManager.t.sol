@@ -4,6 +4,10 @@ pragma solidity >=0.8.24;
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansDepositManagerTest is BurnerLoansTest {
+    // depositManager
+    // given policy deployed
+    //  when depositManager is called
+    //   then it returns immutable policy
     function test_givenPolicyDeployed_depositManager_returnsImmutablePolicy() public view {
         assertEq(
             address(burnerLoans.context().depositManager),

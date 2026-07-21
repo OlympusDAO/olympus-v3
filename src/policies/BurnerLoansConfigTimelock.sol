@@ -316,65 +316,7 @@ contract BurnerLoansConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
         _validatePreState(actionId_, index_, action_);
-
-        bytes4 selector = action_.selector;
-        bool success;
-        bytes memory returnData;
-        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
-            (
-                address asset,
-                AssetRiskConfigUpdate memory update,
-                AssetRiskConfigUpdateSelection memory selection
-            ) = abi.decode(
-                    action_.payload,
-                    (address, AssetRiskConfigUpdate, AssetRiskConfigUpdateSelection)
-                );
-            IBurnerLoans.AssetConfig memory config = BurnerLoansConfigTimelockLib
-                .applyAssetRiskConfigUpdate(
-                    BURNER_LOANS.getAssetConfig(FACILITY, asset),
-                    update,
-                    selection
-                );
-            (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(
-                    selector,
-                    FACILITY,
-                    asset,
-                    BurnerLoansConfigTimelockLib.toRiskConfig(config)
-                )
-            );
-        } else if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
-            (
-                address asset,
-                IBurnerLoans.AssetFeeConfig memory update,
-                FeeConfigUpdateSelection memory selection
-            ) = abi.decode(
-                    action_.payload,
-                    (address, IBurnerLoans.AssetFeeConfig, FeeConfigUpdateSelection)
-                );
-            IBurnerLoans.AssetFeeConfig memory config = BurnerLoansConfigTimelockLib
-                .applyFeeConfigUpdate(
-                    BURNER_LOANS.getAssetFeeConfig(FACILITY, asset),
-                    update,
-                    selection
-                );
-            (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(selector, FACILITY, asset, config)
-            );
-        } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
-            (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
-            (success, returnData) = action_.target.call(
-                abi.encodeWithSelector(selector, FACILITY, asset, debtCapOhm)
-            );
-        } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-        }
-
-        if (!success) {
-            assembly {
-                revert(add(returnData, 32), mload(returnData))
-            }
-        }
+        BurnerLoansConfigTimelockLib.executeSubAction(BURNER_LOANS, FACILITY, action_);
 
         delete _expectedPreStateHashes[actionId_][index_];
         _clearFeeConfigPostState(actionId_, index_);

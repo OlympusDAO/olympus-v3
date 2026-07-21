@@ -12,6 +12,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
 /// @title Burner Loans View Library
 /// @notice Separately linked position and custody previews exposed by the lifecycle policy.
@@ -33,6 +34,28 @@ library BurnerLoansView {
                     ? IBurnerLoans.PositionStatus.NoDebt
                     : IBurnerLoans.PositionStatus.Active
             });
+    }
+
+    function getPositionForBorrower(
+        IFLOANv1 floan_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (IBurnerLoans.Position memory) {
+        return getPosition(BurnerLoansPositions.getOrEmpty(floan_, marketId_, borrower_));
+    }
+
+    function isBorrowerSeizable(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (bool) {
+        return
+            isSeizable(
+                dependencies_,
+                asset_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
     }
 
     function isSeizable(
@@ -99,6 +122,22 @@ library BurnerLoansView {
         totalCollateral = position.collateral + depositedCollateral;
     }
 
+    function previewDepositCollateralForBorrower(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint128 amount_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
+        return
+            previewDepositCollateral(
+                dependencies_,
+                asset_,
+                amount_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
+    }
+
     function previewRepay(
         uint128 repayOhm_,
         IFLOANv1.Position memory position
@@ -119,6 +158,16 @@ library BurnerLoansView {
             resultingHealthFactor: remainingDebtOhm == 0 ? type(uint256).max : 0,
             executable: true
         });
+    }
+
+    function previewRepayForBorrower(
+        IFLOANv1 floan_,
+        uint32 marketId_,
+        address borrower_,
+        uint128 repayOhm_
+    ) public view returns (IBurnerLoans.RepayPreview memory) {
+        return
+            previewRepay(repayOhm_, BurnerLoansPositions.getOrEmpty(floan_, marketId_, borrower_));
     }
 
     function previewWithdrawCollateral(
@@ -161,6 +210,22 @@ library BurnerLoansView {
                 executable: returnAmount != 0 &&
                     (position.principalDue == 0 || resultingHealthFactor >= _WAD)
             });
+    }
+
+    function previewWithdrawCollateralForBorrower(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint128 amount_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (IBurnerLoans.WithdrawPreview memory) {
+        return
+            previewWithdrawCollateral(
+                dependencies_,
+                asset_,
+                amount_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
     }
 
     function _requireAssetConfigured(

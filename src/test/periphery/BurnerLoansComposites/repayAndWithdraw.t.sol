@@ -23,6 +23,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
             });
     }
 
+    // repayAndWithdraw
     // given an authorized caller has active debt and healthy collateral after the requested exit
     //  when repaying and withdrawing
     //   then debt and collateral decrease atomically and output routes to the recipient
@@ -54,6 +55,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // repayAndWithdraw
     // given the caller supplies more OHM than the outstanding debt
     //  when repaying and withdrawing all collateral
     //   then only outstanding debt is repaid and excess OHM is refunded
@@ -83,6 +85,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // repayAndWithdraw
     // given the composite is not authorized to withdraw for the caller
     //  when repayment and withdrawal are requested together
     //   then the withdrawal revert rolls back the preceding repayment and token pull
@@ -112,6 +115,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // repayAndWithdraw
     // given the caller has not approved OHM input
     //  when repaying and withdrawing
     //   then the transfer fails before debt or collateral changes
@@ -127,6 +131,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         );
     }
 
+    // repayAndWithdraw
     // given collateral itself is a whitelisted vault token held directly by DepositManager
     //  when debt is fully repaid and collateral withdrawn
     //   then the vault token is routed directly to the requested recipient
@@ -180,6 +185,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(vaultToken));
     }
 
+    // repayAndWithdraw
     // given both repay and withdrawal amounts are zero
     //  when calling the composite
     //   then the meaningless operation is rejected

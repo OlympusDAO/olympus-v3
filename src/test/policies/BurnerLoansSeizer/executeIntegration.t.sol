@@ -24,6 +24,10 @@ contract BurnerLoansSeizerExecuteIntegrationTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
     }
 
+    // execute
+    // given matured position
+    //  when execute is called through the Heart role
+    //   then it seizes without keeper reward
     function test_givenMaturedPosition_seizesWithoutKeeperReward() public {
         _makeMatured(alice);
         uint256 treasuryBefore = usds.balanceOf(address(trsry));

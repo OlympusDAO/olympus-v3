@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANAddCollateralTest is FLOANTest {
+    // addCollateral
+    // given caller without kernel permission
+    //  when addCollateral is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_addCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -15,6 +19,10 @@ contract FLOANAddCollateralTest is FLOANTest {
         floan.addCollateral(positionId, 1);
     }
 
+    // addCollateral
+    // given valid amount
+    //  when addCollateral is called
+    //   then it updates only collateral
     function testFuzz_givenValidAmount_addCollateral_updatesOnlyCollateral(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
@@ -30,6 +38,10 @@ contract FLOANAddCollateralTest is FLOANTest {
         assertEq(position.maturity, 0, "maturity unchanged");
     }
 
+    // addCollateral
+    // given zero amount
+    //  when addCollateral is called
+    //   then it reverts
     function test_givenZeroAmount_addCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -38,6 +50,10 @@ contract FLOANAddCollateralTest is FLOANTest {
         floan.addCollateral(positionId, 0);
     }
 
+    // addCollateral
+    // given permissioned non facility
+    //  when addCollateral is called
+    //   then it reverts
     function test_givenPermissionedNonFacility_addCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);

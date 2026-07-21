@@ -14,6 +14,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
 /// @title Burner Loans Quote Library
 /// @notice Shared pricing and health validation for Burner Loans previews and execution.
@@ -36,6 +37,22 @@ library BurnerLoansQuote {
         uint48 currentMaturity;
         uint32 marketId;
         uint16 termCount;
+    }
+
+    function previewBorrow(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint128 ohmAmount_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (IBurnerLoans.BorrowPreview memory) {
+        return
+            quoteBorrow(
+                dependencies_,
+                asset_,
+                ohmAmount_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
     }
 
     function quoteBorrow(
@@ -122,6 +139,22 @@ library BurnerLoansQuote {
                     : position.maturity,
                 executable: true
             });
+    }
+
+    function previewExtend(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint16 termCount_,
+        uint32 marketId_,
+        address borrower_
+    ) public view returns (IBurnerLoans.ExtendPreview memory) {
+        return
+            quoteExtend(
+                dependencies_,
+                asset_,
+                termCount_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
     }
 
     function positionHealthFactor(

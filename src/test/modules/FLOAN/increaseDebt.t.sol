@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANIncreaseDebtTest is FLOANTest {
+    // increaseDebt
+    // given caller without kernel permission
+    //  when increaseDebt is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_increaseDebt_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -15,6 +19,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 1));
     }
 
+    // increaseDebt
+    // given permissioned non facility
+    //  when increaseDebt is called
+    //   then it reverts
     function test_givenPermissionedNonFacility_increaseDebt_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -25,6 +33,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 1));
     }
 
+    // increaseDebt
+    // given originations disabled
+    //  when increaseDebt is called
+    //   then it reverts without state change
     function test_givenOriginationsDisabled_increaseDebt_revertsWithoutStateChange() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -40,6 +52,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         assertEq(floan.marketPrincipalDue(marketId), 0, "market principal unchanged");
     }
 
+    // increaseDebt
+    // given invalid amount or maturity
+    //  when increaseDebt is called
+    //   then it reverts
     function test_givenInvalidAmountOrMaturity_increaseDebt_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -51,6 +67,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         vm.stopPrank();
     }
 
+    // increaseDebt
+    // given active debt
+    //  when increaseDebt is called
+    //   then it requires existing maturity
     function test_givenActiveDebt_increaseDebt_requiresExistingMaturity() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -64,6 +84,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
     }
 
+    // increaseDebt
+    // given principal debt is increased
+    //  when increaseDebt is called
+    //   then it updates market facility and token principal totals
     function test_updatesMarketFacilityAndTokenPrincipalTotals() public {
         uint32 firstMarket = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 secondMarket = _createMarket(
@@ -96,11 +120,15 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 700e9, "token principal");
     }
 
+    // increaseDebt
+    // given interest only increase
+    //  when increaseDebt is called
+    //   then it does not change principal totals
     function test_interestOnlyIncrease_doesNotChangePrincipalTotals() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
-        uint64 positionId = floan.getOrCreatePosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
         floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
         vm.stopPrank();
 
@@ -109,6 +137,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 100e9, "token principal");
     }
 
+    // increaseDebt
+    // given a fuzzed principal increase
+    //  when increaseDebt is called
+    //   then it updates every principal total
     function testFuzz_increaseDebt_updatesEveryPrincipalTotal(uint128 principal_) public {
         principal_ = uint128(bound(principal_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, principal_);
@@ -120,6 +152,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), principal_, "token principal");
     }
 
+    // increaseDebt
+    // given exact principal cap
+    //  when increaseDebt is called
+    //   then it succeeds and one over reverts
     function test_increaseDebt_givenExactPrincipalCap_succeedsAndOneOverReverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 100e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -142,6 +178,10 @@ contract FLOANIncreaseDebtTest is FLOANTest {
         );
     }
 
+    // increaseDebt
+    // given markets with different debt tokens in one facility
+    //  when increaseDebt is called
+    //   then it isolates debt tokens within facility
     function test_increaseDebt_isolatesDebtTokensWithinFacility() public {
         uint32 firstMarket = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 secondMarket = _createMarket(

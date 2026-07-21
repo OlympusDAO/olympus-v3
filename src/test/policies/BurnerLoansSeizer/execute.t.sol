@@ -15,6 +15,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         seizer.addAsset(assetOne);
     }
 
+    // execute
+    // given seizable borrowers
+    //  when execute is called
+    //   then it scans advances and seizes
     function test_givenSeizableBorrowers_scansAdvancesAndSeizes() public {
         target.setScanResult(assetOne, _single(alice), 3, 0);
 
@@ -27,6 +31,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(target.getLastSeizedBorrowers(), _single(alice), "seized borrowers");
     }
 
+    // execute
+    // given no managed assets
+    //  when execute is called
+    //   then it returns without calling target
     function test_givenNoManagedAssets_returnsWithoutCallingTarget() public {
         vm.prank(admin);
         seizer.removeAsset(assetOne);
@@ -38,6 +46,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(seizer.nextAssetIndex(), 0, "next asset index");
     }
 
+    // execute
+    // given no seizable borrowers
+    //  when execute is called
+    //   then it advances cursor without seizing
     function test_givenNoSeizableBorrowers_advancesCursorWithoutSeizing() public {
         target.setScanResult(assetOne, new address[](0), 4, 0);
 
@@ -48,6 +60,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(target.seizureCalls(), 0, "seizure calls");
     }
 
+    // execute
+    // given multiple assets
+    //  when execute is called
+    //   then it processes one asset per execution
     function test_givenMultipleAssets_processesOneAssetPerExecution() public {
         vm.prank(admin);
         seizer.addAsset(assetTwo);
@@ -65,6 +81,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(target.lastSeizedAsset(), assetTwo, "seized asset");
     }
 
+    // execute
+    // given seizure reverts
+    //  when execute is called
+    //   then it does not advance borrower cursor
     function test_givenSeizureReverts_doesNotAdvanceBorrowerCursor() public {
         vm.prank(admin);
         seizer.addAsset(assetTwo);
@@ -81,8 +101,20 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
 
         assertEq(seizer.assetCursor(assetOne), 0, "failed asset cursor");
         assertEq(seizer.nextAssetIndex(), 1, "next asset index");
+
+        target.setSeizureReverts(false);
+        target.setScanResult(assetTwo, _single(alice), 4, 0);
+        vm.prank(heart);
+        seizer.execute();
+
+        assertEq(seizer.assetCursor(assetTwo), 4, "next asset cursor");
+        assertEq(target.lastSeizedAsset(), assetTwo, "next seized asset");
     }
 
+    // execute
+    // given scan reverts
+    //  when execute is called
+    //   then it advances to next asset without changing cursor
     function test_givenScanReverts_advancesToNextAssetWithoutChangingCursor() public {
         vm.prank(admin);
         seizer.addAsset(assetTwo);
@@ -100,11 +132,19 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(seizer.nextAssetIndex(), 1, "next asset index");
     }
 
+    // execute
+    // given caller without heart role
+    //  when execute is called
+    //   then it reverts
     function test_givenCallerWithoutHeartRole_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, HEART_ROLE));
         seizer.execute();
     }
 
+    // execute
+    // given seizer role missing
+    //  when execute is called
+    //   then it does not scan or seize
     function test_givenSeizerRoleMissing_doesNotScanOrSeize() public {
         vm.prank(admin);
         rolesAdmin.revokeRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
@@ -119,6 +159,10 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(target.seizureCalls(), 0, "seizure calls");
     }
 
+    // execute
+    // given cursor at end
+    //  when execute is called
+    //   then it wraps to zero
     function test_givenCursorAtEnd_wrapsToZero() public {
         target.setScanResult(assetOne, new address[](0), 4, 0);
         vm.prank(heart);

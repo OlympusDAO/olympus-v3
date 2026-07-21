@@ -6,6 +6,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansHarvestTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarvestTestBase.sol";
 
 contract BurnerLoansGetAssetCollateralStatusTest is BurnerLoansHarvestTestBase {
+    // getAssetCollateralStatus
     // given configured vault custody with borrower principal and earned yield
     //  when reading collateral status
     //   then every field reconciles to DepositManager accounting
@@ -42,6 +43,7 @@ contract BurnerLoansGetAssetCollateralStatusTest is BurnerLoansHarvestTestBase {
         assertTrue(status.solvent, "solvent");
     }
 
+    // getAssetCollateralStatus
     // given custody assets fall below borrower liabilities
     //  when reading collateral status
     //   then the shortfall is surfaced without reverting
@@ -59,6 +61,7 @@ contract BurnerLoansGetAssetCollateralStatusTest is BurnerLoansHarvestTestBase {
         assertFalse(status.solvent, "solvent");
     }
 
+    // getAssetCollateralStatus
     // given FLOAN has two matching markets for this facility and token pair
     //  when reading collateral status
     //   then Burner Loans rejects the ambiguous asset namespace

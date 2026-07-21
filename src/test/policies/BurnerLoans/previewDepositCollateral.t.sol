@@ -11,6 +11,10 @@ contract BurnerLoansPreviewDepositCollateralTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
     }
 
+    // previewDepositCollateral
+    // given existing collateral
+    //  when previewDepositCollateral is called
+    //   then it returns increment and total
     function test_givenExistingCollateral_previewDepositCollateral_returnsIncrementAndTotal()
         public
     {

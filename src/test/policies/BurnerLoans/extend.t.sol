@@ -23,6 +23,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         operator = makeAddr("operator");
     }
 
+    // extend
     // given an active position whose collateral vault has fallen below borrower liabilities
     //  when previewing or executing an extension
     //   then the asset-level custody shortfall blocks the extension
@@ -57,6 +58,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(asset), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given healthy active position
+    //  when extend is called
+    //   then it adds one term and charges collateral fee
     function test_givenHealthyActivePosition_extendAddsOneTermAndChargesCollateralFee() public {
         _borrowForAlice();
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);
@@ -92,6 +97,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "active borrowers");
     }
 
+    // extend
+    // given two terms
+    //  when extend is called
+    //   then it charges twice single term fee
     function test_givenTwoTerms_extendChargesTwiceSingleTermFee() public {
         _borrowForAlice();
         IBurnerLoans.ExtendPreview memory single = burnerLoans.previewExtend(
@@ -115,6 +124,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // extend
+    // given authorized operator
+    //  when extend is called
+    //   then it succeeds and operator pays fee
     function test_givenAuthorizedOperator_extendSucceedsAndOperatorPaysFee() public {
         _borrowForAlice();
         _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
@@ -132,6 +145,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         assertEq(usds.balanceOf(operator), 0, "operator paid fee");
     }
 
+    // extend
+    // given unauthorized caller
+    //  when extend is called
+    //   then it reverts
     function test_givenUnauthorizedCaller_extendReverts() public {
         _borrowForAlice();
 
@@ -140,6 +157,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given unauthorized caller
+    //  when extend is called
+    //   then it reverts
     function testFuzz_givenUnauthorizedCaller_extendReverts(address caller_) public {
         vm.assume(caller_ != alice);
         _borrowForAlice();
@@ -149,6 +170,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given expired authorization
+    //  when extend is called
+    //   then it reverts
     function test_givenExpiredAuthorization_extendReverts() public {
         _borrowForAlice();
         _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp));
@@ -159,6 +184,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given zero term count
+    //  when extend is called
+    //   then it reverts
     function test_givenZeroTermCount_extendReverts() public {
         _borrowForAlice();
 
@@ -167,6 +196,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 0, type(uint256).max);
     }
 
+    // extend
+    // given extension beyond horizon
+    //  when extend is called
+    //   then it reverts
     function test_givenExtensionBeyondHorizon_extendReverts() public {
         _borrowForAlice();
 
@@ -181,6 +214,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 3, type(uint256).max);
     }
 
+    // extend
+    // given active position
+    //  when extend is called
+    //   then it succeeds within the maturity horizon
     function testFuzz_givenActivePosition_extendWithinHorizonSucceeds(
         uint16 termCount_,
         uint32 elapsed_
@@ -207,6 +244,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // extend
+    // given extension above horizon
+    //  when extend is called
+    //   then it reverts
     function testFuzz_givenExtensionAboveHorizon_extendReverts(
         uint16 termCount_,
         uint32 elapsed_
@@ -231,6 +272,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, termCount, type(uint256).max);
     }
 
+    // extend
+    // given extension at exact horizon
+    //  when extend is called
+    //   then it succeeds
     function test_givenExtensionAtExactHorizon_extendSucceeds() public {
         _borrowForAlice();
         vm.warp(block.timestamp + 30 days);
@@ -246,6 +291,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         assertEq(preview.maturity, block.timestamp + 90 days, "exact horizon");
     }
 
+    // extend
+    // given updated term length
+    //  when extend is called
+    //   then it uses new term without changing existing maturity
     function testFuzz_givenUpdatedTermLength_extendUsesNewTermWithoutChangingExistingMaturity(
         uint32 termLength_
     ) public {
@@ -272,6 +321,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         assertEq(preview.maturity, originalMaturity + termLength, "new term length");
     }
 
+    // extend
+    // given unhealthy position
+    //  when extend is called
+    //   then it reverts
     function test_givenUnhealthyPosition_extendReverts() public {
         _borrowForAlice();
         price.setPrice(address(usds), 0.1e18);
@@ -286,6 +339,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given matured healthy position
+    //  when extend is called
+    //   then it uses current timestamp as base
     function test_givenMaturedHealthyPosition_extendUsesCurrentTimestampAsBase() public {
         _borrowForAlice();
         vm.warp(block.timestamp + 31 days);
@@ -301,6 +358,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         assertEq(preview.maturity, block.timestamp + 30 days, "maturity from current time");
     }
 
+    // extend
+    // given asset disabled
+    //  when extend is called
+    //   then it reverts
     function test_givenAssetDisabled_extendReverts() public {
         _borrowForAlice();
         vm.prank(burnerLoansAdmin);
@@ -313,6 +374,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given global policy disabled
+    //  when extend is called
+    //   then it reverts
     function test_givenGlobalPolicyDisabled_extendReverts() public {
         _borrowForAlice();
         vm.prank(emergency);
@@ -323,6 +388,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given stale price
+    //  when extend is called
+    //   then it reverts
     function test_givenStalePrice_extendReverts() public {
         _borrowForAlice();
         vm.warp(block.timestamp + 1 days);
@@ -333,6 +402,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given unavailable price
+    //  when extend is called
+    //   then it reverts
     function test_givenUnavailablePrice_extendReverts() public {
         _borrowForAlice();
         price.setPrice(address(usds), 0);
@@ -342,6 +415,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
 
+    // extend
+    // given no debt
+    //  when extend is called
+    //   then it reverts
     function test_givenNoDebt_extendReverts() public {
         usds.mint(alice, 1e18);
         vm.startPrank(alice);
@@ -352,6 +429,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         vm.stopPrank();
     }
 
+    // extend
+    // given fee above max
+    //  when extend is called
+    //   then it reverts without maturity change
     function test_givenFeeAboveMax_extendRevertsWithoutMaturityChange() public {
         _borrowForAlice();
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);
@@ -377,6 +458,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // extend
+    // given missing fee allowance
+    //  when extend is called
+    //   then it reverts without maturity change
     function test_givenMissingFeeAllowance_extendRevertsWithoutMaturityChange() public {
         _borrowForAlice();
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);
@@ -398,6 +483,10 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // extend
+    // given missing fee balance
+    //  when extend is called
+    //   then it reverts without maturity change
     function test_givenMissingFeeBalance_extendRevertsWithoutMaturityChange() public {
         _borrowForAlice();
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);

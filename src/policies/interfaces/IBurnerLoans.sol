@@ -40,6 +40,7 @@ interface IBurnerLoans {
     error BurnerLoans_AssetAlreadyConfigured(address asset);
     error BurnerLoans_AssetNotConfigured(address asset);
     error BurnerLoans_AmbiguousMarket(address asset, uint256 marketCount);
+    error BurnerLoans_AmbiguousPosition(uint32 marketId, address borrower, uint256 positionCount);
     error BurnerLoans_AssetNotEnabled(address asset);
     error BurnerLoans_AssetAlreadyEnabled(address asset);
     error BurnerLoans_InvalidFeeConfig();

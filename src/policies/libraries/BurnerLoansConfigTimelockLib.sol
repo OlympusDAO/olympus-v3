@@ -3,16 +3,78 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock Library
 /// @notice Pure transformations used when projecting partial timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
+    function executeSubAction(
+        IBurnerLoansConfig burnerLoans_,
+        address facility_,
+        ITimelockBatchQueue.BatchAction memory action_
+    ) external {
+        bytes4 selector = action_.selector;
+        bytes memory callData;
+        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
+            (
+                address asset,
+                IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
+                IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
+            ) = abi.decode(
+                    action_.payload,
+                    (
+                        address,
+                        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate,
+                        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection
+                    )
+                );
+            IBurnerLoans.AssetConfig memory config = applyAssetRiskConfigUpdate(
+                burnerLoans_.getAssetConfig(facility_, asset),
+                update,
+                selection
+            );
+            callData = abi.encodeWithSelector(selector, facility_, asset, toRiskConfig(config));
+        } else if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+            (
+                address asset,
+                IBurnerLoans.AssetFeeConfig memory update,
+                IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection
+            ) = abi.decode(
+                    action_.payload,
+                    (
+                        address,
+                        IBurnerLoans.AssetFeeConfig,
+                        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection
+                    )
+                );
+            IBurnerLoans.AssetFeeConfig memory config = applyFeeConfigUpdate(
+                burnerLoans_.getAssetFeeConfig(facility_, asset),
+                update,
+                selection
+            );
+            callData = abi.encodeWithSelector(selector, facility_, asset, config);
+        } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
+            (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
+            callData = abi.encodeWithSelector(selector, facility_, asset, debtCapOhm);
+        } else {
+            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+        }
+
+        (bool success, bytes memory returnData) = action_.target.call(callData);
+        if (!success) {
+            assembly {
+                revert(add(returnData, 32), mload(returnData))
+            }
+        }
+    }
+
     function applyAssetRiskConfigUpdate(
         IBurnerLoans.AssetConfig memory config,
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update_,
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
-    ) external pure returns (IBurnerLoans.AssetConfig memory) {
+    ) public pure returns (IBurnerLoans.AssetConfig memory) {
         if (
             !selection_.collateralFactorBps &&
             !selection_.minCollateralRatioBps &&
@@ -64,7 +126,7 @@ library BurnerLoansConfigTimelockLib {
 
     function toRiskConfig(
         IBurnerLoans.AssetConfig memory config_
-    ) external pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
+    ) public pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
         return
             IBurnerLoans.AssetRiskConfigInput({
                 collateralFactorBps: config_.collateralFactorBps,
@@ -81,7 +143,7 @@ library BurnerLoansConfigTimelockLib {
         IBurnerLoans.AssetFeeConfig memory config,
         IBurnerLoans.AssetFeeConfig memory update_,
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection_
-    ) external pure returns (IBurnerLoans.AssetFeeConfig memory) {
+    ) public pure returns (IBurnerLoans.AssetFeeConfig memory) {
         if (
             !selection_.baseFeeBps &&
             !selection_.kinkBps &&

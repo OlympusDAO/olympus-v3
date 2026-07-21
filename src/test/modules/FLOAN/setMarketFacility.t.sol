@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketFacilityTest is FLOANTest {
+    // setMarketFacility
+    // given caller without kernel permission
+    //  when setMarketFacility is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_setMarketFacility_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.expectRevert(
@@ -14,6 +18,10 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         floan.setMarketFacility(marketId, otherFacility);
     }
 
+    // setMarketFacility
+    // given an existing market with outstanding principal
+    //  when setMarketFacility is called
+    //   then it moves lookup authority and principal
     function test_setMarketFacility_movesLookupAuthorityAndPrincipal() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -49,6 +57,10 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         assertEq(floan.addCollateral(positionId, 1), 1, "new facility collateral mutation");
     }
 
+    // setMarketFacility
+    // given duplicate target pair
+    //  when setMarketFacility is called
+    //   then it indexes both markets
     function test_setMarketFacility_givenDuplicateTargetPair_indexesBothMarkets() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 existingMarketId = _createMarket(
@@ -74,6 +86,10 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         assertEq(newMarketIds[1], marketId, "moved lookup market id");
     }
 
+    // setMarketFacility
+    // given zero principal
+    //  when setMarketFacility is called
+    //   then it moves lookup without debt dust
     function test_setMarketFacility_givenZeroPrincipal_movesLookupWithoutDebtDust() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
@@ -85,6 +101,10 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 0, "debt token principal");
     }
 
+    // setMarketFacility
+    // given unauthorized manager
+    //  when setMarketFacility is called
+    //   then it reverts
     function test_setMarketFacility_givenUnauthorizedManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
@@ -95,6 +115,10 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
         floan.setMarketFacility(marketId, otherFacility);
     }
 
+    // setMarketFacility
+    // given zero facility
+    //  when setMarketFacility is called
+    //   then it reverts
     function test_setMarketFacility_givenZeroFacility_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

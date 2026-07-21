@@ -7,6 +7,10 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
+    // getSeizableBorrowers
+    // given no active borrowers
+    //  when getSeizableBorrowers is called
+    //   then it returns empty
     function test_givenNoActiveBorrowers_getSeizableBorrowersReturnsEmpty() public view {
         (address[] memory borrowers, uint256 nextIndex, uint256 reward) = burnerLoans
             .getSeizableBorrowers(address(usds), 0, 10, 10);
@@ -16,6 +20,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertEq(reward, 0, "reward");
     }
 
+    // getSeizableBorrowers
+    // given return limit above maximum
+    //  when getSeizableBorrowers is called
+    //   then it reverts
     function testFuzz_givenReturnLimitAboveMaximum_getSeizableBorrowers_reverts(
         uint256 returnLimit_
     ) public {
@@ -25,6 +33,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         burnerLoans.getSeizableBorrowers(address(usds), 0, 100, returnLimit);
     }
 
+    // getSeizableBorrowers
+    // given policy disabled
+    //  when getSeizableBorrowers is called
+    //   then it reverts
     function test_givenPolicyDisabled_getSeizableBorrowers_reverts() public {
         vm.prank(emergency);
         burnerLoans.disable(bytes(""));
@@ -33,6 +45,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         burnerLoans.getSeizableBorrowers(address(usds), 0, 10, 10);
     }
 
+    // getSeizableBorrowers
+    // given stale prices
+    //  when getSeizableBorrowers is called
+    //   then it reverts
     function test_givenStalePrices_getSeizableBorrowers_reverts() public {
         _makeUnhealthy(alice);
         vm.warp(block.timestamp + 9 hours);
@@ -41,6 +57,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         burnerLoans.getSeizableBorrowers(address(usds), 0, 1, 1);
     }
 
+    // getSeizableBorrowers
+    // given mixed active borrowers
+    //  when getSeizableBorrowers is called
+    //   then it returns only eligible positions
     function test_givenMixedActiveBorrowers_getSeizableBorrowersReturnsOnlyEligiblePositions()
         public
     {
@@ -58,6 +78,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertGt(reward, 0, "keeper reward");
     }
 
+    // getSeizableBorrowers
+    // given protocol seizer
+    //  when getSeizableBorrowers is called
+    //   then it returns zero reward
     function test_givenProtocolSeizer_getSeizableBorrowersReturnsZeroReward() public {
         _makeUnhealthy(alice);
 
@@ -73,6 +97,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertEq(reward, 0, "protocol reward");
     }
 
+    // getSeizableBorrowers
+    // given return limit
+    //  when getSeizableBorrowers is called
+    //   then it stops at limit
     function test_givenReturnLimit_getSeizableBorrowersStopsAtLimit() public {
         _borrow(alice, 2_000e18, 100e9);
         _borrow(bob, 2_000e18, 100e9);
@@ -89,6 +117,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertEq(nextIndex, 1, "next cursor");
     }
 
+    // getSeizableBorrowers
+    // given zero check limit
+    //  when getSeizableBorrowers is called
+    //   then it returns empty without advancing
     function test_givenZeroCheckLimit_getSeizableBorrowersReturnsEmptyWithoutAdvancing() public {
         _makeUnhealthy(alice);
 
@@ -100,6 +132,10 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertEq(reward, 0, "reward");
     }
 
+    // getSeizableBorrowers
+    // given start at end
+    //  when getSeizableBorrowers is called
+    //   then it wraps to zero
     function test_givenStartAtEnd_getSeizableBorrowersWrapsToZero() public {
         _makeUnhealthy(alice);
 

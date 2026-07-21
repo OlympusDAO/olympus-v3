@@ -14,6 +14,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
 contract BurnerLoansHarness is BurnerLoans {
     IBurnerLoansConfig internal _testConfig;
@@ -286,7 +287,8 @@ contract BurnerLoansHarness is BurnerLoans {
     }
 
     function setActiveDebtForTest(address asset_, uint256, uint256 assetActiveDebtOhm_) external {
-        uint64 positionId = _FLOAN.getOrCreatePosition(
+        uint64 positionId = BurnerLoansPositions.getOrCreate(
+            _FLOAN,
             _marketId(asset_),
             address(uint160(uint256(keccak256(abi.encode(asset_, "accounting")))))
         );
@@ -313,7 +315,7 @@ contract BurnerLoansHarness is BurnerLoans {
         address owner_,
         IBurnerLoans.Position memory position_
     ) external {
-        uint64 positionId = _FLOAN.getOrCreatePosition(_marketId(asset_), owner_);
+        uint64 positionId = BurnerLoansPositions.getOrCreate(_FLOAN, _marketId(asset_), owner_);
         IFLOANv1.Position memory current = _FLOAN.getPosition(positionId);
         if (position_.depositedCollateral > current.collateral) {
             _FLOAN.addCollateral(

@@ -9,8 +9,13 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
+    // seize
+    // given unhealthy position
+    //  when seize is called
+    //   then it closes position and routes collateral
     function test_givenUnhealthyPosition_seizeClosesPositionAndRoutesCollateral() public {
         _makeUnhealthy(alice);
+        uint256 mintApprovalBefore = mintr.mintApproval(address(burnerLoans));
         IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
             address(usds),
             _single(alice)
@@ -47,8 +52,17 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(usds.balanceOf(address(burnerLoans)), 0, "no residual collateral");
+        assertEq(
+            mintr.mintApproval(address(burnerLoans)),
+            mintApprovalBefore,
+            "defaulted OHM does not restore mint approval"
+        );
     }
 
+    // seize
+    // given two seizable borrowers
+    //  when seize is called
+    //   then it closes homogeneous batch
     function test_givenTwoSeizableBorrowers_seizeClosesHomogeneousBatch() public {
         _borrow(alice, 2_000e18, 100e9);
         _borrow(bob, 4_000e18, 200e9);
@@ -66,6 +80,33 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active set");
     }
 
+    // setGlobalDebtCap
+    // given defaulted principal
+    //  when setGlobalDebtCap is called
+    //   then it reconciles net mint capacity
+    function test_givenDefaultedPrincipal_setGlobalDebtCap_reconcilesNetMintCapacity() public {
+        _makeUnhealthy(alice);
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        vm.startPrank(admin);
+        burnerLoans.setGlobalDebtCap(50e9);
+        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "default exceeds cap");
+
+        burnerLoans.setGlobalDebtCap(200e9);
+        vm.stopPrank();
+
+        assertEq(
+            mintr.mintApproval(address(burnerLoans)),
+            100e9,
+            "capacity excludes defaulted issuance"
+        );
+    }
+
+    // seize
+    // given matured healthy position
+    //  when seize is called
+    //   then it succeeds
     function test_givenMaturedHealthyPosition_seizeSucceeds() public {
         _makeMatured(alice);
 
@@ -79,6 +120,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
     }
 
+    // seize
+    // given zero collateral debt position
+    //  when seize is called
+    //   then it closes position
     function test_givenZeroCollateralDebtPosition_seizeClosesPosition() public {
         burnerLoans.setPositionForTest(
             address(usds),
@@ -105,6 +150,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
     }
 
+    // seize
+    // given protocol seizer
+    //  when seize is called
+    //   then it routes all collateral to treasury
     function test_givenProtocolSeizer_seizeRoutesAllCollateralToTreasury() public {
         _makeUnhealthy(alice);
         uint256 treasuryBefore = usds.balanceOf(address(trsry));
@@ -117,6 +166,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(usds.balanceOf(address(trsry)), treasuryBefore + 2_000e18, "treasury balance");
     }
 
+    // seize
+    // given invalid borrower in batch
+    //  when seize is called
+    //   then it reverts atomically
     function test_givenInvalidBorrowerInBatch_seizeRevertsAtomically() public {
         _borrow(alice, 2_000e18, 100e9);
         _borrow(bob, 4_000e18, 100e9);
@@ -139,6 +192,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
     }
 
+    // seize
+    // given deposit manager withdraw failure
+    //  when seize is called
+    //   then it rolls back all state
     function test_givenDepositManagerWithdrawFailure_seizeRollsBackAllState() public {
         _makeUnhealthy(alice);
         IDepositManager.WithdrawParams memory params = IDepositManager.WithdrawParams({
@@ -172,6 +229,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
     }
 
+    // seize
+    // given already seized position
+    //  when seize is called
+    //   then it reverts
     function test_givenAlreadySeizedPosition_seizeReverts() public {
         _makeUnhealthy(alice);
         vm.prank(keeper);
@@ -181,6 +242,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.seize(address(usds), _single(alice));
     }
 
+    // seize
+    // given policy disabled
+    //  when seize is called
+    //   then it reverts
     function test_givenPolicyDisabled_seizeReverts() public {
         _makeUnhealthy(alice);
         vm.prank(emergency);
@@ -193,6 +258,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt unchanged");
     }
 
+    // seize
+    // given asset originations disabled
+    //  when seize is called
+    //   then it still succeeds
     function test_givenAssetOriginationsDisabled_seizeStillSucceeds() public {
         _makeUnhealthy(alice);
         vm.prank(burnerLoansAdmin);

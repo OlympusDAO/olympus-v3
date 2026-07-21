@@ -4,6 +4,10 @@ pragma solidity >=0.8.24;
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansAssetActiveDebtOhmTest is BurnerLoansTest {
+    // assetActiveDebtOhm
+    // given debt across markets
+    //  when assetActiveDebtOhm is called
+    //   then it returns only requested market debt
     function test_givenDebtAcrossMarkets_assetActiveDebtOhm_returnsOnlyRequestedMarketDebt()
         public
     {

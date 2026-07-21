@@ -6,6 +6,10 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigRequestPermissionsTest is BurnerLoansTest {
+    // requestPermissions
+    // given config policy
+    //  when requestPermissions is called
+    //   then it returns FLOAN mutators
     function test_givenConfigPolicy_requestPermissions_returnsFloanMutators() public view {
         Permissions[] memory permissions = burnerLoansConfig.requestPermissions();
 

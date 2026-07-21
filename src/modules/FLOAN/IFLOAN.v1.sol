@@ -8,12 +8,14 @@ interface IFLOANv1 {
     error FLOAN_InvalidConfig();
     error FLOAN_InvalidMarket(uint32 marketId);
     error FLOAN_InvalidMaturity(uint48 expected, uint48 actual);
+    error FLOAN_MaturityHorizonExceeded(uint48 requested, uint48 maximum);
     error FLOAN_InvalidPosition(uint64 positionId);
     error FLOAN_PositionDefaulted(uint64 positionId);
     error FLOAN_NotManager(uint32 marketId, address caller);
     error FLOAN_NotFacility(uint32 marketId, address caller);
     error FLOAN_OriginationsDisabled(uint32 marketId);
     error FLOAN_PrincipalCapExceeded(uint32 marketId, uint128 principalCap);
+    error FLOAN_InvalidImportId(uint256 expectedId, uint256 providedId);
     error FLOAN_ZeroAddress();
 
     struct Market {
@@ -94,6 +96,8 @@ interface IFLOANv1 {
         uint128 interestDefaulted,
         uint128 collateralSeized
     );
+    event MarketImported(uint32 indexed marketId);
+    event PositionImported(uint64 indexed positionId, uint128 principalDefaulted);
 
     function marketCount() external view returns (uint32);
 
@@ -133,16 +137,6 @@ interface IFLOANv1 {
 
     function isPositionDefaulted(uint64 positionId_) external view returns (bool);
 
-    function getPositionId(
-        uint32 marketId_,
-        address borrower_
-    ) external view returns (bool exists, uint64 positionId);
-
-    function getPositionForBorrower(
-        uint32 marketId_,
-        address borrower_
-    ) external view returns (Position memory);
-
     function getPositionIdsForBorrower(address borrower_) external view returns (uint256[] memory);
 
     function getPositionIdsForMarket(uint32 marketId_) external view returns (uint256[] memory);
@@ -151,6 +145,13 @@ interface IFLOANv1 {
         uint32 marketId_,
         address borrower_
     ) external view returns (uint256[] memory);
+
+    /// @notice Returns the number of positions for a pair and the first indexed ID, if any.
+    /// @dev Callers that require uniqueness must check that `count == 1` before using the ID.
+    function getPositionIdForMarketAndBorrower(
+        uint32 marketId_,
+        address borrower_
+    ) external view returns (uint256 count, uint64 positionId);
 
     function getActiveBorrowers(uint32 marketId_) external view returns (address[] memory);
 
@@ -162,6 +163,14 @@ interface IFLOANv1 {
         Market calldata market_,
         bytes calldata configData_
     ) external returns (uint32 marketId);
+
+    /// @notice Imports the next market while preserving its identifier from a previous FLOAN ledger.
+    /// @dev The provided ID must equal `marketCount`; sparse or reordered imports are rejected.
+    function importMarket(
+        uint32 marketId_,
+        Market calldata market_,
+        bytes calldata configData_
+    ) external;
 
     function setMarketConfig(
         uint32 marketId_,
@@ -180,10 +189,14 @@ interface IFLOANv1 {
         address borrower_
     ) external returns (uint64 positionId);
 
-    function getOrCreatePosition(
-        uint32 marketId_,
-        address borrower_
-    ) external returns (uint64 positionId);
+    /// @notice Imports the next position and reconstructs its indexes and aggregate accounting.
+    /// @dev The provided ID must equal `positionCount`; sparse or reordered imports are rejected.
+    ///      `principalDefaulted_` must be zero for non-defaulted positions.
+    function importPosition(
+        uint64 positionId_,
+        Position calldata position_,
+        uint128 principalDefaulted_
+    ) external;
 
     function addCollateral(
         uint64 positionId_,

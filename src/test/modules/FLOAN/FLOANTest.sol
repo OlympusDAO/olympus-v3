@@ -103,7 +103,7 @@ abstract contract FLOANTest is Test {
         uint128 principal_
     ) internal returns (uint64 positionId) {
         vm.startPrank(facility_);
-        positionId = floan.getOrCreatePosition(marketId_, borrower_);
+        positionId = floan.createPosition(marketId_, borrower_);
         floan.increaseDebt(positionId, principal_, 0, uint48(block.timestamp + 30 days));
         vm.stopPrank();
     }

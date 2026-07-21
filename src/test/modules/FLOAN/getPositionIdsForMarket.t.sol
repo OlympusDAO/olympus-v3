@@ -5,6 +5,10 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetPositionIdsForMarketTest is FLOANTest {
+    // getPositionIdsForMarket
+    // given several markets
+    //  when getPositionIdsForMarket is called
+    //   then it returns only market positions
     function test_givenSeveralMarkets_getPositionIdsForMarket_returnsOnlyMarketPositions() public {
         uint32 firstMarket = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 secondMarket = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
@@ -18,6 +22,10 @@ contract FLOANGetPositionIdsForMarketTest is FLOANTest {
         assertTrue(ids[0] == second || ids[1] == second, "second position missing");
     }
 
+    // getPositionIdsForMarket
+    // given missing market
+    //  when getPositionIdsForMarket is called
+    //   then it reverts
     function test_givenMissingMarket_getPositionIdsForMarket_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, 0));
         floan.getPositionIdsForMarket(0);

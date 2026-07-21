@@ -17,7 +17,6 @@ abstract contract BurnerLoansBorrowTestBase is BurnerLoansTest {
         vm.startPrank(admin);
         minterAdminPolicy = new MinterAdminPolicy(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(minterAdminPolicy));
-        minterAdminPolicy.approveMinter(address(burnerLoans), type(uint256).max);
         vm.stopPrank();
     }
 }

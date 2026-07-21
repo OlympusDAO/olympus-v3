@@ -6,6 +6,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansHarvestTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarvestTestBase.sol";
 
 contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
+    // harvestYield
     // given configured vault custody with borrower principal and earned yield
     //  when any keeper harvests
     //   then DepositManager sends its executable rounded amount to TRSRY
@@ -27,6 +28,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "policy residual");
     }
 
+    // harvestYield
     // given a borrower position and earned custody yield
     //  when yield is harvested
     //   then borrower state and health remain unchanged
@@ -57,6 +59,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         );
     }
 
+    // harvestYield
     // given configured custody without earned yield
     //  when harvest is called
     //   then it succeeds as an idempotent no-op
@@ -69,6 +72,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertEq(vaultAsset.balanceOf(address(trsry)), 0, "treasury yield");
     }
 
+    // harvestYield
     // given the collateral market is disabled after earning yield
     //  when harvest is called
     //   then safe accounting cleanup remains available
@@ -84,6 +88,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertEq(vaultAsset.balanceOf(address(trsry)), claimed, "treasury yield");
     }
 
+    // harvestYield
     // given the policy is globally disabled
     //  when harvest is called
     //   then the emergency pause blocks the external interaction
@@ -97,6 +102,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         burnerLoans.harvestYield(address(vaultAsset));
     }
 
+    // harvestYield
     // given custody assets fall below liabilities
     //  when harvest is called
     //   then the shortfall blocks any custody withdrawal
@@ -116,6 +122,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         burnerLoans.harvestYield(address(vaultAsset));
     }
 
+    // harvestYield
     // given a DepositManager callback attempts to harvest the same asset again
     //  when the outer harvest claims yield
     //   then the callback is rejected and yield is claimed only once
@@ -148,6 +155,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         );
     }
 
+    // harvestYield
     // given FLOAN has two matching markets for this facility and token pair
     //  when harvest is called
     //   then Burner Loans rejects the ambiguous asset namespace

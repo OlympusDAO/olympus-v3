@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANDecreaseDebtTest is FLOANTest {
+    // decreaseDebt
+    // given caller without kernel permission
+    //  when decreaseDebt is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_decreaseDebt_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -15,6 +19,10 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         floan.decreaseDebt(positionId, 1, 0);
     }
 
+    // decreaseDebt
+    // given permissioned non facility
+    //  when decreaseDebt is called
+    //   then it reverts
     function test_givenPermissionedNonFacility_decreaseDebt_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -25,6 +33,10 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         floan.decreaseDebt(positionId, 1, 0);
     }
 
+    // decreaseDebt
+    // given originations disabled
+    //  when decreaseDebt is called
+    //   then it still succeeds
     function test_givenOriginationsDisabled_decreaseDebt_stillSucceeds() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -36,6 +48,10 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(floan.getPosition(positionId).principalDue, 60e9, "principal due");
     }
 
+    // decreaseDebt
+    // given zero or excessive amount
+    //  when decreaseDebt is called
+    //   then it reverts without state change
     function test_givenZeroOrExcessiveAmount_decreaseDebt_revertsWithoutStateChange() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -50,6 +66,10 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(floan.marketPrincipalDue(marketId), 100e9, "market principal unchanged");
     }
 
+    // decreaseDebt
+    // given principal debt across a market, facility, and debt token
+    //  when decreaseDebt is called
+    //   then it updates market facility and token principal totals
     function test_updatesMarketFacilityAndTokenPrincipalTotals() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -62,11 +82,15 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 60e9, "token principal");
     }
 
+    // decreaseDebt
+    // given interest only decrease
+    //  when decreaseDebt is called
+    //   then it does not change principal totals
     function test_interestOnlyDecrease_doesNotChangePrincipalTotals() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
-        uint64 positionId = floan.getOrCreatePosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
         floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
         floan.decreaseDebt(positionId, 0, 10e9);
         vm.stopPrank();
@@ -76,11 +100,15 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 100e9, "token principal");
     }
 
+    // decreaseDebt
+    // given full closure
+    //  when decreaseDebt is called
+    //   then it clears episode and active borrower
     function test_decreaseDebt_givenFullClosure_clearsEpisodeAndActiveBorrower() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
-        uint64 positionId = floan.getOrCreatePosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
         floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
         floan.decreaseDebt(positionId, 100e9, 25e9);
         vm.stopPrank();
@@ -97,6 +125,10 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDue(debtToken), 0, "token principal cleared");
     }
 
+    // decreaseDebt
+    // given another active position
+    //  when decreaseDebt is called
+    //   then it keeps borrower active
     function test_decreaseDebt_givenAnotherActivePosition_keepsBorrowerActive() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

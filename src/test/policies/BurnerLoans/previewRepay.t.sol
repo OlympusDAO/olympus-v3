@@ -24,6 +24,10 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         vm.roll(block.number + 1);
     }
 
+    // previewRepay
+    // given partial repayment
+    //  when previewRepay is called
+    //   then it returns conservative quote
     function test_givenPartialRepayment_previewRepayReturnsConservativeQuote() public view {
         IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
             address(usds),
@@ -36,6 +40,10 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         assertTrue(preview.executable, "executable");
     }
 
+    // previewRepay
+    // given full repayment
+    //  when previewRepay is called
+    //   then it returns debt free health
     function test_givenFullRepayment_previewRepayReturnsDebtFreeHealth() public view {
         IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
             address(usds),
@@ -47,6 +55,10 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         assertTrue(preview.executable, "executable");
     }
 
+    // previewRepay
+    // given amount exceeds debt
+    //  when previewRepay is called
+    //   then it reverts
     function test_givenAmountExceedsDebt_previewRepayReverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -58,11 +70,19 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         burnerLoans.previewRepay(address(usds), 100e9 + 1, alice);
     }
 
+    // previewRepay
+    // given zero amount
+    //  when previewRepay is called
+    //   then it reverts
     function test_givenZeroAmount_previewRepayReverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
         burnerLoans.previewRepay(address(usds), 0, alice);
     }
 
+    // previewRepay
+    // given asset disabled and price stale
+    //  when previewRepay is called
+    //   then it remains executable
     function test_givenAssetDisabledAndPriceStale_previewRepayRemainsExecutable() public {
         vm.prank(burnerLoansAdmin);
         burnerLoans.disableAsset(address(usds));
@@ -78,6 +98,10 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         assertTrue(preview.executable, "executable");
     }
 
+    // previewRepay
+    // given global policy disabled
+    //  when previewRepay is called
+    //   then it reverts
     function test_givenGlobalPolicyDisabled_previewRepayReverts() public {
         vm.prank(emergency);
         burnerLoans.disable("");
@@ -86,6 +110,10 @@ contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
         burnerLoans.previewRepay(address(usds), 1e9, alice);
     }
 
+    // previewRepay
+    // given ambiguous market
+    //  when previewRepay is called
+    //   then it reverts
     function test_givenAmbiguousMarket_previewRepayReverts() public {
         _createDuplicateUsdsMarketForTest();
 

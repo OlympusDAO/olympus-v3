@@ -6,6 +6,10 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansGetActiveBorrowersTest is BurnerLoansTest {
+    // getActiveBorrowers
+    // given multiple active positions
+    //  when getActiveBorrowers is called
+    //   then it returns market borrowers
     function test_givenMultipleActivePositions_getActiveBorrowers_returnsMarketBorrowers() public {
         _addDefaultUsdsAsset();
         address bob = makeAddr("bob");

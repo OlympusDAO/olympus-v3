@@ -40,7 +40,7 @@ library BurnerLoansDependencies {
 
     /// @notice Returns the MINTR and FLOAN permissions required by the lifecycle policy.
     function permissions() public pure returns (Permissions[] memory requests) {
-        requests = new Permissions[](9);
+        requests = new Permissions[](11);
         requests[0] = Permissions({
             keycode: _MINTR_KEYCODE,
             funcSelector: MINTRv1.mintOhm.selector
@@ -50,30 +50,38 @@ library BurnerLoansDependencies {
             funcSelector: MINTRv1.burnOhm.selector
         });
         requests[2] = Permissions({
-            keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.addCollateral.selector
+            keycode: _MINTR_KEYCODE,
+            funcSelector: MINTRv1.increaseMintApproval.selector
         });
         requests[3] = Permissions({
-            keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.removeCollateral.selector
+            keycode: _MINTR_KEYCODE,
+            funcSelector: MINTRv1.decreaseMintApproval.selector
         });
         requests[4] = Permissions({
             keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.increaseDebt.selector
+            funcSelector: IFLOANv1.addCollateral.selector
         });
         requests[5] = Permissions({
             keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.getOrCreatePosition.selector
+            funcSelector: IFLOANv1.removeCollateral.selector
         });
         requests[6] = Permissions({
             keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.decreaseDebt.selector
+            funcSelector: IFLOANv1.increaseDebt.selector
         });
         requests[7] = Permissions({
             keycode: _FLOAN_KEYCODE,
-            funcSelector: IFLOANv1.extendMaturity.selector
+            funcSelector: IFLOANv1.createPosition.selector
         });
         requests[8] = Permissions({
+            keycode: _FLOAN_KEYCODE,
+            funcSelector: IFLOANv1.decreaseDebt.selector
+        });
+        requests[9] = Permissions({
+            keycode: _FLOAN_KEYCODE,
+            funcSelector: IFLOANv1.extendMaturity.selector
+        });
+        requests[10] = Permissions({
             keycode: _FLOAN_KEYCODE,
             funcSelector: IFLOANv1.defaultPosition.selector
         });

@@ -18,7 +18,8 @@ import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculato
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
-import {BURNER_LOANS_SEIZER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
+import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Seizure Library
 /// @notice Separately linked batch validation, scanning, default settlement, and reward routing.
@@ -268,7 +269,8 @@ library BurnerLoansSeizure {
             params_.cursor = params_.cursor + 1 == activeCount ? 0 : params_.cursor + 1;
             ++checked;
 
-            IFLOANv1.Position memory position = dependencies_.floan.getPositionForBorrower(
+            IFLOANv1.Position memory position = BurnerLoansPositions.getOrEmpty(
+                dependencies_.floan,
                 params_.marketId,
                 borrower
             );
@@ -368,7 +370,11 @@ library BurnerLoansSeizure {
     ) private view returns (uint64 positionId, IFLOANv1.Position memory position) {
         if (borrower_ == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
         bool exists;
-        (exists, positionId) = dependencies_.floan.getPositionId(context_.marketId, borrower_);
+        (exists, positionId) = BurnerLoansPositions.find(
+            dependencies_.floan,
+            context_.marketId,
+            borrower_
+        );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoDebt();
         position = dependencies_.floan.getPosition(positionId);
         if (position.defaulted) revert IBurnerLoans.BurnerLoans_PositionSeized();
@@ -558,6 +564,8 @@ library BurnerLoansSeizure {
     function _isProtocolCaller(
         BurnerLoansContext memory dependencies_
     ) private view returns (bool) {
-        return dependencies_.roles.hasRole(msg.sender, BURNER_LOANS_SEIZER_ROLE);
+        return
+            dependencies_.roles.hasRole(msg.sender, BURNER_LOANS_SEIZER_ROLE) ||
+            dependencies_.roles.hasRole(msg.sender, HEART_ROLE);
     }
 }

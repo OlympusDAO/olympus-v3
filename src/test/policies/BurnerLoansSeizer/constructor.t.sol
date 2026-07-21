@@ -7,11 +7,19 @@ import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
 contract BurnerLoansSeizerConstructorTest is BurnerLoansSeizerTest {
+    // constructor
+    // given zero burner loans
+    //  when constructor is called
+    //   then it reverts
     function test_givenZeroBurnerLoans_reverts() public {
         vm.expectRevert(IBurnerLoansSeizer.BurnerLoansSeizer_ZeroAddress.selector);
         new BurnerLoansSeizer(kernel, address(0), 10, 5);
     }
 
+    // constructor
+    // given invalid initial limits
+    //  when constructor is called
+    //   then it reverts
     function test_givenInvalidInitialLimits_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(

@@ -93,6 +93,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     function setGlobalDebtCap(uint128 debtCapOhm_) external givenEnabled onlyAdminRole {
         if (debtCapOhm_ < totalActiveDebtOhm()) revert BurnerLoans_InvalidCap();
         globalDebtCapOhm = debtCapOhm_;
+
+        BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, debtCapOhm_);
         emit GlobalDebtCapSet(debtCapOhm_);
     }
 
@@ -220,23 +222,16 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external override nonReentrant returns (uint256 healthFactor) {
         _requireEnabled();
         if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
-        uint64 positionId = _positionId(asset_, onBehalfOf_);
-        RepayPreview memory preview = BurnerLoansView.previewRepay(
-            repayOhm_,
-            _FLOAN.getPosition(positionId)
-        );
-
-        BurnerLoansCustody.repay(
-            _FLOAN,
-            _MINTR,
-            _OHM,
-            positionId,
-            asset_,
-            onBehalfOf_,
-            repayOhm_,
-            preview.remainingDebtOhm
-        );
-        return preview.resultingHealthFactor;
+        return
+            BurnerLoansCustody.repay(
+                _FLOAN,
+                _MINTR,
+                _OHM,
+                _marketId(asset_),
+                asset_,
+                onBehalfOf_,
+                repayOhm_
+            );
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -248,11 +243,10 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external override nonReentrant returns (uint256 fee, uint48 maturity, uint256 healthFactor) {
         _requireEnabled();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        uint64 positionId = _positionId(asset_, onBehalfOf_);
         ExtendPreview memory preview = BurnerLoansCustody.extend(
             this.context(),
             _TRSRY,
-            positionId,
+            _marketId(asset_),
             asset_,
             onBehalfOf_,
             termCount_,
@@ -299,14 +293,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function assetActiveDebtOhm(address asset_) external view returns (uint256) {
-        return _FLOAN.marketPrincipalDue(_marketId(asset_));
+        return BurnerLoansView.assetActiveDebtOhm(_FLOAN, address(this), address(_OHM), asset_);
     }
 
     function getPosition(
         address asset_,
         address borrower_
     ) external view override returns (Position memory) {
-        return BurnerLoansView.getPosition(_position(asset_, borrower_));
+        return BurnerLoansView.getPositionForBorrower(_FLOAN, _marketId(asset_), borrower_);
     }
 
     function getActiveBorrowers(address asset_) external view override returns (address[] memory) {
@@ -314,7 +308,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function isSeizable(address asset_, address borrower_) external view override returns (bool) {
-        return BurnerLoansView.isSeizable(this.context(), asset_, _position(asset_, borrower_));
+        return
+            BurnerLoansView.isBorrowerSeizable(
+                this.context(),
+                asset_,
+                _marketId(asset_),
+                borrower_
+            );
     }
 
     function previewSeize(
@@ -350,11 +350,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (uint256 depositedCollateral, uint256 totalCollateral) {
         _requireEnabled();
         return
-            BurnerLoansView.previewDepositCollateral(
+            BurnerLoansView.previewDepositCollateralForBorrower(
                 this.context(),
                 asset_,
                 amount_,
-                _position(asset_, onBehalfOf_)
+                _marketId(asset_),
+                onBehalfOf_
             );
     }
 
@@ -365,11 +366,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (WithdrawPreview memory) {
         _requireEnabled();
         return
-            BurnerLoansView.previewWithdrawCollateral(
+            BurnerLoansView.previewWithdrawCollateralForBorrower(
                 this.context(),
                 asset_,
                 amount_,
-                _position(asset_, onBehalfOf_)
+                _marketId(asset_),
+                onBehalfOf_
             );
     }
 
@@ -380,11 +382,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (BorrowPreview memory) {
         _requireEnabled();
         return
-            BurnerLoansQuote.quoteBorrow(
+            BurnerLoansQuote.previewBorrow(
                 this.context(),
                 asset_,
                 ohmAmount_,
-                _position(asset_, onBehalfOf_)
+                _marketId(asset_),
+                onBehalfOf_
             );
     }
 
@@ -395,7 +398,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (RepayPreview memory) {
         _requireEnabled();
         if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
-        return BurnerLoansView.previewRepay(repayOhm_, _position(asset_, onBehalfOf_));
+        return
+            BurnerLoansView.previewRepayForBorrower(
+                _FLOAN,
+                _marketId(asset_),
+                onBehalfOf_,
+                repayOhm_
+            );
     }
 
     function previewExtend(
@@ -405,11 +414,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (ExtendPreview memory) {
         _requireEnabled();
         return
-            BurnerLoansQuote.quoteExtend(
+            BurnerLoansQuote.previewExtend(
                 this.context(),
                 asset_,
                 termCount_,
-                _position(asset_, onBehalfOf_)
+                _marketId(asset_),
+                onBehalfOf_
             );
     }
 

@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANDefaultPositionTest is FLOANTest {
+    // defaultPosition
+    // given caller without kernel permission
+    //  when defaultPosition is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_defaultPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -16,6 +20,10 @@ contract FLOANDefaultPositionTest is FLOANTest {
         floan.defaultPosition(positionId);
     }
 
+    // defaultPosition
+    // given permissioned non facility
+    //  when defaultPosition is called
+    //   then it reverts
     function test_givenPermissionedNonFacility_defaultPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -27,6 +35,10 @@ contract FLOANDefaultPositionTest is FLOANTest {
         floan.defaultPosition(positionId);
     }
 
+    // defaultPosition
+    // given debt free position
+    //  when defaultPosition is called
+    //   then it reverts without state change
     function test_givenDebtFreePosition_defaultPosition_revertsWithoutStateChange() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -38,12 +50,16 @@ contract FLOANDefaultPositionTest is FLOANTest {
         assertFalse(floan.isPositionDefaulted(positionId), "position not defaulted");
     }
 
+    // defaultPosition
+    // given a position with collateral, principal, and interest due
+    //  when defaultPosition is called
+    //   then it closes debt and collateral and preserves episode history
     function test_defaultPosition_closesDebtAndCollateralAndPreservesEpisodeHistory() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint48 maturity = uint48(block.timestamp + 30 days);
 
         vm.startPrank(facility);
-        uint64 positionId = floan.getOrCreatePosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
         floan.addCollateral(positionId, 150e18);
         floan.increaseDebt(positionId, 100e9, 25e9, maturity);
         (uint128 principalDefaulted, uint128 interestDefaulted, uint128 collateralSeized) = floan
@@ -74,11 +90,15 @@ contract FLOANDefaultPositionTest is FLOANTest {
         assertEq(floan.debtTokenPrincipalDefaulted(debtToken), 100e9, "token principal defaulted");
     }
 
+    // position mutators
+    // given defaulted position
+    //  when any position mutator is called
+    //   then it reverts
     function test_givenDefaultedPosition_mutatingFunctionsRevert() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
-        uint64 positionId = floan.getOrCreatePosition(marketId, borrower);
+        uint64 positionId = floan.createPosition(marketId, borrower);
         floan.addCollateral(positionId, 150e18);
         floan.increaseDebt(positionId, 100e9, 0, uint48(block.timestamp + 30 days));
         floan.defaultPosition(positionId);
@@ -110,6 +130,10 @@ contract FLOANDefaultPositionTest is FLOANTest {
         vm.stopPrank();
     }
 
+    // defaultPosition
+    // given another active position
+    //  when defaultPosition is called
+    //   then it keeps borrower active
     function test_defaultPosition_givenAnotherActivePosition_keepsBorrowerActive() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

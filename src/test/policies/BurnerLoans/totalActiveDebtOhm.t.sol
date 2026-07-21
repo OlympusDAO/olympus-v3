@@ -4,6 +4,10 @@ pragma solidity >=0.8.24;
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansTotalActiveDebtOhmTest is BurnerLoansTest {
+    // totalActiveDebtOhm
+    // given debt across markets
+    //  when totalActiveDebtOhm is called
+    //   then it returns facility debt
     function test_givenDebtAcrossMarkets_totalActiveDebtOhm_returnsFacilityDebt() public {
         _addDefaultUsdsAsset();
         burnerLoans.setActiveDebtForTest(address(usds), 0, 40e9);

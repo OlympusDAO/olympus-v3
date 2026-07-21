@@ -107,9 +107,10 @@ storage packing. Servicing policies should widen values to `uint256` before mult
 `FullMath` calculations. Timestamps use `uint48`; the latest borrow block uses `uint32`.
 
 FLOAN permits multiple positions for the same borrower in the same market. It keeps indexes by
-market, borrower, and market/borrower pair. `getOrCreatePosition` offers a default position for
-products such as Burner Loans that deliberately impose one position per pair, while
-`createPosition` preserves the generic multi-position model.
+market, borrower, and market/borrower pair. Facilities create positions explicitly through
+`createPosition`. A product such as Burner Loans that deliberately imposes one position per pair
+enforces that rule in its own policy by reading the pair count and indexed position ID. FLOAN does
+not designate a canonical or default position.
 
 Active borrower membership is derived from active positions. Closing one position does not remove
 a borrower while another position in the same market still owes principal or interest. FLOAN does
@@ -132,6 +133,16 @@ assignment and facility rotation are governance-critical actions.
 FLOAN itself is upgradeable through the Kernel like other modules. Keeping custody outside the
 module avoids a module upgrade or facility rotation automatically gaining control of every
 product's assets; each product defines and secures its own custody boundary.
+
+Migration is an explicit, selector-permissioned operation. `importMarket` and `importPosition`
+accept only the next contiguous ID, so a replacement ledger can preserve every original numeric
+market and position reference without supporting sparse existence state. Markets and positions
+must therefore be imported in ascending ID order. Position imports rebuild borrower/market
+indexes, active principal totals, active-borrower membership, and defaulted-principal totals from
+the imported record; callers do not inject independent aggregate values. The import validates
+canonical active, closed, and defaulted position shapes and still enforces the imported market's
+principal cap. Governance should grant these selectors only to a temporary migration policy and
+remove or deactivate that policy once reconciliation is complete.
 
 ## Responsibilities
 

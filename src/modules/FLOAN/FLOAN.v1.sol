@@ -24,8 +24,6 @@ abstract contract FLOANv1 is Module, IFLOANv1 {
         internal _marketIds;
     mapping(uint32 marketId => bytes configData) internal _marketConfigData;
     mapping(uint64 positionId => Position position) internal _positions;
-    mapping(uint32 marketId => mapping(address borrower => uint64 positionIdPlusOne))
-        internal _defaultPositionIds;
     mapping(uint32 marketId => EnumerableSet.UintSet positionIds) internal _positionIdsByMarket;
     mapping(address borrower => EnumerableSet.UintSet positionIds) internal _positionIdsByBorrower;
     mapping(uint32 marketId => mapping(address borrower => EnumerableSet.UintSet positionIds))

@@ -7,6 +7,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansHarvestTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarvestTestBase.sol";
 
 contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
+    // previewHarvestYield
     // given configured vault custody with borrower principal and earned yield
     //  when previewing harvest
     //   then the quote matches DepositManager and is executable
@@ -27,6 +28,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertTrue(preview.executable, "preview executable");
     }
 
+    // previewHarvestYield
     // given configured custody without earned yield
     //  when previewing harvest
     //   then zero is returned as an executable no-op
@@ -41,6 +43,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertTrue(preview.executable, "preview executable");
     }
 
+    // previewHarvestYield
     // given custody assets fall below liabilities
     //  when previewing harvest
     //   then no yield is quoted and execution is marked unavailable
@@ -56,6 +59,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         assertFalse(preview.executable, "preview executable");
     }
 
+    // previewHarvestYield
     // given the policy is globally disabled
     //  when previewing harvest
     //   then the call reverts consistently with the write path
@@ -67,6 +71,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         burnerLoans.previewHarvestYield(address(vaultAsset));
     }
 
+    // previewHarvestYield
     // given the asset has no Burner Loans market
     //  when previewing harvest
     //   then the asset namespace is rejected
@@ -82,6 +87,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         burnerLoans.previewHarvestYield(unconfiguredAsset);
     }
 
+    // previewHarvestYield
     // given FLOAN has two matching markets for this facility and token pair
     //  when previewing harvest
     //   then Burner Loans rejects the ambiguous asset namespace
@@ -98,6 +104,7 @@ contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
         burnerLoans.previewHarvestYield(address(vaultAsset));
     }
 
+    // previewHarvestYield
     // given DepositManager is disabled
     //  when previewing harvest
     //   then the quote cannot claim to be executable

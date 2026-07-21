@@ -53,6 +53,13 @@ its markets. `BurnerLoans` stores and enforces the product-wide `globalDebtCap`.
 independent configuration bounds: a market cap may be greater than the global cap, but no borrow
 may leave either the market or the facility above its applicable cap.
 
+The global cap also bounds net OHM issuance by this facility. `BurnerLoans` holds a finite MINTR
+approval equal to the cap minus active and defaulted principal, floored at zero. Borrowing consumes
+that approval. Repayment burns OHM and restores the same amount of approval. Seizure removes debt
+from active utilization but does not restore approval, because the defaulted OHM remains
+circulating. An admin cap update reconciles MINTR approval against the current active plus
+defaulted principal rather than granting the new cap again.
+
 Fixed maturity is the main tool that prevents stale 0% shorts from consuming capacity without repricing. Borrow and extension are fee events. Additional borrowing against an already-active position is allowed, but it pays the current borrow fee on the incremental OHM amount and does not extend maturity. Extension pays the current extension fee on the active debt and is the only way to move maturity forward.
 
 Maturity also makes open interest self-cleaning. Positions with active debt must either repay, extend under current conditions, or become seizable after maturity. Debt-free collateral-only positions can remain withdrawable, but they do not count as open interest and cannot be seized.
@@ -78,7 +85,10 @@ sequenceDiagram
     DepositManager->>Vault: deposit collateral asset
     Vault-->>DepositManager: vault shares
     DepositManager-->>BurnerLoans: actual withdrawable credit and receipt token
-    BurnerLoans->>FLOAN: getOrCreatePosition(marketId, onBehalfOf)
+    BurnerLoans->>FLOAN: read position count for market/borrower
+    opt no position exists
+        BurnerLoans->>FLOAN: createPosition(marketId, onBehalfOf)
+    end
     BurnerLoans->>FLOAN: addCollateral(positionId, credited amount)
     FLOAN-->>BurnerLoans: total position collateral
     BurnerLoans-->>Depositor: credited amount and total position collateral
@@ -126,6 +136,7 @@ sequenceDiagram
         FLOAN->>FLOAN: remove borrower from active market index
     end
     BurnerLoans->>MINTR: burn repaid OHM
+    BurnerLoans->>MINTR: restore mint approval by repaid OHM
     BurnerLoans-->>Borrower: healthFactor
 ```
 
@@ -387,12 +398,18 @@ Seizure is for the entire active debt position. After seizure, `debtOhm == 0`, c
 Seizure can be executed by the protocol or by third-party keepers. The distinction should be role-based, not address-name based:
 
 ```text
-isProtocolSeizureCaller = ROLES.hasRole(msg.sender, "burner_loans_seizer")
+isProtocolSeizureCaller =
+    ROLES.hasRole(msg.sender, "burner_loans_seizer") ||
+    ROLES.hasRole(msg.sender, "heart")
 ```
 
-If the protocol-owned periodic seizer calls `seize`, `BurnerLoans` sees the `burner_loans_seizer` role and pays no Burner Loans keeper reward. The seizer is operational infrastructure, not a third-party liquidator.
+If the protocol-owned periodic seizer calls `seize`, `BurnerLoans` sees the
+`burner_loans_seizer` role and pays no Burner Loans keeper reward. A direct caller holding the
+`heart` role also receives no reward. These callers are operational infrastructure, not
+third-party liquidators.
 
-If the caller does not have the `burner_loans_seizer` role, the call is treated as third-party keeper execution. The caller may receive a capped reward, and the remaining collateral goes to `TRSRY`.
+If the caller has neither role, the call is treated as third-party keeper execution. The caller
+may receive a capped reward, and the remaining collateral goes to `TRSRY`.
 
 The reward should be small, deterministic, asset-denominated, and bounded per asset:
 
@@ -442,9 +459,9 @@ previewSeize(asset, borrowers) -> keeperReward, collateralToTreasury, executable
 seize(asset, borrowers) -> keeperReward, collateralToTreasury
 ```
 
-`previewSeize` should not return a single `healthFactor` because a batch can contain multiple borrowers with different health. For per-position diagnostics, callers can query `isSeizable(asset, borrower)` or `getPosition(owner, asset)`. `previewSeize` should return batch-level execution outputs: keeper reward, collateral routed to `TRSRY`, and whether execution would revert.
+`previewSeize` should not return a single `healthFactor` because a batch can contain multiple borrowers with different health. For per-position diagnostics, callers can query `isSeizable(asset, borrower)` or `getPosition(asset, borrower)`. `previewSeize` should return batch-level execution outputs: keeper reward, collateral routed to `TRSRY`, and whether execution would revert.
 
-`getSeizableBorrowers` must be gas-bounded and on-chain usable. A separate `BurnerLoansSeizer` contract should call it periodically without scanning the full position set or risking unbounded memory growth. The function should scan at most `maxBorrowersToCheck`, return at most `maxBorrowersToReturn`, return `nextIndex` so callers can paginate, and return expected keeper reward for the returned batch. `expectedKeeperReward` should be calculated for `msg.sender` using the same protocol-caller reward rules as `seize`: callers with `burner_loans_seizer` receive zero Burner Loans keeper reward. These scan limits should be caller-supplied inputs, not stored contract parameters.
+`getSeizableBorrowers` must be gas-bounded and on-chain usable. A separate `BurnerLoansSeizer` contract should call it periodically without scanning the full position set or risking unbounded memory growth. The function should scan at most `maxBorrowersToCheck`, return at most `maxBorrowersToReturn`, return `nextIndex` so callers can paginate, and return expected keeper reward for the returned batch. `expectedKeeperReward` should be calculated for `msg.sender` using the same protocol-caller reward rules as `seize`: callers with either `burner_loans_seizer` or `heart` receive zero Burner Loans keeper reward. These scan limits should be caller-supplied inputs, not stored contract parameters.
 
 FLOAN maintains an active borrower set per market. A borrower is active when at least one position
 in that market has principal or interest due. Seizure scanning should use:
@@ -500,7 +517,17 @@ if borrowers.length > 0:
 
 `BurnerLoansSeizer` stores a cursor per asset and scans one admin-managed asset per Heart execution in round-robin order. Its configurable check and seizure limits must be non-zero, the seizure limit cannot exceed the check limit or Burner Loans' 50-borrower batch maximum, and the check limit is capped at 500. When `nextIndex` reaches the active set length, the stored cursor wraps to zero.
 
-The policy must be granted both `heart` (for the caller that invokes `execute`) and `burner_loans_seizer` (to the seizer contract itself). It refuses to scan or seize without the latter role, ensuring it cannot accidentally accrue a keeper reward. A scan failure emits `ScanFailed` and moves round-robin processing to the next asset without advancing the failed asset's borrower cursor. A seizure failure emits `SeizureFailed`, also leaves that borrower cursor unchanged, and does not revert the Heart's other periodic tasks. Successful or empty scans commit the returned cursor. Off-chain keepers can still prefer event/indexer-driven discovery plus `isSeizable(asset, borrower)` checks and may receive the capped keeper reward.
+The account used by the Heart policy to call `BurnerLoansSeizer.execute` must hold `heart`.
+Separately, the `BurnerLoansSeizer` contract must hold `burner_loans_seizer`, because it is the
+address that calls the Burner Loans scan and seizure functions. Either role suppresses the Burner
+Loans keeper reward when its holder calls those functions directly. `BurnerLoansSeizer` refuses to
+scan or seize if its own role is missing. A scan failure emits `ScanFailed` and moves round-robin
+processing to the next asset without advancing the failed asset's borrower cursor. A seizure
+failure emits `SeizureFailed`, also leaves that borrower cursor unchanged, advances round-robin
+processing, and returns successfully so the Heart's periodic transaction is not reverted.
+Successful or empty scans commit the returned cursor. Off-chain keepers can still prefer
+event/indexer-driven discovery plus `isSeizable(asset, borrower)` checks and may receive the capped
+keeper reward.
 
 `seize` should accept multiple borrowers by default and be asset-specific. A single-position seizure is `seize(asset, [borrower])`. Batch size should be capped to avoid griefing. All borrowers in the batch must have active, seizable positions for the `asset` parameter; otherwise the batch should revert. Zero addresses, duplicate borrowers, borrowers for a different collateral asset, debt-free or previously closed positions, and active-but-not-seizable positions should all revert the whole batch. Because the batch is single-asset, `BurnerLoans` should fetch OHM/USD, collateral/USD, and backing inputs once before the loop, then reuse those values for every position in the batch. Prefer reverting the batch for invalid or no-longer-seizable borrowers unless partial execution is explicitly required.
 
@@ -697,18 +724,13 @@ harvestYield(asset)
 Position state should be available through a dedicated getter:
 
 ```text
-getPosition(owner, collateralAsset)
-    -> owner,
-       collateralAsset,
-       debtOhm,
-       collateral,
-       maturity,
-       status,
-       isSeizable,
-       healthFactor
+getPosition(collateralAsset, borrower)
+    -> depositedCollateral, debtOhm, maturity, lastBorrowBlock, status
 ```
 
-`collateral` is the remaining principal-denominated collateral associated with the position. `status` is stored lifecycle state, such as `NoDebt`, `Active`, or `Seized`. `isSeizable` is a derived current predicate, so an active position can return `status = Active` and `isSeizable = true`. `healthFactor` should be computed from current PRICE, not stored, so callers see the same health basis used by `isSeizable`, `previewWithdrawCollateral`, `previewBorrow`, `previewExtend`, and `seize`.
+`depositedCollateral` is the remaining principal-denominated collateral associated with the
+position. `status` adapts the FLOAN record into `NoDebt`, `Active`, or `Seized`. Seizability and
+health remain separate derived views so the position getter does not require live PRICE reads.
 
 Every user-facing action should have a matching preview that uses the same validation and currently observable math as the state-changing path. Preview names should mirror the write function name:
 
@@ -725,8 +747,8 @@ previewExtend(collateralAsset, onBehalfOf, termCount)
     -> fee, newMaturity, executable
 previewSeize(asset, borrowers)
     -> keeperReward, collateralToTreasury, executable
-getPosition(owner, collateralAsset)
-    -> owner, collateralAsset, debtOhm, collateral, maturity, status, isSeizable, healthFactor
+getPosition(collateralAsset, borrower)
+    -> depositedCollateral, debtOhm, maturity, lastBorrowBlock, status
 isSeizable(asset, borrower) -> bool
 getSeizableBorrowers(asset, startIndex, maxBorrowersToCheck, maxBorrowersToReturn)
     -> borrowers, nextIndex, expectedKeeperReward
@@ -977,12 +999,17 @@ The factor covers volatility, oracle lag, slippage, and delayed seizure executio
 
 ## Position Ownership And Callers
 
-FLOAN assigns every position a globally unique ID and maintains the product-facing market/owner
-lookup:
+FLOAN assigns every position a globally unique ID and maintains generic indexes by market,
+borrower, and market/borrower pair. Burner Loans applies its one-position rule by requiring the
+pair count to be zero or one:
 
 ```text
-positionId = floan.getPositionId(marketId(asset), owner)
+(count, positionId) = floan.getPositionIdForMarketAndBorrower(marketId(asset), owner)
 ```
+
+If the count is zero, a write path creates a position. If it is greater than one, Burner Loans
+fails closed as ambiguous. FLOAN itself remains capable of storing multiple positions for the same
+market and borrower.
 
 For v1, position ownership should not be transferable. Operator and `onBehalfOf` support gives enough composability without changing borrower terms. A transfer would effectively create a new counterparty relationship and may imply new terms, so it should be handled as a future explicit migration or refinance flow.
 
@@ -1192,18 +1219,23 @@ Runtime sizes should be measured after each lifecycle milestone because new sele
 paths consume the remaining EIP-170 margin. FLOAN, Config, ConfigTimelock, lifecycle, and linked
 libraries each have their own 24,576-byte limit.
 
-The facility-market rewrite currently measures as follows under the repository compiler profiles:
+The completed implementation currently measures as follows. Burner Loans, Config, FLOAN, the
+timelock, the periodic seizer, and borrower composites all use the repository's standard 10,000-run
+optimizer profile:
 
 | Contract                    | Runtime bytes | EIP-170 margin |
 | --------------------------- | ------------: | -------------: |
-| `BurnerLoans`               |        23,478 |          1,098 |
-| `BurnerLoansConfig`         |        19,817 |          4,759 |
-| `BurnerLoansConfigTimelock` |        18,092 |          6,484 |
-| `OlympusFixedTermLoan`      |        21,909 |          2,667 |
+| `BurnerLoans`               |        24,452 |            124 |
+| `BurnerLoansConfig`         |        20,118 |          4,458 |
+| `BurnerLoansConfigTimelock` |        23,915 |            661 |
+| `OlympusFixedTermLoan`      |        22,064 |          2,512 |
+| `BurnerLoansSeizer`         |         7,122 |         17,454 |
+| `BurnerLoansComposites`     |         6,018 |         18,558 |
 
-`BurnerLoansConfigTimelock` uses the 10-run IR profile and delegates pure partial-update
-transformations to `BurnerLoansConfigTimelockLib`. This creates a link-time dependency but avoids
-duplicating that transformation bytecode in the deployable timelock.
+`BurnerLoansConfigTimelock` delegates partial-update transformations and sub-action execution to
+`BurnerLoansConfigTimelockLib`. This creates a link-time dependency but keeps the deployable
+timelock below EIP-170 without a low-run or IR compiler override. Burner Loans has the narrowest
+margin and should not gain additional selectors without a measured reduction elsewhere.
 
 ## Parameter Bounds
 
@@ -1414,6 +1446,27 @@ Borrowers must always be able to close active debt by returning OHM until the po
     Answer: unresolved. The contract should expose the raw position, collateral, and asset state needed by indexers. The subgraph can compute the backing cap off-chain, but the exact indexing source should be decided with the subgraph implementation.
 
 ## Recommended V1 Scope
+
+### Deployment Prerequisites
+
+Deployment must install compatible `FLOAN`, `MINTR`, `PRICE`, `ROLES`, and `TRSRY` modules and
+activate `DepositManager`, `BurnerLoansConfig`, `BurnerLoans`, `BurnerLoansConfigTimelock`, and
+`BurnerLoansSeizer` as applicable. Before originations are enabled:
+
+- configure supported OHM and collateral assets in PRICE;
+- configure BurnerLoans' backing oracle and global debt cap, and align the MINTR approval with the
+  intended facility capacity;
+- configure BurnerLoans as the DepositManager operator for each collateral asset and period,
+  including its operator name and `deposit_operator` role;
+- use BurnerLoansConfig to create exactly one FLOAN market for each
+  `(BurnerLoans, collateralAsset, OHM)` tuple; FLOAN permits more, but BurnerLoans rejects an
+  ambiguous tuple;
+- assign `admin`, `burner_loans_admin`, and emergency authority according to the governance model;
+  and
+- authorize the Heart caller and grant `burner_loans_seizer` to the seizer contract before enabling
+  periodic seizure.
+
+Deployment scripting is intentionally outside the current implementation milestone.
 
 Launch with:
 

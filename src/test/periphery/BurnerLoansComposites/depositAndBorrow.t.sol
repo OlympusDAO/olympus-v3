@@ -11,6 +11,7 @@ import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/Reentran
 import {BurnerLoansCompositesTest} from "src/test/periphery/BurnerLoansComposites/BurnerLoansCompositesTest.sol";
 
 contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest {
+    // depositAndBorrow
     // given the caller pre-authorized the composite and funded collateral plus maximum fee
     //  when depositing and borrowing
     //   then one transaction creates the position, pays the fee, and leaves no residual tokens
@@ -43,6 +44,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // depositAndBorrow
     // given the caller specifies a third-party OHM recipient
     //  when depositing and borrowing
     //   then borrowed OHM is routed only to that recipient
@@ -62,6 +64,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // depositAndBorrow
     // given a signed authorization names the caller and this composite
     //  when depositing and borrowing without prior on-chain authorization
     //   then the signature is consumed and the composite succeeds
@@ -90,6 +93,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // depositAndBorrow
     // given the composite has not been authorized for the caller
     //  when depositing and borrowing without a signature
     //   then Burner Loans rejects the operation and all input remains with the caller
@@ -114,6 +118,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // depositAndBorrow
     // given the caller has not approved the composite to pull collateral and maximum fee
     //  when depositing and borrowing
     //   then the token transfer reverts before any position mutation
@@ -130,6 +135,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         );
     }
 
+    // depositAndBorrow
     // given the actual fee exceeds the caller's maximum fee
     //  when depositing and borrowing
     //   then the deposit, transfers, and authorization state all roll back
@@ -155,6 +161,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(usds));
     }
 
+    // depositAndBorrow
     // given a signature authorizes this composite for a different account than the caller
     //  when depositing and borrowing
     //   then the composite rejects the mismatched account before submitting the signature
@@ -176,6 +183,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         composites.depositAndBorrow(authorization, signature, _depositParams(address(usds), alice));
     }
 
+    // depositAndBorrow
     // given a collateral token callback attempts to reenter the composite
     //  when the outer deposit-and-borrow pulls inputs
     //   then reentrancy is rejected and the outer operation leaves no residual funds

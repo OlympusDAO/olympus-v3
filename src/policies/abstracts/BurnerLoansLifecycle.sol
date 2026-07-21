@@ -72,19 +72,6 @@ abstract contract BurnerLoansLifecycle is
         return BurnerLoansMarketConfig.marketId(_FLOAN, address(this), asset_, address(_OHM));
     }
 
-    function _positionId(address asset_, address borrower_) internal view returns (uint64) {
-        (bool exists, uint64 positionId) = _FLOAN.getPositionId(_marketId(asset_), borrower_);
-        if (!exists) revert BurnerLoans_NoCollateral();
-        return positionId;
-    }
-
-    function _position(
-        address asset_,
-        address borrower_
-    ) internal view returns (IFLOANv1.Position memory) {
-        return _FLOAN.getPositionForBorrower(_marketId(asset_), borrower_);
-    }
-
     function _requireAssetConfigured(
         address asset_
     ) internal view returns (AssetConfig memory config) {

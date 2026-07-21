@@ -1,0 +1,399 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+import {Test} from "forge-std/Test.sol";
+
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+
+import {FullMath} from "src/libraries/FullMath.sol";
+import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
+import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
+import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
+import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
+import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+
+contract BurnerLoansHandler is Test {
+    uint256 internal constant _WAD = 1e18;
+    uint256 internal constant _OHM_SCALE = 1e9;
+
+    BurnerLoansHarness public immutable burnerLoans;
+    BurnerLoansConfig public immutable burnerLoansConfig;
+    BurnerLoansComposites public immutable composites;
+    OlympusFixedTermLoan public immutable floan;
+    BurnerLoansSeizer public immutable seizer;
+    MockPrice public immutable price;
+    MockOhm public immutable ohm;
+    MockERC20 public immutable collateral;
+    DepositManager public immutable depositManager;
+    address public immutable admin;
+    address public immutable treasury;
+
+    address[] internal _actors;
+    uint256 public collateralPrice = _WAD;
+
+    uint256 public repaymentBurnViolations;
+    uint256 public repaymentDebtViolations;
+    uint256 public repaymentCollateralViolations;
+    uint256 public unexpectedRepayFailures;
+    uint256 public sameBlockRepayViolations;
+    uint256 public harvestBoundViolations;
+    uint256 public backingViolations;
+    uint256 public seizureEligibilityViolations;
+
+    struct Dependencies {
+        BurnerLoansHarness burnerLoans;
+        BurnerLoansConfig burnerLoansConfig;
+        BurnerLoansComposites composites;
+        OlympusFixedTermLoan floan;
+        BurnerLoansSeizer seizer;
+        MockPrice price;
+        MockOhm ohm;
+        MockERC20 collateral;
+        DepositManager depositManager;
+        address admin;
+        address treasury;
+        address[] actors;
+    }
+
+    constructor(Dependencies memory dependencies_) {
+        burnerLoans = dependencies_.burnerLoans;
+        burnerLoansConfig = dependencies_.burnerLoansConfig;
+        composites = dependencies_.composites;
+        floan = dependencies_.floan;
+        seizer = dependencies_.seizer;
+        price = dependencies_.price;
+        ohm = dependencies_.ohm;
+        collateral = dependencies_.collateral;
+        depositManager = dependencies_.depositManager;
+        admin = dependencies_.admin;
+        treasury = dependencies_.treasury;
+        _actors = dependencies_.actors;
+
+        for (uint256 i; i < dependencies_.actors.length; ++i) {
+            vm.startPrank(dependencies_.actors[i]);
+            dependencies_.collateral.approve(address(dependencies_.burnerLoans), type(uint256).max);
+            dependencies_.collateral.approve(address(dependencies_.composites), type(uint256).max);
+            dependencies_.burnerLoans.setAuthorization(
+                address(dependencies_.composites),
+                type(uint48).max
+            );
+            vm.stopPrank();
+        }
+    }
+
+    function actorCount() external view returns (uint256) {
+        return _actors.length;
+    }
+
+    function actorAt(uint256 index_) external view returns (address) {
+        return _actors[index_];
+    }
+
+    function deposit(uint256 actorSeed_, uint128 amountSeed_) external {
+        address actor = _actor(actorSeed_);
+        uint128 amount = uint128(bound(amountSeed_, 1e15, 100_000e18));
+        collateral.mint(actor, amount);
+
+        vm.prank(actor);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(burnerLoans.depositCollateral, (address(collateral), amount, actor))
+        );
+        if (!success) return;
+    }
+
+    function borrow(uint256 actorSeed_, uint128 amountSeed_) external {
+        address actor = _actor(actorSeed_);
+        uint128 amount = uint128(bound(amountSeed_, 1, 1_000e9));
+        collateral.mint(actor, 10_000e18);
+
+        uint256 supplyBefore = ohm.totalSupply();
+        uint256 debtBefore = burnerLoans.getPosition(address(collateral), actor).debtOhm;
+        vm.prank(actor);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(
+                burnerLoans.borrow,
+                (address(collateral), amount, actor, actor, type(uint256).max)
+            )
+        );
+        if (!success) return;
+
+        uint256 debtAfter = burnerLoans.getPosition(address(collateral), actor).debtOhm;
+        if (ohm.totalSupply() - supplyBefore != debtAfter - debtBefore) {
+            ++repaymentDebtViolations;
+        }
+        _probeSameBlockRepay(actor);
+        _checkBacking();
+    }
+
+    function repay(uint256 actorSeed_, uint128 amountSeed_) external {
+        address actor = _actor(actorSeed_);
+        IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(
+            address(collateral),
+            actor
+        );
+        uint256 available = ohm.balanceOf(actor) < beforePosition.debtOhm
+            ? ohm.balanceOf(actor)
+            : beforePosition.debtOhm;
+        if (available == 0) return;
+        uint128 amount = uint128(bound(amountSeed_, 1, available));
+        if (block.number <= beforePosition.lastBorrowBlock) {
+            vm.roll(uint256(beforePosition.lastBorrowBlock) + 1);
+        }
+
+        uint256 supplyBefore = ohm.totalSupply();
+        vm.startPrank(actor);
+        ohm.approve(address(burnerLoans), amount);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(burnerLoans.repay, (address(collateral), amount, actor))
+        );
+        vm.stopPrank();
+        if (!success) {
+            ++unexpectedRepayFailures;
+            return;
+        }
+
+        IBurnerLoans.Position memory afterPosition = burnerLoans.getPosition(
+            address(collateral),
+            actor
+        );
+        if (supplyBefore - ohm.totalSupply() != amount) ++repaymentBurnViolations;
+        if (beforePosition.debtOhm - afterPosition.debtOhm != amount) {
+            ++repaymentDebtViolations;
+        }
+        if (beforePosition.depositedCollateral != afterPosition.depositedCollateral) {
+            ++repaymentCollateralViolations;
+        }
+    }
+
+    function compositeDepositAndBorrow(
+        uint256 actorSeed_,
+        uint128 collateralSeed_,
+        uint128 debtSeed_
+    ) external {
+        address actor = _actor(actorSeed_);
+        uint128 collateralAmount = uint128(bound(collateralSeed_, 1e15, 100_000e18));
+        uint128 debtAmount = uint128(bound(debtSeed_, 1, 1_000e9));
+        uint256 maxFee = 10_000e18;
+        collateral.mint(actor, uint256(collateralAmount) + maxFee);
+
+        uint256 supplyBefore = ohm.totalSupply();
+        uint256 debtBefore = burnerLoans.getPosition(address(collateral), actor).debtOhm;
+        IBurnerLoansComposites.DepositAndBorrowParams memory params = IBurnerLoansComposites
+            .DepositAndBorrowParams({
+                asset: address(collateral),
+                collateralAmount: collateralAmount,
+                ohmAmount: debtAmount,
+                recipient: actor,
+                maxFee: maxFee
+            });
+        vm.prank(actor);
+        (bool success, ) = address(composites).call(
+            abi.encodeCall(
+                composites.depositAndBorrow,
+                (_emptyAuthorization(), _emptySignature(), params)
+            )
+        );
+        if (!success) return;
+
+        uint256 debtAfter = burnerLoans.getPosition(address(collateral), actor).debtOhm;
+        if (ohm.totalSupply() - supplyBefore != debtAfter - debtBefore) {
+            ++repaymentDebtViolations;
+        }
+        _probeSameBlockRepay(actor);
+        _checkBacking();
+    }
+
+    function compositeRepayAndWithdraw(
+        uint256 actorSeed_,
+        uint128 repaySeed_,
+        uint128 withdrawSeed_
+    ) external {
+        address actor = _actor(actorSeed_);
+        IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(
+            address(collateral),
+            actor
+        );
+        uint256 available = ohm.balanceOf(actor) < beforePosition.debtOhm
+            ? ohm.balanceOf(actor)
+            : beforePosition.debtOhm;
+        uint128 repayAmount = available == 0 ? 0 : uint128(bound(repaySeed_, 1, available));
+        uint128 withdrawAmount = beforePosition.depositedCollateral == 0
+            ? 0
+            : uint128(bound(withdrawSeed_, 0, beforePosition.depositedCollateral));
+        if (repayAmount == 0 && withdrawAmount == 0) return;
+        if (repayAmount != 0 && block.number <= beforePosition.lastBorrowBlock) {
+            vm.roll(uint256(beforePosition.lastBorrowBlock) + 1);
+        }
+
+        uint256 supplyBefore = ohm.totalSupply();
+        vm.prank(actor);
+        ohm.approve(address(composites), repayAmount);
+        IBurnerLoansComposites.RepayAndWithdrawParams memory params = IBurnerLoansComposites
+            .RepayAndWithdrawParams({
+                asset: address(collateral),
+                maxRepayOhm: repayAmount,
+                collateralAmount: withdrawAmount,
+                recipient: actor
+            });
+        vm.prank(actor);
+        (bool success, ) = address(composites).call(
+            abi.encodeCall(
+                composites.repayAndWithdraw,
+                (_emptyAuthorization(), _emptySignature(), params)
+            )
+        );
+        if (!success) return;
+
+        IBurnerLoans.Position memory afterPosition = burnerLoans.getPosition(
+            address(collateral),
+            actor
+        );
+        uint256 repaid = beforePosition.debtOhm - afterPosition.debtOhm;
+        if (supplyBefore - ohm.totalSupply() != repaid) ++repaymentBurnViolations;
+        if (repaid != repayAmount) ++repaymentDebtViolations;
+        if (
+            beforePosition.depositedCollateral - afterPosition.depositedCollateral != withdrawAmount
+        ) {
+            ++repaymentCollateralViolations;
+        }
+    }
+
+    function withdraw(uint256 actorSeed_, uint128 amountSeed_) external {
+        address actor = _actor(actorSeed_);
+        uint256 deposited = burnerLoans.getPosition(address(collateral), actor).depositedCollateral;
+        if (deposited == 0) return;
+        uint128 amount = uint128(bound(amountSeed_, 1, deposited));
+
+        vm.prank(actor);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(
+                burnerLoans.withdrawCollateral,
+                (address(collateral), amount, actor, actor)
+            )
+        );
+        if (!success) return;
+    }
+
+    function extend(uint256 actorSeed_, uint16 termSeed_) external {
+        address actor = _actor(actorSeed_);
+        if (burnerLoans.getPosition(address(collateral), actor).debtOhm == 0) return;
+        uint16 termCount = uint16(bound(termSeed_, 1, 2));
+        collateral.mint(actor, 10_000e18);
+
+        vm.prank(actor);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(
+                burnerLoans.extend,
+                (address(collateral), actor, termCount, type(uint256).max)
+            )
+        );
+        if (!success) return;
+    }
+
+    function moveOhmPrice(uint256 priceSeed_) external {
+        price.setPrice(address(ohm), bound(priceSeed_, 5e18, 30e18));
+        price.setTimestamp(uint48(block.timestamp));
+    }
+
+    function moveCollateralPrice(uint256 priceSeed_) external {
+        collateralPrice = bound(priceSeed_, 1e18, 2e18);
+        price.setPrice(address(collateral), collateralPrice);
+        price.setTimestamp(uint48(block.timestamp));
+    }
+
+    function moveTime(uint48 timeSeed_) external {
+        vm.warp(block.timestamp + bound(timeSeed_, 1, 45 days));
+        vm.roll(block.number + 1);
+        price.setTimestamp(uint48(block.timestamp));
+    }
+
+    function seize() external {
+        try burnerLoans.getSeizableBorrowers(address(collateral), 0, 8, 4) returns (
+            address[] memory borrowers,
+            uint256,
+            uint256
+        ) {
+            if (borrowers.length == 0) return;
+            for (uint256 i; i < borrowers.length; ++i) {
+                if (!burnerLoans.isSeizable(address(collateral), borrowers[i])) {
+                    ++seizureEligibilityViolations;
+                }
+            }
+            try burnerLoans.seize(address(collateral), borrowers) {
+                _checkBacking();
+            } catch {}
+        } catch {}
+    }
+
+    function executePeriodicSeizer() external {
+        seizer.execute();
+        _checkBacking();
+    }
+
+    function addYield(uint128 amountSeed_) external {
+        collateral.mint(address(depositManager), bound(amountSeed_, 1, 10_000e18));
+    }
+
+    function harvestYield() external {
+        IBurnerLoans.AssetCollateralStatus memory beforeStatus = burnerLoans
+            .getAssetCollateralStatus(address(collateral));
+        uint256 treasuryBefore = collateral.balanceOf(treasury);
+        try burnerLoans.harvestYield(address(collateral)) {
+            uint256 harvested = collateral.balanceOf(treasury) - treasuryBefore;
+            if (harvested > beforeStatus.claimableYield) ++harvestBoundViolations;
+        } catch {}
+    }
+
+    function toggleAsset(bool enable_) external {
+        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(collateral));
+        if (enable_ == config.enabled) return;
+        vm.prank(admin);
+        if (enable_) {
+            try burnerLoansConfig.enableAsset(address(burnerLoans), address(collateral)) {} catch {}
+        } else {
+            try
+                burnerLoansConfig.disableAsset(address(burnerLoans), address(collateral))
+            {} catch {}
+        }
+    }
+
+    function _actor(uint256 seed_) private view returns (address) {
+        return _actors[seed_ % _actors.length];
+    }
+
+    function _probeSameBlockRepay(address actor_) private {
+        vm.startPrank(actor_);
+        ohm.approve(address(burnerLoans), 1);
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeCall(burnerLoans.repay, (address(collateral), uint128(1), actor_))
+        );
+        vm.stopPrank();
+        if (success) ++sameBlockRepayViolations;
+    }
+
+    function _emptyAuthorization()
+        private
+        pure
+        returns (IOperatorAuth.Authorization memory authorization)
+    {}
+
+    function _emptySignature() private pure returns (IOperatorAuth.Signature memory signature) {}
+
+    function _checkBacking() private {
+        IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
+            address(collateral)
+        );
+        uint256 liquidCollateral = status.assets + status.borrowed + collateral.balanceOf(treasury);
+        uint256 liquidBackingUsd = FullMath.mulDiv(liquidCollateral, collateralPrice, _WAD);
+        uint256 totalBackedDebt = burnerLoans.totalActiveDebtOhm() +
+            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm));
+        uint256 requiredBackingUsd = FullMath.mulDiv(totalBackedDebt, _WAD, _OHM_SCALE);
+        if (liquidBackingUsd < requiredBackingUsd) ++backingViolations;
+    }
+}

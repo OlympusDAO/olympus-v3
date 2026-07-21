@@ -8,6 +8,10 @@ contract BurnerLoansPositionHealthFactorTest is BurnerLoansBorrowTestBase {
         return 18;
     }
 
+    // positionHealthFactor
+    // given exact collateral boundary
+    //  when positionHealthFactor is called
+    //   then it returns one WAD
     function test_givenExactCollateralBoundary_positionHealthFactor_returnsOneWad() public view {
         // debt = 100 OHM * $10 = $1,000; 115% minimum collateral = $1,150.
         // collateral = 1,150 units * $1 = $1,150, so health = 1e18.

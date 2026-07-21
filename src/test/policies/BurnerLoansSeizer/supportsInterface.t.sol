@@ -7,6 +7,10 @@ import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
 contract BurnerLoansSeizerSupportsInterfaceTest is BurnerLoansSeizerTest {
+    // supportsInterface
+    // given the seizer is deployed
+    //  when supportsInterface is called
+    //   then it supports expected interfaces
     function test_supportsExpectedInterfaces() public view {
         assertTrue(
             seizer.supportsInterface(type(IPeriodicTask).interfaceId),

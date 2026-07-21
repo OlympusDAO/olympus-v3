@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
+    // previewSeize
+    // given unhealthy position
+    //  when previewSeize is called
+    //   then it returns batch amounts
     function test_givenUnhealthyPosition_previewSeize_returnsBatchAmounts() public {
         _makeUnhealthy(alice);
 
@@ -23,6 +28,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertTrue(preview.executable, "executable");
     }
 
+    // previewSeize
+    // given protocol seizer
+    //  when previewSeize is called
+    //   then it returns zero reward
     function test_givenProtocolSeizer_previewSeize_returnsZeroReward() public {
         _makeUnhealthy(alice);
 
@@ -36,6 +45,29 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
     }
 
+    // previewSeize
+    // given heart caller
+    //  when previewSeize is called
+    //   then it returns zero reward
+    function test_givenHeartCaller_previewSeize_returnsZeroReward() public {
+        _makeUnhealthy(alice);
+        vm.prank(admin);
+        rolesAdmin.grantRole(HEART_ROLE, keeper);
+
+        vm.prank(keeper);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+
+        assertEq(preview.keeperReward, 0, "heart reward");
+        assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
+    }
+
+    // previewSeize
+    // given empty batch
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenEmptyBatch_previewSeize_reverts() public {
         address[] memory borrowers = new address[](0);
 
@@ -43,6 +75,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), borrowers);
     }
 
+    // previewSeize
+    // given batch above maximum
+    //  when previewSeize is called
+    //   then it reverts
     function testFuzz_givenBatchAboveMaximum_previewSeize_reverts(uint256 batchLength_) public {
         uint256 batchLength = bound(batchLength_, 51, 100);
         address[] memory borrowers = new address[](batchLength);
@@ -51,6 +87,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), borrowers);
     }
 
+    // previewSeize
+    // given exact maximum batch
+    //  when previewSeize is called
+    //   then it succeeds
     function test_givenExactMaximumBatch_previewSeize_succeeds() public {
         address[] memory borrowers = new address[](50);
         for (uint256 i; i < borrowers.length; ++i) {
@@ -80,6 +120,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertTrue(preview.executable, "executable");
     }
 
+    // previewSeize
+    // given duplicate borrower
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenDuplicateBorrower_previewSeize_reverts() public {
         _makeUnhealthy(alice);
 
@@ -89,11 +133,19 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), _pair(alice, alice));
     }
 
+    // previewSeize
+    // given zero borrower
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenZeroBorrower_previewSeize_reverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
         burnerLoans.previewSeize(address(usds), _single(address(0)));
     }
 
+    // previewSeize
+    // given healthy position
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenHealthyPosition_previewSeize_reverts() public {
         _borrow(alice, 2_000e18, 100e9);
 
@@ -103,11 +155,19 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), _single(alice));
     }
 
+    // previewSeize
+    // given debt free position
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenDebtFreePosition_previewSeize_reverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
         burnerLoans.previewSeize(address(usds), _single(alice));
     }
 
+    // previewSeize
+    // given stale prices
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenStalePrices_previewSeize_reverts() public {
         _makeUnhealthy(alice);
         vm.warp(block.timestamp + 9 hours);
@@ -116,6 +176,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), _single(alice));
     }
 
+    // previewSeize
+    // given policy disabled
+    //  when previewSeize is called
+    //   then it reverts
     function test_givenPolicyDisabled_previewSeize_reverts() public {
         _makeUnhealthy(alice);
         vm.prank(emergency);
@@ -125,6 +189,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.previewSeize(address(usds), _single(alice));
     }
 
+    // previewSeize
+    // given asset originations disabled
+    //  when previewSeize is called
+    //   then it remains available
     function test_givenAssetOriginationsDisabled_previewSeizeRemainsAvailable() public {
         _makeUnhealthy(alice);
         vm.prank(burnerLoansAdmin);
@@ -136,6 +204,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         );
     }
 
+    // previewSeize
+    // given zero reward BPS
+    //  when previewSeize is called
+    //   then it returns zero reward
     function test_givenZeroRewardBps_previewSeize_returnsZeroReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.keeperRewardBps = 0;
@@ -153,6 +225,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
     }
 
+    // previewSeize
+    // given zero max reward
+    //  when previewSeize is called
+    //   then it returns zero reward
     function test_givenZeroMaxReward_previewSeize_returnsZeroReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.maxKeeperReward = 0;
@@ -169,6 +245,10 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
     }
 
+    // previewSeize
+    // given max reward below BPS reward
+    //  when previewSeize is called
+    //   then it caps reward
     function test_givenMaxRewardBelowBpsReward_previewSeize_capsReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.maxKeeperReward = 5e18;

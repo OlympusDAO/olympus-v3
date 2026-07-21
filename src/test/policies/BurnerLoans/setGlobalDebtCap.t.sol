@@ -78,6 +78,23 @@ contract BurnerLoansSetGlobalDebtCapTest is BurnerLoansTest {
         burnerLoans.setGlobalDebtCap(debtCapOhm_);
 
         assertEq(burnerLoans.globalDebtCapOhm(), debtCapOhm_, "global debt cap");
+        assertEq(mintr.mintApproval(address(burnerLoans)), debtCapOhm_, "mint approval");
+    }
+
+    // setGlobalDebtCap
+    // given an existing global cap
+    //  when the cap is increased and then decreased
+    //   then the remaining MINTR approval changes only by each cap delta
+    function test_givenExistingCap_reconcilesMintApprovalByCapDelta() public {
+        vm.startPrank(admin);
+        burnerLoans.setGlobalDebtCap(1_000e9);
+        burnerLoans.setGlobalDebtCap(1_500e9);
+        assertEq(mintr.mintApproval(address(burnerLoans)), 1_500e9, "increased approval");
+
+        burnerLoans.setGlobalDebtCap(750e9);
+        vm.stopPrank();
+
+        assertEq(mintr.mintApproval(address(burnerLoans)), 750e9, "decreased approval");
     }
 
     // setGlobalDebtCap

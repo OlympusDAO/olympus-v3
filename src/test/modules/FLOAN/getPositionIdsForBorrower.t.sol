@@ -4,6 +4,10 @@ pragma solidity >=0.8.24;
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetPositionIdsForBorrowerTest is FLOANTest {
+    // getPositionIdsForBorrower
+    // given positions across markets
+    //  when getPositionIdsForBorrower is called
+    //   then it returns only borrower positions
     function test_givenPositionsAcrossMarkets_getPositionIdsForBorrower_returnsOnlyBorrowerPositions()
         public
     {

@@ -21,6 +21,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
 /// @title Burner Loans Custody Library
 /// @notice Separately linked DepositManager operations executed in the lifecycle's context.
@@ -57,13 +58,18 @@ library BurnerLoansCustody {
             dependencies_,
             params_.asset,
             params_.ohmAmount,
-            dependencies_.floan.getPositionForBorrower(params_.marketId, params_.onBehalfOf)
+            BurnerLoansPositions.getOrEmpty(
+                dependencies_.floan,
+                params_.marketId,
+                params_.onBehalfOf
+            )
         );
         if (preview.fee > params_.maxFee) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, params_.maxFee);
         }
 
-        (, uint64 positionId) = dependencies_.floan.getPositionId(
+        (, uint64 positionId) = BurnerLoansPositions.find(
+            dependencies_.floan,
             params_.marketId,
             params_.onBehalfOf
         );
@@ -106,7 +112,7 @@ library BurnerLoansCustody {
             amount_
         );
         if (depositedCollateral_ == 0) revert IBurnerLoans.BurnerLoans_ZeroCollateralCredit();
-        uint64 positionId = floan_.getOrCreatePosition(marketId_, onBehalfOf_);
+        uint64 positionId = BurnerLoansPositions.getOrCreate(floan_, marketId_, onBehalfOf_);
         uint128 totalCollateral_ = floan_.addCollateral(positionId, depositedCollateral_);
 
         emit IBurnerLoans.CollateralDeposited(
@@ -144,7 +150,8 @@ library BurnerLoansCustody {
             revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
         }
 
-        IFLOANv1.Position memory position = dependencies_.floan.getPositionForBorrower(
+        IFLOANv1.Position memory position = BurnerLoansPositions.getOrEmpty(
+            dependencies_.floan,
             params_.marketId,
             params_.onBehalfOf
         );
@@ -165,7 +172,8 @@ library BurnerLoansCustody {
             revert IBurnerLoans.BurnerLoans_UnhealthyWithdrawal(healthFactor);
         }
 
-        (, uint64 positionId) = dependencies_.floan.getPositionId(
+        (, uint64 positionId) = BurnerLoansPositions.find(
+            dependencies_.floan,
             params_.marketId,
             params_.onBehalfOf
         );
@@ -392,43 +400,85 @@ library BurnerLoansCustody {
         emit IBurnerLoans.YieldHarvested(asset_, claimed);
     }
 
+    function reconcileMintApproval(
+        IFLOANv1 floan_,
+        MINTRv1 mintr_,
+        IERC20 ohm_,
+        uint128 debtCapOhm_
+    ) public {
+        uint256 issuedPrincipal = floan_.facilityPrincipalDue(address(this), address(ohm_)) +
+            floan_.facilityPrincipalDefaulted(address(this), address(ohm_));
+        uint256 desiredApproval = debtCapOhm_ > issuedPrincipal ? debtCapOhm_ - issuedPrincipal : 0;
+        uint256 currentApproval = mintr_.mintApproval(address(this));
+        if (desiredApproval > currentApproval) {
+            mintr_.increaseMintApproval(address(this), desiredApproval - currentApproval);
+        } else if (desiredApproval < currentApproval) {
+            mintr_.decreaseMintApproval(address(this), currentApproval - desiredApproval);
+        }
+    }
+
     function repay(
         IFLOANv1 floan_,
         MINTRv1 mintr_,
         IERC20 ohm_,
-        uint64 positionId_,
+        uint32 marketId_,
         address asset_,
         address onBehalfOf_,
-        uint128 repayOhm_,
-        uint256 remainingDebtOhm_
-    ) public {
-        floan_.decreaseDebt(positionId_, repayOhm_, 0);
+        uint128 repayOhm_
+    ) public returns (uint256 healthFactor) {
+        (bool exists, uint64 positionId) = BurnerLoansPositions.find(
+            floan_,
+            marketId_,
+            onBehalfOf_
+        );
+        if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
+
+        IFLOANv1.Position memory position = floan_.getPosition(positionId);
+        uint256 debtOhm = position.principalDue;
+        if (debtOhm == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
+        if (repayOhm_ > debtOhm) {
+            revert IBurnerLoans.BurnerLoans_RepayExceedsDebt(repayOhm_, debtOhm);
+        }
+        if (block.number <= position.lastBorrowBlock) {
+            revert IBurnerLoans.BurnerLoans_SameBlockRepay(position.lastBorrowBlock);
+        }
+        uint256 remainingDebtOhm = debtOhm - repayOhm_;
+
+        floan_.decreaseDebt(positionId, repayOhm_, 0);
         ERC20(address(ohm_)).safeTransferFrom(msg.sender, address(this), repayOhm_);
         mintr_.burnOhm(address(this), repayOhm_);
+        mintr_.increaseMintApproval(address(this), repayOhm_);
 
-        emit IBurnerLoans.Repaid(msg.sender, asset_, onBehalfOf_, repayOhm_, remainingDebtOhm_);
+        emit IBurnerLoans.Repaid(msg.sender, asset_, onBehalfOf_, repayOhm_, remainingDebtOhm);
+        return remainingDebtOhm == 0 ? type(uint256).max : 0;
     }
 
     function extend(
         BurnerLoansContext memory dependencies_,
         TRSRYv1 treasury_,
-        uint64 positionId_,
+        uint32 marketId_,
         address asset_,
         address onBehalfOf_,
         uint16 termCount_,
         uint256 maxFee_
     ) public returns (IBurnerLoans.ExtendPreview memory preview) {
+        (bool exists, uint64 positionId) = BurnerLoansPositions.find(
+            dependencies_.floan,
+            marketId_,
+            onBehalfOf_
+        );
+        if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
         preview = BurnerLoansQuote.quoteExtend(
             dependencies_,
             asset_,
             termCount_,
-            dependencies_.floan.getPosition(positionId_)
+            dependencies_.floan.getPosition(positionId)
         );
         if (preview.fee > maxFee_) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, maxFee_);
         }
 
-        dependencies_.floan.extendMaturity(positionId_, preview.maturity);
+        dependencies_.floan.extendMaturity(positionId, preview.maturity);
         if (preview.fee != 0) {
             ERC20(asset_).safeTransferFrom(msg.sender, address(treasury_), preview.fee);
         }

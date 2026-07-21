@@ -4,12 +4,20 @@ pragma solidity >=0.8.24;
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetMarketIdsTest is FLOANTest {
+    // getMarketIds
+    // given missing market
+    //  when getMarketIds is called
+    //   then it returns empty array
     function test_getMarketIds_givenMissingMarket_returnsEmptyArray() public view {
         uint256[] memory marketIds = floan.getMarketIds(facility, collateralToken, debtToken);
 
         assertEq(marketIds.length, 0, "market count");
     }
 
+    // getMarketIds
+    // given market zero
+    //  when getMarketIds is called
+    //   then it returns market zero
     function test_getMarketIds_givenMarketZero_returnsMarketZero() public {
         _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
@@ -19,6 +27,10 @@ contract FLOANGetMarketIdsTest is FLOANTest {
         assertEq(marketIds[0], 0, "market id");
     }
 
+    // getMarketIds
+    // given multiple markets for pair
+    //  when getMarketIds is called
+    //   then it returns every market
     function test_getMarketIds_givenMultipleMarketsForPair_returnsEveryMarket() public {
         uint32 first = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 second = _createMarket(manager, facility, collateralToken, debtToken, 2_000e9);
@@ -30,6 +42,10 @@ contract FLOANGetMarketIdsTest is FLOANTest {
         assertEq(marketIds[1], second, "second market id");
     }
 
+    // getMarketIds
+    // given different tuples
+    //  when getMarketIds is called
+    //   then it keeps indexes separate
     function test_getMarketIds_givenDifferentTuples_keepsIndexesSeparate() public {
         uint32 matching = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _createMarket(manager, otherFacility, collateralToken, debtToken, 1_000e9);

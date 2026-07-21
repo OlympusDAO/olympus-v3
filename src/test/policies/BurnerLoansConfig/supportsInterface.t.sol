@@ -12,6 +12,10 @@ import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecyc
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansTest {
+    // supportsInterface
+    // given config deployed
+    //  when supportsInterface is called
+    //   then it advertises only config surface
     function test_givenConfigDeployed_supportsInterface_advertisesOnlyConfigSurface() public view {
         assertTrue(burnerLoansConfig.supportsInterface(type(IERC165).interfaceId), "IERC165");
         assertTrue(burnerLoansConfig.supportsInterface(type(IEnabler).interfaceId), "IEnabler");

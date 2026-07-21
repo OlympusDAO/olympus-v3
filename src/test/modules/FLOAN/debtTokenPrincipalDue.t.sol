@@ -4,6 +4,10 @@ pragma solidity >=0.8.24;
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANDebtTokenPrincipalDueTest is FLOANTest {
+    // debtTokenPrincipalDue
+    // given several facilities
+    //  when debtTokenPrincipalDue is called
+    //   then it aggregates by debt token
     function test_givenSeveralFacilities_debtTokenPrincipalDue_aggregatesByDebtToken() public {
         uint32 first = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint32 second = _createMarket(manager, otherFacility, collateralToken, debtToken, 1_000e9);

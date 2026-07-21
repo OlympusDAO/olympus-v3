@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketOriginationsEnabledTest is FLOANTest {
+    // setMarketOriginationsEnabled
+    // given caller without kernel permission
+    //  when setMarketOriginationsEnabled is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_setMarketOriginationsEnabled_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.expectRevert(
@@ -14,6 +18,10 @@ contract FLOANSetMarketOriginationsEnabledTest is FLOANTest {
         floan.setMarketOriginationsEnabled(marketId, false);
     }
 
+    // setMarketOriginationsEnabled
+    // given manager
+    //  when setMarketOriginationsEnabled is called
+    //   then it updates state both ways
     function test_givenManager_setMarketOriginationsEnabled_updatesStateBothWays() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.startPrank(manager);
@@ -24,6 +32,10 @@ contract FLOANSetMarketOriginationsEnabledTest is FLOANTest {
         assertTrue(floan.getMarket(marketId).originationsEnabled, "originations enabled");
     }
 
+    // setMarketOriginationsEnabled
+    // given permissioned non manager
+    //  when setMarketOriginationsEnabled is called
+    //   then it reverts
     function test_givenPermissionedNonManager_setMarketOriginationsEnabled_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(otherManager);

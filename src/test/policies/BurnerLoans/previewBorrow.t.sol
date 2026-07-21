@@ -10,6 +10,10 @@ contract BurnerLoansPreviewBorrowTest is BurnerLoansBorrowTestBase {
         return 18;
     }
 
+    // previewBorrow
+    // given healthy first borrow
+    //  when previewBorrow is called
+    //   then it returns executable quote
     function test_givenHealthyFirstBorrow_previewBorrow_returnsExecutableQuote() public {
         burnerLoans.setPositionForTest(
             address(usds),

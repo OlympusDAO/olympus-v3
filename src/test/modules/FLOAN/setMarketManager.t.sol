@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketManagerTest is FLOANTest {
+    // setMarketManager
+    // given caller without kernel permission
+    //  when setMarketManager is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_setMarketManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.expectRevert(
@@ -14,6 +18,10 @@ contract FLOANSetMarketManagerTest is FLOANTest {
         floan.setMarketManager(marketId, otherManager);
     }
 
+    // setMarketManager
+    // given current manager
+    //  when setMarketManager is called
+    //   then it transfers configuration authority
     function test_givenCurrentManager_setMarketManager_transfersConfigurationAuthority() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(manager);
@@ -30,6 +38,10 @@ contract FLOANSetMarketManagerTest is FLOANTest {
         assertEq(floan.getMarket(marketId).manager, manager, "restored manager");
     }
 
+    // setMarketManager
+    // given zero manager
+    //  when setMarketManager is called
+    //   then it reverts
     function test_givenZeroManager_setMarketManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(manager);
@@ -37,6 +49,10 @@ contract FLOANSetMarketManagerTest is FLOANTest {
         floan.setMarketManager(marketId, address(0));
     }
 
+    // setMarketManager
+    // given permissioned non manager
+    //  when setMarketManager is called
+    //   then it reverts
     function test_givenPermissionedNonManager_setMarketManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(otherManager);

@@ -87,6 +87,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
+    // borrow
     // given a configured collateral vault has lost one unit below borrower liabilities
     //  when previewing or executing a new borrow
     //   then the asset-level custody shortfall blocks new exposure
@@ -658,9 +659,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 
-    // Condition tree:
-    // - FLOAN: two markets share the Burner Loans facility, collateral, and debt-token tuple
-    // - Expected branch: Burner Loans rejects the ambiguous market instead of selecting one
+    // borrow
+    // given multiple markets for asset
+    //  when borrow is called
+    //   then it borrow and preview revert
     function test_givenMultipleMarketsForAsset_borrowAndPreviewRevert() public {
         _createDuplicateUsdsMarketForTest();
         bytes memory error = abi.encodeWithSelector(

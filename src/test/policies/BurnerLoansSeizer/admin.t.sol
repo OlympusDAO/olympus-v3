@@ -9,6 +9,10 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
 contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
+    // addAsset/removeAsset
+    // given admin
+    //  when an asset is added and removed
+    //   then it adds and removes managed asset
     function test_givenAdmin_addsAndRemovesManagedAsset() public {
         vm.startPrank(admin);
         seizer.addAsset(assetOne);
@@ -22,6 +26,10 @@ contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
         assertEq(seizer.getAssets().length, 0, "managed asset count");
     }
 
+    // addAsset
+    // given duplicate asset
+    //  when addAsset is called
+    //   then it reverts
     function test_givenDuplicateAsset_reverts() public {
         vm.startPrank(admin);
         seizer.addAsset(assetOne);
@@ -35,6 +43,10 @@ contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
         vm.stopPrank();
     }
 
+    // removeAsset
+    // given missing asset
+    //  when removeAsset is called
+    //   then it reverts
     function test_givenMissingAsset_removeReverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -46,6 +58,10 @@ contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
         seizer.removeAsset(assetOne);
     }
 
+    // setScanLimits
+    // given admin or burner loans admin
+    //  when setScanLimits is called
+    //   then it sets scan limits
     function test_givenAdminOrBurnerLoansAdmin_setsScanLimits() public {
         vm.prank(admin);
         seizer.setScanLimits(20, 10);
@@ -58,6 +74,10 @@ contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
         assertEq(seizer.maxBorrowersToSeize(), 15, "operator seize limit");
     }
 
+    // setScanLimits
+    // given invalid scan limits
+    //  when setScanLimits is called
+    //   then it reverts
     function testFuzz_givenInvalidScanLimits_reverts(uint16 checkLimit_, uint8 seizeLimit_) public {
         bool invalid = checkLimit_ == 0 ||
             checkLimit_ > seizer.MAX_BORROWERS_TO_CHECK() ||
@@ -77,6 +97,10 @@ contract BurnerLoansSeizerAdminTest is BurnerLoansSeizerTest {
         seizer.setScanLimits(checkLimit_, seizeLimit_);
     }
 
+    // setScanLimits
+    // given unauthorized caller
+    //  when setScanLimits is called
+    //   then it cannot change configuration
     function testFuzz_givenUnauthorizedCaller_cannotChangeConfiguration(address caller_) public {
         vm.assume(caller_ != admin && caller_ != burnerLoansAdmin);
 

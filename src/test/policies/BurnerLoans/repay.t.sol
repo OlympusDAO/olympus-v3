@@ -19,6 +19,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         bob = makeAddr("bob");
     }
 
+    // repay
+    // given partial repayment
+    //  when repay is called
+    //   then it burns OHM and reduces only debt
     function test_givenPartialRepayment_repayBurnsOhmAndReducesOnlyDebt() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -36,9 +40,18 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(position.depositedCollateral, 2_000e18, "position collateral");
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 60e9, "asset debt");
         assertEq(burnerLoans.totalActiveDebtOhm(), 60e9, "facility debt");
+        assertEq(
+            mintr.mintApproval(address(burnerLoans)),
+            burnerLoans.globalDebtCapOhm() - 60e9,
+            "recycled mint approval"
+        );
         assertEq(health, 0, "unknown partial health sentinel");
     }
 
+    // repay
+    // given fuzzed partial repayment
+    //  when repay is called
+    //   then it burns exactly debt reduction
     function test_givenFuzzedPartialRepayment_repayBurnsExactlyDebtReduction(
         uint128 repayOhm_
     ) public {
@@ -59,6 +72,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // repay
+    // given full repayment
+    //  when repay is called
+    //   then it clears debt and active borrower only
     function test_givenFullRepayment_repayClearsDebtAndActiveBorrowerOnly() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -76,6 +93,40 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(health, type(uint256).max, "debt-free health");
     }
 
+    // repay
+    // given the global mint capacity has been fully consumed
+    //  when all borrowed OHM is repaid and burned
+    //   then the exact capacity is restored
+    //   then the same amount can be borrowed again
+    function test_givenGlobalMintCapacityConsumed_repayRestoresCapacityForAnotherBorrow() public {
+        vm.prank(admin);
+        burnerLoans.setGlobalDebtCap(100e9);
+        _borrowForAlice(100e9);
+        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "consumed approval");
+
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 100e9);
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 100e9, alice);
+        assertEq(mintr.mintApproval(address(burnerLoans)), 100e9, "restored approval");
+
+        vm.startPrank(alice);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            100e9,
+            alice
+        );
+        burnerLoans.borrow(address(usds), 100e9, alice, alice, preview.fee);
+        vm.stopPrank();
+
+        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt");
+        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "reconsumed approval");
+    }
+
+    // repay
+    // given same borrow block
+    //  when repay is called
+    //   then it reverts
     function test_givenSameBorrowBlock_repayReverts() public {
         _borrowForAlice(100e9);
         _approveOhm(alice, 1e9);
@@ -90,6 +141,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         burnerLoans.repay(address(usds), 1e9, alice);
     }
 
+    // repay
+    // given repay amount exceeds debt
+    //  when repay is called
+    //   then it reverts
     function test_givenRepayAmountExceedsDebt_repayReverts(uint128 surplus_) public {
         surplus_ = uint128(bound(surplus_, 1, type(uint128).max - 100e9));
         uint128 requested = 100e9 + surplus_;
@@ -108,11 +163,19 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         burnerLoans.repay(address(usds), requested, alice);
     }
 
+    // repay
+    // given zero amount
+    //  when repay is called
+    //   then it reverts
     function test_givenZeroAmount_repayReverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
         burnerLoans.repay(address(usds), 0, alice);
     }
 
+    // repay
+    // given no debt
+    //  when repay is called
+    //   then it reverts
     function test_givenNoDebt_repayReverts() public {
         burnerLoans.setPositionForTest(
             address(usds),
@@ -129,6 +192,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         burnerLoans.repay(address(usds), 1, alice);
     }
 
+    // repay
+    // given global policy disabled
+    //  when repay is called
+    //   then it reverts
     function test_givenGlobalPolicyDisabled_repayReverts() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -139,6 +206,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         burnerLoans.repay(address(usds), 1e9, alice);
     }
 
+    // repay
+    // given asset disabled and price stale
+    //  when repay is called
+    //   then it succeeds
     function test_givenAssetDisabledAndPriceStale_repaySucceeds() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -153,6 +224,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
     }
 
+    // repay
+    // given matured unhealthy position
+    //  when repay is called
+    //   then it succeeds without price
     function test_givenMaturedUnhealthyPosition_repaySucceedsWithoutPrice() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -165,6 +240,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
     }
 
+    // repay
+    // given unrelated caller
+    //  when repay is called
+    //   then it can pay another borrower debt
     function test_givenUnrelatedCaller_repayCanPayAnotherBorrowerDebt() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -177,6 +256,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(usds.balanceOf(bob), 0, "caller collateral");
     }
 
+    // repay
+    // given missing allowance
+    //  when repay is called
+    //   then it reverts and preserves debt
     function test_givenMissingAllowance_repayRevertsAndPreservesDebt() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -187,6 +270,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
 
+    // repay
+    // given missing balance
+    //  when repay is called
+    //   then it reverts and preserves debt
     function test_givenMissingBalance_repayRevertsAndPreservesDebt() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -198,6 +285,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
 
+    // repay
+    // given missing market
+    //  when repay is called
+    //   then it reverts before burn
     function test_givenMissingMarket_repayRevertsBeforeBurn() public {
         address unsupported = makeAddr("unsupported");
         ohm.mint(alice, 1e9);
@@ -215,6 +306,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
     }
 
+    // repay
+    // given ambiguous market
+    //  when repay is called
+    //   then it reverts before burn
     function test_givenAmbiguousMarket_repayRevertsBeforeBurn() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
@@ -234,6 +329,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
     }
 
+    // repay
+    // given multiple borrowers
+    //  when repay is called
+    //   then it updates only target position
     function test_givenMultipleBorrowers_repayUpdatesOnlyTargetPosition() public {
         _borrowForAlice(100e9);
         _borrowFor(bob, 50e9);
@@ -247,6 +346,10 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.totalActiveDebtOhm(), 140e9, "facility debt");
     }
 
+    // repay
+    // given debt in another market
+    //  when repay is called
+    //   then it preserves other market debt
     function test_givenDebtInAnotherMarket_repayPreservesOtherMarketDebt() public {
         _borrowForAlice(100e9);
         MockERC20 otherAsset = _setOtherMarketDebtForTest(50e9);

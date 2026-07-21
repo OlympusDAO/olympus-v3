@@ -6,6 +6,10 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANRemoveCollateralTest is FLOANTest {
+    // removeCollateral
+    // given caller without kernel permission
+    //  when removeCollateral is called
+    //   then it reverts
     function test_givenCallerWithoutKernelPermission_removeCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -15,6 +19,10 @@ contract FLOANRemoveCollateralTest is FLOANTest {
         floan.removeCollateral(positionId, 1);
     }
 
+    // removeCollateral
+    // given amount at or below balance
+    //  when removeCollateral is called
+    //   then it decreases exactly
     function testFuzz_givenAmountAtOrBelowBalance_removeCollateral_decreasesExactly(
         uint128 amount_
     ) public {
@@ -30,6 +38,10 @@ contract FLOANRemoveCollateralTest is FLOANTest {
         assertEq(floan.getPosition(positionId).collateral, remaining, "stored collateral");
     }
 
+    // removeCollateral
+    // given zero or one above balance
+    //  when removeCollateral is called
+    //   then it reverts
     function test_givenZeroOrOneAboveBalance_removeCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -43,6 +55,10 @@ contract FLOANRemoveCollateralTest is FLOANTest {
         assertEq(floan.getPosition(positionId).collateral, 100, "collateral unchanged");
     }
 
+    // removeCollateral
+    // given permissioned non facility
+    //  when removeCollateral is called
+    //   then it reverts
     function test_givenPermissionedNonFacility_removeCollateral_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);

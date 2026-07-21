@@ -11,6 +11,10 @@ contract BurnerLoansPreviewWithdrawCollateralTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
     }
 
+    // previewWithdrawCollateral
+    // given debt free position
+    //  when previewWithdrawCollateral is called
+    //   then it returns executable quote
     function test_givenDebtFreePosition_previewWithdrawCollateral_returnsExecutableQuote() public {
         burnerLoans.setPositionForTest(
             address(usds),
