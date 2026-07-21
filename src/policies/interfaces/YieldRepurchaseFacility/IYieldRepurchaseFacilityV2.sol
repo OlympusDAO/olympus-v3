@@ -2,20 +2,36 @@
 pragma solidity >=0.8.24;
 
 /// @title IYieldRepurchaseFacilityV2
-/// @notice The interface for the Multi-Asset Yield Repurchase Facility (YRF) policy.
-/// @dev The facility periodically withdraws yield from a whitelist of ERC4626 reserve
-///      vaults and uses it to buy OHM on Bond Protocol SDA markets. Purchased OHM is
-///      burned, and the recovered backing value is added to the backing vault's weekly
-///      budget to fund subsequent buybacks.
+/// @notice The interface for the multi-asset Yield Repurchase Facility (YRF) policy. The
+///         facility draws yield from registered ERC4626 reserve vaults held by the
+///         treasury, spends it through daily Bond Protocol markets that buy OHM, and
+///         burns the purchased OHM against a treasury withdrawal priced by the backing
+///         oracle.
+/// @dev Amount conventions: reserve amounts are denominated in the reserve token's
+///      decimals, vault share amounts in the vault's decimals (equal to the reserve
+///      decimals for every registered vault), and OHM amounts in the OHM decimals.
+///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price and
+///      the backing value are 18-decimal reserve-per-OHM quotes.
+///
+///      Role restrictions are stated per function. Functions restricted to the YRF
+///      timelock and the admin role are callable by the policy returned by `timelock()`
+///      or by an admin role holder; the yrf_admin role reaches them through the
+///      timelock's queue. The facility also implements: `IPeriodicTask.execute`,
+///      restricted to the heart role; `IBondCallback.callback`, restricted to the
+///      configured teller; `IEnabler.enable`, restricted to the admin role, and
+///      `IEnabler.disable`, restricted to the emergency and admin roles;
+///      `IReEnabler.reEnable`, restricted to the yrf_admin role within the grace window
+///      after a disable; and `IBasicRescueable.rescue`, restricted to the yrf_admin and
+///      admin roles.
 interface IYieldRepurchaseFacilityV2 {
     // ============ EVENTS ============ //
 
-    /// @notice Emitted when a bond market is created for a reserve asset.
-    /// @param vault The ERC4626 vault that funds the market.
-    /// @param marketId The bond market identifier.
-    /// @param payoutToken The token the market pays out: the vault's reserve token for a
-    ///        redeem-to-reserve vault, or the vault itself for a sell-shares vault.
-    /// @param bidAmount The capacity of the market, denominated in the payout token.
+    /// @notice Emitted when a bond market is created for a vault.
+    /// @param vault The vault whose budget funds the market.
+    /// @param marketId The market ID assigned by the bond auctioneer.
+    /// @param payoutToken The token the market pays out: the vault's reserve, or the
+    ///        vault share token for a sell-shares asset.
+    /// @param bidAmount The market capacity, in payout token units.
     event RepoMarket(
         address indexed vault,
         uint256 indexed marketId,
@@ -23,59 +39,58 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 bidAmount
     );
 
-    /// @notice Emitted when the projected next-week yield is updated for a vault.
-    /// @param reserve The underlying reserve token of the vault.
-    /// @param nextYield The projected yield, in the reserve token decimals.
+    /// @notice Emitted when the stored next yield of a vault is set.
+    /// @param reserve The reserve token of the vault.
+    /// @param nextYield The stored next yield, in reserve units.
     event NextYieldSet(address indexed reserve, uint256 nextYield);
 
-    /// @notice Emitted when the buyback share for a vault is updated.
-    /// @param vault The ERC4626 vault.
-    /// @param newShare The share of yield allocated to buybacks (`1e18` = 100%).
+    /// @notice Emitted when the yield buyback share of a vault is set.
+    /// @param vault The vault whose share is set.
+    /// @param newShare The new share (`1e18` = 100%).
     event YieldBuybackShareSet(address indexed vault, uint256 newShare);
 
-    /// @notice Emitted when a reserve asset is added to the whitelist.
-    /// @param vault The ERC4626 vault.
-    /// @param reserve The underlying reserve token of the vault.
-    /// @param yieldBuybackShare The initial buyback share for the asset (`1e18` = 100%).
+    /// @notice Emitted when a vault is registered as a reserve asset.
+    /// @param vault The registered vault.
+    /// @param reserve The vault's underlying reserve token.
+    /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` = 100%).
     event AssetAdded(address indexed vault, address indexed reserve, uint256 yieldBuybackShare);
 
-    /// @notice Emitted when a reserve asset is removed from the whitelist.
-    /// @param vault The ERC4626 vault.
+    /// @notice Emitted when a vault is de-registered.
+    /// @param vault The removed vault.
     event AssetRemoved(address indexed vault);
 
-    /// @notice Emitted when a reserve asset is enabled.
-    /// @param vault The ERC4626 vault.
+    /// @notice Emitted when a registered vault is enabled.
+    /// @param vault The enabled vault.
     event AssetEnabled(address indexed vault);
 
-    /// @notice Emitted when a reserve asset is disabled.
-    /// @param vault The ERC4626 vault.
+    /// @notice Emitted when a registered vault is disabled.
+    /// @param vault The disabled vault.
     event AssetDisabled(address indexed vault);
 
-    /// @notice Emitted when the backing oracle is updated.
-    /// @param backingOracle The new backing oracle.
+    /// @notice Emitted when the backing oracle is set.
+    /// @param backingOracle The backing oracle policy.
     event BackingOracleSet(address indexed backingOracle);
 
-    /// @notice Emitted when the primary backing vault is updated.
-    /// @param backingVault The new backing vault.
+    /// @notice Emitted when the backing vault is set.
+    /// @param backingVault The vault designated as the backing vault.
     event BackingVaultSet(address indexed backingVault);
 
-    /// @notice Emitted when the Bond Protocol auctioneer and teller are updated.
-    /// @param bondAuctioneer The new Bond Protocol SDA auctioneer.
-    /// @param teller The new Bond Protocol teller.
+    /// @notice Emitted when the bond auctioneer and the teller are set.
+    /// @param bondAuctioneer The SDA auctioneer used to create markets.
+    /// @param teller The teller trusted to invoke the bond callback.
     event BondContractsSet(address indexed bondAuctioneer, address indexed teller);
 
-    /// @notice Emitted when the initial discount is updated.
-    /// @param initialDiscount The new initial discount (`1e18` = 100%).
+    /// @notice Emitted when the initial bond market discount is set.
+    /// @param initialDiscount The new discount (`1e18` = 100%).
     event InitialDiscountSet(uint256 initialDiscount);
 
-    /// @notice Emitted when a Clearinghouse receivables offset is updated.
+    /// @notice Emitted when the receivables offset of a Clearinghouse is set.
     /// @param clearinghouse The Clearinghouse address.
-    /// @param offset The new cumulative offset.
+    /// @param offset The cumulative offset, in the receivables' units.
     event ClearinghouseOffsetSet(address indexed clearinghouse, uint256 offset);
 
-    /// @notice Emitted when a Clearinghouse is skipped during the weekly yield computation
-    ///         because its reserve token does not match the backing vault's reserve, or it
-    ///         does not expose the `reserve()` getter.
+    /// @notice Emitted at each weekly reset for every registry Clearinghouse that does
+    ///         not count toward the backing yield.
     /// @param clearinghouse The Clearinghouse address.
     event ClearinghouseDebtTokenMismatch(address indexed clearinghouse);
 
@@ -87,92 +102,97 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param clearinghouse The Clearinghouse address.
     event ClearinghouseExcluded(address indexed clearinghouse);
 
-    /// @notice Emitted when a vault redemption attempt fails. The redemption is skipped
-    ///         and retried on a later cycle.
-    /// @param vault The ERC4626 vault.
-    /// @param shares The number of shares the facility attempted to redeem.
+    /// @notice Emitted when a checked redeem of vault shares fails; the shares are kept
+    ///         and no reserve is received.
+    /// @param vault The vault whose redeem failed.
+    /// @param shares The share amount that was to be redeemed.
     event RedeemFailed(address indexed vault, uint256 shares);
 
-    /// @notice Emitted when bond market creation fails for a vault. The budget is
-    ///         preserved and market creation is retried on the next daily cycle.
-    /// @param vault The ERC4626 vault the market would have been funded from.
-    /// @param bidAmount The capacity the market would have been created with.
+    /// @notice Emitted when a market creation is rejected; the funds stay with the
+    ///         facility and the day's market for the vault is skipped.
+    /// @param vault The vault whose market was not created.
+    /// @param bidAmount The intended market capacity, in payout token units.
     event MarketCreationFailed(address indexed vault, uint256 bidAmount);
 
-    /// @notice Emitted when the weekly prefund cannot withdraw the full budget shortfall
-    ///         because the treasury holds fewer vault shares than required.
-    /// @dev The week proceeds on the smaller funded amount. The unfunded gap remains in
-    ///      `weeklyBudgetRemaining` and the prefund is retried at the next weekly reset.
-    /// @param vault The ERC4626 vault.
-    /// @param sharesRequested The share amount required to fully fund the weekly budget.
-    /// @param sharesWithdrawn The share amount actually withdrawn from the treasury.
+    /// @notice Emitted when the treasury balance does not cover the weekly prefund target
+    ///         and the withdrawal is capped at the balance.
+    /// @param vault The vault being prefunded.
+    /// @param sharesRequested The share amount required to cover the weekly budget.
+    /// @param sharesWithdrawn The share amount actually withdrawn.
     event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
-    /// @notice Emitted when accumulated OHM purchases are burned and the corresponding
-    ///         backing is recycled.
-    /// @param ohmBurned The amount of OHM burned, in OHM decimals.
-    /// @param backingWithdrawn The amount of reserve withdrawn from the backing vault,
-    ///        in the backing vault's reserve decimals.
+    /// @notice Emitted when purchased OHM is burned against a backing withdrawal credited
+    ///         to the backing vault's budget.
+    /// @param ohmBurned The amount of OHM burned.
+    /// @param backingWithdrawn The withdrawal proceeds, in backing reserve units.
     event OhmPurchasesProcessed(uint256 ohmBurned, uint256 backingWithdrawn);
 
     /// @notice Emitted when the funds held by the facility are returned to the treasury.
     /// @param ohmBurned The amount of purchased OHM that was burned.
     event FundsReturnedToTreasury(uint256 ohmBurned);
 
+    /// @notice Emitted when the sweep of a vault by `returnFundsToTreasury` reverts and
+    ///         is skipped; the vault's balances and accounting stay in place and are
+    ///         retried by the next call.
+    /// @param vault The vault whose sweep was skipped.
+    event FundsReturnSkipped(address indexed vault);
+
+    /// @notice Emitted when the weekly reset of a vault reverts and is skipped; the vault
+    ///         is retried at the following weekly reset.
+    /// @param vault The vault whose reset was skipped.
+    event WeeklyResetSkipped(address indexed vault);
+
+    /// @notice Emitted when the daily cycle of a vault reverts and is skipped.
+    /// @param vault The vault whose daily cycle was skipped.
+    event DailyCycleSkipped(address indexed vault);
+
+    /// @notice Emitted when the processing of the purchased OHM reverts and is skipped;
+    ///         the accumulated OHM is retried on the following beats.
+    event OhmPurchasesProcessingSkipped();
+
     // ============ ERRORS ============ //
 
-    /// @notice Thrown when the enable payload length does not match the expected layout.
+    /// @notice Thrown when the `enable` payload is shorter than the minimum
+    ///         `abi.encode(uint256, NextYieldSeed[])` encoding.
     error IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
-    /// @notice Thrown when an asset operation references a vault that is not registered.
-    /// @param vault The vault address that is not registered.
+    /// @notice Thrown when a function targets a vault that is not registered.
+    /// @param vault The unregistered vault.
     error IYieldRepurchaseFacilityV2_AssetNotRegistered(address vault);
 
-    /// @notice Thrown when adding a vault whose reserve token is already used by another
-    ///         registered vault.
-    /// @param vault The vault being added.
-    /// @param reserve The reserve token already taken by another vault.
-    error IYieldRepurchaseFacilityV2_DuplicateReserve(address vault, address reserve);
+    /// @notice Thrown when another registered vault uses the same reserve token.
+    error IYieldRepurchaseFacilityV2_DuplicateReserve();
 
-    /// @notice Thrown when adding a vault that is already registered.
-    /// @param vault The vault that is already registered.
-    error IYieldRepurchaseFacilityV2_AssetAlreadyRegistered(address vault);
+    /// @notice Thrown when the vault is already registered.
+    error IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
 
-    /// @notice Thrown when an asset operation requires the asset to be disabled.
-    /// @param vault The vault that is still enabled.
-    error IYieldRepurchaseFacilityV2_AssetEnabled(address vault);
+    /// @notice Thrown when the targeted asset is enabled where a disabled one is required.
+    error IYieldRepurchaseFacilityV2_AssetEnabled();
 
-    /// @notice Thrown when an asset operation requires the asset to be enabled.
-    /// @param vault The vault that is disabled.
-    error IYieldRepurchaseFacilityV2_AssetDisabled(address vault);
+    /// @notice Thrown when the targeted asset is disabled where an enabled one is
+    ///         required.
+    error IYieldRepurchaseFacilityV2_AssetDisabled();
 
-    /// @notice Thrown when a vault is removed or disabled while still being used as
-    ///         the `backingVault`.
-    /// @param vault The vault that is currently set as the backing vault.
-    error IYieldRepurchaseFacilityV2_VaultIsBackingVault(address vault);
+    /// @notice Thrown when the operation is not allowed on the backing vault.
+    error IYieldRepurchaseFacilityV2_VaultIsBackingVault();
 
-    /// @notice Thrown when setting a sell-shares vault as the backing vault. The backing vault
-    ///         must be redeemable so that backing can be recovered as its reserve token.
-    /// @param vault The vault that cannot be the backing vault.
-    error IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares(address vault);
+    /// @notice Thrown when a sell-shares vault is designated as the backing vault.
+    error IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
 
-    /// @notice Thrown when adding a sell-shares vault whose share decimals do not match its
-    ///         reserve decimals. The bond market prices the shares using the reserve decimals, so
-    ///         the two must be equal.
-    /// @param vault The vault being added.
-    error IYieldRepurchaseFacilityV2_SellSharesDecimalsMismatch(address vault);
+    /// @notice Thrown when the vault's share decimals do not match its reserve decimals.
+    error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-    /// @notice Thrown when the initial discount is greater than or equal to `1e18` (100%).
+    /// @notice Thrown when the initial discount is not less than 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 
-    /// @notice Thrown when the yield buyback share exceeds `1e18` (100%).
+    /// @notice Thrown when the yield buyback share exceeds 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
 
-    /// @notice Thrown when a Clearinghouse receivables offset would exceed the current
-    ///         `principalReceivables` value.
+    /// @notice Thrown when a receivables offset exceeds the Clearinghouse's current
+    ///         `principalReceivables`.
     /// @param clearinghouse The Clearinghouse address.
-    /// @param offset The offset that would be set.
-    /// @param principalReceivables The current `principalReceivables` of the Clearinghouse.
+    /// @param offset The rejected cumulative offset.
+    /// @param principalReceivables The current `principalReceivables`.
     error IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
         address clearinghouse,
         uint256 offset,
@@ -187,64 +207,81 @@ interface IYieldRepurchaseFacilityV2 {
     ///         included in the backing yield.
     error IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
 
-    /// @notice Thrown by IBondCallback hooks that this facility does not support.
+    /// @notice Thrown when a next-yield correction targets a stored value that has
+    ///         changed since the correction was prepared.
+    /// @param vault The vault whose next yield was targeted.
+    /// @param expectedNextYield The stored value the correction expected.
+    /// @param currentNextYield The stored value found at execution.
+    error IYieldRepurchaseFacilityV2_NextYieldMismatch(
+        address vault,
+        uint256 expectedNextYield,
+        uint256 currentNextYield
+    );
+
+    /// @notice Thrown when a next-yield correction does not lower the stored value.
+    /// @param vault The vault whose next yield was targeted.
+    /// @param newNextYield The proposed value.
+    /// @param currentNextYield The stored value.
+    error IYieldRepurchaseFacilityV2_NextYieldNotDecreased(
+        address vault,
+        uint256 newNextYield,
+        uint256 currentNextYield
+    );
+
+    /// @notice Thrown by the `IBondCallback` whitelist management functions, which the
+    ///         facility does not support.
     error IYieldRepurchaseFacilityV2_NotSupported();
 
-    /// @notice Thrown by the bond callback when the resolved market is not owned by this facility.
-    /// @param marketId The market identifier received by the callback.
-    error IYieldRepurchaseFacilityV2_UnknownMarket(uint256 marketId);
+    /// @notice Thrown when the bond callback targets a market that was not created by the
+    ///         facility.
+    error IYieldRepurchaseFacilityV2_UnknownMarket();
 
-    /// @notice Thrown by the bond callback when the caller is not the configured teller, and
-    ///         by the self-redeem helper when the caller is not the facility itself.
-    /// @param caller The unexpected caller.
-    error IYieldRepurchaseFacilityV2_InvalidCaller(address caller);
+    /// @notice Thrown when the bond callback is invoked without the facility's OHM
+    ///         balance covering the tracked purchased OHM plus the reported input.
+    error IYieldRepurchaseFacilityV2_QuoteNotReceived();
 
-    /// @notice Thrown by the self-redeem helper when a vault delivers less reserve than its
-    ///         own `previewRedeem` promise for the redeemed shares.
-    /// @param vault The vault.
-    /// @param expected The reserve amount promised by `previewRedeem`.
-    /// @param received The reserve amount actually delivered.
+    /// @notice Thrown when a caller-pinned function is invoked by any other caller.
+    error IYieldRepurchaseFacilityV2_InvalidCaller();
+
+    /// @notice Thrown when a redeem returns less reserve than its preview.
+    /// @param vault The vault that was redeemed from.
+    /// @param expected The reserve amount previewed.
+    /// @param received The reserve amount received.
     error IYieldRepurchaseFacilityV2_InsufficientRedeem(
         address vault,
         uint256 expected,
         uint256 received
     );
 
-    /// @notice Thrown when adding a vault whose reserve token reports more than 18 decimals.
-    /// @param vault The vault being added.
-    /// @param decimals The reserve decimals reported by the vault's underlying asset.
-    error IYieldRepurchaseFacilityV2_UnsupportedDecimals(address vault, uint8 decimals);
+    /// @notice Thrown when the reserve token decimals exceed the supported maximum of 18.
+    error IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
-    /// @notice Thrown when the `PRICE` module does not report 18 decimals.
-    /// @dev The facility compares the oracle price directly against the 18-decimal backing
-    ///      value, so it requires the oracle to also report 18 decimals.
-    /// @param decimals The decimals reported by the `PRICE` module.
-    error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals(uint8 decimals);
+    /// @notice Thrown when the PRICE module does not report the 18 decimals of the
+    ///         backing value.
+    error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
     // ============ STRUCTS ============ //
 
-    /// @notice The per-reserve configuration and state tracked by the facility.
-    /// @param vault The ERC4626 vault address.
-    /// @param reserve The cached underlying reserve token of the vault.
-    /// @param reserveDecimals The cached decimals of `reserve`.
-    /// @param sellShares True to sell the vault's shares on bond markets (for a vault
-    ///        whose shares cannot be synchronously redeemed, e.g. sUSDe); false redeems the shares
-    ///        to the reserve and sells the reserve.
-    /// @param isAssetEnabled True if the asset participates in the periodic cycle.
-    /// @param yieldBuybackShare The share of yield routed to buybacks (`1e18` = 100%).
-    /// @param lastReserveBalance The protocol-owned reserve balance snapshotted at the
-    ///        last weekly reset, in `reserveDecimals`.
-    /// @param lastConversionRate The vault conversion rate snapshotted at the last weekly
-    ///        reset: the reserve value of `10 ** reserveDecimals` vault shares.
-    /// @param nextYield The projected yield to roll into `weeklyBudgetRemaining` at the
-    ///        next weekly reset, in `reserveDecimals`.
-    /// @param weeklyBudgetRemaining The remaining buyback budget for the current week,
-    ///        in `reserveDecimals`.
-    /// @param prefundedShares The vault shares withdrawn from the treasury and held by
-    ///        the facility for buybacks.
-    /// @param prefundedReserve The reserve redeemed from the prefunded shares (or received
-    ///        through backing recycling) and held by the facility until it is paid out
-    ///        through a bond market, in `reserveDecimals`.
+    /// @notice The configuration and accounting of a registered reserve asset.
+    /// @param vault The ERC4626 vault.
+    /// @param reserve The vault's underlying reserve token.
+    /// @param reserveDecimals The reserve token decimals, equal to the vault share decimals.
+    /// @param sellShares Whether bond markets pay out the vault shares instead of the reserve.
+    /// @param isAssetEnabled Whether the asset participates in the weekly and daily cycles.
+    /// @param yieldBuybackShare The share of the projected yield routed to buybacks
+    ///        (`1e18` = 100%).
+    /// @param lastReserveBalance The protocol reserve balance snapshot of the last weekly reset,
+    ///        in reserve units.
+    /// @param lastConversionRate The reserve amount redeemable for one whole share at the last
+    ///        weekly reset.
+    /// @param nextYield The yield injected into the weekly budget at the next weekly reset,
+    ///        in reserve units.
+    /// @param weeklyBudgetRemaining The unspent buyback budget of the running week, in reserve
+    ///        units.
+    /// @param prefundedShares The vault shares held by the facility and tracked by the budget
+    ///        accounting.
+    /// @param prefundedReserve The reserve held by the facility and tracked by the budget
+    ///        accounting.
     struct ReserveAsset {
         address vault;
         address reserve;
@@ -260,7 +297,16 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 prefundedReserve;
     }
 
-    /// @notice A per-vault seed of the `nextYield` value.
+    /// @notice A per-vault seed of the stored next yield, supplied in the `enable`
+    ///         payload.
+    /// @dev The `enable` payload is `abi.encode(uint256 initialDiscount, NextYieldSeed[]
+    ///      seeds)`. The restart performed by `enable` zeroes the next yields of all
+    ///      enabled vaults first, and each seed then sets the next yield of an enabled
+    ///      registered vault; when the array contains duplicates, the last entry wins. An
+    ///      empty array performs a plain full restart with zero yields. Disabled vaults
+    ///      are not seedable.
+    /// @param vault The registered vault to seed.
+    /// @param nextYield The seeded next yield, in reserve units.
     struct NextYieldSeed {
         address vault;
         uint256 nextYield;
@@ -268,15 +314,26 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ FUNCTIONS ============ //
 
-    /// @notice Registers an ERC4626 vault as a reserve asset for yield extraction and buybacks,
-    ///         optionally seeding its next yield and making it the backing vault.
-    /// @dev Callable by the admin role.
+    /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
+    ///         yield and designating it as the backing vault.
+    /// @dev Callable by the admin role. The asset is registered in the enabled state. The
+    ///      vault's share decimals must equal its reserve decimals, the reserve decimals
+    ///      must not exceed 18, and only one vault per reserve token can be registered.
+    ///      A sell-shares vault cannot be designated as the backing vault.
+    ///
+    ///      The snapshot parameters are the baseline of the first yield projection, and
+    ///      `nextYield_` is injected into the weekly budget at the first weekly reset.
+    ///      Emits `AssetAdded` and `NextYieldSet`, and `BackingVaultSet` when
+    ///      `setAsBackingVault_` is set.
     /// @param vault_ The ERC4626 vault to register.
     /// @param yieldBuybackShare_ The share of the yield routed to buybacks (`1e18` = 100%).
-    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve units.
-    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot.
-    /// @param nextYield_ The initial `nextYield`, in reserve units.
-    /// @param sellShares_ Whether bond markets sell the vault shares instead of the reserve.
+    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve
+    ///        units.
+    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot: the
+    ///        reserve amount redeemable for one whole share.
+    /// @param nextYield_ The initial stored next yield, in reserve units.
+    /// @param sellShares_ Whether bond markets pay out the vault shares instead of the
+    ///        reserve.
     /// @param setAsBackingVault_ Whether the vault becomes the backing vault.
     function addAsset(
         address vault_,
@@ -288,137 +345,243 @@ interface IYieldRepurchaseFacilityV2 {
         bool setAsBackingVault_
     ) external;
 
-    /// @notice Remove a vault from the whitelist and return any leftover balance to the treasury.
-    /// @param vault_ The ERC4626 vault to remove.
+    /// @notice De-registers a disabled vault, transferring the facility's balances of the
+    ///         vault shares and its reserve to the treasury and deleting the per-vault
+    ///         configuration and accounting.
+    /// @dev Callable by the admin role. The vault must be disabled and must not be the
+    ///      backing vault. Emits `AssetRemoved`.
+    /// @param vault_ The vault to de-register.
     function removeAsset(address vault_) external;
 
-    /// @notice Set the backing oracle policy address.
-    /// @param backingOracle_ The new backing oracle.
+    /// @notice Sets the backing oracle consulted for the market price floor gate and for
+    ///         pricing the burn of the purchased OHM.
+    /// @dev Callable by the admin role. The oracle must report the backing as an
+    ///      18-decimal reserve-per-OHM value. Emits `BackingOracleSet`.
+    /// @param backingOracle_ The backing oracle policy; must not be the zero address.
     function setBackingOracle(address backingOracle_) external;
 
-    /// @notice Set the primary backing vault used for backing recycling.
-    /// @param vault_ The vault to use as the backing vault.
+    /// @notice Designates a registered vault as the backing vault: its yield projection
+    ///         includes the Clearinghouse interest, its protocol balance includes the
+    ///         active Clearinghouses, and the purchased OHM is burned against
+    ///         withdrawals from it.
+    /// @dev Callable by the admin role. The vault must be registered, enabled, and not
+    ///      sell-shares. The backing vault cannot be disabled or removed while
+    ///      designated, and the designation can only be replaced, not cleared. Emits
+    ///      `BackingVaultSet`.
+    /// @param vault_ The vault to designate.
     function setBackingVault(address vault_) external;
 
-    /// @notice Update the Bond Protocol SDA auctioneer and teller addresses.
-    /// @param bondAuctioneer_ The new bond auctioneer.
-    /// @param teller_ The new bond teller.
+    /// @notice Sets the SDA auctioneer used to create bond markets and the teller trusted
+    ///         to invoke the bond callback.
+    /// @dev Callable by the admin role. Both addresses must be non-zero. Market creation
+    ///      requires the facility to be callback-authorized on the auctioneer; a market
+    ///      submission the auctioneer rejects is skipped with `MarketCreationFailed`.
+    ///      Emits `BondContractsSet`.
+    /// @param bondAuctioneer_ The SDA auctioneer.
+    /// @param teller_ The teller.
     function setBondContracts(address bondAuctioneer_, address teller_) external;
 
-    /// @notice Sets the Clearinghouse receivables offset (used to neutralize phantom
-    ///         receivables that would otherwise inflate the projected yield).
-    /// @dev Restricted to the admin role.
-    /// @param clearinghouse_ The Clearinghouse address.
-    /// @param offset_ The new cumulative offset.
+    /// @notice Sets the cumulative receivables offset of a Clearinghouse. The offset is
+    ///         subtracted from the Clearinghouse's `principalReceivables` when the weekly
+    ///         reset projects the yield, neutralizing receivables that do not accrue
+    ///         interest to the treasury.
+    /// @dev Callable by the admin role. The offset is validated against the current
+    ///      `principalReceivables` and may be set in both directions. Emits
+    ///      `ClearinghouseOffsetSet`.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param offset_ The new cumulative offset, in the receivables' units.
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
 
     /// @notice Sets the yield buyback share of a registered vault.
-    /// @param vault_ The vault whose share is updated.
-    /// @param newShare_ The new share (`1e18` = 100%).
+    /// @dev Callable by the YRF timelock and the admin role. The share multiplies the
+    ///      yield projected at the weekly reset; the stored next yield is not affected.
+    ///      Emits `YieldBuybackShareSet`.
+    /// @param vault_ The registered vault.
+    /// @param newShare_ The new share (`1e18` = 100%); must not exceed `1e18`.
     function setYieldBuybackShare(address vault_, uint256 newShare_) external;
 
-    /// @notice Sets the initial discount applied to bond market initial price.
-    /// @param initialDiscount_ The new initial discount (`1e18` = 100%).
+    /// @notice Sets the discount applied to the oracle price when a bond market opens:
+    ///         the market's initial price corresponds to the oracle price reduced by the
+    ///         discount, while its minimum price corresponds to the undiscounted oracle
+    ///         price.
+    /// @dev Callable by the YRF timelock and the admin role. Emits `InitialDiscountSet`.
+    /// @param initialDiscount_ The new discount (`1e18` = 100%); must be less than `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external;
 
-    /// @notice Increases the receivables offset of a Clearinghouse.
-    /// @dev Restricted to the yrf_manager role.
-    /// @param clearinghouse_ The Clearinghouse address.
-    /// @param additionalOffset_ The amount to add to the existing offset.
+    /// @notice Increases the cumulative receivables offset of a Clearinghouse.
+    /// @dev Callable by the YRF timelock and the admin role. The resulting offset is
+    ///      validated against the current `principalReceivables`. This path can only
+    ///      increase the offset, which reduces the projected yield; lowering the offset
+    ///      requires the admin role, via `setClearinghouseOffset`. Emits
+    ///      `ClearinghouseOffsetSet`.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param additionalOffset_ The amount added to the existing offset, in the
+    ///        receivables' units.
     function increaseClearinghouseOffset(
         address clearinghouse_,
         uint256 additionalOffset_
     ) external;
 
-    /// @notice Includes a Clearinghouse in the backing vault's yield projection regardless
-    ///         of its reserve token.
-    /// @param clearinghouse_ The Clearinghouse address.
+    /// @notice Lowers the stored next yield of a registered vault, correcting a
+    ///         projection that overstates the yield before the next weekly reset injects
+    ///         it into the budget.
+    /// @dev Callable by the YRF timelock and the admin role. The expected current value
+    ///      guards against a weekly reset replacing the stored value between the
+    ///      correction being prepared and applied: on a mismatch the correction reverts
+    ///      instead of cutting the fresh projection. Emits `NextYieldSet`.
+    /// @param vault_ The registered vault.
+    /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
+    ///        units.
+    /// @param newNextYield_ The corrected next yield, in reserve units; must be lower
+    ///        than the stored value.
+    function decreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external;
+
+    /// @notice Includes a Clearinghouse in the backing vault's yield projection
+    ///         regardless of its reserve token.
+    /// @dev Callable by the admin role. By default only Clearinghouses whose reserve
+    ///      matches the backing reserve are counted; inclusion is meant for
+    ///      Clearinghouses whose receivables accrue to the backing reserve, so the
+    ///      receivables must be denominated in a token with the same decimals as the
+    ///      backing reserve. The receivables offset of the Clearinghouse applies as
+    ///      usual, and `ClearinghouseDebtTokenMismatch` is not emitted for an included
+    ///      Clearinghouse. Only Clearinghouses present in the CHREG registry are
+    ///      iterated, so including any other address has no effect. Emits
+    ///      `ClearinghouseIncluded`.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address and
+    ///        must not be included already.
     function includeClearinghouse(address clearinghouse_) external;
 
-    /// @notice Removes a Clearinghouse from the backing vault's yield projection.
-    /// @param clearinghouse_ The Clearinghouse address.
+    /// @notice Removes a Clearinghouse from the backing vault's yield projection,
+    ///         restoring the default reserve-token filter for it.
+    /// @dev Callable by the YRF timelock and the admin role. Emits
+    ///      `ClearinghouseExcluded`.
+    /// @param clearinghouse_ The included Clearinghouse address.
     function excludeClearinghouse(address clearinghouse_) external;
 
-    /// @notice Re-enables a previously disabled vault.
+    /// @notice Enables a disabled registered vault. The stored next yield is reset to
+    ///         zero and the yield snapshots are refreshed, so the yield projection
+    ///         resumes at the following weekly reset.
+    /// @dev Callable by the YRF timelock and the admin role. Emits `AssetEnabled` and
+    ///      `NextYieldSet`.
     /// @param vault_ The vault to enable.
     function enableAsset(address vault_) external;
 
-    /// @notice Pauses a vault. While disabled the vault is skipped by `execute()`.
-    /// @param vault_ The vault to pause.
+    /// @notice Disables an enabled registered vault. A disabled vault is skipped by the
+    ///         weekly and daily cycles, and purchases on its open bond markets revert;
+    ///         its budget and holdings stay in place.
+    /// @dev Callable by the YRF timelock and the admin role. The backing vault cannot be
+    ///      disabled. Emits `AssetDisabled`.
+    /// @param vault_ The vault to disable.
     function disableAsset(address vault_) external;
 
     /// @notice Burns the purchased OHM held by the facility, transfers all remaining OHM,
     ///         vault, and reserve balances to the treasury, and zeroes the per-vault
-    ///         prefunded balances and weekly budgets.
-    /// @dev Callable by the emergency role and the admin role.
+    ///         holdings accounting and weekly budgets.
+    /// @dev Callable by the emergency and admin roles, and only while the facility is
+    ///      disabled. The per-vault stored next yields are preserved, so a later
+    ///      `reEnable` or `enable` refunds the facility from the treasury at the next
+    ///      weekly reset. Each vault is swept independently: a vault whose sweep fails is
+    ///      skipped with `FundsReturnSkipped`, keeping its balances and accounting, and
+    ///      is retried by the next call. Emits `FundsReturnedToTreasury`.
     function returnFundsToTreasury() external;
 
     // ============ VIEW FUNCTIONS ============ //
 
-    /// @notice Returns the list of currently registered vault addresses.
+    /// @notice Returns the registered vaults.
+    /// @dev The ordering is not meaningful: removals reorder the list.
+    /// @return vaults The registered vault addresses.
     function getVaults() external view returns (address[] memory);
 
-    /// @notice Returns the full state for a registered vault.
-    /// @param vault_ The vault to inspect.
-    /// @return config The full per-asset configuration and state.
+    /// @notice Returns the configuration and accounting of a registered vault.
+    /// @dev Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an
+    ///      unregistered vault.
+    /// @param vault_ The registered vault.
+    /// @return config The per-vault configuration and accounting.
     function getAssetConfig(address vault_) external view returns (ReserveAsset memory config);
 
-    /// @notice Project the next-week yield for a single vault.
-    /// @dev For the `backingVault`, the projection also includes the global Clearinghouse
-    ///      receivables interest contribution. For other vaults, only the vault appreciation
-    ///      is included. The result is scaled by the vault's `yieldBuybackShare`.
-    ///
-    /// @param vault_ The vault to inspect.
-    /// @return yield The projected yield in the vault's reserve decimals.
+    /// @notice Returns the yield a weekly reset running now would project for the vault:
+    ///         the vault yield accrued since the snapshots, plus the weekly Clearinghouse
+    ///         interest for the backing vault, multiplied by the vault's buyback share.
+    /// @dev This is a live projection; the stored next yield is available through
+    ///      `getAssetConfig`. Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered`
+    ///      for an unregistered vault.
+    /// @param vault_ The registered vault.
+    /// @return yield The projected yield, in reserve units.
     function getNextYield(address vault_) external view returns (uint256 yield);
 
-    /// @notice Return the protocol-owned reserve balance of a vault.
-    /// @dev For the `backingVault`, the balance includes TRSRY and all active Clearinghouses.
-    ///      For other vaults, only TRSRY is included. Balances held by the facility itself
-    ///      are excluded.
-    ///
-    /// @param vault_ The vault to inspect.
-    /// @return balance The protocol-owned reserve balance in the vault's reserve decimals.
+    /// @notice Returns the reserve value of the protocol-held shares of a vault: the
+    ///         treasury balance, and for the backing vault also the balances of the
+    ///         active Clearinghouses.
+    /// @dev Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an
+    ///      unregistered vault.
+    /// @param vault_ The registered vault.
+    /// @return balance The reserve value, in reserve units.
     function getReserveBalance(address vault_) external view returns (uint256 balance);
 
-    /// @notice Returns the reserve token associated with a bond market created by this facility.
-    /// @dev Returns `address(0)` for unknown markets.
-    ///
-    /// @param marketId_ The bond market identifier.
-    /// @return reserve The reserve token, or `address(0)` if the market is unknown.
+    /// @notice Returns the reserve token of the vault that funds a market created by the
+    ///         facility.
+    /// @param marketId_ The market ID.
+    /// @return reserve The reserve token, or the zero address when the market was not
+    ///         created by the facility.
     function marketReserves(uint256 marketId_) external view returns (address reserve);
 
-    /// @notice Returns the cumulative offset applied to a Clearinghouse's
-    ///         `principalReceivables` when computing yield.
+    /// @notice Returns the cumulative receivables offset of a Clearinghouse.
     /// @param clearinghouse_ The Clearinghouse address.
+    /// @return The cumulative offset, in the receivables' units.
     function clearinghouseOffset(address clearinghouse_) external view returns (uint256);
 
     /// @notice Returns whether a Clearinghouse is included in the backing yield regardless
     ///         of its reserve token.
+    /// @param clearinghouse_ The Clearinghouse address.
+    /// @return Whether the Clearinghouse is included.
     function isClearinghouseIncluded(address clearinghouse_) external view returns (bool);
 
-    /// @notice The Bond Protocol teller used by this facility.
+    /// @notice Returns the teller trusted to invoke the bond callback.
+    /// @return The teller address.
     function teller() external view returns (address);
 
-    /// @notice The Bond Protocol SDA auctioneer used by this facility.
+    /// @notice Returns the SDA auctioneer used to create bond markets.
+    /// @return The auctioneer address.
     function bondAuctioneer() external view returns (address);
 
-    /// @notice The OHM backing oracle used by this facility.
+    /// @notice Returns the backing oracle providing the 18-decimal reserve-per-OHM
+    ///         backing value.
+    /// @return The backing oracle policy address.
     function backingOracle() external view returns (address);
 
-    /// @notice The primary backing vault used for backing recycling.
+    /// @notice Returns the backing vault.
+    /// @return The backing vault address, or the zero address when none is designated.
     function backingVault() external view returns (address);
 
-    /// @notice The initial discount applied to bond market initial price (`1e18` = 100%).
+    /// @notice Returns the discount applied to the oracle price when a bond market opens.
+    /// @return The discount (`1e18` = 100%).
     function initialDiscount() external view returns (uint256);
 
-    /// @notice The accumulated OHM purchased through bond markets but not yet processed.
+    /// @notice Returns the OHM purchased through the facility's bond markets and not yet
+    ///         burned.
+    /// @dev The facility's OHM balance always covers this amount.
+    /// @return The purchased OHM amount.
     function ohmPurchased() external view returns (uint256);
 
-    /// @notice The running epoch counter, in the range `[0, 21)`.
+    /// @notice Returns the running epoch counter, in the range `[0, 21)`.
+    /// @dev The counter advances by one per heart beat while the facility is enabled;
+    ///      three epochs form a day, and reaching epoch 21 runs the weekly reset before
+    ///      the counter wraps to zero.
+    /// @return The epoch counter.
     function epoch() external view returns (uint48);
 
-    /// @notice Returns the address of the timelock policy authorized to call the operational
-    ///         manager functions.
-    function managerTimelock() external view returns (address);
+    /// @notice Returns the address of the YRF timelock policy authorized to call the
+    ///         timelocked operational functions.
+    /// @return The YRF timelock address.
+    function timelock() external view returns (address);
+
+    /// @notice Returns the exclusive upper bound of the re-enable grace window, in
+    ///         seconds: the window must be strictly shorter than one weekly cycle.
+    /// @return The bound, in seconds.
+    // solhint-disable-next-line func-name-mixedcase
+    function MAX_GRACE_PERIOD() external view returns (uint32);
 }
