@@ -268,7 +268,7 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
 2. **Format the JSON files** to ensure consistent formatting:
 
    ```bash
-   npx prettier --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
+   pnpm exec prettier --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
    ```
 
 #### B6: Validate

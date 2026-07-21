@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-function,screaming-snake-case-immutable)
 pragma solidity >=0.8.15;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
-import "src/Kernel.sol";
+import {Kernel, Module, Keycode, toKeycode} from "src/Kernel.sol";
 
 /// @notice Price oracle data storage contract.
 contract OlympusPrice is PRICEv1 {
@@ -48,6 +49,7 @@ contract OlympusPrice is PRICEv1 {
         observationFrequency = observationFrequency_;
         movingAverageDuration = movingAverageDuration_;
 
+        /// forge-lint: disable-next-line(unsafe-typecast)
         numObservations = uint32(movingAverageDuration_ / observationFrequency_);
 
         // Store blank observations array
@@ -153,6 +155,7 @@ contract OlympusPrice is PRICEv1 {
         cumulativeObs = 0;
         nextObsIndex = 0;
         movingAverageDuration = movingAverageDuration_;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         numObservations = uint32(newObservations);
 
         emit MovingAverageDurationChanged(movingAverageDuration_);
@@ -184,6 +187,7 @@ contract OlympusPrice is PRICEv1 {
         cumulativeObs = 0;
         nextObsIndex = 0;
         observationFrequency = observationFrequency_;
+        /// forge-lint: disable-next-line(unsafe-typecast)
         numObservations = uint32(newObservations);
 
         emit ObservationFrequencyChanged(observationFrequency_);
@@ -234,6 +238,7 @@ contract OlympusPrice is PRICEv1 {
                 updatedAt < block.timestamp - uint256(ohmEthUpdateThreshold) ||
                 answeredInRound != roundId
             ) revert Price_BadFeed(address(ohmEthPriceFeed));
+            /// forge-lint: disable-next-line(unsafe-typecast)
             ohmEthPrice = uint256(ohmEthPriceInt);
 
             int256 reserveEthPriceInt;
@@ -244,6 +249,7 @@ contract OlympusPrice is PRICEv1 {
                 updatedAt < block.timestamp - uint256(reserveEthUpdateThreshold) ||
                 answeredInRound != roundId
             ) revert Price_BadFeed(address(reserveEthPriceFeed));
+            /// forge-lint: disable-next-line(unsafe-typecast)
             reserveEthPrice = uint256(reserveEthPriceInt);
         }
 
@@ -272,3 +278,4 @@ contract OlympusPrice is PRICEv1 {
         return movingAverage > minimumTargetPrice ? movingAverage : minimumTargetPrice;
     }
 }
+/// forge-lint: disable-end(mixed-case-function,screaming-snake-case-immutable)

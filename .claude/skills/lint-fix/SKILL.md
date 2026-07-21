@@ -192,7 +192,7 @@ pnpm run lint:check
 This runs:
 
 - `prettier:check` - Check formatting
-- `solhint:check` - Check Solidity linting
+- `forge-lint:check` - Check Solidity linting
 - `markdownlint:check` - Check Markdown files
 
 ### Full Lint (With Auto-Fix)
@@ -204,7 +204,7 @@ pnpm run lint
 This runs:
 
 - `prettier` - Auto-formats code
-- `solhint` - Auto-fixes some Solidity issues
+- `forge-lint` - Check Solidity linting
 - `markdownlint` - Auto-fixes Markdown issues
 
 ### Individual Tools
@@ -214,26 +214,26 @@ This runs:
 pnpm run prettier
 
 # Check Solidity linting only
-pnpm run solhint:check
+pnpm run forge-lint:check
 
-# Fix Solidity linting where possible
-pnpm run solhint
+# Run Solidity linting only
+pnpm run forge-lint
 ```
 
 ## Common Forge-Lint Rules
 
 | Rule | Description | Fix Strategy |
 |------|-------------|--------------|
-| `var-name-mixedcase` | Variable uses mixedCase | Ensure variable uses mixedCase or suppress |
-| `func-name-mixedcase` | Function uses mixedCase | Rename or suppress if external interface |
+| `mixed-case-variable` | Variable uses mixedCase | Ensure variable uses mixedCase or suppress |
+| `mixed-case-function` | Function uses mixedCase | Rename or suppress if external interface |
 | `const-name-snakecase` | Constant uses snakeCase | Rename to SCREAMING_SNAKE_CASE or suppress |
-| `avoid-low-level-calls` | Uses `call`/`delegatecall` | Refactor or suppress if required |
+| `unchecked-call` | Uses `call`/`delegatecall` | Refactor or suppress if required |
 | `no-empty-blocks` | Empty code block | Remove or add comment |
 | `unwrapped-modifier-logic` | Logic after `_;` in modifier | Move logic to function |
 | `unsafe-typecast` | Direct address typecast | Use safe conversion or suppress |
 | `screaming-snake-case-immutable` | Immutable uses UPPER_CASE | Suppress (acceptable pattern) |
 | `reason-string` | Revert uses string message | Use custom error instead |
-| `no-global-import` | Global import used | Use specific imports |
+| `unaliased-plain-import` | Global import used | Use specific imports |
 | `func-visibility` | Function lacks visibility | Add `public`/`external`/`internal` |
 | `max-line-length` | Line exceeds 80 chars | Break line or suppress |
 
@@ -243,10 +243,10 @@ Many linting issues can be auto-fixed by running:
 
 ```bash
 pnpm run prettier  # Auto-formats code
-pnpm run solhint   # Auto-fixes some Solidity issues
+pnpm run forge-lint # Checks Solidity lint rules
 ```
 
-Always run these first before manual fixes.
+Run formatting first, then address any remaining Forge lint notes manually.
 
 ## Workflow Summary
 
@@ -264,5 +264,5 @@ Always run these first before manual fixes.
 | Check linting | `pnpm run lint:check` |
 | Auto-fix and format | `pnpm run lint` |
 | Format only | `pnpm run prettier` |
-| Check Solidity only | `pnpm run solhint:check` |
+| Check Solidity only | `pnpm run forge-lint:check` |
 | Fix specific file | `pnpm run prettier -- src/Contract.sol` |

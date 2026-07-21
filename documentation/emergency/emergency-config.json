@@ -10,7 +10,7 @@
             },
             "multisigs": {
                 "dao": "0x012BBf0481b97170577745D2167ee14f63E2aD4C",
-                "emergency": "0x0000000000000000000000000000000000000000"
+                "emergency": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55"
             }
         },
         "base": {
@@ -21,7 +21,7 @@
             },
             "multisigs": {
                 "dao": "0x18a390bD45bCc92652b9A91AD51Aed7f1c1358f5",
-                "emergency": "0x18a390bD45bCc92652b9A91AD51Aed7f1c1358f5"
+                "emergency": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55"
             }
         },
         "berachain": {
@@ -35,7 +35,7 @@
             },
             "multisigs": {
                 "dao": "0x91494D1BC2286343D51c55E46AE80C9356D099b5",
-                "emergency": "0xa5ea62894027D981D34BB99A04BD36B818b2Aaf0"
+                "emergency": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55"
             }
         },
         "mainnet": {
@@ -59,6 +59,7 @@
                 "OHM": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
                 "OlympusHeart": "0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB",
                 "OlympusMinter": "0xa90bFe53217da78D900749eb6Ef513ee5b6a491e",
+                "OlympusPriceConfigV2": "0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd",
                 "OlympusTreasury": "0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613",
                 "ReserveMigrator": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
                 "ReserveWrapper": "0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9",
@@ -78,7 +79,7 @@
             },
             "multisigs": {
                 "dao": "0x559a14a2219Ae81f9a9f857CF31407de2b07F36c",
-                "emergency": "0x0000000000000000000000000000000000000000"
+                "emergency": "0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55"
             }
         },
         "sepolia": {
@@ -745,6 +746,41 @@
                 "MEV bot manipulation or abuse",
                 "Integration with auctioneer compromised"
             ]
+        },
+        {
+            "availableOn": ["mainnet"],
+            "calls": [
+                {
+                    "abi": "periphery_enabler",
+                    "args": [
+                        {
+                            "name": "disableData_",
+                            "type": "bytes",
+                            "value": ""
+                        }
+                    ],
+                    "contractKey": "olympus.policies.OlympusPriceConfigV2",
+                    "function": "disable",
+                    "signature": "disable(bytes)"
+                }
+            ],
+            "category": "core",
+            "description": "Disables the PriceConfig v2 policy that manages PRICE v1.2 asset configuration, submodule installation and upgrades, and timelocked PRICE actions.",
+            "id": "price-config",
+            "name": "PRICE Configuration",
+            "owner": "emergency",
+            "postShutdownSteps": [
+                "Verify PriceConfig v2 is disabled via isEnabled()",
+                "Review any queued PRICE actions and cancel malicious or stale actions",
+                "Monitor PRICE asset configuration and oracle reads before re-enabling"
+            ],
+            "severity": "high",
+            "shutdownCriteria": [
+                "PRICE configuration compromise detected",
+                "Malicious or stale PRICE action queued",
+                "Oracle submodule upgrade path compromised",
+                "Price admin role compromise suspected"
+            ]
         }
     ],
     "contractRegistry": [
@@ -765,17 +801,18 @@
         "Emergency",
         "EmissionManager",
         "OlympusHeart",
+        "OlympusPriceConfigV2",
         "ReserveMigrator",
         "ReserveWrapper",
         "V1Migrator",
         "YieldRepurchaseFacility"
     ],
-    "lastUpdated": "2026-03-26T00:00:00Z",
+    "lastUpdated": "2026-07-13T16:51:29Z",
     "metadata": {
         "description": "Emergency shutdown configuration for Olympus Protocol. This file is the single source of truth for emergency shutdown procedures and is used by the frontend for codegen.",
         "docsUrl": "https://docs.olympusdao.finance/emergency",
         "repository": "OlympusDAO/olympus-v3"
     },
     "updatedBy": "claude-code",
-    "version": "1.0.5"
+    "version": "1.0.7"
 }

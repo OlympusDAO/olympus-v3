@@ -9,3 +9,5 @@ bytes32 constant ADMIN_ROLE = "admin";
 bytes32 constant MANAGER_ROLE = "manager";
 /// @dev Heart role, e.g. performing periodic tasks.
 bytes32 constant HEART_ROLE = "heart";
+/// @dev Oracle manager role, e.g. managing oracle deployments.
+bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";

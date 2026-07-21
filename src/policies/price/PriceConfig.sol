@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
+/// forge-lint: disable-start(mixed-case-variable,mixed-case-function,named-struct-fields)
 pragma solidity >=0.8.15;
 
 import {RolesConsumer} from "modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {PRICEv1} from "modules/PRICE/PRICE.v1.sol";
 
-import "src/Kernel.sol";
+import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 
 contract OlympusPriceConfig is Policy, RolesConsumer {
     // ========= STATE ========= //
@@ -110,3 +111,4 @@ contract OlympusPriceConfig is Policy, RolesConsumer {
         PRICE.changeMinimumTargetPrice(minimumTargetPrice_);
     }
 }
+/// forge-lint: disable-end(mixed-case-variable,mixed-case-function,named-struct-fields)
