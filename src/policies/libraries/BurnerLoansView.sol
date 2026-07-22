@@ -86,7 +86,7 @@ library BurnerLoansView {
         if (marketIds.length != 1) {
             revert IBurnerLoans.BurnerLoans_AmbiguousMarket(asset_, marketIds.length);
         }
-        return floan_.marketPrincipalDue(uint32(marketIds[0]));
+        return floan_.getMarketPrincipalDue(uint32(marketIds[0]));
     }
 
     function previewDepositCollateral(

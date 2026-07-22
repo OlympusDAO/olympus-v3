@@ -5,10 +5,6 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetPositionIdsForMarketAndBorrowerTest is FLOANTest {
-    // getPositionIdsForMarketAndBorrower
-    // given multiple positions
-    //  when getPositionIdsForMarketAndBorrower is called
-    //   then it intersects indexes
     function test_givenMultiplePositions_getPositionIdsForMarketAndBorrower_intersectsIndexes()
         public
     {
@@ -25,10 +21,6 @@ contract FLOANGetPositionIdsForMarketAndBorrowerTest is FLOANTest {
         assertTrue(ids[0] == second || ids[1] == second, "second position missing");
     }
 
-    // getPositionIdsForMarketAndBorrower
-    // given missing market
-    //  when getPositionIdsForMarketAndBorrower is called
-    //   then it reverts
     function test_givenMissingMarket_getPositionIdsForMarketAndBorrower_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, 0));
         floan.getPositionIdsForMarketAndBorrower(0, borrower);

@@ -4,10 +4,6 @@ pragma solidity >=0.8.24;
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANActiveBorrowerCountTest is FLOANTest {
-    // activeBorrowerCount
-    // given distinct borrowers with active debt
-    //  when activeBorrowerCount is called
-    //   then it tracks distinct borrowers with debt
     function test_activeBorrowerCount_tracksDistinctBorrowersWithDebt() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -16,10 +12,6 @@ contract FLOANActiveBorrowerCountTest is FLOANTest {
         assertEq(floan.activeBorrowerCount(marketId), 2, "active borrower count");
     }
 
-    // activeBorrowerCount
-    // given invalid market
-    //  when activeBorrowerCount is called
-    //   then it reverts
     function test_givenInvalidMarket_activeBorrowerCount_reverts() public {
         vm.expectRevert();
         floan.activeBorrowerCount(0);

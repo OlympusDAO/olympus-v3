@@ -5,10 +5,6 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetActiveBorrowersTest is FLOANTest {
-    // getActiveBorrowers
-    // given several positions
-    //  when getActiveBorrowers is called
-    //   then it returns unique debt borrowers
     function test_givenSeveralPositions_getActiveBorrowers_returnsUniqueDebtBorrowers() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.startPrank(facility);
@@ -30,10 +26,6 @@ contract FLOANGetActiveBorrowersTest is FLOANTest {
         );
     }
 
-    // getActiveBorrowers
-    // given missing market
-    //  when getActiveBorrowers is called
-    //   then it reverts
     function test_givenMissingMarket_getActiveBorrowers_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, 0));
         floan.getActiveBorrowers(0);

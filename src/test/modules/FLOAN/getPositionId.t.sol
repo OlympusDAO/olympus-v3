@@ -5,10 +5,6 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetPositionIdTest is FLOANTest {
-    // getPositionIdForMarketAndBorrower
-    // given no position
-    //  when getPositionIdForMarketAndBorrower is called
-    //   then it returns a zero count and position ID
     function test_givenNoPosition_getPositionIdForMarketAndBorrower_returnsZero() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
@@ -20,10 +16,6 @@ contract FLOANGetPositionIdTest is FLOANTest {
         assertEq(positionId, 0, "empty id");
     }
 
-    // getPositionIdForMarketAndBorrower
-    // given multiple positions
-    //  when getPositionIdForMarketAndBorrower is called
-    //   then it returns the count and first position ID
     function test_givenMultiplePositions_getPositionIdForMarketAndBorrower_returnsCountAndFirstId()
         public
     {
@@ -39,10 +31,6 @@ contract FLOANGetPositionIdTest is FLOANTest {
         assertEq(positionId, first, "first id");
     }
 
-    // getPositionIdForMarketAndBorrower
-    // given missing market
-    //  when getPositionIdForMarketAndBorrower is called
-    //   then it reverts
     function test_givenMissingMarket_getPositionIdForMarketAndBorrower_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, 0));
         floan.getPositionIdForMarketAndBorrower(0, borrower);

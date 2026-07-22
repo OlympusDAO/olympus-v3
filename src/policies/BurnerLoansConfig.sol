@@ -47,7 +47,7 @@ contract BurnerLoansConfig is BurnerLoansConfigBase {
 
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
         Keycode floan = toKeycode("FLOAN");
-        requests = new Permissions[](4);
+        requests = new Permissions[](7);
         requests[0] = Permissions({keycode: floan, funcSelector: IFLOANv1.createMarket.selector});
         requests[1] = Permissions({
             keycode: floan,
@@ -59,7 +59,19 @@ contract BurnerLoansConfig is BurnerLoansConfigBase {
         });
         requests[3] = Permissions({
             keycode: floan,
-            funcSelector: IFLOANv1.setMarketConfig.selector
+            funcSelector: IFLOANv1.setMarketPrincipalCap.selector
+        });
+        requests[4] = Permissions({
+            keycode: floan,
+            funcSelector: IFLOANv1.setMarketRiskConfig.selector
+        });
+        requests[5] = Permissions({
+            keycode: floan,
+            funcSelector: IFLOANv1.setMarketBaseFee.selector
+        });
+        requests[6] = Permissions({
+            keycode: floan,
+            funcSelector: IFLOANv1.setMarketConfigData.selector
         });
     }
 

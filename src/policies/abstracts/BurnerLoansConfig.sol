@@ -39,7 +39,6 @@ abstract contract BurnerLoansConfigBase is
     // ========== IMMUTABLES ========== //
 
     IERC20 internal immutable _OHM;
-    uint8 internal immutable _OHM_DECIMALS;
     IDepositManager internal immutable _DEPOSIT_MANAGER;
 
     // ========== MODULES ========== //
@@ -71,7 +70,6 @@ abstract contract BurnerLoansConfigBase is
         }
 
         _OHM = ohm_;
-        _OHM_DECIMALS = ohm_.decimals();
         _DEPOSIT_MANAGER = depositManager_;
     }
 
@@ -121,7 +119,7 @@ abstract contract BurnerLoansConfigBase is
         _validateFeeConfig(feeConfig_);
 
         _FLOAN.createMarket(
-            IFLOANv1.Market({
+            IFLOANv1.MarketInput({
                 collateralToken: asset_,
                 debtToken: address(_OHM),
                 manager: address(this),
@@ -132,10 +130,7 @@ abstract contract BurnerLoansConfigBase is
                 maxMaturityHorizon: riskConfig_.maxMaturityHorizon,
                 collateralFactorBps: riskConfig_.collateralFactorBps,
                 minCollateralRatioBps: riskConfig_.minCollateralRatioBps,
-                baseFeeBps: feeConfig_.baseFeeBps,
-                collateralDecimals: assetConfig.collateralDecimals,
-                debtDecimals: _OHM_DECIMALS,
-                originationsEnabled: true
+                baseFeeBps: feeConfig_.baseFeeBps
             }),
             BurnerLoansMarketConfig.encode(assetConfig, feeConfig_)
         );
@@ -163,9 +158,7 @@ abstract contract BurnerLoansConfigBase is
         _validateAssetDebtCap(facility_, asset_, debtCapOhm_);
 
         uint32 marketId_ = _marketId(facility_, asset_);
-        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
-        market.principalCap = debtCapOhm_;
-        _FLOAN.setMarketConfig(marketId_, market, _FLOAN.getMarketConfigData(marketId_));
+        _FLOAN.setMarketPrincipalCap(marketId_, debtCapOhm_);
         emit AssetDebtCapSet(asset_, debtCapOhm_);
     }
 
@@ -368,13 +361,12 @@ abstract contract BurnerLoansConfigBase is
     ) internal {
         uint32 marketId_ = _marketId(facility_, asset_);
         _validateFeeConfig(config_);
-        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
         BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
-        market.baseFeeBps = config_.baseFeeBps;
         marketData.kinkBps = config_.kinkBps;
         marketData.preKinkSlopeBps = config_.preKinkSlopeBps;
         marketData.postKinkSlopeBps = config_.postKinkSlopeBps;
-        _FLOAN.setMarketConfig(marketId_, market, abi.encode(marketData));
+        _FLOAN.setMarketBaseFee(marketId_, config_.baseFeeBps);
+        _FLOAN.setMarketConfigData(marketId_, abi.encode(marketData));
         emit AssetFeeConfigSet(asset_, config_);
     }
 
@@ -390,16 +382,18 @@ abstract contract BurnerLoansConfigBase is
     ) internal {
         _validateRiskConfig(riskConfig_);
         uint32 marketId_ = _marketId(facility_, asset_);
-        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
         BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
-        market.collateralFactorBps = riskConfig_.collateralFactorBps;
-        market.minCollateralRatioBps = riskConfig_.minCollateralRatioBps;
-        market.termLength = riskConfig_.termLength;
-        market.maxMaturityHorizon = riskConfig_.maxMaturityHorizon;
         marketData.backingMultiplierBps = riskConfig_.backingMultiplierBps;
         marketData.keeperRewardBps = riskConfig_.keeperRewardBps;
         marketData.maxKeeperReward = _toUint128(riskConfig_.maxKeeperReward);
-        _FLOAN.setMarketConfig(marketId_, market, abi.encode(marketData));
+        _FLOAN.setMarketRiskConfig(
+            marketId_,
+            riskConfig_.termLength,
+            riskConfig_.maxMaturityHorizon,
+            riskConfig_.collateralFactorBps,
+            riskConfig_.minCollateralRatioBps
+        );
+        _FLOAN.setMarketConfigData(marketId_, abi.encode(marketData));
         emit AssetRiskConfigSet(asset_, riskConfig_);
     }
 
@@ -569,7 +563,7 @@ abstract contract BurnerLoansConfigBase is
         uint128 debtCapOhm_
     ) internal view {
         uint32 marketId_ = _marketId(facility_, asset_);
-        _validateDebtCap(debtCapOhm_, _FLOAN.marketPrincipalDue(marketId_));
+        _validateDebtCap(debtCapOhm_, _FLOAN.getMarketPrincipalDue(marketId_));
     }
 
     function _isAssetConfigured(address facility_, address asset_) internal view returns (bool) {

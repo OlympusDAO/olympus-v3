@@ -87,7 +87,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //   then OHM supply equals active and defaulted facility principal
     function invariant_OhmSupplyAccounting() public view {
         uint256 accountedDebt = burnerLoans.totalActiveDebtOhm() +
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm));
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds)));
         assertEq(ohm.totalSupply(), accountedDebt, "OHM supply does not reconcile to loan debt");
     }
 

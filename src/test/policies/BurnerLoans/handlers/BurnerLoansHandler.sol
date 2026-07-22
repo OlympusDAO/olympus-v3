@@ -392,7 +392,7 @@ contract BurnerLoansHandler is Test {
         uint256 liquidCollateral = status.assets + status.borrowed + collateral.balanceOf(treasury);
         uint256 liquidBackingUsd = FullMath.mulDiv(liquidCollateral, collateralPrice, _WAD);
         uint256 totalBackedDebt = burnerLoans.totalActiveDebtOhm() +
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm));
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(collateral)));
         uint256 requiredBackingUsd = FullMath.mulDiv(totalBackedDebt, _WAD, _OHM_SCALE);
         if (liquidBackingUsd < requiredBackingUsd) ++backingViolations;
     }

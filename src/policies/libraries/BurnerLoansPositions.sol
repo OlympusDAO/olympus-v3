@@ -5,22 +5,30 @@ pragma solidity >=0.8.24;
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
+// Libraries
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+
 /// @title Burner Loans Position Lookup
 /// @notice Applies Burner Loans' one-position-per-market-and-borrower rule over generic FLOAN indexes.
 library BurnerLoansPositions {
+    using SafeCast for uint256;
+
     function find(
         IFLOANv1 floan_,
         uint32 marketId_,
         address borrower_
     ) internal view returns (bool exists, uint64 positionId) {
-        uint256 count;
-        (count, positionId) = floan_.getPositionIdForMarketAndBorrower(marketId_, borrower_);
+        uint256[] memory positionIds = floan_.getPositionIdsForMarketAndBorrower(
+            marketId_,
+            borrower_
+        );
+        uint256 count = positionIds.length;
         if (count > 1) {
             revert IBurnerLoans.BurnerLoans_AmbiguousPosition(marketId_, borrower_, count);
         }
         if (count == 0) return (false, 0);
 
-        return (true, positionId);
+        return (true, positionIds[0].toUint64());
     }
 
     function getOrEmpty(

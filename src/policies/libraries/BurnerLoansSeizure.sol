@@ -183,7 +183,7 @@ library BurnerLoansSeizure {
             address(dependencies_.ohm)
         );
         result.config = _assetConfigForMarket(dependencies_.floan, marketId, request_.asset);
-        uint256 activeCount = dependencies_.floan.activeBorrowerCount(marketId);
+        uint256 activeCount = dependencies_.floan.getActiveBorrowerCount(marketId);
         if (activeCount == 0) {
             result.borrowers = new address[](0);
             return result;
@@ -260,9 +260,9 @@ library BurnerLoansSeizure {
         address[] memory candidates = new address[](params_.returnLimit);
         uint256 returned;
         uint256 checked;
-        uint256 activeCount = dependencies_.floan.activeBorrowerCount(params_.marketId);
+        uint256 activeCount = dependencies_.floan.getActiveBorrowerCount(params_.marketId);
         while (checked < params_.checkLimit && returned < params_.returnLimit) {
-            address borrower = dependencies_.floan.activeBorrowerAt(
+            address borrower = dependencies_.floan.getActiveBorrowerAt(
                 params_.marketId,
                 params_.cursor
             );
@@ -282,7 +282,9 @@ library BurnerLoansSeizure {
         }
 
         result.borrowers = new address[](returned);
-        for (uint256 i; i < returned; ++i) result.borrowers[i] = candidates[i];
+        for (uint256 i; i < returned; ++i) {
+            result.borrowers[i] = candidates[i];
+        }
         result.nextIndex = params_.cursor;
     }
 
@@ -379,8 +381,9 @@ library BurnerLoansSeizure {
         position = dependencies_.floan.getPosition(positionId);
         if (position.defaulted) revert IBurnerLoans.BurnerLoans_PositionSeized();
         if (position.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
-        if (!_isSeizable(dependencies_.ohmDecimals, position, context_.config, context_.pricing))
+        if (!_isSeizable(dependencies_.ohmDecimals, position, context_.config, context_.pricing)) {
             revert IBurnerLoans.BurnerLoans_PositionNotSeizable(borrower_);
+        }
     }
 
     function _requireUniqueBorrower(
@@ -429,8 +432,9 @@ library BurnerLoansSeizure {
         uint256 seizedCollateral_,
         bool isProtocolCaller_
     ) private pure returns (uint256) {
-        if (isProtocolCaller_ || config_.keeperRewardBps == 0 || config_.maxKeeperReward == 0)
+        if (isProtocolCaller_ || config_.keeperRewardBps == 0 || config_.maxKeeperReward == 0) {
             return 0;
+        }
 
         uint256 configuredReward = FullMath.mulDiv(
             seizedCollateral_,
@@ -529,7 +533,9 @@ library BurnerLoansSeizure {
             value == 0 ||
             timestamp == 0 ||
             block.timestamp > uint256(timestamp) + uint256(frequency_)
-        ) revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        ) {
+            revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        }
     }
 
     function _assetConfig(

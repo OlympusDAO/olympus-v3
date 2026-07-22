@@ -63,7 +63,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
         );
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt after seizure");
         assertEq(
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm)),
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
             _BORROW_AMOUNT,
             "defaulted principal"
         );

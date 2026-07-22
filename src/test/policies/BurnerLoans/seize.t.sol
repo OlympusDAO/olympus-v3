@@ -41,12 +41,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "global active debt");
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 0, "asset active debt");
         assertEq(
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm)),
-            100e9,
-            "facility defaulted principal"
-        );
-        assertEq(
-            floan.marketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
             100e9,
             "market defaulted principal"
         );
@@ -55,7 +50,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(
             mintr.mintApproval(address(burnerLoans)),
             mintApprovalBefore,
-            "defaulted OHM does not restore mint approval"
+            "seizure does not mutate mint approval"
         );
     }
 
@@ -73,7 +68,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
 
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt");
         assertEq(
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm)),
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
             300e9,
             "defaulted principal"
         );
@@ -83,23 +78,23 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     // setGlobalDebtCap
     // given defaulted principal
     //  when setGlobalDebtCap is called
-    //   then it reconciles net mint capacity
-    function test_givenDefaultedPrincipal_setGlobalDebtCap_reconcilesNetMintCapacity() public {
+    //   then it reconciles capacity against active principal only
+    function test_givenDefaultedPrincipal_setGlobalDebtCap_reconcilesActiveCapacity() public {
         _makeUnhealthy(alice);
         vm.prank(keeper);
         burnerLoans.seize(address(usds), _single(alice));
 
         vm.startPrank(admin);
         burnerLoans.setGlobalDebtCap(50e9);
-        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "default exceeds cap");
+        assertEq(mintr.mintApproval(address(burnerLoans)), 50e9, "default releases capacity");
 
         burnerLoans.setGlobalDebtCap(200e9);
         vm.stopPrank();
 
         assertEq(
             mintr.mintApproval(address(burnerLoans)),
-            100e9,
-            "capacity excludes defaulted issuance"
+            200e9,
+            "capacity depends only on active principal"
         );
     }
 
@@ -186,7 +181,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getPosition(address(usds), bob).debtOhm, 100e9, "bob debt");
         assertEq(burnerLoans.totalActiveDebtOhm(), activeDebtBefore, "active debt unchanged");
         assertEq(
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm)),
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
             0,
             "defaulted principal unchanged"
         );
@@ -223,7 +218,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt rolled back");
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "active set rolled back");
         assertEq(
-            floan.facilityPrincipalDefaulted(address(burnerLoans), address(ohm)),
+            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds))),
             0,
             "defaulted principal rolled back"
         );

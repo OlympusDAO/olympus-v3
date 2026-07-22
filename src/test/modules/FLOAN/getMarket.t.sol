@@ -5,10 +5,6 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetMarketTest is FLOANTest {
-    // getMarket
-    // given existing market
-    //  when getMarket is called
-    //   then it returns every stored field
     function test_givenExistingMarket_getMarket_returnsEveryStoredField() public {
         IFLOANv1.Market memory expected = _market(
             manager,
@@ -23,10 +19,6 @@ contract FLOANGetMarketTest is FLOANTest {
         assertEq(abi.encode(floan.getMarket(marketId)), abi.encode(expected), "market");
     }
 
-    // getMarket
-    // given missing market
-    //  when getMarket is called
-    //   then it reverts
     function test_givenMissingMarket_getMarket_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, 0));
         floan.getMarket(0);

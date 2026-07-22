@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANDecreaseDebtTest is FLOANTest {
@@ -10,20 +9,31 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given caller without kernel permission
     //  when decreaseDebt is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_decreaseDebt_reverts() public {
+    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-        vm.expectRevert(
-            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
-        );
+        _expectKernelPermissionRevert(caller_);
         floan.decreaseDebt(positionId, 1, 0);
     }
 
     // decreaseDebt
-    // given permissioned non facility
+    // given an invalid position ID
     //  when decreaseDebt is called
     //   then it reverts
-    function test_givenPermissionedNonFacility_decreaseDebt_reverts() public {
+    function test_givenInvalidPosition_reverts_fuzz(uint64 positionId_) public {
+        positionId_ = uint64(bound(positionId_, floan.getPositionCount(), type(uint64).max));
+        vm.prank(facility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidPosition.selector, positionId_)
+        );
+        floan.decreaseDebt(positionId_, 1, 0);
+    }
+
+    // decreaseDebt
+    // given caller is not the position market facility
+    //  when decreaseDebt is called
+    //   then it reverts
+    function test_givenCallerIsNotPositionMarketFacility_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
         vm.prank(otherFacility);
@@ -37,7 +47,7 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given originations disabled
     //  when decreaseDebt is called
     //   then it still succeeds
-    function test_givenOriginationsDisabled_decreaseDebt_stillSucceeds() public {
+    function test_givenOriginationsDisabled_stillSucceeds() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
         vm.prank(manager);
@@ -46,65 +56,134 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         floan.decreaseDebt(positionId, 40e9, 0);
 
         assertEq(floan.getPosition(positionId).principalDue, 60e9, "principal due");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower");
     }
 
     // decreaseDebt
-    // given zero or excessive amount
+    // given a defaulted position
     //  when decreaseDebt is called
-    //   then it reverts without state change
-    function test_givenZeroOrExcessiveAmount_decreaseDebt_revertsWithoutStateChange() public {
+    //   then it reverts
+    function test_givenDefaultedPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-        vm.startPrank(facility);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
-        floan.decreaseDebt(positionId, 0, 0);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
-        floan.decreaseDebt(positionId, 100e9 + 1, 0);
-        vm.stopPrank();
 
-        assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
-        assertEq(floan.marketPrincipalDue(marketId), 100e9, "market principal unchanged");
+        vm.startPrank(facility);
+        floan.defaultPosition(positionId);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
+        );
+        floan.decreaseDebt(positionId, 1, 0);
+        vm.stopPrank();
     }
 
     // decreaseDebt
-    // given principal debt across a market, facility, and debt token
+    // given a position without principal or interest due
     //  when decreaseDebt is called
-    //   then it updates market facility and token principal totals
-    function test_updatesMarketFacilityAndTokenPrincipalTotals() public {
+    //   then it reverts
+    function test_givenDebtFreePosition_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+
+        vm.prank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, 1, 0);
+    }
+
+    // decreaseDebt
+    // given zero principal and interest decrease
+    //  when decreaseDebt is called
+    //   then it reverts without state change
+    function test_givenZeroAmount_revertsWithoutStateChange() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
 
         vm.prank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, 0, 0);
+
+        assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
+        assertEq(floan.getMarketPrincipalDue(marketId), 100e9, "market principal unchanged");
+    }
+
+    // decreaseDebt
+    // given principal decrease above principal due
+    //  when decreaseDebt is called
+    //   then it reverts without state change
+    function test_givenPrincipalAboveDue_revertsWithoutStateChange_fuzz(uint128 excess_) public {
+        excess_ = uint128(bound(excess_, 1, type(uint128).max - 100e9));
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+
+        vm.prank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, uint128(100e9 + excess_), 0);
+
+        assertEq(floan.getPosition(positionId).principalDue, 100e9, "principal unchanged");
+        assertEq(floan.getMarketPrincipalDue(marketId), 100e9, "market principal unchanged");
+    }
+
+    // decreaseDebt
+    // given interest decrease above interest due
+    //  when decreaseDebt is called
+    //   then it reverts without state change
+    function test_givenInterestAboveDue_revertsWithoutStateChange_fuzz(uint128 excess_) public {
+        excess_ = uint128(bound(excess_, 1, type(uint128).max - 25e9));
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+
+        vm.startPrank(facility);
+        uint64 positionId = floan.createPosition(marketId, borrower);
+        floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
+        floan.decreaseDebt(positionId, 0, uint128(25e9 + excess_));
+        vm.stopPrank();
+
+        assertEq(floan.getPosition(positionId).interestDue, 25e9, "interest unchanged");
+        assertEq(floan.getMarketInterestDue(marketId), 25e9, "market interest unchanged");
+    }
+
+    // decreaseDebt
+    // given principal debt across a market and facility
+    //  when decreaseDebt is called
+    //   then it updates market and facility principal totals
+    function test_updatesMarketAndFacilityPrincipalTotals() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+
+        vm.prank(facility);
+        vm.expectEmit(true, false, false, true, address(floan));
+        emit IFLOANv1.PositionDebtDecreased(positionId, 60e9, 0);
         floan.decreaseDebt(positionId, 40e9, 0);
 
-        assertEq(floan.marketPrincipalDue(marketId), 60e9, "market principal");
-        assertEq(floan.facilityPrincipalDue(facility, debtToken), 60e9, "facility principal");
-        assertEq(floan.debtTokenPrincipalDue(debtToken), 60e9, "token principal");
+        assertEq(floan.getMarketPrincipalDue(marketId), 60e9, "market principal");
+        assertEq(floan.getFacilityPrincipalDue(facility, debtToken), 60e9, "facility principal");
     }
 
     // decreaseDebt
     // given interest only decrease
     //  when decreaseDebt is called
     //   then it does not change principal totals
-    function test_interestOnlyDecrease_doesNotChangePrincipalTotals() public {
+    function test_givenDeferredInterestPayment_updatesOnlyInterestTotals() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
         uint64 positionId = floan.createPosition(marketId, borrower);
         floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
+        vm.expectEmit(true, false, false, true, address(floan));
+        emit IFLOANv1.PositionDebtDecreased(positionId, 100e9, 15e9);
         floan.decreaseDebt(positionId, 0, 10e9);
         vm.stopPrank();
 
-        assertEq(floan.marketPrincipalDue(marketId), 100e9, "market principal");
-        assertEq(floan.facilityPrincipalDue(facility, debtToken), 100e9, "facility principal");
-        assertEq(floan.debtTokenPrincipalDue(debtToken), 100e9, "token principal");
+        assertEq(floan.getMarketPrincipalDue(marketId), 100e9, "market principal");
+        assertEq(floan.getFacilityPrincipalDue(facility, debtToken), 100e9, "facility principal");
+        assertEq(floan.getMarketInterestDue(marketId), 15e9, "market interest");
     }
 
     // decreaseDebt
     // given full closure
     //  when decreaseDebt is called
     //   then it clears episode and active borrower
-    function test_decreaseDebt_givenFullClosure_clearsEpisodeAndActiveBorrower() public {
+    function test_givenFullClosure_clearsEpisodeAndActiveBorrower() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
@@ -120,16 +199,21 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         assertEq(position.maturity, 0, "maturity cleared");
         assertEq(position.lastBorrowBlock, 0, "last borrow block cleared");
         assertEq(floan.getActiveBorrowers(marketId).length, 0, "active borrower removed");
-        assertEq(floan.marketPrincipalDue(marketId), 0, "market principal cleared");
-        assertEq(floan.facilityPrincipalDue(facility, debtToken), 0, "facility principal cleared");
-        assertEq(floan.debtTokenPrincipalDue(debtToken), 0, "token principal cleared");
+        assertEq(floan.getActiveBorrowerCount(marketId), 0, "active borrower count");
+        assertEq(floan.getMarketPrincipalDue(marketId), 0, "market principal cleared");
+        assertEq(floan.getMarketInterestDue(marketId), 0, "market interest cleared");
+        assertEq(
+            floan.getFacilityPrincipalDue(facility, debtToken),
+            0,
+            "facility principal cleared"
+        );
     }
 
     // decreaseDebt
     // given another active position
     //  when decreaseDebt is called
     //   then it keeps borrower active
-    function test_decreaseDebt_givenAnotherActivePosition_keepsBorrowerActive() public {
+    function test_givenAnotherActivePosition_keepsBorrowerActive() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.startPrank(facility);
@@ -144,6 +228,8 @@ contract FLOANDecreaseDebtTest is FLOANTest {
         address[] memory activeBorrowers = floan.getActiveBorrowers(marketId);
         assertEq(activeBorrowers.length, 1, "borrower remains active");
         assertEq(activeBorrowers[0], borrower, "active borrower");
-        assertEq(floan.marketPrincipalDue(marketId), 200e9, "remaining market principal");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower by index");
+        assertEq(floan.getMarketPrincipalDue(marketId), 200e9, "remaining market principal");
     }
 }

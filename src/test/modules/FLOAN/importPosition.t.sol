@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Module} from "src/Kernel.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
@@ -17,10 +16,8 @@ contract FLOANImportPositionTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when a position is imported
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_importPosition_reverts() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
-        );
+    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+        _expectKernelPermissionRevert(caller_);
         floan.importPosition(0, _activePosition(borrower, 100e9), 0);
     }
 
@@ -28,10 +25,44 @@ contract FLOANImportPositionTest is FLOANTest {
     // given the imported ID is not the next contiguous position ID
     //  when a position is imported
     //   then it reverts
-    function test_givenNonContiguousId_importPosition_reverts() public {
+    function test_givenNonContiguousId_reverts_fuzz(uint64 positionId_) public {
+        positionId_ = uint64(bound(positionId_, 1, type(uint64).max));
         vm.prank(manager);
-        vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidImportId.selector, 0, 1));
-        floan.importPosition(1, _activePosition(borrower, 100e9), 0);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidImportId.selector, 0, positionId_)
+        );
+        floan.importPosition(positionId_, _activePosition(borrower, 100e9), 0);
+    }
+
+    // importPosition
+    // given the position references an invalid market
+    //  when it is imported
+    //   then it reverts without consuming the ID
+    function test_givenInvalidMarket_reverts() public {
+        IFLOANv1.Position memory imported = _activePosition(borrower, 100e9);
+        imported.marketId = marketId + 1;
+
+        vm.prank(manager);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, imported.marketId)
+        );
+        floan.importPosition(0, imported, 0);
+
+        assertEq(floan.getPositionCount(), 0, "position id not consumed");
+    }
+
+    // importPosition
+    // given the borrower is zero
+    //  when it is imported
+    //   then it reverts without consuming the ID
+    function test_givenZeroBorrower_reverts() public {
+        IFLOANv1.Position memory imported = _activePosition(address(0), 100e9);
+
+        vm.prank(manager);
+        vm.expectRevert(IFLOANv1.FLOAN_ZeroAddress.selector);
+        floan.importPosition(0, imported, 0);
+
+        assertEq(floan.getPositionCount(), 0, "position id not consumed");
     }
 
     // importPosition
@@ -39,7 +70,7 @@ contract FLOANImportPositionTest is FLOANTest {
     //  when it is imported
     //   then it preserves the position ID and values
     //   then it reconstructs all indexes and principal aggregates
-    function test_givenActivePosition_importPosition_reconstructsState() public {
+    function test_givenActivePositionWithPrincipalAndInterest_reconstructsState() public {
         IFLOANv1.Position memory imported = _activePosition(borrower, 80e9);
 
         vm.expectEmit(true, false, false, true, address(floan));
@@ -47,15 +78,33 @@ contract FLOANImportPositionTest is FLOANTest {
         vm.prank(manager);
         floan.importPosition(0, imported, 0);
 
-        IFLOANv1.Position memory stored = floan.getPosition(0);
-        assertEq(abi.encode(stored), abi.encode(imported), "position");
-        assertEq(floan.positionCount(), 1, "position count");
-        assertEq(floan.marketPrincipalDue(marketId), 80e9, "market principal");
-        assertEq(floan.facilityPrincipalDue(facility, debtToken), 80e9, "facility principal");
-        assertEq(floan.debtTokenPrincipalDue(debtToken), 80e9, "debt token principal");
-        assertEq(floan.activeBorrowerCount(marketId), 1, "active borrower count");
-        assertEq(floan.activeBorrowerAt(marketId, 0), borrower, "active borrower");
-        assertEq(floan.getPositionIdsForMarketAndBorrower(marketId, borrower)[0], 0, "pair index");
+        _assertPosition(0, imported);
+        _assertPositionIndexes(0, marketId, borrower, 1, 1, 1, 1);
+        assertEq(floan.getMarketPrincipalDue(marketId), 80e9, "market principal");
+        assertEq(floan.getMarketCollateral(marketId), 150e18, "market collateral");
+        assertEq(floan.getFacilityPrincipalDue(facility, debtToken), 80e9, "facility principal");
+        assertEq(floan.getMarketInterestDue(marketId), 5e9, "market interest");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower");
+    }
+
+    // importPosition
+    // given principal was repaid but deferred interest remains
+    //  when the position is imported
+    //   then it reconstructs interest accounting and active membership
+    function test_givenInterestOnlyActivePosition_reconstructsState() public {
+        IFLOANv1.Position memory imported = _activePosition(borrower, 0);
+        imported.interestDue = 25e9;
+
+        vm.prank(manager);
+        floan.importPosition(0, imported, 0);
+
+        _assertPosition(0, imported);
+        assertEq(floan.getMarketPrincipalDue(marketId), 0, "market principal");
+        assertEq(floan.getFacilityPrincipalDue(facility, debtToken), 0, "facility principal");
+        assertEq(floan.getMarketInterestDue(marketId), 25e9, "market interest");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower");
     }
 
     // importPosition
@@ -64,22 +113,22 @@ contract FLOANImportPositionTest is FLOANTest {
     //   then it preserves both positions
     //   then it indexes the borrower once
     //   then it aggregates both principal balances
-    function test_givenMultipleActivePositions_importPosition_preservesGenericMultiplicity()
-        public
-    {
+    function test_givenMultipleActivePositions_preservesGenericMultiplicity() public {
         vm.startPrank(manager);
         floan.importPosition(0, _activePosition(borrower, 80e9), 0);
         floan.importPosition(1, _activePosition(borrower, 20e9), 0);
         vm.stopPrank();
 
-        assertEq(floan.positionCount(), 2, "position count");
+        assertEq(floan.getPositionCount(), 2, "position count");
         assertEq(
             floan.getPositionIdsForMarketAndBorrower(marketId, borrower).length,
             2,
             "pair position count"
         );
-        assertEq(floan.activeBorrowerCount(marketId), 1, "active borrower count");
-        assertEq(floan.marketPrincipalDue(marketId), 100e9, "market principal");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getMarketPrincipalDue(marketId), 100e9, "market principal");
+        assertEq(floan.getMarketInterestDue(marketId), 10e9, "market interest");
+        assertEq(floan.getMarketCollateral(marketId), 300e18, "market collateral");
     }
 
     // importPosition
@@ -87,7 +136,7 @@ contract FLOANImportPositionTest is FLOANTest {
     //  when it is imported
     //   then it remains inactive
     //   then it reconstructs defaulted principal aggregates
-    function test_givenDefaultedPosition_importPosition_reconstructsDefaultAggregates() public {
+    function test_givenDefaultedPosition_reconstructsDefaultAggregates() public {
         IFLOANv1.Position memory imported = _activePosition(borrower, 0);
         imported.collateral = 0;
         imported.principalDue = 0;
@@ -97,19 +146,17 @@ contract FLOANImportPositionTest is FLOANTest {
         vm.prank(manager);
         floan.importPosition(0, imported, 80e9);
 
-        assertTrue(floan.getPosition(0).defaulted, "position defaulted");
-        assertEq(floan.activeBorrowerCount(marketId), 0, "active borrower count");
-        assertEq(floan.marketPrincipalDue(marketId), 0, "active market principal");
-        assertEq(floan.marketPrincipalDefaulted(marketId), 80e9, "market defaulted");
-        assertEq(floan.facilityPrincipalDefaulted(facility, debtToken), 80e9, "facility defaulted");
-        assertEq(floan.debtTokenPrincipalDefaulted(debtToken), 80e9, "debt token defaulted");
+        _assertPosition(0, imported);
+        assertEq(floan.getActiveBorrowerCount(marketId), 0, "active borrower count");
+        assertEq(floan.getMarketPrincipalDue(marketId), 0, "active market principal");
+        assertEq(floan.getMarketPrincipalDefaulted(marketId), 80e9, "market defaulted");
     }
 
     // importPosition
     // given a non-defaulted position with a defaulted principal amount
     //  when it is imported
     //   then it reverts
-    function test_givenInconsistentDefaultData_importPosition_reverts() public {
+    function test_givenNonDefaultedPositionWithPrincipalDefaulted_reverts() public {
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
         floan.importPosition(0, _activePosition(borrower, 80e9), 1);
@@ -119,7 +166,7 @@ contract FLOANImportPositionTest is FLOANTest {
     // given defaulted principal above principal drawn
     //  when importPosition is called
     //   then it reverts
-    function test_givenDefaultedPrincipalAbovePrincipalDrawn_importPosition_reverts() public {
+    function test_givenDefaultedPrincipalAbovePrincipalDrawn_reverts() public {
         IFLOANv1.Position memory imported = _activePosition(borrower, 0);
         imported.collateral = 0;
         imported.principalDue = 0;
@@ -132,10 +179,66 @@ contract FLOANImportPositionTest is FLOANTest {
     }
 
     // importPosition
+    // given principal due exceeds principal drawn
+    //  when it is imported
+    //   then it reverts
+    function test_givenPrincipalDueAbovePrincipalDrawn_reverts() public {
+        IFLOANv1.Position memory imported = _activePosition(borrower, 100e9);
+        imported.principalDrawn = imported.principalDue - 1;
+
+        vm.prank(manager);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
+        floan.importPosition(0, imported, 0);
+    }
+
+    // importPosition
+    // given a defaulted position retains principal due
+    //  when it is imported
+    //   then it reverts
+    function test_givenDefaultedPositionWithPrincipalDue_reverts() public {
+        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
+        imported.principalDue = 1;
+
+        _expectInvalidConfig(imported, 100e9);
+    }
+
+    // importPosition
+    // given a defaulted position retains interest due
+    //  when it is imported
+    //   then it reverts
+    function test_givenDefaultedPositionWithInterestDue_reverts() public {
+        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
+        imported.interestDue = 1;
+
+        _expectInvalidConfig(imported, 100e9);
+    }
+
+    // importPosition
+    // given a defaulted position retains collateral
+    //  when it is imported
+    //   then it reverts
+    function test_givenDefaultedPositionWithCollateral_reverts() public {
+        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
+        imported.collateral = 1;
+
+        _expectInvalidConfig(imported, 100e9);
+    }
+
+    // importPosition
+    // given a defaulted position has no principal defaulted
+    //  when it is imported
+    //   then it reverts
+    function test_givenDefaultedPositionWithoutPrincipalDefaulted_reverts() public {
+        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
+
+        _expectInvalidConfig(imported, 0);
+    }
+
+    // importPosition
     // given active position without maturity
     //  when importPosition is called
     //   then it reverts
-    function test_givenActivePositionWithoutMaturity_importPosition_reverts() public {
+    function test_givenActivePositionWithoutMaturity_reverts() public {
         IFLOANv1.Position memory imported = _activePosition(borrower, 80e9);
         imported.maturity = 0;
 
@@ -145,27 +248,77 @@ contract FLOANImportPositionTest is FLOANTest {
     }
 
     // importPosition
-    // given closed position with active episode data
+    // given a closed position retains principal drawn
     //  when importPosition is called
     //   then it reverts
-    function test_givenClosedPositionWithActiveEpisodeData_importPosition_reverts() public {
-        IFLOANv1.Position memory imported = _activePosition(borrower, 0);
+    function test_givenClosedPositionWithPrincipalDrawn_reverts() public {
+        IFLOANv1.Position memory imported = _closedPosition(borrower);
+        imported.principalDrawn = 1;
+
+        _expectInvalidConfig(imported, 0);
+    }
+
+    // importPosition
+    // given a closed position retains a maturity
+    //  when importPosition is called
+    //   then it reverts
+    function test_givenClosedPositionWithMaturity_reverts() public {
+        IFLOANv1.Position memory imported = _closedPosition(borrower);
+        imported.maturity = 1;
+
+        _expectInvalidConfig(imported, 0);
+    }
+
+    // importPosition
+    // given a closed position retains a last borrow block
+    //  when importPosition is called
+    //   then it reverts
+    function test_givenClosedPositionWithLastBorrowBlock_reverts() public {
+        IFLOANv1.Position memory imported = _closedPosition(borrower);
+        imported.lastBorrowBlock = 1;
+
+        _expectInvalidConfig(imported, 0);
+    }
+
+    // importPosition
+    // given a fully closed position
+    //  when it is imported
+    //   then it preserves the ID and indexes without affecting aggregates
+    function test_givenClosedPosition_importsWithoutActiveAccounting() public {
+        IFLOANv1.Position memory imported = _closedPosition(borrower);
+        imported.collateral = 50e18;
 
         vm.prank(manager);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
         floan.importPosition(0, imported, 0);
+
+        assertEq(floan.getPositionCount(), 1, "position count");
+        assertEq(floan.getPosition(0).collateral, 50e18, "collateral preserved");
+        assertEq(floan.getMarketCollateral(marketId), 50e18, "market collateral");
+        assertEq(floan.getActiveBorrowerCount(marketId), 0, "no active borrower");
+        assertEq(floan.getMarketPrincipalDue(marketId), 0, "no live principal");
     }
 
     // importPosition
     // given active imported principal would exceed the market cap
     //  when the position is imported
     //   then it reverts
-    function test_givenPrincipalAboveMarketCap_importPosition_reverts() public {
+    function test_givenPrincipalAboveMarketCap_reverts() public {
         vm.prank(manager);
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_PrincipalCapExceeded.selector, marketId, 1_000e9)
         );
         floan.importPosition(0, _activePosition(borrower, 1_001e9), 0);
+    }
+
+    // importPosition
+    // given active imported principal equals the market cap
+    //  when the position is imported
+    //   then it succeeds at the boundary
+    function test_givenPrincipalAtMarketCap_succeeds() public {
+        vm.prank(manager);
+        floan.importPosition(0, _activePosition(borrower, 1_000e9), 0);
+
+        assertEq(floan.getMarketPrincipalDue(marketId), 1_000e9, "market principal at cap");
     }
 
     function _activePosition(
@@ -184,5 +337,47 @@ contract FLOANImportPositionTest is FLOANTest {
                 lastBorrowBlock: uint32(block.number - 1),
                 defaulted: false
             });
+    }
+
+    function _defaultedPosition(
+        address borrower_,
+        uint128 principalDrawn_
+    ) internal view returns (IFLOANv1.Position memory) {
+        return
+            IFLOANv1.Position({
+                borrower: borrower_,
+                marketId: marketId,
+                collateral: 0,
+                principalDrawn: principalDrawn_,
+                principalDue: 0,
+                interestDue: 0,
+                maturity: uint48(block.timestamp - 1),
+                lastBorrowBlock: uint32(block.number - 1),
+                defaulted: true
+            });
+    }
+
+    function _closedPosition(address borrower_) internal view returns (IFLOANv1.Position memory) {
+        return
+            IFLOANv1.Position({
+                borrower: borrower_,
+                marketId: marketId,
+                collateral: 0,
+                principalDrawn: 0,
+                principalDue: 0,
+                interestDue: 0,
+                maturity: 0,
+                lastBorrowBlock: 0,
+                defaulted: false
+            });
+    }
+
+    function _expectInvalidConfig(
+        IFLOANv1.Position memory position_,
+        uint128 principalDefaulted_
+    ) internal {
+        vm.prank(manager);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
+        floan.importPosition(0, position_, principalDefaulted_);
     }
 }

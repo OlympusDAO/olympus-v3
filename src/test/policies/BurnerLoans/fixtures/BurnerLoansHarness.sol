@@ -293,7 +293,7 @@ contract BurnerLoansHarness is BurnerLoans {
             address(uint160(uint256(keccak256(abi.encode(asset_, "accounting")))))
         );
         IFLOANv1.Position memory position = _FLOAN.getPosition(positionId);
-        uint256 marketDebt = _FLOAN.marketPrincipalDue(_marketId(asset_));
+        uint256 marketDebt = _FLOAN.getMarketPrincipalDue(_marketId(asset_));
         uint256 positionDebt = position.principalDue;
         uint256 debtWithoutPosition = marketDebt - positionDebt;
         if (assetActiveDebtOhm_ < debtWithoutPosition) revert BurnerLoans_InvalidCap();

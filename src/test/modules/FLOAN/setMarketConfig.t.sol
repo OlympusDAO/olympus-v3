@@ -6,10 +6,6 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketConfigTest is FLOANTest {
-    // setMarketConfig
-    // given caller without kernel permission
-    //  when setMarketConfig is called
-    //   then it reverts
     function test_givenCallerWithoutKernelPermission_setMarketConfig_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory market = floan.getMarket(marketId);
@@ -19,10 +15,6 @@ contract FLOANSetMarketConfigTest is FLOANTest {
         floan.setMarketConfig(marketId, market, hex"");
     }
 
-    // setMarketConfig
-    // given manager
-    //  when setMarketConfig is called
-    //   then it updates mutable fields and opaque data
     function test_givenManager_setMarketConfig_updatesMutableFieldsAndOpaqueData() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory updated = floan.getMarket(marketId);
@@ -41,10 +33,6 @@ contract FLOANSetMarketConfigTest is FLOANTest {
         assertEq(floan.getMarketConfigData(marketId), configData, "config data");
     }
 
-    // setMarketConfig
-    // given originations disabled
-    //  when setMarketConfig is called
-    //   then it preserves disabled state
     function test_givenOriginationsDisabled_setMarketConfig_preservesDisabledState() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.startPrank(manager);
@@ -58,10 +46,6 @@ contract FLOANSetMarketConfigTest is FLOANTest {
         assertFalse(floan.getMarket(marketId).originationsEnabled, "originations state");
     }
 
-    // setMarketConfig
-    // given cap at live principal
-    //  when setMarketConfig is called
-    //   then it succeeds and one below reverts
     function test_givenCapAtLivePrincipal_setMarketConfig_succeedsAndOneBelowReverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -77,10 +61,6 @@ contract FLOANSetMarketConfigTest is FLOANTest {
         assertEq(floan.getMarket(marketId).principalCap, 100e9, "principal cap unchanged");
     }
 
-    // setMarketConfig
-    // given changed identity
-    //  when setMarketConfig is called
-    //   then it reverts
     function test_givenChangedIdentity_setMarketConfig_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory updated = floan.getMarket(marketId);
@@ -91,10 +71,6 @@ contract FLOANSetMarketConfigTest is FLOANTest {
         floan.setMarketConfig(marketId, updated, hex"");
     }
 
-    // setMarketConfig
-    // given permissioned non manager
-    //  when setMarketConfig is called
-    //   then it reverts
     function test_givenPermissionedNonManager_setMarketConfig_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory updated = floan.getMarket(marketId);

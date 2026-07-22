@@ -105,6 +105,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         emit BackingOracleSet(backingOracle_);
     }
 
+    /// @inheritdoc IBurnerLoansLifecycle
+    function syncMintApproval() external override returns (uint256 approval) {
+        _onlyBurnerLoansManager();
+        approval = BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, globalDebtCapOhm);
+        emit MintApprovalSynchronized(approval);
+    }
+
     // ========== USER FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -289,7 +296,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function totalActiveDebtOhm() public view returns (uint256) {
-        return _FLOAN.facilityPrincipalDue(address(this), address(_OHM));
+        return _FLOAN.getFacilityPrincipalDue(address(this), address(_OHM));
     }
 
     function assetActiveDebtOhm(address asset_) external view returns (uint256) {

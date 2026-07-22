@@ -244,13 +244,13 @@ library BurnerLoansQuote {
         uint128 ohmAmount_,
         uint256 assetCap_
     ) private view returns (uint256 assetDebt) {
-        uint256 totalDebt = floan_.facilityPrincipalDue(facility_, debtToken_);
+        uint256 totalDebt = floan_.getFacilityPrincipalDue(facility_, debtToken_);
         uint256 globalRoom = totalDebt <= globalCap_ ? globalCap_ - totalDebt : 0;
         if (ohmAmount_ > globalRoom) {
             revert IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded(ohmAmount_, globalRoom);
         }
 
-        assetDebt = floan_.marketPrincipalDue(marketId_);
+        assetDebt = floan_.getMarketPrincipalDue(marketId_);
         uint256 assetRoom = assetDebt <= assetCap_ ? assetCap_ - assetDebt : 0;
         if (ohmAmount_ > assetRoom) {
             revert IBurnerLoans.BurnerLoans_AssetDebtCapExceeded(asset_, ohmAmount_, assetRoom);
@@ -426,7 +426,7 @@ library BurnerLoansQuote {
         uint256 feeRate = _feeRate(
             dependencies_.floan,
             context_.marketId,
-            dependencies_.floan.marketPrincipalDue(context_.marketId),
+            dependencies_.floan.getMarketPrincipalDue(context_.marketId),
             context_.config.debtCap
         );
         return BurnerLoansCalculator.borrowFee(requiredAsset, feeRate) * context_.termCount;
@@ -443,7 +443,9 @@ library BurnerLoansQuote {
             price == 0 ||
             timestamp == 0 ||
             block.timestamp > uint256(timestamp) + uint256(frequency_)
-        ) revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        ) {
+            revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        }
     }
 
     function _backingPerOhmUsd(address oracle_, IPRICEv2 price_) private view returns (uint256) {

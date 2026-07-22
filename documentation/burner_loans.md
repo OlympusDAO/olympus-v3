@@ -53,12 +53,15 @@ its markets. `BurnerLoans` stores and enforces the product-wide `globalDebtCap`.
 independent configuration bounds: a market cap may be greater than the global cap, but no borrow
 may leave either the market or the facility above its applicable cap.
 
-The global cap also bounds net OHM issuance by this facility. `BurnerLoans` holds a finite MINTR
-approval equal to the cap minus active and defaulted principal, floored at zero. Borrowing consumes
-that approval. Repayment burns OHM and restores the same amount of approval. Seizure removes debt
-from active utilization but does not restore approval, because the defaulted OHM remains
-circulating. An admin cap update reconciles MINTR approval against the current active plus
-defaulted principal rather than granting the new cap again.
+The global cap bounds current Burner Loans open interest rather than cumulative historical OHM
+issuance. `BurnerLoans` holds a finite MINTR approval equal to the cap minus active FLOAN principal,
+floored at zero. Borrowing consumes that approval and repayment burns OHM while restoring the same
+amount of approval. Seizure removes the position from active utilization, so its capacity may be
+borrowed again even though the defaulted OHM remains circulating. Seizure deliberately does not
+depend on MINTR: a caller with the `burner_loans_manager` role invokes `syncMintApproval` afterward
+to reconcile approval to the exact cap-minus-active value. Admin cap updates perform the same
+bounded reconciliation. This explicit resynchronization can repair approval drift without granting
+unbounded mint capacity.
 
 Fixed maturity is the main tool that prevents stale 0% shorts from consuming capacity without repricing. Borrow and extension are fee events. Additional borrowing against an already-active position is allowed, but it pays the current borrow fee on the incremental OHM amount and does not extend maturity. Extension pays the current extension fee on the active debt and is the only way to move maturity forward.
 
@@ -194,8 +197,10 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
     actor Keeper
+    actor Manager
     participant BurnerLoans
     participant FLOAN
+    participant MINTR
     participant PRICE
     participant DepositManager
     participant Vault as ERC4626 Vault
@@ -213,6 +218,10 @@ sequenceDiagram
         DepositManager-->>Keeper: keeper reward
     end
     DepositManager-->>TRSRY: remaining seized collateral
+    Note over Manager,MINTR: Independent reconciliation; seizure does not depend on MINTR
+    Manager->>BurnerLoans: syncMintApproval()
+    BurnerLoans->>FLOAN: read active facility principal
+    BurnerLoans->>MINTR: set approval delta to cap minus active principal
 ```
 
 ### Harvest Yield Sequence
@@ -1004,10 +1013,10 @@ borrower, and market/borrower pair. Burner Loans applies its one-position rule b
 pair count to be zero or one:
 
 ```text
-(count, positionId) = floan.getPositionIdForMarketAndBorrower(marketId(asset), owner)
+positionIds = floan.getPositionIdsForMarketAndBorrower(marketId(asset), owner)
 ```
 
-If the count is zero, a write path creates a position. If it is greater than one, Burner Loans
+If the array is empty, a write path creates a position. If it contains more than one ID, Burner Loans
 fails closed as ambiguous. FLOAN itself remains capable of storing multiple positions for the same
 market and borrower.
 
@@ -1082,6 +1091,8 @@ Admin-only direct functions are split across the lifecycle and configuration pol
 - `BurnerLoansConfig.addAsset(facility, asset, debtCap, riskConfigInput, feeConfig)`, which creates
     and enables a FLOAN market for the nominated facility.
 - `BurnerLoans.setGlobalDebtCap(cap)`.
+- `BurnerLoans.syncMintApproval()`, restricted to `burner_loans_manager` and bounded by the stored
+    cap and active FLOAN principal.
 - `BurnerLoans.setBackingOracle(oracle)`.
 - `setConfigurator(configurator)`.
 - `setGracePeriod(gracePeriod)`, using the shared `IGracePeriod` surface.
@@ -1095,6 +1106,7 @@ Debt caps are denominated in the debt token, OHM, using OHM's native decimals.
 | --------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | -------------------- | ---------------- |
 | `BurnerLoansConfig`         | Asset whitelist         | `addAsset(facility, asset, debtCap, riskConfigInput, feeConfig)`                                                                         | Yes, OCG timelock | No                   | No               |
 | `BurnerLoans`               | Global debt cap         | `setGlobalDebtCap(cap)`                                                                                                                  | Yes, OCG timelock | No                   | No               |
+| `BurnerLoans`               | MINTR reconciliation    | `syncMintApproval()` to cap minus active principal                                                                                       | Manager role      | No                   | No               |
 | `BurnerLoans`               | Backing oracle          | `setBackingOracle(oracle)`                                                                                                               | Yes, OCG timelock | No                   | No               |
 | `BurnerLoansConfig`         | Asset debt cap          | `setAssetDebtCap(facility, asset, cap)`                                                                                                  | Yes, direct       | Config timelock only | No               |
 | `BurnerLoansConfig`         | Asset risk config       | collateral factor, min collateral ratio, backing multiplier, term length, max maturity horizon, keeper reward bps, and max keeper reward | Yes, direct       | Config timelock only | No               |
@@ -1225,10 +1237,10 @@ optimizer profile:
 
 | Contract                    | Runtime bytes | EIP-170 margin |
 | --------------------------- | ------------: | -------------: |
-| `BurnerLoans`               |        24,452 |            124 |
-| `BurnerLoansConfig`         |        20,118 |          4,458 |
+| `BurnerLoans`               |        23,985 |            591 |
+| `BurnerLoansConfig`         |        20,201 |          4,375 |
 | `BurnerLoansConfigTimelock` |        23,915 |            661 |
-| `OlympusFixedTermLoan`      |        22,064 |          2,512 |
+| `OlympusFixedTermLoan`      |        23,872 |            704 |
 | `BurnerLoansSeizer`         |         7,122 |         17,454 |
 | `BurnerLoansComposites`     |         6,018 |         18,558 |
 
@@ -1281,7 +1293,7 @@ Asset-level bounds should be at least as strict as global bounds. Disabling an a
 
 ```text
 mintedOhmByBurnerLoans - burnedOhmByBurnerLoans
-    == totalActiveDebtOhm + FLOAN.facilityPrincipalDefaulted(BurnerLoans, OHM)
+    == totalActiveDebtOhm + sum(FLOAN.getMarketPrincipalDefaulted(marketId))
 ```
 
 Every OHM minted by the facility is owed, burned, or permanently circulating after seizure.
@@ -1407,8 +1419,8 @@ if position is seized:
     debtOhmAfter == 0
     depositedCollateralAfter == 0
     floan.getActiveBorrowers(marketId(asset)) excludes owner when no other position is active
-    FLOAN.marketPrincipalDefaulted(marketId) increases by debtOhmBefore
-    FLOAN.facilityPrincipalDefaulted(BurnerLoans, OHM) increases by debtOhmBefore
+    FLOAN.getMarketPrincipalDefaulted(marketId) increases by debtOhmBefore
+    BurnerLoans.totalActiveDebtOhm() decreases by debtOhmBefore
 ```
 
 Seizure is not partial liquidation. It resolves the entire debt position, transfers collateral to `TRSRY` and any keeper reward recipient, and leaves no borrower claim against the seized position.
@@ -1461,7 +1473,8 @@ activate `DepositManager`, `BurnerLoansConfig`, `BurnerLoans`, `BurnerLoansConfi
 - use BurnerLoansConfig to create exactly one FLOAN market for each
   `(BurnerLoans, collateralAsset, OHM)` tuple; FLOAN permits more, but BurnerLoans rejects an
   ambiguous tuple;
-- assign `admin`, `burner_loans_admin`, and emergency authority according to the governance model;
+- assign `admin`, `burner_loans_admin`, `burner_loans_manager`, and emergency authority according
+  to the governance model;
   and
 - authorize the Heart caller and grant `burner_loans_seizer` to the seizer contract before enabling
   periodic seizure.

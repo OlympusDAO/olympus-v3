@@ -6,10 +6,6 @@ import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANGetOrCreatePositionTest is FLOANTest {
-    // createPosition
-    // given caller without kernel permission
-    //  when createPosition is called
-    //   then it reverts
     function test_givenCallerWithoutKernelPermission_createPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.expectRevert(
@@ -18,10 +14,6 @@ contract FLOANGetOrCreatePositionTest is FLOANTest {
         floan.createPosition(marketId, borrower);
     }
 
-    // createPosition
-    // given permissioned non facility
-    //  when createPosition is called
-    //   then it reverts
     function test_givenPermissionedNonFacility_createPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(otherFacility);
@@ -31,10 +23,6 @@ contract FLOANGetOrCreatePositionTest is FLOANTest {
         floan.createPosition(marketId, borrower);
     }
 
-    // createPosition
-    // given zero borrower
-    //  when createPosition is called
-    //   then it reverts
     function test_givenZeroBorrower_createPosition_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(facility);
@@ -42,10 +30,6 @@ contract FLOANGetOrCreatePositionTest is FLOANTest {
         floan.createPosition(marketId, address(0));
     }
 
-    // createPosition
-    // given an existing market and borrower
-    //  when createPosition is called
-    //   then it allows multiple positions for pair
     function test_createPosition_allowsMultiplePositionsForPair() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

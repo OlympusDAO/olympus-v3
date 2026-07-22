@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {Module} from "src/Kernel.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketManagerTest is FLOANTest {
@@ -10,20 +9,31 @@ contract FLOANSetMarketManagerTest is FLOANTest {
     // given caller without kernel permission
     //  when setMarketManager is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_setMarketManager_reverts() public {
+    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        vm.expectRevert(
-            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(this))
-        );
+        _expectKernelPermissionRevert(caller_);
         floan.setMarketManager(marketId, otherManager);
+    }
+
+    // setMarketManager
+    // given invalid market ID
+    //  when setMarketManager is called
+    //   then it reverts
+    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+        vm.assume(marketId_ != 0);
+        vm.prank(manager);
+        vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
+        floan.setMarketManager(marketId_, otherManager);
     }
 
     // setMarketManager
     // given current manager
     //  when setMarketManager is called
     //   then it transfers configuration authority
-    function test_givenCurrentManager_setMarketManager_transfersConfigurationAuthority() public {
+    function test_givenCurrentManager_transfersConfigurationAuthority() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.MarketManagerSet(marketId, manager, otherManager);
         vm.prank(manager);
         floan.setMarketManager(marketId, otherManager);
 
@@ -42,7 +52,7 @@ contract FLOANSetMarketManagerTest is FLOANTest {
     // given zero manager
     //  when setMarketManager is called
     //   then it reverts
-    function test_givenZeroManager_setMarketManager_reverts() public {
+    function test_givenZeroManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_ZeroAddress.selector);
@@ -50,14 +60,27 @@ contract FLOANSetMarketManagerTest is FLOANTest {
     }
 
     // setMarketManager
-    // given permissioned non manager
+    // given caller is not the market manager
     //  when setMarketManager is called
     //   then it reverts
-    function test_givenPermissionedNonManager_setMarketManager_reverts() public {
+    function test_givenCallerIsNotMarketManager_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(otherManager);
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, otherManager)
+        );
+        floan.setMarketManager(marketId, otherManager);
+    }
+
+    // setMarketManager
+    // given caller is the facility but not the market manager
+    //  when setMarketManager is called
+    //   then it reverts
+    function test_givenCallerIsMarketFacilityButNotManager_reverts() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        vm.prank(facility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, facility)
         );
         floan.setMarketManager(marketId, otherManager);
     }

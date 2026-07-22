@@ -405,10 +405,9 @@ library BurnerLoansCustody {
         MINTRv1 mintr_,
         IERC20 ohm_,
         uint128 debtCapOhm_
-    ) public {
-        uint256 issuedPrincipal = floan_.facilityPrincipalDue(address(this), address(ohm_)) +
-            floan_.facilityPrincipalDefaulted(address(this), address(ohm_));
-        uint256 desiredApproval = debtCapOhm_ > issuedPrincipal ? debtCapOhm_ - issuedPrincipal : 0;
+    ) public returns (uint256 desiredApproval) {
+        uint256 activePrincipal = floan_.getFacilityPrincipalDue(address(this), address(ohm_));
+        desiredApproval = debtCapOhm_ > activePrincipal ? debtCapOhm_ - activePrincipal : 0;
         uint256 currentApproval = mintr_.mintApproval(address(this));
         if (desiredApproval > currentApproval) {
             mintr_.increaseMintApproval(address(this), desiredApproval - currentApproval);

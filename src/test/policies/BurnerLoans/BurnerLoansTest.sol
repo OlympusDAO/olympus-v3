@@ -266,7 +266,22 @@ abstract contract BurnerLoansTest is Test {
         bytes memory configData = floan.getMarketConfigData(existingMarketId);
 
         vm.prank(address(burnerLoansConfig));
-        marketId = floan.createMarket(market, configData);
+        marketId = floan.createMarket(
+            IFLOANv1.MarketInput({
+                collateralToken: market.collateralToken,
+                debtToken: market.debtToken,
+                manager: market.manager,
+                facility: market.facility,
+                configId: market.configId,
+                principalCap: market.principalCap,
+                termLength: market.termLength,
+                maxMaturityHorizon: market.maxMaturityHorizon,
+                collateralFactorBps: market.collateralFactorBps,
+                minCollateralRatioBps: market.minCollateralRatioBps,
+                baseFeeBps: market.baseFeeBps
+            }),
+            configData
+        );
     }
 
     function _setOtherMarketDebtForTest(uint128 debtOhm_) internal returns (MockERC20 asset) {

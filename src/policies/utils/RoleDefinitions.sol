@@ -36,5 +36,7 @@ bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";
 bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";
 /// @dev Burner Loans parameter manager role, e.g. managing bounded operational parameters.
 bytes32 constant BURNER_LOANS_ADMIN_ROLE = "burner_loans_admin";
+/// @dev Burner Loans operational manager role, e.g. reconciling bounded MINTR capacity.
+bytes32 constant BURNER_LOANS_MANAGER_ROLE = "burner_loans_manager";
 /// @dev Burner Loans protocol seizer role, e.g. performing periodic seizure without keeper rewards.
 bytes32 constant BURNER_LOANS_SEIZER_ROLE = "burner_loans_seizer";

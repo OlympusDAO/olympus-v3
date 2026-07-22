@@ -56,6 +56,9 @@ interface IBurnerLoans {
         uint256 borrowed
     );
 
+    /// @notice Emitted when remaining MINTR approval is reconciled to active debt capacity.
+    event MintApprovalSynchronized(uint256 approval);
+
     enum PositionStatus {
         NoDebt,
         Active,
