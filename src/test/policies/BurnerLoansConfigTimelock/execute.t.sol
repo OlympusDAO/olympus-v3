@@ -32,7 +32,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "collateral factor unchanged"
         );
@@ -62,7 +62,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "collateral factor unchanged"
         );
@@ -98,18 +98,24 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
     // executeQueuedAction
     // given a queued action
-    //  when the target asset has been disabled
-    //   then execution reverts with the asset-disabled error
-    function test_givenAssetDisabled_reverts() public {
+    //  when the target asset has originations disabled
+    //   then the queued risk update remains executable
+    function test_givenAssetOriginationsDisabled_executes() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
         uint64 actionId = _queueCollateralFactorUpdate();
-        vm.prank(emergency);
-        burnerLoans.disableAsset(address(usds));
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotEnabled.selector, address(usds))
+        _expectSingleActionExecuted(
+            actionId,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            address(this)
         );
         configTimelock.executeQueuedAction(actionId);
+
+        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
+        assertFalse(stored.originationsEnabled, "originations disabled");
+        assertEq(stored.collateralFactorBps, 9_500, "risk update applied");
     }
 
     // executeQueuedAction
@@ -120,7 +126,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         uint64 actionId = _queueCollateralFactorUpdate();
 
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(address(burnerLoans));
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(
@@ -155,7 +161,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.collateralFactorBps, 10_000, "collateral factor unchanged");
         assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio unchanged");
     }
@@ -185,7 +191,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.collateralFactorBps, 10_000, "collateral factor unchanged");
         assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio unchanged");
     }
@@ -220,7 +226,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         assertTrue(action.executed, "executed");
         assertEq(action.actions.length, 0, "sub-actions cleared");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_500,
             "collateral factor"
         );
@@ -282,7 +288,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelock.executeQueuedAction(collateralFactorActionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.collateralFactorBps, 9_500, "collateral factor after first action");
         assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio after first action");
 
@@ -294,7 +300,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelock.executeQueuedAction(minCollateralRatioActionId);
 
-        config = burnerLoans.getAssetConfig(address(usds));
+        config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.collateralFactorBps, 9_500, "collateral factor preserved");
         assertEq(config.minCollateralRatioBps, 12_000, "min collateral ratio applied");
     }
@@ -348,7 +354,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelock.executeQueuedAction(firstActionId);
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_500,
             "first value applied"
         );
@@ -362,7 +368,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
         configTimelock.executeQueuedAction(secondActionId);
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_000,
             "second value applied"
         );
@@ -398,9 +404,9 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoans.AssetConfig memory adminConfig = _defaultAssetConfig(USDS_DECIMALS);
         adminConfig.collateralFactorBps = 9_800;
         vm.prank(admin);
-        burnerLoans.setAssetRiskConfig(address(usds), _toRiskConfig(adminConfig));
+        burnerLoansConfig.setAssetRiskConfig(address(usds), _toRiskConfig(adminConfig));
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_800,
             "admin value applied"
         );
@@ -423,7 +429,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_800,
             "admin value preserved"
         );
@@ -494,12 +500,12 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
         assertEq(collateralFactorActionId, 1, "first action id");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "collateral factor unchanged"
         );
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).minCollateralRatioBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).minCollateralRatioBps,
             11_500,
             "min cr unchanged"
         );
@@ -574,7 +580,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(termActionId);
         configTimelock.executeQueuedAction(horizonActionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.termLength, 14 days, "term length");
         assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
     }
@@ -650,7 +656,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(horizonActionId);
         configTimelock.executeQueuedAction(termActionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.termLength, 100 days, "term length");
         assertEq(config.maxMaturityHorizon, 120 days, "max maturity horizon");
     }
@@ -672,20 +678,20 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: true,
                 kinkBps: true,
-                preKinkSlopeBps: false,
+                preKinkSlopeBps: true,
                 postKinkSlopeBps: true
             })
         );
         uint64 slopeActionId = _queueFeeUpdate(
             IBurnerLoans.AssetFeeConfig({
                 baseFeeBps: 0,
-                kinkBps: 0,
+                kinkBps: 5_000,
                 preKinkSlopeBps: 10_000,
                 postKinkSlopeBps: 0
             }),
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: false,
-                kinkBps: false,
+                kinkBps: true,
                 preKinkSlopeBps: true,
                 postKinkSlopeBps: false
             })
@@ -697,6 +703,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoans.AssetFeeConfig memory expectedConfig = _defaultAssetFeeConfig();
         expectedConfig.baseFeeBps = 0;
         expectedConfig.kinkBps = 0;
+        expectedConfig.preKinkSlopeBps = 0;
         expectedConfig.postKinkSlopeBps = 0;
         IBurnerLoans.AssetFeeConfig memory currentConfig = _defaultAssetFeeConfig();
         vm.expectRevert(
@@ -715,9 +722,11 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(singleSlopeActionId);
         configTimelock.executeQueuedAction(slopeActionId);
 
-        IBurnerLoans.AssetFeeConfig memory config = burnerLoans.getAssetFeeConfig(address(usds));
+        IBurnerLoans.AssetFeeConfig memory config = burnerLoansConfig.getAssetFeeConfig(
+            address(usds)
+        );
         assertEq(config.baseFeeBps, 0, "base fee");
-        assertEq(config.kinkBps, 0, "kink");
+        assertEq(config.kinkBps, 5_000, "kink");
         assertEq(config.preKinkSlopeBps, 10_000, "preKinkSlope");
         assertEq(config.postKinkSlopeBps, 0, "postKinkSlope");
     }
@@ -772,12 +781,12 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(riskActionId);
 
         assertEq(
-            burnerLoans.getAssetFeeConfig(address(usds)).baseFeeBps,
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
             25,
             "fee config unchanged"
         );
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_500,
             "risk action applied"
         );
@@ -869,10 +878,16 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(horizonActionId);
         configTimelock.executeQueuedAction(feeActionId);
 
-        IBurnerLoans.AssetConfig memory assetConfig = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory assetConfig = burnerLoansConfig.getAssetConfig(
+            address(usds)
+        );
         assertEq(assetConfig.termLength, 14 days, "term length");
         assertEq(assetConfig.maxMaturityHorizon, 21 days, "max maturity horizon");
-        assertEq(burnerLoans.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee action applied");
+        assertEq(
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
+            30,
+            "fee action applied"
+        );
     }
 
     // executeQueuedAction
@@ -947,11 +962,13 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(termActionId);
         configTimelock.executeQueuedAction(horizonActionId);
 
-        IBurnerLoans.AssetConfig memory assetConfig = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory assetConfig = burnerLoansConfig.getAssetConfig(
+            address(usds)
+        );
         assertEq(assetConfig.termLength, 14 days, "term length");
         assertEq(assetConfig.maxMaturityHorizon, 21 days, "max maturity horizon");
         assertEq(
-            burnerLoans.getAssetFeeConfig(address(usds)).baseFeeBps,
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
             25,
             "fee config unchanged"
         );
@@ -974,7 +991,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: true,
                 kinkBps: true,
-                preKinkSlopeBps: false,
+                preKinkSlopeBps: true,
                 postKinkSlopeBps: true
             })
         );
@@ -1001,13 +1018,13 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         uint64 slopeActionId = _queueFeeUpdate(
             IBurnerLoans.AssetFeeConfig({
                 baseFeeBps: 0,
-                kinkBps: 0,
+                kinkBps: 5_000,
                 preKinkSlopeBps: 10_000,
                 postKinkSlopeBps: 0
             }),
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: false,
-                kinkBps: false,
+                kinkBps: true,
                 preKinkSlopeBps: true,
                 postKinkSlopeBps: false
             })
@@ -1020,6 +1037,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoans.AssetFeeConfig memory expectedConfig = _defaultAssetFeeConfig();
         expectedConfig.baseFeeBps = 0;
         expectedConfig.kinkBps = 0;
+        expectedConfig.preKinkSlopeBps = 0;
         expectedConfig.postKinkSlopeBps = 0;
         IBurnerLoans.AssetFeeConfig memory currentConfig = _defaultAssetFeeConfig();
         vm.expectRevert(
@@ -1039,12 +1057,14 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(slopeActionId);
         configTimelock.executeQueuedAction(riskActionId);
 
-        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoans.getAssetFeeConfig(address(usds));
-        assertEq(feeConfig.kinkBps, 0, "kink");
+        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoansConfig.getAssetFeeConfig(
+            address(usds)
+        );
+        assertEq(feeConfig.kinkBps, 5_000, "kink");
         assertEq(feeConfig.preKinkSlopeBps, 10_000, "preKinkSlope");
         assertEq(feeConfig.postKinkSlopeBps, 0, "postKinkSlope");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_500,
             "risk action applied"
         );
@@ -1067,7 +1087,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: true,
                 kinkBps: true,
-                preKinkSlopeBps: false,
+                preKinkSlopeBps: true,
                 postKinkSlopeBps: true
             })
         );
@@ -1094,13 +1114,13 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         uint64 slopeActionId = _queueFeeUpdate(
             IBurnerLoans.AssetFeeConfig({
                 baseFeeBps: 0,
-                kinkBps: 0,
+                kinkBps: 5_000,
                 preKinkSlopeBps: 10_000,
                 postKinkSlopeBps: 0
             }),
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: false,
-                kinkBps: false,
+                kinkBps: true,
                 preKinkSlopeBps: true,
                 postKinkSlopeBps: false
             })
@@ -1116,12 +1136,14 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         configTimelock.executeQueuedAction(singleSlopeActionId);
         configTimelock.executeQueuedAction(slopeActionId);
 
-        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoans.getAssetFeeConfig(address(usds));
-        assertEq(feeConfig.kinkBps, 0, "kink");
+        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoansConfig.getAssetFeeConfig(
+            address(usds)
+        );
+        assertEq(feeConfig.kinkBps, 5_000, "kink");
         assertEq(feeConfig.preKinkSlopeBps, 10_000, "preKinkSlope");
         assertEq(feeConfig.postKinkSlopeBps, 0, "postKinkSlope");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "risk config unchanged"
         );
@@ -1196,12 +1218,12 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
         assertEq(collateralFactorActionId, 1, "first action id");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "collateral factor unchanged"
         );
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).minCollateralRatioBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).minCollateralRatioBps,
             11_500,
             "min cr unchanged"
         );
@@ -1249,7 +1271,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         vm.prank(executor_);
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.collateralFactorBps, 9_500, "collateral factor");
         assertEq(config.minCollateralRatioBps, 12_000, "min collateral ratio");
     }
@@ -1314,7 +1336,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         vm.prank(executor_);
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.termLength, 14 days, "term length");
         assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
     }
@@ -1338,9 +1360,11 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         vm.prank(executor_);
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetFeeConfig memory config = burnerLoans.getAssetFeeConfig(address(usds));
+        IBurnerLoans.AssetFeeConfig memory config = burnerLoansConfig.getAssetFeeConfig(
+            address(usds)
+        );
         assertEq(config.baseFeeBps, 0, "base fee");
-        assertEq(config.kinkBps, 0, "kink");
+        assertEq(config.kinkBps, 5_000, "kink");
         assertEq(config.preKinkSlopeBps, 10_000, "preKinkSlope");
         assertEq(config.postKinkSlopeBps, 0, "postKinkSlope");
     }
@@ -1463,10 +1487,13 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selectionOne;
         selectionOne.baseFeeBps = true;
         selectionOne.kinkBps = true;
+        selectionOne.preKinkSlopeBps = true;
         selectionOne.postKinkSlopeBps = true;
         IBurnerLoans.AssetFeeConfig memory updateTwo;
+        updateTwo.kinkBps = 5_000;
         updateTwo.preKinkSlopeBps = 10_000;
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selectionTwo;
+        selectionTwo.kinkBps = true;
         selectionTwo.preKinkSlopeBps = true;
 
         actions[0] = _singleAction(

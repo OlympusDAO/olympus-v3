@@ -74,11 +74,25 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         );
         configTimelock.executeQueuedAction(actionId);
 
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
-            0,
-            "asset debt cap"
-        );
+        assertEq(burnerLoansConfig.getAssetConfig(address(usds)).debtCap, 0, "asset debt cap");
+    }
+
+    // queueSetAssetDebtCap
+    // given market originations are disabled
+    //  when a cap update is queued and executed
+    //   then the existing market can still be configured
+    function test_givenOriginationsDisabled_executes() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), 50_000e9);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        configTimelock.executeQueuedAction(actionId);
+
+        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
+        assertFalse(stored.originationsEnabled, "originations disabled");
+        assertEq(stored.debtCap, 50_000e9, "asset debt cap");
     }
 
     // queueSetAssetDebtCap
@@ -114,7 +128,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            burnerLoansConfig.getAssetConfig(address(usds)).debtCap,
             _defaultAssetDebtCap(),
             "asset debt cap unchanged"
         );
@@ -137,7 +151,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            burnerLoansConfig.getAssetConfig(address(usds)).debtCap,
             debtCapOhm,
             "asset debt cap"
         );
@@ -205,7 +219,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(burnerLoans), address(usds)).debtCap,
+            burnerLoansConfig.getAssetConfig(address(usds)).debtCap,
             debtCapOhm_,
             "asset debt cap"
         );

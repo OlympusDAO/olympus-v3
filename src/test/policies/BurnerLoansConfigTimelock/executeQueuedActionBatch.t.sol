@@ -21,9 +21,11 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         actions[0] = _riskAction(_termUpdate(14 days), _termSelection());
         actions[1] = _riskAction(_horizonUpdate(21 days), _horizonSelection());
 
-        IBurnerLoans.AssetConfig memory liveConfig = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory liveConfig = burnerLoansConfig.getAssetConfig(
+            address(usds)
+        );
         IBurnerLoans.AssetConfig memory projectedAfterTerm = IBurnerLoans.AssetConfig({
-            enabled: liveConfig.enabled,
+            originationsEnabled: liveConfig.originationsEnabled,
             collateralDecimals: liveConfig.collateralDecimals,
             collateralFactorBps: liveConfig.collateralFactorBps,
             minCollateralRatioBps: liveConfig.minCollateralRatioBps,
@@ -35,7 +37,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
             maxKeeperReward: liveConfig.maxKeeperReward
         });
         IBurnerLoans.AssetConfig memory projectedAfterHorizon = IBurnerLoans.AssetConfig({
-            enabled: liveConfig.enabled,
+            originationsEnabled: liveConfig.originationsEnabled,
             collateralDecimals: liveConfig.collateralDecimals,
             collateralFactorBps: liveConfig.collateralFactorBps,
             minCollateralRatioBps: liveConfig.minCollateralRatioBps,
@@ -86,7 +88,9 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         vm.warp(block.timestamp + configTimelockHarness.timelockDelay());
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory finalConfig = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory finalConfig = burnerLoansConfig.getAssetConfig(
+            address(usds)
+        );
         assertEq(finalConfig.termLength, 14 days, "final term length");
         assertEq(finalConfig.maxMaturityHorizon, 21 days, "final max maturity horizon");
     }
@@ -103,7 +107,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         actions[0] = _feeAction(_baseFeeUpdate(50), _baseFeeSelection());
         actions[1] = _feeAction(_preKinkSlopeUpdate(200), _preKinkSlopeSelection());
 
-        IBurnerLoans.AssetFeeConfig memory liveConfig = burnerLoans.getAssetFeeConfig(
+        IBurnerLoans.AssetFeeConfig memory liveConfig = burnerLoansConfig.getAssetFeeConfig(
             address(usds)
         );
         IBurnerLoans.AssetFeeConfig memory projectedAfterBaseFee = IBurnerLoans.AssetFeeConfig({
@@ -158,7 +162,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         vm.warp(block.timestamp + configTimelockHarness.timelockDelay());
         configTimelockHarness.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetFeeConfig memory finalConfig = burnerLoans.getAssetFeeConfig(
+        IBurnerLoans.AssetFeeConfig memory finalConfig = burnerLoansConfig.getAssetFeeConfig(
             address(usds)
         );
         assertEq(finalConfig.baseFeeBps, 50, "final base fee");
@@ -180,7 +184,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
 
         configTimelock.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.termLength, 14 days, "term length");
         assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
     }
@@ -200,7 +204,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         IBurnerLoans.AssetFeeConfig memory staleFeeConfig = _defaultAssetFeeConfig();
         staleFeeConfig.baseFeeBps = 40;
         vm.prank(admin);
-        burnerLoans.setAssetFeeConfig(address(usds), staleFeeConfig);
+        burnerLoansConfig.setAssetFeeConfig(address(usds), staleFeeConfig);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(
@@ -217,7 +221,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertFalse(action.executed, "action not executed");
         assertEq(
-            burnerLoans.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             10_000,
             "first sub-action rolled back"
         );

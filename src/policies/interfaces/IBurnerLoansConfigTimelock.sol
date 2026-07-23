@@ -13,9 +13,13 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @notice Thrown when the Burner Loans policy address is zero.
     error BurnerLoansConfigTimelock_ZeroAddress();
 
-    /// @notice Thrown when the Burner Loans policy does not advertise `IBurnerLoans`.
+    /// @notice Thrown when Burner Loans Config is incompatible.
     /// @param burnerLoans The invalid Burner Loans policy address.
     error BurnerLoansConfigTimelock_InvalidBurnerLoans(address burnerLoans);
+
+    /// @notice Thrown when Burner Loans Config belongs to a different Kernel.
+    /// @param configKernel The Kernel configured on Burner Loans Config.
+    error BurnerLoansConfigTimelock_KernelMismatch(address configKernel);
 
     /// @notice Thrown when a configured module has an unsupported version.
     error BurnerLoansConfigTimelock_InvalidModuleVersion();
@@ -85,11 +89,9 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Returns the Burner Loans policy configured by this timelock.
-    /// @return burnerLoans_ The Burner Loans policy.
+    /// @notice Returns the Burner Loans Config policy controlled by this timelock.
+    /// @return burnerLoans_ The Burner Loans Config policy.
     function burnerLoans() external view returns (IBurnerLoansConfig burnerLoans_);
-
-    function FACILITY() external view returns (address facility_);
 
     /// @notice Returns the minimum supported timelock delay.
     /// @return delay_ The minimum delay, in seconds.
@@ -140,7 +142,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a batch of Burner Loans configuration updates.
-    /// @dev Every sub-action must target Burner Loans and use a supported configuration setter.
+    /// @dev Every sub-action must target Burner Loans Config and use a supported setter.
     ///      Reverts if the timelock policy is disabled. The batch is validated and later
     ///      executed atomically in array order.
     /// @param actions_ The Burner Loans configuration sub-actions to queue.

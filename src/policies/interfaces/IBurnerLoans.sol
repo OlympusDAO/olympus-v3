@@ -41,8 +41,7 @@ interface IBurnerLoans {
     error BurnerLoans_AssetNotConfigured(address asset);
     error BurnerLoans_AmbiguousMarket(address asset, uint256 marketCount);
     error BurnerLoans_AmbiguousPosition(uint32 marketId, address borrower, uint256 positionCount);
-    error BurnerLoans_AssetNotEnabled(address asset);
-    error BurnerLoans_AssetAlreadyEnabled(address asset);
+    error BurnerLoans_AssetOriginationsDisabled(address asset);
     error BurnerLoans_InvalidFeeConfig();
     error BurnerLoans_UnauthorizedConfigurator(address caller);
     error BurnerLoans_InvalidModuleVersion();
@@ -74,7 +73,7 @@ interface IBurnerLoans {
     }
 
     struct AssetConfig {
-        bool enabled;
+        bool originationsEnabled;
         uint8 collateralDecimals;
         uint16 collateralFactorBps;
         uint16 minCollateralRatioBps;
@@ -222,6 +221,5 @@ interface IBurnerLoans {
     event ConfiguratorSet(address indexed configurator);
     event AssetRiskConfigSet(address indexed asset, AssetRiskConfigInput config);
     event AssetFeeConfigSet(address indexed asset, AssetFeeConfig config);
-    event AssetEnabled(address indexed asset);
-    event AssetDisabled(address indexed asset);
+    event AssetOriginationsSet(address indexed asset, bool enabled);
 }

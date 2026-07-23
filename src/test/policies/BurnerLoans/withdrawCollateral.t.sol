@@ -259,10 +259,10 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Position state: debt-free collateral
     // - Asset state: disabled after configuration
     // - Expected branch: cleanup withdrawal succeeds despite asset new-risk disable
-    function test_withdrawCollateral_givenAssetDisabledAndZeroDebt_succeeds() public {
+    function test_withdrawCollateral_givenAssetOriginationsDisabledAndZeroDebt_succeeds() public {
         _depositForAlice(1e6);
-        vm.prank(burnerLoansAdmin);
-        burnerLoans.disableAsset(address(usds));
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
 
         IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
             address(usds),
@@ -284,12 +284,12 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Position state: active debt with fresh PRICE and healthy remaining collateral
     // - Asset state: disabled after configuration
     // - Expected branch: withdrawal succeeds because asset disable only blocks new exposure
-    function test_withdrawCollateral_givenAssetDisabledAndActiveDebt_succeeds() public {
+    function test_withdrawCollateral_givenAssetOriginationsDisabledAndActiveDebt_succeeds() public {
         _depositForAlice(120e6);
         _setActiveDebtPosition(120e6, 1e9);
         _setFreshPrices(100e18, 1e18);
-        vm.prank(burnerLoansAdmin);
-        burnerLoans.disableAsset(address(usds));
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
 
         IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
             address(usds),
@@ -996,7 +996,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             address(burnerLoans)
         );
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(vaultAsset_),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),

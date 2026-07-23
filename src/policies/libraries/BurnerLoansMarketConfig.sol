@@ -72,7 +72,7 @@ library BurnerLoansMarketConfig {
         Data memory data = decode(data_);
         return
             IBurnerLoans.AssetConfig({
-                enabled: market_.originationsEnabled,
+                originationsEnabled: market_.originationsEnabled,
                 collateralDecimals: market_.collateralDecimals,
                 collateralFactorBps: market_.collateralFactorBps,
                 minCollateralRatioBps: market_.minCollateralRatioBps,

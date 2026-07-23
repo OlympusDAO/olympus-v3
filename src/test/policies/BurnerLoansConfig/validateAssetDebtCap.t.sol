@@ -3,9 +3,9 @@ pragma solidity >=0.8.24;
 
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
-import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
-contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
+contract BurnerLoansConfigValidateAssetDebtCapTest is BurnerLoansTest {
     // validateAssetDebtCap
     // given asset is not configured
     //  when validating an asset debt cap
@@ -16,7 +16,7 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
         );
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), asset_, debtCapOhm_);
+        burnerLoansConfig.validateAssetDebtCap(asset_, debtCapOhm_);
     }
 
     // validateAssetDebtCap
@@ -30,7 +30,7 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), address(usds), cap_);
+        burnerLoansConfig.validateAssetDebtCap(address(usds), cap_);
     }
 
     // validateAssetDebtCap
@@ -41,7 +41,7 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
         cap_ = uint128(bound(cap_, burnerLoans.globalDebtCapOhm() + 1, type(uint128).max));
 
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), address(usds), cap_);
+        burnerLoansConfig.validateAssetDebtCap(address(usds), cap_);
     }
 
     // validateAssetDebtCap
@@ -51,7 +51,7 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
     function test_givenActiveDebtIsZero_allowsZeroCap() public {
         _addDefaultUsdsAsset();
 
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), address(usds), 0);
+        burnerLoansConfig.validateAssetDebtCap(address(usds), 0);
     }
 
     // validateAssetDebtCap
@@ -63,7 +63,7 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
         activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), address(usds), activeDebtOhm_);
+        burnerLoansConfig.validateAssetDebtCap(address(usds), activeDebtOhm_);
     }
 
     // validateAssetDebtCap
@@ -76,6 +76,6 @@ contract BurnerLoansValidateAssetDebtCapTest is BurnerLoansTest {
         cap_ = uint128(bound(cap_, activeDebtOhm_, type(uint128).max));
         burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
 
-        burnerLoansConfig.validateAssetDebtCap(address(burnerLoans), address(usds), cap_);
+        burnerLoansConfig.validateAssetDebtCap(address(usds), cap_);
     }
 }

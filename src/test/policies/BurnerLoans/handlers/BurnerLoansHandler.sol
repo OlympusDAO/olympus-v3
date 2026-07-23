@@ -351,14 +351,16 @@ contract BurnerLoansHandler is Test {
     }
 
     function toggleAsset(bool enable_) external {
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(collateral));
-        if (enable_ == config.enabled) return;
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(
+            address(collateral)
+        );
+        if (enable_ == config.originationsEnabled) return;
         vm.prank(admin);
         if (enable_) {
-            try burnerLoansConfig.enableAsset(address(burnerLoans), address(collateral)) {} catch {}
+            try burnerLoansConfig.setAssetOriginationsEnabled(address(collateral), true) {} catch {}
         } else {
             try
-                burnerLoansConfig.disableAsset(address(burnerLoans), address(collateral))
+                burnerLoansConfig.setAssetOriginationsEnabled(address(collateral), false)
             {} catch {}
         }
     }
@@ -392,7 +394,7 @@ contract BurnerLoansHandler is Test {
         uint256 liquidCollateral = status.assets + status.borrowed + collateral.balanceOf(treasury);
         uint256 liquidBackingUsd = FullMath.mulDiv(liquidCollateral, collateralPrice, _WAD);
         uint256 totalBackedDebt = burnerLoans.totalActiveDebtOhm() +
-            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(collateral)));
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(collateral)));
         uint256 requiredBackingUsd = FullMath.mulDiv(totalBackedDebt, _WAD, _OHM_SCALE);
         if (liquidBackingUsd < requiredBackingUsd) ++backingViolations;
     }

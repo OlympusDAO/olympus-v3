@@ -178,7 +178,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
         configTimelock.executeQueuedAction(termActionId);
         configTimelock.executeQueuedAction(horizonActionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(config.termLength, 14 days, "term length");
         assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
         assertEq(config.collateralFactorBps, 10_000, "cancelled batch state not applied");

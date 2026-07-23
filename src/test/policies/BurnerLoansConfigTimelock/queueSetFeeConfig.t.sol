@@ -80,6 +80,31 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     }
 
     // queueSetAssetFeeConfig
+    // given market originations are disabled
+    //  when a fee update is queued and executed
+    //   then the existing market can still be configured
+    function test_givenOriginationsDisabled_executes() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        (
+            IBurnerLoans.AssetFeeConfig memory config,
+            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection
+        ) = _singleFeeUpdate(0);
+        config.baseFeeBps = 50;
+
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetFeeConfig(address(usds), config, selection);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        configTimelock.executeQueuedAction(actionId);
+
+        assertFalse(
+            burnerLoansConfig.getAssetConfig(address(usds)).originationsEnabled,
+            "originations disabled"
+        );
+        assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 50, "base fee");
+    }
+
+    // queueSetAssetFeeConfig
     // given timelock policy is disabled
     //  when queueing a baseFeeBps update
     //   then it reverts
@@ -106,7 +131,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection
         ) = _singleFeeUpdate(0);
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoansConfig.setConfigurator(address(burnerLoans));
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
@@ -489,14 +514,14 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     }
 
     // queueSetAssetFeeConfig
-    // given kinkBps and postKinkSlopeBps are both zero
-    //  when queueing a single-slope fee curve
+    // given kinkBps and both slopes are zero
+    //  when queueing a flat base-fee curve
     //   then it queues the action
-    function test_givenKinkBpsAndPostKinkSlopeBpsAreZero_queuesAction() public {
+    function test_givenKinkBpsAndSlopesAreZero_queuesAction() public {
         IBurnerLoans.AssetFeeConfig memory config = IBurnerLoans.AssetFeeConfig({
-            baseFeeBps: 0,
+            baseFeeBps: 100,
             kinkBps: 0,
-            preKinkSlopeBps: 10_000,
+            preKinkSlopeBps: 0,
             postKinkSlopeBps: 0
         });
 
@@ -511,13 +536,13 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     }
 
     // queueSetAssetFeeConfig
-    // given a single-slope fee curve reaches exactly 100% at full utilization
+    // given a kinked fee curve reaches exactly 100% at full utilization
     //  when queueing the action
     //   then it queues the action
-    function test_givenBaseFeePlusSingleSlopeAtOneWad_queuesAction() public {
+    function test_givenBaseFeePlusPreKinkSlopeAtOneWad_queuesAction() public {
         IBurnerLoans.AssetFeeConfig memory config = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 5_000,
-            kinkBps: 0,
+            kinkBps: 5_000,
             preKinkSlopeBps: 5_000,
             postKinkSlopeBps: 0
         });
@@ -559,7 +584,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     //  when a later fee action is queued
     //   then the later action validates against the projected fee config
     function test_givenEarlierQueuedFeeActionChangesDomain_laterActionUsesProjectedState() public {
-        // The first action converts the default kinked curve into a single-slope curve.
+        // The first action converts the default kinked curve into a flat curve.
         // Without projecting that queued state, the second action would be checked against
         // live default values and fail because baseFeeBps + preKinkSlopeBps + postKinkSlopeBps would exceed 100%.
         IBurnerLoans.AssetFeeConfig memory singleSlope = IBurnerLoans.AssetFeeConfig({
@@ -571,15 +596,17 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory singleSlopeSelection;
         singleSlopeSelection.baseFeeBps = true;
         singleSlopeSelection.kinkBps = true;
+        singleSlopeSelection.preKinkSlopeBps = true;
         singleSlopeSelection.postKinkSlopeBps = true;
 
         IBurnerLoans.AssetFeeConfig memory maxSlope = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: 0,
-            kinkBps: 0,
+            kinkBps: 5_000,
             preKinkSlopeBps: 10_000,
             postKinkSlopeBps: 0
         });
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory maxSlopeSelection;
+        maxSlopeSelection.kinkBps = true;
         maxSlopeSelection.preKinkSlopeBps = true;
 
         vm.startPrank(burnerLoansAdmin);
@@ -602,7 +629,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     // queueSetAssetFeeConfig
     // given an earlier queued fee action removes the kink
     //  when a later action tries to set postKinkSlopeBps
-    //   then validation uses the projected single-slope state and reverts
+    //   then validation uses the projected flat state and reverts
     function test_givenEarlierQueuedFeeActionRemovesKink_laterSlope2UpdateRevertsAgainstProjectedState()
         public
     {
@@ -617,6 +644,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         });
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory singleSlopeSelection;
         singleSlopeSelection.kinkBps = true;
+        singleSlopeSelection.preKinkSlopeBps = true;
         singleSlopeSelection.postKinkSlopeBps = true;
 
         IBurnerLoans.AssetFeeConfig memory invalidSlope2;
@@ -642,7 +670,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     //  when the later preKinkSlopeBps update is queued
     //   then validation ignores risk state and uses the projected fee config
     function test_givenRiskActionBetweenFeeActions_laterFeeActionUsesProjectedFeeState() public {
-        // The first action converts the curve to zero-kink single-slope mode. The risk action
+        // The first action converts the curve to zero-kink flat mode. The risk action
         // in the middle should not reset that fee projection. The final 10,000 bps preKinkSlope update
         // is valid only against the projected single-slope state with zero base and postKinkSlope.
         IBurnerLoans.AssetFeeConfig memory singleSlope = IBurnerLoans.AssetFeeConfig({
@@ -654,6 +682,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory singleSlopeSelection;
         singleSlopeSelection.baseFeeBps = true;
         singleSlopeSelection.kinkBps = true;
+        singleSlopeSelection.preKinkSlopeBps = true;
         singleSlopeSelection.postKinkSlopeBps = true;
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate;
@@ -662,8 +691,10 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         riskSelection.collateralFactorBps = true;
 
         IBurnerLoans.AssetFeeConfig memory maxSlope;
+        maxSlope.kinkBps = 5_000;
         maxSlope.preKinkSlopeBps = 10_000;
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory maxSlopeSelection;
+        maxSlopeSelection.kinkBps = true;
         maxSlopeSelection.preKinkSlopeBps = true;
 
         vm.startPrank(burnerLoansAdmin);
@@ -696,7 +727,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     function test_givenLatestFeeProjectionCancelled_laterFeeActionUsesEarlierPendingProjection()
         public
     {
-        // Action 1 converts the curve to zero-kink single-slope mode. The final 10,000 bps
+        // Action 1 converts the curve to zero-kink flat mode. The final 10,000 bps
         // pre-kink slope is valid only against that projected state. Action 2 exists only to
         // become the latest cached fee projection and then be cancelled.
         IBurnerLoans.AssetFeeConfig memory singleSlope = IBurnerLoans.AssetFeeConfig({
@@ -708,6 +739,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory singleSlopeSelection;
         singleSlopeSelection.baseFeeBps = true;
         singleSlopeSelection.kinkBps = true;
+        singleSlopeSelection.preKinkSlopeBps = true;
         singleSlopeSelection.postKinkSlopeBps = true;
 
         IBurnerLoans.AssetFeeConfig memory cancelledUpdate;
@@ -716,8 +748,10 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         cancelledSelection.baseFeeBps = true;
 
         IBurnerLoans.AssetFeeConfig memory maxSlope;
+        maxSlope.kinkBps = 5_000;
         maxSlope.preKinkSlopeBps = 10_000;
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory maxSlopeSelection;
+        maxSlopeSelection.kinkBps = true;
         maxSlopeSelection.preKinkSlopeBps = true;
 
         vm.startPrank(burnerLoansAdmin);
@@ -755,9 +789,11 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         configTimelock.executeQueuedAction(singleSlopeActionId);
         configTimelock.executeQueuedAction(maxSlopeActionId);
 
-        IBurnerLoans.AssetFeeConfig memory config = burnerLoans.getAssetFeeConfig(address(usds));
+        IBurnerLoans.AssetFeeConfig memory config = burnerLoansConfig.getAssetFeeConfig(
+            address(usds)
+        );
         assertEq(config.baseFeeBps, 0, "cancelled base fee not applied");
-        assertEq(config.kinkBps, 0, "kink");
+        assertEq(config.kinkBps, 5_000, "kink");
         assertEq(config.preKinkSlopeBps, 10_000, "pre-kink slope");
         assertEq(config.postKinkSlopeBps, 0, "post-kink slope");
     }
@@ -780,6 +816,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         });
         IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory singleSlopeSelection;
         singleSlopeSelection.kinkBps = true;
+        singleSlopeSelection.preKinkSlopeBps = true;
         singleSlopeSelection.postKinkSlopeBps = true;
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate;

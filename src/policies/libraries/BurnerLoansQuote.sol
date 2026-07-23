@@ -61,12 +61,15 @@ library BurnerLoansQuote {
         uint128 ohmAmount_,
         IFLOANv1.Position memory position
     ) public view returns (IBurnerLoans.BorrowPreview memory) {
-        (uint32 marketId, IBurnerLoans.AssetConfig memory config) = _requireAssetEnabled(
-            dependencies_.floan,
-            dependencies_.facility,
-            address(dependencies_.ohm),
-            asset_
-        );
+        (
+            uint32 marketId,
+            IBurnerLoans.AssetConfig memory config
+        ) = _requireAssetOriginationsEnabled(
+                dependencies_.floan,
+                dependencies_.facility,
+                address(dependencies_.ohm),
+                asset_
+            );
         if (ohmAmount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
         BurnerLoansCustodyAccounting.requireSolvent(
@@ -192,12 +195,15 @@ library BurnerLoansQuote {
         uint16 termCount_,
         IFLOANv1.Position memory position_
     ) public view returns (IBurnerLoans.ExtendPreview memory) {
-        (uint32 marketId, IBurnerLoans.AssetConfig memory config) = _requireAssetEnabled(
-            dependencies_.floan,
-            dependencies_.facility,
-            address(dependencies_.ohm),
-            asset_
-        );
+        (
+            uint32 marketId,
+            IBurnerLoans.AssetConfig memory config
+        ) = _requireAssetOriginationsEnabled(
+                dependencies_.floan,
+                dependencies_.facility,
+                address(dependencies_.ohm),
+                asset_
+            );
         if (termCount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
         if (position_.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
 
@@ -469,13 +475,14 @@ library BurnerLoansQuote {
         config = BurnerLoansMarketConfig.assetConfig(market, floan_.getMarketConfigData(marketId_));
     }
 
-    function _requireAssetEnabled(
+    function _requireAssetOriginationsEnabled(
         IFLOANv1 floan_,
         address facility_,
         address debtToken_,
         address asset_
     ) private view returns (uint32 marketId_, IBurnerLoans.AssetConfig memory config) {
         (marketId_, config) = _requireAssetConfigured(floan_, facility_, debtToken_, asset_);
-        if (!config.enabled) revert IBurnerLoans.BurnerLoans_AssetNotEnabled(asset_);
+        if (!config.originationsEnabled)
+            revert IBurnerLoans.BurnerLoans_AssetOriginationsDisabled(asset_);
     }
 }

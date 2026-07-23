@@ -128,7 +128,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address onBehalfOf_
     ) external returns (uint256, uint256) {
         _requireEnabled();
-        _requireAssetEnabled(asset_);
+        _requireAssetOriginationsEnabled(asset_);
         if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         return

@@ -27,10 +27,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
-    // previewExtend
-    // given healthy position
-    //  when previewExtend is called
-    //   then it returns fee maturity and health
     function test_givenHealthyPosition_previewExtendReturnsFeeMaturityAndHealth() public view {
         IBurnerLoans.ExtendPreview memory preview = burnerLoans.previewExtend(
             address(usds),
@@ -43,19 +39,11 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         assertTrue(preview.executable, "executable");
     }
 
-    // previewExtend
-    // given zero terms
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenZeroTerms_previewExtendReverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
         burnerLoans.previewExtend(address(usds), alice, 0);
     }
 
-    // previewExtend
-    // given no debt
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenNoDebt_previewExtendReverts() public {
         address bob = makeAddr("bob");
         burnerLoans.setPositionForTest(
@@ -74,10 +62,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), bob, 1);
     }
 
-    // previewExtend
-    // given ambiguous market
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenAmbiguousMarket_previewExtendReverts() public {
         _createDuplicateUsdsMarketForTest();
 
@@ -91,10 +75,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given missing market
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenMissingMarket_previewExtendReverts() public {
         address unknownAsset = makeAddr("unknown asset");
 
@@ -107,10 +87,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(unknownAsset, alice, 1);
     }
 
-    // previewExtend
-    // given asset disabled
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenAssetDisabled_previewExtendReverts() public {
         vm.prank(burnerLoansAdmin);
         burnerLoans.disableAsset(address(usds));
@@ -121,10 +97,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given global policy disabled
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenGlobalPolicyDisabled_previewExtendReverts() public {
         vm.prank(emergency);
         burnerLoans.disable("");
@@ -133,10 +105,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given stale price
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenStalePrice_previewExtendReverts() public {
         vm.warp(block.timestamp + 1 days);
         price.setTimestamp(uint48(block.timestamp - 9 hours));
@@ -145,10 +113,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given unavailable price
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenUnavailablePrice_previewExtendReverts() public {
         price.setPrice(address(usds), 0);
 
@@ -156,10 +120,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given unhealthy position
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenUnhealthyPosition_previewExtendReverts() public {
         price.setPrice(address(usds), 0.1e18);
 
@@ -172,10 +132,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 1);
     }
 
-    // previewExtend
-    // given extension beyond horizon
-    //  when previewExtend is called
-    //   then it reverts
     function test_givenExtensionBeyondHorizon_previewExtendReverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -187,10 +143,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.previewExtend(address(usds), alice, 3);
     }
 
-    // previewExtend
-    // given matured healthy position
-    //  when previewExtend is called
-    //   then it uses current timestamp as base
     function test_givenMaturedHealthyPosition_previewExtendUsesCurrentTimestampAsBase() public {
         vm.warp(block.timestamp + 31 days);
         price.setTimestamp(uint48(block.timestamp));
@@ -203,10 +155,6 @@ contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
         assertEq(preview.maturity, block.timestamp + 30 days, "maturity from current time");
     }
 
-    // previewExtend
-    // given two terms
-    //  when previewExtend is called
-    //   then it returns linear fee
     function test_givenTwoTerms_previewExtendReturnsLinearFee() public view {
         IBurnerLoans.ExtendPreview memory single = burnerLoans.previewExtend(
             address(usds),

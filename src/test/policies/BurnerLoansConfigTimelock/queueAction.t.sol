@@ -151,20 +151,20 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: true,
                 kinkBps: true,
-                preKinkSlopeBps: false,
+                preKinkSlopeBps: true,
                 postKinkSlopeBps: true
             })
         );
         actions[1] = _feeAction(
             IBurnerLoans.AssetFeeConfig({
                 baseFeeBps: 0,
-                kinkBps: 0,
+                kinkBps: 5_000,
                 preKinkSlopeBps: 10_000,
                 postKinkSlopeBps: 0
             }),
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: false,
-                kinkBps: false,
+                kinkBps: true,
                 preKinkSlopeBps: true,
                 postKinkSlopeBps: false
             })
@@ -194,7 +194,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
                 baseFeeBps: false,
                 kinkBps: true,
-                preKinkSlopeBps: false,
+                preKinkSlopeBps: true,
                 postKinkSlopeBps: true
             })
         );

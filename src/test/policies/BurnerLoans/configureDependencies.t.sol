@@ -23,6 +23,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
     function test_configureDependencies_setsModules() public view {
         assertEq(address(burnerLoans.MINTR()), address(mintr), "MINTR");
         assertEq(address(burnerLoans.floanForTest()), address(floan), "FLOAN");
+        assertEq(burnerLoans.floan(), address(floan), "public FLOAN getter");
         assertEq(address(burnerLoans.PRICE()), address(price), "PRICE");
         assertEq(address(burnerLoans.ROLES()), address(roles), "ROLES");
         assertEq(address(burnerLoans.TRSRY()), address(trsry), "TRSRY");

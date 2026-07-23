@@ -87,7 +87,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //   then OHM supply equals active and defaulted facility principal
     function invariant_OhmSupplyAccounting() public view {
         uint256 accountedDebt = burnerLoans.totalActiveDebtOhm() +
-            floan.getMarketPrincipalDefaulted(burnerLoans.marketId(address(usds)));
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds)));
         assertEq(ohm.totalSupply(), accountedDebt, "OHM supply does not reconcile to loan debt");
     }
 
@@ -105,7 +105,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //  when debt capacity is checked
     //   then global and market principal remain within their caps
     function invariant_Capacity() public view {
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         assertLe(
             burnerLoans.totalActiveDebtOhm(),
             burnerLoans.globalDebtCapOhm(),
@@ -272,7 +272,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //  when position maturities are checked
     //   then active maturities remain within the configured horizon
     function invariant_TermHorizon() public view {
-        IBurnerLoans.AssetConfig memory config = burnerLoans.getAssetConfig(address(usds));
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
         for (uint256 i; i < invariantActors.length; ++i) {
             IBurnerLoans.Position memory position = burnerLoans.getPosition(
                 address(usds),

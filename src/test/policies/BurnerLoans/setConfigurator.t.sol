@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -20,20 +19,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
-    }
-
-    // setConfigurator
-    // given the policy is disabled
-    //  when setConfigurator is called by admin
-    //   then it reverts
-    function test_givenDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.disable("");
-
-        vm.prank(admin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoansConfig.setConfigurator(makeAddr("newConfigurator"));
+        burnerLoans.setConfigurator(makeAddr("newConfigurator"));
     }
 
     // setConfigurator
@@ -43,7 +29,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     function test_givenZeroAddress_reverts() public {
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
-        burnerLoansConfig.setConfigurator(address(0));
+        burnerLoans.setConfigurator(address(0));
     }
 
     // setConfigurator
@@ -54,10 +40,10 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         address newConfigurator = makeAddr("newConfigurator");
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
+        vm.expectEmit(true, false, false, true, address(burnerLoans));
         emit ConfiguratorSet(newConfigurator);
-        burnerLoansConfig.setConfigurator(newConfigurator);
+        burnerLoans.setConfigurator(newConfigurator);
 
-        assertEq(burnerLoansConfig.configurator(), newConfigurator, "configurator");
+        assertEq(burnerLoans.configurator(), newConfigurator, "configurator");
     }
 }

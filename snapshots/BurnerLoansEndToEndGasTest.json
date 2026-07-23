@@ -1,0 +1,23 @@
+{
+    "BurnerLoans.admin.setBackingOracle": "21499",
+    "BurnerLoans.admin.setGlobalDebtCap": "55595",
+    "BurnerLoans.borrow.additional": "118653",
+    "BurnerLoans.borrow.first": "368288",
+    "BurnerLoans.depositCollateral.additional": "119491",
+    "BurnerLoans.depositCollateral.first": "556432",
+    "BurnerLoans.extend.oneTerm": "97968",
+    "BurnerLoans.harvestYield": "108508",
+    "BurnerLoans.manager.syncMintApproval": "30902",
+    "BurnerLoans.repay.full": "101852",
+    "BurnerLoans.repay.partial": "99042",
+    "BurnerLoans.seize.single": "193740",
+    "BurnerLoans.withdrawCollateral.partial": "92594",
+    "BurnerLoansConfig.admin.addAsset": "434023",
+    "BurnerLoansConfig.admin.disableOriginations": "86173",
+    "BurnerLoansConfig.admin.enableOriginations": "58909",
+    "BurnerLoansConfig.admin.setAssetDebtCap": "56653",
+    "BurnerLoansConfig.admin.setAssetFeeConfig": "80175",
+    "BurnerLoansConfig.admin.setAssetRiskConfig": "84703",
+    "BurnerLoansConfigTimelock.executeBatch.twoActions": "187727",
+    "BurnerLoansConfigTimelock.queueBatch.twoActions": "776885"
+}

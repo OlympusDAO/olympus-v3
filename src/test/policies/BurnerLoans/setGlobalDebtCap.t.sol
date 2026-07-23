@@ -56,7 +56,7 @@ contract BurnerLoansSetGlobalDebtCapTest is BurnerLoansTest {
     //   then it succeeds because configured capacity is not outstanding principal
     function test_givenCapBelowConfiguredAssetCap_setsIndependentFacilityCap(uint128 cap_) public {
         _addDefaultUsdsAsset();
-        uint128 assetCap = uint128(burnerLoans.getAssetConfig(address(usds)).debtCap);
+        uint128 assetCap = uint128(burnerLoansConfig.getAssetConfig(address(usds)).debtCap);
         cap_ = uint128(bound(cap_, 0, assetCap - 1));
 
         vm.prank(admin);

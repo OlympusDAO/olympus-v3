@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
@@ -22,7 +21,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
     function setUp() public override {
         super.setUp();
         _addDefaultUsdsAsset();
-        _setDefaultConfigurator();
+        _enableBurnerLoans();
         _enableConfigTimelock();
     }
 
@@ -43,24 +42,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
                 caller_
             )
         );
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
-    }
-
-    // setAssetRiskConfig
-    // given the policy is disabled
-    //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoansConfig.disable("");
-
-        vm.prank(admin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoansConfig.setAssetRiskConfig(
-            address(burnerLoans),
-            address(usds),
-            _validRiskConfig()
-        );
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -77,11 +59,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
                 unknownAsset
             )
         );
-        burnerLoansConfig.setAssetRiskConfig(
-            address(burnerLoans),
-            unknownAsset,
-            _validRiskConfig()
-        );
+        burnerLoans.setAssetRiskConfig(unknownAsset, _validRiskConfig());
     }
 
     // setAssetRiskConfig
@@ -94,7 +72,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, 0));
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -115,7 +93,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
                 collateralFactorBps_
             )
         );
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -129,7 +107,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -145,7 +123,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -159,7 +137,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -175,7 +153,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -191,7 +169,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
         vm.expectRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, keeperRewardBps_)
         );
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -205,7 +183,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -226,7 +204,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -241,7 +219,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -257,7 +235,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -273,7 +251,7 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
     }
 
     // setAssetRiskConfig
@@ -314,14 +292,11 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
         });
 
         vm.prank(admin);
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
+        vm.expectEmit(true, false, false, true, address(burnerLoans));
         emit AssetRiskConfigSet(address(usds), config);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
 
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
-            address(usds)
-        );
+        IBurnerLoans.AssetConfig memory stored = burnerLoans.getAssetConfig(address(usds));
         assertEq(stored.collateralFactorBps, collateralFactorBps_, "collateral factor");
         assertEq(stored.minCollateralRatioBps, minCollateralRatioBps_, "min collateral ratio");
         assertEq(stored.backingMultiplierBps, backingMultiplierBps_, "backing multiplier");
@@ -336,21 +311,15 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
     //  when setAssetRiskConfig is called by admin
     //   then enabled state, decimals, and debt cap are preserved
     function test_givenRiskConfigUpdates_preservesAdminOnlyFields() public {
-        IBurnerLoans.AssetConfig memory beforeConfig = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
-            address(usds)
-        );
+        IBurnerLoans.AssetConfig memory beforeConfig = burnerLoans.getAssetConfig(address(usds));
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.collateralFactorBps = 9_500;
         config.maxKeeperReward = 500e6;
 
         vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
 
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
-            address(usds)
-        );
+        IBurnerLoans.AssetConfig memory stored = burnerLoans.getAssetConfig(address(usds));
         assertEq(stored.enabled, beforeConfig.enabled, "enabled");
         assertEq(stored.collateralDecimals, beforeConfig.collateralDecimals, "decimals");
         assertEq(stored.debtCap, beforeConfig.debtCap, "debt cap");
@@ -377,10 +346,9 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
         otherConfig.maxKeeperReward = 750e6;
 
         vm.prank(admin);
-        burnerLoansConfig.addAsset(
-            address(burnerLoans),
+        burnerLoans.addAsset(
             address(otherAsset),
-            uint128(otherConfig.debtCap),
+            otherConfig.debtCap,
             _assetRiskConfigInputFromConfig(otherConfig),
             _defaultAssetFeeConfig()
         );
@@ -389,16 +357,12 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
         config.collateralFactorBps = 9_250;
 
         vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
 
-        IBurnerLoans.AssetConfig memory targetStored = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
-            address(usds)
-        );
+        IBurnerLoans.AssetConfig memory targetStored = burnerLoans.getAssetConfig(address(usds));
         assertEq(targetStored.collateralFactorBps, 9_250, "target collateral factor");
 
-        IBurnerLoans.AssetConfig memory otherStored = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
+        IBurnerLoans.AssetConfig memory otherStored = burnerLoans.getAssetConfig(
             address(otherAsset)
         );
         assertEq(
@@ -438,14 +402,11 @@ contract BurnerLoansSetAssetRiskConfigTest is BurnerLoansTest {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
 
         vm.prank(address(configTimelock));
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
+        vm.expectEmit(true, false, false, true, address(burnerLoans));
         emit AssetRiskConfigSet(address(usds), config);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), config);
+        burnerLoans.setAssetRiskConfig(address(usds), config);
 
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(
-            address(burnerLoans),
-            address(usds)
-        );
+        IBurnerLoans.AssetConfig memory stored = burnerLoans.getAssetConfig(address(usds));
         assertEq(stored.minCollateralRatioBps, 12_000, "min collateral ratio");
         assertEq(stored.backingMultiplierBps, 11_000, "backing multiplier");
         assertEq(stored.termLength, 14 days, "term length");

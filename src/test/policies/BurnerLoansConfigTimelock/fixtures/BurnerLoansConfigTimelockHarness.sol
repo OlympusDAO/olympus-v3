@@ -9,9 +9,8 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 contract BurnerLoansConfigTimelockHarness is BurnerLoansConfigTimelock {
     constructor(
         Kernel kernel_,
-        IBurnerLoansConfig config_,
-        address facility_
-    ) BurnerLoansConfigTimelock(kernel_, config_, facility_) {}
+        IBurnerLoansConfig config_
+    ) BurnerLoansConfigTimelock(kernel_, config_) {}
 
     function queueAction(
         address target_,

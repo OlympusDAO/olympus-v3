@@ -96,7 +96,8 @@ library BurnerLoansView {
         IFLOANv1.Position memory position
     ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
         IBurnerLoans.AssetConfig memory config = _requireAssetConfigured(dependencies_, asset_);
-        if (!config.enabled) revert IBurnerLoans.BurnerLoans_AssetNotEnabled(asset_);
+        if (!config.originationsEnabled)
+            revert IBurnerLoans.BurnerLoans_AssetOriginationsDisabled(asset_);
         if (amount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
         IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody

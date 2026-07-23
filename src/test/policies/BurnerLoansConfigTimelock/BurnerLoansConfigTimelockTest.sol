@@ -49,20 +49,12 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         super.setUp();
         _addDefaultUsdsAsset();
         vm.prank(admin);
-        burnerLoansConfig.setAssetFeeConfig(
-            address(burnerLoans),
-            address(usds),
-            _defaultAssetFeeConfig()
-        );
+        burnerLoansConfig.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
         _setDefaultConfigurator();
         _enableConfigTimelock();
 
         vm.startPrank(admin);
-        configTimelockHarness = new BurnerLoansConfigTimelockHarness(
-            kernel,
-            burnerLoansConfig,
-            address(burnerLoans)
-        );
+        configTimelockHarness = new BurnerLoansConfigTimelockHarness(kernel, burnerLoansConfig);
         kernel.executeAction(Actions.ActivatePolicy, address(configTimelockHarness));
         configTimelockHarness.enable("");
         vm.stopPrank();

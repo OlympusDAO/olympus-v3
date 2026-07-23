@@ -407,19 +407,25 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Asset state: disabled after configuration
     // - Custody state: DepositManager asset period remains healthy
     // - Expected branch: deposit reverts because asset disable blocks new exposure
-    function test_depositCollateral_givenAssetDisabled_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        burnerLoans.disableAsset(address(usds));
+    function test_depositCollateral_givenAssetOriginationsDisabled_reverts() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
         _mintAndApprove(address(usds), alice, 1e6);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotEnabled.selector, address(usds))
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
+                address(usds)
+            )
         );
         burnerLoans.previewDepositCollateral(address(usds), 1e6, alice);
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotEnabled.selector, address(usds))
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
+                address(usds)
+            )
         );
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
     }
@@ -986,7 +992,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             address(burnerLoans)
         );
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(vaultAsset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),

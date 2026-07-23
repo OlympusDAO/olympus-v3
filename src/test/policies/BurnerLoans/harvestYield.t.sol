@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+
 import {BurnerLoansHarvestTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarvestTestBase.sol";
 
 contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
@@ -16,7 +19,25 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         IBurnerLoans.HarvestPreview memory preview = burnerLoans.previewHarvestYield(
             address(vaultAsset)
         );
+        (uint256 expectedShares, uint256 expectedAssets) = depositManager.getOperatorAssets(
+            IERC20(address(vaultAsset)),
+            address(burnerLoans)
+        );
+        IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
+            address(vaultAsset)
+        );
         uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
+
+        assertEq(status.shares, expectedShares, "shares before harvest");
+        assertEq(status.assets, expectedAssets, "assets before harvest");
+        assertEq(
+            status.borrowed,
+            depositManager.getBorrowedAmount(IERC20(address(vaultAsset)), address(burnerLoans)),
+            "borrowed before harvest"
+        );
+        assertEq(status.liabilities, _COLLATERAL_AMOUNT, "liabilities before harvest");
+        assertEq(status.claimableYield, preview.amount, "claimable yield matches preview");
+        assertTrue(status.solvent, "solvent before harvest");
 
         vm.expectEmit(true, false, false, false, address(burnerLoans));
         emit IBurnerLoans.YieldHarvested(address(vaultAsset), 0);
@@ -76,11 +97,11 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
     // given the collateral market is disabled after earning yield
     //  when harvest is called
     //   then safe accounting cleanup remains available
-    function test_givenAssetDisabled_stillHarvests() public {
+    function test_givenAssetOriginationsDisabled_stillHarvests() public {
         _depositCollateral();
         _addYield(10e6);
         vm.prank(admin);
-        burnerLoans.disableAsset(address(vaultAsset));
+        burnerLoansConfig.setAssetOriginationsEnabled(address(vaultAsset), false);
 
         uint256 claimed = burnerLoans.harvestYield(address(vaultAsset));
 
@@ -109,6 +130,14 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
     function test_givenCustodyShortfall_reverts() public {
         _depositCollateral();
         _causeShortfall(1);
+
+        IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
+            address(vaultAsset)
+        );
+        assertEq(status.assets, _COLLATERAL_AMOUNT - 1, "shortfall assets");
+        assertEq(status.liabilities, _COLLATERAL_AMOUNT, "shortfall liabilities");
+        assertEq(status.claimableYield, 0, "shortfall claimable yield");
+        assertFalse(status.solvent, "shortfall solvency");
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -162,6 +191,108 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
     function test_givenMultipleMatchingMarkets_reverts() public {
         _createDuplicateMarketForTest(address(vaultAsset));
 
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
+            address(vaultAsset),
+            2
+        );
+
+        vm.expectRevert(error);
+        burnerLoans.getAssetCollateralStatus(address(vaultAsset));
+
+        vm.expectRevert(error);
+        burnerLoans.harvestYield(address(vaultAsset));
+    }
+}
+
+contract BurnerLoansPreviewHarvestYieldTest is BurnerLoansHarvestTestBase {
+    // previewHarvestYield
+    // given configured vault custody with borrower principal and earned yield
+    //  when previewing harvest
+    //   then the quote matches DepositManager and is executable
+    function test_givenSurplus_returnsDepositManagerQuote() public {
+        _depositCollateral();
+        _addYield(10e6);
+
+        uint256 expected = depositManager.maxClaimYield(
+            IERC20(address(vaultAsset)),
+            address(burnerLoans)
+        );
+        IBurnerLoans.HarvestPreview memory preview = burnerLoans.previewHarvestYield(
+            address(vaultAsset)
+        );
+
+        assertEq(preview.amount, expected, "claimable yield");
+        assertGt(preview.amount, 0, "positive yield");
+        assertTrue(preview.executable, "preview executable");
+    }
+
+    // previewHarvestYield
+    // given configured custody without earned yield
+    //  when previewing harvest
+    //   then zero is returned as an executable no-op
+    function test_givenNoSurplus_returnsExecutableZero() public {
+        _depositCollateral();
+
+        IBurnerLoans.HarvestPreview memory preview = burnerLoans.previewHarvestYield(
+            address(vaultAsset)
+        );
+
+        assertEq(preview.amount, 0, "claimable yield");
+        assertTrue(preview.executable, "preview executable");
+    }
+
+    // previewHarvestYield
+    // given custody assets fall below liabilities
+    //  when previewing harvest
+    //   then no yield is quoted and execution is marked unavailable
+    function test_givenCustodyShortfall_returnsNotExecutable() public {
+        _depositCollateral();
+        _causeShortfall(1);
+
+        IBurnerLoans.HarvestPreview memory preview = burnerLoans.previewHarvestYield(
+            address(vaultAsset)
+        );
+
+        assertEq(preview.amount, 0, "claimable yield");
+        assertFalse(preview.executable, "preview executable");
+    }
+
+    // previewHarvestYield
+    // given the policy is globally disabled
+    //  when previewing harvest
+    //   then the call reverts consistently with the write path
+    function test_givenPolicyDisabled_reverts() public {
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewHarvestYield(address(vaultAsset));
+    }
+
+    // previewHarvestYield
+    // given the asset has no Burner Loans market
+    //  when previewing harvest
+    //   then the asset namespace is rejected
+    function test_givenAssetNotConfigured_reverts() public {
+        address unconfiguredAsset = makeAddr("unconfiguredAsset");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                unconfiguredAsset
+            )
+        );
+        burnerLoans.previewHarvestYield(unconfiguredAsset);
+    }
+
+    // previewHarvestYield
+    // given FLOAN has two matching markets for this facility and token pair
+    //  when previewing harvest
+    //   then Burner Loans rejects the ambiguous asset namespace
+    function test_givenMultipleMatchingMarkets_reverts() public {
+        _createDuplicateMarketForTest(address(vaultAsset));
+
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
@@ -169,6 +300,23 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
                 2
             )
         );
-        burnerLoans.harvestYield(address(vaultAsset));
+        burnerLoans.previewHarvestYield(address(vaultAsset));
+    }
+
+    // previewHarvestYield
+    // given DepositManager is disabled
+    //  when previewing harvest
+    //   then the quote cannot claim to be executable
+    function test_givenDepositManagerDisabled_reverts() public {
+        vm.prank(admin);
+        depositManager.disable("");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidDepositManager.selector,
+                address(depositManager)
+            )
+        );
+        burnerLoans.previewHarvestYield(address(vaultAsset));
     }
 }

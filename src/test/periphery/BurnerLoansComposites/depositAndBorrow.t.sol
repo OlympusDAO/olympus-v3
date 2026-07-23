@@ -192,7 +192,7 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _configurePrice(address(token), 1e18);
         _configureDepositManagerAsset(address(token));
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(token),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),

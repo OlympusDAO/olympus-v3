@@ -10,9 +10,51 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @title Burner Loans Config Timelock Library
 /// @notice Pure transformations used when projecting partial timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
+    function validatePreState(
+        IBurnerLoansConfig burnerLoans_,
+        uint64 actionId_,
+        uint256 index_,
+        ITimelockBatchQueue.BatchAction memory action_,
+        bytes32 expectedHash_
+    ) external view {
+        if (action_.target != address(burnerLoans_) || expectedHash_ == bytes32(0)) {
+            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(
+                action_.target,
+                action_.selector
+            );
+        }
+
+        bytes4 selector = action_.selector;
+        address asset = abi.decode(action_.payload, (address));
+        if (!burnerLoans_.isAssetConfigured(asset)) {
+            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset);
+        }
+
+        bytes32 currentHash;
+        if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+            currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetFeeConfig(asset)));
+        } else if (
+            selector == IBurnerLoansConfig.setAssetRiskConfig.selector ||
+            selector == IBurnerLoansConfig.setAssetDebtCap.selector ||
+            selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector
+        ) {
+            currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetConfig(asset)));
+        } else {
+            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+        }
+
+        if (currentHash != expectedHash_) {
+            revert IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged(
+                actionId_,
+                index_,
+                expectedHash_,
+                currentHash
+            );
+        }
+    }
+
     function executeSubAction(
         IBurnerLoansConfig burnerLoans_,
-        address facility_,
         ITimelockBatchQueue.BatchAction memory action_
     ) external {
         bytes4 selector = action_.selector;
@@ -31,11 +73,11 @@ library BurnerLoansConfigTimelockLib {
                     )
                 );
             IBurnerLoans.AssetConfig memory config = applyAssetRiskConfigUpdate(
-                burnerLoans_.getAssetConfig(facility_, asset),
+                burnerLoans_.getAssetConfig(asset),
                 update,
                 selection
             );
-            callData = abi.encodeWithSelector(selector, facility_, asset, toRiskConfig(config));
+            callData = abi.encodeWithSelector(selector, asset, toRiskConfig(config));
         } else if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             (
                 address asset,
@@ -50,14 +92,17 @@ library BurnerLoansConfigTimelockLib {
                     )
                 );
             IBurnerLoans.AssetFeeConfig memory config = applyFeeConfigUpdate(
-                burnerLoans_.getAssetFeeConfig(facility_, asset),
+                burnerLoans_.getAssetFeeConfig(asset),
                 update,
                 selection
             );
-            callData = abi.encodeWithSelector(selector, facility_, asset, config);
+            callData = abi.encodeWithSelector(selector, asset, config);
         } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
             (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
-            callData = abi.encodeWithSelector(selector, facility_, asset, debtCapOhm);
+            callData = abi.encodeWithSelector(selector, asset, debtCapOhm);
+        } else if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
+            (address asset, bool enabled) = abi.decode(action_.payload, (address, bool));
+            callData = abi.encodeWithSelector(selector, asset, enabled);
         } else {
             revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         }

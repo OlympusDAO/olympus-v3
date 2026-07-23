@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Unlicense
+// solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -304,7 +305,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.termLength = termLength;
         vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), riskConfig);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
         assertEq(
             burnerLoans.getPosition(address(usds), alice).maturity,
             originalMaturity,
@@ -359,17 +360,20 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     }
 
     // extend
-    // given asset disabled
+    // given originations disabled
     //  when extend is called
     //   then it reverts
-    function test_givenAssetDisabled_extendReverts() public {
+    function test_givenAssetOriginationsDisabled_extendReverts() public {
         _borrowForAlice();
-        vm.prank(burnerLoansAdmin);
-        burnerLoans.disableAsset(address(usds));
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
 
         vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotEnabled.selector, address(usds))
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
+                address(usds)
+            )
         );
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
     }
@@ -521,5 +525,225 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
         burnerLoans.borrow(address(usds), 100e9, alice, alice, preview.fee);
         vm.stopPrank();
+    }
+}
+
+contract BurnerLoansPreviewExtendTest is BurnerLoansBorrowTestBase {
+    function _collateralDecimals() internal pure override returns (uint8) {
+        return 18;
+    }
+
+    function setUp() public override {
+        super.setUp();
+        burnerLoans.setPositionForTest(
+            address(usds),
+            alice,
+            IBurnerLoans.Position({
+                depositedCollateral: 2_000e18,
+                debtOhm: 100e9,
+                maturity: uint48(block.timestamp + 30 days),
+                lastBorrowBlock: 0,
+                status: IBurnerLoans.PositionStatus.NoDebt
+            })
+        );
+    }
+
+    // previewExtend
+    // given healthy position
+    //  when previewExtend is called
+    //   then it returns fee maturity and health
+    function test_givenHealthyPosition_previewExtendReturnsFeeMaturityAndHealth() public view {
+        IBurnerLoans.ExtendPreview memory preview = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            1
+        );
+        assertGt(preview.fee, 0, "fee");
+        assertEq(preview.maturity, block.timestamp + 60 days, "maturity");
+        assertGt(preview.healthFactor, 1e18, "health");
+        assertTrue(preview.executable, "executable");
+    }
+
+    // previewExtend
+    // given zero terms
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenZeroTerms_previewExtendReverts() public {
+        vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
+        burnerLoans.previewExtend(address(usds), alice, 0);
+    }
+
+    // previewExtend
+    // given no debt
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenNoDebt_previewExtendReverts() public {
+        address bob = makeAddr("bob");
+        burnerLoans.setPositionForTest(
+            address(usds),
+            bob,
+            IBurnerLoans.Position({
+                depositedCollateral: 1e18,
+                debtOhm: 0,
+                maturity: 0,
+                lastBorrowBlock: 0,
+                status: IBurnerLoans.PositionStatus.NoDebt
+            })
+        );
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
+        burnerLoans.previewExtend(address(usds), bob, 1);
+    }
+
+    // previewExtend
+    // given ambiguous market
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenAmbiguousMarket_previewExtendReverts() public {
+        _createDuplicateUsdsMarketForTest();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
+                address(usds),
+                2
+            )
+        );
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given missing market
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenMissingMarket_previewExtendReverts() public {
+        address unknownAsset = makeAddr("unknown asset");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                unknownAsset
+            )
+        );
+        burnerLoans.previewExtend(unknownAsset, alice, 1);
+    }
+
+    // previewExtend
+    // given originations disabled
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenAssetOriginationsDisabled_previewExtendReverts() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
+                address(usds)
+            )
+        );
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given global policy disabled
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenGlobalPolicyDisabled_previewExtendReverts() public {
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given stale price
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenStalePrice_previewExtendReverts() public {
+        vm.warp(block.timestamp + 1 days);
+        price.setTimestamp(uint48(block.timestamp - 9 hours));
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given unavailable price
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenUnavailablePrice_previewExtendReverts() public {
+        price.setPrice(address(usds), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given unhealthy position
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenUnhealthyPosition_previewExtendReverts() public {
+        price.setPrice(address(usds), 0.1e18);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
+                173_913_043_478_260_869
+            )
+        );
+        burnerLoans.previewExtend(address(usds), alice, 1);
+    }
+
+    // previewExtend
+    // given extension beyond horizon
+    //  when previewExtend is called
+    //   then it reverts
+    function test_givenExtensionBeyondHorizon_previewExtendReverts() public {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_MaturityHorizonExceeded.selector,
+                block.timestamp + 120 days,
+                block.timestamp + 90 days
+            )
+        );
+        burnerLoans.previewExtend(address(usds), alice, 3);
+    }
+
+    // previewExtend
+    // given matured healthy position
+    //  when previewExtend is called
+    //   then it uses current timestamp as base
+    function test_givenMaturedHealthyPosition_previewExtendUsesCurrentTimestampAsBase() public {
+        vm.warp(block.timestamp + 31 days);
+        price.setTimestamp(uint48(block.timestamp));
+
+        IBurnerLoans.ExtendPreview memory preview = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            1
+        );
+        assertEq(preview.maturity, block.timestamp + 30 days, "maturity from current time");
+    }
+
+    // previewExtend
+    // given two terms
+    //  when previewExtend is called
+    //   then it returns linear fee
+    function test_givenTwoTerms_previewExtendReturnsLinearFee() public view {
+        IBurnerLoans.ExtendPreview memory single = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            1
+        );
+        IBurnerLoans.ExtendPreview memory doubleTerm = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            2
+        );
+
+        assertEq(doubleTerm.fee, single.fee * 2, "linear fee");
+        assertEq(doubleTerm.maturity, single.maturity + 30 days, "second term");
     }
 }

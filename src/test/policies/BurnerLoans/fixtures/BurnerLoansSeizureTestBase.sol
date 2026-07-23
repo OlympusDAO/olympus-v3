@@ -28,7 +28,7 @@ abstract contract BurnerLoansSeizureTestBase is BurnerLoansBorrowTestBase {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.maxKeeperReward = 1_000e18;
         vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(burnerLoans), address(usds), riskConfig);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
     }
 
     function _borrow(address borrower_, uint128 collateral_, uint128 debt_) internal {

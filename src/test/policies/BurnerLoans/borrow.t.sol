@@ -65,7 +65,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _configurePrice(address(asset_), 1e18);
         _configureDepositManagerAsset(address(asset_));
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(asset_),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
@@ -84,7 +84,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         config.backingMultiplierBps = uint16(backingMultiplierBps_);
 
         vm.prank(admin);
-        burnerLoans.setAssetRiskConfig(address(usds), config);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), config);
     }
 
     // borrow
@@ -680,6 +680,34 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
+    // - Market: one configured asset
+    // - Position index: two FLOAN positions for the same borrower and market
+    // - Expected branch: position getter, preview, and borrow all reject ambiguous ownership
+    function test_givenMultiplePositionsForBorrower_borrowPreviewAndGetterRevert() public {
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+        vm.startPrank(address(burnerLoans));
+        floan.createPosition(marketId, alice);
+        floan.createPosition(marketId, alice);
+        vm.stopPrank();
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_AmbiguousPosition.selector,
+            marketId,
+            alice,
+            2
+        );
+
+        vm.expectRevert(error);
+        burnerLoans.getPosition(address(usds), alice);
+
+        vm.expectRevert(error);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(error);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+    }
+
+    // Condition tree:
     // - Capacity: resulting facility debt exceeds the global cap
     // - Asset capacity: sufficient
     // - Expected branch: global cap error includes resulting debt and cap
@@ -712,7 +740,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 availableRoom = bound(uint256(availableRoom_), 0, amount - 1);
         _depositDefaultCollateral(alice);
-        uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
+        uint256 assetCap = burnerLoansConfig.getAssetConfig(address(usds)).debtCap;
         uint256 existingAssetDebt = assetCap - availableRoom;
         burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt, existingAssetDebt);
 
@@ -744,13 +772,13 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Asset state: configured but disabled for new exposure
     // - Expected branch: preview and write reject the new borrow
-    function test_givenAssetDisabled_borrowAndPreviewRevert() public {
+    function test_givenAssetOriginationsDisabled_borrowAndPreviewRevert() public {
         _depositDefaultCollateral(alice);
         vm.prank(admin);
-        burnerLoans.disableAsset(address(usds));
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
 
         bytes memory error = abi.encodeWithSelector(
-            IBurnerLoans.BurnerLoans_AssetNotEnabled.selector,
+            IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
             address(usds)
         );
         vm.expectRevert(error);
@@ -860,6 +888,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
 
         assertEq(preview.resultingHealthFactor, 1e18, "exact health boundary");
+        assertEq(
+            burnerLoans.positionHealthFactor(address(usds), 1_150e18, DEFAULT_BORROW_AMOUNT),
+            1e18,
+            "direct health getter"
+        );
     }
 
     // Condition tree:
@@ -1399,7 +1432,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _configurePrice(address(feeToken), 1e18);
         _configureDepositManagerAsset(address(feeToken));
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(feeToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
@@ -1519,7 +1552,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         vm.prank(admin);
-        burnerLoans.setAssetDebtCap(address(usds), amount);
+        burnerLoansConfig.setAssetDebtCap(address(usds), amount);
 
         _borrowWithPreview(alice, alice, alice, amount);
 
@@ -1534,7 +1567,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
         vm.startPrank(admin);
-        burnerLoans.setAssetDebtCap(address(usds), amount);
+        burnerLoansConfig.setAssetDebtCap(address(usds), amount);
         burnerLoans.setGlobalDebtCap(amount);
         vm.stopPrank();
 
@@ -1555,7 +1588,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 remainingCapacity = bound(uint256(remainingCapacity_), 1, DEFAULT_BORROW_AMOUNT);
         uint256 excess = bound(uint256(excess_), 1, DEFAULT_BORROW_AMOUNT);
         uint128 borrowAmount = uint128(remainingCapacity + excess);
-        uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
+        uint256 assetCap = burnerLoansConfig.getAssetConfig(address(usds)).debtCap;
         uint256 existingAssetDebt = assetCap - remainingCapacity;
         _depositDefaultCollateral(alice);
         burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt, existingAssetDebt);
@@ -1576,7 +1609,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Expected branch: resulting asset debt equals, but never exceeds, the asset cap
     function test_givenExistingAssetDebt_borrowRemainingAssetCapSucceeds(uint96 ohmAmount_) public {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
-        uint256 assetCap = burnerLoans.getAssetConfig(address(usds)).debtCap;
+        uint256 assetCap = burnerLoansConfig.getAssetConfig(address(usds)).debtCap;
         uint256 existingDebt = assetCap - amount;
         _depositDefaultCollateral(alice);
         usds.mint(alice, 100e18);

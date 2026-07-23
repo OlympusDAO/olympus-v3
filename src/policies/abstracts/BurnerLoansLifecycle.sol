@@ -95,11 +95,11 @@ abstract contract BurnerLoansLifecycle is
             );
     }
 
-    function _requireAssetEnabled(
+    function _requireAssetOriginationsEnabled(
         address asset_
     ) internal view returns (AssetConfig memory config) {
         config = _requireAssetConfigured(asset_);
-        if (!config.enabled) revert BurnerLoans_AssetNotEnabled(asset_);
+        if (!config.originationsEnabled) revert BurnerLoans_AssetOriginationsDisabled(asset_);
     }
 
     function _onlyBurnerLoansAdminOrAdmin() internal view {

@@ -8,6 +8,18 @@ import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
 contract BurnerLoansSeizerConstructorTest is BurnerLoansSeizerTest {
     // constructor
+    // given valid parameters
+    //  when the seizer is deployed
+    //   then it stores its immutable target and initial scan state
+    function test_givenValidParameters_setsInitialState() public view {
+        assertEq(seizer.burnerLoans(), address(target), "burner loans");
+        assertEq(seizer.maxBorrowersToCheck(), 10, "borrowers to check");
+        assertEq(seizer.maxBorrowersToSeize(), 5, "borrowers to seize");
+        assertEq(seizer.nextAssetIndex(), 0, "next asset index");
+        assertEq(seizer.getAssets().length, 0, "managed assets");
+    }
+
+    // constructor
     // given zero burner loans
     //  when constructor is called
     //   then it reverts

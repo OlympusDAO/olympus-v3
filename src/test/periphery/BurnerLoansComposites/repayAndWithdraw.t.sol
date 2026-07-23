@@ -140,7 +140,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         _configurePrice(address(vaultToken), 1e18);
         _configureDepositManagerAsset(address(vaultToken));
         vm.prank(admin);
-        burnerLoans.addAsset(
+        burnerLoansConfig.addAsset(
             address(vaultToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
