@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -41,19 +40,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
             )
         );
         configTimelock.queueSetAssetDebtCap(unknownAsset, 100_000e9);
-    }
-
-    // queueSetAssetDebtCap
-    // given timelock policy is disabled
-    //  when queueing an asset debt cap update
-    //   then it reverts
-    function test_givenTimelockDisabled_reverts() public {
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        configTimelock.queueSetAssetDebtCap(address(usds), 0);
     }
 
     // queueSetAssetDebtCap

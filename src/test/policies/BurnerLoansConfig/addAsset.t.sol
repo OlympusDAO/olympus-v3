@@ -706,6 +706,56 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
+    // given a configured pair is replaced by a market with another config ID and malformed data
+    //  when its asset and fee configurations are read
+    //   then both reject the incompatible schema before decoding the data
+    function test_givenDifferentConfigId_configGettersRevertBeforeDecoding() public {
+        _addDefaultUsdsAsset();
+        bytes16 incompatibleConfigId = bytes16("Different config");
+        uint32 marketId = _replaceMarketConfigForTest(address(usds), incompatibleConfigId, hex"01");
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_IncompatibleMarketConfig.selector,
+            marketId,
+            incompatibleConfigId
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoansConfig.getAssetConfig(address(usds));
+
+        vm.expectRevert(expectedError);
+        burnerLoansConfig.getAssetFeeConfig(address(usds));
+    }
+
+    // addAsset
+    // given a configured pair has the Burner Loans config ID but malformed data length
+    //  when its asset and fee configurations are read
+    //   then both reject the byte length before ABI decoding
+    function test_givenInvalidConfigDataLength_configGettersRevertBeforeDecoding(
+        uint16 configDataLength_
+    ) public {
+        configDataLength_ = uint16(bound(configDataLength_, 0, 384));
+        vm.assume(configDataLength_ != 6 * 32);
+        bytes memory configData = new bytes(configDataLength_);
+        _addDefaultUsdsAsset();
+        uint32 marketId = _replaceMarketConfigForTest(
+            address(usds),
+            bytes16("Burner Loans v1"),
+            configData
+        );
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_InvalidMarketConfigData.selector,
+            marketId,
+            configDataLength_
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoansConfig.getAssetConfig(address(usds));
+
+        vm.expectRevert(expectedError);
+        burnerLoansConfig.getAssetFeeConfig(address(usds));
+    }
+
+    // addAsset
     // given asset dependencies and config are valid
     //  when addAsset is called by admin
     //   then the asset is configured and enabled
@@ -720,16 +770,20 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             burnerLoansConfig.isAssetConfigured(address(usds)),
             "not configured before add"
         );
-        assertEq(
-            abi.encode(burnerLoansConfig.getAssetConfig(address(usds))),
-            abi.encode(IBurnerLoans.AssetConfig(false, 0, 0, 0, 0, 0, 0, 0, 0, 0)),
-            "zero asset config before add"
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                address(usds)
+            )
         );
-        assertEq(
-            abi.encode(burnerLoansConfig.getAssetFeeConfig(address(usds))),
-            abi.encode(IBurnerLoans.AssetFeeConfig(0, 0, 0, 0)),
-            "zero fee config before add"
+        burnerLoansConfig.getAssetConfig(address(usds));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                address(usds)
+            )
         );
+        burnerLoansConfig.getAssetFeeConfig(address(usds));
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
@@ -795,6 +849,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         assertTrue(market.originationsEnabled, "FLOAN originations enabled");
 
         BurnerLoansMarketConfig.Data memory marketData = BurnerLoansMarketConfig.decode(
+            0,
+            market,
             floan.getMarketConfigData(0)
         );
         assertEq(marketData.maxKeeperReward, expected.maxKeeperReward, "FLOAN keeper cap");

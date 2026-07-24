@@ -26,9 +26,6 @@ library BurnerLoansConfigTimelockLib {
 
         bytes4 selector = action_.selector;
         address asset = abi.decode(action_.payload, (address));
-        if (!burnerLoans_.isAssetConfigured(asset)) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset);
-        }
 
         bytes32 currentHash;
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {

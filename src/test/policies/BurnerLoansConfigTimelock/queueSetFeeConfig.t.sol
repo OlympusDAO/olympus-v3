@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
@@ -102,45 +101,6 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
             "originations disabled"
         );
         assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 50, "base fee");
-    }
-
-    // queueSetAssetFeeConfig
-    // given timelock policy is disabled
-    //  when queueing a baseFeeBps update
-    //   then it reverts
-    function test_givenTimelockDisabled_reverts() public {
-        (
-            IBurnerLoans.AssetFeeConfig memory config,
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection
-        ) = _singleFeeUpdate(0);
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        configTimelock.queueSetAssetFeeConfig(address(usds), config, selection);
-    }
-
-    // queueSetAssetFeeConfig
-    // given BurnerLoans configurator has been rotated away from the config timelock
-    //  when queueing a baseFeeBps update
-    //   then it reverts immediately
-    function test_givenConfiguratorRotated_reverts() public {
-        (
-            IBurnerLoans.AssetFeeConfig memory config,
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selection
-        ) = _singleFeeUpdate(0);
-        vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(burnerLoans));
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
-                address(configTimelock)
-            )
-        );
-        configTimelock.queueSetAssetFeeConfig(address(usds), config, selection);
     }
 
     // queueSetAssetFeeConfig

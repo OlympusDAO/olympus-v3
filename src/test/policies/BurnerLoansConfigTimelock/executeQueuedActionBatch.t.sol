@@ -170,26 +170,6 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
     }
 
     // executeQueuedAction
-    // given a queued batch has two dependent risk sub-actions
-    //  when the batch executes after the delay
-    //   then sub-actions execute atomically in array order
-    function test_givenDelayElapsed_executesBatchInOrder() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = _riskAction(_termUpdate(14 days), _termSelection());
-        actions[1] = _riskAction(_horizonUpdate(21 days), _horizonSelection());
-
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueBatch(actions);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        configTimelock.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.termLength, 14 days, "term length");
-        assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
-    }
-
-    // executeQueuedAction
     // given a queued batch where the second sub-action pre-state becomes stale
     //  when execution reaches the stale sub-action
     //   then the whole batch reverts and the first sub-action is rolled back

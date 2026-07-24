@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {Actions, Kernel} from "src/Kernel.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -31,6 +32,37 @@ contract BurnerLoansConfigSetMarketFacilityTest is BurnerLoansTest {
 
         assertEq(floan.getMarket(marketId).facility, newFacility, "facility");
         assertFalse(burnerLoansConfig.isAssetConfigured(address(usds)), "old facility lookup");
+    }
+
+    // setMarketFacility
+    // given the market ID does not exist
+    //  when admin attempts to set its facility
+    //   then FLOAN rejects the invalid market
+    function test_givenInvalidMarketId_reverts(uint32 marketId_) public {
+        marketId_ = uint32(bound(marketId_, floan.getMarketCount(), type(uint32).max));
+        address newFacility = address(_createActiveFacility(kernel));
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
+        burnerLoansConfig.setMarketFacility(marketId_, newFacility);
+    }
+
+    // asset configuration getters
+    // given no market exists for the bound facility and collateral asset
+    //  when either asset configuration getter is called
+    //   then it reverts instead of returning a zero-valued configuration
+    function test_givenUnconfiguredAsset_gettersRevert(address asset_) public {
+        vm.assume(asset_ != address(usds));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
+        );
+        burnerLoansConfig.getAssetConfig(asset_);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
+        );
+        burnerLoansConfig.getAssetFeeConfig(asset_);
     }
 
     // setMarketFacility

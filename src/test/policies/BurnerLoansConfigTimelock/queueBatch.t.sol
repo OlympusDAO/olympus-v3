@@ -86,6 +86,43 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
     }
 
     // queueBatch
+    // given BurnerLoansConfig is disabled
+    //  when queueing a valid mixed batch
+    //   then it reverts before storing an action
+    function test_givenBurnerLoansConfigDisabled_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
+        vm.prank(emergency);
+        burnerLoansConfig.disable("");
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        configTimelock.queueBatch(actions);
+
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
+    }
+
+    // queueBatch
+    // given the configurator has been rotated away from the timelock
+    //  when queueing a valid mixed batch
+    //   then it reverts before storing an action
+    function test_givenConfiguratorRotated_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
+        vm.prank(admin);
+        burnerLoansConfig.setConfigurator(address(burnerLoans));
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                address(configTimelock)
+            )
+        );
+        configTimelock.queueBatch(actions);
+
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
+    }
+
+    // queueBatch
     // given batch is empty
     //  when queueing the batch
     //   then it reverts before storing an action
@@ -190,6 +227,28 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
             )
         );
         configTimelock.getQueuedAction(1);
+    }
+
+    // queueBatch
+    // given a later sub-action references an unconfigured asset
+    //  when queueing a mixed batch
+    //   then the whole batch reverts and no action ID is consumed
+    function test_givenSubActionAssetUnconfigured_revertsWholeQueue(address asset_) public {
+        vm.assume(asset_ != address(usds));
+        ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
+        IBurnerLoans.AssetFeeConfig memory feeUpdate;
+        feeUpdate.baseFeeBps = 30;
+        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection;
+        feeSelection.baseFeeBps = true;
+        actions[1].payload = abi.encode(asset_, feeUpdate, feeSelection);
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_AssetNotConfigured.selector, asset_)
+        );
+        configTimelock.queueBatch(actions);
+
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     function _mixedBatch()

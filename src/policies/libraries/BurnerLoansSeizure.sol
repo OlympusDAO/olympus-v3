@@ -182,7 +182,7 @@ library BurnerLoansSeizure {
             request_.asset,
             address(dependencies_.ohm)
         );
-        result.config = _assetConfigForMarket(dependencies_.floan, marketId, request_.asset);
+        result.config = _assetConfigForMarket(dependencies_.floan, marketId);
         uint256 activeCount = dependencies_.floan.getActiveBorrowerCount(marketId);
         if (activeCount == 0) {
             result.borrowers = new address[](0);
@@ -306,7 +306,7 @@ library BurnerLoansSeizure {
             asset_,
             address(dependencies_.ohm)
         );
-        context.config = _assetConfigForMarket(dependencies_.floan, context.marketId, asset_);
+        context.config = _assetConfigForMarket(dependencies_.floan, context.marketId);
         context.pricing = _pricing(dependencies_, asset_);
         batch = _validateBatch(dependencies_, borrowers_, context);
 
@@ -548,19 +548,20 @@ library BurnerLoansSeizure {
             asset_,
             address(dependencies_.ohm)
         );
-        return _assetConfigForMarket(dependencies_.floan, marketId, asset_);
+        return _assetConfigForMarket(dependencies_.floan, marketId);
     }
 
     function _assetConfigForMarket(
         IFLOANv1 floan_,
-        uint32 marketId_,
-        address asset_
+        uint32 marketId_
     ) private view returns (IBurnerLoans.AssetConfig memory) {
         IFLOANv1.Market memory market = floan_.getMarket(marketId_);
-        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
-        return BurnerLoansMarketConfig.assetConfig(market, floan_.getMarketConfigData(marketId_));
+        return
+            BurnerLoansMarketConfig.assetConfig(
+                marketId_,
+                market,
+                floan_.getMarketConfigData(marketId_)
+            );
     }
 
     function _dependencies() private view returns (BurnerLoansContext memory) {

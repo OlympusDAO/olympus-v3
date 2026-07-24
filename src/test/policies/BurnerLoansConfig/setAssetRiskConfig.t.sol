@@ -77,6 +77,26 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     }
 
     // setAssetRiskConfig
+    // given the asset/token pair exists only under another facility
+    //  when setAssetRiskConfig is called by admin
+    //   then it reverts because the bound facility has no market
+    function test_givenBoundFacilityMarketDoesNotExist_reverts() public {
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+
+        vm.prank(address(burnerLoansConfig));
+        floan.setMarketFacility(marketId, makeAddr("otherFacility"));
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                address(usds)
+            )
+        );
+        burnerLoansConfig.setAssetRiskConfig(address(usds), _validRiskConfig());
+    }
+
+    // setAssetRiskConfig
     // given collateralFactorBps is zero
     //  when setAssetRiskConfig is called by admin
     //   then it reverts

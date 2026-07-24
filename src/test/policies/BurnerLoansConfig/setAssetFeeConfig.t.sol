@@ -72,6 +72,26 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
     }
 
     // setAssetFeeConfig
+    // given the asset/token pair exists only under another facility
+    //  when setAssetFeeConfig is called by admin
+    //   then it reverts because the bound facility has no market
+    function test_givenBoundFacilityMarketDoesNotExist_reverts() public {
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+
+        vm.prank(address(burnerLoansConfig));
+        floan.setMarketFacility(marketId, makeAddr("otherFacility"));
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                address(usds)
+            )
+        );
+        burnerLoansConfig.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
+    }
+
+    // setAssetFeeConfig
     // given baseFeeBps is greater than 100%
     //  when setAssetFeeConfig is called by admin
     //   then it reverts

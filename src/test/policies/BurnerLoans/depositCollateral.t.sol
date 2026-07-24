@@ -32,6 +32,53 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
+    // - Market state: the collateral/debt pair resolves to a non-Burner-Loans config ID
+    // - Config data state: malformed and not decodable as Burner Loans data
+    // - Action: preview and execute a collateral deposit
+    // - Expected branch: both reject the incompatible schema before decoding config data
+    function test_givenDifferentConfigId_revertsBeforeDecoding() public {
+        bytes16 incompatibleConfigId = bytes16("Different config");
+        uint32 marketId = _replaceMarketConfigForTest(address(usds), incompatibleConfigId, hex"01");
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_IncompatibleMarketConfig.selector,
+            marketId,
+            incompatibleConfigId
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewDepositCollateral(address(usds), 1e6, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.depositCollateral(address(usds), 1e6, alice);
+    }
+
+    // Condition tree:
+    // - Market state: the collateral/debt pair has the Burner Loans config ID
+    // - Config data state: malformed encoded byte length
+    // - Action: preview and execute a collateral deposit
+    // - Expected branch: both reject the byte length before ABI decoding
+    function test_givenInvalidConfigDataLength_revertsBeforeDecoding() public {
+        uint32 marketId = _replaceMarketConfigForTest(
+            address(usds),
+            bytes16("Burner Loans v1"),
+            hex"01"
+        );
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_InvalidMarketConfigData.selector,
+            marketId,
+            1
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewDepositCollateral(address(usds), 1e6, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.depositCollateral(address(usds), 1e6, alice);
+    }
+
+    // Condition tree:
     // - Caller: owner (`alice`)
     // - Authorization state: owner acts on own account
     // - Custody path: direct DepositManager custody

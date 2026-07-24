@@ -98,28 +98,6 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
     // executeQueuedAction
     // given a queued action
-    //  when the target asset has originations disabled
-    //   then the queued risk update remains executable
-    function test_givenAssetOriginationsDisabled_executes() public {
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-        uint64 actionId = _queueCollateralFactorUpdate();
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        _expectSingleActionExecuted(
-            actionId,
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            address(this)
-        );
-        configTimelock.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertFalse(stored.originationsEnabled, "originations disabled");
-        assertEq(stored.collateralFactorBps, 9_500, "risk update applied");
-    }
-
-    // executeQueuedAction
-    // given a queued action
     //  when the BurnerLoans configurator has been rotated
     //   then execution reverts and the queued action is stale
     function test_givenConfiguratorRotated_reverts() public {

@@ -80,16 +80,19 @@ abstract contract BurnerLoansLifecycle is
     ) internal view returns (AssetConfig memory config) {
         uint32 marketId_ = _marketId(asset_);
         IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
-        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
-            revert BurnerLoans_AssetNotConfigured(asset_);
-        }
-        return BurnerLoansMarketConfig.assetConfig(market, _FLOAN.getMarketConfigData(marketId_));
+        return
+            BurnerLoansMarketConfig.assetConfig(
+                marketId_,
+                market,
+                _FLOAN.getMarketConfigData(marketId_)
+            );
     }
 
     function _assetFeeConfig(address asset_) internal view returns (AssetFeeConfig memory) {
         uint32 marketId_ = _marketId(asset_);
         return
             BurnerLoansMarketConfig.feeConfig(
+                marketId_,
                 _FLOAN.getMarket(marketId_),
                 _FLOAN.getMarketConfigData(marketId_)
             );

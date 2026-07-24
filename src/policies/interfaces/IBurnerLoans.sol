@@ -40,6 +40,14 @@ interface IBurnerLoans {
     error BurnerLoans_AssetAlreadyConfigured(address asset);
     error BurnerLoans_AssetNotConfigured(address asset);
     error BurnerLoans_AmbiguousMarket(address asset, uint256 marketCount);
+    /// @notice The resolved FLOAN market does not use the Burner Loans configuration schema.
+    /// @param marketId Incompatible FLOAN market identifier.
+    /// @param configId Actual configuration schema identifier stored by the market.
+    error BurnerLoans_IncompatibleMarketConfig(uint32 marketId, bytes16 configId);
+    /// @notice A Burner Loans market's encoded product data has an invalid length.
+    /// @param marketId FLOAN market containing the invalid data.
+    /// @param length Actual encoded data length.
+    error BurnerLoans_InvalidMarketConfigData(uint32 marketId, uint256 length);
     error BurnerLoans_AmbiguousPosition(uint32 marketId, address borrower, uint256 positionCount);
     error BurnerLoans_AssetOriginationsDisabled(address asset);
     error BurnerLoans_InvalidFeeConfig();

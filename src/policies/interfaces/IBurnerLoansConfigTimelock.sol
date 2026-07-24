@@ -108,7 +108,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     // ========== QUEUE FUNCTIONS ========== //
 
     /// @notice Queues an asset fee-curve update.
-    /// @dev Reverts if the timelock policy is disabled.
+    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Partial fee curve update.
     /// @param selection_ Fields to apply from `config_`.
@@ -120,7 +120,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues an asset active debt cap update.
-    /// @dev Reverts if the timelock policy is disabled.
+    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New active debt cap, in OHM decimals.
     /// @return actionId The queued action ID.
@@ -130,7 +130,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a partial asset risk-configuration update.
-    /// @dev Reverts if the timelock policy is disabled.
+    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param update_ Partial risk and term update.
     /// @param selection_ Fields to apply from `update_`.
@@ -143,8 +143,8 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     /// @notice Queues a batch of Burner Loans configuration updates.
     /// @dev Every sub-action must target Burner Loans Config and use a supported setter.
-    ///      Reverts if the timelock policy is disabled. The batch is validated and later
-    ///      executed atomically in array order.
+    ///      Reverts if the timelock or controlled Burner Loans Config policy is disabled.
+    ///      The batch is validated and later executed atomically in array order.
     /// @param actions_ The Burner Loans configuration sub-actions to queue.
     /// @return actionId The queued action ID.
     function queueBatch(

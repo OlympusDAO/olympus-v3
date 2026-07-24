@@ -240,11 +240,9 @@ library BurnerLoansView {
             address(dependencies_.ohm)
         );
         IFLOANv1.Market memory market = dependencies_.floan.getMarket(marketId_);
-        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
         return
             BurnerLoansMarketConfig.assetConfig(
+                marketId_,
                 market,
                 dependencies_.floan.getMarketConfigData(marketId_)
             );

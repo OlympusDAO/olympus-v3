@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
@@ -89,45 +88,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     }
 
     // queueSetAssetRiskConfig
-    // given timelock policy is disabled
-    //  when queueing a collateralFactorBps update
-    //   then it reverts
-    function test_givenTimelockDisabled_reverts() public {
-        (
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
-    }
-
-    // queueSetAssetRiskConfig
-    // given BurnerLoans configurator has been rotated away from the config timelock
-    //  when queueing a collateralFactorBps update
-    //   then it reverts immediately
-    function test_givenConfiguratorRotated_reverts() public {
-        (
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
-        vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(burnerLoans));
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
-                address(configTimelock)
-            )
-        );
-        configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
-    }
-
-    // queueSetAssetRiskConfig
     // given asset is not configured
     //  when queueing a collateralFactorBps update
     //   then it reverts
@@ -146,6 +106,28 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
             )
         );
         configTimelock.queueSetAssetRiskConfig(unknownAsset, update, selection);
+    }
+
+    // queueSetAssetRiskConfig
+    // given market originations are disabled
+    //  when a risk update is queued and executed
+    //   then the existing market can still be configured
+    function test_givenOriginationsDisabled_executes() public {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
+        ) = _collateralFactorUpdate();
+
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        configTimelock.executeQueuedAction(actionId);
+
+        IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
+        assertFalse(stored.originationsEnabled, "originations disabled");
+        assertEq(stored.collateralFactorBps, 9_500, "risk update applied");
     }
 
     // queueSetAssetRiskConfig

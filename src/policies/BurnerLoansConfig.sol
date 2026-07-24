@@ -86,12 +86,7 @@ contract BurnerLoansConfig is
         ) {
             revert BurnerLoans_InvalidDepositManager(address(depositManager_));
         }
-        if (
-            !ERC165Checker.supportsInterface(facility_, type(IBurnerLoansLifecycle).interfaceId) ||
-            address(Policy(facility_).kernel()) != address(kernel_)
-        ) {
-            revert BurnerLoansConfig_InvalidFacility(facility_);
-        }
+        _validateFacility(facility_, false);
 
         _OHM = ohm_;
         _DEPOSIT_MANAGER = depositManager_;
@@ -186,35 +181,11 @@ contract BurnerLoansConfig is
 
     /// @inheritdoc IBurnerLoansConfig
     function getAssetConfig(address asset_) external view returns (AssetConfig memory) {
-        if (!_isAssetConfigured(asset_)) {
-            return
-                AssetConfig({
-                    originationsEnabled: false,
-                    collateralDecimals: 0,
-                    collateralFactorBps: 0,
-                    minCollateralRatioBps: 0,
-                    backingMultiplierBps: 0,
-                    keeperRewardBps: 0,
-                    termLength: 0,
-                    maxMaturityHorizon: 0,
-                    debtCap: 0,
-                    maxKeeperReward: 0
-                });
-        }
         return _getAssetConfig(_marketId(asset_));
     }
 
     /// @inheritdoc IBurnerLoansConfig
     function getAssetFeeConfig(address asset_) external view returns (AssetFeeConfig memory) {
-        if (!_isAssetConfigured(asset_)) {
-            return
-                AssetFeeConfig({
-                    baseFeeBps: 0,
-                    kinkBps: 0,
-                    preKinkSlopeBps: 0,
-                    postKinkSlopeBps: 0
-                });
-        }
         return _getAssetFeeConfig(_marketId(asset_));
     }
 
@@ -228,7 +199,7 @@ contract BurnerLoansConfig is
         address facility_
     ) external givenEnabled onlyAdminRole {
         if (facility_ == address(0)) revert BurnerLoans_ZeroAddress();
-        _validateFacility(facility_);
+        _validateFacility(facility_, true);
         _FLOAN.setMarketFacility(marketId_, facility_);
     }
 
@@ -303,9 +274,8 @@ contract BurnerLoansConfig is
         address asset_,
         uint128 debtCapOhm_
     ) external givenEnabled onlyConfiguratorOrAdmin {
-        _validateAssetDebtCap(asset_, debtCapOhm_);
+        uint32 marketId_ = _validateAssetDebtCap(asset_, debtCapOhm_);
 
-        uint32 marketId_ = _marketId(asset_);
         _FLOAN.setMarketPrincipalCap(marketId_, debtCapOhm_);
         emit AssetDebtCapSet(asset_, debtCapOhm_);
     }
@@ -345,11 +315,11 @@ contract BurnerLoansConfig is
         address asset_,
         bool enabled_
     ) external givenEnabled onlyConfiguratorOrAdmin {
-        AssetConfig memory currentConfig = _requireAssetConfigured(asset_);
+        (uint32 marketId_, AssetConfig memory currentConfig) = _requireAssetConfigured(asset_);
         if (currentConfig.originationsEnabled == enabled_) return;
         if (enabled_) _validateAssetDependencies(asset_, true);
 
-        _FLOAN.setMarketOriginationsEnabled(_marketId(asset_), enabled_);
+        _FLOAN.setMarketOriginationsEnabled(marketId_, enabled_);
         emit AssetOriginationsSet(asset_, enabled_);
     }
 
@@ -448,11 +418,16 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates a Burner Loans facility policy at a linking boundary.
-    /// @dev Active-policy membership proves that `facility_` belongs to this policy's Kernel.
-    function _validateFacility(address facility_) internal view {
+    /// @dev The constructor permits a compatible same-Kernel facility that is not active yet.
+    ///      Runtime rotation additionally requires active-policy membership. Reverts with
+    ///      `BurnerLoansConfig_InvalidFacility` when any required condition is not satisfied.
+    /// @param facility_ Facility policy to validate.
+    /// @param requireActive_ Whether the facility must currently be active in this Kernel.
+    function _validateFacility(address facility_, bool requireActive_) internal view {
         if (
             !ERC165Checker.supportsInterface(facility_, type(IBurnerLoansLifecycle).interfaceId) ||
-            !kernel.isPolicyActive(Policy(facility_))
+            address(Policy(facility_).kernel()) != address(kernel) ||
+            (requireActive_ && !kernel.isPolicyActive(Policy(facility_)))
         ) {
             revert BurnerLoansConfig_InvalidFacility(facility_);
         }
@@ -470,15 +445,20 @@ contract BurnerLoansConfig is
     ///      admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    /// @notice Returns the stored configuration for an added collateral asset.
-    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when `asset_` has not been added.
+    /// @notice Resolves and decodes the unique Burner Loans market for a collateral asset.
+    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when no bound market exists, or
+    ///      `BurnerLoans_AmbiguousMarket` when multiple bound markets exist for the pair.
+    ///      Reverts with `BurnerLoans_IncompatibleMarketConfig` when the resolved market uses a
+    ///      different schema, or `BurnerLoans_InvalidMarketConfigData` when its data length is
+    ///      invalid.
     /// @param asset_ Collateral asset to look up.
-    /// @return config Storage pointer to the asset configuration.
+    /// @return marketId_ FLOAN market identifier for the configured asset.
+    /// @return config Decoded asset configuration.
     function _requireAssetConfigured(
         address asset_
-    ) internal view returns (AssetConfig memory config) {
-        uint32 marketId_ = _marketId(asset_);
-        return _getAssetConfig(marketId_);
+    ) internal view returns (uint32 marketId_, AssetConfig memory config) {
+        marketId_ = _marketId(asset_);
+        config = _getAssetConfig(marketId_);
     }
 
     /// @notice Validates and stores the complete asset fee curve.
@@ -667,41 +647,83 @@ contract BurnerLoansConfig is
     ///      debt for `asset_` or above the global debt cap.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
-    function _validateAssetDebtCap(address asset_, uint128 debtCapOhm_) internal view {
-        uint32 marketId_ = _marketId(asset_);
+    /// @return marketId_ Validated FLOAN market identifier for `asset_`.
+    function _validateAssetDebtCap(
+        address asset_,
+        uint128 debtCapOhm_
+    ) internal view returns (uint32 marketId_) {
+        marketId_ = _marketId(asset_);
+        BurnerLoansMarketConfig.requireCompatibleConfig(marketId_, _FLOAN.getMarket(marketId_));
         _validateDebtCap(debtCapOhm_, _FLOAN.getMarketPrincipalDue(marketId_));
     }
 
+    /// @notice Returns whether the bound facility has at least one market for an asset and OHM.
+    /// @param asset_ Collateral asset to query.
+    /// @return configured True when at least one matching FLOAN market exists.
     function _isAssetConfigured(address asset_) internal view returns (bool) {
         return BurnerLoansMarketConfig.hasMarket(_FLOAN, _FACILITY, asset_, address(_OHM));
     }
 
+    /// @notice Resolves the unique FLOAN market for a collateral asset and OHM.
+    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when no matching market exists and
+    ///      `BurnerLoans_AmbiguousMarket` when more than one matching market exists.
+    /// @param asset_ Collateral asset to resolve.
+    /// @return marketId_ Unique matching FLOAN market identifier.
     function _marketId(address asset_) internal view returns (uint32 marketId_) {
         return BurnerLoansMarketConfig.marketId(_FLOAN, _FACILITY, asset_, address(_OHM));
     }
 
+    /// @notice Decodes the Burner Loans asset configuration stored by a FLOAN market.
+    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
+    ///      validates the configuration schema and encoded data length before decoding.
+    /// @param marketId_ FLOAN market identifier to read.
+    /// @return config Decoded Burner Loans asset configuration.
     function _getAssetConfig(uint32 marketId_) internal view returns (AssetConfig memory config) {
         IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
-        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
-            revert BurnerLoans_AssetNotConfigured(market.collateralToken);
-        }
-        return BurnerLoansMarketConfig.assetConfig(market, _FLOAN.getMarketConfigData(marketId_));
-    }
-
-    function _getAssetFeeConfig(uint32 marketId_) internal view returns (AssetFeeConfig memory) {
         return
-            BurnerLoansMarketConfig.feeConfig(
-                _FLOAN.getMarket(marketId_),
+            BurnerLoansMarketConfig.assetConfig(
+                marketId_,
+                market,
                 _FLOAN.getMarketConfigData(marketId_)
             );
     }
 
+    /// @notice Decodes the Burner Loans fee configuration stored by a FLOAN market.
+    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
+    ///      validates the configuration schema and encoded data length before decoding.
+    /// @param marketId_ FLOAN market identifier to read.
+    /// @return config Decoded Burner Loans fee configuration.
+    function _getAssetFeeConfig(uint32 marketId_) internal view returns (AssetFeeConfig memory) {
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        return
+            BurnerLoansMarketConfig.feeConfig(
+                marketId_,
+                market,
+                _FLOAN.getMarketConfigData(marketId_)
+            );
+    }
+
+    /// @notice Decodes the Burner Loans-specific data stored by a FLOAN market.
+    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
+    ///      validates the configuration schema and encoded data length before decoding.
+    /// @param marketId_ FLOAN market identifier to read.
+    /// @return data Decoded Burner Loans market data.
     function _getMarketData(
         uint32 marketId_
     ) internal view returns (BurnerLoansMarketConfig.Data memory) {
-        return BurnerLoansMarketConfig.decode(_FLOAN.getMarketConfigData(marketId_));
+        IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
+        return
+            BurnerLoansMarketConfig.decode(
+                marketId_,
+                market,
+                _FLOAN.getMarketConfigData(marketId_)
+            );
     }
 
+    /// @notice Converts a value to the storage width used by FLOAN market configuration.
+    /// @dev Reverts with `BurnerLoans_InvalidCap` when `value_` exceeds `uint128`.
+    /// @param value_ Value to convert.
+    /// @return result Value represented as `uint128`.
     function _toUint128(uint256 value_) internal pure returns (uint128 result) {
         result = uint128(value_);
         if (result != value_) revert BurnerLoans_InvalidCap();

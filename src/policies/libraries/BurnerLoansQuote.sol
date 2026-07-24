@@ -342,6 +342,7 @@ library BurnerLoansQuote {
             revert IBurnerLoans.BurnerLoans_InvalidCap();
         }
         IBurnerLoans.AssetFeeConfig memory feeConfig = BurnerLoansMarketConfig.feeConfig(
+            marketId_,
             floan_.getMarket(marketId_),
             floan_.getMarketConfigData(marketId_)
         );
@@ -366,6 +367,7 @@ library BurnerLoansQuote {
             revert IBurnerLoans.BurnerLoans_InvalidCap();
         }
         IBurnerLoans.AssetFeeConfig memory feeConfig = BurnerLoansMarketConfig.feeConfig(
+            marketId_,
             floan_.getMarket(marketId_),
             floan_.getMarketConfigData(marketId_)
         );
@@ -469,10 +471,11 @@ library BurnerLoansQuote {
     ) private view returns (uint32 marketId_, IBurnerLoans.AssetConfig memory config) {
         marketId_ = BurnerLoansMarketConfig.marketId(floan_, facility_, asset_, debtToken_);
         IFLOANv1.Market memory market = floan_.getMarket(marketId_);
-        if (market.configId != BurnerLoansMarketConfig.CONFIG_ID) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
-        config = BurnerLoansMarketConfig.assetConfig(market, floan_.getMarketConfigData(marketId_));
+        config = BurnerLoansMarketConfig.assetConfig(
+            marketId_,
+            market,
+            floan_.getMarketConfigData(marketId_)
+        );
     }
 
     function _requireAssetOriginationsEnabled(

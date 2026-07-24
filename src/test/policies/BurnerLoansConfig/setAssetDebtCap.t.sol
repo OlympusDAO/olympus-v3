@@ -44,6 +44,27 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     }
 
     // setAssetDebtCap
+    // given the asset/token pair exists only under another facility
+    //  when setAssetDebtCap is called by admin
+    //   then it reverts because the bound facility has no market
+    function test_givenBoundFacilityMarketDoesNotExist_reverts() public {
+        _addDefaultUsdsAsset();
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+
+        vm.prank(address(burnerLoansConfig));
+        floan.setMarketFacility(marketId, makeAddr("otherFacility"));
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+                address(usds)
+            )
+        );
+        burnerLoansConfig.setAssetDebtCap(address(usds), 200_000e9);
+    }
+
+    // setAssetDebtCap
     // given new asset debt cap is below active asset debt
     //  when setAssetDebtCap is called by admin
     //   then it reverts
