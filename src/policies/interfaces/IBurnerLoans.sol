@@ -14,6 +14,13 @@ interface IBurnerLoans {
     error BurnerLoans_InvalidBps(uint256 bps);
     error BurnerLoans_InvalidCap();
     error BurnerLoans_InvalidDepositManager(address depositManager);
+    /// @notice The configured backing oracle does not implement IOlympusBackingOracle.
+    /// @param backingOracle Invalid backing oracle address.
+    error BurnerLoans_InvalidBackingOracle(address backingOracle);
+    /// @notice The configured DepositManager belongs to a different Kernel.
+    /// @param expectedKernel Kernel supplied to Burner Loans.
+    /// @param actualKernel Kernel reported by DepositManager.
+    error BurnerLoans_DepositManagerKernelMismatch(address expectedKernel, address actualKernel);
     error BurnerLoans_ZeroAmount();
     error BurnerLoans_ZeroCollateralCredit();
     error BurnerLoans_ZeroCollateralWithdrawal();
@@ -24,6 +31,10 @@ interface IBurnerLoans {
     error BurnerLoans_RepayExceedsDebt(uint256 requested, uint256 debt);
     error BurnerLoans_SameBlockRepay(uint48 borrowBlock);
     error BurnerLoans_MaturityHorizonExceeded(uint256 requested, uint256 maximum);
+    /// @notice An extension does not move the position maturity beyond the current timestamp.
+    /// @param requested Resulting maturity calculated from the position's previous maturity.
+    /// @param currentTimestamp Current block timestamp.
+    error BurnerLoans_ExtensionMaturityNotFuture(uint256 requested, uint256 currentTimestamp);
     error BurnerLoans_UnhealthyPosition(uint256 healthFactor);
     error BurnerLoans_UnhealthyBorrow(uint256 healthFactor);
     error BurnerLoans_PositionMatured(uint48 maturity);
@@ -48,7 +59,6 @@ interface IBurnerLoans {
     /// @param marketId FLOAN market containing the invalid data.
     /// @param length Actual encoded data length.
     error BurnerLoans_InvalidMarketConfigData(uint32 marketId, uint256 length);
-    error BurnerLoans_AmbiguousPosition(uint32 marketId, address borrower, uint256 positionCount);
     error BurnerLoans_AssetOriginationsDisabled(address asset);
     error BurnerLoans_InvalidFeeConfig();
     error BurnerLoans_UnauthorizedConfigurator(address caller);

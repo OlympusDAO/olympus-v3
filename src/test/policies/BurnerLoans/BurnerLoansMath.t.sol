@@ -126,10 +126,26 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_debtValueUsd_givenPriceDecimalsAreNotWad_usesPriceScale() public view {
-        // debt = 4e9 OHM units = 4 OHM with 9 decimals
-        // price = 250e8 USD/OHM with 8 PRICE decimals
-        // Expected: ceil(4e9 * 250e8 / 1e9) = 1000e8
-        assertEq(burnerLoans.debtValueUsd(4e9, 250e8, OHM_DECIMALS), 1000e8, "debt value");
+        // debt = 1.234567890 OHM with 9 decimals
+        // price = 2.50000001 USD/OHM with 8 PRICE decimals
+        // Expected: ceil(1_234_567_890 * 250_000_001 / 1e9) = 308_641_974 (8 decimals).
+        assertEq(
+            burnerLoans.debtValueUsd(1_234_567_890, 250_000_001, OHM_DECIMALS),
+            308_641_974,
+            "fractional debt value"
+        );
+    }
+
+    function test_debtValueUsd_givenNonWadPriceScaleAndSmallestValues_roundsUp() public view {
+        // One smallest OHM unit at one smallest 8-decimal price unit is below one USD price unit.
+        // Expected: ceil(1 * 1 / 1e9) = 1, proving nonzero dust is not truncated to zero.
+        assertEq(burnerLoans.debtValueUsd(1, 1, OHM_DECIMALS), 1, "smallest debt value");
+    }
+
+    function test_debtValueUsd_givenNonWadPriceScaleAndFractionalDust_roundsUp() public view {
+        // 123 smallest OHM units at a 7-unit price still remain below one 8-decimal USD unit.
+        // Expected: ceil(123 * 7 / 1e9) = 1.
+        assertEq(burnerLoans.debtValueUsd(123, 7, OHM_DECIMALS), 1, "fractional dust value");
     }
 
     function test_debtValueUsd_givenTinyDebt_roundsUp() public view {

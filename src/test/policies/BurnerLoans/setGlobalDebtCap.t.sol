@@ -82,19 +82,46 @@ contract BurnerLoansSetGlobalDebtCapTest is BurnerLoansTest {
     }
 
     // setGlobalDebtCap
-    // given an existing global cap
-    //  when the cap is increased and then decreased
-    //   then the remaining MINTR approval changes only by each cap delta
-    function test_givenExistingCap_reconcilesMintApprovalByCapDelta() public {
-        vm.startPrank(admin);
+    // given an existing global cap with active debt
+    //  when the cap is increased
+    //   then MINTR approval equals the increased cap less active debt
+    function test_givenExistingCap_whenNewCapIsHigher_reconcilesRemainingApproval() public {
+        vm.prank(admin);
         burnerLoans.setGlobalDebtCap(1_000e9);
+        _setOtherMarketDebtForTest(400e9);
+
+        vm.prank(admin);
         burnerLoans.setGlobalDebtCap(1_500e9);
-        assertEq(mintr.mintApproval(address(burnerLoans)), 1_500e9, "increased approval");
 
+        assertEq(mintr.mintApproval(address(burnerLoans)), 1_100e9, "increased approval");
+    }
+
+    // given an existing global cap with active debt
+    //  when the same cap is set again
+    //   then MINTR approval is reconciled to the unchanged cap less active debt
+    function test_givenExistingCap_whenNewCapIsEqual_reconcilesRemainingApproval() public {
+        vm.prank(admin);
+        burnerLoans.setGlobalDebtCap(1_000e9);
+        _setOtherMarketDebtForTest(400e9);
+
+        vm.prank(admin);
+        burnerLoans.setGlobalDebtCap(1_000e9);
+
+        assertEq(mintr.mintApproval(address(burnerLoans)), 600e9, "equal-cap approval");
+    }
+
+    // given an existing global cap with active debt
+    //  when the cap is decreased but remains above active debt
+    //   then MINTR approval equals the decreased cap less active debt
+    function test_givenExistingCap_whenNewCapIsLower_reconcilesRemainingApproval() public {
+        vm.prank(admin);
+        burnerLoans.setGlobalDebtCap(1_000e9);
+        _setOtherMarketDebtForTest(400e9);
+
+        vm.prank(admin);
         burnerLoans.setGlobalDebtCap(750e9);
-        vm.stopPrank();
 
-        assertEq(mintr.mintApproval(address(burnerLoans)), 750e9, "decreased approval");
+        assertEq(mintr.mintApproval(address(burnerLoans)), 350e9, "decreased approval");
     }
 
     // setGlobalDebtCap

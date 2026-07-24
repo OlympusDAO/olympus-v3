@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -49,6 +50,23 @@ contract BurnerLoansSetBackingOracleTest is BurnerLoansTest {
     }
 
     // setBackingOracle
+    // given backing oracle does not implement IOlympusBackingOracle
+    //  when setBackingOracle is called by admin
+    //   then it reverts
+    function test_givenBackingOracleDoesNotSupportInterface_reverts() public {
+        address invalidBackingOracle = address(new MockInvalidBackingOracleForSetter());
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidBackingOracle.selector,
+                invalidBackingOracle
+            )
+        );
+        burnerLoans.setBackingOracle(invalidBackingOracle);
+    }
+
+    // setBackingOracle
     // given backing oracle address is nonzero
     //  when setBackingOracle is called by admin
     //   then it stores the oracle and emits the configuration event
@@ -61,5 +79,11 @@ contract BurnerLoansSetBackingOracleTest is BurnerLoansTest {
         burnerLoans.setBackingOracle(address(newBackingOracle));
 
         assertEq(burnerLoans.backingOracle(), address(newBackingOracle), "backing oracle");
+    }
+}
+
+contract MockInvalidBackingOracleForSetter is IERC165 {
+    function supportsInterface(bytes4) external pure returns (bool) {
+        return false;
     }
 }

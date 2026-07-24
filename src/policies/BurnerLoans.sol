@@ -6,6 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
@@ -27,7 +28,10 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
 /// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
 contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
+    /// @notice Maximum active OHM principal across all Burner Loans markets.
     uint128 public globalDebtCapOhm;
+
+    /// @notice Oracle supplying the canonical backing value per OHM.
     address public backingOracle;
 
     // ========== INTERNAL STRUCTS ========== //
@@ -62,8 +66,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
-        IDepositManager depositManager_
-    ) BurnerLoansLifecycle(kernel_, ohm_, depositManager_) {}
+        IDepositManager depositManager_,
+        IOlympusBackingOracle backingOracle_
+    ) BurnerLoansLifecycle(kernel_, ohm_, depositManager_) {
+        BurnerLoansDependencies.validateBackingOracle(address(backingOracle_));
+        backingOracle = address(backingOracle_);
+    }
 
     // ========== POLICY SETUP ========== //
 
@@ -100,14 +108,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
 
     /// @notice Sets the oracle supplying canonical OHM backing.
     function setBackingOracle(address backingOracle_) external givenEnabled onlyAdminRole {
-        if (backingOracle_ == address(0)) revert BurnerLoans_ZeroAddress();
+        BurnerLoansDependencies.validateBackingOracle(backingOracle_);
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
     function syncMintApproval() external override returns (uint256 approval) {
-        _onlyBurnerLoansManager();
+        _onlyBurnerLoansAdmin();
         approval = BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, globalDebtCapOhm);
         emit MintApprovalSynchronized(approval);
     }
@@ -128,14 +136,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address onBehalfOf_
     ) external returns (uint256, uint256) {
         _requireEnabled();
-        _requireAssetOriginationsEnabled(asset_);
+        (uint32 marketId, ) = _requireAssetOriginationsEnabled(asset_);
         if (amount_ == 0) revert BurnerLoans_ZeroAmount();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         return
             BurnerLoansCustody.depositCollateral(
                 _FLOAN,
                 _DEPOSIT_MANAGER,
-                _marketId(asset_),
+                marketId,
                 asset_,
                 amount_,
                 onBehalfOf_
@@ -165,10 +173,10 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         )
     {
         _requireEnabled();
-        _requireAssetConfigured(asset_);
+        (uint32 marketId, ) = _requireAssetConfigured(asset_);
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         BurnerLoansCustody.WithdrawParams memory params;
-        params.marketId = _marketId(asset_);
+        params.marketId = marketId;
         params.asset = asset_;
         params.onBehalfOf = onBehalfOf_;
         params.recipient = recipient_;
@@ -229,12 +237,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external override nonReentrant returns (uint256 healthFactor) {
         _requireEnabled();
         if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
+        (uint32 marketId, ) = _requireAssetConfigured(asset_);
         return
             BurnerLoansCustody.repay(
                 _FLOAN,
                 _MINTR,
                 _OHM,
-                _marketId(asset_),
+                marketId,
                 asset_,
                 onBehalfOf_,
                 repayOhm_
@@ -405,13 +414,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ) external view override returns (RepayPreview memory) {
         _requireEnabled();
         if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
-        return
-            BurnerLoansView.previewRepayForBorrower(
-                _FLOAN,
-                _marketId(asset_),
-                onBehalfOf_,
-                repayOhm_
-            );
+        (uint32 marketId, ) = _requireAssetConfigured(asset_);
+        return BurnerLoansView.previewRepayForBorrower(_FLOAN, marketId, onBehalfOf_, repayOhm_);
     }
 
     function previewExtend(

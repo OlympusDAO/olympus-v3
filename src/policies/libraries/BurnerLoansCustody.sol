@@ -29,8 +29,10 @@ import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.
 library BurnerLoansCustody {
     using TransferHelper for ERC20;
 
+    /// @dev Fixed-point scale used for withdrawal health validation.
     uint256 private constant _WAD = 1e18;
 
+    /// @notice Parameters for executing a borrow.
     struct BorrowParams {
         uint32 marketId;
         address asset;
@@ -40,6 +42,7 @@ library BurnerLoansCustody {
         uint256 maxFee;
     }
 
+    /// @notice Parameters for executing a collateral withdrawal.
     struct WithdrawParams {
         uint32 marketId;
         address asset;
@@ -48,6 +51,14 @@ library BurnerLoansCustody {
         uint128 amount;
     }
 
+    /// @notice Quotes and executes a borrow against the first borrower position.
+    /// @dev Reverts on quote validation failure, excessive fees, transfer failure, or FLOAN/MINTR
+    ///      mutation failure.
+    /// @param dependencies_ Burner Loans dependency context.
+    /// @param mintr_ MINTR module used to mint debt.
+    /// @param treasury_ Treasury receiving collateral-denominated fees.
+    /// @param params_ Borrow execution parameters.
+    /// @return preview Executed borrow quote.
     function borrow(
         BurnerLoansContext memory dependencies_,
         MINTRv1 mintr_,
@@ -89,6 +100,11 @@ library BurnerLoansCustody {
         );
     }
 
+    /// @notice Deposits collateral into custody and credits the borrower position.
+    /// @dev Reverts when custody is unsupported, limits are exceeded, credit rounds to zero, or
+    ///      FLOAN rejects the position mutation.
+    /// @return depositedCollateral Actual collateral credited after vault rounding.
+    /// @return totalCollateral Resulting position collateral.
     function depositCollateral(
         IFLOANv1 floan_,
         IDepositManager depositManager_,
@@ -125,6 +141,13 @@ library BurnerLoansCustody {
         return (depositedCollateral_, totalCollateral_);
     }
 
+    /// @notice Validates and executes a collateral withdrawal.
+    /// @dev Reverts for invalid inputs, unsupported custody, insufficient or unhealthy collateral,
+    ///      zero vault output, or an underlying mutation failure.
+    /// @return tokenOut Collateral token returned.
+    /// @return amountOut Actual amount returned after vault conversion.
+    /// @return remainingCollateral Resulting credited collateral.
+    /// @return healthFactor Resulting position health factor.
     function withdrawCollateral(
         BurnerLoansContext memory dependencies_,
         IDepositManager depositManager_,
@@ -197,6 +220,9 @@ library BurnerLoansCustody {
         tokenOut = params_.asset;
     }
 
+    /// @notice Validates custody support for the calling Burner Loans policy.
+    /// @dev Reverts with `BurnerLoans_InvalidDepositManager` when the manager, asset, or period is
+    ///      unavailable.
     function validateCustodySupport(
         IDepositManager depositManager_,
         address asset_,
@@ -213,6 +239,9 @@ library BurnerLoansCustody {
             );
     }
 
+    /// @notice Validates custody support for an explicit operator.
+    /// @dev Reverts with `BurnerLoans_InvalidDepositManager` when the manager, asset, or period is
+    ///      unavailable.
     function validateCustodySupportFor(
         IDepositManager depositManager_,
         address asset_,
@@ -243,6 +272,8 @@ library BurnerLoansCustody {
         }
     }
 
+    /// @notice Validates a deposit amount for the calling Burner Loans policy.
+    /// @dev Reverts when the amount is below the minimum or would exceed the operator deposit cap.
     function validateDepositAmount(
         IDepositManager depositManager_,
         address asset_,
@@ -258,6 +289,8 @@ library BurnerLoansCustody {
         );
     }
 
+    /// @notice Validates a deposit amount for an explicit operator.
+    /// @dev Reverts when the amount is below the minimum or would exceed the operator deposit cap.
     function validateDepositAmountFor(
         IDepositManager depositManager_,
         address asset_,
@@ -286,6 +319,10 @@ library BurnerLoansCustody {
         }
     }
 
+    /// @notice Quotes withdrawable collateral credited by a vault deposit.
+    /// @param vault_ ERC-4626 vault, or zero for direct custody.
+    /// @param amount_ Underlying amount supplied.
+    /// @return Actual withdrawable credit, rounded according to the vault.
     function previewDepositAmount(address vault_, uint128 amount_) public view returns (uint128) {
         if (vault_ == address(0)) return amount_;
         IERC4626 vault = IERC4626(vault_);
@@ -293,12 +330,20 @@ library BurnerLoansCustody {
         return shares == 0 ? 0 : SafeCast.toUint128(vault.previewRedeem(shares));
     }
 
+    /// @notice Quotes vault assets returned for a requested collateral debit.
+    /// @param vault_ ERC-4626 vault, or zero for direct custody.
+    /// @param amount_ Credited collateral amount.
+    /// @return Actual underlying amount returned by the vault.
     function previewWithdrawAmount(address vault_, uint256 amount_) public view returns (uint256) {
         if (vault_ == address(0)) return amount_;
         IERC4626 vault = IERC4626(vault_);
         return vault.previewRedeem(vault.convertToShares(amount_));
     }
 
+    /// @notice Transfers collateral into DepositManager custody.
+    /// @dev Reverts on transfer failure, residual collateral, receipt approval failure, or a
+    ///      DepositManager error.
+    /// @return depositedCollateral Actual collateral credited after vault rounding.
     function deposit(
         IDepositManager depositManager_,
         address asset_,
@@ -332,6 +377,9 @@ library BurnerLoansCustody {
         _approveReceiptBurn(depositManager_, asset_, depositPeriod_);
     }
 
+    /// @notice Withdraws collateral from DepositManager custody.
+    /// @dev Reverts with the underlying DepositManager error when withdrawal is unavailable.
+    /// @return Actual amount transferred to the recipient.
     function withdraw(
         IDepositManager depositManager_,
         address asset_,
@@ -352,6 +400,8 @@ library BurnerLoansCustody {
             );
     }
 
+    /// @notice Returns validated custody accounting for an asset and operator.
+    /// @dev Reverts when custody support is invalid.
     function getAssetCollateralStatus(
         IDepositManager depositManager_,
         address asset_,
@@ -367,6 +417,10 @@ library BurnerLoansCustody {
         return BurnerLoansCustodyAccounting.status(depositManager_, asset_, operator_);
     }
 
+    /// @notice Claims solvent custody yield to a recipient.
+    /// @dev Returns zero when no yield is claimable and reverts when custody is unsupported or
+    ///      insolvent.
+    /// @return claimed Actual yield transferred.
     function harvestYield(
         IDepositManager depositManager_,
         address asset_,
@@ -400,6 +454,9 @@ library BurnerLoansCustody {
         emit IBurnerLoans.YieldHarvested(asset_, claimed);
     }
 
+    /// @notice Reconciles MINTR approval to unused global debt capacity.
+    /// @dev Increases or decreases approval by the exact delta from the current allowance.
+    /// @return desiredApproval Remaining mint capacity after active principal.
     function reconcileMintApproval(
         IFLOANv1 floan_,
         MINTRv1 mintr_,
@@ -416,6 +473,10 @@ library BurnerLoansCustody {
         }
     }
 
+    /// @notice Repays principal, burns OHM, and restores equivalent MINTR capacity.
+    /// @dev Reverts for a missing/debt-free position, excessive or same-block repayment, token
+    ///      transfer failure, or an underlying FLOAN/MINTR failure.
+    /// @return healthFactor Max uint after full repayment, otherwise the conservative zero sentinel.
     function repay(
         IFLOANv1 floan_,
         MINTRv1 mintr_,
@@ -452,6 +513,10 @@ library BurnerLoansCustody {
         return remainingDebtOhm == 0 ? type(uint256).max : 0;
     }
 
+    /// @notice Quotes and executes a fixed-term maturity extension.
+    /// @dev Reverts for a missing position, invalid quote, excessive fee, transfer failure, or an
+    ///      underlying FLOAN mutation failure.
+    /// @return preview Executed extension quote.
     function extend(
         BurnerLoansContext memory dependencies_,
         TRSRYv1 treasury_,

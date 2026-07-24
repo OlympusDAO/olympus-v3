@@ -8,9 +8,13 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @title Burner Loans Market Config
 /// @notice Encodes and decodes the Burner Loans-specific portion of a FLOAN market.
 library BurnerLoansMarketConfig {
+    /// @notice FLOAN configuration schema identifier for Burner Loans v1.
     bytes16 internal constant CONFIG_ID = bytes16("Burner Loans v1");
+
+    /// @dev Exact ABI-encoded length of `Data`.
     uint256 internal constant DATA_LENGTH = 6 * 32;
 
+    /// @notice Burner Loans-specific fields encoded into a FLOAN market's configuration data.
     struct Data {
         uint128 maxKeeperReward;
         uint16 backingMultiplierBps;
@@ -39,6 +43,27 @@ library BurnerLoansMarketConfig {
         }
         if (marketIds.length != 1) {
             revert IBurnerLoans.BurnerLoans_AmbiguousMarket(collateralToken_, marketIds.length);
+        }
+        return uint32(marketIds[0]);
+    }
+
+    /// @notice Resolves the first FLOAN market for a facility and token pair.
+    /// @dev Burner Loans deliberately operates on the earliest matching market when FLOAN contains
+    ///      multiple matches. Reverts when no matching market exists.
+    /// @param floan_ FLOAN module to query.
+    /// @param facility_ Facility servicing the market.
+    /// @param collateralToken_ Market collateral token.
+    /// @param debtToken_ Market debt token.
+    /// @return marketId_ First matching FLOAN market identifier.
+    function firstMarketId(
+        IFLOANv1 floan_,
+        address facility_,
+        address collateralToken_,
+        address debtToken_
+    ) internal view returns (uint32) {
+        uint256[] memory marketIds = floan_.getMarketIds(facility_, collateralToken_, debtToken_);
+        if (marketIds.length == 0) {
+            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(collateralToken_);
         }
         return uint32(marketIds[0]);
     }

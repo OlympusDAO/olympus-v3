@@ -23,6 +23,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             address(usds),
             _single(alice)
         );
+        assertEq(preview.seizedDebtOhm, 100e9, "preview seized debt");
+        assertEq(preview.seizedCollateral, 2_000e18, "preview seized collateral");
+        assertEq(preview.keeperReward, 20e18, "preview one percent reward");
+        assertEq(preview.collateralToTreasury, 1_980e18, "preview treasury collateral");
+        assertTrue(preview.executable, "preview executable");
         uint256 keeperBefore = usds.balanceOf(keeper);
         uint256 treasuryBefore = usds.balanceOf(address(trsry));
 
@@ -55,6 +60,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             mintApprovalBefore,
             "seizure does not mutate mint approval"
         );
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // seize
@@ -76,6 +82,8 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             "defaulted principal"
         );
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active set");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+        _assertFloanPositionMatchesBurnerLoans(address(usds), bob);
     }
 
     // setGlobalDebtCap
@@ -116,6 +124,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             uint8(IBurnerLoans.PositionStatus.Seized),
             "seized status"
         );
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // seize
@@ -155,12 +164,19 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     function test_givenProtocolSeizer_seizeRoutesAllCollateralToTreasury() public {
         _makeUnhealthy(alice);
         uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.prank(protocolSeizer);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        assertEq(preview.keeperReward, 0, "preview protocol reward");
+        assertEq(preview.collateralToTreasury, 2_000e18, "preview treasury collateral");
 
         vm.prank(protocolSeizer);
         (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
 
-        assertEq(reward, 0, "protocol reward");
-        assertEq(treasuryAmount, 2_000e18, "all collateral to treasury");
+        assertEq(reward, preview.keeperReward, "protocol reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "all collateral to treasury");
         assertEq(usds.balanceOf(address(trsry)), treasuryBefore + 2_000e18, "treasury balance");
     }
 
@@ -173,11 +189,17 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         _borrow(bob, 4_000e18, 100e9);
         _configurePrice(address(ohm), 20e18);
         uint256 activeDebtBefore = burnerLoans.totalActiveDebtOhm();
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_PositionNotSeizable.selector,
+            bob
+        );
 
         vm.prank(keeper);
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PositionNotSeizable.selector, bob)
-        );
+        vm.expectRevert(error);
+        burnerLoans.previewSeize(address(usds), _pair(alice, bob));
+
+        vm.prank(keeper);
+        vm.expectRevert(error);
         burnerLoans.seize(address(usds), _pair(alice, bob));
 
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "alice debt");
@@ -237,6 +259,9 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.seize(address(usds), _single(alice));
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
+        burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
         burnerLoans.seize(address(usds), _single(alice));
     }
 
@@ -248,6 +273,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         _makeUnhealthy(alice);
         vm.prank(emergency);
         burnerLoans.disable(bytes(""));
+
+        vm.prank(keeper);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewSeize(address(usds), _single(alice));
 
         vm.prank(keeper);
         vm.expectRevert(IEnabler.NotEnabled.selector);
@@ -264,57 +293,47 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         _makeUnhealthy(alice);
         vm.prank(admin);
         burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        vm.prank(keeper);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        assertTrue(preview.executable, "disabled asset seizure preview");
 
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(reward, preview.keeperReward, "keeper reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "treasury collateral");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt");
+    }
+
+    // seize
+    // given multiple markets for the facility and token pair
+    //  when seizure is previewed and executed
+    //   then Burner Loans uses the first market
+    function test_givenMultipleMarkets_previewAndSeizeUseFirstMarket() public {
+        _makeUnhealthy(alice);
+        uint32 firstMarketId = burnerLoansConfig.marketId(address(usds));
+        uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
+
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
         vm.prank(keeper);
         burnerLoans.seize(address(usds), _single(alice));
 
-        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt");
-    }
-}
-
-contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
-    // previewSeize
-    // given unhealthy position
-    //  when previewSeize is called
-    //   then it returns batch amounts
-    function test_givenUnhealthyPosition_previewSeize_returnsBatchAmounts() public {
-        _makeUnhealthy(alice);
-
-        vm.prank(keeper);
-        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
-            address(usds),
-            _single(alice)
-        );
-
-        assertEq(preview.seizedDebtOhm, 100e9, "seized debt");
-        assertEq(preview.seizedCollateral, 2_000e18, "seized collateral");
-        assertEq(preview.keeperReward, 20e18, "one percent reward");
-        assertEq(preview.collateralToTreasury, 1_980e18, "treasury collateral");
-        assertTrue(preview.executable, "executable");
+        assertEq(preview.seizedDebtOhm, 100e9, "preview first-market debt");
+        assertEq(floan.getMarketPrincipalDefaulted(firstMarketId), 100e9, "first-market default");
+        assertEq(floan.getMarketPrincipalDefaulted(secondMarketId), 0, "second-market default");
     }
 
-    // previewSeize
-    // given protocol seizer
-    //  when previewSeize is called
-    //   then it returns zero reward
-    function test_givenProtocolSeizer_previewSeize_returnsZeroReward() public {
-        _makeUnhealthy(alice);
-
-        vm.prank(protocolSeizer);
-        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
-            address(usds),
-            _single(alice)
-        );
-
-        assertEq(preview.keeperReward, 0, "protocol reward");
-        assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
-    }
-
-    // previewSeize
+    // seize
     // given heart caller
-    //  when previewSeize is called
-    //   then it returns zero reward
-    function test_givenHeartCaller_previewSeize_returnsZeroReward() public {
+    //  when seizure is previewed and executed
+    //   then it returns zero reward and routes all collateral to treasury
+    function test_givenHeartCaller_seizeRoutesAllCollateralToTreasury() public {
         _makeUnhealthy(alice);
         vm.prank(admin);
         rolesAdmin.grantRole(HEART_ROLE, keeper);
@@ -327,36 +346,47 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
 
         assertEq(preview.keeperReward, 0, "heart reward");
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
+
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
+        assertEq(reward, preview.keeperReward, "executed heart reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "executed treasury collateral");
     }
 
-    // previewSeize
+    // seize
     // given empty batch
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenEmptyBatch_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenEmptyBatch_seizeReverts() public {
         address[] memory borrowers = new address[](0);
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidBatch.selector);
         burnerLoans.previewSeize(address(usds), borrowers);
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidBatch.selector);
+        burnerLoans.seize(address(usds), borrowers);
     }
 
-    // previewSeize
+    // seize
     // given batch above maximum
-    //  when previewSeize is called
-    //   then it reverts
-    function testFuzz_givenBatchAboveMaximum_previewSeize_reverts(uint256 batchLength_) public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenBatchAboveMaximum_seizeReverts_fuzz(uint256 batchLength_) public {
         uint256 batchLength = bound(batchLength_, 51, 100);
         address[] memory borrowers = new address[](batchLength);
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidBatch.selector);
         burnerLoans.previewSeize(address(usds), borrowers);
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidBatch.selector);
+        burnerLoans.seize(address(usds), borrowers);
     }
 
-    // previewSeize
+    // seize
     // given exact maximum batch
-    //  when previewSeize is called
-    //   then it succeeds
-    function test_givenExactMaximumBatch_previewSeize_succeeds() public {
+    //  when seizure is previewed and executed
+    //   then both succeed with matching totals
+    function test_givenExactMaximumBatch_seizeSucceeds() public {
         address[] memory borrowers = new address[](50);
         for (uint256 i; i < borrowers.length; ++i) {
             address borrower = address(uint160(i + 100));
@@ -383,97 +413,93 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(preview.seizedCollateral, 0, "seized collateral");
         assertEq(preview.keeperReward, 0, "keeper reward");
         assertTrue(preview.executable, "executable");
+
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), borrowers);
+        assertEq(reward, preview.keeperReward, "executed keeper reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "executed treasury collateral");
     }
 
-    // previewSeize
+    // seize
     // given duplicate borrower
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenDuplicateBorrower_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenDuplicateBorrower_seizeReverts() public {
         _makeUnhealthy(alice);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_DuplicateBorrower.selector, alice)
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_DuplicateBorrower.selector,
+            alice
         );
+
+        vm.expectRevert(error);
         burnerLoans.previewSeize(address(usds), _pair(alice, alice));
+
+        vm.expectRevert(error);
+        burnerLoans.seize(address(usds), _pair(alice, alice));
     }
 
-    // previewSeize
+    // seize
     // given zero borrower
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenZeroBorrower_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenZeroBorrower_seizeReverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
         burnerLoans.previewSeize(address(usds), _single(address(0)));
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAddress.selector);
+        burnerLoans.seize(address(usds), _single(address(0)));
     }
 
-    // previewSeize
+    // seize
     // given healthy position
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenHealthyPosition_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenHealthyPosition_seizeReverts() public {
         _borrow(alice, 2_000e18, 100e9);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_PositionNotSeizable.selector, alice)
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_PositionNotSeizable.selector,
+            alice
         );
+
+        vm.expectRevert(error);
         burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.expectRevert(error);
+        burnerLoans.seize(address(usds), _single(alice));
     }
 
-    // previewSeize
+    // seize
     // given debt free position
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenDebtFreePosition_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenDebtFreePosition_seizeReverts() public {
         vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
         burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
+        burnerLoans.seize(address(usds), _single(alice));
     }
 
-    // previewSeize
+    // seize
     // given stale prices
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenStalePrices_previewSeize_reverts() public {
+    //  when seizure is previewed and executed
+    //   then both revert
+    function test_givenStalePrices_seizeReverts() public {
         _makeUnhealthy(alice);
         vm.warp(block.timestamp + 9 hours);
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
         burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
+        burnerLoans.seize(address(usds), _single(alice));
     }
 
-    // previewSeize
-    // given policy disabled
-    //  when previewSeize is called
-    //   then it reverts
-    function test_givenPolicyDisabled_previewSeize_reverts() public {
-        _makeUnhealthy(alice);
-        vm.prank(emergency);
-        burnerLoans.disable(bytes(""));
-
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.previewSeize(address(usds), _single(alice));
-    }
-
-    // previewSeize
-    // given asset originations disabled
-    //  when previewSeize is called
-    //   then it remains available
-    function test_givenAssetOriginationsDisabled_previewSeizeRemainsAvailable() public {
-        _makeUnhealthy(alice);
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-
-        assertTrue(
-            burnerLoans.previewSeize(address(usds), _single(alice)).executable,
-            "disabled asset seizure preview"
-        );
-    }
-
-    // previewSeize
+    // seize
     // given zero reward BPS
-    //  when previewSeize is called
-    //   then it returns zero reward
-    function test_givenZeroRewardBps_previewSeize_returnsZeroReward() public {
+    //  when seizure is previewed and executed
+    //   then both return zero reward
+    function test_givenZeroRewardBps_seizeReturnsZeroReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.keeperRewardBps = 0;
         riskConfig.maxKeeperReward = 1_000e18;
@@ -488,13 +514,18 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
 
         assertEq(preview.keeperReward, 0, "keeper reward");
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
+
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
+        assertEq(reward, preview.keeperReward, "executed keeper reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "executed treasury collateral");
     }
 
-    // previewSeize
+    // seize
     // given zero max reward
-    //  when previewSeize is called
-    //   then it returns zero reward
-    function test_givenZeroMaxReward_previewSeize_returnsZeroReward() public {
+    //  when seizure is previewed and executed
+    //   then both return zero reward
+    function test_givenZeroMaxReward_seizeReturnsZeroReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.maxKeeperReward = 0;
         vm.prank(admin);
@@ -508,13 +539,18 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
 
         assertEq(preview.keeperReward, 0, "keeper reward");
         assertEq(preview.collateralToTreasury, 2_000e18, "treasury collateral");
+
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
+        assertEq(reward, preview.keeperReward, "executed keeper reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "executed treasury collateral");
     }
 
-    // previewSeize
+    // seize
     // given max reward below BPS reward
-    //  when previewSeize is called
-    //   then it caps reward
-    function test_givenMaxRewardBelowBpsReward_previewSeize_capsReward() public {
+    //  when seizure is previewed and executed
+    //   then both cap the reward
+    function test_givenMaxRewardBelowBpsReward_seizeCapsReward() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
         riskConfig.maxKeeperReward = 5e18;
         vm.prank(admin);
@@ -527,6 +563,11 @@ contract BurnerLoansPreviewSeizeTest is BurnerLoansSeizureTestBase {
         );
 
         assertEq(preview.keeperReward, 5e18, "capped keeper reward");
+
+        vm.prank(keeper);
+        (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
+        assertEq(reward, preview.keeperReward, "executed capped keeper reward");
+        assertEq(treasuryAmount, preview.collateralToTreasury, "executed treasury collateral");
     }
 }
 
@@ -548,7 +589,7 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
     // given return limit above maximum
     //  when getSeizableBorrowers is called
     //   then it reverts
-    function testFuzz_givenReturnLimitAboveMaximum_getSeizableBorrowers_reverts(
+    function test_givenReturnLimitAboveMaximum_getSeizableBorrowers_reverts_fuzz(
         uint256 returnLimit_
     ) public {
         uint256 returnLimit = bound(returnLimit_, 51, 100);
@@ -800,19 +841,17 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
     }
 
     // isSeizable
-    // given ambiguous market
+    // given multiple markets
     //  when isSeizable is called
-    //   then it reverts
-    function test_givenAmbiguousMarket_isSeizable_reverts() public {
+    //   then it uses the first market
+    function test_givenMultipleMarkets_isSeizableUsesFirstMarket() public {
+        burnerLoans.setPositionForTest(
+            address(usds),
+            alice,
+            _position(2_000e18, 100e9, uint48(block.timestamp + 30 days))
+        );
         _createDuplicateUsdsMarketForTest();
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
-                address(usds),
-                2
-            )
-        );
-        burnerLoans.isSeizable(address(usds), alice);
+        assertFalse(burnerLoans.isSeizable(address(usds), alice), "first-market health");
     }
 }

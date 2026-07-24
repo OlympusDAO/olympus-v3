@@ -17,8 +17,10 @@ import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.
 /// @title Burner Loans View Library
 /// @notice Separately linked position and custody previews exposed by the lifecycle policy.
 library BurnerLoansView {
+    /// @dev Fixed-point health-factor scale.
     uint256 internal constant _WAD = 1e18;
 
+    /// @notice Converts a FLOAN position into the Burner Loans public position shape.
     function getPosition(
         IFLOANv1.Position memory position
     ) public pure returns (IBurnerLoans.Position memory) {
@@ -36,6 +38,7 @@ library BurnerLoansView {
             });
     }
 
+    /// @notice Returns the first Burner Loans position for a borrower and market.
     function getPositionForBorrower(
         IFLOANv1 floan_,
         uint32 marketId_,
@@ -44,6 +47,8 @@ library BurnerLoansView {
         return getPosition(BurnerLoansPositions.getOrEmpty(floan_, marketId_, borrower_));
     }
 
+    /// @notice Returns whether the borrower's first position is currently seizable.
+    /// @dev Reverts when market configuration or required pricing is unavailable.
     function isBorrowerSeizable(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -58,6 +63,9 @@ library BurnerLoansView {
             );
     }
 
+    /// @notice Returns whether a supplied FLOAN position is currently seizable.
+    /// @dev Debt-free/defaulted positions are not seizable; matured positions are seizable without
+    ///      a price read.
     function isSeizable(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -75,6 +83,8 @@ library BurnerLoansView {
             ) < _WAD;
     }
 
+    /// @notice Returns active principal for the first matching market.
+    /// @dev Returns zero when the facility and token pair has no market.
     function assetActiveDebtOhm(
         IFLOANv1 floan_,
         address facility_,
@@ -83,12 +93,12 @@ library BurnerLoansView {
     ) public view returns (uint256) {
         uint256[] memory marketIds = floan_.getMarketIds(facility_, asset_, debtToken_);
         if (marketIds.length == 0) return 0;
-        if (marketIds.length != 1) {
-            revert IBurnerLoans.BurnerLoans_AmbiguousMarket(asset_, marketIds.length);
-        }
         return floan_.getMarketPrincipalDue(uint32(marketIds[0]));
     }
 
+    /// @notice Quotes collateral credited by a deposit against a supplied position.
+    /// @dev Reverts for invalid configuration, disabled originations, zero/invalid amounts,
+    ///      unsupported custody, or zero vault credit.
     function previewDepositCollateral(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -123,6 +133,7 @@ library BurnerLoansView {
         totalCollateral = position.collateral + depositedCollateral;
     }
 
+    /// @notice Quotes a deposit against the borrower's first market position.
     function previewDepositCollateralForBorrower(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -139,6 +150,8 @@ library BurnerLoansView {
             );
     }
 
+    /// @notice Quotes principal repayment against a supplied position.
+    /// @dev Reverts for no debt, excessive repayment, or repayment in the borrow block.
     function previewRepay(
         uint128 repayOhm_,
         IFLOANv1.Position memory position
@@ -161,6 +174,7 @@ library BurnerLoansView {
         });
     }
 
+    /// @notice Quotes repayment against the borrower's first market position.
     function previewRepayForBorrower(
         IFLOANv1 floan_,
         uint32 marketId_,
@@ -171,6 +185,8 @@ library BurnerLoansView {
             previewRepay(repayOhm_, BurnerLoansPositions.getOrEmpty(floan_, marketId_, borrower_));
     }
 
+    /// @notice Quotes collateral withdrawal against a supplied position.
+    /// @dev Reverts for invalid configuration, zero/excessive amounts, or unsupported custody.
     function previewWithdrawCollateral(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -213,6 +229,7 @@ library BurnerLoansView {
             });
     }
 
+    /// @notice Quotes withdrawal against the borrower's first market position.
     function previewWithdrawCollateralForBorrower(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -233,7 +250,7 @@ library BurnerLoansView {
         BurnerLoansContext memory dependencies_,
         address asset_
     ) private view returns (IBurnerLoans.AssetConfig memory config) {
-        uint32 marketId_ = BurnerLoansMarketConfig.marketId(
+        uint32 marketId_ = BurnerLoansMarketConfig.firstMarketId(
             dependencies_.floan,
             dependencies_.facility,
             asset_,

@@ -3,16 +3,23 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 
 /// @title Burner Loans Position Lookup
-/// @notice Applies Burner Loans' one-position-per-market-and-borrower rule over generic FLOAN indexes.
+/// @notice Resolves the first position created for a borrower in a market.
+/// @dev FLOAN permits multiple positions. Burner Loans intentionally operates only on the first
+///      indexed position and leaves any later positions to their originating facility implementation.
 library BurnerLoansPositions {
     using SafeCast for uint256;
 
+    /// @notice Finds the first position for a borrower in a market.
+    /// @param floan_ FLOAN module to query.
+    /// @param marketId_ FLOAN market identifier.
+    /// @param borrower_ Position borrower.
+    /// @return exists Whether a matching position exists.
+    /// @return positionId First matching position identifier, or zero when absent.
     function find(
         IFLOANv1 floan_,
         uint32 marketId_,
@@ -22,15 +29,16 @@ library BurnerLoansPositions {
             marketId_,
             borrower_
         );
-        uint256 count = positionIds.length;
-        if (count > 1) {
-            revert IBurnerLoans.BurnerLoans_AmbiguousPosition(marketId_, borrower_, count);
-        }
-        if (count == 0) return (false, 0);
+        if (positionIds.length == 0) return (false, 0);
 
         return (true, positionIds[0].toUint64());
     }
 
+    /// @notice Returns the first borrower position or an empty position for the market.
+    /// @param floan_ FLOAN module to query.
+    /// @param marketId_ FLOAN market identifier.
+    /// @param borrower_ Position borrower.
+    /// @return position Existing first position or a zero-valued position preserving identity.
     function getOrEmpty(
         IFLOANv1 floan_,
         uint32 marketId_,
@@ -53,6 +61,12 @@ library BurnerLoansPositions {
             });
     }
 
+    /// @notice Returns the first borrower position ID, creating a position when absent.
+    /// @dev Reverts with the underlying FLOAN error if position creation is not permitted.
+    /// @param floan_ FLOAN module to mutate.
+    /// @param marketId_ FLOAN market identifier.
+    /// @param borrower_ Position borrower.
+    /// @return positionId Existing or newly created position identifier.
     function getOrCreate(
         IFLOANv1 floan_,
         uint32 marketId_,

@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -31,6 +32,8 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
 abstract contract BurnerLoansTest is Test {
+    using SafeCast for uint256;
+
     event AuthorizationSet(
         address indexed caller,
         address indexed account,
@@ -91,8 +94,13 @@ abstract contract BurnerLoansTest is Test {
         price = new MockPrice(kernel, PRICE_DECIMALS, uint32(8 hours));
         receiptTokenManager = new ReceiptTokenManager();
         depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
-        burnerLoans = new BurnerLoansHarness(kernel, IERC20(address(ohm)), depositManager);
         backingOracle = new MockOlympusBackingOracle(1e18);
+        burnerLoans = new BurnerLoansHarness(
+            kernel,
+            IERC20(address(ohm)),
+            depositManager,
+            backingOracle
+        );
 
         kernel.executeAction(Actions.InstallModule, address(floan));
         kernel.executeAction(Actions.InstallModule, address(mintr));
@@ -125,7 +133,6 @@ abstract contract BurnerLoansTest is Test {
         burnerLoansConfig.enable("");
         depositManager.setOperatorName(address(burnerLoans), "brn");
         burnerLoans.enable("");
-        burnerLoans.setBackingOracle(address(backingOracle));
 
         vm.stopPrank();
     }
@@ -341,13 +348,16 @@ abstract contract BurnerLoansTest is Test {
     }
 
     function _assertDepositMatchesPreview(
+        address asset_,
+        address account_,
         uint256 previewDeposit_,
         uint256 previewTotal_,
         uint256 deposited_,
         uint256 total_
-    ) internal pure {
+    ) internal view {
         assertEq(previewDeposit_, deposited_, "preview deposit");
         assertEq(previewTotal_, total_, "preview total");
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_);
     }
 
     function _assertWithdrawalMatchesPreview(
@@ -377,6 +387,33 @@ abstract contract BurnerLoansTest is Test {
         assertEq(position.maturity, expectedMaturity_, "position maturity");
         assertEq(burnerLoans.totalActiveDebtOhm(), expectedDebtOhm_, "total active debt");
         assertEq(burnerLoans.assetActiveDebtOhm(asset_), expectedDebtOhm_, "asset active debt");
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_);
+    }
+
+    function _assertFloanPositionMatchesBurnerLoans(
+        address asset_,
+        address account_
+    ) internal view {
+        uint32 marketId = burnerLoansConfig.marketId(asset_);
+        uint256[] memory positionIds = floan.getPositionIdsForMarketAndBorrower(marketId, account_);
+        assertGt(positionIds.length, 0, "FLOAN position count");
+
+        IFLOANv1.Position memory floanPosition = floan.getPosition(positionIds[0].toUint64());
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(asset_, account_);
+        IBurnerLoans.PositionStatus expectedStatus = floanPosition.defaulted
+            ? IBurnerLoans.PositionStatus.Seized
+            : floanPosition.principalDue == 0
+            ? IBurnerLoans.PositionStatus.NoDebt
+            : IBurnerLoans.PositionStatus.Active;
+
+        assertEq(floanPosition.borrower, account_, "FLOAN borrower");
+        assertEq(floanPosition.marketId, marketId, "FLOAN market");
+        assertEq(floanPosition.collateral, position.depositedCollateral, "FLOAN collateral");
+        assertEq(floanPosition.principalDue, position.debtOhm, "FLOAN debt");
+        assertEq(floanPosition.interestDue, 0, "FLOAN interest");
+        assertEq(floanPosition.maturity, position.maturity, "FLOAN maturity");
+        assertEq(floanPosition.lastBorrowBlock, position.lastBorrowBlock, "FLOAN borrow block");
+        assertEq(uint8(position.status), uint8(expectedStatus), "FLOAN status");
     }
 
     /// @dev Replaces the real custody policy for tests that need injected impossible-state failures.
@@ -385,7 +422,12 @@ abstract contract BurnerLoansTest is Test {
         kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
 
         mockDepositManager = new MockDepositManager(kernel, address(usds));
-        burnerLoans = new BurnerLoansHarness(kernel, IERC20(address(ohm)), mockDepositManager);
+        burnerLoans = new BurnerLoansHarness(
+            kernel,
+            IERC20(address(ohm)),
+            mockDepositManager,
+            backingOracle
+        );
         kernel.executeAction(Actions.ActivatePolicy, address(burnerLoans));
         burnerLoansConfig = new BurnerLoansConfig(
             kernel,

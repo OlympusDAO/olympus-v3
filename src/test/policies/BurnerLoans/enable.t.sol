@@ -54,16 +54,4 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
         vm.expectRevert(IEnabler.NotDisabled.selector);
         burnerLoans.enable("");
     }
-
-    // borrow
-    // given the policy is disabled
-    //  when borrow is called
-    //   then it reverts before reaching the placeholder implementation
-    function test_borrow_givenDisabled_revertsBeforePlaceholder() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
-
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.borrow(address(usds), 1e9, alice, alice, 0);
-    }
 }

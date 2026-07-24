@@ -26,16 +26,23 @@ import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefin
 library BurnerLoansSeizure {
     using TransferHelper for ERC20;
 
+    /// @notice Maximum number of positions in one seizure batch.
     uint256 internal constant MAX_BATCH_SIZE = 50;
+
+    /// @dev Basis-point denominator.
     uint256 private constant _BPS = 10_000;
+
+    /// @dev Fixed-point scale for valuation calculations.
     uint256 private constant _WAD = 1e18;
 
+    /// @notice Price snapshot shared across a seizure batch.
     struct Pricing {
         uint256 ohmUsdPrice;
         uint256 backingPerOhmUsd;
         uint256 collateralUsdPrice;
     }
 
+    /// @notice Validated seizure batch and its position-level accounting.
     struct Batch {
         IBurnerLoans.SeizePreview preview;
         IBurnerLoans.AssetConfig config;
@@ -46,12 +53,14 @@ library BurnerLoansSeizure {
         uint256 creditedCollateral;
     }
 
+    /// @notice Market configuration and pricing shared during batch validation.
     struct BatchContext {
         uint32 marketId;
         IBurnerLoans.AssetConfig config;
         Pricing pricing;
     }
 
+    /// @notice Bounded active-borrower scan parameters.
     struct ScanParams {
         uint32 marketId;
         uint256 cursor;
@@ -59,6 +68,7 @@ library BurnerLoansSeizure {
         uint256 returnLimit;
     }
 
+    /// @notice Caller-supplied active-borrower scan request.
     struct ScanRequest {
         address asset;
         uint256 startIndex;
@@ -66,6 +76,7 @@ library BurnerLoansSeizure {
         uint256 maxBorrowersToReturn;
     }
 
+    /// @notice Accumulated active-borrower scan result.
     struct ScanResult {
         address[] borrowers;
         uint256 nextIndex;
@@ -75,6 +86,9 @@ library BurnerLoansSeizure {
         Pricing pricing;
     }
 
+    /// @notice Quotes seizure of a homogeneous borrower batch.
+    /// @dev Reverts for invalid batches, invalid configuration/custody/prices, duplicate borrowers,
+    ///      missing debt, or any position that is not seizable.
     function previewSeize(
         address asset_,
         address[] memory borrowers_
@@ -85,6 +99,9 @@ library BurnerLoansSeizure {
                 .preview;
     }
 
+    /// @notice Defaults a homogeneous borrower batch and routes withdrawn collateral.
+    /// @dev Applies the same validation as preview, then atomically defaults FLOAN positions,
+    ///      withdraws collateral, pays any keeper reward, and transfers the remainder to treasury.
     function seize(
         address asset_,
         address[] memory borrowers_
@@ -156,6 +173,8 @@ library BurnerLoansSeizure {
         );
     }
 
+    /// @notice Scans active borrowers and returns a bounded set of seizable addresses.
+    /// @dev Reverts for an excessive return limit or unavailable market configuration/pricing.
     function getSeizableBorrowers(
         ScanRequest memory request_
     )
@@ -176,7 +195,7 @@ library BurnerLoansSeizure {
         if (request_.maxBorrowersToReturn > MAX_BATCH_SIZE) {
             revert IBurnerLoans.BurnerLoans_InvalidBatch();
         }
-        uint32 marketId = BurnerLoansMarketConfig.marketId(
+        uint32 marketId = BurnerLoansMarketConfig.firstMarketId(
             dependencies_.floan,
             dependencies_.facility,
             request_.asset,
@@ -300,7 +319,7 @@ library BurnerLoansSeizure {
         }
 
         BatchContext memory context;
-        context.marketId = BurnerLoansMarketConfig.marketId(
+        context.marketId = BurnerLoansMarketConfig.firstMarketId(
             dependencies_.floan,
             dependencies_.facility,
             asset_,
@@ -536,19 +555,6 @@ library BurnerLoansSeizure {
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidPrice();
         }
-    }
-
-    function _assetConfig(
-        BurnerLoansContext memory dependencies_,
-        address asset_
-    ) private view returns (IBurnerLoans.AssetConfig memory) {
-        uint32 marketId = BurnerLoansMarketConfig.marketId(
-            dependencies_.floan,
-            dependencies_.facility,
-            asset_,
-            address(dependencies_.ohm)
-        );
-        return _assetConfigForMarket(dependencies_.floan, marketId);
     }
 
     function _assetConfigForMarket(

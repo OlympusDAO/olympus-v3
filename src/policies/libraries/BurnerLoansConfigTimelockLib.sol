@@ -10,6 +10,8 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @title Burner Loans Config Timelock Library
 /// @notice Pure transformations used when projecting partial timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
+    /// @notice Validates that a queued action's relevant configuration has not changed.
+    /// @dev Reverts for an unsupported action or when the current state hash differs.
     function validatePreState(
         IBurnerLoansConfig burnerLoans_,
         uint64 actionId_,
@@ -50,6 +52,8 @@ library BurnerLoansConfigTimelockLib {
         }
     }
 
+    /// @notice Decodes and executes one supported Burner Loans configuration action.
+    /// @dev Reverts for unsupported selectors and bubbles the target setter's revert data.
     function executeSubAction(
         IBurnerLoansConfig burnerLoans_,
         ITimelockBatchQueue.BatchAction memory action_
@@ -112,6 +116,8 @@ library BurnerLoansConfigTimelockLib {
         }
     }
 
+    /// @notice Applies a selected partial risk-configuration update.
+    /// @dev Reverts when no fields are selected or an unselected update field is nonzero.
     function applyAssetRiskConfigUpdate(
         IBurnerLoans.AssetConfig memory config,
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update_,
@@ -166,6 +172,7 @@ library BurnerLoansConfigTimelockLib {
         return config;
     }
 
+    /// @notice Projects a complete asset configuration into the risk setter's input shape.
     function toRiskConfig(
         IBurnerLoans.AssetConfig memory config_
     ) public pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
@@ -181,6 +188,8 @@ library BurnerLoansConfigTimelockLib {
             });
     }
 
+    /// @notice Applies a selected partial fee-configuration update.
+    /// @dev Reverts when no fields are selected or an unselected update field is nonzero.
     function applyFeeConfigUpdate(
         IBurnerLoans.AssetFeeConfig memory config,
         IBurnerLoans.AssetFeeConfig memory update_,

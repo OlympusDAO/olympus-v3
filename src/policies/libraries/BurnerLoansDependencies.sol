@@ -6,6 +6,7 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Contracts
 import {Keycode, Module, Permissions} from "src/Kernel.sol";
@@ -16,17 +17,34 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 /// @title Burner Loans Dependency Validation
 /// @notice Validates module interfaces and versions when the policy is activated.
 library BurnerLoansDependencies {
+    /// @dev FLOAN module keycode.
     // Each literal is exactly five bytes, so wrapping cannot truncate data.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _FLOAN_KEYCODE = Keycode.wrap(bytes5("FLOAN"));
+    /// @dev MINTR module keycode.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _MINTR_KEYCODE = Keycode.wrap(bytes5("MINTR"));
+    /// @dev PRICE module keycode.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _PRICE_KEYCODE = Keycode.wrap(bytes5("PRICE"));
+    /// @dev ROLES module keycode.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _ROLES_KEYCODE = Keycode.wrap(bytes5("ROLES"));
+    /// @dev TRSRY module keycode.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _TRSRY_KEYCODE = Keycode.wrap(bytes5("TRSRY"));
+
+    /// @notice Validates that an address implements the backing-oracle interface.
+    /// @dev Reverts for a zero address, an EOA, or a contract that reports no interface support.
+    function validateBackingOracle(address backingOracle_) public view {
+        if (backingOracle_ == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
+        if (
+            backingOracle_.code.length == 0 ||
+            !IERC165(backingOracle_).supportsInterface(type(IOlympusBackingOracle).interfaceId)
+        ) {
+            revert IBurnerLoans.BurnerLoans_InvalidBackingOracle(backingOracle_);
+        }
+    }
 
     /// @notice Returns the modules required by the lifecycle policy in dependency-slot order.
     function keycodes() public pure returns (Keycode[] memory dependencies) {

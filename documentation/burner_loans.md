@@ -167,7 +167,7 @@ facilityPrincipalDue + newPrincipal <= globalDebtCap
 | Global cap change | Unchanged        | Recalculated  | Reconciled to `cap - active principal`        |
 
 `BurnerLoans` stores the global cap; FLOAN stores each market cap and reports live facility OHM
-principal. Mint approval is finite rather than unlimited. The `burner_loans_manager` role may call
+principal. Mint approval is finite rather than unlimited. The `burner_loans_admin` role may call
 `syncMintApproval` to repair drift and restore capacity released by default without making seizure
 depend on MINTR availability.
 
@@ -233,13 +233,15 @@ can retry the same borrower range.
 | Asset origination state               | `burner_loans_admin` via config timelock  | Queued Burner Loans delay                                       |
 | Global disable                        | `admin` or `burner_loans_admin`           | Immediate risk reduction                                        |
 | Re-enable                             | Governed grace-period rules               | Prevents indefinite emergency authority                         |
-| Reconcile mint approval               | `burner_loans_manager`                    | Operational maintenance                                         |
+| Reconcile mint approval               | `burner_loans_admin`                      | Operational maintenance                                         |
 
 `BurnerLoansConfig` creates exactly one FLOAN market for each collateral/OHM pair under its bound
 facility and stores Burner Loans-specific values in `configData` under
 `bytes16("Burner Loans v1")`. Standard fixed-term fields remain typed in FLOAN. Constructor linkage
-checks interface compatibility and reported-Kernel equality. The deployer is responsible for
-supplying the intended immutable facility because those responses are not identity proofs.
+checks DepositManager interface compatibility and reported-Kernel equality. The backing oracle is
+required at deployment and both constructor installation and later rotation require ERC-165 support
+for `IOlympusBackingOracle`. The deployer is responsible for supplying the intended immutable
+facility because those responses are not identity proofs.
 
 ## Preview Semantics
 

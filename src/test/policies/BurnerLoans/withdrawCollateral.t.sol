@@ -34,6 +34,51 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
+    // - Market schema: incompatible config ID with malformed data
+    // - Action: preview and execute withdrawal
+    // - Expected branch: both reject the schema before decoding
+    function test_givenDifferentConfigId_previewAndWithdrawalRevertBeforeDecoding() public {
+        bytes16 incompatibleConfigId = bytes16("Different config");
+        uint32 marketId = _replaceMarketConfigForTest(address(usds), incompatibleConfigId, hex"01");
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_IncompatibleMarketConfig.selector,
+            marketId,
+            incompatibleConfigId
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewWithdrawCollateral(address(usds), 1e6, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.withdrawCollateral(address(usds), 1e6, alice, alice);
+    }
+
+    // Condition tree:
+    // - Market schema: compatible config ID with malformed data length
+    // - Action: preview and execute withdrawal
+    // - Expected branch: both reject the byte length before decoding
+    function test_givenInvalidConfigDataLength_previewAndWithdrawalRevertBeforeDecoding() public {
+        uint32 marketId = _replaceMarketConfigForTest(
+            address(usds),
+            bytes16("Burner Loans v1"),
+            hex"01"
+        );
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_InvalidMarketConfigData.selector,
+            marketId,
+            1
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewWithdrawCollateral(address(usds), 1e6, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.withdrawCollateral(address(usds), 1e6, alice, alice);
+    }
+
+    // Condition tree:
     // - Caller: owner (`alice`)
     // - Position state: debt-free direct-custody collateral
     // - Recipient: owner
@@ -59,6 +104,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             .withdrawCollateral(address(usds), 400e6, alice, alice);
 
         _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
         assertEq(usds.balanceOf(alice), 400e6, "alice balance");
         assertEq(usds.balanceOf(address(burnerLoans)), 0, "burner loans residual");
         assertEq(
@@ -170,6 +216,41 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         vm.prank(alice);
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
         burnerLoans.withdrawCollateral(address(usds), 0, alice, alice);
+    }
+
+    // Condition tree:
+    // - FLOAN markets: multiple markets for the facility and token pair
+    // - Actions: preview and execute a collateral withdrawal
+    // - Expected branch: both actions use the first market
+    function test_givenMultipleMarkets_previewAndWithdrawalUseFirstMarket() public {
+        _depositForAlice(100e6);
+        uint32 firstMarketId = burnerLoansConfig.marketId(address(usds));
+        uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(usds),
+            40e6,
+            alice
+        );
+        vm.prank(alice);
+        burnerLoans.withdrawCollateral(address(usds), 40e6, alice, alice);
+
+        assertEq(preview.remainingDepositedCollateral, 60e6, "preview first-market collateral");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            60e6,
+            "first-market position"
+        );
+        assertEq(
+            floan.getPositionIdsForMarketAndBorrower(firstMarketId, alice).length,
+            1,
+            "first-market position count"
+        );
+        assertEq(
+            floan.getPositionIdsForMarketAndBorrower(secondMarketId, alice).length,
+            0,
+            "second-market position count"
+        );
     }
 
     // Condition tree:
@@ -417,16 +498,16 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // Condition tree:
     // - Caller: owner
     // - Custody path: vault-backed DepositManager custody
-    // - Withdrawal amount: fuzzed positive amount whose vault share conversion rounds to zero after yield
+    // - Withdrawal amount: fuzzed positive amount worth less than one vault share after yield
     // - Expected branch: preview marks withdrawal non-executable and write reverts before debiting accounting
-    function test_withdrawCollateral_givenVaultShareRateRoundsOutputToZero_reverts(
-        uint128 amount_
-    ) public {
+    function test_givenAmountBelowOneVaultShare_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, 1_000e6));
         uint128 depositedAmount = 1_000_000e6;
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _depositVaultForAlice(vaultAsset, depositedAmount);
         vaultAsset.mint(address(vault), amount_ * depositedAmount);
+
+        assertEq(vault.convertToShares(amount_), 0, "withdrawal shares");
 
         IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
             address(vaultAsset),
@@ -455,6 +536,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             "liabilities"
         );
         assertEq(vaultAsset.balanceOf(alice), 0, "alice balance");
+        _assertFloanPositionMatchesBurnerLoans(address(vaultAsset), alice);
     }
 
     // Condition tree:
@@ -936,6 +1018,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         );
 
         _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining_, health);
+        _assertFloanPositionMatchesBurnerLoans(asset_, alice);
     }
 
     function _depositForAlice(uint128 amount_) internal {

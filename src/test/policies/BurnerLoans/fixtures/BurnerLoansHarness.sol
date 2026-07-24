@@ -9,6 +9,7 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -19,8 +20,9 @@ contract BurnerLoansHarness is BurnerLoans {
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
-        IDepositManager depositManager_
-    ) BurnerLoans(kernel_, ohm_, depositManager_) {}
+        IDepositManager depositManager_,
+        IOlympusBackingOracle backingOracle_
+    ) BurnerLoans(kernel_, ohm_, depositManager_, backingOracle_) {}
 
     function floanForTest() external view returns (IFLOANv1) {
         return _FLOAN;

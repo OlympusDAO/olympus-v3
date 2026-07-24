@@ -2,11 +2,13 @@
 pragma solidity >=0.8.24;
 
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -17,6 +19,8 @@ import {CallbackMinter} from "./fixtures/CallbackMinter.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
 contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
+    using SafeCast for uint256;
+
     event Borrowed(
         address indexed caller,
         address indexed asset,
@@ -37,6 +41,51 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function setUp() public override {
         super.setUp();
         operator = makeAddr("operator");
+    }
+
+    // Condition tree:
+    // - Market schema: incompatible config ID with malformed data
+    // - Action: preview and execute borrow
+    // - Expected branch: both reject the schema before decoding
+    function test_givenDifferentConfigId_previewAndBorrowRevertBeforeDecoding() public {
+        bytes16 incompatibleConfigId = bytes16("Different config");
+        uint32 marketId = _replaceMarketConfigForTest(address(usds), incompatibleConfigId, hex"01");
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_IncompatibleMarketConfig.selector,
+            marketId,
+            incompatibleConfigId
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+    }
+
+    // Condition tree:
+    // - Market schema: compatible config ID with malformed data length
+    // - Action: preview and execute borrow
+    // - Expected branch: both reject the byte length before decoding
+    function test_givenInvalidConfigDataLength_previewAndBorrowRevertBeforeDecoding() public {
+        uint32 marketId = _replaceMarketConfigForTest(
+            address(usds),
+            bytes16("Burner Loans v1"),
+            hex"01"
+        );
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_InvalidMarketConfigData.selector,
+            marketId,
+            1
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 
     function _depositDefaultCollateral(address account_) internal {
@@ -139,6 +188,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertEq(maturity, preview.maturity, "preview maturity");
         assertEq(healthFactor, preview.resultingHealthFactor, "preview health");
         assertTrue(preview.executable, "preview executable");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), onBehalfOf_);
     }
 
     function _borrowAssetWithPreview(
@@ -163,6 +213,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertEq(maturity, preview.maturity, "preview maturity");
         assertEq(healthFactor, preview.resultingHealthFactor, "preview health");
         assertTrue(preview.executable, "preview executable");
+        _assertFloanPositionMatchesBurnerLoans(asset_, borrower_);
     }
 
     function _expectBorrowAndPreviewRevert(bytes memory error_, uint128 ohmAmount_) internal {
@@ -659,52 +710,78 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 
-    // borrow
-    // given multiple markets for asset
-    //  when borrow is called
-    //   then it borrow and preview revert
-    function test_givenMultipleMarketsForAsset_borrowAndPreviewRevert() public {
-        _createDuplicateUsdsMarketForTest();
-        bytes memory error = abi.encodeWithSelector(
-            IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
+    // Condition tree:
+    // - FLOAN markets: multiple markets for the facility and token pair
+    // - Actions: deposit, preview borrow, and borrow
+    // - Expected branch: every action uses the first market
+    function test_givenMultipleMarkets_depositPreviewAndBorrowUseFirstMarket() public {
+        uint32 firstMarketId = burnerLoansConfig.marketId(address(usds));
+        uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
+        _depositDefaultCollateral(alice);
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
             address(usds),
-            2
+            1e9,
+            alice
         );
-
-        vm.expectRevert(error);
-        burnerLoans.previewBorrow(address(usds), 1e9, alice);
-
         vm.prank(alice);
-        vm.expectRevert(error);
-        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, preview.fee);
+
+        assertEq(floan.getMarketPrincipalDue(firstMarketId), 1e9, "first-market debt");
+        assertEq(floan.getMarketPrincipalDue(secondMarketId), 0, "second-market debt");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            1e9,
+            "first-market position"
+        );
     }
 
     // Condition tree:
     // - Market: one configured asset
     // - Position index: two FLOAN positions for the same borrower and market
-    // - Expected branch: position getter, preview, and borrow all reject ambiguous ownership
-    function test_givenMultiplePositionsForBorrower_borrowPreviewAndGetterRevert() public {
+    // - First position: credited collateral
+    // - Second position: empty
+    // - Expected branch: getter, preview, and borrow use only the first position
+    function test_givenMultiplePositionsForBorrower_borrowPreviewAndGetterUseFirstPosition()
+        public
+    {
+        _depositDefaultCollateral(alice);
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
-        vm.startPrank(address(burnerLoans));
-        floan.createPosition(marketId, alice);
-        floan.createPosition(marketId, alice);
-        vm.stopPrank();
-        bytes memory error = abi.encodeWithSelector(
-            IBurnerLoans.BurnerLoans_AmbiguousPosition.selector,
+        uint256[] memory firstPositionIds = floan.getPositionIdsForMarketAndBorrower(
             marketId,
-            alice,
-            2
+            alice
+        );
+        uint64 firstPositionId = firstPositionIds[0].toUint64();
+        vm.prank(address(burnerLoans));
+        uint64 secondPositionId = floan.createPosition(marketId, alice);
+
+        IBurnerLoans.Position memory exposedPosition = burnerLoans.getPosition(
+            address(usds),
+            alice
+        );
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            1e9,
+            alice
         );
 
-        vm.expectRevert(error);
-        burnerLoans.getPosition(address(usds), alice);
-
-        vm.expectRevert(error);
-        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+        assertEq(
+            exposedPosition.depositedCollateral,
+            DEFAULT_COLLATERAL_AMOUNT,
+            "first position collateral"
+        );
+        assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
-        vm.expectRevert(error);
-        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, preview.fee);
+
+        IFLOANv1.Position memory firstPosition = floan.getPosition(firstPositionId);
+        IFLOANv1.Position memory secondPosition = floan.getPosition(secondPositionId);
+        assertEq(firstPosition.collateral, DEFAULT_COLLATERAL_AMOUNT, "first collateral");
+        assertEq(firstPosition.principalDue, 1e9, "first debt");
+        assertEq(secondPosition.collateral, 0, "second collateral");
+        assertEq(secondPosition.principalDue, 0, "second debt");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // Condition tree:

@@ -10,6 +10,7 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
@@ -142,7 +143,8 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         BurnerLoansHarness localBurnerLoans = new BurnerLoansHarness(
             kernel_,
             IERC20(address(ohm)),
-            depositManager
+            new MockDepositManager(kernel_, address(usds)),
+            backingOracle
         );
 
         kernel_.executeAction(Actions.InstallModule, address(floan_));

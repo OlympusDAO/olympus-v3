@@ -105,7 +105,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, 1_000e6, "deposited");
         assertEq(total, 1_000e6, "total");
         _assertPositionAndActiveDebt(address(usds), alice, 1_000e6, 0, 0);
@@ -148,7 +155,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         assertEq(deposited, 1_000e6, "deposited");
         assertEq(total, 1_000e6, "total");
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(usds.balanceOf(address(burnerLoans)), 1, "preexisting dust remains");
         assertEq(usds.balanceOf(address(depositManager)), 1_000e6, "deposit manager balance");
         assertEq(
@@ -192,7 +206,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         assertEq(deposited, 100e6, "deposited");
         assertEq(total, 1_100e6, "total collateral");
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         _assertPositionAndActiveDebt(address(usds), alice, 1_100e6, debtOhm, maturity);
     }
 
@@ -225,7 +246,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, 100e6, "deposited");
         assertEq(total, 1_100e6, "total collateral");
         _assertPositionAndActiveDebt(address(usds), alice, 1_100e6, debtOhm, maturity);
@@ -254,7 +282,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, 100e6, "deposited");
         assertEq(total, 100e6, "total");
         assertEq(
@@ -294,7 +329,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, 600e6, "deposited");
         assertEq(total, 1_000e6, "total");
         assertEq(
@@ -335,7 +377,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, 250e6, "deposited");
         assertEq(total, 250e6, "total");
         assertEq(
@@ -713,7 +762,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewCredit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(vaultAsset),
+            alice,
+            previewCredit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, expectedCredit, "deposited");
         assertEq(total, expectedCredit, "total");
         assertEq(
@@ -756,7 +812,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice
         );
 
-        _assertDepositMatchesPreview(previewDeposit, previewTotal, deposited, total);
+        _assertDepositMatchesPreview(
+            address(usds),
+            alice,
+            previewDeposit,
+            previewTotal,
+            deposited,
+            total
+        );
         assertEq(deposited, amount_, "deposited");
         assertEq(total, amount_, "total");
     }

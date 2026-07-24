@@ -9,6 +9,11 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 /// @title Burner Loans Custody Accounting Library
 /// @notice Shared DepositManager accounting reads and shortfall validation.
 library BurnerLoansCustodyAccounting {
+    /// @notice Returns DepositManager custody accounting for an operator and asset.
+    /// @param depositManager_ DepositManager policy to query.
+    /// @param asset_ Custodied asset.
+    /// @param operator_ DepositManager operator.
+    /// @return result Shares, assets, borrowing, liabilities, yield, and solvency status.
     function status(
         IDepositManager depositManager_,
         address asset_,
@@ -24,6 +29,12 @@ library BurnerLoansCustodyAccounting {
         result.claimableYield = depositManager_.maxClaimYield(IERC20(asset_), operator_);
     }
 
+    /// @notice Reverts when DepositManager custody cannot cover the operator's liabilities.
+    /// @dev Borrow and extension add exposure without mutating DepositManager, so its post-mutation
+    ///      solvency validation does not run on those paths. Call this before either operation.
+    /// @param depositManager_ DepositManager policy to query.
+    /// @param asset_ Custodied asset.
+    /// @param operator_ DepositManager operator.
     function requireSolvent(
         IDepositManager depositManager_,
         address asset_,

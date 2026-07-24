@@ -20,8 +20,10 @@ import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.
 /// @notice Shared pricing and health validation for Burner Loans previews and execution.
 /// @dev Separately linked to keep the policy below EIP-170 without duplicating module state.
 library BurnerLoansQuote {
+    /// @dev Fixed-point scale for health and utilization values.
     uint256 internal constant _WAD = 1e18;
 
+    /// @notice Price snapshot and derived collateral valuation for one quote.
     struct Pricing {
         uint256 ohmUsdPrice;
         uint256 backingPerOhmUsd;
@@ -29,6 +31,7 @@ library BurnerLoansQuote {
         uint256 riskAdjustedCollateralUsd;
     }
 
+    /// @notice Cached inputs used to quote an extension.
     struct ExtensionContext {
         Pricing pricing;
         IBurnerLoans.AssetConfig config;
@@ -39,6 +42,9 @@ library BurnerLoansQuote {
         uint16 termCount;
     }
 
+    /// @notice Quotes a borrow for the first borrower position in a known market.
+    /// @dev Reverts on invalid configuration, disabled originations, custody shortfall, cap breach,
+    ///      stale pricing, matured debt, or unhealthy current/resulting debt.
     function previewBorrow(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -55,6 +61,8 @@ library BurnerLoansQuote {
             );
     }
 
+    /// @notice Quotes a borrow against a supplied FLOAN position snapshot.
+    /// @dev Applies the same validation and rounding used by execution.
     function quoteBorrow(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -144,6 +152,9 @@ library BurnerLoansQuote {
             });
     }
 
+    /// @notice Quotes an extension for the first borrower position in a known market.
+    /// @dev Reverts on invalid configuration, disabled originations, custody shortfall, missing
+    ///      debt, stale pricing, unhealthy debt, or an invalid resulting maturity.
     function previewExtend(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -160,6 +171,9 @@ library BurnerLoansQuote {
             );
     }
 
+    /// @notice Calculates current health for supplied collateral and debt.
+    /// @dev Returns max uint for zero debt and otherwise reverts when configuration or prices are
+    ///      unavailable.
     function positionHealthFactor(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -189,6 +203,10 @@ library BurnerLoansQuote {
             );
     }
 
+    /// @notice Quotes an extension against a supplied FLOAN position snapshot.
+    /// @dev Calculates the new maturity from the previous maturity rather than the current block
+    ///      timestamp. The resulting maturity must be in the future and within the configured
+    ///      horizon.
     function quoteExtend(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -385,12 +403,15 @@ library BurnerLoansQuote {
         BurnerLoansContext memory dependencies_,
         ExtensionContext memory context_
     ) private view returns (IBurnerLoans.ExtendPreview memory) {
-        uint256 maturityBase = context_.currentMaturity > block.timestamp
-            ? context_.currentMaturity
-            : block.timestamp;
-        uint256 requestedMaturity = maturityBase +
+        uint256 requestedMaturity = uint256(context_.currentMaturity) +
             uint256(context_.config.termLength) *
             context_.termCount;
+        if (requestedMaturity <= block.timestamp) {
+            revert IBurnerLoans.BurnerLoans_ExtensionMaturityNotFuture(
+                requestedMaturity,
+                block.timestamp
+            );
+        }
         uint256 maximumMaturity = block.timestamp + uint256(context_.config.maxMaturityHorizon);
         if (maximumMaturity > type(uint48).max) maximumMaturity = type(uint48).max;
         if (requestedMaturity > maximumMaturity) {
@@ -469,7 +490,7 @@ library BurnerLoansQuote {
         address debtToken_,
         address asset_
     ) private view returns (uint32 marketId_, IBurnerLoans.AssetConfig memory config) {
-        marketId_ = BurnerLoansMarketConfig.marketId(floan_, facility_, asset_, debtToken_);
+        marketId_ = BurnerLoansMarketConfig.firstMarketId(floan_, facility_, asset_, debtToken_);
         IFLOANv1.Market memory market = floan_.getMarket(marketId_);
         config = BurnerLoansMarketConfig.assetConfig(
             marketId_,

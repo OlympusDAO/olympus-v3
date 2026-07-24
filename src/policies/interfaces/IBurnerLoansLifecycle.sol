@@ -8,7 +8,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @notice State-changing borrower lifecycle operations.
 interface IBurnerLoansLifecycle is IBurnerLoans {
     /// @notice Reconciles MINTR approval to the global cap less active FLOAN principal.
-    /// @dev Restricted to the `burner_loans_manager` role.
+    /// @dev Restricted to the `burner_loans_admin` role.
     /// @return approval Remaining bounded MINTR approval after reconciliation.
     function syncMintApproval() external returns (uint256 approval);
 

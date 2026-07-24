@@ -24,7 +24,7 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
-import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Lifecycle Base
 /// @notice Lifecycle-only state and adapters after configuration and positions are externalized.
@@ -37,16 +37,31 @@ abstract contract BurnerLoansLifecycle is
     IBurnerLoansView,
     IVersioned
 {
+    /// @dev Basis-point denominator shared by lifecycle calculations.
     uint256 internal constant _BPS = BurnerLoansConstants.MAX_BPS;
+
+    /// @dev Fixed-point scale used for health factors and utilization values.
     uint256 internal constant _WAD = 1e18;
 
+    /// @dev Debt token minted by Burner Loans.
     IERC20 internal immutable _OHM;
+
+    /// @dev Decimal precision of `_OHM`.
     uint8 internal immutable _OHM_DECIMALS;
+
+    /// @dev Custody policy that holds collateral on behalf of Burner Loans.
     IDepositManager internal immutable _DEPOSIT_MANAGER;
 
+    /// @dev Fixed-term loan module holding markets and positions.
     IFLOANv1 internal _FLOAN;
+
+    /// @dev Minter module used to mint and burn OHM principal.
     MINTRv1 internal _MINTR;
+
+    /// @dev Price module used for collateral and OHM valuation.
     IPRICEv2 internal _PRICE;
+
+    /// @dev Treasury module receiving fees, yield, and seized collateral.
     TRSRYv1 internal _TRSRY;
 
     constructor(
@@ -65,6 +80,10 @@ abstract contract BurnerLoansLifecycle is
         ) {
             revert BurnerLoans_InvalidDepositManager(address(depositManager_));
         }
+        address depositManagerKernel = address(Policy(address(depositManager_)).kernel());
+        if (depositManagerKernel != address(kernel_)) {
+            revert BurnerLoans_DepositManagerKernelMismatch(address(kernel_), depositManagerKernel);
+        }
 
         _OHM = ohm_;
         _OHM_DECIMALS = ohm_.decimals();
@@ -72,36 +91,34 @@ abstract contract BurnerLoansLifecycle is
     }
 
     function _marketId(address asset_) internal view returns (uint32) {
-        return BurnerLoansMarketConfig.marketId(_FLOAN, address(this), asset_, address(_OHM));
+        return BurnerLoansMarketConfig.firstMarketId(_FLOAN, address(this), asset_, address(_OHM));
     }
 
+    /// @notice Resolves and decodes the unique Burner Loans market for an asset.
+    /// @dev Reverts when the market is absent, ambiguous, uses another schema, or has malformed data.
+    /// @param asset_ Collateral asset whose market is required.
+    /// @return marketId_ Resolved FLOAN market identifier.
+    /// @return config Decoded Burner Loans asset configuration.
     function _requireAssetConfigured(
         address asset_
-    ) internal view returns (AssetConfig memory config) {
-        uint32 marketId_ = _marketId(asset_);
+    ) internal view returns (uint32 marketId_, AssetConfig memory config) {
+        marketId_ = _marketId(asset_);
         IFLOANv1.Market memory market = _FLOAN.getMarket(marketId_);
-        return
-            BurnerLoansMarketConfig.assetConfig(
-                marketId_,
-                market,
-                _FLOAN.getMarketConfigData(marketId_)
-            );
+        config = BurnerLoansMarketConfig.assetConfig(
+            marketId_,
+            market,
+            _FLOAN.getMarketConfigData(marketId_)
+        );
     }
 
-    function _assetFeeConfig(address asset_) internal view returns (AssetFeeConfig memory) {
-        uint32 marketId_ = _marketId(asset_);
-        return
-            BurnerLoansMarketConfig.feeConfig(
-                marketId_,
-                _FLOAN.getMarket(marketId_),
-                _FLOAN.getMarketConfigData(marketId_)
-            );
-    }
-
+    /// @notice Resolves a configured market and requires originations to be enabled.
+    /// @param asset_ Collateral asset whose market is required.
+    /// @return marketId_ Resolved FLOAN market identifier.
+    /// @return config Decoded Burner Loans asset configuration.
     function _requireAssetOriginationsEnabled(
         address asset_
-    ) internal view returns (AssetConfig memory config) {
-        config = _requireAssetConfigured(asset_);
+    ) internal view returns (uint32 marketId_, AssetConfig memory config) {
+        (marketId_, config) = _requireAssetConfigured(asset_);
         if (!config.originationsEnabled) revert BurnerLoans_AssetOriginationsDisabled(asset_);
     }
 
@@ -109,8 +126,8 @@ abstract contract BurnerLoansLifecycle is
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
-    function _onlyBurnerLoansManager() internal view {
-        _requireRole(msg.sender, BURNER_LOANS_MANAGER_ROLE);
+    function _onlyBurnerLoansAdmin() internal view {
+        _requireRole(msg.sender, BURNER_LOANS_ADMIN_ROLE);
     }
 
     function _authorizeReEnable() internal view override {

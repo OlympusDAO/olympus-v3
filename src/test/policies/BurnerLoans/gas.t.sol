@@ -12,7 +12,6 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
-import {BURNER_LOANS_MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
@@ -282,15 +281,12 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     }
 
     // syncMintApproval
-    // given the caller is the Burner Loans manager
+    // given the caller is the Burner Loans admin
     //  when it reconciles MINTR approval with active debt
     //   then it records the operational admin gas cost
-    function test_gasSnapshot_manager_syncMintApproval() public {
-        vm.prank(admin);
-        rolesAdmin.grantRole(BURNER_LOANS_MANAGER_ROLE, admin);
-
-        vm.startPrank(admin);
-        vm.startSnapshotGas("BurnerLoans.manager.syncMintApproval");
+    function test_gasSnapshot_admin_syncMintApproval() public {
+        vm.startPrank(burnerLoansAdmin);
+        vm.startSnapshotGas("BurnerLoans.admin.syncMintApproval");
         uint256 approval = burnerLoans.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();

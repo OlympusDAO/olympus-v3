@@ -7,7 +7,6 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
-import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 
 contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
@@ -22,6 +21,51 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         bob = makeAddr("bob");
     }
 
+    // Condition tree:
+    // - Market schema: incompatible config ID with malformed data
+    // - Action: preview and execute repayment
+    // - Expected branch: both reject the schema before position or token handling
+    function test_givenDifferentConfigId_previewAndRepayRevertBeforeDecoding() public {
+        bytes16 incompatibleConfigId = bytes16("Different config");
+        uint32 marketId = _replaceMarketConfigForTest(address(usds), incompatibleConfigId, hex"01");
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_IncompatibleMarketConfig.selector,
+            marketId,
+            incompatibleConfigId
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewRepay(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.repay(address(usds), 1e9, alice);
+    }
+
+    // Condition tree:
+    // - Market schema: compatible config ID with malformed data length
+    // - Action: preview and execute repayment
+    // - Expected branch: both reject the byte length before position or token handling
+    function test_givenInvalidConfigDataLength_previewAndRepayRevertBeforeDecoding() public {
+        uint32 marketId = _replaceMarketConfigForTest(
+            address(usds),
+            bytes16("Burner Loans v1"),
+            hex"01"
+        );
+        bytes memory expectedError = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_InvalidMarketConfigData.selector,
+            marketId,
+            1
+        );
+
+        vm.expectRevert(expectedError);
+        burnerLoans.previewRepay(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(expectedError);
+        burnerLoans.repay(address(usds), 1e9, alice);
+    }
+
     // repay
     // given partial repayment
     //  when repay is called
@@ -31,6 +75,15 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
         _approveOhm(alice, 40e9);
         uint256 supplyBefore = ohm.totalSupply();
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            40e9,
+            alice
+        );
+        assertEq(preview.repayAmount, 40e9, "preview repay amount");
+        assertEq(preview.remainingDebtOhm, 60e9, "preview remaining debt");
+        assertEq(preview.resultingHealthFactor, 0, "preview unknown health sentinel");
+        assertTrue(preview.executable, "preview executable");
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.Repaid(alice, address(usds), alice, 40e9, 60e9);
@@ -49,6 +102,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
             "recycled mint approval"
         );
         assertEq(health, 0, "unknown partial health sentinel");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // repay
@@ -63,6 +117,14 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
         _approveOhm(alice, repayOhm_);
         uint256 supplyBefore = ohm.totalSupply();
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            repayOhm_,
+            alice
+        );
+        assertEq(preview.repayAmount, repayOhm_, "preview repay amount");
+        assertEq(preview.remainingDebtOhm, 100e9 - repayOhm_, "preview remaining debt");
+        assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
         burnerLoans.repay(address(usds), repayOhm_, alice);
@@ -83,6 +145,15 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
         _approveOhm(alice, 100e9);
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            100e9,
+            alice
+        );
+        assertEq(preview.repayAmount, 100e9, "preview repay amount");
+        assertEq(preview.remainingDebtOhm, 0, "preview remaining debt");
+        assertEq(preview.resultingHealthFactor, type(uint256).max, "preview debt-free health");
+        assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
         uint256 health = burnerLoans.repay(address(usds), 100e9, alice);
@@ -94,6 +165,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "facility debt");
         assertEq(health, type(uint256).max, "debt-free health");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // repay
@@ -134,6 +206,14 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _borrowForAlice(100e9);
         _approveOhm(alice, 1e9);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_SameBlockRepay.selector,
+                uint48(block.number)
+            )
+        );
+        burnerLoans.previewRepay(address(usds), 1e9, alice);
+
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -154,15 +234,17 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
         _approveOhm(alice, requested);
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_RepayExceedsDebt.selector,
+            requested,
+            100e9
+        );
+
+        vm.expectRevert(error);
+        burnerLoans.previewRepay(address(usds), requested, alice);
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_RepayExceedsDebt.selector,
-                requested,
-                100e9
-            )
-        );
+        vm.expectRevert(error);
         burnerLoans.repay(address(usds), requested, alice);
     }
 
@@ -171,6 +253,9 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     //  when repay is called
     //   then it reverts
     function test_givenZeroAmount_repayReverts() public {
+        vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
+        burnerLoans.previewRepay(address(usds), 0, alice);
+
         vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
         burnerLoans.repay(address(usds), 0, alice);
     }
@@ -192,6 +277,9 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
             })
         );
         vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
+        burnerLoans.previewRepay(address(usds), 1, alice);
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);
         burnerLoans.repay(address(usds), 1, alice);
     }
 
@@ -204,6 +292,9 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
         vm.prank(emergency);
         burnerLoans.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewRepay(address(usds), 1e9, alice);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.repay(address(usds), 1e9, alice);
@@ -221,6 +312,13 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.warp(block.timestamp + 10 days);
         price.setTimestamp(uint48(block.timestamp - 9 hours));
         _approveOhm(alice, 1e9);
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            1e9,
+            alice
+        );
+        assertEq(preview.remainingDebtOhm, 99e9, "preview remaining debt");
+        assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
         burnerLoans.repay(address(usds), 1e9, alice);
@@ -237,6 +335,13 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.warp(block.timestamp + 31 days);
         price.setPrice(address(usds), 0);
         _approveOhm(alice, 1e9);
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            1e9,
+            alice
+        );
+        assertEq(preview.remainingDebtOhm, 99e9, "preview remaining debt");
+        assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
         burnerLoans.repay(address(usds), 1e9, alice);
@@ -257,6 +362,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         burnerLoans.repay(address(usds), 25e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 75e9, "alice debt");
         assertEq(usds.balanceOf(bob), 0, "caller collateral");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // repay
@@ -297,39 +403,46 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         ohm.mint(alice, 1e9);
         _approveOhm(alice, 1e9);
         uint256 balanceBefore = ohm.balanceOf(alice);
+        bytes memory error = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
+            unsupported
+        );
+
+        vm.expectRevert(error);
+        burnerLoans.previewRepay(unsupported, 1e9, alice);
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
-                unsupported
-            )
-        );
+        vm.expectRevert(error);
         burnerLoans.repay(unsupported, 1e9, alice);
         assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
     }
 
     // repay
-    // given ambiguous market
-    //  when repay is called
-    //   then it reverts before burn
-    function test_givenAmbiguousMarket_repayRevertsBeforeBurn() public {
+    // given multiple markets for the facility and token pair
+    //  when repayment is previewed and executed
+    //   then Burner Loans uses the first market
+    function test_givenMultipleMarkets_previewAndRepayUseFirstMarket() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
+        uint32 firstMarketId = burnerLoansConfig.marketId(address(usds));
         _createDuplicateUsdsMarketForTest();
         _approveOhm(alice, 1e9);
-        uint256 balanceBefore = ohm.balanceOf(alice);
 
-        vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
-                address(usds),
-                2
-            )
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            1e9,
+            alice
         );
+        assertEq(preview.remainingDebtOhm, 99e9, "preview first-market debt");
+        vm.prank(alice);
         burnerLoans.repay(address(usds), 1e9, alice);
-        assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
+
+        assertEq(floan.getMarketPrincipalDue(firstMarketId), 99e9, "first-market debt");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            99e9,
+            "first-market position"
+        );
     }
 
     // repay
@@ -347,6 +460,8 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 90e9, "alice debt");
         assertEq(burnerLoans.getPosition(address(usds), bob).debtOhm, 50e9, "bob debt");
         assertEq(burnerLoans.totalActiveDebtOhm(), 140e9, "facility debt");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+        _assertFloanPositionMatchesBurnerLoans(address(usds), bob);
     }
 
     // repay
@@ -387,129 +502,5 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     function _approveOhm(address account_, uint256 amount_) internal {
         vm.prank(account_);
         ohm.approve(address(burnerLoans), amount_);
-    }
-}
-
-contract BurnerLoansPreviewRepayTest is BurnerLoansTest {
-    function setUp() public override {
-        super.setUp();
-        _addDefaultUsdsAsset();
-        burnerLoans.setPositionForTest(
-            address(usds),
-            alice,
-            IBurnerLoans.Position({
-                depositedCollateral: 1_000e6,
-                debtOhm: 100e9,
-                maturity: uint48(block.timestamp + 30 days),
-                lastBorrowBlock: 0,
-                status: IBurnerLoans.PositionStatus.NoDebt
-            })
-        );
-        vm.roll(block.number + 1);
-    }
-
-    // previewRepay
-    // given partial repayment
-    //  when previewRepay is called
-    //   then it returns conservative quote
-    function test_givenPartialRepayment_previewRepayReturnsConservativeQuote() public view {
-        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
-            address(usds),
-            40e9,
-            alice
-        );
-        assertEq(preview.repayAmount, 40e9, "repay amount");
-        assertEq(preview.remainingDebtOhm, 60e9, "remaining debt");
-        assertEq(preview.resultingHealthFactor, 0, "unknown health sentinel");
-        assertTrue(preview.executable, "executable");
-    }
-
-    // previewRepay
-    // given full repayment
-    //  when previewRepay is called
-    //   then it returns debt free health
-    function test_givenFullRepayment_previewRepayReturnsDebtFreeHealth() public view {
-        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
-            address(usds),
-            100e9,
-            alice
-        );
-        assertEq(preview.remainingDebtOhm, 0, "remaining debt");
-        assertEq(preview.resultingHealthFactor, type(uint256).max, "health");
-        assertTrue(preview.executable, "executable");
-    }
-
-    // previewRepay
-    // given amount exceeds debt
-    //  when previewRepay is called
-    //   then it reverts
-    function test_givenAmountExceedsDebt_previewRepayReverts() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_RepayExceedsDebt.selector,
-                100e9 + 1,
-                100e9
-            )
-        );
-        burnerLoans.previewRepay(address(usds), 100e9 + 1, alice);
-    }
-
-    // previewRepay
-    // given zero amount
-    //  when previewRepay is called
-    //   then it reverts
-    function test_givenZeroAmount_previewRepayReverts() public {
-        vm.expectRevert(IBurnerLoans.BurnerLoans_ZeroAmount.selector);
-        burnerLoans.previewRepay(address(usds), 0, alice);
-    }
-
-    // previewRepay
-    // given originations disabled and price stale
-    //  when previewRepay is called
-    //   then it remains executable
-    function test_givenAssetOriginationsDisabledAndPriceStale_previewRepayRemainsExecutable()
-        public
-    {
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-        vm.warp(block.timestamp + 10 days);
-        price.setTimestamp(uint48(block.timestamp - 9 hours));
-
-        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
-            address(usds),
-            1e9,
-            alice
-        );
-        assertEq(preview.remainingDebtOhm, 99e9, "remaining debt");
-        assertTrue(preview.executable, "executable");
-    }
-
-    // previewRepay
-    // given global policy disabled
-    //  when previewRepay is called
-    //   then it reverts
-    function test_givenGlobalPolicyDisabled_previewRepayReverts() public {
-        vm.prank(emergency);
-        burnerLoans.disable("");
-
-        vm.expectRevert(IEnabler.NotEnabled.selector);
-        burnerLoans.previewRepay(address(usds), 1e9, alice);
-    }
-
-    // previewRepay
-    // given ambiguous market
-    //  when previewRepay is called
-    //   then it reverts
-    function test_givenAmbiguousMarket_previewRepayReverts() public {
-        _createDuplicateUsdsMarketForTest();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_AmbiguousMarket.selector,
-                address(usds),
-                2
-            )
-        );
-        burnerLoans.previewRepay(address(usds), 1e9, alice);
     }
 }
