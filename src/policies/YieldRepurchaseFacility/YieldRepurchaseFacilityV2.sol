@@ -65,6 +65,8 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      - `returnFundsToTreasury` (emergency or admin) burns the purchased OHM and returns
 ///        the held balances to the treasury while the facility is disabled, sweeping each
 ///        vault independently.
+///      - `seedCycle` (admin, one-shot) sets the epoch counter and seeds the running
+///        week's budgets, covering them with treasury withdrawals.
 ///
 ///      The admin role is expected to be held only by the OCG timelock, so every
 ///      admin-gated function of this contract is de-facto timelocked.
@@ -172,6 +174,10 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Running epoch counter, in the range `[0, 21)`.
     uint48 internal _epoch;
+
+    /// @notice Whether the one-shot `seedCycle` has been consumed.
+    /// @dev The flag is never reset, including by an `enable` restart.
+    bool internal _cycleSeeded;
 
     /// @notice Accumulated OHM purchased via bond markets, not yet processed.
     /// @dev The OHM balance always covers this amount: `callback` verifies the quote
@@ -1167,6 +1173,58 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
+    ///      The one-shot flag is consumed before any external interaction and is never
+    ///      re-armed, so the epoch counter is written only by `execute`, by the restart
+    ///      in `enable`, and by at most one seeding.
+    ///
+    ///      The epoch pin (`_epoch == _EPOCH_LENGTH - 1`) rejects a seeding after a
+    ///      heart beat has advanced the counter past the `enable` restart. The counter
+    ///      also holds this value on the last epoch of every week, so the pin alone
+    ///      does not prove that no beat has run.
+    ///
+    ///      Per seed, the budget is credited and `WeeklyBudgetSeeded` is emitted before
+    ///      the prefund runs, so the event precedes a `PrefundShortfall` it may cause.
+    ///
+    ///      The function reverts if:
+    ///      - The contract is disabled.
+    ///      - The caller does not hold the admin role.
+    ///      - The cycle has already been seeded.
+    ///      - The epoch counter is not at the restart value set by `enable`.
+    ///      - `epoch_` is not below the weekly epoch count of 21.
+    ///      - A seed references an unregistered or disabled vault.
+    ///      - A seeded amount is zero.
+    ///      - The treasury withdrawal of a prefund or a preview of a seeded vault
+    ///        reverts.
+    function seedCycle(
+        uint48 epoch_,
+        WeeklyBudgetSeed[] calldata budgetSeeds_
+    ) external override nonReentrant givenEnabled onlyAdminRole {
+        if (_cycleSeeded) revert IYieldRepurchaseFacilityV2_CycleAlreadySeeded();
+        _cycleSeeded = true;
+
+        if (_epoch != _EPOCH_LENGTH - 1) revert IYieldRepurchaseFacilityV2_CycleAlreadyStarted();
+
+        if (epoch_ >= _EPOCH_LENGTH) revert IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
+        _epoch = epoch_;
+
+        uint256 seedsLength = budgetSeeds_.length;
+        for (uint256 i = 0; i < seedsLength; ++i) {
+            WeeklyBudgetSeed calldata seed = budgetSeeds_[i];
+            ReserveAsset storage config = _requireRegistered(seed.vault);
+            _requireAssetEnabled(config);
+            _requireNonzeroAmount(seed.weeklyBudget);
+
+            config.weeklyBudgetRemaining += seed.weeklyBudget;
+            emit WeeklyBudgetSeeded(seed.vault, seed.weeklyBudget, epoch_);
+
+            _prefundVault(seed.vault, config);
+        }
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered.
@@ -1733,6 +1791,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     function epoch() external view override returns (uint48) {
         return _epoch;
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    function isCycleSeeded() external view override returns (bool) {
+        return _cycleSeeded;
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2

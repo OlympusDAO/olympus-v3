@@ -163,6 +163,14 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 budgetAdded
     );
 
+    /// @notice Emitted when the running week's buyback budget of a vault is seeded by
+    ///         `seedCycle`.
+    /// @param vault The seeded vault.
+    /// @param weeklyBudget The amount added to the vault's weekly budget, in reserve
+    ///        units.
+    /// @param epoch The seeded epoch counter.
+    event WeeklyBudgetSeeded(address indexed vault, uint256 weeklyBudget, uint48 epoch);
+
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the `enable` payload is shorter than the minimum
@@ -277,6 +285,17 @@ interface IYieldRepurchaseFacilityV2 {
     ///         backing value.
     error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
+    /// @notice Thrown when `seedCycle` is invoked after the one-shot seeding has been
+    ///         consumed.
+    error IYieldRepurchaseFacilityV2_CycleAlreadySeeded();
+
+    /// @notice Thrown when `seedCycle` is invoked while the epoch counter does not hold
+    ///         the restart value of 20 that `enable` sets.
+    error IYieldRepurchaseFacilityV2_CycleAlreadyStarted();
+
+    /// @notice Thrown when the seeded epoch is not below the weekly epoch count of 21.
+    error IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
+
     // ============ STRUCTS ============ //
 
     /// @notice The configuration and accounting of a registered reserve asset.
@@ -329,6 +348,19 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 nextYield;
     }
 
+    /// @notice A per-vault seed of the running week's buyback budget, supplied to
+    ///         `seedCycle`.
+    /// @dev The seeded amount is added to the vault's `weeklyBudgetRemaining` (see
+    ///      `getAssetConfig`) and covered by a withdrawal of vault shares from the
+    ///      treasury; when the array contains duplicates, their amounts accumulate.
+    /// @param vault The registered vault to seed; its asset must be enabled.
+    /// @param weeklyBudget The amount added to the running week's budget, in reserve
+    ///        units; must be non-zero.
+    struct WeeklyBudgetSeed {
+        address vault;
+        uint256 weeklyBudget;
+    }
+
     // ============ FUNCTIONS ============ //
 
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
@@ -361,6 +393,29 @@ interface IYieldRepurchaseFacilityV2 {
         bool sellShares_,
         bool setAsBackingVault_
     ) external;
+
+    /// @notice Seeds the weekly cycle: sets the epoch counter to the supplied value,
+    ///         adds each seeded amount to its vault's weekly buyback budget, and covers
+    ///         the budgets with treasury withdrawals.
+    /// @dev Callable by the admin role, at most once over the lifetime of the contract,
+    ///      only while the facility is enabled, and only while the epoch counter holds
+    ///      the restart value of 20 that `enable` sets, so a heart beat between the
+    ///      restart and the seeding is rejected. The expected call order is `enable`
+    ///      first, then `addAsset` for every seeded vault, then this function: the
+    ///      restart performed by `enable` refreshes the snapshots and zeroes the next
+    ///      yields of the enabled assets that are already registered, erasing their
+    ///      `addAsset` seeds.
+    ///
+    ///      The seeded budgets fund the daily market cycles remaining in the week (an
+    ///      epoch of 18 or later leaves none), and the unspent remainder is retained by
+    ///      the following weekly reset. The stored next yields and the yield snapshots
+    ///      are not affected. An empty seed array seeds only the epoch and emits no
+    ///      event. Emits `WeeklyBudgetSeeded` per seed.
+    /// @param epoch_ The epoch counter to resume at, in the range `[0, 21)`.
+    /// @param budgetSeeds_ The per-vault budget seeds; every seeded vault must be
+    ///        registered with an enabled asset, and every seeded amount must be
+    ///        non-zero.
+    function seedCycle(uint48 epoch_, WeeklyBudgetSeed[] calldata budgetSeeds_) external;
 
     /// @notice De-registers a disabled vault, transferring the facility's balances of the
     ///         vault shares and its reserve to the treasury and deleting the per-vault
@@ -601,9 +656,14 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Returns the running epoch counter, in the range `[0, 21)`.
     /// @dev The counter advances by one per heart beat while the facility is enabled;
     ///      three epochs form a day, and reaching epoch 21 runs the weekly reset before
-    ///      the counter wraps to zero.
+    ///      the counter wraps to zero. A restart through `enable` sets the counter to
+    ///      20, and `seedCycle` sets it to the seeded value.
     /// @return The epoch counter.
     function epoch() external view returns (uint48);
+
+    /// @notice Returns whether the one-shot `seedCycle` has been consumed.
+    /// @return Whether the cycle has been seeded.
+    function isCycleSeeded() external view returns (bool);
 
     /// @notice Returns the address of the YRF timelock policy authorized to call the
     ///         timelocked operational functions.
