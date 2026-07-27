@@ -30,7 +30,7 @@ additional_compiler_profiles = [
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
-    { paths = "src/policies/YieldRepurchaseFacilityV2.sol", profile = "four-hundred-runs" },
+    { paths = "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol", profile = "four-hundred-runs" },
     { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "**", version = "0.8.15" },
 ]
