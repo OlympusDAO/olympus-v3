@@ -10,6 +10,11 @@ bytes32 constant MANAGER_ROLE = "manager";
 /// @dev Heart role, e.g. performing periodic tasks.
 bytes32 constant HEART_ROLE = "heart";
 
+/// @dev YieldRepurchaseFacilityV2 operational access, e.g. proposing timelocked parameter
+///      updates on YRFTimelock and re-enabling the facility. Typically assigned to a
+///      multisig/council.
+bytes32 constant YRF_ADMIN_ROLE = "yrf_admin";
+
 /// @dev BackingOracle operational access, e.g. queueing timelocked updates of the OHM
 ///      backing value. Typically assigned to a multisig/council.
 bytes32 constant BACKING_ADMIN_ROLE = "backing_admin";
