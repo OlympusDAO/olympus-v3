@@ -89,6 +89,12 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 
+// YRF v2 stack
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
+
 // solhint-disable gas-custom-errors
 
 /// @notice V3 of the deployment script
@@ -1074,6 +1080,135 @@ contract DeployV3 is WithEnvironment {
             emissionManager,
             heart,
             reserveWrapper
+        );
+
+        return (address(activator), "olympus.periphery");
+    }
+
+    function deployBackingOracle() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("BackingOracle parameters:");
+        console2.log("  kernel", kernel);
+
+        // Deploy
+        vm.broadcast();
+        BackingOracle backingOracle = new BackingOracle(Kernel(kernel));
+
+        return (address(backingOracle), "olympus.policies");
+    }
+
+    function deployYRFTimelock() public returns (address, string memory) {
+        // Input parameters
+        uint48 timelockDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256("YRFTimelock", "timelockDelay")
+        );
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("YRFTimelock", "gracePeriod")
+        );
+
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+
+        // Log parameters
+        console2.log("YRFTimelock parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  timelockDelay", timelockDelay);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        YRFTimelock yrfTimelock = new YRFTimelock(Kernel(kernel), timelockDelay, gracePeriod);
+
+        return (address(yrfTimelock), "olympus.policies");
+    }
+
+    /// @dev The facility must be compiled with 400 optimizer runs to fit under the
+    ///      EIP-170 size limit, and the four-hundred-runs profile configured in the
+    ///      foundry.toml `compilation_restrictions` is not applied by forge builds, so
+    ///      this deployment sequence must run with `FOUNDRY_OPTIMIZER_RUNS=400`. The
+    ///      code-size check below fails the simulation when the override is missing.
+    ///
+    ///      The facility links the external libraries `YRFBondMarketLib` and
+    ///      `YRFClearinghouseLib`: forge deploys and links them automatically within the
+    ///      same broadcast, through the deterministic CREATE2 deployer, and records them
+    ///      in the broadcast artifact (the `libraries` field and two CREATE2
+    ///      transactions).
+    function deployYieldRepurchaseFacilityV2() public returns (address, string memory) {
+        // Input parameters
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256("YieldRepurchaseFacilityV2", "gracePeriod")
+        );
+
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
+        address yrfTimelock = _getAddressNotZero("olympus.policies.YRFTimelock");
+        address bondAuctioneer = _getAddressNotZero(
+            "external.bond-protocol.BondFixedTermAuctioneer"
+        );
+        address teller = _getAddressNotZero("external.bond-protocol.BondFixedTermTeller");
+
+        // Log parameters
+        console2.log("YieldRepurchaseFacilityV2 parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  ohm", ohm);
+        console2.log("  backingOracle", backingOracle);
+        console2.log("  bondAuctioneer", bondAuctioneer);
+        console2.log("  teller", teller);
+        console2.log("  yrfTimelock", yrfTimelock);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        YieldRepurchaseFacilityV2 yieldRepo = new YieldRepurchaseFacilityV2(
+            Kernel(kernel),
+            ohm,
+            backingOracle,
+            bondAuctioneer,
+            teller,
+            yrfTimelock,
+            gracePeriod
+        );
+
+        // The local EVM does not enforce EIP-170, so the check surfaces an oversized
+        // build during the simulation, before a mainnet deployment fails.
+        require(
+            address(yieldRepo).code.length <= 24576,
+            "YieldRepurchaseFacilityV2 exceeds the EIP-170 size limit: deploy with FOUNDRY_OPTIMIZER_RUNS=400"
+        );
+
+        return (address(yieldRepo), "olympus.policies");
+    }
+
+    function deployYieldRepurchaseFacilityV2Activator() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address timelock = _getAddressNotZero("olympus.governance.Timelock");
+        address yieldRepo = _getAddressNotZero("olympus.policies.YieldRepurchaseFacilityV2");
+        address yrfTimelock = _getAddressNotZero("olympus.policies.YRFTimelock");
+        address backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
+
+        // Log parameters
+        console2.log("YieldRepurchaseFacilityV2Activator parameters:");
+        console2.log("  owner", timelock);
+        console2.log("  yieldRepo", yieldRepo);
+        console2.log("  yrfTimelock", yrfTimelock);
+        console2.log("  backingOracle", backingOracle);
+
+        // Deploy
+        vm.broadcast();
+        YieldRepurchaseFacilityV2Activator activator = new YieldRepurchaseFacilityV2Activator(
+            timelock,
+            yieldRepo,
+            yrfTimelock,
+            backingOracle
         );
 
         return (address(activator), "olympus.periphery");
