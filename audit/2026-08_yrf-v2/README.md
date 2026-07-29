@@ -12,10 +12,10 @@ Key changes from v1.2:
 
 - Multi-asset ERC4626 whitelist, replacing the fixed USDS/sUSDS asset; each asset gets its own market, and assets whose shares cannot be redeemed synchronously (sUSDe) sell the shares directly.
 - Per-asset yield split between buybacks and retained backing, replacing the unconditional 100% burn.
-- Backing read live from `BackingOracle`, initialized at `$12.04` and replacing the hardcoded `$11.33` constant.
+- The facility reads the governance-set backing value from the new `BackingOracle` policy, initialized at `$12.04`; the value can be updated without redeploying the facility and replaces v1.2's hardcoded `$11.33`.
 - Non-zero bond-market minimum price anchored to the OHM oracle price, plus a configurable initial discount.
-- Governance-controlled Clearinghouse receivables offset and one-way downward yield correction, remediating a reported Cooler v1 receivables-inflation vector.
-- Accounting driven by tracked balances rather than raw token balances, closing an OHM-donation inflation vector.
+- Governance-controlled Clearinghouse receivables offsets and one-way downward yield correction.
+- Accounting driven by tracked balances rather than raw token balances.
 - Mutable teller/auctioneer, and the `IEnabler` lifecycle in place of the bespoke `isShutdown` flag.
 
 Governance authorization is [OIP-194](https://snapshot.box/#/s:olympusdao.eth/proposal/0x5c5a16fefe142bf09bc94814b926204e41b5c58fefc6dfae74ebe7e93b6023cb).
@@ -103,7 +103,7 @@ flowchart LR
 3. **Epoch state machine** — `enable`, `reEnable` within the grace window, and the one-shot `seedCycle` all write the epoch counter; check for a sequence that skips or double-runs a weekly reset.
 4. **Soft-fail isolation** — per-vault work runs through self-calls whose reverts are caught. Confirm a misbehaving vault or auctioneer cannot stall the heartbeat, and that a caught revert cannot leave partial accounting.
 5. **Timelock integrity** — the pre-state hash, the stale-facility guard, and the per-parameter pending slot in `YRFTimelock`, including the batch path.
-6. **Donation resistance** — that the tracked-accounting rewrite closes the v1 vectors, and that `rescue` (capped at the excess over tracked, treasury-directed) cannot defund an open market beyond the documented caveat.
+6. **Donation resistance** — the tracked-accounting invariants, and whether `rescue` (capped at the excess over tracked, treasury-directed) can defund an open market beyond the documented caveat.
 7. **Sell-shares assets** — the share-denominated market path for sUSDe, where the oracle price is converted per-share through the vault conversion rate.
 
 ## Known Risks
