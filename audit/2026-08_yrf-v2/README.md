@@ -24,7 +24,7 @@ Governance authorization is [OIP-194](https://snapshot.box/#/s:olympusdao.eth/pr
 
 Branch: `feat/multi-asset-yrf-updates`
 
-Base commit: `7e72c9a7`. See [scopefile.txt](./scopefile.txt) for the machine-readable list.
+Code commit: `7e72c9a75995b13900dbadf2bb2c0f659086e08e`. See [scopefile.txt](./scopefile.txt) for the machine-readable list.
 
 ### In-Scope Contracts
 
@@ -48,17 +48,11 @@ The contracts in scope for this audit are:
     - [scripts/ops/batches/](../../src/scripts/ops/batches)
         - [YieldRepoV2Install.sol](../../src/scripts/ops/batches/YieldRepoV2Install.sol)
 
-### Out of Scope
-
-- **Shared enabler and timelock bases** — `EnablerV2`, `PolicyEnablerV2`, `ReEnabler`, `ReEnablerGracePeriod`, `PolicyReEnabler`, `TimelockQueue`, `TimelockBatchQueue` and their interfaces. Inherited unmodified by the in-scope policies and covered by the Bridge audit below.
-- [YieldRepurchaseFacility.sol](../../src/policies/YieldRepurchaseFacility.sol) — v1.2, shut down by the activation proposal
-- `Kernel.sol`, the TRSRY / PRICE / CHREG / ROLES modules, and `Heart.sol` — previously audited, unmodified
-- Bond Protocol SDA auctioneer and teller — third-party, unmodified
-- The ERC4626 vaults themselves (sUSDS, sUSDe) — third-party
-
 ## Previous Audits
 
-**Olympus Bridge (06/2026)** — [report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-06-Bridge.pdf). Covers the shared enabler lifecycle and timelock-queue bases that `YieldRepurchaseFacilityV2`, `YRFTimelock`, and `BackingOracle` build on. Package: [audit/2026-03_lz-bridge-upgrade](../2026-03_lz-bridge-upgrade/README.md).
+**Olympus Bridge (06/2026)** — [report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-06-Bridge.pdf). Its explicit scope includes `TimelockBatchQueue`, `ITimelockBatchQueue`, and `PolicyAdminOptimized`, which are reused by `YRFTimelock` and the in-scope policies. Package: [audit/2026-03_lz-bridge-upgrade](../2026-03_lz-bridge-upgrade/README.md).
+
+**PRICE v1.2 (03/2026)** — the [audit package](../2026-03_price-feed-improvements/README.md) includes `PriceConfigv2` and its timelock behavior.
 
 ## Architecture
 
@@ -81,34 +75,62 @@ flowchart LR
 
 **Daily cycle** (every 3rd beat) — burns accumulated purchased OHM against a fresh backing withdrawal credited to the backing vault's budget, then opens one 24-hour market per enabled asset sized at `weeklyBudgetRemaining / daysRemaining`. Market creation is skipped entirely when the OHM oracle price is zero or below backing; the burn still runs.
 
-**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount, and the minimum price corresponds to the undiscounted oracle price, capping payout per OHM. Submission is a `delegatecall` into `YRFBondMarketLib`, so the facility is the market owner and callback.
+**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount, and the minimum price corresponds to the undiscounted oracle price, capping payout per OHM.
 
-**Activation** — the one-shot `seedCycle` carries v1.2's epoch position and unspent weekly budget into v2 so the migration does not forfeit a buyback week.
+**Activation** — the one-shot `seedCycle` carries v1.2's epoch position and unspent weekly budget into v2 so the migration does not forfeit the remainder of the current buyback week.
 
 ## Access Control
 
-| Role        | Holder             | Reach                                                                                                                                                                             |
-| ----------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `admin`     | OCG timelock       | Structural changes (assets, backing oracle/vault, bond contracts, Clearinghouse offsets and inclusions, `enable`, `seedCycle`), plus a direct path to every operational parameter |
-| `yrf_admin` | DAO multisig       | Operational parameters only by queueing on `YRFTimelock` (1-day delay, 3-day execution window, permissionless execution); directly `reEnable` and `rescue`                        |
-| `emergency` | Emergency multisig | `disable`, `returnFundsToTreasury`, cancel queued timelock actions                                                                                                                |
-| `heart`     | Heart              | `execute`                                                                                                                                                                         |
+The production role holders are:
 
-`BackingOracle` mirrors this: `backing_admin` queues bounded (±10%) backing updates, `admin` may set directly, `emergency` cancels.
+| Role            | Holder             |
+| --------------- | ------------------ |
+| `admin`         | OCG timelock       |
+| `yrf_admin`     | DAO multisig       |
+| `backing_admin` | DAO multisig       |
+| `emergency`     | Emergency multisig |
+| `heart`         | Heart              |
 
-## Focus Areas
+### YieldRepurchaseFacilityV2
 
-1. **Budget accounting** — the invariants tying `weeklyBudgetRemaining` to `prefundedShares` / `prefundedReserve` across the weekly re-mark, prefund, redeem, bid, contribution, and bond-callback paths, and whether any of them can double-count yield or over-spend the treasury.
-2. **OHM burn accounting** — `OHM.balanceOf(facility) >= _ohmPurchased` must hold across the callback, the pro-rated burn on a short backing withdrawal, `rescue`, and `returnFundsToTreasury`.
-3. **Epoch state machine** — `enable`, `reEnable` within the grace window, and the one-shot `seedCycle` all write the epoch counter; check for a sequence that skips or double-runs a weekly reset.
-4. **Soft-fail isolation** — per-vault work runs through self-calls whose reverts are caught. Confirm a misbehaving vault or auctioneer cannot stall the heartbeat, and that a caught revert cannot leave partial accounting.
-5. **Timelock integrity** — the pre-state hash, the stale-facility guard, and the per-parameter pending slot in `YRFTimelock`, including the batch path.
-6. **Donation resistance** — the tracked-accounting invariants, and whether `rescue` (capped at the excess over tracked, treasury-directed) can defund an open market beyond the documented caveat.
-7. **Sell-shares assets** — the share-denominated market path for sUSDe, where the oracle price is converted per-share through the vault conversion rate.
+| Caller      | Authority                                                                                                                                                                                                                                                                |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `admin`     | `enable`, `disable`, `setGracePeriod`, `returnFundsToTreasury`, `addAsset`, `removeAsset`, `seedCycle`, backing-oracle/vault and Bond-contract changes, direct Clearinghouse configuration, direct access to every operation exposed through `YRFTimelock`, and `rescue` |
+| `yrf_admin` | `reEnable` during the grace period and `rescue`; operational changes must otherwise be queued through `YRFTimelock`                                                                                                                                                      |
+| `emergency` | `disable` and, while disabled, `returnFundsToTreasury`                                                                                                                                                                                                                   |
+| `heart`     | `execute`                                                                                                                                                                                                                                                                |
+| Bond teller | `callback`, only for a market ID recorded by the facility while both the facility and its asset are enabled                                                                                                                                                              |
+| Anyone      | `contribute`                                                                                                                                                                                                                                                             |
+
+### YRFTimelock
+
+| Caller      | Authority                                                                                                                                                                                                                                                     |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`     | `enable`, `disable`, `setFacility`, `setTimelockDelay`, and `setGracePeriod`                                                                                                                                                                                  |
+| `yrf_admin` | Queue individual or batched calls to set a yield buyback share or initial discount, enable or disable an asset, exclude a Clearinghouse, increase a Clearinghouse offset, or decrease a stored next-yield projection; also `reEnable` during the grace period |
+| `emergency` | `disable` and cancel queued actions, including while the policy is disabled                                                                                                                                                                                   |
+| Anyone      | Execute a queued action after the 1-day delay and before the end of its 3-day execution window                                                                                                                                                                |
+
+### BackingOracle
+
+| Caller          | Authority                                                                                           |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| `admin`         | `enable`, `disable`, direct `setBacking`, queue `setBacking`, and queue a timelock-delay change     |
+| `backing_admin` | Queue `setBacking`                                                                                  |
+| `emergency`     | `disable` and cancel queued actions, including while the policy is disabled                         |
+| Anyone          | Execute a queued action after the configured delay and before the end of its 7-day execution window |
 
 ## Known Risks
 
-- **Backing is governance-set.** An overstated backing value causes the facility to withdraw more reserve per OHM burned than the OHM is worth. Mitigated by the ±10% per-update bound, the timelock, and the emergency cancel — not by an on-chain solvency check.
+- **Backing is governance-set.** The ±10% per-update bound is an input-error guard, not an economic protection: repeated updates can move backing arbitrarily, and `enable` can initialize any non-zero value. The emergency role can cancel a queued update; otherwise correctness rests on governance.
 - `PRICE.getLastPrice()` **is the stored observation**, refreshed by `Heart.beat()` in the same transaction. Granting the heart role to anything other than the Heart contract would price markets off a stale observation.
+- **The configured Bond contracts are trusted dependencies.** The auctioneer can reject market creation or revoke callback authorization, and the teller is trusted to deliver OHM and invoke callbacks correctly. Disabling the facility or an asset, or replacing the teller or the Bond suite while a 24-hour market is open, prevents that market from completing normally.
+- **Bond market IDs must be globally unique.** The facility keys market authorization and accounting only by the ID returned by the auctioneer. The configured Bond suite must use an aggregator that preserves a single unique ID namespace; a collision can overwrite the vault associated with an earlier market.
+- **Sell-shares markets transfer vault shares, not reserve assets.** The buyer is responsible for redeeming sUSDe shares into USDe and bears the vault's redemption, liquidity, and issuer-control risks.
+- **Yield corrections are operationally time-sensitive.** If `yrf_admin` does not execute `decreaseNextYield` before the stored projection is injected at the next weekly reset, the following week's budget is overstated. The recovery path is to disable the facility before the reset, execute the correction, and re-enable within the grace period.
+- **A delayed `reEnable` slightly understates Clearinghouse yield.** The interrupted cycle is stretched by the downtime, but the next projection still credits one week of Clearinghouse interest. The maximum error is bounded by the re-enable grace period, which must be shorter than one week.
+- **Reserve vault controls remain external dependencies.** sUSDe/USDe controls can freeze facility-held balances, and sUSDS is upgradeable; either can prevent redemptions or invalidate the behavior assumed when the asset was registered.
+- **Disabling does not unwind open markets or automatically return funds.** `returnFundsToTreasury` is a separate call, and a vault whose transfer or redemption reverts is skipped until a later retry.
+- **Queued YRF actions survive a timelock disable.** A still-live action becomes executable again after re-enable unless the emergency role cancels it. An expired action also retains any per-parameter pending slot until it is cancelled.
 - `contribute` **is permissionless and irreversible.** Contributed funds join the facility's tracked pool and cannot be withdrawn by the contributor.
-- **Per-asset pausing is timelocked** for `yrf_admin`. The only instant halt is the emergency role disabling the facility as a whole.
+- **The emergency role has no per-asset pause.** It can immediately disable the facility as a whole; an individual asset change must come from `admin` or through `YRFTimelock`.
