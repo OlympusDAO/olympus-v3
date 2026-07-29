@@ -85,6 +85,9 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @notice The Bond Protocol SDA auctioneer used by both YRF versions.
     address public constant BOND_AUCTIONEER = 0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222;
 
+    /// @notice The Bond Protocol fixed-term teller trusted to invoke the v2 callback.
+    address public constant BOND_TELLER = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
+
     /// @notice The DAI v1 Clearinghouse, included in the backing yield (its receivables
     ///         accrue to USDS through the 1:1 DAI to USDS migration).
     address public constant CLEARINGHOUSE_DAI_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
@@ -106,11 +109,9 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     // ========== PARAMETERS ========== //
 
     /// @notice The initial backing value, in USDS per OHM (18 decimals).
-    /// @dev 11.33e18 replicates the backing hardcoded in the deployed YRF v1.2.
-    ///      NOTE: Confirm the value with governance before the proposal is submitted; an
-    ///      alternative is synchronizing with `EmissionManager.backing()` (11.69e18 as
-    ///      of 2026-07-27).
-    uint256 public constant BACKING = 11.33e18;
+    /// @dev 12.04e18 is the liquid backing per OHM selected for the v2 launch, replacing
+    ///      the 11.33e18 value hardcoded in the deployed YRF v1.2.
+    uint256 public constant BACKING = 12.04e18;
 
     /// @notice The initial bond market discount (`1e18` = 100%), equal to the discount
     ///         of the deployed YRF v1.2.
@@ -124,13 +125,12 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
 
     /// @notice The fixed next-yield seed of sUSDe (18 decimals): the budget of its first
     ///         full week, injected at the first weekly reset.
-    /// @dev The estimate is one week of a 4% APY on the treasury sUSDe holding:
-    ///      previewRedeem(~24.71M shares) = ~30.66M USDe (18 decimals).
-    ///      30.66M * 400 / 10_000 / 52 = ~23,585 USDe.
-    ///      TODO: Re-derive from the live treasury holding before the proposal is
-    ///      submitted, and update the figure in the proposal description together with
-    ///      this constant.
-    uint256 public constant SUSDE_NEXT_YIELD_SEED = 23_000e18;
+    /// @dev The estimate is one week of a 4% annualized rate on the treasury sUSDe holding:
+    ///      previewRedeem(24,659,208.386952951521922260 shares)
+    ///      = 30,606,111.521932362440850759 USDe at block 25,636,793.
+    ///      30,606,111.521932362440850759 * 400 / 10_000 / 52
+    ///      = 23,543.162709178740339115 USDe, rounding down at each division.
+    uint256 public constant SUSDE_NEXT_YIELD_SEED = 23_543_162_709_178_740_339_115;
 
     /// @notice The Heart periodic task slot occupied by the YRF.
     uint256 public constant HEART_YRF_TASK_INDEX = 4;
