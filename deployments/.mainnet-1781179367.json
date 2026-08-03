@@ -1,0 +1,7 @@
+{
+    "olympus.periphery.LZBridgeActivator": "0x0f8Cc53Ac14dda2f9aebfCcB6cc3A4426BfF4Af7",
+    "olympus.periphery.LZCrossChainBridge": "0x9AD85D2f5EfC076Bb321dca425e67cf2E6829330",
+    "olympus.policies.LZBridgeAndDelegateConfig": "0x946B739a26A8e7f035B27B075eb0cE8a54bF2f12",
+    "olympus.policies.LZBridgeGateway": "0x23dDFccdd5C573B9Fd7fC0fcD70B687A0D0C5f23",
+    "olympus.policies.LZEndpointDelegate": "0xb218Eb347218031B2B9d17a19B040bD3509EFAc0"
+}

@@ -19,7 +19,7 @@ import "src/Kernel.sol";
 
 import {CrossChainBridge, ILayerZeroEndpoint} from "policies/CrossChainBridge.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {LZEndpointMock} from "layer-zero/mocks/LZEndpointMock.sol";
+import {LZEndpointMock} from "@layer-zero-endpoint-v1-1.1.0/lzApp/mocks/LZEndpointMock.sol";
 
 contract CrossChainBridgeTest is Test {
     using FullMath for uint256;
