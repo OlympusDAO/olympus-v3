@@ -13,6 +13,18 @@ pragma solidity >=0.8.24;
 ///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price and
 ///      the backing value are 18-decimal reserve-per-OHM quotes.
 ///
+///      The reserve-side accounting is balance-based: the facility's holdings of a
+///      vault's shares and of its reserve token form the vault's buyback pool, and the
+///      daily markets are sized from those balances. A plain transfer of the vault
+///      shares or of the reserve token to the facility is an irreversible donation that
+///      joins the pool and is spent by the following daily cycles at prices no lower
+///      than the market floor. Donations never increase treasury withdrawals: the
+///      treasury is drawn only for the stored yield projection at the weekly reset, for
+///      the backing of purchased-and-burned OHM, and for the admin-supplied seeds, and
+///      none of those paths reads the facility's balances. The OHM channel is exempt
+///      from the balance-based convention: purchased OHM is tracked by a counter and
+///      donated OHM is never burned against a treasury withdrawal.
+///
 ///      Role restrictions are stated per function. Functions restricted to the YRF
 ///      timelock and the admin role are callable by the policy returned by `timelock()`
 ///      or by an admin role holder; the yrf_admin role reaches them through the
@@ -27,7 +39,7 @@ interface IYieldRepurchaseFacilityV2 {
     // ============ EVENTS ============ //
 
     /// @notice Emitted when a bond market is created for a vault.
-    /// @param vault The vault whose budget funds the market.
+    /// @param vault The vault whose buyback pool funds the market.
     /// @param marketId The market ID assigned by the bond auctioneer.
     /// @param payoutToken The token the market pays out: the vault's reserve, or the
     ///        vault share token for a sell-shares asset.
@@ -114,17 +126,19 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param bidAmount The intended market capacity, in payout token units.
     event MarketCreationFailed(address indexed vault, uint256 bidAmount);
 
-    /// @notice Emitted when the treasury balance does not cover the weekly prefund target
-    ///         and the withdrawal is capped at the balance.
-    /// @param vault The vault being prefunded.
-    /// @param sharesRequested The share amount required to cover the weekly budget.
+    /// @notice Emitted when the treasury balance does not cover a sanctioned funding
+    ///         withdrawal and the withdrawal is capped at the balance; the unfunded
+    ///         remainder is carried and retried at the following weekly reset.
+    /// @param vault The vault being funded.
+    /// @param sharesRequested The share amount required to cover the funding target.
     /// @param sharesWithdrawn The share amount actually withdrawn.
     event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
-    /// @notice Emitted when purchased OHM is burned against a backing withdrawal credited
-    ///         to the backing vault's budget.
+    /// @notice Emitted when purchased OHM is burned against a backing withdrawal; the
+    ///         withdrawn backing vault shares join the backing vault's buyback pool.
     /// @param ohmBurned The amount of OHM burned.
-    /// @param backingWithdrawn The withdrawal proceeds, in backing reserve units.
+    /// @param backingWithdrawn The value of the withdrawn shares, in backing reserve
+    ///        units.
     event OhmPurchasesProcessed(uint256 ohmBurned, uint256 backingWithdrawn);
 
     /// @notice Emitted when the funds held by the facility are returned to the treasury.
@@ -150,24 +164,18 @@ interface IYieldRepurchaseFacilityV2 {
     ///         the accumulated OHM is retried on the following beats.
     event OhmPurchasesProcessingSkipped();
 
-    /// @notice Emitted when a contribution adds funds to a vault's weekly budget.
-    /// @param vault The vault contributed to.
-    /// @param contributor The caller that supplied the funds.
-    /// @param sharesAdded The vault shares added to the tracked holdings.
-    /// @param budgetAdded The redeemable value of the added shares credited to the weekly
-    ///        budget, in reserve units.
-    event Contributed(
-        address indexed vault,
-        address indexed contributor,
-        uint256 sharesAdded,
-        uint256 budgetAdded
-    );
+    /// @notice Emitted when the wrap of a sell-shares vault's idle reserve balance into
+    ///         vault shares reverts and is skipped; the reserve stays with the facility
+    ///         and the wrap is retried at the following daily cycle.
+    /// @param vault The vault whose reserve wrap was skipped.
+    /// @param amount The reserve amount that was to be wrapped.
+    event ReserveWrapFailed(address indexed vault, uint256 amount);
 
-    /// @notice Emitted when the running week's buyback budget of a vault is seeded by
+    /// @notice Emitted when the running week's buyback pool of a vault is seeded by
     ///         `seedCycle`.
     /// @param vault The seeded vault.
-    /// @param weeklyBudget The amount added to the vault's weekly budget, in reserve
-    ///        units.
+    /// @param weeklyBudget The seeded amount, covered by a treasury withdrawal into the
+    ///        vault's buyback pool, in reserve units.
     /// @param epoch The seeded epoch counter.
     event WeeklyBudgetSeeded(address indexed vault, uint256 weeklyBudget, uint48 epoch);
 
@@ -181,8 +189,17 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The unregistered vault.
     error IYieldRepurchaseFacilityV2_AssetNotRegistered(address vault);
 
-    /// @notice Thrown when another registered vault uses the same reserve token.
-    error IYieldRepurchaseFacilityV2_DuplicateReserve();
+    /// @notice Thrown when a token of the asset being registered already participates in
+    ///         another balance pool: the token is OHM, the vault equals its own reserve,
+    ///         or the vault or the reserve collides with the vault or the reserve of a
+    ///         registered asset.
+    /// @param token The conflicting token.
+    error IYieldRepurchaseFacilityV2_TokenPoolConflict(address token);
+
+    /// @notice Thrown when `rescue` targets the share or the reserve token of a
+    ///         registered asset, whose balances form the asset's buyback pool.
+    /// @param token The non-rescuable token.
+    error IYieldRepurchaseFacilityV2_TokenNotRescuable(address token);
 
     /// @notice Thrown when the vault is already registered.
     error IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
@@ -278,6 +295,16 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 received
     );
 
+    /// @notice Thrown when a vault deposit mints fewer shares than its preview.
+    /// @param vault The vault that was deposited into.
+    /// @param expected The share amount previewed.
+    /// @param received The share amount received.
+    error IYieldRepurchaseFacilityV2_InsufficientDeposit(
+        address vault,
+        uint256 expected,
+        uint256 received
+    );
+
     /// @notice Thrown when the reserve token decimals exceed the supported maximum of 18.
     error IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
@@ -302,7 +329,9 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ STRUCTS ============ //
 
-    /// @notice The configuration and accounting of a registered reserve asset.
+    /// @notice The configuration and accounting of a registered reserve asset. The
+    ///         facility's balances of the vault shares and of the reserve token are the
+    ///         asset's buyback pool and are not mirrored by counters.
     /// @param vault The ERC4626 vault.
     /// @param reserve The vault's underlying reserve token.
     /// @param reserveDecimals The reserve token decimals, equal to the vault share decimals.
@@ -314,14 +343,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///        in reserve units.
     /// @param lastConversionRate The reserve amount redeemable for one whole share at the last
     ///        weekly reset.
-    /// @param nextYield The yield injected into the weekly budget at the next weekly reset,
-    ///        in reserve units.
-    /// @param weeklyBudgetRemaining The unspent buyback budget of the running week, in reserve
-    ///        units.
-    /// @param prefundedShares The vault shares held by the facility and tracked by the budget
-    ///        accounting.
-    /// @param prefundedReserve The reserve held by the facility and tracked by the budget
-    ///        accounting.
+    /// @param nextYield The yield withdrawn from the treasury into the buyback pool at the next
+    ///        weekly reset, in reserve units.
+    /// @param unfundedYield The sanctioned yield the treasury balance could not cover, carried
+    ///        into the funding target of the next weekly reset, in reserve units.
     struct ReserveAsset {
         address vault;
         address reserve;
@@ -332,9 +357,7 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 lastReserveBalance;
         uint256 lastConversionRate;
         uint256 nextYield;
-        uint256 weeklyBudgetRemaining;
-        uint256 prefundedShares;
-        uint256 prefundedReserve;
+        uint256 unfundedYield;
     }
 
     /// @notice A per-vault seed of the stored next yield, supplied in the `enable`
@@ -352,14 +375,14 @@ interface IYieldRepurchaseFacilityV2 {
         uint256 nextYield;
     }
 
-    /// @notice A per-vault seed of the running week's buyback budget, supplied to
+    /// @notice A per-vault seed of the running week's buyback pool, supplied to
     ///         `seedCycle`.
-    /// @dev The seeded amount is added to the vault's `weeklyBudgetRemaining` (see
-    ///      `getAssetConfig`) and covered by a withdrawal of vault shares from the
-    ///      treasury; when the array contains duplicates, their amounts accumulate.
+    /// @dev The seeded amount is covered by a withdrawal of vault shares from the
+    ///      treasury into the vault's buyback pool; when the array contains duplicates,
+    ///      their amounts accumulate.
     /// @param vault The registered vault to seed; its asset must be enabled.
-    /// @param weeklyBudget The amount added to the running week's budget, in reserve
-    ///        units; must be non-zero.
+    /// @param weeklyBudget The amount withdrawn into the running week's buyback pool, in
+    ///        reserve units; must be non-zero.
     struct WeeklyBudgetSeed {
         address vault;
         uint256 weeklyBudget;
@@ -371,11 +394,16 @@ interface IYieldRepurchaseFacilityV2 {
     ///         yield and designating it as the backing vault.
     /// @dev Callable by the admin role. The asset is registered in the enabled state. The
     ///      vault's share decimals must equal its reserve decimals, the reserve decimals
-    ///      must not exceed 18, and only one vault per reserve token can be registered.
-    ///      A sell-shares vault cannot be designated as the backing vault.
+    ///      must not exceed 18, and a sell-shares vault cannot be designated as the
+    ///      backing vault.
+    ///
+    ///      Every token balance held by the facility belongs to exactly one pool, so the
+    ///      registration rejects any token collision: neither the vault nor the reserve
+    ///      may be OHM, the vault may not equal its own reserve, and neither may equal
+    ///      the vault or the reserve of a registered asset.
     ///
     ///      The snapshot parameters are the baseline of the first yield projection, and
-    ///      `nextYield_` is injected into the weekly budget at the first weekly reset.
+    ///      `nextYield_` is withdrawn into the buyback pool at the first weekly reset.
     ///      Emits `AssetAdded` and `NextYieldSet`, and `BackingVaultSet` when
     ///      `setAsBackingVault_` is set.
     /// @param vault_ The ERC4626 vault to register.
@@ -398,9 +426,9 @@ interface IYieldRepurchaseFacilityV2 {
         bool setAsBackingVault_
     ) external;
 
-    /// @notice Seeds the weekly cycle: sets the epoch counter to the supplied value,
-    ///         adds each seeded amount to its vault's weekly buyback budget, and covers
-    ///         the budgets with treasury withdrawals.
+    /// @notice Seeds the weekly cycle: sets the epoch counter to the supplied value and
+    ///         withdraws each seeded amount from the treasury into its vault's buyback
+    ///         pool.
     /// @dev Callable by the admin role, at most once over the lifetime of the contract,
     ///      only while the facility is enabled, and only while the epoch counter holds
     ///      the restart value of 20 that `enable` sets, so a heart beat between the
@@ -410,13 +438,17 @@ interface IYieldRepurchaseFacilityV2 {
     ///      yields of the enabled assets that are already registered, erasing their
     ///      `addAsset` seeds.
     ///
-    ///      The seeded budgets fund the daily market cycles remaining in the week (an
-    ///      epoch of 18 or later leaves none), and the unspent remainder is retained by
-    ///      the following weekly reset. The stored next yields and the yield snapshots
-    ///      are not affected. An empty seed array seeds only the epoch and emits no
-    ///      event. Emits `WeeklyBudgetSeeded` per seed.
+    ///      The seeded pools fund the daily market cycles remaining in the week (an
+    ///      epoch of 18 or later leaves none), and the unspent remainder stays in the
+    ///      pool across the following weekly reset. The stored next yields and the yield
+    ///      snapshots are not affected. An empty seed array seeds only the epoch and
+    ///      emits no event; the seeding stays observable through `isCycleSeeded` and
+    ///      `epoch`. A treasury balance that does not cover a seeded amount is reported
+    ///      with `PrefundShortfall`, and the unfunded remainder is carried (see
+    ///      `ReserveAsset.unfundedYield`) and retried at the next weekly reset. Emits
+    ///      `WeeklyBudgetSeeded` per seed.
     /// @param epoch_ The epoch counter to resume at, in the range `[0, 21)`.
-    /// @param budgetSeeds_ The per-vault budget seeds; every seeded vault must be
+    /// @param budgetSeeds_ The per-vault pool seeds; every seeded vault must be
     ///        registered with an enabled asset, and every seeded amount must be
     ///        non-zero.
     function seedCycle(uint48 epoch_, WeeklyBudgetSeed[] calldata budgetSeeds_) external;
@@ -501,12 +533,14 @@ interface IYieldRepurchaseFacilityV2 {
     ) external;
 
     /// @notice Lowers the stored next yield of a registered vault, correcting a
-    ///         projection that overstates the yield before the next weekly reset injects
-    ///         it into the budget.
+    ///         projection that overstates the yield before the next weekly reset
+    ///         withdraws it into the buyback pool.
     /// @dev Callable by the YRF timelock and the admin role. The expected current value
     ///      guards against a weekly reset replacing the stored value between the
     ///      correction being prepared and applied: on a mismatch the correction reverts
-    ///      instead of cutting the fresh projection. Emits `NextYieldSet`.
+    ///      instead of cutting the fresh projection. The function lowers only the stored
+    ///      projection; the `unfundedYield` carry is corrected only through an `enable`
+    ///      restart. Emits `NextYieldSet`.
     /// @param vault_ The registered vault.
     /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
     ///        units.
@@ -540,9 +574,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param clearinghouse_ The included Clearinghouse address.
     function excludeClearinghouse(address clearinghouse_) external;
 
-    /// @notice Enables a disabled registered vault. The stored next yield is reset to
-    ///         zero and the yield snapshots are refreshed, so the yield projection
-    ///         resumes at the following weekly reset.
+    /// @notice Enables a disabled registered vault. The stored next yield and the
+    ///         unfunded carry are reset to zero and the yield snapshots are refreshed,
+    ///         so the yield projection resumes at the following weekly reset.
     /// @dev Callable by the YRF timelock and the admin role. Emits `AssetEnabled` and
     ///      `NextYieldSet`.
     /// @param vault_ The vault to enable.
@@ -550,36 +584,22 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Disables an enabled registered vault. A disabled vault is skipped by the
     ///         weekly and daily cycles, and purchases on its open bond markets revert;
-    ///         its budget and holdings stay in place.
+    ///         its buyback pool and accounting stay in place.
     /// @dev Callable by the YRF timelock and the admin role. The backing vault cannot be
     ///      disabled. Emits `AssetDisabled`.
     /// @param vault_ The vault to disable.
     function disableAsset(address vault_) external;
 
-    /// @notice Burns the purchased OHM held by the facility, transfers all remaining OHM,
-    ///         vault, and reserve balances to the treasury, and zeroes the per-vault
-    ///         holdings accounting and weekly budgets.
+    /// @notice Burns the purchased OHM held by the facility and transfers all remaining
+    ///         OHM, vault, and reserve balances to the treasury, emptying the buyback
+    ///         pools.
     /// @dev Callable by the emergency and admin roles, and only while the facility is
-    ///      disabled. The per-vault stored next yields are preserved, so a later
-    ///      `reEnable` or `enable` refunds the facility from the treasury at the next
-    ///      weekly reset. Each vault is swept independently: a vault whose sweep fails is
-    ///      skipped with `FundsReturnSkipped`, keeping its balances and accounting, and
-    ///      is retried by the next call. Emits `FundsReturnedToTreasury`.
+    ///      disabled. The per-vault stored next yields and unfunded carries are
+    ///      preserved, so a later `reEnable` or `enable` refunds the facility from the
+    ///      treasury at the next weekly reset. Each vault is swept independently: a vault
+    ///      whose sweep fails is skipped with `FundsReturnSkipped`, keeping its balances,
+    ///      and is retried by the next call. Emits `FundsReturnedToTreasury`.
     function returnFundsToTreasury() external;
-
-    /// @notice Contributes funds to a vault's weekly buyback budget: the supplied amount
-    ///         is added to the tracked holdings, and its redeemable value is credited to
-    ///         the budget and spent over the remaining daily cycles of the running week.
-    /// @dev Callable by anyone; a contribution is an irreversible donation drawn from the
-    ///      caller. A reserve contribution is wrapped into vault shares through the
-    ///      vault's `deposit`, so the caller must approve the facility for the reserve;
-    ///      a share contribution requires an approval for the vault shares. The vault's
-    ///      own deposit restrictions apply to the wrap. Emits `Contributed`.
-    /// @param vault_ The registered vault to contribute to; its asset must be enabled.
-    /// @param amount_ The contribution amount: vault shares when `inShares_` is set, and
-    ///        reserve units otherwise.
-    /// @param inShares_ Whether `amount_` is denominated in vault shares.
-    function contribute(address vault_, uint256 amount_, bool inShares_) external;
 
     // ============ VIEW FUNCTIONS ============ //
 

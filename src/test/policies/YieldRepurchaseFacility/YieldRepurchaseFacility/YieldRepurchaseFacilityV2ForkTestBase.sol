@@ -258,14 +258,14 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // ============ MIRROR MODEL ============ //
 
     /// @notice The expected per-vault state, mirroring `ReserveAsset` plus the expected
-    ///         TRSRY share balance of the vault.
+    ///         facility (buyback pool) and TRSRY balances of the vault.
     struct AssetModel {
         bool sellShares;
         uint256 yieldBuybackShare;
         uint256 nextYield;
-        uint256 budget;
-        uint256 prefundedShares;
-        uint256 prefundedReserve;
+        uint256 unfundedYield;
+        uint256 heldShares;
+        uint256 heldReserve;
         uint256 lastConversionRate;
         uint256 lastReserveBalance;
         uint256 trsryShares;
@@ -394,7 +394,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _installV2Stack() internal {
-        // Kernel actions are performed by the kernel executor (the DAO MS).
+        // Kernel actions are performed by the kernel executor (the DAO MS)
         vm.startPrank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
         kernel.executeAction(Actions.ActivatePolicy, address(yrfTimelock));
@@ -522,7 +522,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _initializeOracleState() internal {
-        // Start the simulated price path from the live feed answers at the pinned block.
+        // Start the simulated price path from the live feed answers at the pinned block
         (, ohmEthAnswer, , , ) = AggregatorV3Interface(CHAINLINK_OHM_ETH).latestRoundData();
         (, daiEthAnswer, , , ) = AggregatorV3Interface(CHAINLINK_DAI_ETH).latestRoundData();
     }
@@ -532,9 +532,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             sellShares: false,
             yieldBuybackShare: SUSDS_BUYBACK_SHARE,
             nextYield: susdsSeedYield,
-            budget: 0,
-            prefundedShares: 0,
-            prefundedReserve: 0,
+            unfundedYield: 0,
+            heldShares: 0,
+            heldReserve: 0,
             lastConversionRate: susdsSeedRate,
             lastReserveBalance: susdsSeedBalance,
             trsryShares: susds.balanceOf(address(treasury))
@@ -543,9 +543,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             sellShares: true,
             yieldBuybackShare: SUSDE_BUYBACK_SHARE,
             nextYield: susdeSeedYield,
-            budget: 0,
-            prefundedShares: 0,
-            prefundedReserve: 0,
+            unfundedYield: 0,
+            heldShares: 0,
+            heldReserve: 0,
             lastConversionRate: susdeSeedRate,
             lastReserveBalance: susdeSeedBalance,
             trsryShares: susde.balanceOf(address(treasury))
@@ -682,12 +682,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         AssetModel storage m = model[vault_];
         IERC4626 vault = IERC4626(vault_);
 
-        // Pool-value sync: budget = max(budget, previewRedeem(shares) + reserve).
-        uint256 poolValue = vault.previewRedeem(m.prefundedShares) + m.prefundedReserve;
-        if (poolValue > m.budget) m.budget = poolValue;
-
-        // The projected yield is injected exactly once per reset.
-        m.budget += m.nextYield;
+        // The sanctioned funding target: the stored projection plus the carried
+        // shortfall. It does not depend on the facility's balances.
+        uint256 fundingTarget = m.nextYield + m.unfundedYield;
 
         // Projection for the next week: snapshot-based vault yield plus the clearinghouse
         // yield (backing vault only), scaled by the buyback share.
@@ -706,21 +703,23 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         m.lastConversionRate = currentRate;
 
-        // Prefunding: withdraw the missing shares from the treasury, capped at its balance.
-        if (m.budget != 0 && m.prefundedReserve < m.budget) {
-            uint256 targetShares = vault.previewWithdraw(m.budget - m.prefundedReserve);
-            if (targetShares > m.prefundedShares) {
-                uint256 sharesToWithdraw = targetShares - m.prefundedShares;
-                if (sharesToWithdraw > m.trsryShares) sharesToWithdraw = m.trsryShares;
-                if (sharesToWithdraw != 0) {
-                    m.prefundedShares += sharesToWithdraw;
-                    m.trsryShares -= sharesToWithdraw;
-                }
+        // Funding withdrawal: shares worth the target, capped at the treasury balance;
+        // the uncovered remainder is carried.
+        uint256 funded = 0;
+        if (fundingTarget != 0) {
+            uint256 shares = vault.previewWithdraw(fundingTarget);
+            if (shares > m.trsryShares) shares = m.trsryShares;
+            if (shares != 0) {
+                funded = vault.previewRedeem(shares);
+                m.heldShares += shares;
+                m.trsryShares -= shares;
             }
         }
+        m.unfundedYield = Math.saturatingSub(fundingTarget, funded);
 
-        // The balance snapshot is taken after the prefunding. No clearinghouse is active
-        // on the pinned block, so the protocol balance is the TRSRY share balance.
+        // The balance snapshot is taken after the funding withdrawal. No clearinghouse
+        // is active on the pinned block, so the protocol balance is the TRSRY share
+        // balance.
         m.lastReserveBalance = vault.previewRedeem(m.trsryShares);
     }
 
@@ -745,7 +744,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         AssetModel storage m = model[SUSDS];
 
-        // backingAmount = purchased (9 dec) * BACKING (18 dec) / 1e9 -> 18 decimals.
+        // backingAmount = purchased (9 dec) * BACKING (18 dec) / 1e9 -> 18 decimals
         uint256 backingAmount = modelOhmPurchased.mulDiv(BACKING, 1e9);
         if (backingAmount == 0) return;
 
@@ -753,17 +752,16 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         if (shares > m.trsryShares) shares = m.trsryShares;
         if (shares == 0) return;
 
-        uint256 received = susds.previewRedeem(shares);
-        if (received == 0) return;
-
-        uint256 ohmToBurn = received >= backingAmount
+        uint256 funded = susds.previewRedeem(shares);
+        uint256 ohmToBurn = funded >= backingAmount
             ? modelOhmPurchased
-            : modelOhmPurchased.mulDiv(received, backingAmount);
+            : modelOhmPurchased.mulDiv(funded, backingAmount);
+        if (ohmToBurn == 0) return;
 
+        // The withdrawn shares join the backing vault's buyback pool as shares
         modelOhmPurchased -= ohmToBurn;
         m.trsryShares -= shares;
-        m.budget += received;
-        m.prefundedReserve += received;
+        m.heldShares += shares;
     }
 
     function _modelDailyCycle(
@@ -773,18 +771,22 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         uint256 marketCountBefore_
     ) internal {
         AssetModel storage m = model[vault_];
-        if (m.budget == 0) return;
-
-        uint256 bidAmount = m.budget / daysRemaining_;
-        if (bidAmount == 0) return;
-
         IERC4626 vault = IERC4626(vault_);
         uint256 marketOraclePrice = oraclePrice_;
         address payoutToken;
         uint256 capacity;
 
         if (m.sellShares) {
-            uint256 capacityShares = Math.min(vault.previewWithdraw(bidAmount), m.prefundedShares);
+            // The idle reserve is wrapped into vault shares before the sizing
+            if (m.heldReserve != 0) {
+                m.heldShares += vault.previewDeposit(m.heldReserve);
+                m.heldReserve = 0;
+            }
+
+            uint256 bidAmount = vault.previewRedeem(m.heldShares) / daysRemaining_;
+            if (bidAmount == 0) return;
+
+            uint256 capacityShares = Math.min(vault.previewWithdraw(bidAmount), m.heldShares);
             if (capacityShares == 0) return;
 
             uint256 conversionRate = vault.previewRedeem(1e18);
@@ -796,17 +798,19 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             payoutToken = vault_;
             capacity = capacityShares;
         } else {
-            uint256 currentReserve = m.prefundedReserve;
+            uint256 currentReserve = m.heldReserve;
+            uint256 bidAmount = (currentReserve + vault.previewRedeem(m.heldShares)) /
+                daysRemaining_;
+            if (bidAmount == 0) return;
+
             if (currentReserve < bidAmount) {
                 uint256 deficit = bidAmount - currentReserve;
                 uint256 sharesNeeded = vault.previewWithdraw(deficit);
-                uint256 sharesToRedeem = sharesNeeded > m.prefundedShares
-                    ? m.prefundedShares
-                    : sharesNeeded;
+                uint256 sharesToRedeem = sharesNeeded > m.heldShares ? m.heldShares : sharesNeeded;
                 uint256 redeemed = sharesToRedeem == 0 ? 0 : vault.previewRedeem(sharesToRedeem);
 
-                m.prefundedShares -= sharesToRedeem;
-                m.prefundedReserve += redeemed;
+                m.heldShares -= sharesToRedeem;
+                m.heldReserve += redeemed;
 
                 if (redeemed < deficit) bidAmount = currentReserve + redeemed;
             }
@@ -828,7 +832,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             initialPrice: initialPrice,
             minPrice: minPrice,
             scale: 10 ** uint8(36 + scaleAdjustment),
-            // maxPayout = capacity * depositInterval / duration = capacity / 6 (floor).
+            // maxPayout = capacity * depositInterval / duration = capacity / 6 (floor)
             maxPayout: capacity / 6
         });
         modelPendingMarkets += 1;
@@ -851,7 +855,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         uint256 minPrice = oracleSquare / oraclePrice_;
 
         int8 priceDecimals = _mirrorPriceDecimals(initialPrice);
-        // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2.
+        // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2
         scaleAdjustment = int8(18) - int8(9) + (priceDecimals / 2);
 
         uint256 oracleScale = 10 ** uint8(int8(18) - priceDecimals);
@@ -896,21 +900,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         IYieldRepurchaseFacilityV2.ReserveAsset memory config = yieldRepo.getAssetConfig(vault_);
 
         assertEq(config.nextYield, m.nextYield, string.concat(label_, ": nextYield"));
-        assertEq(
-            config.weeklyBudgetRemaining,
-            m.budget,
-            string.concat(label_, ": weeklyBudgetRemaining")
-        );
-        assertEq(
-            config.prefundedShares,
-            m.prefundedShares,
-            string.concat(label_, ": prefundedShares")
-        );
-        assertEq(
-            config.prefundedReserve,
-            m.prefundedReserve,
-            string.concat(label_, ": prefundedReserve")
-        );
+        assertEq(config.unfundedYield, m.unfundedYield, string.concat(label_, ": unfundedYield"));
         assertEq(
             config.lastConversionRate,
             m.lastConversionRate,
@@ -923,27 +913,27 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         );
     }
 
-    /// @notice Asserts that the token holdings of the facility and the treasury match the
-    ///         tracked accounting exactly (the facility holds nothing untracked).
+    /// @notice Asserts that the token holdings of the facility (the buyback pools) and
+    ///         the treasury match the mirror model exactly.
     function _assertHoldings() internal view {
         assertEq(
             susds.balanceOf(address(yieldRepo)),
-            model[SUSDS].prefundedShares,
+            model[SUSDS].heldShares,
             "holdings: facility sUSDS"
         );
         assertEq(
             usds.balanceOf(address(yieldRepo)),
-            model[SUSDS].prefundedReserve,
+            model[SUSDS].heldReserve,
             "holdings: facility USDS"
         );
         assertEq(
             susde.balanceOf(address(yieldRepo)),
-            model[SUSDE].prefundedShares,
+            model[SUSDE].heldShares,
             "holdings: facility sUSDe"
         );
         assertEq(
             usde.balanceOf(address(yieldRepo)),
-            model[SUSDE].prefundedReserve,
+            model[SUSDE].heldReserve,
             "holdings: facility USDe"
         );
         assertEq(ohm.balanceOf(address(yieldRepo)), modelOhmPurchased, "holdings: facility OHM");
@@ -1019,7 +1009,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
             uint256 expectedPayout = auctioneer.payoutFor(amountIn, mkt.id, address(0));
 
-            // Mint the quote OHM to the buyer: the MINTR module is the OHM vault.
+            // Mint the quote OHM to the buyer: the MINTR module is the OHM vault
             vm.prank(MINTR_MODULE);
             ohm.mint(buyer, amountIn);
 
@@ -1034,16 +1024,12 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             );
             vm.stopPrank();
 
-            // Mirror the callback accounting.
+            // Mirror the callback accounting: the payout leaves the buyback pool
             modelOhmPurchased += amountIn;
             if (m.sellShares) {
-                // The budget is reduced by the reserve value of the sold shares
-                // (previewMint rounds up), the prefunded shares by the payout.
-                m.budget = Math.saturatingSub(m.budget, IERC4626(vault_).previewMint(payout));
-                m.prefundedShares = Math.saturatingSub(m.prefundedShares, payout);
+                m.heldShares = Math.saturatingSub(m.heldShares, payout);
             } else {
-                m.budget = Math.saturatingSub(m.budget, payout);
-                m.prefundedReserve = Math.saturatingSub(m.prefundedReserve, payout);
+                m.heldReserve = Math.saturatingSub(m.heldReserve, payout);
             }
             boughtPayout += payout;
         }

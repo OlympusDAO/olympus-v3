@@ -133,7 +133,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     // ============ SETUP VALIDATION ============ //
 
     function test_setup() public view {
-        // The v1.2 state feeding the migration matches the pinned block.
+        // The v1.2 state feeding the migration matches the pinned block
         assertEq(yieldRepoV1.nextYield(), ANCHOR_V1_NEXT_YIELD, "v1 nextYield");
         assertEq(
             yieldRepoV1.lastReserveBalance(),
@@ -147,14 +147,14 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
         assertTrue(yieldRepoV1.isShutdown(), "v1 isShutdown");
 
-        // The computed seeds match the anchors.
+        // The computed seeds match the anchors
         assertEq(susdsSeedYield, ANCHOR_SUSDS_SEED_YIELD, "sUSDS seed yield");
         assertEq(susdsSeedBalance, ANCHOR_V1_LAST_RESERVE_BALANCE, "sUSDS seed balance");
         assertEq(susdsSeedRate, ANCHOR_V1_LAST_CONVERSION_RATE, "sUSDS seed rate");
         assertEq(susdeSeedBalance, ANCHOR_SUSDE_SEED_BALANCE, "sUSDe seed balance");
         assertEq(susdeSeedYield, ANCHOR_SUSDE_SEED_YIELD, "sUSDe seed yield");
 
-        // The facility configuration.
+        // The facility configuration
         assertTrue(yieldRepo.isEnabled(), "facility enabled");
         assertEq(yieldRepo.epoch(), 20, "initial epoch");
         assertEq(yieldRepo.backingVault(), SUSDS, "backing vault");
@@ -187,7 +187,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(susdeConfig.yieldBuybackShare, SUSDE_BUYBACK_SHARE, "sUSDe share");
         assertEq(susdeConfig.nextYield, susdeSeedYield, "sUSDe nextYield");
 
-        // The market authorization and the oracle price.
+        // The market authorization and the oracle price
         assertTrue(auctioneer.callbackAuthorized(address(yieldRepo)), "callback authorized");
         assertEq(price.getLastPrice(), ANCHOR_INITIAL_PRICE, "initial oracle price");
 
@@ -211,11 +211,11 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
     function test_e2e_twoWeeks() public {
         for (uint256 day = 0; day < 14; ++day) {
-            // The daily reward stream and the daily price move land before the daily beat.
+            // The daily reward stream and the daily price move land before the daily beat
             _accrueSusdeRewards();
             _applyPriceDeltaBps(PRICE_DELTA_BPS[day]);
 
-            // The daily beat: on day 0 and day 7 it also performs the weekly reset.
+            // The daily beat: on day 0 and day 7 it also performs the weekly reset
             bool isResetDay = day % 7 == 0;
             if (isResetDay) vm.recordLogs();
             _beat();
@@ -224,17 +224,17 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             if (day == 0) _assertWeekOneStart();
             if (day == 7) _assertWeekTwoStart();
 
-            // Bond purchases at the freshly created markets.
+            // Bond purchases at the freshly created markets
             _buyBonds(SUSDS, BUY_SUSDS_BPS[day]);
             _buyBonds(SUSDE, BUY_SUSDE_BPS[day]);
 
-            // Scenario events.
+            // Scenario events
             if (day == 2) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
             if (day == 4) _queueOffsetIncrease();
             if (day == 5) _executeOffsetIncreaseAndAssert();
             if (day == 9) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
 
-            // The two intra-day beats: the facility only advances its epoch.
+            // The two intra-day beats: the facility only advances its epoch
             _beat();
             if (day == 2) _assertMarketsAtPriceFloor();
             _beat();
@@ -248,32 +248,28 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
     // ============ DAY-SPECIFIC ASSERTIONS ============ //
 
-    /// @notice Day 0: the first weekly reset funds both weekly budgets with the seeded
-    ///         next yields, and the day-1 markets are sized to 1/7 of the budgets.
+    /// @notice Day 0: the first weekly reset withdraws the seeded next yields into the
+    ///         buyback pools, and the day-1 markets are sized to 1/7 of the funded pools.
     function _assertWeekOneStart() internal view {
-        // The pool value was zero before the first reset, so the budget equals the seed.
-        assertEq(
-            yieldRepo.getAssetConfig(SUSDS).weeklyBudgetRemaining,
-            // The purchased-OHM processing has not run yet: nothing was purchased.
-            ANCHOR_SUSDS_SEED_YIELD,
-            "week 1: sUSDS budget"
+        // The pools were empty before the first reset, so the funded value is the round
+        // trip of the seed through the treasury withdrawal:
+        // shares = previewWithdraw(seed) (round up), funded = previewRedeem(shares)
+        // (round down), so funded >= seed within the share rounding.
+        uint256 susdsFunded = IERC4626(SUSDS).previewRedeem(
+            IERC4626(SUSDS).previewWithdraw(ANCHOR_SUSDS_SEED_YIELD)
         );
-        assertEq(
-            yieldRepo.getAssetConfig(SUSDE).weeklyBudgetRemaining,
-            ANCHOR_SUSDE_SEED_YIELD,
-            "week 1: sUSDe budget"
-        );
+        uint256 susdeFundedShares = IERC4626(SUSDE).previewWithdraw(ANCHOR_SUSDE_SEED_YIELD);
 
-        // Day 1 markets: capacity = budget / 7 (floor). The sUSDS market pays the raw
+        // The whole seed was funded: no unfunded carry on either vault
+        assertEq(yieldRepo.getAssetConfig(SUSDS).unfundedYield, 0, "week 1: sUSDS carry");
+        assertEq(yieldRepo.getAssetConfig(SUSDE).unfundedYield, 0, "week 1: sUSDe carry");
+
+        // Day 1 markets: capacity = pool value / 7 (floor). The sUSDS market pays the raw
         // reserve; the sUSDe market pays vault shares priced at the share conversion rate.
-        assertEq(
-            market[SUSDS].capacity,
-            ANCHOR_SUSDS_SEED_YIELD / 7,
-            "week 1: sUSDS day-1 capacity"
-        );
+        assertEq(market[SUSDS].capacity, susdsFunded / 7, "week 1: sUSDS day-1 capacity");
         assertEq(
             market[SUSDE].capacity,
-            IERC4626(SUSDE).previewWithdraw(ANCHOR_SUSDE_SEED_YIELD / 7),
+            IERC4626(SUSDE).previewWithdraw(IERC4626(SUSDE).previewRedeem(susdeFundedShares) / 7),
             "week 1: sUSDe day-1 capacity"
         );
 
@@ -300,9 +296,19 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             "week 2: sUSDe projection view"
         );
 
-        // Week 2 has a live budget on both assets.
-        assertGt(yieldRepo.getAssetConfig(SUSDS).weeklyBudgetRemaining, 0, "week 2: sUSDS budget");
-        assertGt(yieldRepo.getAssetConfig(SUSDE).weeklyBudgetRemaining, 0, "week 2: sUSDe budget");
+        // Week 2 has a funded buyback pool on both assets.
+        assertGt(
+            usds.balanceOf(address(yieldRepo)) +
+                IERC4626(SUSDS).previewRedeem(susds.balanceOf(address(yieldRepo))),
+            0,
+            "week 2: sUSDS pool"
+        );
+        assertGt(
+            usde.balanceOf(address(yieldRepo)) +
+                IERC4626(SUSDE).previewRedeem(susde.balanceOf(address(yieldRepo))),
+            0,
+            "week 2: sUSDe pool"
+        );
     }
 
     /// @notice Day 5: the yrf_admin queues the DAI v1.1 offset increase through the

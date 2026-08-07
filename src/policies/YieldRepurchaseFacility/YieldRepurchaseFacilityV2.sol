@@ -46,19 +46,28 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 /// @notice Multi-asset Yield Repurchase Facility (YRF), version 2.
 /// @dev The facility runs on the heart beat: each `execute` advances the epoch counter,
 ///      every third epoch runs a daily cycle that opens 24-hour bond markets buying OHM
-///      with the reserves, and the 21st epoch first runs the weekly reset, which injects
-///      the projected yield into the per-vault budgets and prefunds them from the
-///      treasury. The purchased OHM is burned against a treasury withdrawal priced by
-///      the backing oracle. Markets are not opened while the oracle price is below the
+///      with the reserves, and the 21st epoch first runs the weekly reset, which
+///      withdraws the projected yield from the treasury into the per-vault buyback
+///      pools. The purchased OHM is burned against a treasury withdrawal priced by the
+///      backing oracle. Markets are not opened while the oracle price is below the
 ///      backing.
 ///
+///      The reserve-side accounting is balance-based: the facility's balances of a
+///      vault's shares and of its reserve token are the vault's buyback pool, and the
+///      daily bids are sized from those balances. A plain transfer of either token to
+///      the facility joins the pool. The treasury is drawn only through three paths,
+///      none of which reads the facility's balances: the weekly withdrawal of the
+///      stored `nextYield` (plus the carried `unfundedYield`), the backing withdrawal
+///      for purchased-and-burned OHM tracked by the `ohmPurchased` counter, and the
+///      admin-supplied seeds.
+///
 ///      Lifecycle:
-///      - `enable` (admin) performs a full restart: the budgets and yields of the enabled
-///        assets are zeroed, their yield snapshots are refreshed, and the epoch counter
-///        is set so that the next `execute` performs a weekly reset. The payload may seed
-///        the per-vault `nextYield` values (an empty seed array restarts with zero
-///        yields). Funds held for the enabled assets are re-absorbed into the budget by
-///        the pool-value sync of that reset.
+///      - `enable` (admin) performs a full restart: the yields and unfunded carries of
+///        the enabled assets are zeroed, their yield snapshots are refreshed, and the
+///        epoch counter is set so that the next `execute` performs a weekly reset. The
+///        payload may seed the per-vault `nextYield` values (an empty seed array
+///        restarts with zero yields). Funds held for the enabled assets stay in their
+///        buyback pools and continue to be spent by the daily cycles.
 ///      - `disable` (emergency or admin) only halts `execute` and `callback`; the funds and
 ///        the accounting state are left in place.
 ///      - `reEnable` (yrf_admin) resumes the interrupted week in place, and is only
@@ -67,7 +76,7 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///        the held balances to the treasury while the facility is disabled, sweeping each
 ///        vault independently.
 ///      - `seedCycle` (admin, one-shot) sets the epoch counter and seeds the running
-///        week's budgets, covering them with treasury withdrawals.
+///        week's buyback pools with treasury withdrawals.
 ///
 ///      The admin role is expected to be held only by the OCG timelock, so every
 ///      admin-gated function of this contract is de-facto timelocked.
@@ -320,14 +329,14 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ENABLE / DISABLE ============ //
 
     /// @inheritdoc EnablerV2
-    /// @dev Performs a full restart of the epoch cycle: the budgets and yields of the
-    ///      enabled assets are zeroed, their yield snapshots are refreshed, and the epoch
-    ///      counter is set so that the next `execute` performs a weekly reset. Disabled
-    ///      assets are left untouched; `enableAsset` resets them when they are enabled.
-    ///      The payload may seed the next yield of enabled vaults; with an empty seed
-    ///      array every enabled vault restarts with a zero yield. Funds held for the
-    ///      enabled assets are re-absorbed into the budget by the pool-value sync of the
-    ///      first weekly reset. For resuming an interrupted week after a disable, see
+    /// @dev Performs a full restart of the epoch cycle: the yields and unfunded carries
+    ///      of the enabled assets are zeroed, their yield snapshots are refreshed, and
+    ///      the epoch counter is set so that the next `execute` performs a weekly reset.
+    ///      Disabled assets are left untouched; `enableAsset` resets them when they are
+    ///      enabled. The payload may seed the next yield of enabled vaults; with an
+    ///      empty seed array every enabled vault restarts with a zero yield. Funds held
+    ///      for the enabled assets stay in their buyback pools and continue to be spent
+    ///      by the daily cycles. For resuming an interrupted week after a disable, see
     ///      `reEnable`.
     ///
     ///      Reverts if:
@@ -353,9 +362,9 @@ contract YieldRepurchaseFacilityV2 is
         _resetCycle(nextYieldSeeds);
     }
 
-    /// @notice Restarts the weekly cycle: zeroes the budgets and yields of the enabled
-    ///         assets, applies the supplied next-yield seeds, refreshes their yield
-    ///         snapshots, and rewinds the epoch counter so that the next `execute`
+    /// @notice Restarts the weekly cycle: zeroes the yields and unfunded carries of the
+    ///         enabled assets, applies the supplied next-yield seeds, refreshes their
+    ///         yield snapshots, and rewinds the epoch counter so that the next `execute`
     ///         performs a weekly reset.
     /// @dev Disabled assets are not touched and are not seedable: a seed for a disabled
     ///      vault would be erased by the reset `enableAsset` performs, so it is rejected
@@ -374,7 +383,7 @@ contract YieldRepurchaseFacilityV2 is
             if (!config.isAssetEnabled) continue;
 
             config.nextYield = 0;
-            config.weeklyBudgetRemaining = 0;
+            config.unfundedYield = 0;
             _refreshSnapshots(vault, config);
         }
 
@@ -411,15 +420,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc ReEnabler
-    /// @dev Resumes the interrupted epoch cycle in place: the epoch counter, the per-vault
-    ///      budgets, the prefunded balances, and the yield snapshots are intentionally left
-    ///      untouched, so the facility continues the week where it stopped. Epochs advance
-    ///      only while the facility is enabled, so the week is stretched by the downtime;
-    ///      the vault yield accrued during the downtime is captured by the next weekly
-    ///      reset, and `nextYield` is injected into the weekly budget exactly once per
-    ///      reset regardless of the downtime. The grace-window check runs through
-    ///      `super`. The callback authorization is not re-checked: a missing
-    ///      authorization degrades to market submissions the auctioneer rejects.
+    /// @dev Resumes the interrupted epoch cycle in place: the epoch counter, the buyback
+    ///      pools, and the yield snapshots are intentionally left untouched, so the
+    ///      facility continues the week where it stopped. Epochs advance only while the
+    ///      facility is enabled, so the week is stretched by the downtime; the vault
+    ///      yield accrued during the downtime is captured by the next weekly reset, and
+    ///      `nextYield` is withdrawn into the buyback pool exactly once per reset
+    ///      regardless of the downtime. The grace-window check runs through `super`. The
+    ///      callback authorization is not re-checked: a missing authorization degrades
+    ///      to market submissions the auctioneer rejects.
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
     }
@@ -451,14 +460,15 @@ contract YieldRepurchaseFacilityV2 is
     ///      and leaves the funds in place so that `reEnable` can resume the interrupted
     ///      week. Call this function after a disable when the facility is not expected to
     ///      be re-enabled soon, or when holding funds on the facility is a concern. The
-    ///      per-vault `nextYield` is intentionally preserved, so a later `reEnable` or
-    ///      `enable` refunds the facility from the treasury at the next weekly reset.
+    ///      per-vault `nextYield` and `unfundedYield` are intentionally preserved, so a
+    ///      later `reEnable` or `enable` refunds the facility from the treasury at the
+    ///      next weekly reset.
     ///
     ///      The sweep of each vault is isolated through a self-call: a vault whose sweep
-    ///      reverts is skipped with a `FundsReturnSkipped` event, keeping its balances and
-    ///      accounting in place, and is retried by the next call. The OHM burn and
-    ///      transfer are not isolated: OHM is a protocol-owned token whose balance always
-    ///      covers the tracked purchased amount.
+    ///      reverts is skipped with a `FundsReturnSkipped` event, keeping its balances in
+    ///      place, and is retried by the next call. The OHM burn and transfer are not
+    ///      isolated: OHM is a protocol-owned token whose balance always covers the
+    ///      tracked purchased amount.
     ///
     ///      The function reverts if:
     ///      - The contract is enabled.
@@ -485,8 +495,7 @@ contract YieldRepurchaseFacilityV2 is
         emit FundsReturnedToTreasury(purchasedOhm);
     }
 
-    /// @notice Returns a vault's share and reserve balances to the treasury and zeroes
-    ///         the vault's holdings accounting and weekly budget.
+    /// @notice Returns a vault's share and reserve balances to the treasury.
     /// @dev External only for the self-call isolation in `returnFundsToTreasury`.
     ///
     ///      Reverts if the caller is not the facility itself.
@@ -494,13 +503,7 @@ contract YieldRepurchaseFacilityV2 is
     function selfReturnVaultFunds(address vault_) external {
         _requireCaller(address(this));
 
-        ReserveAsset storage config = _assetConfigs[vault_];
-
-        _returnBalancesToTrsry(vault_, config.reserve);
-
-        config.prefundedShares = 0;
-        config.prefundedReserve = 0;
-        config.weeklyBudgetRemaining = 0;
+        _returnBalancesToTrsry(vault_, _assetConfigs[vault_].reserve);
     }
 
     // ============ PERIODIC TASK ============ //
@@ -539,9 +542,9 @@ contract YieldRepurchaseFacilityV2 is
         }
 
         // Below the backing, each purchase would release more backing on the burn than
-        // the reserve it spends, growing the budget on every cycle, so market creation
+        // the reserve it spends, growing the pool on every cycle, so market creation
         // is skipped for every vault. Skipping before any redeem also keeps the reserve
-        // in the yield-earning vaults; the unspent budget rolls into the following days.
+        // in the yield-earning vaults; the unspent pool rolls into the following days.
         uint256 oraclePrice = PRICE.getLastPrice();
         uint256 backing = _backing();
         if (oraclePrice == 0 || oraclePrice < backing) return;
@@ -582,20 +585,19 @@ contract YieldRepurchaseFacilityV2 is
         _executeDailyCycle(vault_, _assetConfigs[vault_], daysRemaining_, oraclePrice_);
     }
 
-    /// @notice Performs the weekly reset: re-absorbs the funds held by the facility into
-    ///         the weekly budget, injects the projected yield, refreshes the yield
-    ///         snapshots, and prefunds the budget from the treasury.
-    /// @dev Every unit of vault yield enters the budget exactly once, at the first weekly reset
-    ///      after it accrues: the yield on the treasury-held shares through the `nextYield`
-    ///      projection, and the yield on the shares held by the facility through the pool-value
-    ///      sync (`budget = max(budget, poolValue)`). The daily bids deliberately spend the fixed
-    ///      budget counter, so the intra-week appreciation of the prefunded shares is not spent
-    ///      within the running week; it is captured by the sync of the following reset.
+    /// @notice Performs the weekly reset: projects the yield of the coming week,
+    ///         refreshes the yield snapshots, and withdraws the previously stored
+    ///         projection from the treasury into the buyback pool.
+    /// @dev Every unit of yield enters the buyback pool exactly once: the yield on the
+    ///      treasury-held shares through the `nextYield` projection withdrawn here, and the
+    ///      appreciation of the facility-held shares directly through the balance-based daily
+    ///      bids. The projection reads only treasury-side snapshots, so the facility's balances
+    ///      never influence the withdrawal.
     ///
     ///      The processing of each vault is isolated through a self-call: a vault whose processing
     ///      reverts is skipped for the week with a `WeeklyResetSkipped` event and retried at the
     ///      following reset. The stored `nextYield` of a skipped vault stays in place and is
-    ///      injected once, at the first reset that succeeds. A skipped reset of the backing vault
+    ///      withdrawn once, at the first reset that succeeds. A skipped reset of the backing vault
     ///      forfeits that week's Clearinghouse interest: the following reset projects the interest
     ///      anew, for one week only.
     function _weeklyReset() private {
@@ -626,12 +628,17 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @notice Runs the weekly reset of a single vault: re-absorbs the funds held by the
-    ///         facility into the weekly budget, injects the projected yield, refreshes the
-    ///         yield snapshots, and prefunds the budget from the treasury.
+    /// @notice Runs the weekly reset of a single vault: projects the yield of the coming
+    ///         week, refreshes the yield snapshots, and withdraws the previously stored
+    ///         projection from the treasury into the buyback pool.
     /// @dev External only for the self-call isolation in `_weeklyReset`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`.
+    ///
+    ///      The funding target is the stored `nextYield` plus the `unfundedYield` carried
+    ///      from earlier shortfalls; it does not depend on the facility's balances. The
+    ///      remainder the treasury balance cannot cover is stored back into
+    ///      `unfundedYield` and retried at the following reset.
     ///
     ///      Reverts if the caller is not the facility itself.
     /// @param vault_ The vault to reset.
@@ -642,16 +649,7 @@ contract YieldRepurchaseFacilityV2 is
 
         ReserveAsset storage config = _assetConfigs[vault_];
 
-        // The re-mark commits the appreciation of the facility-held pool to buybacks. It
-        // never lowers the budget, so an unfunded prefund shortfall is preserved and
-        // retried by the prefund below.
-        uint256 poolValue = _previewRedeem(vault_, config.prefundedShares) +
-            config.prefundedReserve;
-        if (poolValue > config.weeklyBudgetRemaining) {
-            config.weeklyBudgetRemaining = poolValue;
-        }
-
-        config.weeklyBudgetRemaining += config.nextYield;
+        uint256 fundingTarget = config.nextYield + config.unfundedYield;
 
         // The projection reads the stored snapshots against the current rate, so it must
         // run before the snapshots are refreshed below.
@@ -661,78 +659,78 @@ contract YieldRepurchaseFacilityV2 is
 
         config.lastConversionRate = _conversionRate(config);
 
-        _prefundVault(vault_, config);
+        uint256 funded = _fundFromTreasury(vault_, fundingTarget);
+        config.unfundedYield = Math.saturatingSub(fundingTarget, funded);
 
-        // The balance snapshot is taken after the prefund, so it excludes the shares
-        // moved to the facility.
+        // The balance snapshot is taken after the funding withdrawal, so it excludes the
+        // shares moved to the facility.
         config.lastReserveBalance = _getProtocolReserveBalance(vault_);
     }
 
-    /// @notice Withdraws vault shares from the treasury so that the facility's tracked
-    ///         holdings cover the weekly budget.
-    /// @dev The target is `previewWithdraw(budget - prefundedReserve)` shares (rounded up
-    ///      by the vault), reduced by the shares already held. The withdrawal is capped
-    ///      at the treasury balance, with a `PrefundShortfall` event on the cap.
-    function _prefundVault(address vault_, ReserveAsset storage config_) private {
-        uint256 budget = config_.weeklyBudgetRemaining;
-        if (budget == 0) return;
+    /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
+    ///         treasury into the buyback pool.
+    /// @dev The share amount is `previewWithdraw(amount_)` (rounded up by the vault),
+    ///      capped at the treasury balance with a `PrefundShortfall` event on the cap.
+    ///      The funded value is the redeemable value of the withdrawn shares (floor).
+    /// @return funded The funded value, in reserve units.
+    function _fundFromTreasury(address vault_, uint256 amount_) private returns (uint256 funded) {
+        if (amount_ == 0) return 0;
 
-        // The held reserve already covers part of the budget, so the unsold remainder
-        // of a previous bid is not funded again.
-        uint256 heldReserve = config_.prefundedReserve;
-        if (heldReserve >= budget) return;
-
-        uint256 targetShares = _previewWithdraw(vault_, budget - heldReserve);
-        uint256 currentShares = config_.prefundedShares;
-        if (targetShares <= currentShares) return;
-
-        uint256 sharesToWithdraw = targetShares - currentShares;
+        uint256 shares = _previewWithdraw(vault_, amount_);
         uint256 trsryBalance = _trsryBalance(vault_);
-        if (sharesToWithdraw > trsryBalance) {
-            // The unfunded gap stays in the budget and is retried at the next reset
-            emit PrefundShortfall(vault_, sharesToWithdraw, trsryBalance);
-            sharesToWithdraw = trsryBalance;
+        if (shares > trsryBalance) {
+            // The unfunded remainder is carried by the caller and retried at the next
+            // reset.
+            emit PrefundShortfall(vault_, shares, trsryBalance);
+            shares = trsryBalance;
         }
-        if (sharesToWithdraw == 0) return;
+        if (shares == 0) return 0;
 
-        _withdrawShares(vault_, sharesToWithdraw);
-        config_.prefundedShares = currentShares + sharesToWithdraw;
+        _withdrawShares(vault_, shares);
+        funded = _previewRedeem(vault_, shares);
     }
 
-    /// @notice Opens the daily bond market of a vault.
-    /// @dev The bid is `weeklyBudgetRemaining / daysRemaining_` (floor). For a
-    ///      sell-shares asset the market capacity is the smaller of
-    ///      `previewWithdraw(bid)` and the prefunded shares, denominated in shares.
-    ///      Otherwise the reserve shortfall is redeemed from the prefunded shares first,
-    ///      and the bid is clamped to the reserve actually held when the redeem falls
-    ///      short. A zero budget, bid, or capacity skips the market.
+    /// @notice Opens the daily bond market of a vault, sized from the facility's
+    ///         balances.
+    /// @dev The bid is the pool value divided by `daysRemaining_` (floor). For a
+    ///      sell-shares asset the idle reserve balance is wrapped into vault shares
+    ///      first, the pool value is the redeemable value of the held shares, and the
+    ///      market capacity is the smaller of `previewWithdraw(bid)` and the held
+    ///      shares, denominated in shares. Otherwise the pool value is the held reserve
+    ///      plus the redeemable value of the held shares, the reserve shortfall of the
+    ///      bid is redeemed from the held shares, and the bid is clamped to the reserve
+    ///      actually held when the redeem falls short. A zero bid or capacity skips the
+    ///      market.
     function _executeDailyCycle(
         address vault_,
         ReserveAsset storage config_,
         uint256 daysRemaining_,
         uint256 oraclePrice_
     ) private {
-        uint256 weeklyBudgetRemaining = config_.weeklyBudgetRemaining;
-        if (weeklyBudgetRemaining == 0) return;
-
-        uint256 bidAmount = weeklyBudgetRemaining / daysRemaining_;
-        if (bidAmount == 0) return;
+        address reserve_ = config_.reserve;
 
         if (config_.sellShares) {
-            uint256 capacityShares = Math.min(
-                _previewWithdraw(vault_, bidAmount),
-                config_.prefundedShares
-            );
+            _wrapIdleReserve(vault_, reserve_);
+
+            uint256 heldShares = _selfBalance(vault_);
+            uint256 bidAmount = _previewRedeem(vault_, heldShares) / daysRemaining_;
+            if (bidAmount == 0) return;
+
+            uint256 capacityShares = Math.min(_previewWithdraw(vault_, bidAmount), heldShares);
             if (capacityShares == 0) return;
 
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
         } else {
-            address reserve_ = config_.reserve;
             uint256 currentReserve = _selfBalance(reserve_);
+            uint256 heldShares = _selfBalance(vault_);
+
+            uint256 bidAmount = (currentReserve + _previewRedeem(vault_, heldShares)) /
+                daysRemaining_;
+            if (bidAmount == 0) return;
 
             if (currentReserve < bidAmount) {
                 uint256 deficit = bidAmount - currentReserve;
-                uint256 redeemed = _redeemFromPrefunded(vault_, reserve_, deficit, config_);
+                uint256 redeemed = _redeemForDeficit(vault_, reserve_, deficit, heldShares);
 
                 if (redeemed < deficit) {
                     bidAmount = currentReserve + redeemed;
@@ -745,24 +743,66 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
+    /// @notice Wraps the facility's idle reserve balance into vault shares through the
+    ///         checked self-call.
+    /// @dev On a failed wrap the reserve is kept, `ReserveWrapFailed` is emitted, and
+    ///      the wrap is retried at the following daily cycle. A dust balance that
+    ///      previews to zero shares is skipped without an event and stays on the
+    ///      facility until the balance grows past the vault's rounding threshold.
+    function _wrapIdleReserve(address vault_, address reserve_) private {
+        uint256 idleReserve = _selfBalance(reserve_);
+        if (idleReserve == 0) return;
+        if (IERC4626(vault_).previewDeposit(idleReserve) == 0) return;
+
+        try this.selfWrapReserve(vault_, reserve_, idleReserve) {} catch {
+            // The failed self-call rolled back the deposit, so the reserve is still held
+            emit ReserveWrapFailed(vault_, idleReserve);
+        }
+    }
+
+    /// @notice Deposits the reserve into the vault and verifies the minted shares
+    ///         against the preview.
+    /// @dev External only for the self-call isolation in `_wrapIdleReserve`. The
+    ///      function is intentionally not `nonReentrant`: it executes within the guard
+    ///      held by `execute`. The received amount is measured as the share balance
+    ///      delta.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not the facility itself.
+    ///      - The received shares are below `previewDeposit(amount_)`.
+    /// @param vault_ The vault to deposit into.
+    /// @param reserve_ The vault's reserve token.
+    /// @param amount_ The reserve amount to deposit.
+    function selfWrapReserve(address vault_, address reserve_, uint256 amount_) external {
+        _requireCaller(address(this));
+
+        uint256 expected = IERC4626(vault_).previewDeposit(amount_);
+        uint256 sharesBefore = _selfBalance(vault_);
+        IERC20(reserve_).forceApprove(vault_, amount_);
+        IERC4626(vault_).deposit(amount_, address(this));
+        uint256 received = _selfBalance(vault_) - sharesBefore;
+
+        if (received < expected)
+            revert IYieldRepurchaseFacilityV2_InsufficientDeposit(vault_, expected, received);
+    }
+
     /// @notice Redeems vault shares through the checked self-call.
     /// @dev On a failed redeem the shares are kept, `RedeemFailed` is emitted, and zero
-    ///      is reported as both the received and the used amount.
+    ///      is reported as the received amount.
     /// @return received The reserve amount received.
-    /// @return used The share amount consumed by the redeem.
     function _redeemShares(
         address vault_,
         address reserve_,
         uint256 shares_
-    ) private returns (uint256 received, uint256 used) {
-        if (shares_ == 0) return (0, 0);
+    ) private returns (uint256 received) {
+        if (shares_ == 0) return 0;
 
         try this.selfRedeemChecked(vault_, reserve_, shares_) returns (uint256 received_) {
-            return (received_, shares_);
+            return received_;
         } catch {
             // The failed self-call rolled back the redeem, so all shares are still held
             emit RedeemFailed(vault_, shares_);
-            return (0, 0);
+            return 0;
         }
     }
 
@@ -796,62 +836,32 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_InsufficientRedeem(vault_, expected, received);
     }
 
-    /// @notice Redeems prefunded shares to cover a reserve deficit.
+    /// @notice Redeems held shares to cover a reserve deficit of the daily bid.
     /// @dev The share amount is `previewWithdraw(deficit_)` (rounded up by the vault),
-    ///      capped at the prefunded shares. The consumed shares and the received reserve
-    ///      are moved between the tracked counters.
-    function _redeemFromPrefunded(
+    ///      capped at the held shares.
+    function _redeemForDeficit(
         address vault_,
         address reserve_,
         uint256 deficit_,
-        ReserveAsset storage config_
+        uint256 heldShares_
     ) private returns (uint256 redeemed) {
-        if (deficit_ == 0) return 0;
-
         uint256 sharesNeeded = _previewWithdraw(vault_, deficit_);
-        uint256 available = config_.prefundedShares;
-        uint256 sharesToRedeem = sharesNeeded > available ? available : sharesNeeded;
+        uint256 sharesToRedeem = sharesNeeded > heldShares_ ? heldShares_ : sharesNeeded;
 
-        uint256 used;
-        (redeemed, used) = _redeemShares(vault_, reserve_, sharesToRedeem);
-        config_.prefundedShares = available - used;
-        config_.prefundedReserve += redeemed;
+        redeemed = _redeemShares(vault_, reserve_, sharesToRedeem);
     }
 
-    /// @notice Withdraws vault shares from the treasury and redeems them for the reserve.
-    /// @dev The share amount is `previewWithdraw(amount_)` (rounded up by the vault),
-    ///      capped at the treasury balance. Shares that fail to redeem are returned to
-    ///      the treasury.
-    function _withdrawAndRedeemFresh(
-        address vault_,
-        address reserve_,
-        uint256 amount_
-    ) private returns (uint256 received) {
-        if (amount_ == 0) return 0;
-
-        uint256 shares = _previewWithdraw(vault_, amount_);
-        uint256 trsryBalance = _trsryBalance(vault_);
-        if (shares > trsryBalance) shares = trsryBalance;
-        if (shares == 0) return 0;
-
-        _withdrawShares(vault_, shares);
-
-        uint256 used;
-        (received, used) = _redeemShares(vault_, reserve_, shares);
-
-        // Unredeemed shares would sit untracked on the facility, so they go back to the
-        // treasury.
-        _transferToTrsry(vault_, shares - used);
-    }
-
-    /// @notice Burns the purchased OHM against a fresh backing withdrawal and credits the
-    ///         proceeds to the backing vault's budget.
+    /// @notice Burns the purchased OHM against a backing withdrawal; the withdrawn
+    ///         backing vault shares join the backing vault's buyback pool.
     /// @dev External only for the self-call isolation in `execute`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
-    ///      `execute`. Without a backing vault, or when the scaled backing amount or the
-    ///      withdrawal proceeds are zero, the accumulated OHM is kept for later
-    ///      processing. When the proceeds fall short of the backing amount, the burn is
-    ///      pro-rated down (floor) and the remainder stays accumulated.
+    ///      `execute`. Without a backing vault, or when the scaled backing amount, the
+    ///      withdrawable share amount, or the pro-rated burn amount is zero, the
+    ///      accumulated OHM is kept for later processing and nothing is withdrawn. When
+    ///      the treasury balance caps the withdrawal below the backing amount, the burn
+    ///      is pro-rated down (floor) and the remainder stays accumulated, so the
+    ///      withdrawal never exceeds the backing of the burned OHM by more than the
+    ///      pro-rating rounding.
     ///
     ///      Reverts if the caller is not the facility itself.
     function selfProcessOhmPurchases() external {
@@ -863,37 +873,37 @@ contract YieldRepurchaseFacilityV2 is
         address backingVault_ = backingVault;
         if (backingVault_ == address(0)) return;
 
-        ReserveAsset storage backingConfig = _assetConfigs[backingVault_];
         uint256 backingPerOhm = _backing();
 
         // backingAmount18 = purchased (9 dec) * backingPerOhm (18 dec) / 10^9
         // backingAmount   = scaleFrom18(backingAmount18, reserveDecimals).
         uint256 backingAmount18 = purchased.mulDiv(backingPerOhm, 10 ** _OHM_DECIMALS);
-        uint256 backingAmount = _scaleFrom18(backingAmount18, backingConfig.reserveDecimals);
+        uint256 backingAmount = _scaleFrom18(
+            backingAmount18,
+            _assetConfigs[backingVault_].reserveDecimals
+        );
         if (backingAmount == 0) return;
 
-        uint256 received = _withdrawAndRedeemFresh(
-            backingVault_,
-            backingConfig.reserve,
-            backingAmount
-        );
-        if (received == 0) return;
+        uint256 shares = _previewWithdraw(backingVault_, backingAmount);
+        uint256 trsryBalance = _trsryBalance(backingVault_);
+        if (shares > trsryBalance) shares = trsryBalance;
+        if (shares == 0) return;
 
-        // The explicit full branch avoids the mulDiv rounding when the withdrawal
-        // delivered in full.
-        uint256 ohmToBurn = received >= backingAmount
+        // The burn amount is derived from the withdrawable value before the withdrawal,
+        // so nothing is withdrawn unless OHM is burned for it. The explicit full branch
+        // avoids the mulDiv rounding when the treasury covers the backing in full.
+        uint256 funded = _previewRedeem(backingVault_, shares);
+        uint256 ohmToBurn = funded >= backingAmount
             ? purchased
-            : purchased.mulDiv(received, backingAmount);
+            : purchased.mulDiv(funded, backingAmount);
+        if (ohmToBurn == 0) return;
+
+        _withdrawShares(backingVault_, shares);
 
         _ohmPurchased = purchased - ohmToBurn;
         IBurnableERC20(address(_OHM)).burn(ohmToBurn);
 
-        // The proceeds are held by the facility, so the budget and the tracked reserve
-        // grow together.
-        backingConfig.weeklyBudgetRemaining += received;
-        backingConfig.prefundedReserve += received;
-
-        emit OhmPurchasesProcessed(ohmToBurn, received);
+        emit OhmPurchasesProcessed(ohmToBurn, funded);
     }
 
     /// @notice Creates a bond market that sells the vault's payout token for OHM.
@@ -937,8 +947,7 @@ contract YieldRepurchaseFacilityV2 is
             })
         );
 
-        // The funds stay with the facility and the budget is untouched (only the
-        // callback decrements it), so the following cycle retries the market.
+        // The funds stay in the buyback pool, so the following cycle retries the market
         if (!success) {
             emit MarketCreationFailed(vault_, bidAmount_);
             return;
@@ -947,57 +956,6 @@ contract YieldRepurchaseFacilityV2 is
         _marketVaults[marketId] = vault_;
 
         emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
-    }
-
-    // ============ CONTRIBUTIONS ============ //
-
-    /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The contribution is measured through balance deltas. A reserve contribution
-    ///      is wrapped into vault shares through the vault's `deposit`. The tracked
-    ///      holdings grow by the added shares, and the weekly budget grows by their
-    ///      redeemable value (floor), so the budget does not exceed the value of the held
-    ///      pool and the weekly reset's pool-value sync cannot inject the contribution a
-    ///      second time.
-    ///
-    ///      Reverts if:
-    ///      - The contract is disabled.
-    ///      - The vault is not registered.
-    ///      - The vault's asset is disabled.
-    ///      - `amount_` is zero, or the contribution adds zero shares.
-    ///      - The token transfer or the vault deposit reverts.
-    function contribute(
-        address vault_,
-        uint256 amount_,
-        bool inShares_
-    ) external override nonReentrant {
-        _requireEnabled();
-        ReserveAsset storage config = _requireRegistered(vault_);
-        _requireAssetEnabled(config);
-        _requireNonzeroAmount(amount_);
-
-        uint256 sharesAdded;
-        if (inShares_) {
-            uint256 sharesBefore = _selfBalance(vault_);
-            IERC20(vault_).safeTransferFrom(msg.sender, address(this), amount_);
-            sharesAdded = _selfBalance(vault_) - sharesBefore;
-        } else {
-            address reserve_ = config.reserve;
-            uint256 reserveBefore = _selfBalance(reserve_);
-            IERC20(reserve_).safeTransferFrom(msg.sender, address(this), amount_);
-            uint256 received = _selfBalance(reserve_) - reserveBefore;
-
-            uint256 sharesBefore = _selfBalance(vault_);
-            IERC20(reserve_).forceApprove(vault_, received);
-            IERC4626(vault_).deposit(received, address(this));
-            sharesAdded = _selfBalance(vault_) - sharesBefore;
-        }
-        _requireNonzeroAmount(sharesAdded);
-
-        uint256 budgetAdded = _previewRedeem(vault_, sharesAdded);
-        config.prefundedShares += sharesAdded;
-        config.weeklyBudgetRemaining += budgetAdded;
-
-        emit Contributed(vault_, msg.sender, sharesAdded, budgetAdded);
     }
 
     // ============ BOND CALLBACK ============ //
@@ -1010,8 +968,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      donated amount.
     ///
     ///      `outputAmount_` is teller-computed and not validated here: the payout is
-    ///      bounded only by the payout-token balance held by the facility, and the tracked
-    ///      counters are reduced with saturating subtraction (`_recordReserveOutflow`).
+    ///      bounded only by the payout-token balance held by the facility, whose transfer
+    ///      reverts on an insufficient balance.
     ///
     ///      Reverts if:
     ///      - The caller is not the teller.
@@ -1019,6 +977,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The market was not created by this facility.
     ///      - The market's asset is disabled.
     ///      - The OHM balance is below `_ohmPurchased + inputAmount_`.
+    ///      - The payout-token balance is below `outputAmount_`.
     function callback(
         uint256 id_,
         uint256 inputAmount_,
@@ -1037,44 +996,12 @@ contract YieldRepurchaseFacilityV2 is
         if (_selfBalance(address(_OHM)) < _ohmPurchased + inputAmount_)
             revert IYieldRepurchaseFacilityV2_QuoteNotReceived();
 
-        address reserve_ = config.reserve;
-
         _ohmPurchased += inputAmount_;
         uint256[2] storage marketAmounts = _amountsPerMarket[id_];
         marketAmounts[0] += inputAmount_;
         marketAmounts[1] += outputAmount_;
 
-        _recordReserveOutflow(config, vault, outputAmount_);
-
-        IERC20(config.sellShares ? vault : reserve_).safeTransfer(msg.sender, outputAmount_);
-    }
-
-    /// @notice Reduces the budget and holdings counters by a market payout.
-    /// @dev The subtractions saturate at zero. For a sell-shares asset the budget is
-    ///      reduced by `previewMint(outputAmount_)` (rounded up by the vault), the
-    ///      reserve value of the paid shares.
-    function _recordReserveOutflow(
-        ReserveAsset storage config_,
-        address vault_,
-        uint256 outputAmount_
-    ) private {
-        if (!config_.sellShares) {
-            config_.weeklyBudgetRemaining = Math.saturatingSub(
-                config_.weeklyBudgetRemaining,
-                outputAmount_
-            );
-            config_.prefundedReserve = Math.saturatingSub(config_.prefundedReserve, outputAmount_);
-        } else {
-            // The round-up debit keeps the budget from exceeding the value of the
-            // remaining share pool, so the prefund does not re-withdraw the rounding
-            // dust from the treasury.
-            uint256 reserveValue = IERC4626(vault_).previewMint(outputAmount_);
-            config_.weeklyBudgetRemaining = Math.saturatingSub(
-                config_.weeklyBudgetRemaining,
-                reserveValue
-            );
-            config_.prefundedShares = Math.saturatingSub(config_.prefundedShares, outputAmount_);
-        }
+        IERC20(config.sellShares ? vault : config.reserve).safeTransfer(msg.sender, outputAmount_);
     }
 
     /// @inheritdoc IBondCallback
@@ -1112,7 +1039,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault address is the zero address.
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset.
-    ///      - Another registered vault uses the same reserve token.
+    ///      - The vault or its reserve token is OHM, the vault equals its own reserve,
+    ///        or the vault or the reserve collides with the vault or the reserve of a
+    ///        registered asset.
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault's share decimals do not match its reserve decimals (a vault with a
     ///        decimals offset is not supported).
@@ -1144,13 +1073,22 @@ contract YieldRepurchaseFacilityV2 is
         if (IERC20Metadata(vault_).decimals() != reserveDecimals)
             revert IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-        // The facility pools the raw reserve balance per token, so two vaults over the
-        // same reserve would share holdings.
+        // Every token balance held by the facility belongs to exactly one pool: the OHM
+        // balance backs the purchased-OHM counter, and each registered vault or reserve
+        // balance backs its own asset, so any collision between them is rejected.
+        if (vault_ == address(_OHM) || reserve_ == address(_OHM))
+            revert IYieldRepurchaseFacilityV2_TokenPoolConflict(address(_OHM));
+        if (vault_ == reserve_) revert IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
+
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
-            if (_assetConfigs[vaults[i]].reserve == reserve_)
-                revert IYieldRepurchaseFacilityV2_DuplicateReserve();
+            address registeredVault = vaults[i];
+            address registeredReserve = _assetConfigs[registeredVault].reserve;
+            if (registeredReserve == reserve_ || registeredVault == reserve_)
+                revert IYieldRepurchaseFacilityV2_TokenPoolConflict(reserve_);
+            if (registeredReserve == vault_)
+                revert IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
         }
 
         _assetConfigs[vault_] = ReserveAsset({
@@ -1163,9 +1101,7 @@ contract YieldRepurchaseFacilityV2 is
             lastReserveBalance: initialReserveBalance_,
             lastConversionRate: initialConversionRate_,
             nextYield: nextYield_,
-            weeklyBudgetRemaining: 0,
-            prefundedShares: 0,
-            prefundedReserve: 0
+            unfundedYield: 0
         });
         vaults.push(vault_);
 
@@ -1188,8 +1124,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      also holds this value on the last epoch of every week, so the pin alone
     ///      does not prove that no beat has run.
     ///
-    ///      Per seed, the budget is credited and `WeeklyBudgetSeeded` is emitted before
-    ///      the prefund runs, so the event precedes a `PrefundShortfall` it may cause.
+    ///      Per seed, `WeeklyBudgetSeeded` is emitted before the funding withdrawal
+    ///      runs, so the event precedes a `PrefundShortfall` it may cause. The remainder
+    ///      the treasury balance cannot cover is added to the vault's `unfundedYield`
+    ///      and retried at the following weekly reset.
     ///
     ///      The function reverts if:
     ///      - The contract is disabled.
@@ -1199,8 +1137,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `epoch_` is not below the weekly epoch count of 21.
     ///      - A seed references an unregistered or disabled vault.
     ///      - A seeded amount is zero.
-    ///      - The treasury withdrawal of a prefund or a preview of a seeded vault
-    ///        reverts.
+    ///      - The treasury withdrawal or a preview of a seeded vault reverts.
     function seedCycle(
         uint48 epoch_,
         WeeklyBudgetSeed[] calldata budgetSeeds_
@@ -1220,10 +1157,10 @@ contract YieldRepurchaseFacilityV2 is
             _requireAssetEnabled(config);
             _requireNonzeroAmount(seed.weeklyBudget);
 
-            config.weeklyBudgetRemaining += seed.weeklyBudget;
             emit WeeklyBudgetSeeded(seed.vault, seed.weeklyBudget, epoch_);
 
-            _prefundVault(seed.vault, config);
+            uint256 funded = _fundFromTreasury(seed.vault, seed.weeklyBudget);
+            config.unfundedYield += Math.saturatingSub(seed.weeklyBudget, funded);
         }
     }
 
@@ -1400,7 +1337,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reachable through the YRF timelock or directly by the admin, so an
     ///      increase is de-facto timelocked. The offset is read live by the weekly reset
     ///      projection, so an increase that executes only after a reset misses that
-    ///      projection: the following weekly budget then overstates the yield by one week
+    ///      projection: the following weekly funding then overstates the yield by one week
     ///      of interest on the missing offset. When that matters, the emergency role can
     ///      `disable` the facility before the reset beat (the cycle freezes in place),
     ///      let the queued increase execute, and have the yrf_admin `reEnable`; the reset
@@ -1510,9 +1447,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reachable through the YRF timelock or directly by the admin, so a re-enable is
     ///      de-facto timelocked.
     ///
-    ///      The next yield is reset to zero and the yield snapshots are refreshed, so a
-    ///      value left over from before the asset was disabled does not enter the weekly
-    ///      budget; the yield projection resumes at the following weekly reset.
+    ///      The next yield and the unfunded carry are reset to zero and the yield
+    ///      snapshots are refreshed, so a value left over from before the asset was
+    ///      disabled does not enter the funding target of the weekly reset; the yield
+    ///      projection resumes at the following weekly reset.
     ///
     ///      Reverts if:
     ///      - The caller is neither the YRF timelock nor the admin.
@@ -1523,6 +1461,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireAssetDisabled(config);
 
         config.isAssetEnabled = true;
+        config.unfundedYield = 0;
         _refreshSnapshots(vault_, config);
 
         emit AssetEnabled(vault_);
@@ -1837,33 +1776,32 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IBasicRescueable
     /// @dev Sweeps the rescuable balance of `token_` held by the facility to the TRSRY.
     ///
-    ///      For tokens tracked by the internal accounting, the rescue is capped at the excess
-    ///      of the balance over the tracked amount:
+    ///      Only the OHM excess and unregistered tokens are rescuable:
     ///      - OHM is capped at the balance above the purchased-OHM accumulator.
-    ///      - A registered vault is capped at the share balance above `prefundedShares`.
-    ///      - A registered reserve is capped at the balance above `prefundedReserve`.
+    ///      - The share and reserve tokens of registered assets are their buyback pools
+    ///        and are rejected.
+    ///      - Any other token is swept in full.
     ///
-    ///      Warning. Rescuing the excess of a registered reserve, or of a sell-shares vault,
-    ///      can defund an open bond market whose capacity counted the donated balance.
-    ///      Purchases on such a market revert until the next daily cycle creates a market sized
-    ///      to the funds actually held.
-    ///
-    ///      Reverts if the caller holds neither the yrf_admin role nor the admin role.
+    ///      Reverts if:
+    ///      - The caller holds neither the yrf_admin role nor the admin role.
+    ///      - `token_` is the share or the reserve token of a registered asset.
     function rescue(address token_) external override onlyYrfAdminOrAdminRole {
-        // The tracked amount backs the internal accounting and must stay on the facility
-        uint256 tracked;
-        if (token_ == address(_OHM)) tracked = _ohmPurchased;
-
-        address[] storage vaults = _vaults;
-        uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
-            address vault = vaults[i];
-            ReserveAsset storage config = _assetConfigs[vault];
-            if (token_ == vault) tracked += config.prefundedShares;
-            if (token_ == config.reserve) tracked += config.prefundedReserve;
+        uint256 rescuable;
+        if (token_ == address(_OHM)) {
+            // The purchased OHM backs the burn accounting and must stay on the facility
+            rescuable = Math.saturatingSub(_selfBalance(token_), _ohmPurchased);
+        } else {
+            address[] storage vaults = _vaults;
+            uint256 vaultsLength = vaults.length;
+            for (uint256 i = 0; i < vaultsLength; ++i) {
+                address vault = vaults[i];
+                if (token_ == vault || token_ == _assetConfigs[vault].reserve)
+                    revert IYieldRepurchaseFacilityV2_TokenNotRescuable(token_);
+            }
+            rescuable = _selfBalance(token_);
         }
 
-        _transferToTrsry(token_, Math.saturatingSub(_selfBalance(token_), tracked));
+        _transferToTrsry(token_, rescuable);
     }
 
     // ============ ERC165 ============ //
