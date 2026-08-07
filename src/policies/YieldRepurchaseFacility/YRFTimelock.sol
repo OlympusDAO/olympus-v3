@@ -96,8 +96,10 @@ contract YRFTimelock is
     mapping(uint64 actionId => mapping(uint256 index => bytes32 lockKey)) internal _lockKeys;
 
     /// @notice The queued action currently holding a parameter's pending slot.
-    /// @dev A held slot rejects further queueing of the same parameter until the holder is
-    ///      executed or cancelled.
+    /// @dev The slots are keyed by parameter, not by selector: the yield buyback share
+    ///      locks per vault, so share updates for different vaults can be pending at the
+    ///      same time, including within one batch. A held slot rejects further queueing of
+    ///      the same parameter until the holder is executed or cancelled.
     mapping(bytes32 lockKey => uint64 actionId) internal _pendingActionIds;
 
     // ========== INITIALIZATION ========== //

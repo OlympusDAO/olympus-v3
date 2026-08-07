@@ -389,6 +389,62 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
     }
 
     // queueBatch
+    // given share updates for different vaults in one batch (the pending slots are keyed
+    //   per vault, not per selector)
+    //  when queueing and executing the batch
+    //   then it queues, each vault's slot points at the batch, and both updates apply
+    function test_givenShareUpdatesForDifferentVaultsInBatch_queuesAndExecutes() public {
+        _registerBackingAsset(yieldRepo, 0);
+        address secondaryVault = _registerSecondaryAsset(yieldRepo, "secondary", 0);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _facilityAction(
+            IYieldRepurchaseFacilityV2.setYieldBuybackShare.selector,
+            abi.encode(address(sReserve), uint256(5e17))
+        );
+        actions[1] = _facilityAction(
+            IYieldRepurchaseFacilityV2.setYieldBuybackShare.selector,
+            abi.encode(secondaryVault, uint256(6e17))
+        );
+
+        uint64 actionId = _queueBatch(actions);
+
+        assertEq(
+            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            actionId,
+            "backing slot held by batch"
+        );
+        assertEq(
+            yrfTimelock.pendingYieldBuybackShareActionId(secondaryVault),
+            actionId,
+            "secondary slot held by batch"
+        );
+
+        _warpToExecutable(yrfTimelock, actionId);
+        yrfTimelock.executeQueuedAction(actionId);
+
+        assertEq(
+            yieldRepo.getAssetConfig(address(sReserve)).yieldBuybackShare,
+            5e17,
+            "backing share applied"
+        );
+        assertEq(
+            yieldRepo.getAssetConfig(secondaryVault).yieldBuybackShare,
+            6e17,
+            "secondary share applied"
+        );
+        assertEq(
+            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            0,
+            "backing slot released"
+        );
+        assertEq(
+            yrfTimelock.pendingYieldBuybackShareActionId(secondaryVault),
+            0,
+            "secondary slot released"
+        );
+    }
+
+    // queueBatch
     // given a later flip sub-action depends on an earlier sub-action's effect
     //  when queueing the batch (validation is against live state, no batch-local projection)
     //   then it reverts at queue time with the facility's state-flip error
