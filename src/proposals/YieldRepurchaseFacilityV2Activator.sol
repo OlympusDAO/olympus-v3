@@ -23,8 +23,8 @@ import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
 ///         deployed v1.2 to the multi-asset v2 stack in a single OCG proposal action:
 ///         it wires and enables the YRFTimelock, the BackingOracle, and the
 ///         YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into
-///         the v2 seeds, registers sUSDe as a second yield asset, includes the DAI
-///         Clearinghouses in the backing yield, seeds the running week, and swaps the
+///         the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler
+///         v1 Clearinghouses in the backing yield, seeds the running week, and swaps the
 ///         Heart periodic task from v1.2 to v2.
 /// @dev Assumes:
 ///      - The owner is the OCG timelock, which calls `activate()` from the proposal.
@@ -58,12 +58,14 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @notice The Bond Protocol fixed-term teller trusted to invoke the v2 callback.
     address public constant BOND_TELLER = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
 
-    /// @notice The DAI v1 Clearinghouse, included in the backing yield (its receivables
-    ///         accrue to USDS through the 1:1 DAI to USDS migration).
-    address public constant CLEARINGHOUSE_DAI_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
+    /// @notice The Cooler v1 Clearinghouse v1 (DAI-denominated), included in the backing
+    ///         yield: its receivables accrue to USDS through the 1:1 DAI to USDS
+    ///         migration.
+    address public constant CLEARINGHOUSE_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
 
-    /// @notice The DAI v1.1 Clearinghouse, included in the backing yield.
-    address public constant CLEARINGHOUSE_DAI_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
+    /// @notice The Cooler v1 Clearinghouse v1.1 (DAI-denominated), included in the
+    ///         backing yield.
+    address public constant CLEARINGHOUSE_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
 
     // ========== TOKENS ========== //
 
@@ -148,6 +150,12 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @param policy The inactive policy.
     error PolicyNotActive(address policy);
 
+    /// @notice Thrown when the facility's wired bond contracts do not match the
+    ///         auctioneer and teller constants of this activator.
+    /// @param bondAuctioneer The auctioneer reported by the facility.
+    /// @param bondTeller The teller reported by the facility.
+    error BondContractsMismatch(address bondAuctioneer, address bondTeller);
+
     /// @notice Thrown when the facility is not authorized as a market callback on the
     ///         SDA auctioneer.
     /// @param facility The unauthorized facility.
@@ -218,6 +226,8 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     ///      - The caller is not the owner.
     ///      - The activation has already been performed.
     ///      - A v2 stack policy is not active in the Kernel.
+    ///      - The facility's wired bond contracts do not match the auctioneer and teller
+    ///        constants of this activator.
     ///      - The facility is not authorized as a market callback on the SDA auctioneer.
     ///      - USDS or USDe does not resolve to a non-zero OHM price through
     ///        `PRICE.getPriceIn`.
@@ -250,7 +260,7 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         // 7.-8. Register the v2 assets
         _registerAssets(susdsSeedBalance, susdsSeedRate, susdsSeedYield);
 
-        // 9. Include the DAI Clearinghouses in the backing yield
+        // 9. Include the Cooler v1 Clearinghouses in the backing yield
         _configureClearinghouses();
 
         // 10. Resume the interrupted v1.2 week
@@ -273,6 +283,13 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         if (!Policy(YIELD_REPO).isActive()) revert PolicyNotActive(YIELD_REPO);
         if (!Policy(BACKING_ORACLE).isActive()) revert PolicyNotActive(BACKING_ORACLE);
         if (!Policy(YRF_TIMELOCK).isActive()) revert PolicyNotActive(YRF_TIMELOCK);
+
+        // The callback authorization below is meaningful only on the auctioneer the
+        // facility submits its markets to, so the facility's bond wiring must match the
+        // constants the check runs against.
+        IYieldRepurchaseFacilityV2 yieldRepo = IYieldRepurchaseFacilityV2(YIELD_REPO);
+        if (yieldRepo.bondAuctioneer() != BOND_AUCTIONEER || yieldRepo.bondTeller() != BOND_TELLER)
+            revert BondContractsMismatch(yieldRepo.bondAuctioneer(), yieldRepo.bondTeller());
 
         // The callback authorization is granted by the Bond Protocol multisig before the
         // proposal is queued; the auctioneer rejects every market submission of an
@@ -380,13 +397,14 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         );
     }
 
-    /// @dev Includes the DAI v1 and v1.1 Clearinghouses in the backing yield (their
-    ///      receivables accrue to USDS through the 1:1 DAI to USDS migration).
+    /// @dev Includes the Cooler v1 Clearinghouses (v1 and v1.1, DAI-denominated) in the
+    ///      backing yield: their receivables accrue to USDS through the 1:1 DAI to USDS
+    ///      migration.
     function _configureClearinghouses() internal {
         IYieldRepurchaseFacilityV2 yieldRepo = IYieldRepurchaseFacilityV2(YIELD_REPO);
 
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1_1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1_1);
     }
 
     /// @dev Continues the v1.2 week: the epoch counter is set to the v1.2 value, and

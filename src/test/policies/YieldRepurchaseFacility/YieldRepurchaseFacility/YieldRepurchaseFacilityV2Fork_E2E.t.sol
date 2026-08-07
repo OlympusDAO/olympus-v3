@@ -125,7 +125,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
     /// @notice The additional receivables offset queued by the yrf_admin through the
     ///         YRF timelock on day 5 and executed on day 6, one timelock delay later.
-    uint256 internal constant DAI_V1_1_OFFSET_INCREASE = 2_000_000e18;
+    uint256 internal constant CLEARINGHOUSE_V1_1_OFFSET_INCREASE = 2_000_000e18;
 
     /// @notice The queued offset increase, pending between day 5 and day 6.
     uint64 internal offsetActionId;
@@ -193,14 +193,21 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(ohmPriceUsd, ANCHOR_INITIAL_PRICE, "initial oracle price");
         assertEq(_expectedOraclePrice(), ANCHOR_INITIAL_PRICE, "initial gate price");
 
-        // The clearinghouse configuration: both DAI clearinghouses are included, the
-        // v1.1 inclusion carries the initial phantom-receivables offset.
-        assertTrue(yieldRepo.isClearinghouseIncluded(CLEARINGHOUSE_DAI_V1), "DAI v1 included");
-        assertTrue(yieldRepo.isClearinghouseIncluded(CLEARINGHOUSE_DAI_V1_1), "DAI v1.1 included");
+        // The clearinghouse configuration: both DAI-denominated clearinghouses (v1 and
+        // v1.1) are included, the v1.1 inclusion carries the initial phantom-receivables
+        // offset.
+        assertTrue(
+            yieldRepo.isClearinghouseIncluded(CLEARINGHOUSE_V1),
+            "clearinghouse v1 included"
+        );
+        assertTrue(
+            yieldRepo.isClearinghouseIncluded(CLEARINGHOUSE_V1_1),
+            "clearinghouse v1.1 included"
+        );
         assertEq(
-            yieldRepo.clearinghouseOffset(CLEARINGHOUSE_DAI_V1_1),
-            DAI_V1_1_INITIAL_OFFSET,
-            "DAI v1.1 offset"
+            yieldRepo.clearinghouseOffset(CLEARINGHOUSE_V1_1),
+            CLEARINGHOUSE_V1_1_INITIAL_OFFSET,
+            "clearinghouse v1.1 offset"
         );
         assertEq(chreg.registryCount(), 3, "registry count");
 
@@ -323,17 +330,20 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
     }
 
-    /// @notice Day 5: the yrf_admin queues the DAI v1.1 offset increase through the
+    /// @notice Day 5: the yrf_admin queues the Clearinghouse v1.1 offset increase through the
     ///         YRF timelock; the direct facility path is closed for the yrf_admin.
     function _queueOffsetIncrease() internal {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(yrfAdmin);
-        yieldRepo.increaseClearinghouseOffset(CLEARINGHOUSE_DAI_V1_1, DAI_V1_1_OFFSET_INCREASE);
+        yieldRepo.increaseClearinghouseOffset(
+            CLEARINGHOUSE_V1_1,
+            CLEARINGHOUSE_V1_1_OFFSET_INCREASE
+        );
 
         vm.prank(yrfAdmin);
         offsetActionId = yrfTimelock.queueIncreaseClearinghouseOffset(
-            CLEARINGHOUSE_DAI_V1_1,
-            DAI_V1_1_OFFSET_INCREASE
+            CLEARINGHOUSE_V1_1,
+            CLEARINGHOUSE_V1_1_OFFSET_INCREASE
         );
     }
 
@@ -347,8 +357,8 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         yrfTimelock.executeQueuedAction(offsetActionId);
 
         assertEq(
-            yieldRepo.clearinghouseOffset(CLEARINGHOUSE_DAI_V1_1),
-            DAI_V1_1_INITIAL_OFFSET + DAI_V1_1_OFFSET_INCREASE,
+            yieldRepo.clearinghouseOffset(CLEARINGHOUSE_V1_1),
+            CLEARINGHOUSE_V1_1_INITIAL_OFFSET + CLEARINGHOUSE_V1_1_OFFSET_INCREASE,
             "offset: cumulative value"
         );
 
@@ -360,11 +370,13 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // after:  ((receivables - 4_000_000e18) * 5) / 1000 / 52 = 59304516693331496985.
         // delta = 192307692307692307692, equal to (2_000_000e18 * 5) / 1000 / 52 at
         // these values.
-        uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_DAI_V1_1);
-        uint256 interestBefore = ((receivables - DAI_V1_1_INITIAL_OFFSET) * 5) / 1000 / 52;
+        uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_V1_1);
+        uint256 interestBefore = ((receivables - CLEARINGHOUSE_V1_1_INITIAL_OFFSET) * 5) /
+            1000 /
+            52;
         uint256 interestAfter = ((receivables -
-            DAI_V1_1_INITIAL_OFFSET -
-            DAI_V1_1_OFFSET_INCREASE) * 5) /
+            CLEARINGHOUSE_V1_1_INITIAL_OFFSET -
+            CLEARINGHOUSE_V1_1_OFFSET_INCREASE) * 5) /
             1000 /
             52;
 

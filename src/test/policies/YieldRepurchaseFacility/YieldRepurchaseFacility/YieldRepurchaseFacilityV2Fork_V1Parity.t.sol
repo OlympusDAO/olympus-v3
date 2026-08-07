@@ -122,7 +122,8 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
     ///      state snapshot, so both branches share an identical pre-boundary history;
     ///      until it is registered in the Heart pipeline and seeded with an asset it is
     ///      inert. The asset registration and the pipeline swap happen after the revert,
-    ///      in the v2 branch only. Both DAI clearinghouses are included without offsets:
+    ///      in the v2 branch only. Both DAI-denominated clearinghouses are included
+    ///      without offsets:
     ///      v1 counts the receivables of the whole registry, so the projection parity
     ///      requires v2 to count the same set.
     function setUp() public override {
@@ -138,8 +139,8 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
         _initializeOracleState();
 
         vm.startPrank(TIMELOCK);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1_1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1_1);
         vm.stopPrank();
     }
 

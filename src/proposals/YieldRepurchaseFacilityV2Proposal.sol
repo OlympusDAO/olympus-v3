@@ -34,7 +34,8 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {ADMIN_ROLE, BACKING_ADMIN_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {Kernel, Policy} from "src/Kernel.sol";
+import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
@@ -70,6 +71,12 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
     ///         separately proves that its swap does not change the count.
     uint256 internal constant _EXPECTED_HEART_TASK_COUNT = 6;
 
+    /// @notice The expected CHREG registry length at submission. This intentionally
+    ///         couples proposal validation to the live registry expected at submission:
+    ///         a Clearinghouse registered between authoring and execution must be
+    ///         re-reviewed for its backing-yield treatment.
+    uint256 internal constant _EXPECTED_CLEARINGHOUSE_COUNT = 3;
+
     // ========== PROPOSAL ========== //
 
     function id() public pure override returns (uint256) {
@@ -103,7 +110,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "The proposal has three main components:\n",
                 "\n",
                 "1. Grant the operational roles of the v2 stack (`yrf_admin`, `backing_admin`) to the DAO MS.\n",
-                "2. Execute the one-shot YieldRepurchaseFacilityV2Activator, which wires and enables the YRFTimelock, the BackingOracle, and the YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into the v2 seeds, registers sUSDe as a second yield asset, includes the DAI Clearinghouses in the backing yield, resumes the interrupted v1.2 week, and swaps the Heart periodic task from v1.2 to v2.\n",
+                "2. Execute the one-shot YieldRepurchaseFacilityV2Activator, which wires and enables the YRFTimelock, the BackingOracle, and the YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler v1 Clearinghouses in the backing yield, resumes the interrupted v1.2 week, and swaps the Heart periodic task from v1.2 to v2.\n",
                 "3. Revoke the temporary roles from the activator and retire the v1.2 `loop_daddy` role.\n",
                 "\n",
                 "The migration preserves the v1.2 economics for sUSDS through a 100% yield buyback share and a 3% initial market discount. The new sUSDe asset also starts with a 100% yield buyback share. Backing launches at the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in v1.2.\n",
@@ -156,7 +163,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "   - Reads the v1.2 accounting (epoch, projected next yield, yield snapshots, residual funds) and shuts v1.2 down, burning its entire OHM balance and sweeping its USDS and sUSDS to the treasury.\n",
                 "   - Registers sUSDS as the backing vault (100% buyback share) with the migrated v1.2 seeds.\n",
                 "   - Registers sUSDe as a sell-shares yield asset (100% buyback share). Because it has no v1 history to migrate, its snapshots use the live treasury position and its fixed next-yield seed is a 4% annualized estimate: approximately 23,543 USDe for the first full week.\n",
-                "   - Includes the DAI v1 and v1.1 Clearinghouses in the backing yield.\n",
+                "   - Includes the Cooler v1 Clearinghouses (v1 and v1.1) in the backing yield.\n",
                 "   - Seeds the running week: resumes the v1.2 epoch and re-injects the unspent v1.2 weekly budget into the sUSDS budget.\n",
                 "   - Replaces YRF v1.2 with the v2 facility in slot 4 of the Heart periodic tasks.\n"
             );
@@ -404,25 +411,38 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
         // 4. Validate the Clearinghouse configuration
         {
             IYieldRepurchaseFacilityV2 yrf = IYieldRepurchaseFacilityV2(yieldRepo);
-            address chDaiV1 = activator.CLEARINGHOUSE_DAI_V1();
-            address chDaiV1_1 = activator.CLEARINGHOUSE_DAI_V1_1();
+            CHREGv1 chreg = CHREGv1(address(_kernel.getModuleForKeycode(toKeycode("CHREG"))));
+            address usds = addresses.getAddress("external-tokens-USDS");
+
+            // Every registry Clearinghouse must count toward the backing yield: through
+            // the USDS reserve-token filter or through an explicit inclusion. The
+            // DAI-denominated v1 and v1.1 Clearinghouses lack a `reserve()` returning
+            // USDS, so they must be the included ones.
+            uint256 registryCount = chreg.registryCount();
+            require(
+                registryCount == _EXPECTED_CLEARINGHOUSE_COUNT,
+                "CHREG registry count does not match the expected count"
+            );
+            for (uint256 i = 0; i < registryCount; i++) {
+                address clearinghouse = chreg.registry(i);
+                require(
+                    yrf.isClearinghouseIncluded(clearinghouse) ||
+                        _readClearinghouseReserve(clearinghouse) == usds,
+                    "A registry Clearinghouse does not count toward the backing yield"
+                );
+                require(
+                    yrf.clearinghouseOffset(clearinghouse) == 0,
+                    "A Clearinghouse offset should be unset"
+                );
+            }
 
             require(
-                yrf.isClearinghouseIncluded(chDaiV1) == true,
-                "DAI v1 Clearinghouse is not included"
+                yrf.isClearinghouseIncluded(activator.CLEARINGHOUSE_V1()) == true,
+                "Cooler v1 Clearinghouse v1 is not included"
             );
             require(
-                yrf.isClearinghouseIncluded(chDaiV1_1) == true,
-                "DAI v1.1 Clearinghouse is not included"
-            );
-
-            require(
-                yrf.clearinghouseOffset(chDaiV1) == 0,
-                "DAI v1 Clearinghouse offset should be unset"
-            );
-            require(
-                yrf.clearinghouseOffset(chDaiV1_1) == 0,
-                "DAI v1.1 Clearinghouse offset should be unset"
+                yrf.isClearinghouseIncluded(activator.CLEARINGHOUSE_V1_1()) == true,
+                "Cooler v1 Clearinghouse v1.1 is not included"
             );
         }
 
@@ -509,6 +529,17 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
     /// @notice Reverts if the address is zero, including the registry key in the message.
     function _requireNonZeroAddress(address addr_, string memory key_) internal pure {
         require(addr_ != address(0), string.concat(key_, " address is zero"));
+    }
+
+    /// @notice Reads `reserve()` of a Clearinghouse, treating a revert or a malformed
+    ///         return as the zero address (the v1 and v1.1 Clearinghouses expose
+    ///         `dai()` instead).
+    function _readClearinghouseReserve(address clearinghouse_) internal view returns (address) {
+        (bool success, bytes memory data) = clearinghouse_.staticcall(
+            abi.encodeWithSignature("reserve()")
+        );
+        if (!success || data.length < 32) return address(0);
+        return abi.decode(data, (address));
     }
 }
 

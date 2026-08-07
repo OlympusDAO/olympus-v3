@@ -144,9 +144,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     address internal constant COOLER_BORROWER = 0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0;
 
     /// @notice The registered clearinghouses on the pinned block (all deactivated).
-    address internal constant CLEARINGHOUSE_DAI_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
-    address internal constant CLEARINGHOUSE_DAI_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
-    address internal constant CLEARINGHOUSE_USDS_V1_2 = 0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0;
+    address internal constant CLEARINGHOUSE_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
+    address internal constant CLEARINGHOUSE_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
+    address internal constant CLEARINGHOUSE_V1_2 = 0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0;
 
     /// @notice The PriceConfig v2 policy: the production path for registering an asset
     ///         in the PRICE module (gated to the price_admin role, held by the DAO MS).
@@ -178,10 +178,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         seed estimate and for the simulated Ethena reward stream.
     uint256 internal constant SUSDE_APR_BPS = 400;
 
-    /// @notice The receivables offset applied to the DAI v1.1 Clearinghouse when it is
+    /// @notice The receivables offset applied to the Cooler v1 Clearinghouse v1.1 when it is
     ///         included into the backing yield (the governance estimate of its phantom
     ///         receivables at inclusion time).
-    uint256 internal constant DAI_V1_1_INITIAL_OFFSET = 2_000_000e18;
+    uint256 internal constant CLEARINGHOUSE_V1_1_INITIAL_OFFSET = 2_000_000e18;
 
     uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
     uint48 internal constant EPOCH_LENGTH = 21;
@@ -394,9 +394,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         vm.label(BOND_TELLER, "BondTeller");
         vm.label(BOND_AGGREGATOR, "BondAggregator");
         vm.label(BOND_OWNER, "BondOwner");
-        vm.label(CLEARINGHOUSE_DAI_V1, "ClearinghouseDaiV1");
-        vm.label(CLEARINGHOUSE_DAI_V1_1, "ClearinghouseDaiV1_1");
-        vm.label(CLEARINGHOUSE_USDS_V1_2, "ClearinghouseUsdsV1_2");
+        vm.label(CLEARINGHOUSE_V1, "ClearinghouseV1");
+        vm.label(CLEARINGHOUSE_V1_1, "ClearinghouseV1_1");
+        vm.label(CLEARINGHOUSE_V1_2, "ClearinghouseV1_2");
         vm.label(PRICE_CONFIG, "PriceConfigV2");
         vm.label(CHAINLINK_USDE_USD, "ChainlinkUsdeUsd");
 
@@ -582,13 +582,13 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _configureClearinghouses() internal {
-        // The DAI clearinghouses accrue to the backing reserve through the 1:1 DAI->USDS
-        // migration, so they are included explicitly; the v1.1 inclusion is accompanied by
-        // an offset for its phantom receivables.
+        // The DAI-denominated clearinghouses accrue to the backing reserve through the
+        // 1:1 DAI->USDS migration, so they are included explicitly; the v1.1 inclusion is
+        // accompanied by an offset for its phantom receivables.
         vm.startPrank(TIMELOCK);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_DAI_V1_1);
-        yieldRepo.setClearinghouseOffset(CLEARINGHOUSE_DAI_V1_1, DAI_V1_1_INITIAL_OFFSET);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1_1);
+        yieldRepo.setClearinghouseOffset(CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_INITIAL_OFFSET);
         vm.stopPrank();
     }
 
