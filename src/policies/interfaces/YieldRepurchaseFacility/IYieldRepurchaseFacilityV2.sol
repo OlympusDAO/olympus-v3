@@ -285,6 +285,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///         backing value.
     error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
+    /// @notice Thrown when the facility is not authorized as a market callback on the
+    ///         bond auctioneer.
+    error IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
+
     /// @notice Thrown when `seedCycle` is invoked after the one-shot seeding has been
     ///         consumed.
     error IYieldRepurchaseFacilityV2_CycleAlreadySeeded();
@@ -445,10 +449,12 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Sets the SDA auctioneer used to create bond markets and the teller trusted
     ///         to invoke the bond callback.
-    /// @dev Callable by the admin role. Both addresses must be non-zero. Market creation
-    ///      requires the facility to be callback-authorized on the auctioneer; a market
-    ///      submission the auctioneer rejects is skipped with `MarketCreationFailed`.
-    ///      Emits `BondContractsSet`.
+    /// @dev Callable by the admin role. Both addresses must be non-zero. The facility
+    ///      must be authorized as a market callback on the auctioneer: `enable` and a
+    ///      reconfiguration of the enabled facility revert without the authorization,
+    ///      while a revocation after the fact degrades to market submissions the
+    ///      auctioneer rejects, skipped with `MarketCreationFailed`. Emits
+    ///      `BondContractsSet`.
     /// @param bondAuctioneer_ The SDA auctioneer.
     /// @param teller_ The teller.
     function setBondContracts(address bondAuctioneer_, address teller_) external;

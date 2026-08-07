@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IBondCallback} from "src/interfaces/IBondCallback.sol";
 import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
@@ -332,12 +333,16 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The payload is shorter than the minimum `abi.encode(uint256, NextYieldSeed[])`.
     ///      - The payload does not `abi.decode` as `(uint256, NextYieldSeed[])`.
+    ///      - The facility is not authorized as a market callback on the bond
+    ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
     ///      - A seed references an unregistered or disabled vault.
     ///      - An enabled vault reverts on `previewRedeem` or `balanceOf`.
     function _beforeEnable(bytes calldata data_) internal override {
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
+
+        _requireCallbackAuthorized();
 
         (uint256 initialDiscount_, NextYieldSeed[] memory nextYieldSeeds) = abi.decode(
             data_,
@@ -413,7 +418,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      the vault yield accrued during the downtime is captured by the next weekly
     ///      reset, and `nextYield` is injected into the weekly budget exactly once per
     ///      reset regardless of the downtime. The grace-window check runs through
-    ///      `super`.
+    ///      `super`. The callback authorization is not re-checked: a missing
+    ///      authorization degrades to market submissions the auctioneer rejects.
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
     }
@@ -1269,6 +1275,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if:
+    ///      - The caller does not hold the admin role.
+    ///      - Either address is the zero address.
+    ///      - The facility is enabled and is not authorized as a market callback on the
+    ///        supplied auctioneer.
     function setBondContracts(
         address bondAuctioneer_,
         address teller_
@@ -1298,13 +1310,23 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Sets the bond auctioneer and the teller.
-    /// @dev Reverts if either address is the zero address.
+    /// @dev The constructor configures the contracts before the callback authorization
+    ///      can exist, so the authorization check applies only while the facility is
+    ///      enabled; `_beforeEnable` covers the disabled-to-enabled transition.
+    ///
+    ///      Reverts if:
+    ///      - Either address is the zero address.
+    ///      - The facility is enabled and is not authorized as a market callback on the
+    ///        supplied auctioneer.
     function _setBondContracts(address bondAuctioneer_, address teller_) internal {
         _requireNonzeroAddress(bondAuctioneer_, "bondAuctioneer");
         _requireNonzeroAddress(teller_, "teller");
 
         bondAuctioneer = bondAuctioneer_;
         teller = teller_;
+
+        if (isEnabled) _requireCallbackAuthorized();
+
         emit BondContractsSet(bondAuctioneer_, teller_);
     }
 
@@ -1675,6 +1697,13 @@ contract YieldRepurchaseFacilityV2 is
     function _setNextYield(ReserveAsset storage config_, uint256 nextYield_) private {
         config_.nextYield = nextYield_;
         emit NextYieldSet(config_.reserve, nextYield_);
+    }
+
+    /// @notice Reverts unless the facility is authorized as a market callback on the
+    ///         bond auctioneer.
+    function _requireCallbackAuthorized() private view {
+        if (!IBondAuctioneer(bondAuctioneer).callbackAuthorized(address(this)))
+            revert IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
     }
 
     /// @notice Reverts unless the asset is enabled.
