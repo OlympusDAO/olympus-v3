@@ -89,6 +89,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param backingVault The vault designated as the backing vault.
     event BackingVaultSet(address indexed backingVault);
 
+    /// @notice Emitted when the sell-shares mode of a vault is set.
+    /// @param vault The vault whose mode is set.
+    /// @param sellShares Whether bond markets pay out the vault shares instead of the
+    ///        reserve.
+    event SellSharesSet(address indexed vault, bool sellShares);
+
     /// @notice Emitted when the bond auctioneer and the teller are set.
     /// @param bondAuctioneer The SDA auctioneer used to create markets.
     /// @param teller The teller trusted to invoke the bond callback.
@@ -242,6 +248,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when a sell-shares vault is designated as the backing vault.
     error IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
 
+    /// @notice Thrown when `setSellShares` supplies the mode the vault already has.
+    error IYieldRepurchaseFacilityV2_SellSharesUnchanged();
+
     /// @notice Thrown when a registration attempts to designate the backing vault while
     ///         one is already designated.
     error IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
@@ -311,6 +320,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the bond callback targets a market that was not created by the
     ///         facility.
     error IYieldRepurchaseFacilityV2_UnknownMarket();
+
+    /// @notice Thrown when the bond callback targets a market that is not the tracked
+    ///         live market of its vault.
+    error IYieldRepurchaseFacilityV2_MarketNotCurrent();
 
     /// @notice Thrown when the bond callback is invoked without the facility's OHM
     ///         balance covering the tracked purchased OHM plus the reported input.
@@ -502,6 +515,22 @@ interface IYieldRepurchaseFacilityV2 {
     ///      rejected. Emits `BackingOracleSet`.
     /// @param backingOracle_ The backing oracle policy; must not be the zero address.
     function setBackingOracle(address backingOracle_) external;
+
+    /// @notice Sets whether the vault's bond markets pay out the vault shares instead of
+    ///         the reserve.
+    /// @dev Callable by the admin role. The backing vault cannot sell shares. The
+    ///      vault's tracked live bond market is closed before the change, and a failing
+    ///      close reverts the change. The per-vault accounting is denominated in
+    ///      reserve units in both modes and is not affected; the held balances are
+    ///      spent by the following daily cycles under the new mode. The reserve mode
+    ///      requires a redeemable vault: with `sellShares_` unset the daily cycles
+    ///      redeem the held shares for the bids, so on a vault whose redeem reverts the
+    ///      redeem is skipped with `RedeemFailed`, the bid is clamped to the held
+    ///      reserve balance, and a zero bid opens no market. Emits `SellSharesSet`.
+    /// @param vault_ The registered vault.
+    /// @param sellShares_ Whether bond markets pay out the vault shares; must differ
+    ///        from the stored mode.
+    function setSellShares(address vault_, bool sellShares_) external;
 
     /// @notice Designates a registered vault as the backing vault: its yield projection
     ///         includes the Clearinghouse interest, its protocol balance includes the

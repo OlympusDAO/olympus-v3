@@ -237,8 +237,10 @@ contract YieldRepurchaseFacilityV2 is
     ///         none is tracked.
     /// @dev The offset encodes "none" as zero while the market id zero stays a valid id.
     ///      The entry always refers to a market of the current `bondAuctioneer`: it is
-    ///      cleared whenever the market is closed, and `setBondContracts` closes every
-    ///      tracked market before the auctioneer changes.
+    ///      cleared whenever a close of the market is attempted, and `setBondContracts`
+    ///      closes every tracked market before the auctioneer changes. Only the tracked
+    ///      market of a vault is purchasable: `callback` rejects every other market, so
+    ///      a market that outlives a failed best-effort close is unpurchasable.
     mapping(address vault => uint256 marketIdPlusOne) internal _liveMarketIds;
 
     // ============ SETUP ============ //
@@ -464,10 +466,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Closes the vault's tracked live bond market on the current auctioneer,
     ///         best-effort.
     /// @dev The tracked id is cleared unconditionally. The close call is external: a
-    ///      revert of the auctioneer (for example an already-closed market) is absorbed
-    ///      with a `MarketCloseFailed` event carrying the truncated revert reason, and
-    ///      the market is left to expire on its own; purchases on a market whose asset
-    ///      is disabled or whose record is unreachable revert in `callback`.
+    ///      revert of the auctioneer is absorbed with a `MarketCloseFailed` event
+    ///      carrying the truncated revert reason, and the market is left to expire on
+    ///      its own, unpurchasable: `callback` only serves the tracked market.
     function _closeVaultMarket(address vault_) private {
         uint256 marketIdPlusOne = _liveMarketIds[vault_];
         if (marketIdPlusOne == 0) return;
@@ -1077,7 +1078,9 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      The market record is looked up under the current `bondAuctioneer`, so after a
     ///      bond-contract change an id colliding with a market of the outgoing contracts
-    ///      cannot reach the stale record.
+    ///      cannot reach the stale record. Only the tracked live market of the vault is
+    ///      purchasable: a market that has been superseded or whose close was attempted
+    ///      is rejected even when it is still live on the auctioneer.
     ///
     ///      `outputAmount_` is teller-computed and not validated here: the payout is
     ///      bounded only by the payout-token balance held by the facility, whose transfer
@@ -1087,6 +1090,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller is not the teller.
     ///      - The contract is disabled.
     ///      - The market was not created by this facility on the current auctioneer.
+    ///      - The market is not the tracked live market of its vault.
     ///      - The market's asset is disabled.
     ///      - The OHM balance is below `_ohmPurchased + inputAmount_`.
     ///      - The payout-token balance is below `outputAmount_`.
@@ -1102,6 +1106,7 @@ contract YieldRepurchaseFacilityV2 is
         address auctioneer = bondAuctioneer;
         address vault = _marketVaults[auctioneer][id_];
         if (vault == address(0)) revert IYieldRepurchaseFacilityV2_UnknownMarket();
+        if (_liveMarketIds[vault] != id_ + 1) revert IYieldRepurchaseFacilityV2_MarketNotCurrent();
 
         ReserveAsset storage config = _assetConfigs[vault];
         _requireAssetEnabled(config);
@@ -1336,6 +1341,43 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
         _setBackingOracle(backingOracle_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The admin role is expected to be held only by the OCG timelock, so the
+    ///      function is de-facto timelocked.
+    ///
+    ///      The vault's tracked live bond market is closed before the change; the
+    ///      close is not isolated, so a revert of the auctioneer reverts the change.
+    ///      The per-vault accounting (the yield projection, the snapshots, and the
+    ///      carries) is denominated in reserve units in both modes and is left
+    ///      untouched; the held share and reserve balances are spent by the following
+    ///      daily cycles under the new mode. The reserve mode requires a redeemable
+    ///      vault: with `sellShares_` unset the daily cycles redeem the held shares for
+    ///      the bids, so on a vault whose redeem reverts the redeem is skipped with
+    ///      `RedeemFailed`, the bid is clamped to the held reserve balance, and a zero
+    ///      bid opens no market.
+    ///
+    ///      Reverts if:
+    ///      - The caller does not hold the admin role.
+    ///      - The vault is not registered.
+    ///      - The stored mode already equals `sellShares_`.
+    ///      - `sellShares_` is set while the vault is the backing vault.
+    ///      - The close of the vault's tracked live bond market reverts.
+    function setSellShares(address vault_, bool sellShares_) external override onlyAdminRole {
+        ReserveAsset storage config = _requireRegistered(vault_);
+        if (config.sellShares == sellShares_)
+            revert IYieldRepurchaseFacilityV2_SellSharesUnchanged();
+        if (sellShares_) _requireNotBackingVault(vault_);
+
+        uint256 marketIdPlusOne = _liveMarketIds[vault_];
+        if (marketIdPlusOne != 0) {
+            _liveMarketIds[vault_] = 0;
+            IBondAuctioneer(bondAuctioneer).closeMarket(marketIdPlusOne - 1);
+        }
+
+        config.sellShares = sellShares_;
+        emit SellSharesSet(vault_, sellShares_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
