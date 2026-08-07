@@ -486,12 +486,12 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         yrfTimelock = new YRFTimelock(kernel, YRF_TIMELOCK_DELAY, GRACE_PERIOD);
         vm.label(address(yrfTimelock), "YRFTimelock");
 
+        // The teller is resolved by the facility from the auctioneer
         yieldRepo = new YieldRepurchaseFacilityV2(
             kernel,
             OHM,
             address(backingOracle),
             BOND_AUCTIONEER,
-            BOND_TELLER,
             address(yrfTimelock),
             GRACE_PERIOD
         );

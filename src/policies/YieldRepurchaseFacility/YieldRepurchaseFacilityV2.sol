@@ -69,8 +69,9 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///        payload may seed the per-vault `nextYield` values (an empty seed array
 ///        restarts with zero yields). Funds held for the enabled assets stay in their
 ///        buyback pools and continue to be spent by the daily cycles.
-///      - `disable` (emergency or admin) only halts `execute` and `callback`; the funds and
-///        the accounting state are left in place.
+///      - `disable` (emergency or admin) closes the live bond markets (best-effort) and
+///        halts `execute` and `callback`; the funds and the accounting state are left in
+///        place.
 ///      - `reEnable` (yrf_admin) resumes the interrupted week in place, and is only
 ///        available within the grace window after the disable.
 ///      - `returnFundsToTreasury` (emergency or admin) burns the purchased OHM and returns
@@ -208,26 +209,43 @@ contract YieldRepurchaseFacilityV2 is
     ///         token.
     mapping(address clearinghouse => bool included) internal _includedClearinghouses;
 
-    /// @notice The vault that funds each open bond market created by this facility.
+    /// @notice The vault that funds each open bond market created by this facility, keyed
+    ///         by the auctioneer the market was created on.
     /// @dev Set on market creation; a non-zero entry implicitly validates that the market
-    ///      was created here.
-    mapping(uint256 marketId => address vault) internal _marketVaults;
+    ///      was created here. Market ids are unique only within one bond Aggregator, so
+    ///      the records are scoped to the creating auctioneer: after a bond-contract
+    ///      change, a colliding id on the new contracts cannot reach a stale record.
+    mapping(address auctioneer => mapping(uint256 marketId => address vault))
+        internal _marketVaults;
 
-    /// @notice Cumulative input/output amounts per bond market.
+    /// @notice Cumulative input/output amounts per bond market, keyed by the auctioneer
+    ///         the market was created on.
     /// @dev `[0]` = OHM in (quote), `[1]` = reserve out (payout).
-    mapping(uint256 marketId => uint256[2] amounts) internal _amountsPerMarket;
+    mapping(address auctioneer => mapping(uint256 marketId => uint256[2] amounts))
+        internal _amountsPerMarket;
+
+    /// @notice The market id of the vault's latest bond market plus one, or zero when
+    ///         none is tracked.
+    /// @dev The offset encodes "none" as zero while the market id zero stays a valid id.
+    ///      The entry always refers to a market of the current `bondAuctioneer`: it is
+    ///      cleared whenever the market is closed, and `setBondContracts` closes every
+    ///      tracked market before the auctioneer changes.
+    mapping(address vault => uint256 marketIdPlusOne) internal _liveMarketIds;
 
     // ============ SETUP ============ //
 
-    /// @dev Reverts if:
-    ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, `bondAuctioneer_`, or
-    ///        `teller_` is the zero address.
+    /// @dev The teller is resolved from the auctioneer (`getTeller`), so the pair is
+    ///      consistent by construction.
+    ///
+    ///      Reverts if:
+    ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, or `bondAuctioneer_` is
+    ///        the zero address.
+    ///      - The auctioneer reports the zero address as its teller.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
     /// @param kernel_ The Olympus Kernel.
     /// @param ohm_ The OHM token address.
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
-    /// @param teller_ The Bond Protocol teller.
     /// @param timelock_ The YRF timelock policy authorized for the operational functions.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
     constructor(
@@ -235,7 +253,6 @@ contract YieldRepurchaseFacilityV2 is
         address ohm_,
         address backingOracle_,
         address bondAuctioneer_,
-        address teller_,
         address timelock_,
         uint32 gracePeriod_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
@@ -249,7 +266,7 @@ contract YieldRepurchaseFacilityV2 is
         _TIMELOCK = timelock_;
 
         _setBackingOracle(backingOracle_);
-        _setBondContracts(bondAuctioneer_, teller_);
+        _setBondContracts(bondAuctioneer_);
 
         // Disabled by default by EnablerV2
     }
@@ -411,10 +428,40 @@ contract YieldRepurchaseFacilityV2 is
         _epoch = _EPOCH_LENGTH - 1;
     }
 
-    // `_beforeDisable` is deliberately not overridden: disabling only halts `execute` and
-    // `callback`, leaving the funds and the accounting state in place so that `reEnable`
-    // can resume the interrupted week. Use `returnFundsToTreasury` to sweep the funds
-    // after a disable when holding them on the facility is a concern.
+    /// @inheritdoc EnablerV2
+    /// @dev Closes the tracked live bond markets, best-effort, so no purchasable market
+    ///      outlives the disable; the funds and the accounting state are left in place so
+    ///      that `reEnable` can resume the interrupted week. Use `returnFundsToTreasury`
+    ///      to sweep the funds after a disable when holding them on the facility is a
+    ///      concern. The auctioneer is external, so a revert there is absorbed and never
+    ///      blocks the disable.
+    function _beforeDisable(bytes calldata) internal override {
+        _closeAllVaultMarkets();
+    }
+
+    /// @notice Closes the tracked live bond market of every registered vault,
+    ///         best-effort.
+    function _closeAllVaultMarkets() private {
+        address[] storage vaults = _vaults;
+        uint256 vaultsLength = vaults.length;
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            _closeVaultMarket(vaults[i]);
+        }
+    }
+
+    /// @notice Closes the vault's tracked live bond market on the current auctioneer,
+    ///         best-effort.
+    /// @dev The tracked id is cleared unconditionally. The close call is external: a
+    ///      revert of the auctioneer (for example an already-closed market) is absorbed,
+    ///      and the market is left to expire on its own; purchases on a market whose
+    ///      asset is disabled or whose record is unreachable revert in `callback`.
+    function _closeVaultMarket(address vault_) private {
+        uint256 marketIdPlusOne = _liveMarketIds[vault_];
+        if (marketIdPlusOne == 0) return;
+        _liveMarketIds[vault_] = 0;
+
+        try IBondAuctioneer(bondAuctioneer).closeMarket(marketIdPlusOne - 1) {} catch {} // solhint-disable-line no-empty-blocks
+    }
 
     /// @inheritdoc ReEnabler
     /// @dev The re-enable is restricted to the yrf_admin, the operational role of the
@@ -925,9 +972,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      a sell-shares asset the payout token is the vault share and the reserve price
     ///      is converted to a per-share price through the conversion rate (floor): one
     ///      share is worth the conversion rate in reserve units.
+    ///      The vault's previous tracked market is closed first, best-effort, so at most
+    ///      one purchasable market per vault exists at a time even when missed beats
+    ///      stretch the daily schedule.
     ///      Failures are absorbed: a zero conversion rate or a rejected market submission
     ///      emits `MarketCreationFailed` and keeps the funds with the facility. A created
-    ///      market is recorded in `_marketVaults`, which authorizes its callback.
+    ///      market is recorded in `_marketVaults` under the creating auctioneer, which
+    ///      authorizes its callback, and its id is tracked for the later close.
     function _createMarket(
         address vault_,
         ReserveAsset storage config_,
@@ -947,9 +998,12 @@ contract YieldRepurchaseFacilityV2 is
             payoutToken = vault_;
         }
 
+        _closeVaultMarket(vault_);
+
+        address auctioneer = bondAuctioneer;
         (bool success, uint256 marketId) = YRFBondMarketLib.createMarket(
             YRFBondMarketLib.MarketConfig({
-                auctioneer: IBondSDA(bondAuctioneer),
+                auctioneer: IBondSDA(auctioneer),
                 payoutToken: payoutToken,
                 quoteToken: address(_OHM),
                 capacity: bidAmount_,
@@ -967,7 +1021,8 @@ contract YieldRepurchaseFacilityV2 is
             return;
         }
 
-        _marketVaults[marketId] = vault_;
+        _marketVaults[auctioneer][marketId] = vault_;
+        _liveMarketIds[vault_] = marketId + 1;
 
         emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
     }
@@ -981,6 +1036,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      counts toward the balance, so it can cover a missing quote transfer up to the
     ///      donated amount.
     ///
+    ///      The market record is looked up under the current `bondAuctioneer`, so after a
+    ///      bond-contract change an id colliding with a market of the outgoing contracts
+    ///      cannot reach the stale record.
+    ///
     ///      `outputAmount_` is teller-computed and not validated here: the payout is
     ///      bounded only by the payout-token balance held by the facility, whose transfer
     ///      reverts on an insufficient balance.
@@ -988,7 +1047,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The caller is not the teller.
     ///      - The contract is disabled.
-    ///      - The market was not created by this facility.
+    ///      - The market was not created by this facility on the current auctioneer.
     ///      - The market's asset is disabled.
     ///      - The OHM balance is below `_ohmPurchased + inputAmount_`.
     ///      - The payout-token balance is below `outputAmount_`.
@@ -1001,7 +1060,8 @@ contract YieldRepurchaseFacilityV2 is
 
         _requireEnabled();
 
-        address vault = _marketVaults[id_];
+        address auctioneer = bondAuctioneer;
+        address vault = _marketVaults[auctioneer][id_];
         if (vault == address(0)) revert IYieldRepurchaseFacilityV2_UnknownMarket();
 
         ReserveAsset storage config = _assetConfigs[vault];
@@ -1011,7 +1071,7 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_QuoteNotReceived();
 
         _ohmPurchased += inputAmount_;
-        uint256[2] storage marketAmounts = _amountsPerMarket[id_];
+        uint256[2] storage marketAmounts = _amountsPerMarket[auctioneer][id_];
         marketAmounts[0] += inputAmount_;
         marketAmounts[1] += outputAmount_;
 
@@ -1019,10 +1079,12 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IBondCallback
+    /// @dev The amounts are scoped to the markets created on the current
+    ///      `bondAuctioneer`.
     function amountsForMarket(
         uint256 id_
     ) external view override returns (uint256 in_, uint256 out_) {
-        uint256[2] storage marketAmounts = _amountsPerMarket[id_];
+        uint256[2] storage marketAmounts = _amountsPerMarket[bondAuctioneer][id_];
         return (marketAmounts[0], marketAmounts[1]);
     }
 
@@ -1197,6 +1259,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
+    ///      The vault's tracked live bond market, if any is left, is closed best-effort:
+    ///      a revert of the auctioneer is absorbed and the market is left to expire, its
+    ///      purchases reverting in `callback` for the de-registered asset.
+    ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - The vault is not registered.
@@ -1207,6 +1273,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireAssetDisabled(config);
         _requireNotBackingVault(vault_);
 
+        _closeVaultMarket(vault_);
         _returnBalancesToTrsry(vault_, config.reserve);
 
         address[] storage vaults = _vaults;
@@ -1242,16 +1309,20 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
+    ///      The tracked live markets are closed on the outgoing auctioneer before the
+    ///      swap, best-effort: a revert of the auctioneer is absorbed and the affected
+    ///      market is left to expire, unpurchasable (its callback is pinned to the
+    ///      outgoing teller).
+    ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - Either address is the zero address.
+    ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
+    ///        its teller.
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
-    function setBondContracts(
-        address bondAuctioneer_,
-        address teller_
-    ) external override onlyAdminRole {
-        _setBondContracts(bondAuctioneer_, teller_);
+    function setBondContracts(address bondAuctioneer_) external override onlyAdminRole {
+        _closeAllVaultMarkets();
+        _setBondContracts(bondAuctioneer_);
     }
 
     /// @notice Sets the backing oracle.
@@ -1275,17 +1346,22 @@ contract YieldRepurchaseFacilityV2 is
         emit BackingVaultSet(vault_);
     }
 
-    /// @notice Sets the bond auctioneer and the teller.
-    /// @dev The constructor configures the contracts before the callback authorization
-    ///      can exist, so the authorization check applies only while the facility is
-    ///      enabled; `_beforeEnable` covers the disabled-to-enabled transition.
+    /// @notice Sets the bond auctioneer and caches the teller it reports.
+    /// @dev The teller is resolved through `getTeller()` of the supplied auctioneer, so
+    ///      the pair is consistent by construction; the auctioneer's teller is immutable,
+    ///      so the cached value cannot go stale. The constructor configures the contracts
+    ///      before the callback authorization can exist, so the authorization check
+    ///      applies only while the facility is enabled; `_beforeEnable` covers the
+    ///      disabled-to-enabled transition.
     ///
     ///      Reverts if:
-    ///      - Either address is the zero address.
+    ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
+    ///        its teller.
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
-    function _setBondContracts(address bondAuctioneer_, address teller_) internal {
+    function _setBondContracts(address bondAuctioneer_) internal {
         _requireNonzeroAddress(bondAuctioneer_, "bondAuctioneer");
+        address teller_ = address(IBondAuctioneer(bondAuctioneer_).getTeller());
         _requireNonzeroAddress(teller_, "teller");
 
         bondAuctioneer = bondAuctioneer_;
@@ -1502,6 +1578,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      per-asset halt is de-facto timelocked. An immediate halt of the whole
     ///      facility remains available to the emergency role through `disable`.
     ///
+    ///      The vault's tracked live bond market is closed, best-effort: a revert of the
+    ///      auctioneer is absorbed and the market is left to expire, its purchases
+    ///      reverting in `callback` for the disabled asset.
+    ///
     ///      Reverts if:
     ///      - The caller is neither the YRF timelock nor the admin.
     ///      - The vault is not registered.
@@ -1513,6 +1593,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireNotBackingVault(vault_);
 
         config.isAssetEnabled = false;
+        _closeVaultMarket(vault_);
         emit AssetDisabled(vault_);
     }
 
@@ -1772,8 +1853,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev The lookup is scoped to the markets created on the current `bondAuctioneer`.
     function marketReserves(uint256 marketId_) external view override returns (address reserve) {
-        address vault = _marketVaults[marketId_];
+        address vault = _marketVaults[bondAuctioneer][marketId_];
         if (vault == address(0)) return address(0);
         return _assetConfigs[vault].reserve;
     }

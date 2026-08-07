@@ -1153,7 +1153,6 @@ contract DeployV3 is WithEnvironment {
         address bondAuctioneer = _getAddressNotZero(
             "external.bond-protocol.BondFixedTermAuctioneer"
         );
-        address teller = _getAddressNotZero("external.bond-protocol.BondFixedTermTeller");
 
         // Log parameters
         console2.log("YieldRepurchaseFacilityV2 parameters:");
@@ -1161,18 +1160,16 @@ contract DeployV3 is WithEnvironment {
         console2.log("  ohm", ohm);
         console2.log("  backingOracle", backingOracle);
         console2.log("  bondAuctioneer", bondAuctioneer);
-        console2.log("  teller", teller);
         console2.log("  yrfTimelock", yrfTimelock);
         console2.log("  gracePeriod", gracePeriod);
 
-        // Deploy
+        // Deploy. The teller is resolved by the facility from the auctioneer.
         vm.broadcast();
         YieldRepurchaseFacilityV2 yieldRepo = new YieldRepurchaseFacilityV2(
             Kernel(kernel),
             ohm,
             backingOracle,
             bondAuctioneer,
-            teller,
             yrfTimelock,
             gracePeriod
         );

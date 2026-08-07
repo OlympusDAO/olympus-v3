@@ -466,8 +466,9 @@ interface IYieldRepurchaseFacilityV2 {
     ///        non-zero.
     function seedCycle(uint48 epoch_, WeeklyBudgetSeed[] calldata budgetSeeds_) external;
 
-    /// @notice De-registers a disabled vault, transferring the facility's balances of the
-    ///         vault shares and its reserve to the treasury and deleting the per-vault
+    /// @notice De-registers a disabled vault, closing its live bond market on a
+    ///         best-effort basis, transferring the facility's balances of the vault
+    ///         shares and its reserve to the treasury, and deleting the per-vault
     ///         configuration and accounting.
     /// @dev Callable by the admin role. The vault must be disabled and must not be the
     ///      backing vault. Emits `AssetRemoved`.
@@ -492,17 +493,20 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault_ The vault to designate.
     function setBackingVault(address vault_) external;
 
-    /// @notice Sets the SDA auctioneer used to create bond markets and the teller trusted
-    ///         to invoke the bond callback.
-    /// @dev Callable by the admin role. Both addresses must be non-zero. The facility
-    ///      must be authorized as a market callback on the auctioneer: `enable` and a
+    /// @notice Sets the SDA auctioneer used to create bond markets; the teller trusted to
+    ///         invoke the bond callback is resolved from the auctioneer's `getTeller()`,
+    ///         so the pair stays consistent.
+    /// @dev Callable by the admin role. The auctioneer and its reported teller must be
+    ///      non-zero. The live bond markets are closed on the outgoing auctioneer before
+    ///      the change, on a best-effort basis: a revert of the auctioneer is absorbed
+    ///      and the affected market is left to expire, unpurchasable. The facility must
+    ///      be authorized as a market callback on the auctioneer: `enable` and a
     ///      reconfiguration of the enabled facility revert without the authorization,
     ///      while a revocation after the fact degrades to market submissions the
     ///      auctioneer rejects, skipped with `MarketCreationFailed`. Emits
     ///      `BondContractsSet`.
     /// @param bondAuctioneer_ The SDA auctioneer.
-    /// @param teller_ The teller.
-    function setBondContracts(address bondAuctioneer_, address teller_) external;
+    function setBondContracts(address bondAuctioneer_) external;
 
     /// @notice Sets the cumulative receivables offset of a Clearinghouse. The offset is
     ///         subtracted from the Clearinghouse's `principalReceivables` when the weekly
@@ -596,8 +600,10 @@ interface IYieldRepurchaseFacilityV2 {
     function enableAsset(address vault_) external;
 
     /// @notice Disables an enabled registered vault. A disabled vault is skipped by the
-    ///         weekly and daily cycles, and purchases on its open bond markets revert;
-    ///         its buyback pool and accounting stay in place.
+    ///         weekly and daily cycles, its live bond market is closed on a best-effort
+    ///         basis (a revert of the auctioneer leaves the market to expire), and
+    ///         purchases on any remaining market of the vault revert; its buyback pool
+    ///         and accounting stay in place.
     /// @dev Callable by the YRF timelock and the admin role. The backing vault cannot be
     ///      disabled. Emits `AssetDisabled`.
     /// @param vault_ The vault to disable.
@@ -648,10 +654,10 @@ interface IYieldRepurchaseFacilityV2 {
     function getReserveBalance(address vault_) external view returns (uint256 balance);
 
     /// @notice Returns the reserve token of the vault that funds a market created by the
-    ///         facility.
+    ///         facility on the current bond auctioneer.
     /// @param marketId_ The market ID.
     /// @return reserve The reserve token, or the zero address when the market was not
-    ///         created by the facility.
+    ///         created by the facility on the current bond auctioneer.
     function marketReserves(uint256 marketId_) external view returns (address reserve);
 
     /// @notice Returns the cumulative receivables offset of a Clearinghouse.
