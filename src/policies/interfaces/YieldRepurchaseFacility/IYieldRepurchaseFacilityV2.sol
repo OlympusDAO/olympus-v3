@@ -120,13 +120,26 @@ interface IYieldRepurchaseFacilityV2 {
     ///         and no reserve is received.
     /// @param vault The vault whose redeem failed.
     /// @param shares The share amount that was to be redeemed.
-    event RedeemFailed(address indexed vault, uint256 shares);
+    /// @param reason The raw revert data of the failed redeem, truncated to at most 256
+    ///        bytes.
+    event RedeemFailed(address indexed vault, uint256 shares, bytes reason);
 
     /// @notice Emitted when a market creation is rejected; the funds stay with the
     ///         facility and the day's market for the vault is skipped.
     /// @param vault The vault whose market was not created.
     /// @param bidAmount The intended market capacity, in payout token units.
-    event MarketCreationFailed(address indexed vault, uint256 bidAmount);
+    /// @param reason The raw revert data of the rejected submission, truncated to at
+    ///        most 256 bytes; empty when the pricing was skipped before the submission
+    ///        (a zero conversion rate).
+    event MarketCreationFailed(address indexed vault, uint256 bidAmount, bytes reason);
+
+    /// @notice Emitted when the best-effort close of a vault's tracked bond market
+    ///         reverts; the market is left to expire on its own.
+    /// @param vault The vault whose market close failed.
+    /// @param marketId The market that was to be closed.
+    /// @param reason The raw revert data of the failed close, truncated to at most 256
+    ///        bytes.
+    event MarketCloseFailed(address indexed vault, uint256 marketId, bytes reason);
 
     /// @notice Emitted when the treasury balance does not cover a sanctioned funding
     ///         withdrawal and the withdrawal is capped at the balance; the unfunded
@@ -151,27 +164,37 @@ interface IYieldRepurchaseFacilityV2 {
     ///         is skipped; the vault's balances and accounting stay in place and are
     ///         retried by the next call.
     /// @param vault The vault whose sweep was skipped.
-    event FundsReturnSkipped(address indexed vault);
+    /// @param reason The raw revert data of the failed sweep, truncated to at most 256
+    ///        bytes.
+    event FundsReturnSkipped(address indexed vault, bytes reason);
 
     /// @notice Emitted when the weekly reset of a vault reverts and is skipped; the vault
     ///         is retried at the following weekly reset.
     /// @param vault The vault whose reset was skipped.
-    event WeeklyResetSkipped(address indexed vault);
+    /// @param reason The raw revert data of the failed reset, truncated to at most 256
+    ///        bytes.
+    event WeeklyResetSkipped(address indexed vault, bytes reason);
 
     /// @notice Emitted when the daily cycle of a vault reverts and is skipped.
     /// @param vault The vault whose daily cycle was skipped.
-    event DailyCycleSkipped(address indexed vault);
+    /// @param reason The raw revert data of the failed cycle, truncated to at most 256
+    ///        bytes.
+    event DailyCycleSkipped(address indexed vault, bytes reason);
 
     /// @notice Emitted when the processing of the purchased OHM reverts and is skipped;
     ///         the accumulated OHM is retried on the following beats.
-    event OhmPurchasesProcessingSkipped();
+    /// @param reason The raw revert data of the failed processing, truncated to at most
+    ///        256 bytes.
+    event OhmPurchasesProcessingSkipped(bytes reason);
 
     /// @notice Emitted when the wrap of a sell-shares vault's idle reserve balance into
     ///         vault shares reverts and is skipped; the reserve stays with the facility
     ///         and the wrap is retried at the following daily cycle.
     /// @param vault The vault whose reserve wrap was skipped.
     /// @param amount The reserve amount that was to be wrapped.
-    event ReserveWrapFailed(address indexed vault, uint256 amount);
+    /// @param reason The raw revert data of the failed wrap, truncated to at most 256
+    ///        bytes.
+    event ReserveWrapFailed(address indexed vault, uint256 amount, bytes reason);
 
     /// @notice Emitted when the running week's buyback pool of a vault is seeded by
     ///         `seedCycle`.

@@ -2,9 +2,11 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 
 // Libraries
+import {CappedCall} from "src/libraries/CappedCall.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 // Contracts
@@ -60,23 +62,26 @@ library YRFBondMarketLib {
     /// @dev The market runs for `BOND_MARKET_DURATION` with instant vesting, a
     ///      `BOND_DEPOSIT_INTERVAL` deposit interval, a `BOND_DEBT_BUFFER` debt buffer,
     ///      and the capacity denominated in the payout token; the caller is the market
-    ///      callback. A revert of the auctioneer is reported as a failure instead of
-    ///      bubbling; a revert of the pricing (a checked cast on an extreme price)
-    ///      bubbles to the caller.
+    ///      callback. A revert of the auctioneer is reported as a failure with the
+    ///      captured revert data instead of bubbling; a revert of the pricing (a checked
+    ///      cast on an extreme price) bubbles to the caller.
     /// @param config_ The market submission inputs.
     /// @return success Whether the auctioneer accepted the market.
     /// @return marketId The market ID assigned by the auctioneer, or zero on a failure.
+    /// @return reason The raw revert data of a rejected submission, truncated by
+    ///         `CappedCall`; empty on a success.
     function createMarket(
         MarketConfig memory config_
-    ) external returns (bool success, uint256 marketId) {
+    ) external returns (bool success, uint256 marketId, bytes memory reason) {
         (
             uint256 formattedInitialPrice,
             uint256 formattedMinimumPrice,
             int8 scaleAdjustment
         ) = _computeMarketPricing(config_);
 
-        try
-            config_.auctioneer.createMarket(
+        bytes memory callData = abi.encodeCall(
+            IBondAuctioneer.createMarket,
+            (
                 abi.encode(
                     IBondSDA.MarketParams({
                         payoutToken: SolmateERC20(config_.payoutToken),
@@ -94,11 +99,15 @@ library YRFBondMarketLib {
                     })
                 )
             )
-        returns (uint256 marketId_) {
-            return (true, marketId_);
-        } catch {
-            return (false, 0);
-        }
+        );
+
+        // The capped capture keeps a reverting auctioneer from inflating the memory
+        // cost of the calling facility; the success returndata is one word (the id)
+        bytes memory returned;
+        (success, returned) = CappedCall.tryCall(address(config_.auctioneer), callData);
+
+        if (!success) return (false, 0, returned);
+        return (true, abi.decode(returned, (uint256)), "");
     }
 
     /// @notice Computes the Bond SDA price parameters for a market quoted in OHM.

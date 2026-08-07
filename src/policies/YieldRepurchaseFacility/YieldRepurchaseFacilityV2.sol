@@ -17,6 +17,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
+import {CappedCall} from "src/libraries/CappedCall.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
@@ -463,15 +464,21 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Closes the vault's tracked live bond market on the current auctioneer,
     ///         best-effort.
     /// @dev The tracked id is cleared unconditionally. The close call is external: a
-    ///      revert of the auctioneer (for example an already-closed market) is absorbed,
-    ///      and the market is left to expire on its own; purchases on a market whose
-    ///      asset is disabled or whose record is unreachable revert in `callback`.
+    ///      revert of the auctioneer (for example an already-closed market) is absorbed
+    ///      with a `MarketCloseFailed` event carrying the truncated revert reason, and
+    ///      the market is left to expire on its own; purchases on a market whose asset
+    ///      is disabled or whose record is unreachable revert in `callback`.
     function _closeVaultMarket(address vault_) private {
         uint256 marketIdPlusOne = _liveMarketIds[vault_];
         if (marketIdPlusOne == 0) return;
         _liveMarketIds[vault_] = 0;
 
-        try IBondAuctioneer(bondAuctioneer).closeMarket(marketIdPlusOne - 1) {} catch {} // solhint-disable-line no-empty-blocks
+        uint256 marketId = marketIdPlusOne - 1;
+        (bool success, bytes memory reason) = CappedCall.tryCall(
+            bondAuctioneer,
+            abi.encodeCall(IBondAuctioneer.closeMarket, (marketId))
+        );
+        if (!success) emit MarketCloseFailed(vault_, marketId, reason);
     }
 
     /// @inheritdoc ReEnabler
@@ -552,9 +559,11 @@ contract YieldRepurchaseFacilityV2 is
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
-            try this.selfReturnVaultFunds(vault) {} catch {
-                emit FundsReturnSkipped(vault);
-            }
+            (bool success, bytes memory reason) = CappedCall.tryCall(
+                address(this),
+                abi.encodeCall(this.selfReturnVaultFunds, (vault))
+            );
+            if (!success) emit FundsReturnSkipped(vault, reason);
         }
 
         emit FundsReturnedToTreasury(purchasedOhm);
@@ -607,8 +616,12 @@ contract YieldRepurchaseFacilityV2 is
 
         // The purchased OHM is processed before the price gate, so the burn continues
         // while markets are skipped.
-        try this.selfProcessOhmPurchases() {} catch {
-            emit OhmPurchasesProcessingSkipped();
+        {
+            (bool success, bytes memory reason) = CappedCall.tryCall(
+                address(this),
+                abi.encodeCall(this.selfProcessOhmPurchases, ())
+            );
+            if (!success) emit OhmPurchasesProcessingSkipped(reason);
         }
 
         // Below the backing, each purchase would release more backing on the burn than
@@ -630,9 +643,11 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            try this.selfProcessVaultDaily(vault, daysRemaining) {} catch {
-                emit DailyCycleSkipped(vault);
-            }
+            (bool success, bytes memory reason) = CappedCall.tryCall(
+                address(this),
+                abi.encodeCall(this.selfProcessVaultDaily, (vault, daysRemaining))
+            );
+            if (!success) emit DailyCycleSkipped(vault, reason);
         }
     }
 
@@ -696,9 +711,11 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            try this.selfProcessVaultReset(vault, clearinghouseYield) {} catch {
-                emit WeeklyResetSkipped(vault);
-            }
+            (bool success, bytes memory reason) = CappedCall.tryCall(
+                address(this),
+                abi.encodeCall(this.selfProcessVaultReset, (vault, clearinghouseYield))
+            );
+            if (!success) emit WeeklyResetSkipped(vault, reason);
         }
     }
 
@@ -828,10 +845,12 @@ contract YieldRepurchaseFacilityV2 is
         if (idleReserve == 0) return;
         if (IERC4626(vault_).previewDeposit(idleReserve) == 0) return;
 
-        try this.selfWrapReserve(vault_, reserve_, idleReserve) {} catch {
-            // The failed self-call rolled back the deposit, so the reserve is still held
-            emit ReserveWrapFailed(vault_, idleReserve);
-        }
+        (bool success, bytes memory reason) = CappedCall.tryCall(
+            address(this),
+            abi.encodeCall(this.selfWrapReserve, (vault_, reserve_, idleReserve))
+        );
+        // The failed self-call rolled back the deposit, so the reserve is still held
+        if (!success) emit ReserveWrapFailed(vault_, idleReserve, reason);
     }
 
     /// @notice Deposits the reserve into the vault and verifies the minted shares
@@ -871,13 +890,18 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 received) {
         if (shares_ == 0) return 0;
 
-        try this.selfRedeemChecked(vault_, reserve_, shares_) returns (uint256 received_) {
-            return received_;
-        } catch {
+        (bool success, bytes memory data) = CappedCall.tryCall(
+            address(this),
+            abi.encodeCall(this.selfRedeemChecked, (vault_, reserve_, shares_))
+        );
+        if (!success) {
             // The failed self-call rolled back the redeem, so all shares are still held
-            emit RedeemFailed(vault_, shares_);
+            emit RedeemFailed(vault_, shares_, data);
             return 0;
         }
+        // The success returndata is the one-word return of `selfRedeemChecked`, well
+        // below the `CappedCall` truncation
+        return abi.decode(data, (uint256));
     }
 
     /// @notice Redeems vault shares and verifies the received reserve against the
@@ -1006,7 +1030,7 @@ contract YieldRepurchaseFacilityV2 is
         if (config_.sellShares) {
             uint256 conversionRate = _conversionRate(config_);
             if (conversionRate == 0) {
-                emit MarketCreationFailed(vault_, bidAmount_);
+                emit MarketCreationFailed(vault_, bidAmount_, "");
                 return;
             }
             marketOraclePrice = oraclePrice_.mulDiv(10 ** config_.reserveDecimals, conversionRate);
@@ -1016,7 +1040,7 @@ contract YieldRepurchaseFacilityV2 is
         _closeVaultMarket(vault_);
 
         address auctioneer = bondAuctioneer;
-        (bool success, uint256 marketId) = YRFBondMarketLib.createMarket(
+        (bool success, uint256 marketId, bytes memory reason) = YRFBondMarketLib.createMarket(
             YRFBondMarketLib.MarketConfig({
                 auctioneer: IBondSDA(auctioneer),
                 payoutToken: payoutToken,
@@ -1032,7 +1056,7 @@ contract YieldRepurchaseFacilityV2 is
 
         // The funds stay in the buyback pool, so the following cycle retries the market
         if (!success) {
-            emit MarketCreationFailed(vault_, bidAmount_);
+            emit MarketCreationFailed(vault_, bidAmount_, reason);
             return;
         }
 

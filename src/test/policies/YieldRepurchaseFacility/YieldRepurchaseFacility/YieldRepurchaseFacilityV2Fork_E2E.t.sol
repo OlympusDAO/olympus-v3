@@ -400,7 +400,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     ///         skipped with `DailyCycleSkipped`, and no sUSDe market exists. The feed
     ///         recovers for the following beats.
     function _assertSusdeCycleSkipped() internal {
-        bytes32 skippedTopic = keccak256("DailyCycleSkipped(address)");
+        bytes32 skippedTopic = keccak256("DailyCycleSkipped(address,bytes)");
         Vm.Log[] memory logs = vm.getRecordedLogs();
         bool found = false;
         for (uint256 i = 0; i < logs.length; i++) {
