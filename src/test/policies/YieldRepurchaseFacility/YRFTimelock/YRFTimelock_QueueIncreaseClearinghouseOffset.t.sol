@@ -7,6 +7,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
 
+// Libraries
+import {Errors} from "src/libraries/Errors.sol";
+
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
@@ -64,15 +67,11 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
     // queueIncreaseClearinghouseOffset
     // given the Clearinghouse address is zero
     //  when queueing an offset increase
-    //   then it reverts with IYRFTimelock_InvalidAddress("clearinghouse")
+    //   then it reverts with the facility's BadInput("clearinghouse") (the queue delegates
+    //   the value checks to the facility's validator)
     function test_givenZeroClearinghouse_reverts() public {
         vm.prank(yrfAdmin);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_InvalidAddress.selector,
-                "clearinghouse"
-            )
-        );
+        vm.expectRevert(abi.encodeWithSelector(Errors.BadInput.selector, "clearinghouse"));
         yrfTimelock.queueIncreaseClearinghouseOffset(address(0), 250e18);
     }
 

@@ -7,7 +7,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
 
 // Contracts
-import {Actions} from "src/Kernel.sol";
+import {Actions, Kernel, Policy} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -40,32 +40,68 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     }
 
     // setFacility
-    // given the facility does not implement ERC165
+    // given the facility is not an active policy of the timelock's kernel
     //  when the admin sets the facility
     //   then it reverts with IYRFTimelock_InvalidFacility
-    function test_givenFacilityDoesNotImplementErc165_reverts() public {
+    function test_givenFacilityNotActivePolicy_reverts() public {
+        // A fully valid facility pinned to this timelock, deployed but never activated.
+        YieldRepurchaseFacilityV2 inactiveFacility = new YieldRepurchaseFacilityV2(
+            kernel,
+            address(ohm),
+            address(backingOracle),
+            address(auctioneer),
+            address(yrfTimelock),
+            gracePeriod
+        );
+        vm.label(address(inactiveFacility), "inactiveFacility");
+
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
-                address(reserve)
+                address(inactiveFacility)
             )
         );
-        yrfTimelock.setFacility(address(reserve));
+        yrfTimelock.setFacility(address(inactiveFacility));
     }
 
     // setFacility
-    // given the facility implements ERC165 but not IYieldRepurchaseFacilityV2
+    // given the candidate is an active policy that does not implement ERC165
     //  when the admin sets the facility
     //   then it reverts with IYRFTimelock_InvalidFacility
-    function test_givenFacilityDoesNotSupportInterface_reverts() public {
-        address candidate = address(new MockErc165WithoutFacilityInterface());
+    function test_givenFacilityDoesNotImplementErc165_reverts() public {
+        MockActivePolicyWithoutErc165 candidate = new MockActivePolicyWithoutErc165(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(candidate));
 
         vm.prank(guardian);
         vm.expectRevert(
-            abi.encodeWithSelector(IYRFTimelock.IYRFTimelock_InvalidFacility.selector, candidate)
+            abi.encodeWithSelector(
+                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                address(candidate)
+            )
         );
-        yrfTimelock.setFacility(candidate);
+        yrfTimelock.setFacility(address(candidate));
+    }
+
+    // setFacility
+    // given the candidate is an active policy implementing ERC165 but not
+    //   IYieldRepurchaseFacilityV2
+    //  when the admin sets the facility
+    //   then it reverts with IYRFTimelock_InvalidFacility
+    function test_givenFacilityDoesNotSupportInterface_reverts() public {
+        MockActivePolicyWithoutFacilityInterface candidate = new MockActivePolicyWithoutFacilityInterface(
+                kernel
+            );
+        kernel.executeAction(Actions.ActivatePolicy, address(candidate));
+
+        vm.prank(guardian);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                address(candidate)
+            )
+        );
+        yrfTimelock.setFacility(address(candidate));
     }
 
     // setFacility
@@ -73,7 +109,8 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //  when the admin sets the facility
     //   then it reverts with IYRFTimelock_InvalidFacility
     function test_givenFacilityTimelockMismatch_reverts() public {
-        // The harness facility advertises IYieldRepurchaseFacilityV2 but pins the harness.
+        // The harness facility is active and advertises IYieldRepurchaseFacilityV2, but
+        // pins the harness.
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -85,7 +122,7 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     }
 
     // setFacility
-    // given a valid facility
+    // given a valid active facility
     //  when the admin sets the facility
     //   then the slot is updated and FacilitySet is emitted
     function test_givenAdminCaller_setsFacilityAndEmitsEvent() public {
@@ -120,7 +157,6 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //   then the slot is replaced and subsequent queues validate against the new facility
     function test_givenFacilityRotated_replacesSlot() public {
         YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
-        kernel.executeAction(Actions.ActivatePolicy, address(newFacility));
         // The vault is registered only on the new facility, so the queue below can only
         // pass validation against the rotated slot.
         _registerBackingAsset(newFacility, 0);
@@ -173,7 +209,15 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     }
 }
 
-contract MockErc165WithoutFacilityInterface {
+/// @notice An activatable policy without an ERC165 surface.
+contract MockActivePolicyWithoutErc165 is Policy {
+    constructor(Kernel kernel_) Policy(kernel_) {}
+}
+
+/// @notice An activatable policy advertising only the bare IERC165 interface.
+contract MockActivePolicyWithoutFacilityInterface is Policy {
+    constructor(Kernel kernel_) Policy(kernel_) {}
+
     function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
         return interfaceId_ == type(IERC165).interfaceId;
     }

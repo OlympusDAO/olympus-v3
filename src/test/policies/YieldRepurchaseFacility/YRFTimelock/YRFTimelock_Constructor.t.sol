@@ -4,10 +4,12 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
 
 // Contracts
 import {Actions, Kernel, Module, Permissions, Policy} from "src/Kernel.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
 
 import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
@@ -184,5 +186,34 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
         Permissions[] memory permissions = yrfTimelock.requestPermissions();
 
         assertEq(permissions.length, 0, "permissions length");
+    }
+
+    // pairing (facility constructor)
+    // given a timelock deployed on another kernel
+    //  when deploying a facility pinned to it
+    //   then the facility constructor reverts with
+    //   IYieldRepurchaseFacilityV2_TimelockKernelMismatch
+    function test_facilityConstructor_givenTimelockOnOtherKernel_reverts() public {
+        Kernel otherKernel = new Kernel();
+        vm.label(address(otherKernel), "otherKernel");
+        YRFTimelock foreignTimelock = new YRFTimelock(otherKernel, yrfTimelockDelay, gracePeriod);
+        vm.label(address(foreignTimelock), "foreignTimelock");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IYieldRepurchaseFacilityV2
+                    .IYieldRepurchaseFacilityV2_TimelockKernelMismatch
+                    .selector,
+                address(foreignTimelock)
+            )
+        );
+        new YieldRepurchaseFacilityV2(
+            kernel,
+            address(ohm),
+            address(backingOracle),
+            address(auctioneer),
+            address(foreignTimelock),
+            gracePeriod
+        );
     }
 }

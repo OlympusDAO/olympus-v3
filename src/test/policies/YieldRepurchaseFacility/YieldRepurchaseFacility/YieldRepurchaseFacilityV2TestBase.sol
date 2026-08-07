@@ -2,207 +2,221 @@
 pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
-import {UserFactory} from "src/test/lib/UserFactory.sol";
 
-import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
-import {BondAggregator} from "src/test/lib/bonds/BondAggregator.sol";
-import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
-import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
+// Interfaces
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
+// Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
-import {MockPrice} from "src/test/mocks/MockPrice.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
+import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
-import {Kernel, Actions} from "src/Kernel.sol";
-import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
-import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
-import {RolesAdmin} from "policies/RolesAdmin.sol";
-import {BackingOracle} from "policies/BackingOracle.sol";
-import {YieldRepurchaseFacilityV2} from "policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {IYieldRepurchaseFacilityV2} from "policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {YRFTimelock} from "policies/YieldRepurchaseFacility/YRFTimelock.sol";
+// Bond stack (vendored production contracts)
+import {RolesAuthority, Authority as SolmateAuthority} from "solmate/auth/authorities/RolesAuthority.sol";
+import {BondAggregator} from "src/test/lib/bonds/BondAggregator.sol";
+import {BondFixedTermSDA} from "src/test/lib/bonds/BondFixedTermSDA.sol";
+import {BondFixedTermTeller} from "src/test/lib/bonds/BondFixedTermTeller.sol";
 
-/// @notice Shared harness for the multi-asset YRF v2 tests. It deploys the common stack (the bond
-///         system, OHM, the USDS-like backing reserve and its vault, the kernel and modules, the
-///         facility, the backing oracle and the roles), grants the `heart`/`admin` roles, and
-///         authorizes the facility callback. Funding and asset registration are left to each test,
-///         since they differ per scenario.
+// Contracts
+import {Actions, Kernel} from "src/Kernel.sol";
+import {OlympusClearinghouseRegistry} from "src/modules/CHREG/OlympusClearinghouseRegistry.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+
+/// @notice PRICE mock reporting the version the facility pins: major 1, minor >= 2 (the
+///         `getPriceIn` surface of the live `OlympusPricev1_2`).
+contract MockPriceV1_2 is MockPrice {
+    constructor(
+        Kernel kernel_,
+        uint8 decimals_,
+        uint32 observationFrequency_
+    ) MockPrice(kernel_, decimals_, observationFrequency_) {}
+
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
+        return (1, 2);
+    }
+}
+
+/// @notice Shared unit-test base for the YRF v2 stack.
+/// @dev `_deployStack` assembles a local kernel with the real TRSRY, ROLES, and CHREG
+///      modules, a PRICE mock pinned to version 1.2 with 18 decimals, the vendored bond
+///      stack, and the un-enabled BackingOracle, then deploys `yrfTimelock` and a facility
+///      pinned to it, wires the pair, and enables the timelock. The facility itself is left
+///      disabled; tests that need the enabled facility call `_enableFacility`.
+///
+///      Roles: `guardian` holds admin and emergency, `yrfAdmin` holds yrf_admin, and
+///      `heart` holds the heart role. The test contract itself is the kernel executor and
+///      the RolesAdmin admin.
+///
+///      CHREG holds two mock Clearinghouses: `clearinghouse` (active) and
+///      `includableClearinghouse` (inactive). Both are registry members, so either passes
+///      the facility's `includeClearinghouse` validation.
+// solhint-disable-next-line max-states-count
 abstract contract YieldRepurchaseFacilityV2TestBase is Test {
-    UserFactory internal userCreator;
+    // ========== ACTORS ========== //
+
     address internal guardian;
-    address internal heart;
-    address internal manager;
     address internal yrfAdmin;
+    address internal heart;
+
+    // ========== TOKENS ========== //
+
+    MockOhm internal ohm;
+    MockERC20 internal reserve;
+    MockERC4626 internal sReserve;
+
+    // ========== BOND STACK ========== //
 
     RolesAuthority internal auth;
     BondAggregator internal aggregator;
     BondFixedTermTeller internal teller;
     BondFixedTermSDA internal auctioneer;
 
-    MockOhm internal ohm;
-    MockERC20 internal reserve; // backing reserve (USDS-like)
-    MockERC4626 internal sReserve; // backing vault (sUSDS-like, redeem-to-reserve)
+    // ========== KERNEL AND MODULES ========== //
 
     Kernel internal kernel;
-    MockPrice internal PRICE;
     OlympusTreasury internal TRSRY;
-    OlympusMinter internal MINTR;
     OlympusRoles internal ROLES;
     OlympusClearinghouseRegistry internal CHREG;
+    MockPriceV1_2 internal PRICE;
+
+    // ========== CLEARINGHOUSES ========== //
 
     MockClearinghouse internal clearinghouse;
-    YieldRepurchaseFacilityV2 internal yieldRepo;
-    YRFTimelock internal yrfTimelock;
-    BackingOracle internal backingOracle;
+    MockClearinghouse internal includableClearinghouse;
+
+    // ========== POLICIES ========== //
+
     RolesAdmin internal rolesAdmin;
+    BackingOracle internal backingOracle;
+    YRFTimelock internal yrfTimelock;
+    YieldRepurchaseFacilityV2 internal yieldRepo;
 
-    // Backing value: 11.33 per OHM at 18 decimals.
-    uint256 internal backingPerToken = 1133 * 1e16;
-    // 3% initial bond discount (18 decimals).
-    uint256 internal initialDiscount = 3e16;
-    // Grace window for the yrf_admin reEnable after a disable, shared by the facility and
-    // the YRF timelock.
-    uint32 internal gracePeriod = 5 days;
-    // Timelock delay applied to the YRF timelock queue.
+    // ========== PARAMETERS ========== //
+
     uint48 internal yrfTimelockDelay = 1 days;
+    uint32 internal gracePeriod = 5 days;
 
-    /// @notice Deploys the common stack: bond system, tokens, kernel and modules, the facility, the
-    ///         backing oracle and the roles. Sets the oracle price to 10e18 and authorizes the
-    ///         facility callback. Does not fund the treasury or register any reserve asset.
+    /// @notice The discount `_enableFacility` seeds through the enable payload (3%).
+    uint256 internal initialDiscount = 3e16;
+
+    /// @notice The mocked OHM price, in the 18-decimal oracle scale.
+    uint256 internal ohmPrice = 10e18;
+
+    /// @notice The mocked price of every reserve token, in the 18-decimal oracle scale.
+    uint256 internal reservePrice = 1e18;
+
+    // ========== SETUP ========== //
+
     function _deployStack() internal {
-        // Set an absolute starting timestamp.
-        vm.warp(51 * 365 * 24 * 60 * 60);
+        // A fixed recent timestamp, far from the uint48 domain edges.
+        vm.warp(1_750_000_000);
 
-        userCreator = new UserFactory();
-        {
-            address[] memory users = userCreator.create(2);
-            guardian = users[0];
-            heart = users[1];
-            manager = makeAddr("manager");
-            yrfAdmin = makeAddr("yrfAdmin");
-            vm.label(guardian, "guardian");
-            vm.label(heart, "heart");
-            auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
-            vm.label(address(auth), "RolesAuthority");
+        guardian = makeAddr("guardian");
+        yrfAdmin = makeAddr("yrfAdmin");
+        heart = makeAddr("heart");
 
-            aggregator = new BondAggregator(guardian, auth);
-            vm.label(address(aggregator), "BondAggregator");
-            teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
-            vm.label(address(teller), "BondTeller");
-            auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
-            vm.label(address(auctioneer), "BondAuctioneer");
+        // Tokens
+        ohm = new MockOhm("Olympus", "OHM", 9);
+        vm.label(address(ohm), "ohm");
+        reserve = new MockERC20("Reserve", "RSV", 18);
+        vm.label(address(reserve), "reserve");
+        sReserve = new MockERC4626(reserve, "sReserve", "sRSV");
+        vm.label(address(sReserve), "sReserve");
 
-            vm.prank(guardian);
-            aggregator.registerAuctioneer(auctioneer);
-        }
+        // Bond stack; the guardian owns the bond contracts and their authority.
+        auth = new RolesAuthority(guardian, SolmateAuthority(address(0)));
+        vm.label(address(auth), "bondAuthority");
+        aggregator = new BondAggregator(guardian, auth);
+        vm.label(address(aggregator), "bondAggregator");
+        teller = new BondFixedTermTeller(guardian, aggregator, guardian, auth);
+        vm.label(address(teller), "bondTeller");
+        auctioneer = new BondFixedTermSDA(teller, aggregator, guardian, auth);
+        vm.label(address(auctioneer), "bondAuctioneer");
+        vm.prank(guardian);
+        aggregator.registerAuctioneer(auctioneer);
 
-        {
-            ohm = new MockOhm("Olympus", "OHM", 9);
-            vm.label(address(ohm), "OHM");
-            reserve = new MockERC20("Reserve", "RSV", 18);
-            vm.label(address(reserve), "reserve");
-            sReserve = new MockERC4626(reserve, "sReserve", "sRSV");
-            vm.label(address(sReserve), "sReserve");
-        }
+        // Kernel and modules; the test contract is the executor.
+        kernel = new Kernel();
+        vm.label(address(kernel), "kernel");
+        TRSRY = new OlympusTreasury(kernel);
+        vm.label(address(TRSRY), "TRSRY");
+        ROLES = new OlympusRoles(kernel);
+        vm.label(address(ROLES), "ROLES");
+        PRICE = new MockPriceV1_2(kernel, 18, uint32(8 hours));
+        vm.label(address(PRICE), "PRICE");
 
-        {
-            kernel = new Kernel();
-            vm.label(address(kernel), "Kernel");
+        clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
+        vm.label(address(clearinghouse), "clearinghouse");
+        includableClearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
+        vm.label(address(includableClearinghouse), "includableClearinghouse");
+        address[] memory inactive = new address[](1);
+        inactive[0] = address(includableClearinghouse);
+        CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
+        vm.label(address(CHREG), "CHREG");
 
-            PRICE = new MockPrice(kernel, uint48(8 hours), 10 * 1e18);
-            vm.label(address(PRICE), "PRICE");
-            TRSRY = new OlympusTreasury(kernel);
-            vm.label(address(TRSRY), "TRSRY");
-            MINTR = new OlympusMinter(kernel, address(ohm));
-            vm.label(address(MINTR), "MINTR");
-            ROLES = new OlympusRoles(kernel);
-            vm.label(address(ROLES), "ROLES");
+        // Policies. The facility pins the YRF timelock as an immutable address, so the
+        // timelock is deployed first and wired to the facility afterwards. The backing
+        // oracle stays un-enabled: only its pure `decimals()` is read by these tests.
+        backingOracle = new BackingOracle(kernel);
+        vm.label(address(backingOracle), "backingOracle");
+        yrfTimelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
+        vm.label(address(yrfTimelock), "yrfTimelock");
+        yieldRepo = new YieldRepurchaseFacilityV2(
+            kernel,
+            address(ohm),
+            address(backingOracle),
+            address(auctioneer),
+            address(yrfTimelock),
+            gracePeriod
+        );
+        vm.label(address(yieldRepo), "yieldRepo");
+        rolesAdmin = new RolesAdmin(kernel);
+        vm.label(address(rolesAdmin), "rolesAdmin");
 
-            clearinghouse = new MockClearinghouse(address(reserve), address(sReserve));
-            vm.label(address(clearinghouse), "clearinghouse");
-            CHREG = new OlympusClearinghouseRegistry(
-                kernel,
-                address(clearinghouse),
-                new address[](0)
-            );
-            vm.label(address(CHREG), "CHREG");
+        kernel.executeAction(Actions.InstallModule, address(TRSRY));
+        kernel.executeAction(Actions.InstallModule, address(PRICE));
+        kernel.executeAction(Actions.InstallModule, address(CHREG));
+        kernel.executeAction(Actions.InstallModule, address(ROLES));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(yrfTimelock));
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
 
-            PRICE.setMovingAverage(10 * 1e18);
-            PRICE.setLastPrice(10 * 1e18);
-            PRICE.setDecimals(18);
-            PRICE.setLastTime(uint48(vm.getBlockTimestamp()));
-        }
-
-        {
-            backingOracle = new BackingOracle(kernel);
-            vm.label(address(backingOracle), "backingOracle");
-            // The facility pins the YRF timelock as an immutable address, so the timelock is
-            // deployed first and wired to the facility afterwards via `setFacility`.
-            yrfTimelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
-            vm.label(address(yrfTimelock), "yrfTimelock");
-            yieldRepo = new YieldRepurchaseFacilityV2(
-                kernel,
-                address(ohm),
-                address(backingOracle),
-                address(auctioneer),
-                address(teller),
-                address(yrfTimelock),
-                gracePeriod
-            );
-            vm.label(address(yieldRepo), "yieldRepo");
-            rolesAdmin = new RolesAdmin(kernel);
-            vm.label(address(rolesAdmin), "rolesAdmin");
-        }
-
-        {
-            kernel.executeAction(Actions.InstallModule, address(PRICE));
-            kernel.executeAction(Actions.InstallModule, address(TRSRY));
-            kernel.executeAction(Actions.InstallModule, address(MINTR));
-            kernel.executeAction(Actions.InstallModule, address(ROLES));
-            kernel.executeAction(Actions.InstallModule, address(CHREG));
-
-            kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
-            kernel.executeAction(Actions.ActivatePolicy, address(yrfTimelock));
-            kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
-            kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        }
-
-        rolesAdmin.grantRole("heart", address(heart));
         rolesAdmin.grantRole("admin", guardian);
-        rolesAdmin.grantRole("manager", manager);
-        rolesAdmin.grantRole("yrf_admin", yrfAdmin);
         rolesAdmin.grantRole("emergency", guardian);
+        rolesAdmin.grantRole("yrf_admin", yrfAdmin);
+        rolesAdmin.grantRole("heart", heart);
 
-        // Wire the YRF timelock to the facility and enable it so that timelocked operational
-        // actions can be queued.
+        // The facility is its own bond callback, which the auctioneer owner authorizes.
+        vm.prank(guardian);
+        auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
+
+        // Prices for the OHM quote and the shared reserve; per-asset helpers register
+        // their own reserves.
+        PRICE.setPrice(address(ohm), ohmPrice);
+        PRICE.setPrice(address(reserve), reservePrice);
+
+        // Wire and enable the timelock; the facility stays disabled by default.
         vm.startPrank(guardian);
         yrfTimelock.setFacility(address(yieldRepo));
         yrfTimelock.enable("");
         vm.stopPrank();
-
-        // V2 creates bond markets with a callback, which requires the market owner to be
-        // authorized on the auctioneer.
-        vm.prank(guardian);
-        auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
     }
 
-    /// @notice Enables the backing oracle (with `backingPerToken`) and the facility (with the
-    ///         common enable params). Funding and asset registration should be done before this.
+    // ========== STATE HELPERS ========== //
+
+    /// @notice Enables the facility with the base-configured initial discount and no
+    ///         next-yield seeds.
     function _enableFacility() internal {
-        vm.startPrank(guardian);
-        backingOracle.enable(abi.encode(backingPerToken));
+        vm.prank(guardian);
         yieldRepo.enable(
             abi.encode(initialDiscount, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
         );
-        vm.stopPrank();
-    }
-
-    /// @notice Donates 0.01% of the backing vault's assets to it, simulating accrued yield.
-    function _mintYield() internal {
-        reserve.mint(address(sReserve), sReserve.totalAssets() / 10000);
     }
 }

@@ -19,7 +19,9 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
 
     function setUp() public override {
         super.setUp();
-        includedClearinghouse = makeAddr("includedClearinghouse");
+        // The inclusion is validated against the CHREG registry, so the base-registered
+        // inactive Clearinghouse is used as the inclusion candidate.
+        includedClearinghouse = address(includableClearinghouse);
     }
 
     // queueExcludeClearinghouse

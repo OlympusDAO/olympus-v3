@@ -315,7 +315,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         _registerBackingAsset(yieldRepo, 100e18);
         address vaultToDisable = _registerSecondaryAsset(yieldRepo, "vaultToDisable", 0);
         address vaultToEnable = _registerSecondaryAsset(yieldRepo, "vaultToEnable", 0);
-        address includedClearinghouse = makeAddr("includedClearinghouse");
+        address includedClearinghouse = address(includableClearinghouse);
         vm.startPrank(guardian);
         yieldRepo.disableAsset(vaultToEnable);
         yieldRepo.includeClearinghouse(includedClearinghouse);
@@ -439,7 +439,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     //  when executing the batch
     //   then the whole batch reverts and the earlier sub-action is rolled back
     function test_givenLaterSubActionReverts_revertsAtomically() public {
-        address includedClearinghouse = makeAddr("includedClearinghouse");
+        address includedClearinghouse = address(includableClearinghouse);
         vm.prank(guardian);
         yieldRepo.includeClearinghouse(includedClearinghouse);
         // Both duplicate exclusions are valid against the live queue-time state; at

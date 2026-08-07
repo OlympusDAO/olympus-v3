@@ -38,11 +38,9 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
 
         timelockHarness = new YRFTimelockHarness(kernel, yrfTimelockDelay, gracePeriod);
         vm.label(address(timelockHarness), "timelockHarness");
+        kernel.executeAction(Actions.ActivatePolicy, address(timelockHarness));
         harnessFacility = _deployFacilityPinnedTo(address(timelockHarness));
         vm.label(address(harnessFacility), "harnessFacility");
-
-        kernel.executeAction(Actions.ActivatePolicy, address(timelockHarness));
-        kernel.executeAction(Actions.ActivatePolicy, address(harnessFacility));
 
         vm.startPrank(guardian);
         timelockHarness.setFacility(address(harnessFacility));
@@ -253,8 +251,8 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     }
 
     /// @notice Deploys a facility pinned to `timelock_`, mirroring the `yieldRepo`
-    ///         constructor arguments. The instance is not activated as a policy; tests that
-    ///         need its role-gated functions activate it explicitly.
+    ///         constructor arguments, and activates it as a policy so that it passes the
+    ///         active-policy check of `setFacility`.
     function _deployFacilityPinnedTo(
         address timelock_
     ) internal returns (YieldRepurchaseFacilityV2 facility) {
@@ -263,11 +261,11 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
             address(ohm),
             address(backingOracle),
             address(auctioneer),
-            address(teller),
             timelock_,
             gracePeriod
         );
         vm.label(address(facility), "pinnedFacility");
+        kernel.executeAction(Actions.ActivatePolicy, address(facility));
     }
 
     /// @notice Registers `sReserve` on `facility_` as the enabled backing asset, seeding the
@@ -281,15 +279,19 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     }
 
     /// @notice Registers a fresh non-backing asset (own reserve and vault mocks) on
-    ///         `facility_`, returning the vault address. The asset is registered enabled.
+    ///         `facility_`, returning the vault address. The asset is registered enabled;
+    ///         its reserve is made priceable for the registration probe.
     function _registerSecondaryAsset(
         YieldRepurchaseFacilityV2 facility_,
         string memory label_,
         uint256 nextYieldSeed_
     ) internal returns (address vault) {
         MockERC20 secondaryReserve = new MockERC20(label_, label_, 18);
+        vm.label(address(secondaryReserve), string.concat(label_, "Reserve"));
         MockERC4626 secondaryVault = new MockERC4626(secondaryReserve, label_, label_);
         vm.label(address(secondaryVault), label_);
+
+        PRICE.setPrice(address(secondaryReserve), reservePrice);
 
         vm.prank(guardian);
         facility_.addAsset(address(secondaryVault), 1e18, 0, 0, nextYieldSeed_, false, false);
