@@ -39,13 +39,12 @@ interface IBackingOracle {
 
     // ============ TIMELOCK MANAGEMENT ============ //
 
-    /// @notice Queue a timelocked change to the timelock delay.
-    /// @dev The delay update is not applied until the queued action is executed. Intended to be
+    /// @notice Set the timelock delay applied to future queued actions.
+    /// @dev Already-queued actions keep the delay they were queued with. Intended to be
     ///      callable only by the admin role.
     ///
     /// @param delay_ The new timelock delay in seconds.
-    /// @return actionId_ The queued action ID.
-    function queueTimelockDelay(uint48 delay_) external returns (uint64 actionId_);
+    function setTimelockDelay(uint48 delay_) external;
 
     // ============ ADMIN FUNCTIONS ============ //
 

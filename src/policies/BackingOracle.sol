@@ -14,7 +14,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {TimelockQueue} from "src/policies/utils/TimelockQueue.sol";
 
 // Constants
-import {ADMIN_ROLE, BACKING_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BACKING_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title BackingOracle
 /// @notice A policy that serves as the canonical OHM backing value (the reserve per OHM, 18 decimals).
@@ -136,21 +136,21 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
     // ========== TIMELOCK MANAGEMENT ========== //
 
     /// @inheritdoc IBackingOracle
-    /// @dev The queued action targets this policy with the `queueTimelockDelay` selector and is
-    ///      applied by `_executeAction` when executed.
+    /// @dev Already-queued actions keep the delay they were queued with. The admin role is
+    ///      expected to be held only by the OCG timelock, so the change is de-facto
+    ///      timelocked.
     ///
     ///      Reverts if:
-    ///      - The policy is not enabled.
     ///      - The caller does not hold the admin role.
-    ///      - The delay is outside the accepted range.
-    function queueTimelockDelay(uint48 delay_) external returns (uint64 actionId_) {
-        return _queueAction(address(this), this.queueTimelockDelay.selector, abi.encode(delay_));
+    ///      - The delay is outside the `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]` range.
+    function setTimelockDelay(uint48 delay_) external onlyAdminRole {
+        _setTimelockDelay(delay_);
     }
 
     /// @inheritdoc TimelockQueue
     /// @dev Called by `_queueAction` before the queued action is stored. This is the queue-time
-    ///      gate: it checks enabled status, queue authorization, supported target and selector
-    ///      pairs, and payload validity.
+    ///      gate: it checks enabled status, queue authorization, the supported target and
+    ///      selector pair, and payload validity.
     ///
     ///      Reverts if:
     ///      - The policy is not enabled.
@@ -166,18 +166,10 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
     ) internal view override {
         _requireEnabled();
 
-        if (target_ == address(this)) {
-            if (selector_ == this.queueSetBacking.selector) {
-                _onlyBackingAdminOrAdminRole(caller_);
-                _validateBackingChange(abi.decode(payload_, (uint256)));
-                return;
-            }
-            if (selector_ == this.queueTimelockDelay.selector) {
-                // Timelock delay changes affect future queue semantics, so only the admin can propose them
-                _requireRole(caller_, ADMIN_ROLE);
-                _validateTimelockDelay(abi.decode(payload_, (uint48)));
-                return;
-            }
+        if (target_ == address(this) && selector_ == this.queueSetBacking.selector) {
+            _onlyBackingAdminOrAdminRole(caller_);
+            _validateBackingChange(abi.decode(payload_, (uint256)));
+            return;
         }
 
         revert ITimelockQueue_ActionInvalid(target_, selector_);
@@ -199,11 +191,8 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
     ) internal view override {
         _requireEnabled();
 
-        if (
-            action_.target == address(this) &&
-            (action_.selector == this.queueSetBacking.selector ||
-                action_.selector == this.queueTimelockDelay.selector)
-        ) return;
+        if (action_.target == address(this) && action_.selector == this.queueSetBacking.selector)
+            return;
 
         revert ITimelockQueue_ActionInvalid(action_.target, action_.selector);
     }
@@ -234,19 +223,13 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
     ///      - The queued payload cannot be decoded for the action.
     ///      - The decoded payload fails action-specific validation at execution time.
     function _executeAction(uint64, ITimelockQueue.QueuedAction memory action_) internal override {
-        if (action_.target == address(this)) {
-            if (action_.selector == this.queueSetBacking.selector) {
-                uint256 newBacking = abi.decode(action_.payload, (uint256));
-                // The current backing may have moved since queueing, so the change threshold is
-                // validated again at execution time.
-                _validateBackingChange(newBacking);
-                _setBacking(newBacking);
-                return;
-            }
-            if (action_.selector == this.queueTimelockDelay.selector) {
-                _setTimelockDelay(abi.decode(action_.payload, (uint48)));
-                return;
-            }
+        if (action_.target == address(this) && action_.selector == this.queueSetBacking.selector) {
+            uint256 newBacking = abi.decode(action_.payload, (uint256));
+            // The current backing may have moved since queueing, so the change threshold is
+            // validated again at execution time.
+            _validateBackingChange(newBacking);
+            _setBacking(newBacking);
+            return;
         }
 
         revert ITimelockQueue_ActionInvalid(action_.target, action_.selector);
