@@ -5,25 +5,36 @@ pragma solidity >=0.8.24;
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {Actions, Kernel, Module, Permissions, Policy} from "src/Kernel.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_Constructor is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // constructor
     // given the kernel address is zero
     //  when deploying the timelock
-    //   then it reverts with IYRFTimelock_InvalidAddress("kernel")
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidAddress("kernel")
     function test_constructor_givenZeroKernel_reverts() public {
         vm.expectRevert(
-            abi.encodeWithSelector(IYRFTimelock.IYRFTimelock_InvalidAddress.selector, "kernel")
+            abi.encodeWithSelector(
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidAddress
+                    .selector,
+                "kernel"
+            )
         );
-        new YRFTimelock(Kernel(address(0)), yrfTimelockDelay, gracePeriod);
+        new YieldRepurchaseFacilityConfigTimelock(
+            Kernel(address(0)),
+            configTimelockDelay,
+            gracePeriod
+        );
     }
 
     // constructor
@@ -31,7 +42,7 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when deploying the timelock with any such delay
     //   then it reverts with ITimelockBatchQueue_TimelockDelayInvalid
     function test_constructor_givenDelayBelowMinimum_reverts(uint48 delay_) public {
-        uint48 minDelay = yrfTimelock.MIN_TIMELOCK_DELAY();
+        uint48 minDelay = configTimelock.MIN_TIMELOCK_DELAY();
         delay_ = uint48(bound(delay_, 0, minDelay - 1));
 
         vm.expectRevert(
@@ -39,10 +50,10 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
                 ITimelockBatchQueue.ITimelockBatchQueue_TimelockDelayInvalid.selector,
                 delay_,
                 minDelay,
-                yrfTimelock.MAX_TIMELOCK_DELAY()
+                configTimelock.MAX_TIMELOCK_DELAY()
             )
         );
-        new YRFTimelock(kernel, delay_, gracePeriod);
+        new YieldRepurchaseFacilityConfigTimelock(kernel, delay_, gracePeriod);
     }
 
     // constructor
@@ -50,18 +61,18 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when deploying the timelock with any such delay
     //   then it reverts with ITimelockBatchQueue_TimelockDelayInvalid
     function test_constructor_givenDelayAboveMaximum_reverts(uint48 delay_) public {
-        uint48 maxDelay = yrfTimelock.MAX_TIMELOCK_DELAY();
+        uint48 maxDelay = configTimelock.MAX_TIMELOCK_DELAY();
         delay_ = uint48(bound(delay_, uint256(maxDelay) + 1, type(uint48).max));
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_TimelockDelayInvalid.selector,
                 delay_,
-                yrfTimelock.MIN_TIMELOCK_DELAY(),
+                configTimelock.MIN_TIMELOCK_DELAY(),
                 maxDelay
             )
         );
-        new YRFTimelock(kernel, delay_, gracePeriod);
+        new YieldRepurchaseFacilityConfigTimelock(kernel, delay_, gracePeriod);
     }
 
     // constructor
@@ -69,9 +80,9 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when deploying the timelock
     //   then it succeeds (inclusive boundary)
     function test_constructor_givenDelayAtMinimum_succeeds() public {
-        YRFTimelock timelock = new YRFTimelock(
+        YieldRepurchaseFacilityConfigTimelock timelock = new YieldRepurchaseFacilityConfigTimelock(
             kernel,
-            yrfTimelock.MIN_TIMELOCK_DELAY(),
+            configTimelock.MIN_TIMELOCK_DELAY(),
             gracePeriod
         );
 
@@ -83,9 +94,9 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when deploying the timelock
     //   then it succeeds (inclusive boundary)
     function test_constructor_givenDelayAtMaximum_succeeds() public {
-        YRFTimelock timelock = new YRFTimelock(
+        YieldRepurchaseFacilityConfigTimelock timelock = new YieldRepurchaseFacilityConfigTimelock(
             kernel,
-            yrfTimelock.MAX_TIMELOCK_DELAY(),
+            configTimelock.MAX_TIMELOCK_DELAY(),
             gracePeriod
         );
 
@@ -98,18 +109,22 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //   then it reverts with GracePeriod_ZeroPeriod
     function test_constructor_givenZeroGracePeriod_reverts() public {
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
-        new YRFTimelock(kernel, yrfTimelockDelay, 0);
+        new YieldRepurchaseFacilityConfigTimelock(kernel, configTimelockDelay, 0);
     }
 
     // constructor
     // given the grace period is at or above MAX_GRACE_PERIOD
     //  when deploying the timelock
-    //   then it reverts with IYRFTimelock_GracePeriodTooLong
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong
     function test_constructor_givenGracePeriodAtOrAboveMax_reverts(uint32 gracePeriod_) public {
         gracePeriod_ = uint32(bound(gracePeriod_, 7 days, type(uint32).max));
 
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_GracePeriodTooLong.selector);
-        new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod_);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong
+                .selector
+        );
+        new YieldRepurchaseFacilityConfigTimelock(kernel, configTimelockDelay, gracePeriod_);
     }
 
     // constructor
@@ -127,7 +142,11 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
         emit IGracePeriod.GracePeriodSet(grace);
         vm.expectEmit(false, false, false, true);
         emit ITimelockBatchQueue.TimelockDelaySet(delay);
-        YRFTimelock timelock = new YRFTimelock(kernel, delay, grace);
+        YieldRepurchaseFacilityConfigTimelock timelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            delay,
+            grace
+        );
 
         assertEq(timelock.timelockDelay(), delay, "timelock delay");
         assertEq(timelock.gracePeriod(), grace, "grace period");
@@ -147,7 +166,11 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when deploying the timelock
     //   then the policy starts disabled and the facility slot is unset
     function test_constructor_givenValidParams_startsDisabledWithoutFacility() public {
-        YRFTimelock timelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
+        YieldRepurchaseFacilityConfigTimelock timelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            configTimelockDelay,
+            gracePeriod
+        );
 
         assertFalse(timelock.isEnabled(), "enabled flag");
         assertEq(timelock.lastTransitionAt(), 0, "last transition timestamp");
@@ -165,7 +188,11 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when the kernel activates the policy
     //   then it reverts with Policy_WrongModuleVersion(abi.encode([1]))
     function test_configureDependencies_givenWrongRolesVersion_reverts() public {
-        YRFTimelock timelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
+        YieldRepurchaseFacilityConfigTimelock timelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            configTimelockDelay,
+            gracePeriod
+        );
         vm.mockCall(
             address(ROLES),
             abi.encodeWithSelector(Module.VERSION.selector),
@@ -183,7 +210,7 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     //  when reading the requested permissions
     //   then the array is empty
     function test_requestPermissions_returnsEmpty() public view {
-        Permissions[] memory permissions = yrfTimelock.requestPermissions();
+        Permissions[] memory permissions = configTimelock.requestPermissions();
 
         assertEq(permissions.length, 0, "permissions length");
     }
@@ -196,7 +223,11 @@ contract YRFTimelockTests_Constructor is YRFTimelockTestBase {
     function test_facilityConstructor_givenTimelockOnOtherKernel_reverts() public {
         Kernel otherKernel = new Kernel();
         vm.label(address(otherKernel), "otherKernel");
-        YRFTimelock foreignTimelock = new YRFTimelock(otherKernel, yrfTimelockDelay, gracePeriod);
+        YieldRepurchaseFacilityConfigTimelock foreignTimelock = new YieldRepurchaseFacilityConfigTimelock(
+                otherKernel,
+                configTimelockDelay,
+                gracePeriod
+            );
         vm.label(address(foreignTimelock), "foreignTimelock");
 
         vm.expectRevert(

@@ -5,19 +5,21 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueIncreaseClearinghouseOffset is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     uint256 internal constant _RECEIVABLES = 1_000e18;
 
     function setUp() public override {
@@ -34,7 +36,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
+        configTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
     }
 
     // queueIncreaseClearinghouseOffset
@@ -43,24 +45,28 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
     //   then it reverts with NotEnabled and no action id is consumed
     function test_givenTimelockDisabled_reverts() public {
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
+        configTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueIncreaseClearinghouseOffset
     // given the facility slot has not been set
     //  when queueing an offset increase
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
     }
 
@@ -72,7 +78,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
     function test_givenZeroClearinghouse_reverts() public {
         vm.prank(yrfAdmin);
         vm.expectRevert(abi.encodeWithSelector(Errors.BadInput.selector, "clearinghouse"));
-        yrfTimelock.queueIncreaseClearinghouseOffset(address(0), 250e18);
+        configTimelock.queueIncreaseClearinghouseOffset(address(0), 250e18);
     }
 
     // queueIncreaseClearinghouseOffset
@@ -93,7 +99,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
                 _RECEIVABLES
             )
         );
-        yrfTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), additionalOffset_);
+        configTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), additionalOffset_);
     }
 
     // queueIncreaseClearinghouseOffset
@@ -115,7 +121,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
                 _RECEIVABLES
             )
         );
-        yrfTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 500e18);
+        configTimelock.queueIncreaseClearinghouseOffset(address(clearinghouse), 500e18);
 
         // The remaining headroom is still queueable.
         uint64 actionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 400e18);
@@ -153,7 +159,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
                 0
             )
         );
-        yrfTimelock.queueIncreaseClearinghouseOffset(unknownClearinghouse, 1);
+        configTimelock.queueIncreaseClearinghouseOffset(unknownClearinghouse, 1);
     }
 
     // queueIncreaseClearinghouseOffset
@@ -164,8 +170,8 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
         address unknownClearinghouse = address(reserve);
 
         uint64 actionId = _queueIncreaseClearinghouseOffset(unknownClearinghouse, 0);
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.clearinghouseOffset(unknownClearinghouse), 0, "offset unchanged");
     }
@@ -185,14 +191,14 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
             abi.encode(address(clearinghouse), additionalOffset_)
         );
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueIncreaseClearinghouseOffset(
             address(clearinghouse),
             additionalOffset_
         );
 
         assertEq(actionId, 1, "action id");
-        _assertQueuedSingleAction(yrfTimelock, actionId, queuedAt, actions[0]);
+        _assertQueuedSingleAction(configTimelock, actionId, queuedAt, actions[0]);
     }
 
     // queueIncreaseClearinghouseOffset
@@ -203,13 +209,17 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 250e18);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
         vm.expectEmit(true, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.ClearinghouseOffsetSet(address(clearinghouse), 250e18);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.clearinghouseOffset(address(clearinghouse)), 250e18, "offset increased");
     }
@@ -221,7 +231,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
     function test_givenReceivablesRepaidAfterQueue_executionReverts() public {
         uint64 actionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 800e18);
         clearinghouse.setPrincipalReceivables(500e18);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -233,7 +243,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
                 500e18
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.clearinghouseOffset(address(clearinghouse)), 0, "offset unchanged");
     }
@@ -246,7 +256,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
         uint64 actionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 800e18);
         vm.prank(guardian);
         yieldRepo.increaseClearinghouseOffset(address(clearinghouse), 300e18);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -258,7 +268,7 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
                 _RECEIVABLES
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(
             yieldRepo.clearinghouseOffset(address(clearinghouse)),
@@ -274,16 +284,16 @@ contract YRFTimelockTests_QueueIncreaseClearinghouseOffset is YRFTimelockTestBas
     function test_givenTwoPendingIncreasesWithinReceivables_bothExecute() public {
         uint64 firstActionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 400e18);
         uint64 secondActionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 500e18);
-        _warpToExecutable(yrfTimelock, secondActionId);
+        _warpToExecutable(configTimelock, secondActionId);
 
-        yrfTimelock.executeQueuedAction(firstActionId);
+        configTimelock.executeQueuedAction(firstActionId);
         assertEq(
             yieldRepo.clearinghouseOffset(address(clearinghouse)),
             400e18,
             "first increase applied"
         );
 
-        yrfTimelock.executeQueuedAction(secondActionId);
+        configTimelock.executeQueuedAction(secondActionId);
         assertEq(
             yieldRepo.clearinghouseOffset(address(clearinghouse)),
             900e18,

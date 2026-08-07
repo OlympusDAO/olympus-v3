@@ -5,16 +5,18 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueBatch is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // queueBatch
     // given the caller does not hold the yrf_admin role
     //  when queueing a valid batch
@@ -25,7 +27,7 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
     }
 
     // queueBatch
@@ -37,7 +39,7 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
 
         vm.prank(guardian);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
     }
 
     // queueBatch
@@ -47,25 +49,29 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
     function test_givenTimelockDisabled_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
     // given the facility slot has not been set
     //  when queueing a valid batch
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueBatch(actions);
     }
 
@@ -78,9 +84,9 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
 
         vm.prank(yrfAdmin);
         vm.expectRevert(ITimelockBatchQueue.ITimelockBatchQueue_BatchEmpty.selector);
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
@@ -100,9 +106,9 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
                 15
             )
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
@@ -112,11 +118,15 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
     function test_givenYrfAdminCaller_whenBatchIsValid_queuesBatch() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueBatch(actions);
 
         assertEq(actionId, 1, "action id");
-        assertEq(yrfTimelock.getQueuedActionLength(actionId), actions.length, "sub-action count");
+        assertEq(
+            configTimelock.getQueuedActionLength(actionId),
+            actions.length,
+            "sub-action count"
+        );
     }
 
     // queueBatch
@@ -128,13 +138,17 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueBatch(actions);
 
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertEq(action.proposer, yrfAdmin, "proposer");
         assertEq(action.queuedAt, queuedAt, "queuedAt");
         assertEq(action.actions.length, actions.length, "stored sub-action count");
-        assertEq(yrfTimelock.getQueuedActionLength(actionId), actions.length, "sub-action count");
+        assertEq(
+            configTimelock.getQueuedActionLength(actionId),
+            actions.length,
+            "sub-action count"
+        );
         for (uint256 i = 0; i < actions.length; ++i) {
-            (address target, bytes4 selector, bytes memory payload) = yrfTimelock
+            (address target, bytes4 selector, bytes memory payload) = configTimelock
                 .getQueuedSubAction(actionId, i);
             assertEq(target, actions[i].target, "target");
             assertEq(selector, actions[i].selector, "selector");
@@ -157,7 +171,7 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
                 2
             )
         );
-        yrfTimelock.getQueuedSubAction(actionId, 2);
+        configTimelock.getQueuedSubAction(actionId, 2);
     }
 
     // queueBatch
@@ -176,9 +190,9 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
                 actions[1].selector
             )
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
@@ -200,9 +214,9 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
                 actions[1].selector
             )
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
@@ -221,11 +235,11 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh.selector
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
         // The pending slot taken by the earlier discount sub-action is rolled back.
-        assertEq(yrfTimelock.pendingInitialDiscountActionId(), 0, "no pending slot leaked");
+        assertEq(configTimelock.pendingInitialDiscountActionId(), 0, "no pending slot leaked");
     }
 
     // queueBatch
@@ -316,15 +330,15 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
 
         vm.prank(yrfAdmin);
         vm.expectRevert();
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueBatch
     // given two sub-actions taking the same pending parameter slot in one batch
     //  when queueing the batch
-    //   then it reverts with IYRFTimelock_ConflictingActionPending
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
     function test_givenConflictingLockedSubActionsInBatch_reverts() public {
         _registerBackingAsset(yieldRepo, 0);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
@@ -342,16 +356,18 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
         vm.prank(yrfAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_ConflictingActionPending.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
+                    .selector,
                 IYieldRepurchaseFacilityV2.setYieldBuybackShare.selector,
                 uint64(1)
             )
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            configTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
             0,
             "no pending slot leaked"
         );
@@ -375,14 +391,14 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
 
         uint64 actionId = _queueBatch(actions);
 
-        assertEq(yrfTimelock.getQueuedActionLength(actionId), 2, "sub-action count");
+        assertEq(configTimelock.getQueuedActionLength(actionId), 2, "sub-action count");
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            configTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
             actionId,
             "share slot held by batch"
         );
         assertEq(
-            yrfTimelock.pendingInitialDiscountActionId(),
+            configTimelock.pendingInitialDiscountActionId(),
             actionId,
             "discount slot held by batch"
         );
@@ -409,18 +425,18 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
         uint64 actionId = _queueBatch(actions);
 
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            configTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
             actionId,
             "backing slot held by batch"
         );
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(secondaryVault),
+            configTimelock.pendingYieldBuybackShareActionId(secondaryVault),
             actionId,
             "secondary slot held by batch"
         );
 
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(
             yieldRepo.getAssetConfig(address(sReserve)).yieldBuybackShare,
@@ -433,12 +449,12 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
             "secondary share applied"
         );
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
+            configTimelock.pendingYieldBuybackShareActionId(address(sReserve)),
             0,
             "backing slot released"
         );
         assertEq(
-            yrfTimelock.pendingYieldBuybackShareActionId(secondaryVault),
+            configTimelock.pendingYieldBuybackShareActionId(secondaryVault),
             0,
             "secondary slot released"
         );
@@ -466,9 +482,9 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetEnabled.selector
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // ========== HELPERS ========== //
@@ -502,8 +518,8 @@ contract YRFTimelockTests_QueueBatch is YRFTimelockTestBase {
                 selector_
             )
         );
-        yrfTimelock.queueBatch(actions);
+        configTimelock.queueBatch(actions);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 }

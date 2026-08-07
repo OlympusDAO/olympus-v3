@@ -27,7 +27,7 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 
 /// @notice PRICE mock reporting the version the facility pins: major 1, minor >= 2 (the
 ///         `getPriceIn` surface of the live `OlympusPricev1_2`).
@@ -46,7 +46,7 @@ contract MockPriceV1_2 is MockPrice {
 /// @notice Shared unit-test base for the YRF v2 stack.
 /// @dev `_deployStack` assembles a local kernel with the real TRSRY, ROLES, and CHREG
 ///      modules, a PRICE mock pinned to version 1.2 with 18 decimals, the vendored bond
-///      stack, and the un-enabled BackingOracle, then deploys `yrfTimelock` and a facility
+///      stack, and the un-enabled BackingOracle, then deploys `configTimelock` and a facility
 ///      pinned to it, wires the pair, and enables the timelock. The facility itself is left
 ///      disabled; tests that need the enabled facility call `_enableFacility`.
 ///
@@ -95,12 +95,12 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
 
     RolesAdmin internal rolesAdmin;
     BackingOracle internal backingOracle;
-    YRFTimelock internal yrfTimelock;
+    YieldRepurchaseFacilityConfigTimelock internal configTimelock;
     YieldRepurchaseFacilityV2 internal yieldRepo;
 
     // ========== PARAMETERS ========== //
 
-    uint48 internal yrfTimelockDelay = 1 days;
+    uint48 internal configTimelockDelay = 1 days;
     uint32 internal gracePeriod = 5 days;
 
     /// @notice The discount `_enableFacility` seeds through the enable payload (3%).
@@ -161,19 +161,23 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
         CHREG = new OlympusClearinghouseRegistry(kernel, address(clearinghouse), inactive);
         vm.label(address(CHREG), "CHREG");
 
-        // Policies. The facility pins the YRF timelock as an immutable address, so the
+        // Policies. The facility pins the config timelock as an immutable address, so the
         // timelock is deployed first and wired to the facility afterwards. The backing
         // oracle stays un-enabled: only its pure `decimals()` is read by these tests.
         backingOracle = new BackingOracle(kernel);
         vm.label(address(backingOracle), "backingOracle");
-        yrfTimelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
-        vm.label(address(yrfTimelock), "yrfTimelock");
+        configTimelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            configTimelockDelay,
+            gracePeriod
+        );
+        vm.label(address(configTimelock), "configTimelock");
         yieldRepo = new YieldRepurchaseFacilityV2(
             kernel,
             address(ohm),
             address(backingOracle),
             address(auctioneer),
-            address(yrfTimelock),
+            address(configTimelock),
             gracePeriod
         );
         vm.label(address(yieldRepo), "yieldRepo");
@@ -185,7 +189,7 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
         kernel.executeAction(Actions.InstallModule, address(CHREG));
         kernel.executeAction(Actions.InstallModule, address(ROLES));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        kernel.executeAction(Actions.ActivatePolicy, address(yrfTimelock));
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
 
         rolesAdmin.grantRole("admin", guardian);
@@ -204,8 +208,8 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
 
         // Wire and enable the timelock; the facility stays disabled by default.
         vm.startPrank(guardian);
-        yrfTimelock.setFacility(address(yieldRepo));
-        yrfTimelock.enable("");
+        configTimelock.setFacility(address(yieldRepo));
+        configTimelock.enable("");
         vm.stopPrank();
     }
 

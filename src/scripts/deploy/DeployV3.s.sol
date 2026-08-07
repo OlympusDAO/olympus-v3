@@ -91,7 +91,7 @@ import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 
 // YRF v2 stack
 import {BackingOracle} from "src/policies/BackingOracle.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseFacilityV2Activator.sol";
 
@@ -1101,13 +1101,13 @@ contract DeployV3 is WithEnvironment {
         return (address(backingOracle), "olympus.policies");
     }
 
-    function deployYRFTimelock() public returns (address, string memory) {
+    function deployYieldRepurchaseFacilityConfigTimelock() public returns (address, string memory) {
         // Input parameters
         uint48 timelockDelay = SafeCast.encodeUInt48(
-            _readDeploymentArgUint256("YRFTimelock", "timelockDelay")
+            _readDeploymentArgUint256("YieldRepurchaseFacilityConfigTimelock", "timelockDelay")
         );
         uint32 gracePeriod = SafeCast.encodeUInt32(
-            _readDeploymentArgUint256("YRFTimelock", "gracePeriod")
+            _readDeploymentArgUint256("YieldRepurchaseFacilityConfigTimelock", "gracePeriod")
         );
 
         // Dependencies
@@ -1115,16 +1115,20 @@ contract DeployV3 is WithEnvironment {
         address kernel = _getAddressNotZero("olympus.Kernel");
 
         // Log parameters
-        console2.log("YRFTimelock parameters:");
+        console2.log("YieldRepurchaseFacilityConfigTimelock parameters:");
         console2.log("  kernel", kernel);
         console2.log("  timelockDelay", timelockDelay);
         console2.log("  gracePeriod", gracePeriod);
 
         // Deploy
         vm.broadcast();
-        YRFTimelock yrfTimelock = new YRFTimelock(Kernel(kernel), timelockDelay, gracePeriod);
+        YieldRepurchaseFacilityConfigTimelock configTimelock = new YieldRepurchaseFacilityConfigTimelock(
+                Kernel(kernel),
+                timelockDelay,
+                gracePeriod
+            );
 
-        return (address(yrfTimelock), "olympus.policies");
+        return (address(configTimelock), "olympus.policies");
     }
 
     /// @dev The facility must be compiled with 400 optimizer runs to fit under the
@@ -1149,7 +1153,9 @@ contract DeployV3 is WithEnvironment {
         address kernel = _getAddressNotZero("olympus.Kernel");
         address ohm = _getAddressNotZero("olympus.legacy.OHM");
         address backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
-        address yrfTimelock = _getAddressNotZero("olympus.policies.YRFTimelock");
+        address configTimelock = _getAddressNotZero(
+            "olympus.policies.YieldRepurchaseFacilityConfigTimelock"
+        );
         address bondAuctioneer = _getAddressNotZero(
             "external.bond-protocol.BondFixedTermAuctioneer"
         );
@@ -1160,7 +1166,7 @@ contract DeployV3 is WithEnvironment {
         console2.log("  ohm", ohm);
         console2.log("  backingOracle", backingOracle);
         console2.log("  bondAuctioneer", bondAuctioneer);
-        console2.log("  yrfTimelock", yrfTimelock);
+        console2.log("  configTimelock", configTimelock);
         console2.log("  gracePeriod", gracePeriod);
 
         // Deploy. The teller is resolved by the facility from the auctioneer.
@@ -1170,7 +1176,7 @@ contract DeployV3 is WithEnvironment {
             ohm,
             backingOracle,
             bondAuctioneer,
-            yrfTimelock,
+            configTimelock,
             gracePeriod
         );
 
@@ -1189,14 +1195,16 @@ contract DeployV3 is WithEnvironment {
         console2.log("Checking dependencies");
         address timelock = _getAddressNotZero("olympus.governance.Timelock");
         address yieldRepo = _getAddressNotZero("olympus.policies.YieldRepurchaseFacilityV2");
-        address yrfTimelock = _getAddressNotZero("olympus.policies.YRFTimelock");
+        address configTimelock = _getAddressNotZero(
+            "olympus.policies.YieldRepurchaseFacilityConfigTimelock"
+        );
         address backingOracle = _getAddressNotZero("olympus.policies.BackingOracle");
 
         // Log parameters
         console2.log("YieldRepurchaseFacilityV2Activator parameters:");
         console2.log("  owner", timelock);
         console2.log("  yieldRepo", yieldRepo);
-        console2.log("  yrfTimelock", yrfTimelock);
+        console2.log("  configTimelock", configTimelock);
         console2.log("  backingOracle", backingOracle);
 
         // Deploy
@@ -1204,7 +1212,7 @@ contract DeployV3 is WithEnvironment {
         YieldRepurchaseFacilityV2Activator activator = new YieldRepurchaseFacilityV2Activator(
             timelock,
             yieldRepo,
-            yrfTimelock,
+            configTimelock,
             backingOracle
         );
 

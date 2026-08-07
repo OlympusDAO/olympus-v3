@@ -9,7 +9,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
@@ -21,7 +21,7 @@ import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
 /// @title YieldRepurchaseFacilityV2Activator
 /// @notice Single-use contract that migrates the Yield Repurchase Facility from the
 ///         deployed v1.2 to the multi-asset v2 stack in a single OCG proposal action:
-///         it wires and enables the YRFTimelock, the BackingOracle, and the
+///         it wires and enables the YieldRepurchaseFacilityConfigTimelock, the BackingOracle, and the
 ///         YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into
 ///         the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler
 ///         v1 Clearinghouses in the backing yield, seeds the running week, and swaps the
@@ -33,7 +33,7 @@ import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
 ///      - The `loop_daddy` role has been granted to this contract for the duration of
 ///        the activation, so that reading the v1.2 seeds and sweeping its funds via
 ///        `shutdown` are atomic (revoked by the proposal immediately after).
-///      - The DAO MS has already activated the BackingOracle, the YRFTimelock, and the
+///      - The DAO MS has already activated the BackingOracle, the YieldRepurchaseFacilityConfigTimelock, and the
 ///        YieldRepurchaseFacilityV2 policies in the Kernel.
 ///      - The Bond Protocol multisig has already authorized the v2 facility as a market
 ///        callback on the SDA auctioneer.
@@ -118,8 +118,8 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @notice The YieldRepurchaseFacilityV2 policy.
     address public immutable YIELD_REPO;
 
-    /// @notice The YRFTimelock policy.
-    address public immutable YRF_TIMELOCK;
+    /// @notice The YieldRepurchaseFacilityConfigTimelock policy.
+    address public immutable CONFIG_TIMELOCK;
 
     /// @notice The BackingOracle policy.
     address public immutable BACKING_ORACLE;
@@ -181,32 +181,32 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
 
     /// @dev Reverts if:
     ///      - Any parameter is the zero address.
-    ///      - `yieldRepo_` does not report `yrfTimelock_` as its timelock.
+    ///      - `yieldRepo_` does not report `configTimelock_` as its timelock.
     ///      - `yieldRepo_` does not report `backingOracle_` as its backing oracle.
     /// @param owner_ The OCG timelock address.
     /// @param yieldRepo_ The YieldRepurchaseFacilityV2 policy address.
-    /// @param yrfTimelock_ The YRFTimelock policy address.
+    /// @param configTimelock_ The YieldRepurchaseFacilityConfigTimelock policy address.
     /// @param backingOracle_ The BackingOracle policy address.
     constructor(
         address owner_,
         address yieldRepo_,
-        address yrfTimelock_,
+        address configTimelock_,
         address backingOracle_
     ) Owned(owner_) {
         if (owner_ == address(0)) revert InvalidParams("owner");
         if (yieldRepo_ == address(0)) revert InvalidParams("yieldRepo");
-        if (yrfTimelock_ == address(0)) revert InvalidParams("yrfTimelock");
+        if (configTimelock_ == address(0)) revert InvalidParams("configTimelock");
         if (backingOracle_ == address(0)) revert InvalidParams("backingOracle");
 
         // Sanity-check the wiring of the deployed v2 stack: the facility pins both the
         // timelock and the backing oracle.
-        if (IYieldRepurchaseFacilityV2(yieldRepo_).timelock() != yrfTimelock_)
-            revert InvalidParams("yrfTimelock mismatch");
+        if (IYieldRepurchaseFacilityV2(yieldRepo_).timelock() != configTimelock_)
+            revert InvalidParams("configTimelock mismatch");
         if (IYieldRepurchaseFacilityV2(yieldRepo_).backingOracle() != backingOracle_)
             revert InvalidParams("backingOracle mismatch");
 
         YIELD_REPO = yieldRepo_;
-        YRF_TIMELOCK = yrfTimelock_;
+        CONFIG_TIMELOCK = configTimelock_;
         BACKING_ORACLE = backingOracle_;
     }
 
@@ -215,7 +215,7 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @notice Performs the YRF v1.2 to v2 migration.
     /// @dev This function assumes:
     ///      - The `admin` and `loop_daddy` roles have been granted to this contract.
-    ///      - The BackingOracle, YRFTimelock, and YieldRepurchaseFacilityV2 policies have
+    ///      - The BackingOracle, YieldRepurchaseFacilityConfigTimelock, and YieldRepurchaseFacilityV2 policies have
     ///        been activated in the Kernel by the DAO MS.
     ///      - The v2 facility has been callback-authorized on the SDA auctioneer by the
     ///        Bond Protocol multisig.
@@ -282,7 +282,7 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         // enabler flag).
         if (!Policy(YIELD_REPO).isActive()) revert PolicyNotActive(YIELD_REPO);
         if (!Policy(BACKING_ORACLE).isActive()) revert PolicyNotActive(BACKING_ORACLE);
-        if (!Policy(YRF_TIMELOCK).isActive()) revert PolicyNotActive(YRF_TIMELOCK);
+        if (!Policy(CONFIG_TIMELOCK).isActive()) revert PolicyNotActive(CONFIG_TIMELOCK);
 
         // The callback authorization below is meaningful only on the auctioneer the
         // facility submits its markets to, so the facility's bond wiring must match the
@@ -321,12 +321,12 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         revert ReserveNotPriceable(reserve_);
     }
 
-    /// @dev Wires the YRF timelock to the facility and enables the timelock, the backing
+    /// @dev Wires the config timelock to the facility and enables the timelock, the backing
     ///      oracle, and the facility.
     function _enableV2Stack() internal {
-        // 2. Wire and enable the YRF timelock
-        IYRFTimelock(YRF_TIMELOCK).setFacility(YIELD_REPO);
-        IEnabler(YRF_TIMELOCK).enable("");
+        // 2. Wire and enable the config timelock
+        IYieldRepurchaseFacilityConfigTimelock(CONFIG_TIMELOCK).setFacility(YIELD_REPO);
+        IEnabler(CONFIG_TIMELOCK).enable("");
 
         // 3. Enable the backing oracle before the facility, so that the facility's
         //    price gate never sees a zero backing.

@@ -10,9 +10,11 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_ReEnable is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // reEnable
     // given the caller does not hold the yrf_admin role
     //  when re-enabling the disabled policy
@@ -20,11 +22,11 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     function test_givenNonYrfAdminCaller_reverts(address caller_) public {
         vm.assume(caller_ != yrfAdmin);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
     }
 
     // reEnable
@@ -33,11 +35,11 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     //   then it reverts (the admin restarts through `enable` instead)
     function test_givenAdminCaller_reverts() public {
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(guardian);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
     }
 
     // reEnable
@@ -47,7 +49,7 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     function test_givenAlreadyEnabled_reverts() public {
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotDisabled.selector);
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
     }
 
     // reEnable
@@ -57,7 +59,7 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     function test_givenGracePeriodElapsed_reverts(uint48 elapsed_) public {
         uint256 disabledAt = vm.getBlockTimestamp();
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
         // Keep the warped timestamp within the uint48 domain the grace check is measured
         // in; beyond it the contract's uint48 timestamp cast wraps (~8.9M years out).
         elapsed_ = uint48(bound(elapsed_, gracePeriod + 1, type(uint48).max - disabledAt));
@@ -70,9 +72,9 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
                 uint48(disabledAt + gracePeriod)
             )
         );
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
 
-        assertFalse(yrfTimelock.isEnabled(), "still disabled");
+        assertFalse(configTimelock.isEnabled(), "still disabled");
     }
 
     // reEnable
@@ -82,21 +84,21 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     function test_givenYrfAdminCallerWithinGracePeriod_reenablesPolicy(uint48 elapsed_) public {
         uint256 disabledAt = vm.getBlockTimestamp();
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
         // The deadline is inclusive: the window closes strictly after
         // `lastTransitionAt + gracePeriod`.
         elapsed_ = uint48(bound(elapsed_, 0, gracePeriod));
         vm.warp(disabledAt + elapsed_);
 
-        vm.expectEmit(false, false, false, true, address(yrfTimelock));
+        vm.expectEmit(false, false, false, true, address(configTimelock));
         emit IEnabler.Enabled();
-        vm.expectEmit(true, true, false, true, address(yrfTimelock));
+        vm.expectEmit(true, true, false, true, address(configTimelock));
         emit IEnablerV2.Transition(yrfAdmin, true, "", uint48(disabledAt + elapsed_));
         vm.prank(yrfAdmin);
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
 
-        assertTrue(yrfTimelock.isEnabled(), "enabled");
-        assertEq(yrfTimelock.lastTransitionAt(), disabledAt + elapsed_, "last transition at");
+        assertTrue(configTimelock.isEnabled(), "enabled");
+        assertEq(configTimelock.lastTransitionAt(), disabledAt + elapsed_, "last transition at");
     }
 
     // reEnable
@@ -106,16 +108,16 @@ contract YRFTimelockTests_ReEnable is YRFTimelockTestBase {
     function test_givenReEnabled_queuedActionBecomesExecutable() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
         // One day of downtime: within the grace window, at the action's executableAt.
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         vm.prank(yrfAdmin);
-        yrfTimelock.reEnable();
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.reEnable();
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
     }

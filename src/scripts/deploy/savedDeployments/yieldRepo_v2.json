@@ -5,7 +5,7 @@
             "args": {}
         },
         {
-            "name": "YRFTimelock",
+            "name": "YieldRepurchaseFacilityConfigTimelock",
             "args": {
                 "timelockDelay": 86400,
                 "gracePeriod": 432000

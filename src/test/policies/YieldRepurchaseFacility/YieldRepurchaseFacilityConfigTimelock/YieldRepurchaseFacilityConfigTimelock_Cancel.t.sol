@@ -4,16 +4,18 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_Cancel is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // cancelQueuedAction
     // given the caller does not hold the emergency role
     //  when cancelling a queued action
@@ -24,7 +26,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
     }
 
     // cancelQueuedAction
@@ -36,7 +38,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
 
         vm.prank(yrfAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, EMERGENCY_ROLE));
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
     }
 
     // cancelQueuedAction
@@ -44,7 +46,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     //  when the emergency role cancels it
     //   then it reverts with ITimelockBatchQueue_ActionNotFound
     function test_givenActionNotFound_reverts() public {
-        uint64 actionId = yrfTimelock.nextActionId();
+        uint64 actionId = configTimelock.nextActionId();
 
         vm.prank(guardian);
         vm.expectRevert(
@@ -53,7 +55,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
     }
 
     // cancelQueuedAction
@@ -62,8 +64,8 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     //   then it reverts with ITimelockBatchQueue_ActionAlreadyExecuted
     function test_givenExecutedAction_reverts() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         vm.prank(guardian);
         vm.expectRevert(
@@ -72,7 +74,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
     }
 
     // cancelQueuedAction
@@ -82,7 +84,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     function test_givenCancelledAction_reverts() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
         vm.prank(guardian);
         vm.expectRevert(
@@ -91,7 +93,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
     }
 
     // cancelQueuedAction
@@ -104,7 +106,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
         elapsed_ = uint48(bound(elapsed_, 0, type(uint48).max));
 
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
         vm.warp(queuedAt + elapsed_);
 
         vm.expectRevert(
@@ -113,7 +115,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 0, "discount unchanged");
     }
@@ -125,7 +127,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     function test_givenCancelledAction_cannotReadLength() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -133,7 +135,7 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.getQueuedActionLength(actionId);
+        configTimelock.getQueuedActionLength(actionId);
     }
 
     // cancelQueuedAction
@@ -143,15 +145,15 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     function test_givenTimelockDisabled_allowsEmergencyCancellation() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
-        assertFalse(yrfTimelock.isEnabled(), "disabled");
-        vm.expectEmit(true, true, false, true, address(yrfTimelock));
+        assertFalse(configTimelock.isEnabled(), "disabled");
+        vm.expectEmit(true, true, false, true, address(configTimelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(actionId, guardian);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
-        assertTrue(yrfTimelock.getQueuedAction(actionId).cancelled, "cancelled");
+        assertTrue(configTimelock.getQueuedAction(actionId).cancelled, "cancelled");
     }
 
     // cancelQueuedAction
@@ -160,13 +162,13 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     //   then it cancels and releases the held pending slot
     function test_givenExpiredAction_allowsEmergencyCancellation() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        _warpPastExpiry(yrfTimelock, actionId);
+        _warpPastExpiry(configTimelock, actionId);
 
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
-        assertTrue(yrfTimelock.getQueuedAction(actionId).cancelled, "cancelled");
-        assertEq(yrfTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
+        assertTrue(configTimelock.getQueuedAction(actionId).cancelled, "cancelled");
+        assertEq(configTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
         assertEq(_queueSetInitialDiscount(2e16), actionId + 1, "parameter can be queued again");
     }
 
@@ -180,12 +182,12 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
         elapsed_ = uint48(bound(elapsed_, 0, type(uint48).max));
         vm.warp(queuedAt + elapsed_);
 
-        vm.expectEmit(true, true, false, true, address(yrfTimelock));
+        vm.expectEmit(true, true, false, true, address(configTimelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(actionId, guardian);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertTrue(action.cancelled, "cancelled");
         assertFalse(action.executed, "not executed");
         assertEq(action.actions.length, 0, "sub-actions cleared");
@@ -212,15 +214,15 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
         elapsed_ = uint48(bound(elapsed_, 0, type(uint48).max));
         vm.warp(queuedAt + elapsed_);
 
-        vm.expectEmit(true, true, false, true, address(yrfTimelock));
+        vm.expectEmit(true, true, false, true, address(configTimelock));
         emit ITimelockBatchQueue.TimelockActionCancelled(actionId, guardian);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
+        configTimelock.cancelQueuedAction(actionId);
 
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertTrue(action.cancelled, "cancelled");
         assertEq(action.actions.length, 0, "sub-actions cleared");
-        assertEq(yrfTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
+        assertEq(configTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
     }
 
     // cancelQueuedAction
@@ -304,17 +306,17 @@ contract YRFTimelockTests_Cancel is YRFTimelockTestBase {
     //   then the slot is released and the parameter can be queued against the new facility
     function test_givenFacilityRotated_cancellationReleasesSlotForNewFacility() public {
         uint64 staleActionId = _queueSetInitialDiscount(1e16);
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(newFacility));
 
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(staleActionId);
+        configTimelock.cancelQueuedAction(staleActionId);
 
-        assertEq(yrfTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
+        assertEq(configTimelock.pendingInitialDiscountActionId(), 0, "pending slot released");
         uint64 actionId = _queueSetInitialDiscount(2e16);
         assertEq(actionId, staleActionId + 1, "parameter can be queued again");
-        (address target, , ) = yrfTimelock.getQueuedSubAction(actionId, 0);
+        (address target, , ) = configTimelock.getQueuedSubAction(actionId, 0);
         assertEq(target, address(newFacility), "queued against the new facility");
     }
 }

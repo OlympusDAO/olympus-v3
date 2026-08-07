@@ -3,27 +3,27 @@ pragma solidity >=0.8.24;
 
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
-/// @title IYRFTimelock
+/// @title IYieldRepurchaseFacilityConfigTimelock
 /// @notice The interface of the timelock policy that owns the operational parameters of a YRF
 ///         on behalf of the `yrf_admin` role.
 /// @dev Execution is permissionless once the timelock delay elapses and requires only this
 ///      policy to be enabled.
-interface IYRFTimelock is ITimelockBatchQueue {
+interface IYieldRepurchaseFacilityConfigTimelock is ITimelockBatchQueue {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a constructor argument or a proposed facility slot is the zero
     ///         address.
     /// @param parameter The name of the invalid parameter.
-    error IYRFTimelock_InvalidAddress(string parameter);
+    error IYieldRepurchaseFacilityConfigTimelock_InvalidAddress(string parameter);
 
     /// @notice Thrown when an action is queued before the facility slot has been set.
-    error IYRFTimelock_FacilityNotSet();
+    error IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet();
 
     /// @notice Thrown when a proposed facility is not an active policy of this policy's
     ///         kernel, does not advertise `IYieldRepurchaseFacilityV2` support through
     ///         ERC165, or does not pin this policy as its timelock.
     /// @param facility The rejected facility address.
-    error IYRFTimelock_InvalidFacility(address facility);
+    error IYieldRepurchaseFacilityConfigTimelock_InvalidFacility(address facility);
 
     /// @notice Thrown at execution when the facility slot no longer holds the address the
     ///         action was queued against (the slot was rotated between queue and execution).
@@ -33,7 +33,7 @@ interface IYRFTimelock is ITimelockBatchQueue {
     /// @param index The sub-action position within the batch.
     /// @param queuedFacility The facility the action was validated against at queue time.
     /// @param currentFacility The facility the slot currently holds.
-    error IYRFTimelock_FacilityStale(
+    error IYieldRepurchaseFacilityConfigTimelock_FacilityStale(
         uint64 actionId,
         uint256 index,
         address queuedFacility,
@@ -48,7 +48,7 @@ interface IYRFTimelock is ITimelockBatchQueue {
     /// @param index The sub-action position within the batch.
     /// @param expectedHash Hash of the parameter state captured at queue time.
     /// @param currentHash Hash of the live parameter state.
-    error IYRFTimelock_PreStateChanged(
+    error IYieldRepurchaseFacilityConfigTimelock_PreStateChanged(
         uint64 actionId,
         uint256 index,
         bytes32 expectedHash,
@@ -60,11 +60,14 @@ interface IYRFTimelock is ITimelockBatchQueue {
     ///         expired holder must be cancelled by the emergency role to release it.
     /// @param selector The facility function selector of the rejected sub-action.
     /// @param pendingActionId The queued action holding the parameter's pending slot.
-    error IYRFTimelock_ConflictingActionPending(bytes4 selector, uint64 pendingActionId);
+    error IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending(
+        bytes4 selector,
+        uint64 pendingActionId
+    );
 
     /// @notice Thrown when the re-enable grace window is configured with a length at or
     ///         above `MAX_GRACE_PERIOD`.
-    error IYRFTimelock_GracePeriodTooLong();
+    error IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong();
 
     // ========== EVENTS ========== //
 

@@ -124,7 +124,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     uint256 internal constant TRSRY_OUTFLOW_SUSDS_SHARES = 1_400_000e18;
 
     /// @notice The additional receivables offset queued by the yrf_admin through the
-    ///         YRF timelock on day 5 and executed on day 6, one timelock delay later.
+    ///         config timelock on day 5 and executed on day 6, one timelock delay later.
     uint256 internal constant CLEARINGHOUSE_V1_1_OFFSET_INCREASE = 2_000_000e18;
 
     /// @notice The queued offset increase, pending between day 5 and day 6.
@@ -161,7 +161,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.backingOracle(), address(backingOracle), "backing oracle");
         assertEq(yieldRepo.bondTeller(), BOND_TELLER, "bondTeller");
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
-        assertEq(yieldRepo.timelock(), address(yrfTimelock), "timelock");
+        assertEq(yieldRepo.timelock(), address(configTimelock), "timelock");
         assertEq(yieldRepo.initialDiscount(), INITIAL_DISCOUNT, "initial discount");
         assertEq(backingOracle.backing(), BACKING, "backing value");
 
@@ -331,7 +331,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     }
 
     /// @notice Day 5: the yrf_admin queues the Clearinghouse v1.1 offset increase through the
-    ///         YRF timelock; the direct facility path is closed for the yrf_admin.
+    ///         config timelock; the direct facility path is closed for the yrf_admin.
     function _queueOffsetIncrease() internal {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(yrfAdmin);
@@ -341,7 +341,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
 
         vm.prank(yrfAdmin);
-        offsetActionId = yrfTimelock.queueIncreaseClearinghouseOffset(
+        offsetActionId = configTimelock.queueIncreaseClearinghouseOffset(
             CLEARINGHOUSE_V1_1,
             CLEARINGHOUSE_V1_1_OFFSET_INCREASE
         );
@@ -354,7 +354,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     function _executeOffsetIncreaseAndAssert() internal {
         uint256 projectionBefore = yieldRepo.getNextYield(SUSDS);
 
-        yrfTimelock.executeQueuedAction(offsetActionId);
+        configTimelock.executeQueuedAction(offsetActionId);
 
         assertEq(
             yieldRepo.clearinghouseOffset(CLEARINGHOUSE_V1_1),

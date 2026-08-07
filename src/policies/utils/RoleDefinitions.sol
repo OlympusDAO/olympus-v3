@@ -11,7 +11,7 @@ bytes32 constant MANAGER_ROLE = "manager";
 bytes32 constant HEART_ROLE = "heart";
 
 /// @dev YieldRepurchaseFacilityV2 operational access, e.g. proposing timelocked parameter
-///      updates on YRFTimelock and re-enabling the facility. Typically assigned to a
+///      updates on YieldRepurchaseFacilityConfigTimelock and re-enabling the facility. Typically assigned to a
 ///      multisig/council.
 bytes32 constant YRF_ADMIN_ROLE = "yrf_admin";
 

@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Mocks
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
@@ -13,22 +13,24 @@ import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 // Contracts
 import {Actions} from "src/Kernel.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YieldRepurchaseFacilityV2TestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacility/YieldRepurchaseFacilityV2TestBase.sol";
-import {YRFTimelockHarness} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockHarness.sol";
+import {YieldRepurchaseFacilityConfigTimelockHarness} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockHarness.sol";
 
-/// @notice Shared base for the YRFTimelock test suite.
+/// @notice Shared base for the YieldRepurchaseFacilityConfigTimelock test suite.
 /// @dev Builds on the facility stack from `YieldRepurchaseFacilityV2TestBase`, whose
-///      `_deployStack` deploys `yrfTimelock`, wires it to `yieldRepo`, and enables it, with
+///      `_deployStack` deploys `configTimelock`, wires it to `yieldRepo`, and enables it, with
 ///      the guardian holding the admin and emergency roles and `yrfAdmin` holding the
 ///      yrf_admin role.
 ///
 ///      The facility pins its timelock as an immutable address, so the storage-inspecting
-///      `YRFTimelockHarness` cannot be wired to `yieldRepo`; `setUp` deploys a dedicated
+///      `YieldRepurchaseFacilityConfigTimelockHarness` cannot be wired to `yieldRepo`; `setUp` deploys a dedicated
 ///      `harnessFacility` pinned to the harness and wires the pair the same way.
-abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
+abstract contract YieldRepurchaseFacilityConfigTimelockTestBase is
+    YieldRepurchaseFacilityV2TestBase
+{
     /// @notice Timelock harness exposing the internal pre-state and pending-slot storage.
-    YRFTimelockHarness internal timelockHarness;
+    YieldRepurchaseFacilityConfigTimelockHarness internal timelockHarness;
 
     /// @notice Facility pinned to `timelockHarness`, mirroring the `yieldRepo` wiring.
     YieldRepurchaseFacilityV2 internal harnessFacility;
@@ -36,7 +38,11 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     function setUp() public virtual {
         _deployStack();
 
-        timelockHarness = new YRFTimelockHarness(kernel, yrfTimelockDelay, gracePeriod);
+        timelockHarness = new YieldRepurchaseFacilityConfigTimelockHarness(
+            kernel,
+            configTimelockDelay,
+            gracePeriod
+        );
         vm.label(address(timelockHarness), "timelockHarness");
         kernel.executeAction(Actions.ActivatePolicy, address(timelockHarness));
         harnessFacility = _deployFacilityPinnedTo(address(timelockHarness));
@@ -93,7 +99,7 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     /// @notice Expects the per-sub-action and closing queue events for a batch queued on
     ///         `queue_` in the current block.
     function _expectActionQueued(
-        IYRFTimelock queue_,
+        IYieldRepurchaseFacilityConfigTimelock queue_,
         uint64 actionId_,
         address proposer_,
         ITimelockBatchQueue.BatchAction[] memory actions_
@@ -124,7 +130,7 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     /// @notice Expects the per-sub-action and closing execution events for a batch executed
     ///         on `queue_`. Facility events interleave between the expected ones.
     function _expectActionExecuted(
-        IYRFTimelock queue_,
+        IYieldRepurchaseFacilityConfigTimelock queue_,
         uint64 actionId_,
         address executor_,
         ITimelockBatchQueue.BatchAction[] memory actions_
@@ -143,34 +149,34 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     }
 
     // ========== QUEUE WRAPPERS ========== //
-    // Each wrapper queues on `yrfTimelock` as the yrf_admin.
+    // Each wrapper queues on `configTimelock` as the yrf_admin.
 
     function _queueSetYieldBuybackShare(
         address vault_,
         uint256 newShare_
     ) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueSetYieldBuybackShare(vault_, newShare_);
+        return configTimelock.queueSetYieldBuybackShare(vault_, newShare_);
     }
 
     function _queueSetInitialDiscount(uint256 initialDiscount_) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueSetInitialDiscount(initialDiscount_);
+        return configTimelock.queueSetInitialDiscount(initialDiscount_);
     }
 
     function _queueEnableAsset(address vault_) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueEnableAsset(vault_);
+        return configTimelock.queueEnableAsset(vault_);
     }
 
     function _queueDisableAsset(address vault_) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueDisableAsset(vault_);
+        return configTimelock.queueDisableAsset(vault_);
     }
 
     function _queueExcludeClearinghouse(address clearinghouse_) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueExcludeClearinghouse(clearinghouse_);
+        return configTimelock.queueExcludeClearinghouse(clearinghouse_);
     }
 
     function _queueIncreaseClearinghouseOffset(
@@ -178,7 +184,7 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
         uint256 additionalOffset_
     ) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueIncreaseClearinghouseOffset(clearinghouse_, additionalOffset_);
+        return configTimelock.queueIncreaseClearinghouseOffset(clearinghouse_, additionalOffset_);
     }
 
     function _queueDecreaseNextYield(
@@ -187,20 +193,20 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
         uint256 newNextYield_
     ) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueDecreaseNextYield(vault_, expectedNextYield_, newNextYield_);
+        return configTimelock.queueDecreaseNextYield(vault_, expectedNextYield_, newNextYield_);
     }
 
     function _queueBatch(
         ITimelockBatchQueue.BatchAction[] memory actions_
     ) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
-        return yrfTimelock.queueBatch(actions_);
+        return configTimelock.queueBatch(actions_);
     }
 
     /// @notice Asserts the stored metadata and content of a single-action queue entry
     ///         queued by the yrf_admin at `queuedAt_` under the current delay.
     function _assertQueuedSingleAction(
-        IYRFTimelock queue_,
+        IYieldRepurchaseFacilityConfigTimelock queue_,
         uint64 actionId_,
         uint256 queuedAt_,
         ITimelockBatchQueue.BatchAction memory expected_
@@ -230,20 +236,33 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
     // ========== TIME HELPERS ========== //
 
     /// @notice Warps to the first timestamp at which the action is executable.
-    function _warpToExecutable(IYRFTimelock queue_, uint64 actionId_) internal {
+    function _warpToExecutable(
+        IYieldRepurchaseFacilityConfigTimelock queue_,
+        uint64 actionId_
+    ) internal {
         vm.warp(queue_.getQueuedAction(actionId_).executableAt);
     }
 
     /// @notice Warps to the first timestamp at which the action has expired.
-    function _warpPastExpiry(IYRFTimelock queue_, uint64 actionId_) internal {
+    function _warpPastExpiry(
+        IYieldRepurchaseFacilityConfigTimelock queue_,
+        uint64 actionId_
+    ) internal {
         vm.warp(uint256(queue_.getQueuedAction(actionId_).expiresAt) + 1);
     }
 
     // ========== STATE HELPERS ========== //
 
     /// @notice Deploys, activates, and enables a timelock whose facility slot is unset.
-    function _deployUnwiredTimelock() internal returns (YRFTimelock timelock) {
-        timelock = new YRFTimelock(kernel, yrfTimelockDelay, gracePeriod);
+    function _deployUnwiredTimelock()
+        internal
+        returns (YieldRepurchaseFacilityConfigTimelock timelock)
+    {
+        timelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            configTimelockDelay,
+            gracePeriod
+        );
         vm.label(address(timelock), "unwiredTimelock");
         kernel.executeAction(Actions.ActivatePolicy, address(timelock));
         vm.prank(guardian);
@@ -299,13 +318,13 @@ abstract contract YRFTimelockTestBase is YieldRepurchaseFacilityV2TestBase {
         return address(secondaryVault);
     }
 
-    /// @notice Mirrors `YRFTimelock`'s pending slot key of a vault's yield buyback share.
+    /// @notice Mirrors `YieldRepurchaseFacilityConfigTimelock`'s pending slot key of a vault's yield buyback share.
     function _yieldBuybackShareLockKey(address vault_) internal pure returns (bytes32) {
         return
             keccak256(abi.encode(IYieldRepurchaseFacilityV2.setYieldBuybackShare.selector, vault_));
     }
 
-    /// @notice Mirrors `YRFTimelock`'s pending slot key of the initial discount.
+    /// @notice Mirrors `YieldRepurchaseFacilityConfigTimelock`'s pending slot key of the initial discount.
     function _initialDiscountLockKey() internal pure returns (bytes32) {
         return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setInitialDiscount.selector));
     }

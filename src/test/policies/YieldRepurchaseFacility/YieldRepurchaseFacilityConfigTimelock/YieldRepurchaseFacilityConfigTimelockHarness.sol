@@ -2,18 +2,18 @@
 pragma solidity >=0.8.24;
 
 import {Kernel} from "src/Kernel.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 
-/// @notice Exposes the internal per-sub-action bookkeeping of `YRFTimelock` so that tests
+/// @notice Exposes the internal per-sub-action bookkeeping of `YieldRepurchaseFacilityConfigTimelock` so that tests
 ///         can assert that the pre-state bindings and pending parameter slots are recorded
 ///         at queue time and cleared again on execution and cancellation, which is not
 ///         fully observable through the public surface.
-contract YRFTimelockHarness is YRFTimelock {
+contract YieldRepurchaseFacilityConfigTimelockHarness is YieldRepurchaseFacilityConfigTimelock {
     constructor(
         Kernel kernel_,
         uint48 initialTimelockDelay_,
         uint32 gracePeriod_
-    ) YRFTimelock(kernel_, initialTimelockDelay_, gracePeriod_) {}
+    ) YieldRepurchaseFacilityConfigTimelock(kernel_, initialTimelockDelay_, gracePeriod_) {}
 
     function expectedPreStateHash(
         uint64 actionId_,

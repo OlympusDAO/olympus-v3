@@ -5,16 +5,18 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueDecreaseNextYield is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     uint256 internal constant _STORED_NEXT_YIELD = 100e18;
 
     // queueDecreaseNextYield
@@ -27,7 +29,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
+        configTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
     }
 
     // queueDecreaseNextYield
@@ -37,24 +39,28 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
     function test_givenTimelockDisabled_reverts() public {
         _registerBackingAsset(yieldRepo, _STORED_NEXT_YIELD);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
+        configTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueDecreaseNextYield
     // given the facility slot has not been set
     //  when queueing a next-yield correction
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
     }
 
@@ -70,7 +76,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 address(sReserve)
             )
         );
-        yrfTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
+        configTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
     }
 
     // queueDecreaseNextYield
@@ -90,7 +96,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 _STORED_NEXT_YIELD
             )
         );
-        yrfTimelock.queueDecreaseNextYield(address(sReserve), expectedNextYield_, 0);
+        configTimelock.queueDecreaseNextYield(address(sReserve), expectedNextYield_, 0);
     }
 
     // queueDecreaseNextYield
@@ -111,7 +117,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 _STORED_NEXT_YIELD
             )
         );
-        yrfTimelock.queueDecreaseNextYield(
+        configTimelock.queueDecreaseNextYield(
             address(sReserve),
             _STORED_NEXT_YIELD,
             _STORED_NEXT_YIELD
@@ -137,7 +143,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 _STORED_NEXT_YIELD
             )
         );
-        yrfTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, newNextYield_);
+        configTimelock.queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, newNextYield_);
     }
 
     // queueDecreaseNextYield
@@ -156,7 +162,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
             abi.encode(address(sReserve), _STORED_NEXT_YIELD, newNextYield_)
         );
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueDecreaseNextYield(
             address(sReserve),
             _STORED_NEXT_YIELD,
@@ -164,7 +170,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
         );
 
         assertEq(actionId, 1, "action id");
-        _assertQueuedSingleAction(yrfTimelock, actionId, queuedAt, actions[0]);
+        _assertQueuedSingleAction(configTimelock, actionId, queuedAt, actions[0]);
     }
 
     // queueDecreaseNextYield
@@ -188,13 +194,17 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueDecreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 40e18);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
         vm.expectEmit(true, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.NextYieldSet(address(reserve), 40e18);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(
             yieldRepo.getAssetConfig(address(sReserve)).nextYield,
@@ -213,7 +223,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
         // A direct admin correction replaces the stored value the queued action targets.
         vm.prank(guardian);
         yieldRepo.decreaseNextYield(address(sReserve), _STORED_NEXT_YIELD, 70e18);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -223,7 +233,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 70e18
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(
             yieldRepo.getAssetConfig(address(sReserve)).nextYield,
@@ -248,9 +258,9 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
             _STORED_NEXT_YIELD,
             30e18
         );
-        _warpToExecutable(yrfTimelock, secondActionId);
+        _warpToExecutable(configTimelock, secondActionId);
 
-        yrfTimelock.executeQueuedAction(firstActionId);
+        configTimelock.executeQueuedAction(firstActionId);
         assertEq(
             yieldRepo.getAssetConfig(address(sReserve)).nextYield,
             40e18,
@@ -266,7 +276,7 @@ contract YRFTimelockTests_QueueDecreaseNextYield is YRFTimelockTestBase {
                 40e18
             )
         );
-        yrfTimelock.executeQueuedAction(secondActionId);
+        configTimelock.executeQueuedAction(secondActionId);
 
         assertEq(
             yieldRepo.getAssetConfig(address(sReserve)).nextYield,

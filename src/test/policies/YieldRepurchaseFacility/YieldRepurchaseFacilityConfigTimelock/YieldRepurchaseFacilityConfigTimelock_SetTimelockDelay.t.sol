@@ -8,9 +8,11 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_SetTimelockDelay is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // setTimelockDelay
     // given the caller does not hold the admin role
     //  when setting the delay
@@ -20,7 +22,7 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        yrfTimelock.setTimelockDelay(2 days);
+        configTimelock.setTimelockDelay(2 days);
     }
 
     // setTimelockDelay
@@ -30,7 +32,7 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     function test_givenYrfAdminCaller_reverts() public {
         vm.prank(yrfAdmin);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        yrfTimelock.setTimelockDelay(2 days);
+        configTimelock.setTimelockDelay(2 days);
     }
 
     // setTimelockDelay
@@ -38,8 +40,8 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     //  when the admin sets any such delay
     //   then it reverts with ITimelockBatchQueue_TimelockDelayInvalid
     function test_givenDelayBelowMinimum_reverts(uint48 delay_) public {
-        uint48 minDelay = yrfTimelock.MIN_TIMELOCK_DELAY();
-        uint48 maxDelay = yrfTimelock.MAX_TIMELOCK_DELAY();
+        uint48 minDelay = configTimelock.MIN_TIMELOCK_DELAY();
+        uint48 maxDelay = configTimelock.MAX_TIMELOCK_DELAY();
         delay_ = uint48(bound(delay_, 0, minDelay - 1));
 
         vm.prank(guardian);
@@ -51,7 +53,7 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
                 maxDelay
             )
         );
-        yrfTimelock.setTimelockDelay(delay_);
+        configTimelock.setTimelockDelay(delay_);
     }
 
     // setTimelockDelay
@@ -59,8 +61,8 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     //  when the admin sets any such delay
     //   then it reverts with ITimelockBatchQueue_TimelockDelayInvalid
     function test_givenDelayAboveMaximum_reverts(uint48 delay_) public {
-        uint48 minDelay = yrfTimelock.MIN_TIMELOCK_DELAY();
-        uint48 maxDelay = yrfTimelock.MAX_TIMELOCK_DELAY();
+        uint48 minDelay = configTimelock.MIN_TIMELOCK_DELAY();
+        uint48 maxDelay = configTimelock.MAX_TIMELOCK_DELAY();
         delay_ = uint48(bound(delay_, uint256(maxDelay) + 1, type(uint48).max));
 
         vm.prank(guardian);
@@ -72,7 +74,7 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
                 maxDelay
             )
         );
-        yrfTimelock.setTimelockDelay(delay_);
+        configTimelock.setTimelockDelay(delay_);
     }
 
     // setTimelockDelay
@@ -81,15 +83,15 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     //   then the delay is updated and TimelockDelaySet is emitted
     function test_givenAdminCaller_setsDelayAndEmitsEvent(uint48 delay_) public {
         delay_ = uint48(
-            bound(delay_, yrfTimelock.MIN_TIMELOCK_DELAY(), yrfTimelock.MAX_TIMELOCK_DELAY())
+            bound(delay_, configTimelock.MIN_TIMELOCK_DELAY(), configTimelock.MAX_TIMELOCK_DELAY())
         );
 
-        vm.expectEmit(false, false, false, true, address(yrfTimelock));
+        vm.expectEmit(false, false, false, true, address(configTimelock));
         emit ITimelockBatchQueue.TimelockDelaySet(delay_);
         vm.prank(guardian);
-        yrfTimelock.setTimelockDelay(delay_);
+        configTimelock.setTimelockDelay(delay_);
 
-        assertEq(yrfTimelock.timelockDelay(), delay_, "timelock delay");
+        assertEq(configTimelock.timelockDelay(), delay_, "timelock delay");
     }
 
     // setTimelockDelay
@@ -98,12 +100,12 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     //   then the delay is updated (configuration is allowed while disabled)
     function test_givenTimelockDisabled_setsDelay() public {
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(guardian);
-        yrfTimelock.setTimelockDelay(2 days);
+        configTimelock.setTimelockDelay(2 days);
 
-        assertEq(yrfTimelock.timelockDelay(), 2 days, "timelock delay");
+        assertEq(configTimelock.timelockDelay(), 2 days, "timelock delay");
     }
 
     // setTimelockDelay
@@ -114,16 +116,16 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
     function test_givenDelayChanged_alreadyQueuedActionKeepsQueuedTimestamps() public {
         uint48 queuedAt = uint48(vm.getBlockTimestamp());
         uint64 queuedActionId = _queueSetInitialDiscount(1e16);
-        ITimelockBatchQueue.QueuedAction memory queued = yrfTimelock.getQueuedAction(
+        ITimelockBatchQueue.QueuedAction memory queued = configTimelock.getQueuedAction(
             queuedActionId
         );
-        assertEq(queued.executableAt, queuedAt + yrfTimelockDelay, "executableAt before change");
+        assertEq(queued.executableAt, queuedAt + configTimelockDelay, "executableAt before change");
 
         uint48 newDelay = 10 days;
         vm.prank(guardian);
-        yrfTimelock.setTimelockDelay(newDelay);
+        configTimelock.setTimelockDelay(newDelay);
 
-        ITimelockBatchQueue.QueuedAction memory queuedAfter = yrfTimelock.getQueuedAction(
+        ITimelockBatchQueue.QueuedAction memory queuedAfter = configTimelock.getQueuedAction(
             queuedActionId
         );
         assertEq(queuedAfter.executableAt, queued.executableAt, "executableAt unchanged");
@@ -131,7 +133,7 @@ contract YRFTimelockTests_SetTimelockDelay is YRFTimelockTestBase {
 
         uint64 nextActionId = _queueIncreaseClearinghouseOffset(address(clearinghouse), 0);
         assertEq(
-            yrfTimelock.getQueuedAction(nextActionId).executableAt,
+            configTimelock.getQueuedAction(nextActionId).executableAt,
             queuedAt + newDelay,
             "new action uses new delay"
         );

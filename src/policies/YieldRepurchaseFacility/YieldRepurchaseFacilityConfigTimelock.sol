@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
@@ -19,7 +19,7 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
-/// @title YRFTimelock
+/// @title YieldRepurchaseFacilityConfigTimelock
 /// @notice Timelock policy that owns the operational parameters of a
 ///         YieldRepurchaseFacilityV2 on behalf of the `yrf_admin` role.
 /// @dev The policy is intended to be pinned as the facility's immutable timelock. In that
@@ -32,7 +32,7 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///      state, so an action that would revert on the facility cannot be queued. The
 ///      overwrite setters `setYieldBuybackShare` and `setInitialDiscount` are additionally
 ///      bound to the parameter value observed at queue time: execution reverts with
-///      `IYRFTimelock_PreStateChanged` when the live value no longer matches, and at most
+///      `IYieldRepurchaseFacilityConfigTimelock_PreStateChanged` when the live value no longer matches, and at most
 ///      one update per parameter can be pending at a time. The other facility functions are
 ///      re-validated by the facility itself at execution: the asset and Clearinghouse state
 ///      flips revert when re-applied, `decreaseNextYield` is compare-and-set, and offset
@@ -46,26 +46,26 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///      Disabling the policy suspends queueing and execution but does not clear queued
 ///      actions or their pending parameter slots; before re-enabling, the emergency role must
 ///      cancel any queued action that should not become executable again.
-contract YRFTimelock is
+contract YieldRepurchaseFacilityConfigTimelock is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     TimelockBatchQueue,
-    IYRFTimelock,
+    IYieldRepurchaseFacilityConfigTimelock,
     IVersioned
 {
     // ========== CONSTANTS ========== //
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     uint48 public constant override MAX_TIMELOCK_DELAY = 30 days;
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     uint48 public constant override EXECUTION_WINDOW = 3 days;
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     uint32 public constant override MAX_GRACE_PERIOD = 7 days;
 
     /// @notice Expected `abi.encode` payload lengths of the supported selectors, named by
@@ -81,7 +81,7 @@ contract YRFTimelock is
 
     // ========== STATE ========== //
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     address public override facility;
 
     /// @notice Hash of the facility parameter state a sub-action was validated against at
@@ -151,21 +151,21 @@ contract YRFTimelock is
 
     // ========== VIEW ========== //
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     function pendingYieldBuybackShareActionId(
         address vault_
     ) external view override returns (uint64 actionId) {
         return _pendingActionIds[_yieldBuybackShareLockKey(vault_)];
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     function pendingInitialDiscountActionId() external view override returns (uint64 actionId) {
         return _pendingActionIds[_initialDiscountLockKey()];
     }
 
     // ========== QUEUE ========== //
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
@@ -185,7 +185,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
@@ -203,7 +203,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
@@ -219,7 +219,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
@@ -236,7 +236,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
@@ -253,7 +253,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev The receivables bound is re-checked by the facility at execution against the
     ///      live value, so repayments during the delay can revert the execution; the action
     ///      is then cancelled and re-queued with a smaller offset.
@@ -277,7 +277,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev The facility re-checks the compare-and-set at execution, so a weekly reset that
     ///      replaces the stored value during the delay makes the queued correction revert
     ///      instead of cutting the fresh value.
@@ -302,7 +302,7 @@ contract YRFTimelock is
             );
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Sub-actions are validated independently against the live facility state; the
     ///      effect of an earlier sub-action within the batch is not projected onto the
     ///      validation of a later one. A later sub-action that requires the effect of an
@@ -422,7 +422,12 @@ contract YRFTimelock is
     ) internal override {
         address currentFacility = facility;
         if (action_.target != currentFacility)
-            revert IYRFTimelock_FacilityStale(actionId_, index_, action_.target, currentFacility);
+            revert IYieldRepurchaseFacilityConfigTimelock_FacilityStale(
+                actionId_,
+                index_,
+                action_.target,
+                currentFacility
+            );
 
         IYieldRepurchaseFacilityV2 yrf = IYieldRepurchaseFacilityV2(currentFacility);
         bytes4 sel = action_.selector;
@@ -507,11 +512,11 @@ contract YRFTimelock is
 
     // ========== CONFIGURATION ========== //
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev The setter exists so that the facility, which pins this policy as its immutable
     ///      timelock, can be wired after this policy is deployed. Rotating the slot makes
     ///      every action queued against the previous facility revert with
-    ///      `IYRFTimelock_FacilityStale` at execution. The pending parameter slots of the
+    ///      `IYieldRepurchaseFacilityConfigTimelock_FacilityStale` at execution. The pending parameter slots of the
     ///      overwrite setters are keyed by parameter, not by facility, so a stale action
     ///      keeps holding its slot until it is cancelled.
     ///
@@ -535,13 +540,13 @@ contract YRFTimelock is
                 type(IYieldRepurchaseFacilityV2).interfaceId
             ) ||
             IYieldRepurchaseFacilityV2(facility_).timelock() != address(this)
-        ) revert IYRFTimelock_InvalidFacility(facility_);
+        ) revert IYieldRepurchaseFacilityConfigTimelock_InvalidFacility(facility_);
 
         facility = facility_;
         emit FacilitySet(facility_);
     }
 
-    /// @inheritdoc IYRFTimelock
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
     /// @dev Already-queued actions keep the delay they were queued with. The admin role is
     ///      expected to be held only by the OCG timelock, so the change is de-facto
     ///      timelocked.
@@ -655,7 +660,7 @@ contract YRFTimelock is
 
     /// @notice Records the pre-state binding of an overwrite setter sub-action and takes the
     ///         parameter's pending slot.
-    /// @dev Reverts with `IYRFTimelock_ConflictingActionPending` if the slot is already held
+    /// @dev Reverts with `IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending` if the slot is already held
     ///      by a queued action, including an earlier sub-action of the batch being queued.
     function _recordPreState(
         uint64 actionId_,
@@ -666,7 +671,10 @@ contract YRFTimelock is
     ) private {
         uint64 pendingActionId = _pendingActionIds[lockKey_];
         if (pendingActionId != 0)
-            revert IYRFTimelock_ConflictingActionPending(selector_, pendingActionId);
+            revert IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending(
+                selector_,
+                pendingActionId
+            );
 
         _pendingActionIds[lockKey_] = actionId_;
         _lockKeys[actionId_][index_] = lockKey_;
@@ -682,7 +690,12 @@ contract YRFTimelock is
     ) private view {
         bytes32 expectedHash = _expectedPreStateHashes[actionId_][index_];
         if (expectedHash != currentHash_)
-            revert IYRFTimelock_PreStateChanged(actionId_, index_, expectedHash, currentHash_);
+            revert IYieldRepurchaseFacilityConfigTimelock_PreStateChanged(
+                actionId_,
+                index_,
+                expectedHash,
+                currentHash_
+            );
     }
 
     /// @notice Clears the pre-state binding of a sub-action and releases its pending
@@ -740,16 +753,18 @@ contract YRFTimelock is
     /// @notice Returns the facility slot, reverting if it has not been set.
     function _requireFacility() private view returns (address facility_) {
         facility_ = facility;
-        if (facility_ == address(0)) revert IYRFTimelock_FacilityNotSet();
+        if (facility_ == address(0)) revert IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet();
     }
 
     function _requireNonzeroAddress(address address_, string memory parameter_) private pure {
-        if (address_ == address(0)) revert IYRFTimelock_InvalidAddress(parameter_);
+        if (address_ == address(0))
+            revert IYieldRepurchaseFacilityConfigTimelock_InvalidAddress(parameter_);
     }
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.
     function _requireValidGracePeriod(uint32 period_) private pure {
-        if (period_ >= MAX_GRACE_PERIOD) revert IYRFTimelock_GracePeriodTooLong();
+        if (period_ >= MAX_GRACE_PERIOD)
+            revert IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong();
     }
 
     /// @notice Reverts for an unsupported action.
@@ -770,7 +785,7 @@ contract YRFTimelock is
         returns (bool)
     {
         return
-            interfaceId_ == type(IYRFTimelock).interfaceId ||
+            interfaceId_ == type(IYieldRepurchaseFacilityConfigTimelock).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

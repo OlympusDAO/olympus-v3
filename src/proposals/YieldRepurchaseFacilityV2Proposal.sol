@@ -7,7 +7,7 @@ pragma solidity >=0.8.24;
 //       the contracts are deployed. They are referenced by this proposal but do not
 //       exist in the registry yet:
 //       - "olympus-policy-yieldrepurchasefacility-2_0": the YieldRepurchaseFacilityV2 policy
-//       - "olympus-policy-yrf-timelock-1_0": the YRFTimelock policy
+//       - "olympus-policy-yieldrepurchasefacility-config-timelock-1_0": the YieldRepurchaseFacilityConfigTimelock policy
 //       - "olympus-policy-backing-oracle-1_0": the BackingOracle policy
 //       - "olympus-yrf-v2-activator": the YieldRepurchaseFacilityV2Activator
 //       - "external-tokens-sUSDe": 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497
@@ -27,7 +27,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Constants
@@ -42,7 +42,7 @@ import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseF
 
 /// @notice OCG proposal that migrates the Yield Repurchase Facility (YRF) from the
 ///         deployed v1.2 to the multi-asset v2 stack (YieldRepurchaseFacilityV2,
-///         YRFTimelock) and the BackingOracle.
+///         YieldRepurchaseFacilityConfigTimelock) and the BackingOracle.
 ///
 ///         The YieldRepurchaseFacilityV2Activator performs the enablement, the v1.2
 ///         shutdown, the state migration, the asset registration, the Clearinghouse
@@ -52,7 +52,7 @@ import {YieldRepurchaseFacilityV2Activator} from "src/proposals/YieldRepurchaseF
 ///
 ///         Assumes:
 ///         - The v2 stack and the activator have been deployed on Ethereum mainnet.
-///         - The DAO MS has already activated the BackingOracle, the YRFTimelock, and
+///         - The DAO MS has already activated the BackingOracle, the YieldRepurchaseFacilityConfigTimelock, and
 ///           the YieldRepurchaseFacilityV2 policies in the Kernel.
 ///         - The Bond Protocol multisig has already authorized the v2 facility as a
 ///           market callback on the SDA auctioneer.
@@ -110,19 +110,19 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "The proposal has three main components:\n",
                 "\n",
                 "1. Grant the operational roles of the v2 stack (`yrf_admin`, `backing_admin`) to the DAO MS.\n",
-                "2. Execute the one-shot YieldRepurchaseFacilityV2Activator, which wires and enables the YRFTimelock, the BackingOracle, and the YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler v1 Clearinghouses in the backing yield, resumes the interrupted v1.2 week, and swaps the Heart periodic task from v1.2 to v2.\n",
+                "2. Execute the one-shot YieldRepurchaseFacilityV2Activator, which wires and enables the YieldRepurchaseFacilityConfigTimelock, the BackingOracle, and the YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler v1 Clearinghouses in the backing yield, resumes the interrupted v1.2 week, and swaps the Heart periodic task from v1.2 to v2.\n",
                 "3. Revoke the temporary roles from the activator and retire the v1.2 `loop_daddy` role.\n",
                 "\n",
                 "The migration preserves the v1.2 economics for sUSDS through a 100% yield buyback share and a 3% initial market discount. The new sUSDe asset also starts with a 100% yield buyback share. Backing launches at the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in v1.2.\n",
                 "\n",
-                "The `yrf_admin` role queues bounded facility parameter changes through the YRFTimelock, which launches with a 1-day delay, a 3-day permissionless execution window, and emergency cancellation. It can also re-enable the facility during its 5-day grace period and rescue untracked token balances or excess balances above the facility's accounting. The `backing_admin` role queues backing updates through the BackingOracle's 1-day timelock; each executed update is limited to a 10% increase or decrease, execution is permissionless for 7 days, and the emergency role can cancel queued updates. The OCG timelock's `admin` role retains a direct setter subject to the same 10% bound.\n",
+                "The `yrf_admin` role queues bounded facility parameter changes through the YieldRepurchaseFacilityConfigTimelock, which launches with a 1-day delay, a 3-day permissionless execution window, and emergency cancellation. It can also re-enable the facility during its 5-day grace period and rescue untracked token balances or excess balances above the facility's accounting. The `backing_admin` role queues backing updates through the BackingOracle's 1-day timelock; each executed update is limited to a 10% increase or decrease, execution is permissionless for 7 days, and the emergency role can cancel queued updates. The OCG timelock's `admin` role retains a direct setter subject to the same 10% bound.\n",
                 "\n",
                 "## Affected Contracts\n",
                 "\n",
                 "- YieldRepurchaseFacility policy (existing - 1.2, shut down)\n",
                 "- Heart policy (existing - 1.7, task slot 4 swapped)\n",
                 "- YieldRepurchaseFacilityV2 policy (new - 2.0)\n",
-                "- YRFTimelock policy (new - 1.0)\n",
+                "- YieldRepurchaseFacilityConfigTimelock policy (new - 1.0)\n",
                 "- BackingOracle policy (new - 1.0)\n",
                 "\n"
             );
@@ -135,7 +135,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "\n",
                 "The following must be completed before this proposal is queued. The OCG timelock's 24-hour execution window is too short to coordinate multisig actions between queueing and execution, and the activator reverts (failing the whole proposal) if any of them is missing:\n",
                 "\n",
-                "- The DAO MS has executed `kernel.executeAction(ActivatePolicy, ...)` for the BackingOracle, the YRFTimelock, and the YieldRepurchaseFacilityV2 policies.\n",
+                "- The DAO MS has executed `kernel.executeAction(ActivatePolicy, ...)` for the BackingOracle, the YieldRepurchaseFacilityConfigTimelock, and the YieldRepurchaseFacilityV2 policies.\n",
                 "- The Bond Protocol multisig (0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969) has executed `setCallbackAuthStatus` on the SDA auctioneer for the YieldRepurchaseFacilityV2 address.\n",
                 "- The DAO MS (the `price_admin` role holder) has registered USDe in the PRICE module through the PriceConfig v2 policy (`addAsset` with a Chainlink USDe/USD feed), so that `PRICE.getPriceIn(OHM, USDe)` resolves. The facility prices each asset live through `PRICE.getPriceIn(OHM, reserve)`, and both its `addAsset` registration probe and the activator precondition check depend on the resolution.\n",
                 "\n"
@@ -157,7 +157,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "4. Grant the temporary `loop_daddy` role to the activator, so that the v1.2 shutdown runs inside `activate()`: reading the v1.2 seeds, burning its OHM balance, and sweeping its reserve funds.\n",
                 "5. Execute `YieldRepurchaseFacilityV2Activator.activate()`, which:\n",
                 "   - Validates the pre-requisites (Kernel activation, callback authorization, YRF v1.2 in Heart slot 4).\n",
-                "   - Wires the YRFTimelock to the facility and enables it.\n",
+                "   - Wires the YieldRepurchaseFacilityConfigTimelock to the facility and enables it.\n",
                 "   - Enables the BackingOracle with the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in YRF v1.2. The value becomes governance-updatable; `backing_admin` updates are timelocked and bounded to +/-10% per executed update.\n",
                 "   - Enables the facility with a 3% initial discount and an empty seed array.\n",
                 "   - Reads the v1.2 accounting (epoch, projected next yield, yield snapshots, residual funds) and shuts v1.2 down, burning its entire OHM balance and sweeping its USDS and sUSDS to the treasury.\n",
@@ -319,8 +319,11 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "Activator YIELD_REPO does not match the registry"
             );
             require(
-                activator.YRF_TIMELOCK() == addresses.getAddress("olympus-policy-yrf-timelock-1_0"),
-                "Activator YRF_TIMELOCK does not match the registry"
+                activator.CONFIG_TIMELOCK() ==
+                    addresses.getAddress(
+                        "olympus-policy-yieldrepurchasefacility-config-timelock-1_0"
+                    ),
+                "Activator CONFIG_TIMELOCK does not match the registry"
             );
             require(
                 activator.BACKING_ORACLE() ==
@@ -358,7 +361,10 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "YRF v2 backing oracle does not match the registry"
             );
             require(
-                yrf.timelock() == addresses.getAddress("olympus-policy-yrf-timelock-1_0"),
+                yrf.timelock() ==
+                    addresses.getAddress(
+                        "olympus-policy-yieldrepurchasefacility-config-timelock-1_0"
+                    ),
                 "YRF v2 timelock does not match the registry"
             );
             require(
@@ -458,15 +464,23 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
             );
         }
 
-        // 6. Validate the YRF timelock
+        // 6. Validate the config timelock
         {
-            address yrfTimelock = addresses.getAddress("olympus-policy-yrf-timelock-1_0");
+            address configTimelock = addresses.getAddress(
+                "olympus-policy-yieldrepurchasefacility-config-timelock-1_0"
+            );
 
-            require(Policy(yrfTimelock).isActive() == true, "YRFTimelock is not active");
-            require(IEnabler(yrfTimelock).isEnabled() == true, "YRFTimelock is not enabled");
             require(
-                IYRFTimelock(yrfTimelock).facility() == yieldRepo,
-                "YRFTimelock facility is not the v2 facility"
+                Policy(configTimelock).isActive() == true,
+                "YieldRepurchaseFacilityConfigTimelock is not active"
+            );
+            require(
+                IEnabler(configTimelock).isEnabled() == true,
+                "YieldRepurchaseFacilityConfigTimelock is not enabled"
+            );
+            require(
+                IYieldRepurchaseFacilityConfigTimelock(configTimelock).facility() == yieldRepo,
+                "YieldRepurchaseFacilityConfigTimelock facility is not the v2 facility"
             );
         }
 

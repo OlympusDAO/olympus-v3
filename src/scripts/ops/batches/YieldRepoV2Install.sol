@@ -38,7 +38,9 @@ contract YieldRepoV2Install is BatchScriptV2 {
 
         address kernel = _envAddressNotZero("olympus.Kernel");
         address backingOracle = _envAddressNotZero("olympus.policies.BackingOracle");
-        address yrfTimelock = _envAddressNotZero("olympus.policies.YRFTimelock");
+        address configTimelock = _envAddressNotZero(
+            "olympus.policies.YieldRepurchaseFacilityConfigTimelock"
+        );
         address yieldRepo = _envAddressNotZero("olympus.policies.YieldRepurchaseFacilityV2");
 
         console2.log("=== Activating the YRF v2 stack ===");
@@ -53,13 +55,13 @@ contract YieldRepoV2Install is BatchScriptV2 {
             )
         );
 
-        console2.log("Activating YRFTimelock policy:", yrfTimelock);
+        console2.log("Activating YieldRepurchaseFacilityConfigTimelock policy:", configTimelock);
         addToBatch(
             kernel,
             abi.encodeWithSelector(
                 Kernel.executeAction.selector,
                 Actions.ActivatePolicy,
-                yrfTimelock
+                configTimelock
             )
         );
 

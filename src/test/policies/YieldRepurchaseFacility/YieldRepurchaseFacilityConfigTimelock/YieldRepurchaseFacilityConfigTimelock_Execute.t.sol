@@ -6,20 +6,22 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_Execute is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_Execute is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // executeQueuedAction
     // given the action id has never been queued
     //  when executing it
     //   then it reverts with ITimelockBatchQueue_ActionNotFound
     function test_givenActionNotFound_reverts() public {
-        uint64 actionId = yrfTimelock.nextActionId();
+        uint64 actionId = configTimelock.nextActionId();
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -27,7 +29,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // executeQueuedAction
@@ -37,8 +39,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenBeforeDelay_reverts(uint48 elapsed_) public {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
-        elapsed_ = uint48(bound(elapsed_, 0, yrfTimelockDelay - 1));
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
+        elapsed_ = uint48(bound(elapsed_, 0, configTimelockDelay - 1));
         vm.warp(queuedAt + elapsed_);
 
         vm.expectRevert(
@@ -48,7 +50,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 action.executableAt
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 0, "discount unchanged");
     }
@@ -60,8 +62,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenExpired_reverts(uint48 elapsed_) public {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
-        uint48 firstExpiredElapsed = yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW() + 1;
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
+        uint48 firstExpiredElapsed = configTimelockDelay + configTimelock.EXECUTION_WINDOW() + 1;
         elapsed_ = uint48(bound(elapsed_, firstExpiredElapsed, type(uint48).max));
         vm.warp(queuedAt + elapsed_);
 
@@ -72,7 +74,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 action.expiresAt
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 0, "discount unchanged");
     }
@@ -83,8 +85,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     //   then it reverts with ITimelockBatchQueue_ActionAlreadyExecuted
     function test_givenExecutedAction_reverts() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -92,7 +94,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // executeQueuedAction
@@ -102,8 +104,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenCancelledAction_reverts() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
-        _warpToExecutable(yrfTimelock, actionId);
+        configTimelock.cancelQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -111,7 +113,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // executeQueuedAction
@@ -121,11 +123,11 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenTimelockDisabled_reverts() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.disable("");
-        _warpToExecutable(yrfTimelock, actionId);
+        configTimelock.disable("");
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // executeQueuedAction
@@ -135,13 +137,13 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenTimelockReEnabled_executesAction() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
         // One day of downtime: within the 7-day grace window, and exactly at executableAt.
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.prank(yrfAdmin);
-        yrfTimelock.reEnable();
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.reEnable();
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
     }
@@ -154,11 +156,11 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         // Shrink the grace window below the timelock delay so that it can expire while the
         // action's execution window is still open.
         vm.prank(guardian);
-        yrfTimelock.setGracePeriod(1 hours);
+        configTimelock.setGracePeriod(1 hours);
         uint256 disabledAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
         vm.warp(disabledAt + 2 hours);
 
         // The grace path is closed, so the yrf_admin cannot resume the policy.
@@ -169,12 +171,12 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 uint48(disabledAt + 1 hours)
             )
         );
-        yrfTimelock.reEnable();
+        configTimelock.reEnable();
 
         vm.prank(guardian);
-        yrfTimelock.enable("");
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.enable("");
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
     }
@@ -188,29 +190,33 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         // The admin overwrites the discount directly, invalidating the queue-time binding.
         vm.prank(guardian);
         yieldRepo.setInitialDiscount(5e16);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_PreStateChanged.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_PreStateChanged
+                    .selector,
                 actionId,
                 uint256(0),
                 keccak256(abi.encode(uint256(0))),
                 keccak256(abi.encode(uint256(5e16)))
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
-        assertEq(yrfTimelock.pendingInitialDiscountActionId(), actionId, "pending slot held");
+        assertEq(configTimelock.pendingInitialDiscountActionId(), actionId, "pending slot held");
         vm.prank(yrfAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_ConflictingActionPending.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
+                    .selector,
                 IYieldRepurchaseFacilityV2.setInitialDiscount.selector,
                 actionId
             )
         );
-        yrfTimelock.queueSetInitialDiscount(2e16);
+        configTimelock.queueSetInitialDiscount(2e16);
     }
 
     // executeQueuedAction
@@ -222,9 +228,9 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
         yieldRepo.disable("");
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertFalse(yieldRepo.isEnabled(), "facility still disabled");
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
@@ -233,24 +239,26 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     // executeQueuedAction
     // given the facility slot was rotated after the queue
     //  when executing the action
-    //   then it reverts with IYRFTimelock_FacilityStale
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityStale
     function test_givenFacilityRotated_revertsAsStale() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
-        _warpToExecutable(yrfTimelock, actionId);
+        configTimelock.setFacility(address(newFacility));
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_FacilityStale.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_FacilityStale
+                    .selector,
                 actionId,
                 uint256(0),
                 address(yieldRepo),
                 address(newFacility)
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // executeQueuedAction
@@ -259,14 +267,14 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     //   then it executes (the stale check compares against the live slot)
     function test_givenFacilityRotatedBack_executesAction() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
         vm.startPrank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
-        yrfTimelock.setFacility(address(yieldRepo));
+        configTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(yieldRepo));
         vm.stopPrank();
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
     }
@@ -279,7 +287,11 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
         ITimelockBatchQueue.BatchAction[] memory actions = _singleAction(
@@ -291,11 +303,11 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         // The facility event precedes the sub-action event, which precedes the closing event.
         vm.expectEmit(false, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.InitialDiscountSet(1e16);
-        _expectActionExecuted(yrfTimelock, actionId, executor_, actions);
+        _expectActionExecuted(configTimelock, actionId, executor_, actions);
         vm.prank(executor_);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertTrue(action.executed, "executed");
         assertEq(action.actions.length, 0, "sub-actions cleared");
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
@@ -354,13 +366,17 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueBatch(actions);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
-        _expectActionExecuted(yrfTimelock, actionId, executor_, actions);
+        _expectActionExecuted(configTimelock, actionId, executor_, actions);
         vm.prank(executor_);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 2e16, "discount applied");
         assertEq(
@@ -380,7 +396,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
             40e18,
             "next yield decreased"
         );
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertTrue(action.executed, "executed");
         assertEq(action.actions.length, 0, "sub-actions cleared");
     }
@@ -392,8 +408,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenBatchBeforeDelay_reverts(uint48 elapsed_) public {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueBatch(_discountAndOffsetBatch());
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
-        elapsed_ = uint48(bound(elapsed_, 0, yrfTimelockDelay - 1));
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
+        elapsed_ = uint48(bound(elapsed_, 0, configTimelockDelay - 1));
         vm.warp(queuedAt + elapsed_);
 
         vm.expectRevert(
@@ -403,7 +419,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 action.executableAt
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 0, "discount unchanged");
         assertEq(yieldRepo.clearinghouseOffset(address(clearinghouse)), 0, "offset unchanged");
@@ -416,8 +432,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenBatchExpired_reverts(uint48 elapsed_) public {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueBatch(_discountAndOffsetBatch());
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
-        uint48 firstExpiredElapsed = yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW() + 1;
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
+        uint48 firstExpiredElapsed = configTimelockDelay + configTimelock.EXECUTION_WINDOW() + 1;
         elapsed_ = uint48(bound(elapsed_, firstExpiredElapsed, type(uint48).max));
         vm.warp(queuedAt + elapsed_);
 
@@ -428,7 +444,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 action.expiresAt
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 0, "discount unchanged");
         assertEq(yieldRepo.clearinghouseOffset(address(clearinghouse)), 0, "offset unchanged");
@@ -454,22 +470,22 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
             abi.encode(includedClearinghouse)
         );
         uint64 actionId = _queueBatch(actions);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded.selector
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertTrue(
             yieldRepo.isClearinghouseIncluded(includedClearinghouse),
             "first exclusion rolled back"
         );
-        assertFalse(yrfTimelock.getQueuedAction(actionId).executed, "executed flag rolled back");
+        assertFalse(configTimelock.getQueuedAction(actionId).executed, "executed flag rolled back");
         // The stuck batch remains cancellable.
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(actionId);
-        assertTrue(yrfTimelock.getQueuedAction(actionId).cancelled, "cancelled");
+        configTimelock.cancelQueuedAction(actionId);
+        assertTrue(configTimelock.getQueuedAction(actionId).cancelled, "cancelled");
     }
 
     // executeQueuedAction
@@ -560,16 +576,16 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     function test_givenExecutedAction_keepsAuditMetadata() public {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
-        ITimelockBatchQueue.QueuedAction memory action = yrfTimelock.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertEq(action.proposer, yrfAdmin, "proposer");
         assertEq(action.queuedAt, queuedAt, "queuedAt");
-        assertEq(action.executableAt, queuedAt + yrfTimelockDelay, "executableAt");
+        assertEq(action.executableAt, queuedAt + configTimelockDelay, "executableAt");
         assertEq(
             action.expiresAt,
-            queuedAt + yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW(),
+            queuedAt + configTimelockDelay + configTimelock.EXECUTION_WINDOW(),
             "expiresAt"
         );
         assertTrue(action.executed, "executed");
@@ -583,8 +599,8 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
     //   then they revert with ITimelockBatchQueue_ActionAlreadyExecuted
     function test_givenExecutedAction_cannotReadSubActions() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
-        _warpToExecutable(yrfTimelock, actionId);
-        yrfTimelock.executeQueuedAction(actionId);
+        _warpToExecutable(configTimelock, actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -592,7 +608,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.getQueuedActionLength(actionId);
+        configTimelock.getQueuedActionLength(actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -600,7 +616,7 @@ contract YRFTimelockTests_Execute is YRFTimelockTestBase {
                 actionId
             )
         );
-        yrfTimelock.getQueuedSubAction(actionId, 0);
+        configTimelock.getQueuedSubAction(actionId, 0);
     }
 
     // ========== HELPERS ========== //

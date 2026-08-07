@@ -5,16 +5,18 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueSetInitialDiscount is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // queueSetInitialDiscount
     // given the caller does not hold the yrf_admin role
     //  when queueing a discount update
@@ -24,7 +26,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueSetInitialDiscount(1e16);
+        configTimelock.queueSetInitialDiscount(1e16);
     }
 
     // queueSetInitialDiscount
@@ -34,7 +36,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     function test_givenAdminCaller_reverts() public {
         vm.prank(guardian);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueSetInitialDiscount(1e16);
+        configTimelock.queueSetInitialDiscount(1e16);
     }
 
     // queueSetInitialDiscount
@@ -43,24 +45,28 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     //   then it reverts with NotEnabled and no action id is consumed
     function test_givenTimelockDisabled_reverts() public {
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueSetInitialDiscount(1e16);
+        configTimelock.queueSetInitialDiscount(1e16);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueSetInitialDiscount
     // given the facility slot has not been set
     //  when queueing a discount update
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueSetInitialDiscount(1e16);
     }
 
@@ -73,7 +79,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InitialDiscountTooHigh.selector
         );
-        yrfTimelock.queueSetInitialDiscount(1e18);
+        configTimelock.queueSetInitialDiscount(1e18);
     }
 
     // queueSetInitialDiscount
@@ -87,7 +93,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InitialDiscountTooHigh.selector
         );
-        yrfTimelock.queueSetInitialDiscount(discount_);
+        configTimelock.queueSetInitialDiscount(discount_);
     }
 
     // queueSetInitialDiscount
@@ -103,11 +109,11 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
             abi.encode(discount_)
         );
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueSetInitialDiscount(discount_);
 
         assertEq(actionId, 1, "action id");
-        _assertQueuedSingleAction(yrfTimelock, actionId, queuedAt, actions[0]);
+        _assertQueuedSingleAction(configTimelock, actionId, queuedAt, actions[0]);
     }
 
     // queueSetInitialDiscount
@@ -118,7 +124,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
         uint64 actionId = _queueSetInitialDiscount(1e16);
 
         assertEq(
-            yrfTimelock.pendingInitialDiscountActionId(),
+            configTimelock.pendingInitialDiscountActionId(),
             actionId,
             "pending discount action id"
         );
@@ -127,19 +133,21 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     // queueSetInitialDiscount
     // given a discount update is already pending
     //  when queueing another discount update
-    //   then it reverts with IYRFTimelock_ConflictingActionPending
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
     function test_givenPendingDiscountUpdate_reverts() public {
         uint64 pendingActionId = _queueSetInitialDiscount(1e16);
 
         vm.prank(yrfAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_ConflictingActionPending.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
+                    .selector,
                 IYieldRepurchaseFacilityV2.setInitialDiscount.selector,
                 pendingActionId
             )
         );
-        yrfTimelock.queueSetInitialDiscount(2e16);
+        configTimelock.queueSetInitialDiscount(2e16);
     }
 
     // queueSetInitialDiscount
@@ -161,14 +169,14 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     //   then it queues (execution releases the pending slot)
     function test_givenPendingDiscountExecuted_allowsNewQueue() public {
         uint64 executedActionId = _queueSetInitialDiscount(1e16);
-        _warpToExecutable(yrfTimelock, executedActionId);
-        yrfTimelock.executeQueuedAction(executedActionId);
+        _warpToExecutable(configTimelock, executedActionId);
+        configTimelock.executeQueuedAction(executedActionId);
 
         uint64 actionId = _queueSetInitialDiscount(2e16);
 
         assertEq(actionId, executedActionId + 1, "action id");
         assertEq(
-            yrfTimelock.pendingInitialDiscountActionId(),
+            configTimelock.pendingInitialDiscountActionId(),
             actionId,
             "pending discount action id"
         );
@@ -181,7 +189,7 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     function test_givenPendingDiscountCancelled_allowsNewQueue() public {
         uint64 cancelledActionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(cancelledActionId);
+        configTimelock.cancelQueuedAction(cancelledActionId);
 
         uint64 actionId = _queueSetInitialDiscount(2e16);
 
@@ -196,13 +204,17 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueSetInitialDiscount(1e16);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
         vm.expectEmit(false, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.InitialDiscountSet(1e16);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 1e16, "discount applied");
     }
@@ -210,23 +222,25 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     // queueSetInitialDiscount
     // given the discount was changed directly by the admin after the queue
     //  when the queued action executes
-    //   then it reverts with IYRFTimelock_PreStateChanged
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_PreStateChanged
     function test_givenDiscountChangedAfterQueue_revertsAsStale() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         vm.prank(guardian);
         yieldRepo.setInitialDiscount(5e16);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_PreStateChanged.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_PreStateChanged
+                    .selector,
                 actionId,
                 uint256(0),
                 keccak256(abi.encode(uint256(0))),
                 keccak256(abi.encode(uint256(5e16)))
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), 5e16, "admin value preserved");
     }
@@ -234,23 +248,25 @@ contract YRFTimelockTests_QueueSetInitialDiscount is YRFTimelockTestBase {
     // queueSetInitialDiscount
     // given a facility restart (`enable`) replaced the discount after the queue
     //  when the queued action executes
-    //   then it reverts with IYRFTimelock_PreStateChanged
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_PreStateChanged
     function test_givenFacilityRestartChangesDiscountAfterQueue_revertsAsStale() public {
         uint64 actionId = _queueSetInitialDiscount(1e16);
         // The admin restart seeds the base-configured 3% discount through `_beforeEnable`.
         _enableFacility();
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_PreStateChanged.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_PreStateChanged
+                    .selector,
                 actionId,
                 uint256(0),
                 keccak256(abi.encode(uint256(0))),
                 keccak256(abi.encode(initialDiscount))
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertEq(yieldRepo.initialDiscount(), initialDiscount, "restart value preserved");
     }

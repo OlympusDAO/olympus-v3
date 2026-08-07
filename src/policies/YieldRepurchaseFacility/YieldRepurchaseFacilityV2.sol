@@ -151,7 +151,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice The cached OHM decimals (9 on mainnet).
     uint8 private immutable _OHM_DECIMALS;
 
-    /// @notice The YRF timelock authorized for the timelocked operational functions.
+    /// @notice The config timelock authorized for the timelocked operational functions.
     /// @dev The functions `setYieldBuybackShare`, `setInitialDiscount`, `enableAsset`,
     ///      `disableAsset`, `excludeClearinghouse`, `increaseClearinghouseOffset`, and
     ///      `decreaseNextYield` trust only this address for the timelocked path, so the
@@ -258,7 +258,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @param ohm_ The OHM token address.
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
-    /// @param timelock_ The YRF timelock policy authorized for the operational functions.
+    /// @param timelock_ The config timelock policy authorized for the operational functions.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
     constructor(
         Kernel kernel_,
@@ -363,7 +363,7 @@ contract YieldRepurchaseFacilityV2 is
         _;
     }
 
-    /// @notice Reverts unless the caller is the YRF timelock or holds the admin role.
+    /// @notice Reverts unless the caller is the config timelock or holds the admin role.
     modifier onlyTimelockOrAdminRole() {
         _requireAuthorized(msg.sender != _TIMELOCK && !_isAdmin(msg.sender));
         _;
@@ -1458,11 +1458,11 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so a change is
+    /// @dev Reachable through the config timelock or directly by the admin, so a change is
     ///      de-facto timelocked.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The share exceeds 100% (`1e18`).
     function setYieldBuybackShare(
@@ -1477,7 +1477,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so a change is
+    /// @dev Reachable through the config timelock or directly by the admin, so a change is
     ///      de-facto timelocked.
     ///
     ///      The only enforced bound is below 100% (`1e18`). A discount large enough to
@@ -1485,7 +1485,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      (`DailyCycleSkipped` or `MarketCreationFailed`) and does not block the beat.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The initial discount is not less than 100% (`1e18`).
     function setInitialDiscount(
         uint256 initialDiscount_
@@ -1503,7 +1503,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so an
+    /// @dev Reachable through the config timelock or directly by the admin, so an
     ///      increase is de-facto timelocked. The offset is read live by the weekly reset
     ///      projection, so an increase that executes only after a reset misses that
     ///      projection: the following weekly funding then overstates the yield by one week
@@ -1516,7 +1516,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      lowering the offset requires the admin, via `setClearinghouseOffset`.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
     function increaseClearinghouseOffset(
@@ -1530,7 +1530,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so a
+    /// @dev Reachable through the config timelock or directly by the admin, so a
     ///      correction is de-facto timelocked. The function corrects a stored projection
     ///      that is known to overstate the yield, for example when a receivables offset
     ///      executed only after the weekly reset that made the projection. The stored
@@ -1541,7 +1541,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      reverts instead of cutting the fresh value.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The stored next yield does not equal `expectedNextYield_`.
     ///      - `newNextYield_` is not lower than the stored value.
@@ -1594,13 +1594,13 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so an
+    /// @dev Reachable through the config timelock or directly by the admin, so an
     ///      exclusion is de-facto timelocked. The immediate defensive lever against a
     ///      misbehaving Clearinghouse is the emergency `disable` of the facility, which
     ///      freezes the cycle in place until the queued correction executes.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The Clearinghouse is not included.
     function excludeClearinghouse(
         address clearinghouse_
@@ -1612,7 +1612,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so a re-enable is
+    /// @dev Reachable through the config timelock or directly by the admin, so a re-enable is
     ///      de-facto timelocked.
     ///
     ///      The next yield and the unfunded carry are reset to zero and the yield
@@ -1621,7 +1621,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      projection resumes at the following weekly reset.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyTimelockOrAdminRole {
@@ -1637,7 +1637,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the YRF timelock or directly by the admin, so a
+    /// @dev Reachable through the config timelock or directly by the admin, so a
     ///      per-asset halt is de-facto timelocked. An immediate halt of the whole
     ///      facility remains available to the emergency role through `disable`.
     ///
@@ -1646,7 +1646,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      reverting in `callback` for the disabled asset.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the YRF timelock nor the admin.
+    ///      - The caller is neither the config timelock nor the admin.
     ///      - The vault is not registered.
     ///      - The vault is already disabled.
     ///      - The vault is the backing vault.

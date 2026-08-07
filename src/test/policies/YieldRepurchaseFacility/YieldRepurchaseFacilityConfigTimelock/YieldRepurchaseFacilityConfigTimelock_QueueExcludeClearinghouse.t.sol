@@ -5,16 +5,18 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueExcludeClearinghouse is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     address internal includedClearinghouse;
 
     function setUp() public override {
@@ -34,7 +36,7 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueExcludeClearinghouse(includedClearinghouse);
+        configTimelock.queueExcludeClearinghouse(includedClearinghouse);
     }
 
     // queueExcludeClearinghouse
@@ -44,25 +46,29 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
     function test_givenTimelockDisabled_reverts() public {
         _includeClearinghouse();
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueExcludeClearinghouse(includedClearinghouse);
+        configTimelock.queueExcludeClearinghouse(includedClearinghouse);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueExcludeClearinghouse
     // given the facility slot has not been set
     //  when queueing a Clearinghouse exclusion
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
         _includeClearinghouse();
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueExcludeClearinghouse(includedClearinghouse);
     }
 
@@ -75,7 +81,7 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded.selector
         );
-        yrfTimelock.queueExcludeClearinghouse(includedClearinghouse);
+        configTimelock.queueExcludeClearinghouse(includedClearinghouse);
     }
 
     // queueExcludeClearinghouse
@@ -91,11 +97,11 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
             abi.encode(includedClearinghouse)
         );
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueExcludeClearinghouse(includedClearinghouse);
 
         assertEq(actionId, 1, "action id");
-        _assertQueuedSingleAction(yrfTimelock, actionId, queuedAt, actions[0]);
+        _assertQueuedSingleAction(configTimelock, actionId, queuedAt, actions[0]);
     }
 
     // queueExcludeClearinghouse
@@ -107,13 +113,17 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueExcludeClearinghouse(includedClearinghouse);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
         vm.expectEmit(true, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.ClearinghouseExcluded(includedClearinghouse);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertFalse(
             yieldRepo.isClearinghouseIncluded(includedClearinghouse),
@@ -130,12 +140,12 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
         uint64 actionId = _queueExcludeClearinghouse(includedClearinghouse);
         vm.prank(guardian);
         yieldRepo.excludeClearinghouse(includedClearinghouse);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded.selector
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // queueExcludeClearinghouse
@@ -149,9 +159,9 @@ contract YRFTimelockTests_QueueExcludeClearinghouse is YRFTimelockTestBase {
         yieldRepo.excludeClearinghouse(includedClearinghouse);
         yieldRepo.includeClearinghouse(includedClearinghouse);
         vm.stopPrank();
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         assertFalse(
             yieldRepo.isClearinghouseIncluded(includedClearinghouse),

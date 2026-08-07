@@ -4,21 +4,23 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_SetGracePeriod is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_SetGracePeriod is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // setGracePeriod
     // given the policy was constructed with a grace period
     //  when reading gracePeriod
     //   then it returns the constructor value
     function test_givenConstructed_setsInitialGracePeriod() public view {
-        assertEq(yrfTimelock.gracePeriod(), gracePeriod, "grace period");
+        assertEq(configTimelock.gracePeriod(), gracePeriod, "grace period");
     }
 
     // setGracePeriod
@@ -30,7 +32,7 @@ contract YRFTimelockTests_SetGracePeriod is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        yrfTimelock.setGracePeriod(3 days);
+        configTimelock.setGracePeriod(3 days);
     }
 
     // setGracePeriod
@@ -40,7 +42,7 @@ contract YRFTimelockTests_SetGracePeriod is YRFTimelockTestBase {
     function test_givenZeroGracePeriod_reverts() public {
         vm.prank(guardian);
         vm.expectRevert(IGracePeriod.GracePeriod_ZeroPeriod.selector);
-        yrfTimelock.setGracePeriod(0);
+        configTimelock.setGracePeriod(0);
     }
 
     // setGracePeriod
@@ -49,13 +51,13 @@ contract YRFTimelockTests_SetGracePeriod is YRFTimelockTestBase {
     //   then it reverts with NotEnabled (the window is fixed while disabled)
     function test_givenDisabled_reverts() public {
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(guardian);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.setGracePeriod(3 days);
+        configTimelock.setGracePeriod(3 days);
 
-        assertEq(yrfTimelock.gracePeriod(), gracePeriod, "grace period unchanged");
+        assertEq(configTimelock.gracePeriod(), gracePeriod, "grace period unchanged");
     }
 
     // setGracePeriod
@@ -63,29 +65,33 @@ contract YRFTimelockTests_SetGracePeriod is YRFTimelockTestBase {
     //  when the admin sets it
     //   then the window is updated and GracePeriodSet is emitted
     function test_givenAdminCaller_setsGracePeriod(uint32 gracePeriod_) public {
-        gracePeriod_ = uint32(bound(gracePeriod_, 1, yrfTimelock.MAX_GRACE_PERIOD() - 1));
+        gracePeriod_ = uint32(bound(gracePeriod_, 1, configTimelock.MAX_GRACE_PERIOD() - 1));
 
-        vm.expectEmit(false, false, false, true, address(yrfTimelock));
+        vm.expectEmit(false, false, false, true, address(configTimelock));
         emit IGracePeriod.GracePeriodSet(gracePeriod_);
         vm.prank(guardian);
-        yrfTimelock.setGracePeriod(gracePeriod_);
+        configTimelock.setGracePeriod(gracePeriod_);
 
-        assertEq(yrfTimelock.gracePeriod(), gracePeriod_, "grace period");
+        assertEq(configTimelock.gracePeriod(), gracePeriod_, "grace period");
     }
 
     // setGracePeriod
     // given any grace period at or above MAX_GRACE_PERIOD
     //  when the admin sets it
-    //   then it reverts with IYRFTimelock_GracePeriodTooLong
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong
     function test_givenGracePeriodAtOrAboveMax_reverts(uint32 gracePeriod_) public {
         gracePeriod_ = uint32(
-            bound(gracePeriod_, yrfTimelock.MAX_GRACE_PERIOD(), type(uint32).max)
+            bound(gracePeriod_, configTimelock.MAX_GRACE_PERIOD(), type(uint32).max)
         );
 
         vm.prank(guardian);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_GracePeriodTooLong.selector);
-        yrfTimelock.setGracePeriod(gracePeriod_);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_GracePeriodTooLong
+                .selector
+        );
+        configTimelock.setGracePeriod(gracePeriod_);
 
-        assertEq(yrfTimelock.gracePeriod(), gracePeriod, "grace period unchanged");
+        assertEq(configTimelock.gracePeriod(), gracePeriod, "grace period unchanged");
     }
 }

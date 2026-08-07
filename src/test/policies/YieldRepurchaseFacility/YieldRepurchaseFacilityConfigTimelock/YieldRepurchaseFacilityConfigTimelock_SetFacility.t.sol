@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {Actions, Kernel, Policy} from "src/Kernel.sol";
@@ -12,9 +12,11 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_SetFacility is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // setFacility
     // given the caller does not hold the admin role
     //  when setting the facility
@@ -24,25 +26,30 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        yrfTimelock.setFacility(address(yieldRepo));
+        configTimelock.setFacility(address(yieldRepo));
     }
 
     // setFacility
     // given the facility address is zero
     //  when the admin sets the facility
-    //   then it reverts with IYRFTimelock_InvalidAddress("facility")
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidAddress("facility")
     function test_givenZeroFacility_reverts() public {
         vm.prank(guardian);
         vm.expectRevert(
-            abi.encodeWithSelector(IYRFTimelock.IYRFTimelock_InvalidAddress.selector, "facility")
+            abi.encodeWithSelector(
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidAddress
+                    .selector,
+                "facility"
+            )
         );
-        yrfTimelock.setFacility(address(0));
+        configTimelock.setFacility(address(0));
     }
 
     // setFacility
     // given the facility is not an active policy of the timelock's kernel
     //  when the admin sets the facility
-    //   then it reverts with IYRFTimelock_InvalidFacility
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
     function test_givenFacilityNotActivePolicy_reverts() public {
         // A fully valid facility pinned to this timelock, deployed but never activated.
         YieldRepurchaseFacilityV2 inactiveFacility = new YieldRepurchaseFacilityV2(
@@ -50,7 +57,7 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
             address(ohm),
             address(backingOracle),
             address(auctioneer),
-            address(yrfTimelock),
+            address(configTimelock),
             gracePeriod
         );
         vm.label(address(inactiveFacility), "inactiveFacility");
@@ -58,17 +65,19 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
+                    .selector,
                 address(inactiveFacility)
             )
         );
-        yrfTimelock.setFacility(address(inactiveFacility));
+        configTimelock.setFacility(address(inactiveFacility));
     }
 
     // setFacility
     // given the candidate is an active policy that does not implement ERC165
     //  when the admin sets the facility
-    //   then it reverts with IYRFTimelock_InvalidFacility
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
     function test_givenFacilityDoesNotImplementErc165_reverts() public {
         MockActivePolicyWithoutErc165 candidate = new MockActivePolicyWithoutErc165(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(candidate));
@@ -76,18 +85,20 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
+                    .selector,
                 address(candidate)
             )
         );
-        yrfTimelock.setFacility(address(candidate));
+        configTimelock.setFacility(address(candidate));
     }
 
     // setFacility
     // given the candidate is an active policy implementing ERC165 but not
     //   IYieldRepurchaseFacilityV2
     //  when the admin sets the facility
-    //   then it reverts with IYRFTimelock_InvalidFacility
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
     function test_givenFacilityDoesNotSupportInterface_reverts() public {
         MockActivePolicyWithoutFacilityInterface candidate = new MockActivePolicyWithoutFacilityInterface(
                 kernel
@@ -97,28 +108,32 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
+                    .selector,
                 address(candidate)
             )
         );
-        yrfTimelock.setFacility(address(candidate));
+        configTimelock.setFacility(address(candidate));
     }
 
     // setFacility
     // given the facility does not pin this policy as its timelock
     //  when the admin sets the facility
-    //   then it reverts with IYRFTimelock_InvalidFacility
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
     function test_givenFacilityTimelockMismatch_reverts() public {
         // The harness facility is active and advertises IYieldRepurchaseFacilityV2, but
         // pins the harness.
         vm.prank(guardian);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_InvalidFacility.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_InvalidFacility
+                    .selector,
                 address(harnessFacility)
             )
         );
-        yrfTimelock.setFacility(address(harnessFacility));
+        configTimelock.setFacility(address(harnessFacility));
     }
 
     // setFacility
@@ -126,14 +141,14 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //  when the admin sets the facility
     //   then the slot is updated and FacilitySet is emitted
     function test_givenAdminCaller_setsFacilityAndEmitsEvent() public {
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
 
-        vm.expectEmit(true, false, false, true, address(yrfTimelock));
-        emit IYRFTimelock.FacilitySet(address(newFacility));
+        vm.expectEmit(true, false, false, true, address(configTimelock));
+        emit IYieldRepurchaseFacilityConfigTimelock.FacilitySet(address(newFacility));
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(newFacility));
 
-        assertEq(yrfTimelock.facility(), address(newFacility), "facility slot");
+        assertEq(configTimelock.facility(), address(newFacility), "facility slot");
     }
 
     // setFacility
@@ -141,14 +156,14 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //  when the admin sets a valid facility
     //   then the slot is updated (wiring is allowed while disabled)
     function test_givenTimelockDisabled_setsFacility() public {
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(newFacility));
 
-        assertEq(yrfTimelock.facility(), address(newFacility), "facility slot");
+        assertEq(configTimelock.facility(), address(newFacility), "facility slot");
     }
 
     // setFacility
@@ -156,7 +171,7 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //  when the admin sets another valid facility
     //   then the slot is replaced and subsequent queues validate against the new facility
     function test_givenFacilityRotated_replacesSlot() public {
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
         // The vault is registered only on the new facility, so the queue below can only
         // pass validation against the rotated slot.
         _registerBackingAsset(newFacility, 0);
@@ -168,16 +183,16 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
                 address(sReserve)
             )
         );
-        yrfTimelock.queueSetYieldBuybackShare(address(sReserve), 5e17);
+        configTimelock.queueSetYieldBuybackShare(address(sReserve), 5e17);
 
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(newFacility));
 
         uint64 actionId = _queueSetYieldBuybackShare(address(sReserve), 5e17);
 
-        assertEq(yrfTimelock.facility(), address(newFacility), "facility slot");
+        assertEq(configTimelock.facility(), address(newFacility), "facility slot");
         assertEq(actionId, 1, "action id");
-        (address target, , ) = yrfTimelock.getQueuedSubAction(actionId, 0);
+        (address target, , ) = configTimelock.getQueuedSubAction(actionId, 0);
         assertEq(target, address(newFacility), "queued target");
     }
 
@@ -187,25 +202,27 @@ contract YRFTimelockTests_SetFacility is YRFTimelockTestBase {
     //   then the pending parameter slot is still held by the stale action until cancellation
     function test_givenFacilityRotated_pendingSlotOfOldActionStillHeld() public {
         uint64 staleActionId = _queueSetInitialDiscount(1e16);
-        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(yrfTimelock));
+        YieldRepurchaseFacilityV2 newFacility = _deployFacilityPinnedTo(address(configTimelock));
 
         vm.prank(guardian);
-        yrfTimelock.setFacility(address(newFacility));
+        configTimelock.setFacility(address(newFacility));
 
         assertEq(
-            yrfTimelock.pendingInitialDiscountActionId(),
+            configTimelock.pendingInitialDiscountActionId(),
             staleActionId,
             "pending slot holder"
         );
         vm.prank(yrfAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IYRFTimelock.IYRFTimelock_ConflictingActionPending.selector,
+                IYieldRepurchaseFacilityConfigTimelock
+                    .IYieldRepurchaseFacilityConfigTimelock_ConflictingActionPending
+                    .selector,
                 IYieldRepurchaseFacilityV2.setInitialDiscount.selector,
                 staleActionId
             )
         );
-        yrfTimelock.queueSetInitialDiscount(2e16);
+        configTimelock.queueSetInitialDiscount(2e16);
     }
 }
 

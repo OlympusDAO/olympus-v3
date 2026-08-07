@@ -592,7 +592,7 @@ interface IYieldRepurchaseFacilityV2 {
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
 
     /// @notice Sets the yield buyback share of a registered vault.
-    /// @dev Callable by the YRF timelock and the admin role. The share multiplies the
+    /// @dev Callable by the config timelock and the admin role. The share multiplies the
     ///      yield projected at the weekly reset; the stored next yield is not affected.
     ///      Emits `YieldBuybackShareSet`.
     /// @param vault_ The registered vault.
@@ -603,12 +603,12 @@ interface IYieldRepurchaseFacilityV2 {
     ///         the market's initial price corresponds to the oracle price reduced by the
     ///         discount, while its minimum price corresponds to the undiscounted oracle
     ///         price.
-    /// @dev Callable by the YRF timelock and the admin role. Emits `InitialDiscountSet`.
+    /// @dev Callable by the config timelock and the admin role. Emits `InitialDiscountSet`.
     /// @param initialDiscount_ The new discount (`1e18` = 100%); must be less than `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external;
 
     /// @notice Increases the cumulative receivables offset of a Clearinghouse.
-    /// @dev Callable by the YRF timelock and the admin role. The resulting offset is
+    /// @dev Callable by the config timelock and the admin role. The resulting offset is
     ///      validated against the current `principalReceivables`. This path can only
     ///      increase the offset, which reduces the projected yield; lowering the offset
     ///      requires the admin role, via `setClearinghouseOffset`. Emits
@@ -624,7 +624,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Lowers the stored next yield of a registered vault, correcting a
     ///         projection that overstates the yield before the next weekly reset
     ///         withdraws it into the buyback pool.
-    /// @dev Callable by the YRF timelock and the admin role. The expected current value
+    /// @dev Callable by the config timelock and the admin role. The expected current value
     ///      guards against a weekly reset replacing the stored value between the
     ///      correction being prepared and applied: on a mismatch the correction reverts
     ///      instead of cutting the fresh projection. The function lowers only the stored
@@ -659,7 +659,7 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Removes a Clearinghouse from the backing vault's yield projection,
     ///         restoring the default reserve-token filter for it.
-    /// @dev Callable by the YRF timelock and the admin role. Emits
+    /// @dev Callable by the config timelock and the admin role. Emits
     ///      `ClearinghouseExcluded`.
     /// @param clearinghouse_ The included Clearinghouse address.
     function excludeClearinghouse(address clearinghouse_) external;
@@ -667,7 +667,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Enables a disabled registered vault. The stored next yield and the
     ///         unfunded carry are reset to zero and the yield snapshots are refreshed,
     ///         so the yield projection resumes at the following weekly reset.
-    /// @dev Callable by the YRF timelock and the admin role. Emits `AssetEnabled` and
+    /// @dev Callable by the config timelock and the admin role. Emits `AssetEnabled` and
     ///      `NextYieldSet`.
     /// @param vault_ The vault to enable.
     function enableAsset(address vault_) external;
@@ -677,7 +677,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         basis (a revert of the auctioneer leaves the market to expire), and
     ///         purchases on any remaining market of the vault revert; its buyback pool
     ///         and accounting stay in place.
-    /// @dev Callable by the YRF timelock and the admin role. The backing vault cannot be
+    /// @dev Callable by the config timelock and the admin role. The backing vault cannot be
     ///      disabled. Emits `AssetDisabled`.
     /// @param vault_ The vault to disable.
     function disableAsset(address vault_) external;
@@ -698,7 +698,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Validates the parameters of `setYieldBuybackShare` against the live
     ///         facility state, reverting when the setter's value checks would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      YRF timelock when a `setYieldBuybackShare` action is queued.
+    ///      config timelock when a `setYieldBuybackShare` action is queued.
     /// @param vault_ The registered vault.
     /// @param newShare_ The proposed share (`1e18` = 100%).
     function validateSetYieldBuybackShare(address vault_, uint256 newShare_) external view;
@@ -706,28 +706,28 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Validates the parameter of `setInitialDiscount`, reverting when the
     ///         setter's value check would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      YRF timelock when a `setInitialDiscount` action is queued.
+    ///      config timelock when a `setInitialDiscount` action is queued.
     /// @param initialDiscount_ The proposed discount (`1e18` = 100%).
     function validateSetInitialDiscount(uint256 initialDiscount_) external view;
 
     /// @notice Validates the parameter of `enableAsset` against the live facility state,
     ///         reverting when the setter's value checks would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      YRF timelock when an `enableAsset` action is queued.
+    ///      config timelock when an `enableAsset` action is queued.
     /// @param vault_ The vault to enable.
     function validateEnableAsset(address vault_) external view;
 
     /// @notice Validates the parameter of `disableAsset` against the live facility state,
     ///         reverting when the setter's value checks would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      YRF timelock when a `disableAsset` action is queued.
+    ///      config timelock when a `disableAsset` action is queued.
     /// @param vault_ The vault to disable.
     function validateDisableAsset(address vault_) external view;
 
     /// @notice Validates the parameter of `excludeClearinghouse` against the live
     ///         facility state, reverting when the setter's value check would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      YRF timelock when an `excludeClearinghouse` action is queued.
+    ///      config timelock when an `excludeClearinghouse` action is queued.
     /// @param clearinghouse_ The Clearinghouse address.
     function validateExcludeClearinghouse(address clearinghouse_) external view;
 
@@ -735,7 +735,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         facility state, reverting when the setter's value checks would fail.
     /// @dev The validation applies no authorization gate. The receivables are read live,
     ///      so a validation that passes can be invalidated by repayments before the
-    ///      setter runs. Intended to be called by the YRF timelock when an
+    ///      setter runs. Intended to be called by the config timelock when an
     ///      `increaseClearinghouseOffset` action is queued.
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param additionalOffset_ The amount added to the existing offset, in the
@@ -749,7 +749,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         state, reverting when the setter's value checks would fail.
     /// @dev The validation applies no authorization gate. The stored next yield is read
     ///      live, so a validation that passes can be invalidated by a weekly reset before
-    ///      the setter runs. Intended to be called by the YRF timelock when a
+    ///      the setter runs. Intended to be called by the config timelock when a
     ///      `decreaseNextYield` action is queued.
     /// @param vault_ The registered vault.
     /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
@@ -857,9 +857,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @return Whether `seedCycle` is callable.
     function isCycleSeedable() external view returns (bool);
 
-    /// @notice Returns the address of the YRF timelock policy authorized to call the
+    /// @notice Returns the address of the config timelock policy authorized to call the
     ///         timelocked operational functions.
-    /// @return The YRF timelock address.
+    /// @return The config timelock address.
     function timelock() external view returns (address);
 
     /// @notice Returns the exclusive upper bound of the re-enable grace window, in

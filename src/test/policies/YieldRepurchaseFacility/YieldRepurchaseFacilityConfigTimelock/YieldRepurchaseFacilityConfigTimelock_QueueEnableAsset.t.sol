@@ -5,16 +5,18 @@ pragma solidity >=0.8.24;
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
+import {IYieldRepurchaseFacilityConfigTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol";
 
 // Contracts
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
 import {YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {YRFTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YRFTimelock/YRFTimelockTestBase.sol";
+import {YieldRepurchaseFacilityConfigTimelockTestBase} from "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock/YieldRepurchaseFacilityConfigTimelockTestBase.sol";
 
-contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
+contract YieldRepurchaseFacilityConfigTimelockTests_QueueEnableAsset is
+    YieldRepurchaseFacilityConfigTimelockTestBase
+{
     // queueEnableAsset
     // given the caller does not hold the yrf_admin role
     //  when queueing an asset enable
@@ -25,7 +27,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, YRF_ADMIN_ROLE));
-        yrfTimelock.queueEnableAsset(vault);
+        configTimelock.queueEnableAsset(vault);
     }
 
     // queueEnableAsset
@@ -35,24 +37,28 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
     function test_givenTimelockDisabled_reverts() public {
         address vault = _registerDisabledAsset();
         vm.prank(guardian);
-        yrfTimelock.disable("");
+        configTimelock.disable("");
 
         vm.prank(yrfAdmin);
         vm.expectRevert(IEnabler.NotEnabled.selector);
-        yrfTimelock.queueEnableAsset(vault);
+        configTimelock.queueEnableAsset(vault);
 
-        assertEq(yrfTimelock.nextActionId(), 1, "next action id");
+        assertEq(configTimelock.nextActionId(), 1, "next action id");
     }
 
     // queueEnableAsset
     // given the facility slot has not been set
     //  when queueing an asset enable
-    //   then it reverts with IYRFTimelock_FacilityNotSet
+    //   then it reverts with IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
     function test_givenFacilityNotSet_reverts() public {
-        YRFTimelock unwired = _deployUnwiredTimelock();
+        YieldRepurchaseFacilityConfigTimelock unwired = _deployUnwiredTimelock();
 
         vm.prank(yrfAdmin);
-        vm.expectRevert(IYRFTimelock.IYRFTimelock_FacilityNotSet.selector);
+        vm.expectRevert(
+            IYieldRepurchaseFacilityConfigTimelock
+                .IYieldRepurchaseFacilityConfigTimelock_FacilityNotSet
+                .selector
+        );
         unwired.queueEnableAsset(address(sReserve));
     }
 
@@ -68,7 +74,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
                 address(sReserve)
             )
         );
-        yrfTimelock.queueEnableAsset(address(sReserve));
+        configTimelock.queueEnableAsset(address(sReserve));
     }
 
     // queueEnableAsset
@@ -82,7 +88,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetEnabled.selector
         );
-        yrfTimelock.queueEnableAsset(vault);
+        configTimelock.queueEnableAsset(vault);
     }
 
     // queueEnableAsset
@@ -98,11 +104,11 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
             abi.encode(vault)
         );
 
-        _expectActionQueued(yrfTimelock, 1, yrfAdmin, actions);
+        _expectActionQueued(configTimelock, 1, yrfAdmin, actions);
         uint64 actionId = _queueEnableAsset(vault);
 
         assertEq(actionId, 1, "action id");
-        _assertQueuedSingleAction(yrfTimelock, actionId, queuedAt, actions[0]);
+        _assertQueuedSingleAction(configTimelock, actionId, queuedAt, actions[0]);
     }
 
     // queueEnableAsset
@@ -119,7 +125,11 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         uint256 queuedAt = vm.getBlockTimestamp();
         uint64 actionId = _queueEnableAsset(vault);
         elapsed_ = uint48(
-            bound(elapsed_, yrfTimelockDelay, yrfTimelockDelay + yrfTimelock.EXECUTION_WINDOW())
+            bound(
+                elapsed_,
+                configTimelockDelay,
+                configTimelockDelay + configTimelock.EXECUTION_WINDOW()
+            )
         );
         vm.warp(queuedAt + elapsed_);
 
@@ -127,7 +137,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         emit IYieldRepurchaseFacilityV2.AssetEnabled(vault);
         vm.expectEmit(true, false, false, true, address(yieldRepo));
         emit IYieldRepurchaseFacilityV2.NextYieldSet(assetReserve, 0);
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
         IYieldRepurchaseFacilityV2.ReserveAsset memory config = yieldRepo.getAssetConfig(vault);
         assertTrue(config.isAssetEnabled, "asset enabled");
@@ -146,12 +156,12 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         uint64 actionId = _queueEnableAsset(vault);
         vm.prank(guardian);
         yieldRepo.enableAsset(vault);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetEnabled.selector
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // queueEnableAsset
@@ -163,7 +173,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         uint64 actionId = _queueEnableAsset(vault);
         vm.prank(guardian);
         yieldRepo.removeAsset(vault);
-        _warpToExecutable(yrfTimelock, actionId);
+        _warpToExecutable(configTimelock, actionId);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -171,7 +181,7 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
                 vault
             )
         );
-        yrfTimelock.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
     }
 
     // queueEnableAsset
@@ -182,21 +192,21 @@ contract YRFTimelockTests_QueueEnableAsset is YRFTimelockTestBase {
         address vault = _registerDisabledAsset();
         uint64 firstActionId = _queueEnableAsset(vault);
         uint64 secondActionId = _queueEnableAsset(vault);
-        _warpToExecutable(yrfTimelock, secondActionId);
+        _warpToExecutable(configTimelock, secondActionId);
 
-        yrfTimelock.executeQueuedAction(firstActionId);
+        configTimelock.executeQueuedAction(firstActionId);
         assertTrue(yieldRepo.getAssetConfig(vault).isAssetEnabled, "asset enabled");
 
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetEnabled.selector
         );
-        yrfTimelock.executeQueuedAction(secondActionId);
+        configTimelock.executeQueuedAction(secondActionId);
 
-        assertFalse(yrfTimelock.getQueuedAction(secondActionId).executed, "second not executed");
+        assertFalse(configTimelock.getQueuedAction(secondActionId).executed, "second not executed");
         // The stuck duplicate remains cancellable.
         vm.prank(guardian);
-        yrfTimelock.cancelQueuedAction(secondActionId);
-        assertTrue(yrfTimelock.getQueuedAction(secondActionId).cancelled, "second cancelled");
+        configTimelock.cancelQueuedAction(secondActionId);
+        assertTrue(configTimelock.getQueuedAction(secondActionId).cancelled, "second cancelled");
     }
 
     // ========== HELPERS ========== //
