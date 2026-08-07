@@ -16,6 +16,15 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 // Contracts
 import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
 
+/// @notice The subset of the PRICE module surface used by the preconditions.
+interface IPriceLike {
+    /// @notice Returns the price of `asset_` denominated in `quote_`.
+    /// @param asset_ The asset to price.
+    /// @param quote_ The quote asset.
+    /// @return The price of one `asset_` unit in `quote_` units, in the PRICE decimals.
+    function getPriceIn(address asset_, address quote_) external view returns (uint256);
+}
+
 /// @notice The subset of the deployed YRF v1.2 surface used by the migration.
 /// @dev `shutdown` is declared with `address[]`, which is ABI-identical to the
 ///      `ERC20[]` parameter of the deployed contract.
@@ -70,6 +79,9 @@ interface IYieldRepoV1 {
 ///        YieldRepurchaseFacilityV2 policies in the Kernel.
 ///      - The Bond Protocol multisig has already authorized the v2 facility as a market
 ///        callback on the SDA auctioneer.
+///      - The price_admin role holder has already registered USDe in the PRICE module
+///        through the PriceConfig v2 policy, so that `PRICE.getPriceIn(OHM, USDe)`
+///        resolves.
 contract YieldRepurchaseFacilityV2Activator is Owned {
     // ========== EXISTING CONTRACTS ========== //
 
@@ -97,11 +109,17 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
 
     // ========== TOKENS ========== //
 
+    /// @notice The OHM token, the asset side of the facility's price reads.
+    address public constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
+
     /// @notice The USDS token, the backing reserve.
     address public constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
 
     /// @notice The sUSDS vault, registered as the backing vault.
     address public constant SUSDS = 0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD;
+
+    /// @notice The USDe token, the reserve of the sUSDe vault.
+    address public constant USDE = 0x4c9EDD5852cd905f086C759E8383e09bff1E68B3;
 
     /// @notice The sUSDe vault, registered as a sell-shares yield asset.
     address public constant SUSDE = 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497;
@@ -177,6 +195,11 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @param facility The unauthorized facility.
     error CallbackNotAuthorized(address facility);
 
+    /// @notice Thrown when a reserve of the v2 assets does not resolve to a non-zero OHM
+    ///         price through the PRICE module.
+    /// @param reserve The reserve token that could not be priced.
+    error ReserveNotPriceable(address reserve);
+
     /// @notice Thrown when a Heart periodic task slot does not hold the expected task.
     /// @param index The inspected task slot.
     /// @param expected The task expected in the slot.
@@ -230,12 +253,16 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     ///        been activated in the Kernel by the DAO MS.
     ///      - The v2 facility has been callback-authorized on the SDA auctioneer by the
     ///        Bond Protocol multisig.
+    ///      - USDe has been registered in the PRICE module through the PriceConfig v2
+    ///        policy by the price_admin role holder.
     ///
     ///      This function reverts if:
     ///      - The caller is not the owner.
     ///      - The activation has already been performed.
     ///      - A v2 stack policy is not active in the Kernel.
     ///      - The facility is not authorized as a market callback on the SDA auctioneer.
+    ///      - USDS or USDe does not resolve to a non-zero OHM price through
+    ///        `PRICE.getPriceIn`.
     ///      - The Heart task slot does not hold YRF v1.2 before the swap, does not hold
     ///        the v2 facility after the swap, or the task count changes.
     ///      - Any of the configuration calls reverts.
@@ -295,11 +322,28 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         if (!IBondAuctioneer(BOND_AUCTIONEER).callbackAuthorized(YIELD_REPO))
             revert CallbackNotAuthorized(YIELD_REPO);
 
+        // The facility prices each asset through `PRICE.getPriceIn(OHM, reserve)` and
+        // its `addAsset` probes the resolution, so both reserves must resolve in the
+        // PRICE module. The USDe registration is performed by the price_admin role
+        // holder through the PriceConfig v2 policy before the proposal is queued.
+        address priceModule = address(Kernel(KERNEL).getModuleForKeycode(toKeycode("PRICE")));
+        _requireReservePriceable(priceModule, USDS);
+        _requireReservePriceable(priceModule, USDE);
+
         // YRF v1.2 must occupy its Heart slot, so that the swap below replaces the
         // intended task.
         (address task, ) = IPeriodicTaskManager(HEART).getPeriodicTaskAtIndex(HEART_YRF_TASK_INDEX);
         if (task != YIELD_REPO_V1)
             revert UnexpectedHeartTask(HEART_YRF_TASK_INDEX, YIELD_REPO_V1, task);
+    }
+
+    /// @dev Reverts with `ReserveNotPriceable` when `PRICE.getPriceIn(OHM, reserve_)`
+    ///      reverts or returns zero.
+    function _requireReservePriceable(address priceModule_, address reserve_) internal view {
+        try IPriceLike(priceModule_).getPriceIn(OHM, reserve_) returns (uint256 reservePrice) {
+            if (reservePrice != 0) return;
+        } catch {} // solhint-disable-line no-empty-blocks
+        revert ReserveNotPriceable(reserve_);
     }
 
     /// @dev Wires the YRF timelock to the facility and enables the timelock, the backing

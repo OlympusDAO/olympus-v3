@@ -10,8 +10,10 @@ pragma solidity >=0.8.24;
 /// @dev Amount conventions: reserve amounts are denominated in the reserve token's
 ///      decimals, vault share amounts in the vault's decimals (equal to the reserve
 ///      decimals for every registered vault), and OHM amounts in the OHM decimals.
-///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price and
-///      the backing value are 18-decimal reserve-per-OHM quotes.
+///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price of
+///      an asset is the OHM price denominated in its reserve token, resolved live
+///      through the PRICE module per daily cycle; the oracle prices and the backing
+///      value are 18-decimal reserve-per-OHM quotes.
 ///
 ///      The reserve-side accounting is balance-based: the facility's holdings of a
 ///      vault's shares and of its reserve token form the vault's buyback pool, and the
@@ -220,6 +222,11 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the vault's share decimals do not match its reserve decimals.
     error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
+    /// @notice Thrown when the reserve of the asset being registered resolves to a zero
+    ///         OHM price through the PRICE module.
+    /// @param reserve The reserve token that could not be priced.
+    error IYieldRepurchaseFacilityV2_ReserveNotPriceable(address reserve);
+
     /// @notice Thrown when the initial discount is not less than 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 
@@ -394,8 +401,9 @@ interface IYieldRepurchaseFacilityV2 {
     ///         yield and designating it as the backing vault.
     /// @dev Callable by the admin role. The asset is registered in the enabled state. The
     ///      vault's share decimals must equal its reserve decimals, the reserve decimals
-    ///      must not exceed 18, and a sell-shares vault cannot be designated as the
-    ///      backing vault.
+    ///      must not exceed 18, the reserve must resolve to a non-zero OHM price through
+    ///      the PRICE module, and a sell-shares vault cannot be designated as the backing
+    ///      vault.
     ///
     ///      Every token balance held by the facility belongs to exactly one pool, so the
     ///      registration rejects any token collision: neither the vault nor the reserve

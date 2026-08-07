@@ -130,6 +130,9 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
 
         _setupActors();
         _loadMainnetContracts();
+        // The oracle-state initialization collects the USDe feed configuration from the
+        // PRICE module, so the production-path registration runs in this suite as well.
+        _registerUsdeInPrice();
         _deployV2Stack();
         _installV2Stack();
         _initializeOracleState();
@@ -176,11 +179,11 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
 
     // ============ PHASE A ============ //
 
-    /// @notice Beats from the pinned block (v1 epoch 9) to the week boundary (epoch 20)
+    /// @notice Beats from the pinned block (v1 epoch 1) to the week boundary (epoch 20)
     ///         without purchases: v1 holds no OHM at the boundary and its unsold
     ///         inventory is the organic residual that enters the day-1 total.
     function _runPhaseA() internal {
-        assertEq(yieldRepoV1.epoch(), 9, "phase A: pinned epoch");
+        assertEq(yieldRepoV1.epoch(), 1, "phase A: pinned epoch");
         while (yieldRepoV1.epoch() != 20) {
             _beatIntraDay();
         }
@@ -435,7 +438,7 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
         //   delta(d) <= seedPool * (rate_d - rate_1) / rate_1 + slack,
         // slack = 1 wei of the seed round trip + 3 floor wei per transition * 6 = 19,
         // rounded to 20. On the pinned fork the weekly rate growth is ~0.06%, so the
-        // envelope stays below 9e18 while the observed divergence peaks below 2e18.
+        // envelope stays below 7.5e18 while the observed divergence peaks below 1.5e18.
         uint256 rateNow = susds.previewRedeem(1e18);
         assertLe(
             uint256(poolDelta),

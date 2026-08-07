@@ -37,7 +37,8 @@ library YRFBondMarketLib {
     /// @param payoutToken The token the market pays out.
     /// @param quoteToken The quote token (OHM).
     /// @param capacity The market capacity, in payout token units.
-    /// @param oraclePrice The quote price of one payout unit, in oracle decimals.
+    /// @param oraclePrice The price of one quote token (OHM) unit, denominated in the
+    ///        payout token, in oracle decimals.
     /// @param initialDiscount The discount applied to the oracle price for the initial
     ///        market price (`1e18` = 100%).
     /// @param oracleDecimals The decimals of `oraclePrice`.

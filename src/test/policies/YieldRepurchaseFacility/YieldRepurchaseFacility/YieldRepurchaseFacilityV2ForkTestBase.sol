@@ -3,16 +3,20 @@ pragma solidity >=0.8.24;
 
 import {Test} from "@forge-std-1.9.6/Test.sol";
 
-import {AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {AggregatorV2V3Interface, AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -124,10 +128,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
     // ============ FORK CONFIGURATION ============ //
 
-    /// @notice Pinned mainnet block (2026-07-10 00:44:23 UTC). YRF v1.2 is mid-week at
-    ///         epoch 9 with a projected `nextYield` and an unspent weekly budget, which the
-    ///         setup migrates into the v2 seeds.
-    uint256 internal constant FORK_BLOCK = 25_498_685;
+    /// @notice Pinned mainnet block (2026-08-04, after the in-place PRICE v1.2 upgrade).
+    ///         YRF v1.2 is at epoch 1 with a projected `nextYield` and an unspent weekly
+    ///         budget, which the setup migrates into the v2 seeds.
+    uint256 internal constant FORK_BLOCK = 25_680_000;
 
     // These addresses are hard-coded, as the values in env.json can change while this test
     // operates on a pinned block.
@@ -162,9 +166,16 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     address internal constant CLEARINGHOUSE_DAI_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
     address internal constant CLEARINGHOUSE_USDS_V1_2 = 0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0;
 
-    /// @notice The Chainlink feeds read by the PRICE module.
-    address internal constant CHAINLINK_OHM_ETH = 0x9a72298ae3886221820B1c878d12D872087D3a23;
-    address internal constant CHAINLINK_DAI_ETH = 0x773616E4d11A78F511299002da57A0a94577F1f4;
+    /// @notice The PriceConfig v2 policy: the production path for registering an asset
+    ///         in the PRICE module (gated to the price_admin role, held by the DAO MS).
+    address internal constant PRICE_CONFIG = 0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd;
+
+    /// @notice The Chainlink USDe/USD aggregator, registered as the single USDe feed.
+    address internal constant CHAINLINK_USDE_USD = 0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961;
+
+    /// @notice The USDe feed update threshold registered in PRICE (the production
+    ///         parameter: the 24-hour feed heartbeat).
+    uint48 internal constant USDE_UPDATE_THRESHOLD = 86_400;
 
     // ============ DEPLOYMENT PARAMETERS ============ //
 
@@ -202,6 +213,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     RolesAdmin internal rolesAdmin;
     TRSRYv1 internal treasury;
     PRICEv1 internal price;
+    /// @notice The v2 surface of the same PRICE module (v1.2 provides both).
+    IPRICEv2 internal priceV2;
     CHREGv1 internal chreg;
     OlympusHeart internal heart;
     IYieldRepoV1 internal yieldRepoV1;
@@ -252,8 +265,42 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
     // ============ ORACLE PRICE STATE ============ //
 
-    int256 internal ohmEthAnswer;
-    int256 internal daiEthAnswer;
+    /// @notice The steered OHM/USD price (18 decimals): every OHM feed of the PRICE
+    ///         module is mocked to this value, so the module resolves the OHM price to it
+    ///         exactly. USDS is pinned to exactly 1e18, so `getPriceIn(OHM, USDS)` equals
+    ///         this value as well.
+    uint256 internal ohmPriceUsd;
+
+    /// @notice A Chainlink-interface aggregator mocked at the source: `latestRoundData`
+    ///         returns the pinned answer with a fresh timestamp on every warp.
+    struct ChainlinkFeedMock {
+        address aggregator;
+        int256 answer;
+    }
+
+    /// @notice The aggregators behind the USDS and USDe feeds of the PRICE module,
+    ///         collected from the live feed configuration.
+    ChainlinkFeedMock[] internal chainlinkFeedMocks;
+
+    /// @notice An OHM feed of the PRICE module, mocked at the feed-submodule call
+    ///         boundary with the exact per-feed calldata.
+    /// @dev The OHM feeds resolve through Uniswap V3 TWAPs (and a Chainlink composite
+    ///      averaged with them), and a pool cannot be steered to a chosen target price,
+    ///      so the OHM price is injected at the lowest boundary that can express it: the
+    ///      staticcall the PRICE module makes to the feed submodule. The module's
+    ///      registry, strategy, and freshness logic stay live.
+    struct OhmFeedMock {
+        address submodule;
+        bytes callData;
+    }
+
+    /// @notice The mocked OHM feed calls, collected from the live feed configuration.
+    OhmFeedMock[] internal ohmFeedMocks;
+
+    /// @notice When set, the USDe aggregator is mocked with a timestamp beyond its update
+    ///         threshold, so the PRICE module rejects the USDe price as stale and the
+    ///         facility skips the sUSDe daily cycle.
+    bool internal susdeReserveFeedStale;
 
     // ============ MIRROR MODEL ============ //
 
@@ -300,6 +347,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         _setupActors();
         _loadMainnetContracts();
+        // The USDe PRICE registration precedes the facility asset registration: the
+        // facility's `addAsset` probes `PRICE.getPriceIn(OHM, USDe)`.
+        _registerUsdeInPrice();
         _deployV2Stack();
         _installV2Stack();
         _computeSeeds();
@@ -324,6 +374,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         roles = ROLESv1(address(kernel.getModuleForKeycode(toKeycode("ROLES"))));
         treasury = TRSRYv1(address(kernel.getModuleForKeycode(toKeycode("TRSRY"))));
         price = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
+        priceV2 = IPRICEv2(address(price));
         chreg = CHREGv1(address(kernel.getModuleForKeycode(toKeycode("CHREG"))));
         rolesAdmin = RolesAdmin(ROLES_ADMIN);
         heart = OlympusHeart(HEART);
@@ -364,12 +415,66 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         vm.label(CLEARINGHOUSE_DAI_V1, "ClearinghouseDaiV1");
         vm.label(CLEARINGHOUSE_DAI_V1_1, "ClearinghouseDaiV1_1");
         vm.label(CLEARINGHOUSE_USDS_V1_2, "ClearinghouseUsdsV1_2");
-        vm.label(CHAINLINK_OHM_ETH, "ChainlinkOhmEth");
-        vm.label(CHAINLINK_DAI_ETH, "ChainlinkDaiEth");
+        vm.label(PRICE_CONFIG, "PriceConfigV2");
+        vm.label(CHAINLINK_USDE_USD, "ChainlinkUsdeUsd");
 
         // The reserve-balance model relies on the fact that no clearinghouse is active on
         // the pinned block (the v2 backing balance then equals the TRSRY share balance).
         assertEq(chreg.activeCount(), 0, "setup: active clearinghouses");
+    }
+
+    /// @notice Registers USDe in the PRICE module through the production path: the
+    ///         PriceConfig v2 policy, called by the price_admin role holder (the DAO MS),
+    ///         with the production feed parameters (a single Chainlink USDe/USD feed with
+    ///         the 24-hour update threshold, no moving average, no strategy).
+    function _registerUsdeInPrice() internal {
+        // On the pinned block USDe is not registered yet
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, USDE));
+        priceV2.getPriceIn(OHM, USDE);
+
+        // A single feed without a moving average needs no strategy (the sUSDS shape)
+        IPRICEv2.Component memory strategy = IPRICEv2.Component({
+            target: toSubKeycode(""),
+            selector: bytes4(0),
+            params: abi.encode("")
+        });
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component({
+            target: toSubKeycode("PRICE.CHAINLINK"),
+            selector: ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            params: abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams({
+                    feed: AggregatorV2V3Interface(CHAINLINK_USDE_USD),
+                    updateThreshold: USDE_UPDATE_THRESHOLD
+                })
+            )
+        });
+
+        // The expectation pins the registration to the live feed answer
+        (, int256 liveAnswer, , , ) = AggregatorV3Interface(CHAINLINK_USDE_USD).latestRoundData();
+        uint8 feedDecimals = AggregatorV2V3Interface(CHAINLINK_USDE_USD).decimals();
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: uint256(liveAnswer) * 10 ** (18 - feedDecimals),
+            toleranceBps: 100
+        });
+
+        vm.prank(DAO_MS);
+        IPriceConfigv2(PRICE_CONFIG).addAsset(
+            USDE,
+            false, // storeMovingAverage
+            false, // useMovingAverage
+            0, // movingAverageDuration
+            0, // lastObservationTime
+            new uint256[](0), // observations
+            strategy,
+            feeds,
+            expectations
+        );
+
+        assertGt(priceV2.getPriceIn(OHM, USDE), 0, "setup: USDe priceable");
     }
 
     function _deployV2Stack() internal {
@@ -521,10 +626,92 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         assertEq(tasksAfter.length, tasksBefore.length, "setup: task count");
     }
 
+    /// @notice Collects the mock surface of the PRICE feed layer from the live feed
+    ///         configuration and installs the initial mocks.
+    /// @dev The steered OHM/USD price starts at the live CURRENT resolution of the
+    ///      pinned block. USDS is pinned to exactly $1 (every aggregator behind its
+    ///      feeds answers exactly one unit), so `getPriceIn(OHM, USDS)` equals the
+    ///      steered OHM/USD price exactly and the v1 and v2 branches of the parity test
+    ///      price their markets identically. USDe keeps its live answer, so the sUSDe
+    ///      markets exercise a non-unit reserve price.
     function _initializeOracleState() internal {
-        // Start the simulated price path from the live feed answers at the pinned block
-        (, ohmEthAnswer, , , ) = AggregatorV3Interface(CHAINLINK_OHM_ETH).latestRoundData();
-        (, daiEthAnswer, , , ) = AggregatorV3Interface(CHAINLINK_DAI_ETH).latestRoundData();
+        // The live CURRENT price of the pinned block seeds the steered price path (all
+        // feeds are fresh on a live block)
+        ohmPriceUsd = priceV2.getPrice(OHM);
+
+        _collectChainlinkFeedMocks(USDS, true);
+        _collectChainlinkFeedMocks(USDE, false);
+        _collectOhmFeedMocks();
+
+        _updateOracles();
+
+        assertEq(priceV2.getPrice(USDS), 1e18, "setup: USDS pinned to one");
+        assertEq(priceV2.getPriceIn(OHM, USDS), ohmPriceUsd, "setup: OHM price in USDS");
+        assertEq(priceV2.getPrice(OHM), ohmPriceUsd, "setup: OHM price mocked");
+    }
+
+    /// @notice Collects the aggregators behind the single-feed Chainlink components of an
+    ///         asset registered in PRICE.
+    /// @param asset_ The registered asset.
+    /// @param pinToUnit_ When set, the aggregator answer is pinned to exactly one unit of
+    ///        the feed's decimals; otherwise the live answer of the pinned block is kept.
+    function _collectChainlinkFeedMocks(address asset_, bool pinToUnit_) internal {
+        IPRICEv2.Asset memory assetData = priceV2.getAssetData(asset_);
+        IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+
+        for (uint256 i = 0; i < feeds.length; ++i) {
+            assertEq(
+                feeds[i].selector,
+                ChainlinkPriceFeeds.getOneFeedPrice.selector,
+                "setup: unexpected feed shape"
+            );
+            ChainlinkPriceFeeds.OneFeedParams memory params = abi.decode(
+                feeds[i].params,
+                (ChainlinkPriceFeeds.OneFeedParams)
+            );
+
+            int256 answer;
+            if (pinToUnit_) {
+                answer = int256(10 ** params.feed.decimals());
+            } else {
+                (, answer, , , ) = params.feed.latestRoundData();
+            }
+            chainlinkFeedMocks.push(
+                ChainlinkFeedMock({aggregator: address(params.feed), answer: answer})
+            );
+        }
+    }
+
+    /// @notice Collects the per-feed submodule calldata of every OHM feed, so that
+    ///         `_updateOracles` can mock each of them to the steered OHM/USD price.
+    function _collectOhmFeedMocks() internal {
+        IPRICEv2.Asset memory assetData = priceV2.getAssetData(OHM);
+        IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+        uint8 priceDecimals = priceV2.decimals();
+
+        for (uint256 i = 0; i < feeds.length; ++i) {
+            address submodule = address(
+                ModuleWithSubmodules(address(price)).getSubmoduleForKeycode(feeds[i].target)
+            );
+            assertTrue(submodule != address(0), "setup: OHM feed submodule missing");
+
+            // The exact staticcall payload the PRICE module sends to the submodule
+            ohmFeedMocks.push(
+                OhmFeedMock({
+                    submodule: submodule,
+                    callData: abi.encodeWithSelector(
+                        feeds[i].selector,
+                        OHM,
+                        priceDecimals,
+                        feeds[i].params
+                    )
+                })
+            );
+        }
+
+        // All OHM feeds are mocked to the same value, so the deviation-average strategy
+        // resolves to that value exactly
+        assertEq(ohmFeedMocks.length, 4, "setup: OHM feed count");
     }
 
     function _initializeModel() internal {
@@ -556,9 +743,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
     // ============ BEAT DRIVER ============ //
 
-    /// @notice Advances to the next heart beat slot, refreshes the Chainlink mocks,
-    ///         applies the expected state transition to the mirror model, executes the
-    ///         beat, and asserts the resulting on-chain state against the model.
+    /// @notice Advances to the next heart beat slot, refreshes the feed mocks, applies
+    ///         the expected state transition to the mirror model, executes the beat, and
+    ///         asserts the resulting on-chain state against the model.
     function _beat() internal {
         vm.warp(heart.lastBeat() + heart.frequency());
         _updateOracles();
@@ -603,44 +790,53 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         modelTrsryRawUsds = externalRawUsds;
     }
 
-    /// @notice Re-mocks both Chainlink feeds with the current simulated answers and a
-    ///         fresh timestamp. Required before every beat: `PRICE.updateMovingAverage`
-    ///         and the EmissionManager task read the live feeds and revert on staleness.
+    /// @notice Re-installs the whole feed mock surface: the Chainlink-interface
+    ///         aggregators behind the USDS and USDe feeds (pinned answers, fresh
+    ///         timestamps) and the per-feed submodule calls of the OHM feeds (the steered
+    ///         OHM/USD price). Required before every beat: the CURRENT price resolution
+    ///         of the PRICE module enforces the feed update thresholds, and mocks are not
+    ///         part of the state snapshots.
     function _updateOracles() internal {
-        vm.mockCall(
-            CHAINLINK_OHM_ETH,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(
-                uint80(block.number),
-                ohmEthAnswer,
-                block.timestamp,
-                block.timestamp,
-                uint80(block.number)
-            )
-        );
-        vm.mockCall(
-            CHAINLINK_DAI_ETH,
-            abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
-            abi.encode(
-                uint80(block.number),
-                daiEthAnswer,
-                block.timestamp,
-                block.timestamp,
-                uint80(block.number)
-            )
-        );
+        for (uint256 i = 0; i < chainlinkFeedMocks.length; ++i) {
+            ChainlinkFeedMock storage feedMock = chainlinkFeedMocks[i];
+            uint256 updatedAt = block.timestamp;
+            if (susdeReserveFeedStale && feedMock.aggregator == CHAINLINK_USDE_USD) {
+                updatedAt = block.timestamp - USDE_UPDATE_THRESHOLD - 1;
+            }
+            vm.mockCall(
+                feedMock.aggregator,
+                abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+                abi.encode(uint80(1), feedMock.answer, updatedAt, updatedAt, uint80(1))
+            );
+        }
+
+        for (uint256 i = 0; i < ohmFeedMocks.length; ++i) {
+            vm.mockCall(
+                ohmFeedMocks[i].submodule,
+                ohmFeedMocks[i].callData,
+                abi.encode(ohmPriceUsd)
+            );
+        }
     }
 
-    /// @notice Applies a relative change (in signed basis points) to the OHM/ETH answer,
-    ///         moving the OHM price for the subsequent beats.
+    /// @notice Applies a relative change (in signed basis points) to the steered OHM/USD
+    ///         price, moving the OHM price for the subsequent beats.
     function _applyPriceDeltaBps(int256 deltaBps_) internal {
-        ohmEthAnswer = (ohmEthAnswer * (10_000 + deltaBps_)) / 10_000;
+        ohmPriceUsd = uint256((int256(ohmPriceUsd) * (10_000 + deltaBps_)) / 10_000);
     }
 
-    /// @notice The oracle price the PRICE module stores at the pending beat:
-    ///         ohmEth (18 dec) * 1e18 / daiEth (18 dec) -> 18 decimals (floor).
+    /// @notice The oracle price of the sUSDS asset and of the price gate at the pending
+    ///         beat: the live `getPriceIn(OHM, USDS)` resolution, evaluated on the same
+    ///         mocked feeds the facility reads. USDS is pinned to exactly 1e18, so the
+    ///         value equals the steered OHM/USD price.
     function _expectedOraclePrice() internal view returns (uint256) {
-        return uint256(ohmEthAnswer).mulDiv(1e18, uint256(daiEthAnswer));
+        return priceV2.getPriceIn(OHM, USDS);
+    }
+
+    /// @notice The oracle price of the sUSDe asset at the pending beat: the live
+    ///         `getPriceIn(OHM, USDe)` resolution on the same mocked feeds.
+    function _expectedSusdeOraclePrice() internal view returns (uint256) {
+        return priceV2.getPriceIn(OHM, USDE);
     }
 
     // ============ MIRROR MODEL: BEAT TRANSITION ============ //
@@ -664,12 +860,19 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         _modelProcessOhmPurchases();
 
-        uint256 oraclePrice = _expectedOraclePrice();
-        if (oraclePrice < BACKING) return;
+        // The price gate compares the OHM price in the backing reserve (USDS) against
+        // the backing value; per-vault market pricing reads each vault's own reserve
+        // price below.
+        uint256 gatePrice = _expectedOraclePrice();
+        if (gatePrice < BACKING) return;
 
         uint256 daysRemaining = DAYS_PER_WEEK - uint256(modelEpoch / EPOCHS_PER_DAY);
-        _modelDailyCycle(SUSDS, daysRemaining, oraclePrice, marketCountBefore_);
-        _modelDailyCycle(SUSDE, daysRemaining, oraclePrice, marketCountBefore_);
+        _modelDailyCycle(SUSDS, daysRemaining, gatePrice, marketCountBefore_);
+        // A stale USDe feed reverts the sUSDe price resolution; the facility skips the
+        // sUSDe daily cycle through its self-call isolation and the beat continues.
+        if (!susdeReserveFeedStale) {
+            _modelDailyCycle(SUSDE, daysRemaining, _expectedSusdeOraclePrice(), marketCountBefore_);
+        }
     }
 
     function _modelWeeklyReset() internal {

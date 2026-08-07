@@ -130,6 +130,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "\n",
                 "- The DAO MS has executed `kernel.executeAction(ActivatePolicy, ...)` for the BackingOracle, the YRFTimelock, and the YieldRepurchaseFacilityV2 policies.\n",
                 "- The Bond Protocol multisig (0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969) has executed `setCallbackAuthStatus` on the SDA auctioneer for the YieldRepurchaseFacilityV2 address.\n",
+                "- The DAO MS (the `price_admin` role holder) has registered USDe in the PRICE module through the PriceConfig v2 policy (`addAsset` with a Chainlink USDe/USD feed), so that `PRICE.getPriceIn(OHM, USDe)` resolves. The facility prices each asset live through `PRICE.getPriceIn(OHM, reserve)`, and both its `addAsset` registration probe and the activator precondition check depend on the resolution.\n",
                 "\n"
             );
     }

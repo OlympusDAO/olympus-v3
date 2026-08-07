@@ -15,9 +15,10 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///         YRF v1.2 and drives the facility through two full weekly cycles with real
 ///         heart beats, daily oracle price moves in both directions, full and partial
 ///         bond market buyouts on both assets (sUSDS reserve markets and sUSDe share
-///         markets), simulated sUSDe rewards, treasury in/outflows, and a mid-week
-///         clearinghouse offset increase. Every beat is asserted exactly against the
-///         mirror model of the base contract.
+///         markets), simulated sUSDe rewards, treasury in/outflows, a mid-week
+///         clearinghouse offset increase, and a one-day stale USDe feed that skips only
+///         the sUSDe daily cycle. Every beat is asserted exactly against the mirror
+///         model of the base contract.
 contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2ForkTestBase {
     using FullMath for uint256;
 
@@ -27,38 +28,37 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     // runtime computation in the setup against silent regressions.
 
     /// @notice YRF v1.2 `nextYield` at the fork block.
-    uint256 internal constant ANCHOR_V1_NEXT_YIELD = 5_982_089_731_452_058_944_082;
+    uint256 internal constant ANCHOR_V1_NEXT_YIELD = 4_928_271_123_449_554_446_677;
     /// @notice YRF v1.2 `lastReserveBalance` at the fork block.
-    uint256 internal constant ANCHOR_V1_LAST_RESERVE_BALANCE = 7_806_531_153_059_147_483_913_598;
+    uint256 internal constant ANCHOR_V1_LAST_RESERVE_BALANCE = 6_233_970_843_384_700_549_263_322;
     /// @notice YRF v1.2 `lastConversionRate` at the fork block.
-    uint256 internal constant ANCHOR_V1_LAST_CONVERSION_RATE = 1_102_142_411_298_698_298;
+    uint256 internal constant ANCHOR_V1_LAST_CONVERSION_RATE = 1_105_110_460_979_110_481;
 
     // susdsSeedYield = v1.nextYield + v1 USDS balance + previewRedeem(v1 sUSDS balance)
-    //                = 5982089731452058944082 + 1966844232402929448780
-    //                  + 7079416863813230974217
-    //                = 15028350827668219367079 (18 decimals, ~15028 USDS).
-    uint256 internal constant ANCHOR_SUSDS_SEED_YIELD = 15_028_350_827_668_219_367_079;
+    //                = 4928271123449554446677 + 581035073856701697328
+    //                  + 6962457638133393135336
+    //                = 12471763835439649279341 (18 decimals, ~12472 USDS).
+    uint256 internal constant ANCHOR_SUSDS_SEED_YIELD = 12_471_763_835_439_649_279_341;
 
     // susdeSeedBalance = susde.previewRedeem(susde.balanceOf(TRSRY))
-    //                  = previewRedeem(24787014187233048960130950)
-    //                  = 30701086260475240266353512 (~30.7M USDe).
-    uint256 internal constant ANCHOR_SUSDE_SEED_BALANCE = 30_701_086_260_475_240_266_353_512;
+    //                  = previewRedeem(24659208386952951521922260)
+    //                  = 30625819877463308069230224 (~30.6M USDe).
+    uint256 internal constant ANCHOR_SUSDE_SEED_BALANCE = 30_625_819_877_463_308_069_230_224;
 
     // susdeSeedYield = susdeSeedBalance * 400 / 10000 / 52 * 5e17 / 1e18
-    //                = 30701086260475240266353512 * 400 / 10000 / 52 / 2
-    //                = 11808110100182784717828 (~11808 USDe, floor at each step).
-    uint256 internal constant ANCHOR_SUSDE_SEED_YIELD = 11_808_110_100_182_784_717_828;
+    //                = 30625819877463308069230224 * 400 / 10000 / 52 / 2
+    //                = 11779161491332041565088 (~11779 USDe, floor at each step).
+    uint256 internal constant ANCHOR_SUSDE_SEED_YIELD = 11_779_161_491_332_041_565_088;
 
-    // The oracle price stored by the PRICE module at the fork block:
-    // ohmEth (9.884202867418591e15) * 1e18 / daiEth (5.69962526353400e14)
-    // = 17341846894141216413 (~$17.34 per OHM, 18 decimals).
-    uint256 internal constant ANCHOR_INITIAL_PRICE = 17_341_846_894_141_216_413;
+    // The live CURRENT OHM price resolved by the PRICE module at the fork block
+    // (~$18.66 per OHM, 18 decimals), captured as the base of the steered price path.
+    uint256 internal constant ANCHOR_INITIAL_PRICE = 18_658_476_018_160_737_830;
 
     // ============ SCENARIO TABLES (ONE ENTRY PER DAY) ============ //
 
-    /// @notice Daily oracle price moves in signed basis points, applied to the OHM/ETH
-    ///         feed before the daily beat. Mixed directions, bounded by ~2.2% per day, so
-    ///         the price stays well above the backing for the whole test.
+    /// @notice Daily oracle price moves in signed basis points, applied to the steered
+    ///         OHM/USD price before the daily beat. Mixed directions, bounded by ~2.2%
+    ///         per day, so the price stays well above the backing for the whole test.
     int256[14] internal PRICE_DELTA_BPS = [
         int256(150),
         -220,
@@ -189,7 +189,9 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
         // The market authorization and the oracle price
         assertTrue(auctioneer.callbackAuthorized(address(yieldRepo)), "callback authorized");
-        assertEq(price.getLastPrice(), ANCHOR_INITIAL_PRICE, "initial oracle price");
+        // The steered price path starts at the live CURRENT resolution of the fork block
+        assertEq(ohmPriceUsd, ANCHOR_INITIAL_PRICE, "initial oracle price");
+        assertEq(_expectedOraclePrice(), ANCHOR_INITIAL_PRICE, "initial gate price");
 
         // The clearinghouse configuration: both DAI clearinghouses are included, the
         // v1.1 inclusion carries the initial phantom-receivables offset.
@@ -215,11 +217,21 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             _accrueSusdeRewards();
             _applyPriceDeltaBps(PRICE_DELTA_BPS[day]);
 
+            // Day 8: the USDe feed goes stale for the daily beat. The PRICE module
+            // rejects the stale USDe price, the facility skips the sUSDe daily cycle
+            // through its self-call isolation, and the beat and the sUSDS market
+            // proceed.
+            if (day == 8) {
+                susdeReserveFeedStale = true;
+                vm.recordLogs();
+            }
+
             // The daily beat: on day 0 and day 7 it also performs the weekly reset
             bool isResetDay = day % 7 == 0;
             if (isResetDay) vm.recordLogs();
             _beat();
             if (isResetDay) _assertNoMismatchEvents();
+            if (day == 8) _assertSusdeCycleSkipped();
 
             if (day == 0) _assertWeekOneStart();
             if (day == 7) _assertWeekTwoStart();
@@ -341,12 +353,13 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
 
         // The projection drops by the difference of the floored per-clearinghouse
-        // interest values, not by the floored interest on the offset delta itself.
-        // receivables = 4694589579921195513858306 (live at the pinned block).
-        // before: ((receivables - 2_000_000e18) * 5) / 1000 / 52 = 259095151915499568640.
-        // after:  ((receivables - 4_000_000e18) * 5) / 1000 / 52 = 66787459607807260947.
-        // delta = 192307692307692307693, one wei above (2_000_000e18 * 5) / 1000 / 52
-        // due to the sequential floor divisions.
+        // interest values, not by the floored interest on the offset delta itself (the
+        // sequential floor divisions can shift the difference by a wei).
+        // receivables = 4616766973610647568650468 (live at the pinned block).
+        // before: ((receivables - 2_000_000e18) * 5) / 1000 / 52 = 251612209001023804677.
+        // after:  ((receivables - 4_000_000e18) * 5) / 1000 / 52 = 59304516693331496985.
+        // delta = 192307692307692307692, equal to (2_000_000e18 * 5) / 1000 / 52 at
+        // these values.
         uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_DAI_V1_1);
         uint256 interestBefore = ((receivables - DAI_V1_1_INITIAL_OFFSET) * 5) / 1000 / 52;
         uint256 interestAfter = ((receivables -
@@ -380,6 +393,30 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             market[SUSDE].minPrice,
             "floor: sUSDe price at floor"
         );
+    }
+
+    /// @notice Day 8 (stale USDe feed): the beat survived (asserted by the mirror model
+    ///         inside `_beat`), the sUSDS market was created, the sUSDe daily cycle was
+    ///         skipped with `DailyCycleSkipped`, and no sUSDe market exists. The feed
+    ///         recovers for the following beats.
+    function _assertSusdeCycleSkipped() internal {
+        bytes32 skippedTopic = keccak256("DailyCycleSkipped(address)");
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bool found = false;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (
+                logs[i].emitter == address(yieldRepo) &&
+                logs[i].topics[0] == skippedTopic &&
+                address(uint160(uint256(logs[i].topics[1]))) == SUSDE
+            ) {
+                found = true;
+            }
+        }
+        assertTrue(found, "stale feed: sUSDe cycle skipped event");
+        assertTrue(market[SUSDS].live, "stale feed: sUSDS market created");
+        assertFalse(market[SUSDE].live, "stale feed: no sUSDe market");
+
+        susdeReserveFeedStale = false;
     }
 
     /// @notice Asserts that the weekly reset emitted no ClearinghouseDebtTokenMismatch:

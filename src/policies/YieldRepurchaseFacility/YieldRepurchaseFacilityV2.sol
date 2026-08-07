@@ -26,7 +26,7 @@ import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClear
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
-import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 
@@ -48,9 +48,10 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      every third epoch runs a daily cycle that opens 24-hour bond markets buying OHM
 ///      with the reserves, and the 21st epoch first runs the weekly reset, which
 ///      withdraws the projected yield from the treasury into the per-vault buyback
-///      pools. The purchased OHM is burned against a treasury withdrawal priced by the
-///      backing oracle. Markets are not opened while the oracle price is below the
-///      backing.
+///      pools. Each vault's market is priced by the live OHM price denominated in its
+///      reserve token (`PRICE.getPriceIn`). The purchased OHM is burned against a
+///      treasury withdrawal priced by the backing oracle. Markets are not opened while
+///      the OHM price in the backing reserve is below the backing.
 ///
 ///      The reserve-side accounting is balance-based: the facility's balances of a
 ///      vault's shares and of its reserve token are the vault's buyback pool, and the
@@ -159,7 +160,7 @@ contract YieldRepurchaseFacilityV2 is
     // ============ MODULES ============ //
 
     TRSRYv1 internal TRSRY;
-    PRICEv1 internal PRICE;
+    PRICEv2 internal PRICE;
     CHREGv1 internal CHREG;
 
     /// @notice Cached `PRICE.decimals()`.
@@ -257,6 +258,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reverts if:
     ///      - Any of the TRSRY, PRICE, CHREG, or ROLES modules does not report major
     ///        version 1.
+    ///      - The PRICE module reports a minor version below 2. The facility prices the
+    ///        assets through `PRICE.getPriceIn`, which the PRICE surface provides from
+    ///        version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](4);
@@ -266,16 +270,19 @@ contract YieldRepurchaseFacilityV2 is
         dependencies[3] = _KEYCODE_ROLES;
 
         TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
-        PRICE = PRICEv1(getModuleAddress(dependencies[1]));
+        PRICE = PRICEv2(getModuleAddress(dependencies[1]));
         CHREG = CHREGv1(getModuleAddress(dependencies[2]));
         ROLES = ROLESv1(getModuleAddress(dependencies[3]));
 
         (uint8 trsryMajor, ) = TRSRY.VERSION();
-        (uint8 priceMajor, ) = PRICE.VERSION();
+        (uint8 priceMajor, uint8 priceMinor) = PRICE.VERSION();
         (uint8 chregMajor, ) = CHREG.VERSION();
         (uint8 rolesMajor, ) = ROLES.VERSION();
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
             revert Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
+
+        // The `getPriceIn` surface is provided by the PRICE module from version 1.2
+        if (priceMinor < 2) revert Policy_WrongModuleVersion(abi.encode([1, 2]));
 
         // The oracle price is compared against the 18-decimal backing value, so the
         // oracle must report 18 decimals.
@@ -512,21 +519,26 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The beat must survive a misbehaving vault: the processing of each vault and the
     ///      processing of the purchased OHM are isolated through self-calls, so a revert
     ///      skips the affected step with an event and the remaining steps and the heartbeat
-    ///      continue. Skipped work is retried on the following beats. The `PRICE` and
-    ///      backing oracle reads are deliberately not isolated: both are protocol-owned
-    ///      dependencies, and a failure there is a configuration error that should surface
-    ///      loudly.
+    ///      continue. Skipped work is retried on the following beats.
     ///
-    ///      Market pricing reads `PRICE.getLastPrice()`, the stored observation, without a
-    ///      freshness check: `Heart.beat()` refreshes it through `PRICE.updateMovingAverage()`
-    ///      in the same transaction before the periodic tasks run, and reverts on a stale
-    ///      Chainlink feed. A caller that invokes `execute` outside the beat therefore
-    ///      prices markets with the observation of the last beat, so the heart role should
-    ///      be granted only to the Heart contract.
+    ///      Market pricing is per asset: each vault's daily cycle reads
+    ///      `PRICE.getPriceIn(OHM, reserve)`, a live resolution through which the PRICE
+    ///      module enforces the freshness thresholds of the configured feeds, reverting
+    ///      on a stale feed or an unregistered reserve. The read runs inside the vault's
+    ///      isolated self-call, so a price failure of one reserve skips only that
+    ///      vault's daily cycle.
+    ///
+    ///      The price gate compares the OHM price denominated in the backing reserve
+    ///      against the backing value. The gate read and the backing oracle read are
+    ///      deliberately not isolated: both are protocol-owned dependencies of the
+    ///      backing accounting, and a failure there is a configuration error that should
+    ///      surface loudly.
     ///
     ///      Reverts if:
     ///      - The caller does not hold the heart role.
-    ///      - The `PRICE.getLastPrice()` or the backing oracle `backing()` read reverts.
+    ///      - The `PRICE.getPriceIn` read of the backing reserve reverts, including when
+    ///        no backing vault is designated (the PRICE module rejects the zero address).
+    ///      - The backing oracle `backing()` read reverts.
     function execute() external override nonReentrant onlyRole(HEART_ROLE) {
         if (!isEnabled) return;
         _epoch += 1;
@@ -545,9 +557,11 @@ contract YieldRepurchaseFacilityV2 is
         // the reserve it spends, growing the pool on every cycle, so market creation
         // is skipped for every vault. Skipping before any redeem also keeps the reserve
         // in the yield-earning vaults; the unspent pool rolls into the following days.
-        uint256 oraclePrice = PRICE.getLastPrice();
+        // The gate compares like for like: the backing value and the gate price are
+        // both denominated in the backing reserve.
+        uint256 gatePrice = _reservePrice(_backingReserve());
         uint256 backing = _backing();
-        if (oraclePrice == 0 || oraclePrice < backing) return;
+        if (gatePrice == 0 || gatePrice < backing) return;
 
         // In the range [1, 7]: the weekly reset has wrapped the epoch to zero
         uint256 daysRemaining = _DAYS_PER_WEEK - uint256(_epoch / _EPOCHS_PER_DAY);
@@ -558,31 +572,29 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            try this.selfProcessVaultDaily(vault, daysRemaining, oraclePrice) {} catch {
+            try this.selfProcessVaultDaily(vault, daysRemaining) {} catch {
                 emit DailyCycleSkipped(vault);
             }
         }
     }
 
-    /// @notice Runs the daily cycle of a single vault.
+    /// @notice Runs the daily cycle of a single vault, priced by the live OHM price
+    ///         denominated in the vault's reserve.
     /// @dev External only for the self-call isolation in `execute`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`.
     ///
-    ///      Reverts if the caller is not the facility itself.
+    ///      Reverts if:
+    ///      - The caller is not the facility itself.
+    ///      - The `PRICE.getPriceIn` read of the vault's reserve reverts.
     /// @param vault_ The vault to process.
     /// @param daysRemaining_ The number of daily cycles remaining in the week, including
     ///        this one.
-    /// @param oraclePrice_ The oracle price used for the market pricing, in oracle
-    ///        decimals.
-    function selfProcessVaultDaily(
-        address vault_,
-        uint256 daysRemaining_,
-        uint256 oraclePrice_
-    ) external {
+    function selfProcessVaultDaily(address vault_, uint256 daysRemaining_) external {
         _requireCaller(address(this));
 
-        _executeDailyCycle(vault_, _assetConfigs[vault_], daysRemaining_, oraclePrice_);
+        ReserveAsset storage config = _assetConfigs[vault_];
+        _executeDailyCycle(vault_, config, daysRemaining_, _reservePrice(config.reserve));
     }
 
     /// @notice Performs the weekly reset: projects the yield of the coming week,
@@ -909,8 +921,10 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Creates a bond market that sells the vault's payout token for OHM.
     /// @dev The pricing and the submission are performed by the linked `YRFBondMarketLib`
     ///      through a delegatecall, so the facility is the market owner and callback.
-    ///      For a sell-shares asset the payout token is the vault share and the oracle
-    ///      price is converted to a per-share price through the conversion rate (floor).
+    ///      `oraclePrice_` is the OHM price denominated in the vault's reserve token. For
+    ///      a sell-shares asset the payout token is the vault share and the reserve price
+    ///      is converted to a per-share price through the conversion rate (floor): one
+    ///      share is worth the conversion rate in reserve units.
     ///      Failures are absorbed: a zero conversion rate or a rejected market submission
     ///      emits `MarketCreationFailed` and keeps the funds with the facility. A created
     ///      market is recorded in `_marketVaults`, which authorizes its callback.
@@ -1045,6 +1059,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault's share decimals do not match its reserve decimals (a vault with a
     ///        decimals offset is not supported).
+    ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts (for example when the
+    ///        reserve is not registered in the PRICE module) or returns zero.
     ///      - The yield buyback share exceeds 100% (`1e18`).
     ///      - `setAsBackingVault_` is set together with `sellShares_`.
     function addAsset(
@@ -1090,6 +1106,12 @@ contract YieldRepurchaseFacilityV2 is
             if (registeredReserve == vault_)
                 revert IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
         }
+
+        // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
+        // reserve must resolve against OHM at registration; a PRICE revert (for example
+        // an unregistered reserve) bubbles up.
+        if (_reservePrice(reserve_) == 0)
+            revert IYieldRepurchaseFacilityV2_ReserveNotPriceable(reserve_);
 
         _assetConfigs[vault_] = ReserveAsset({
             vault: vault_,
@@ -1663,6 +1685,14 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Reads the backing value from the backing oracle, in 18 decimals.
     function _backing() private view returns (uint256) {
         return IBackingOracle(backingOracle).backing();
+    }
+
+    /// @notice Returns the live OHM price denominated in `reserve_`, in oracle decimals.
+    /// @dev The `PRICE.getPriceIn` resolution is live: the PRICE module enforces the
+    ///      freshness thresholds of the configured feeds, and reverts when the price of
+    ///      either side of the pair cannot be determined.
+    function _reservePrice(address reserve_) private view returns (uint256) {
+        return PRICE.getPriceIn(address(_OHM), reserve_);
     }
 
     /// @notice Returns the `token_` balance of `account_`.
