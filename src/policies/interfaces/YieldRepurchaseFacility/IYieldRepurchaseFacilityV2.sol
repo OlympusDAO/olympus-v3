@@ -386,6 +386,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param timelock The rejected timelock address.
     error IYieldRepurchaseFacilityV2_TimelockKernelMismatch(address timelock);
 
+    /// @notice Thrown when a proposed backing oracle does not report the facility's
+    ///         kernel as its own or, on the admin setter path, is not an active policy
+    ///         of the kernel.
+    /// @param backingOracle The rejected backing oracle address.
+    error IYieldRepurchaseFacilityV2_InvalidBackingOracle(address backingOracle);
+
     // ============ STRUCTS ============ //
 
     /// @notice The configuration and accounting of a registered reserve asset. The
@@ -525,9 +531,10 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Sets the backing oracle consulted for the market price floor gate and for
     ///         pricing the burn of the purchased OHM.
-    /// @dev Callable by the admin role. The oracle must report the backing as an
-    ///      18-decimal reserve-per-OHM value: an oracle whose `decimals()` is not 18 is
-    ///      rejected. Emits `BackingOracleSet`.
+    /// @dev Callable by the admin role. The oracle must be an active policy of the
+    ///      facility's kernel and report the backing as an 18-decimal reserve-per-OHM
+    ///      value: an oracle whose `decimals()` is not 18 is rejected. Emits
+    ///      `BackingOracleSet`.
     /// @param backingOracle_ The backing oracle policy; must not be the zero address.
     function setBackingOracle(address backingOracle_) external;
 

@@ -250,6 +250,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, or `bondAuctioneer_` is
     ///        the zero address.
     ///      - The timelock does not report `kernel_` as its kernel.
+    ///      - The backing oracle does not report `kernel_` as its kernel.
     ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - The auctioneer reports the zero address as its teller.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
@@ -1288,11 +1289,21 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
+    ///      The setter additionally requires the oracle to be an active policy of the
+    ///      kernel: a rotation runs after the deployment is activated, unlike the
+    ///      constructor wiring.
+    ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - `backingOracle_` is the zero address.
+    ///      - The oracle is not an active policy of the kernel, or does not report the
+    ///        facility's kernel as its own.
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
+        _requireNonzeroAddress(backingOracle_, "backingOracle");
+        if (!kernel.isPolicyActive(Policy(backingOracle_)))
+            revert IYieldRepurchaseFacilityV2_InvalidBackingOracle(backingOracle_);
+
         _setBackingOracle(backingOracle_);
     }
 
@@ -1361,11 +1372,22 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Sets the backing oracle.
-    /// @dev Reverts if:
+    /// @dev The registry activation of the oracle is checked only by the admin setter:
+    ///      this shared path also runs in the constructor, before the deployment is
+    ///      activated in the kernel.
+    ///
+    ///      Reverts if:
     ///      - `backingOracle_` is the zero address.
+    ///      - The oracle does not report the facility's kernel as its own.
     ///      - The oracle does not report the 18 decimals of the backing value.
     function _setBackingOracle(address backingOracle_) internal {
         _requireNonzeroAddress(backingOracle_, "backingOracle");
+
+        // The oracle is a policy of the same installation: an oracle wired to a
+        // different kernel, or an address without a kernel (for example a token whose
+        // `decimals()` also reports 18), is rejected.
+        if (address(Policy(backingOracle_).kernel()) != address(kernel))
+            revert IYieldRepurchaseFacilityV2_InvalidBackingOracle(backingOracle_);
 
         // The backing value is compared against the 18-decimal oracle prices and scaled
         // by the 18-decimal convention in the burn pricing, so an oracle with any other
