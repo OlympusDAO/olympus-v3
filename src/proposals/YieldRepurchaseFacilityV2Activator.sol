@@ -6,7 +6,9 @@ import {IPeriodicTaskManager} from "src/bases/interfaces/IPeriodicTaskManager.so
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
@@ -15,50 +17,6 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
 // Contracts
 import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
-
-/// @notice The subset of the PRICE module surface used by the preconditions.
-interface IPriceLike {
-    /// @notice Returns the price of `asset_` denominated in `quote_`.
-    /// @param asset_ The asset to price.
-    /// @param quote_ The quote asset.
-    /// @return The price of one `asset_` unit in `quote_` units, in the PRICE decimals.
-    function getPriceIn(address asset_, address quote_) external view returns (uint256);
-}
-
-/// @notice The subset of the deployed YRF v1.2 surface used by the migration.
-/// @dev `shutdown` is declared with `address[]`, which is ABI-identical to the
-///      `ERC20[]` parameter of the deployed contract.
-interface IYieldRepoV1 {
-    /// @notice Returns the running epoch counter.
-    /// @return The epoch counter.
-    function epoch() external view returns (uint48);
-
-    /// @notice Returns whether the facility has been shut down.
-    /// @return Whether the facility has been shut down.
-    function isShutdown() external view returns (bool);
-
-    /// @notice Returns the yield to be funded at the next weekly reset, in USDS (18
-    ///         decimals).
-    /// @return The stored next yield.
-    function nextYield() external view returns (uint256);
-
-    /// @notice Returns the reserve balance snapshot of the last weekly reset, in USDS
-    ///         (18 decimals).
-    /// @return The reserve balance snapshot.
-    function lastReserveBalance() external view returns (uint256);
-
-    /// @notice Returns the conversion rate snapshot of the last weekly reset: the USDS
-    ///         amount redeemable for 1e18 sUSDS shares.
-    /// @return The conversion rate snapshot.
-    function lastConversionRate() external view returns (uint256);
-
-    /// @notice Shuts the facility down: burns its OHM balance and transfers the listed
-    ///         token balances to the treasury.
-    /// @dev Callable by the loop_daddy role.
-    /// @param tokensToTransfer The tokens whose full balances are transferred to the
-    ///        treasury.
-    function shutdown(address[] memory tokensToTransfer) external;
-}
 
 /// @title YieldRepurchaseFacilityV2Activator
 /// @notice Single-use contract that migrates the Yield Repurchase Facility from the
@@ -340,7 +298,7 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     /// @dev Reverts with `ReserveNotPriceable` when `PRICE.getPriceIn(OHM, reserve_)`
     ///      reverts or returns zero.
     function _requireReservePriceable(address priceModule_, address reserve_) internal view {
-        try IPriceLike(priceModule_).getPriceIn(OHM, reserve_) returns (uint256 reservePrice) {
+        try IPRICEv2(priceModule_).getPriceIn(OHM, reserve_) returns (uint256 reservePrice) {
             if (reservePrice != 0) return;
         } catch {} // solhint-disable-line no-empty-blocks
         revert ReserveNotPriceable(reserve_);

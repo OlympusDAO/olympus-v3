@@ -25,29 +25,11 @@ import {OlympusHeart} from "src/policies/Heart.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {YRFTimelock} from "src/policies/YieldRepurchaseFacility/YRFTimelock.sol";
 
 // ============ MINIMAL MAINNET INTERFACES ============ //
-
-/// @notice The YRF v1.2 surface used by the migration to v2.
-interface IYieldRepoV1 {
-    function epoch() external view returns (uint48);
-
-    function isShutdown() external view returns (bool);
-
-    function nextYield() external view returns (uint256);
-
-    function lastReserveBalance() external view returns (uint256);
-
-    function lastConversionRate() external view returns (uint256);
-
-    function getReserveBalance() external view returns (uint256);
-
-    function getNextYield() external view returns (uint256);
-
-    function shutdown(address[] memory tokensToTransfer) external;
-}
 
 /// @notice The Bond Protocol SDA auctioneer surface used by the test.
 interface IBondAuctioneerLike {
