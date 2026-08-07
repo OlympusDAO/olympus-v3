@@ -22,6 +22,7 @@ import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {YRFAssetConfigLib} from "src/policies/YieldRepurchaseFacility/YRFAssetConfigLib.sol";
 import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol";
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 
@@ -120,9 +121,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Three 32-byte words: `initialDiscount`, the seed array offset, and the seed
     ///      array length.
     uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 96;
-
-    /// @notice Maximum reserve token decimals supported when adding a vault.
-    uint8 private constant _MAX_RESERVE_DECIMALS = 18;
 
     /// @notice Decimals of the backing value, and therefore the decimals both the
     ///         `PRICE` module and the backing oracle must report so that the oracle
@@ -402,40 +400,24 @@ contract YieldRepurchaseFacilityV2 is
     ///         enabled assets, applies the supplied next-yield seeds, refreshes their
     ///         yield snapshots, rewinds the epoch counter so that the next `execute`
     ///         performs a weekly reset, and opens the seeding window of `seedCycle`.
-    /// @dev Disabled assets are not touched and are not seedable: a seed for a disabled
-    ///      vault would be erased by the reset `enableAsset` performs, so it is rejected
-    ///      instead. A single `NextYieldSet` event with the resulting value is emitted
-    ///      per enabled vault; when the seed array contains duplicates, the last entry
-    ///      wins.
+    /// @dev The restart of the per-asset accounting is performed by the linked
+    ///      `YRFAssetConfigLib`. Disabled assets are not touched and are not seedable: a
+    ///      seed for a disabled vault would be erased by the reset `enableAsset`
+    ///      performs, so it is rejected instead. A single `NextYieldSet` event with the
+    ///      resulting value is emitted per enabled vault; when the seed array contains
+    ///      duplicates, the last entry wins.
     ///
     ///      Reverts if a seed references an unregistered or disabled vault.
     /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
     function _resetCycle(NextYieldSeed[] memory nextYieldSeeds_) private {
-        address[] storage vaults = _vaults;
-        uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
-            address vault = vaults[i];
-            ReserveAsset storage config = _assetConfigs[vault];
-            if (!config.isAssetEnabled) continue;
-
-            config.nextYield = 0;
-            config.unfundedYield = 0;
-            _refreshSnapshots(vault, config);
-        }
-
-        uint256 seedsLength = nextYieldSeeds_.length;
-        for (uint256 i = 0; i < seedsLength; ++i) {
-            NextYieldSeed memory seed = nextYieldSeeds_[i];
-            ReserveAsset storage config = _requireRegistered(seed.vault);
-            _requireAssetEnabled(config);
-            config.nextYield = seed.nextYield;
-        }
-
-        for (uint256 i = 0; i < vaultsLength; ++i) {
-            ReserveAsset storage config = _assetConfigs[vaults[i]];
-            if (!config.isAssetEnabled) continue;
-            _setNextYield(config, config.nextYield);
-        }
+        YRFAssetConfigLib.resetCycle(
+            _assetConfigs,
+            _vaults,
+            nextYieldSeeds_,
+            CHREG,
+            address(TRSRY),
+            backingVault
+        );
 
         _epoch = _EPOCH_LENGTH - 1;
         // The restart opens the seeding window of `seedCycle`, closed by the first beat
@@ -756,7 +738,12 @@ contract YieldRepurchaseFacilityV2 is
 
         // The balance snapshot is taken after the funding withdrawal, so it excludes the
         // shares moved to the facility.
-        config.lastReserveBalance = _getProtocolReserveBalance(vault_);
+        config.lastReserveBalance = YRFAssetConfigLib.protocolReserveBalance(
+            vault_,
+            CHREG,
+            address(TRSRY),
+            backingVault
+        );
     }
 
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
@@ -1152,7 +1139,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
-    ///      The asset is registered in the enabled state.
+    ///      The asset is registered in the enabled state. The validation and the
+    ///      registration are performed by the linked `YRFAssetConfigLib`.
     ///
     ///      The function reverts if:
     ///      - The caller does not hold the admin role.
@@ -1179,63 +1167,20 @@ contract YieldRepurchaseFacilityV2 is
         bool sellShares_,
         bool setAsBackingVault_
     ) external override onlyAdminRole {
-        _requireNonzeroAddress(vault_, "vault");
-        _requireValidYieldBuybackShare(yieldBuybackShare_);
-        if (_assetConfigs[vault_].vault != address(0))
-            revert IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
-
-        address reserve_ = IERC4626(vault_).asset();
-        _requireNonzeroAddress(reserve_, "vault.asset");
-
-        uint8 reserveDecimals = IERC20Metadata(reserve_).decimals();
-        if (reserveDecimals > _MAX_RESERVE_DECIMALS)
-            revert IYieldRepurchaseFacilityV2_UnsupportedDecimals();
-
-        // The conversion rate probe and the sell-shares market pricing both treat
-        // `10 ** reserveDecimals` as one whole share.
-        if (IERC20Metadata(vault_).decimals() != reserveDecimals)
-            revert IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
-
-        // Every token balance held by the facility belongs to exactly one pool: the OHM
-        // balance backs the purchased-OHM counter, and each registered vault or reserve
-        // balance backs its own asset, so any collision between them is rejected.
-        if (vault_ == address(_OHM) || reserve_ == address(_OHM))
-            revert IYieldRepurchaseFacilityV2_TokenPoolConflict(address(_OHM));
-        if (vault_ == reserve_) revert IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
-
-        address[] storage vaults = _vaults;
-        uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
-            address registeredVault = vaults[i];
-            address registeredReserve = _assetConfigs[registeredVault].reserve;
-            if (registeredReserve == reserve_ || registeredVault == reserve_)
-                revert IYieldRepurchaseFacilityV2_TokenPoolConflict(reserve_);
-            if (registeredReserve == vault_)
-                revert IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
-        }
-
-        // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
-        // reserve must resolve against OHM at registration; a PRICE revert (for example
-        // an unregistered reserve) bubbles up.
-        if (_reservePrice(reserve_) == 0)
-            revert IYieldRepurchaseFacilityV2_ReserveNotPriceable(reserve_);
-
-        _assetConfigs[vault_] = ReserveAsset({
-            vault: vault_,
-            reserve: reserve_,
-            reserveDecimals: reserveDecimals,
-            sellShares: sellShares_,
-            isAssetEnabled: true,
-            yieldBuybackShare: yieldBuybackShare_,
-            lastReserveBalance: initialReserveBalance_,
-            lastConversionRate: initialConversionRate_,
-            nextYield: nextYield_,
-            unfundedYield: 0
-        });
-        vaults.push(vault_);
-
-        emit AssetAdded(vault_, reserve_, yieldBuybackShare_);
-        _setNextYield(_assetConfigs[vault_], nextYield_);
+        YRFAssetConfigLib.addAsset(
+            _assetConfigs,
+            _vaults,
+            PRICE,
+            address(_OHM),
+            YRFAssetConfigLib.AddAssetParams({
+                vault: vault_,
+                yieldBuybackShare: yieldBuybackShare_,
+                initialReserveBalance: initialReserveBalance_,
+                initialConversionRate: initialConversionRate_,
+                nextYield: nextYield_,
+                sellShares: sellShares_
+            })
+        );
 
         if (setAsBackingVault_) {
             // The registration path only designates the first backing vault; an existing
@@ -1667,7 +1612,7 @@ contract YieldRepurchaseFacilityV2 is
 
         config.isAssetEnabled = true;
         config.unfundedYield = 0;
-        _refreshSnapshots(vault_, config);
+        YRFAssetConfigLib.refreshSnapshots(config, CHREG, address(TRSRY), backingVault);
 
         emit AssetEnabled(vault_);
         _setNextYield(config, 0);
@@ -1705,12 +1650,6 @@ contract YieldRepurchaseFacilityV2 is
     ///      requires the vault's share decimals to equal its reserve decimals.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
         return _previewRedeem(config_.vault, 10 ** config_.reserveDecimals);
-    }
-
-    /// @notice Refreshes the vault's conversion-rate and reserve-balance snapshots.
-    function _refreshSnapshots(address vault_, ReserveAsset storage config_) private {
-        config_.lastConversionRate = _conversionRate(config_);
-        config_.lastReserveBalance = _getProtocolReserveBalance(vault_);
     }
 
     /// @notice Returns the vault yield accrued since the snapshots, in reserve units.
@@ -1753,22 +1692,6 @@ contract YieldRepurchaseFacilityV2 is
         address backingVault_ = backingVault;
         if (backingVault_ == address(0)) return address(0);
         return _assetConfigs[backingVault_].reserve;
-    }
-
-    /// @notice Returns the reserve value of the protocol-held shares of a vault.
-    /// @dev Counts the treasury balance, and for the backing vault also the balances of
-    ///      the active Clearinghouses, valued through `previewRedeem` (floor).
-    function _getProtocolReserveBalance(address vault_) private view returns (uint256 balance) {
-        uint256 totalShares = _trsryBalance(vault_);
-
-        if (vault_ == backingVault) {
-            uint256 activeCount = CHREG.activeCount();
-            for (uint256 i = 0; i < activeCount; ++i) {
-                totalShares += _balanceOf(vault_, CHREG.active(i));
-            }
-        }
-
-        balance = _previewRedeem(vault_, totalShares);
     }
 
     /// @notice Sets the cumulative receivables offset of a Clearinghouse.
@@ -1956,7 +1879,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
         _requireRegistered(vault_);
-        return _getProtocolReserveBalance(vault_);
+        return
+            YRFAssetConfigLib.protocolReserveBalance(vault_, CHREG, address(TRSRY), backingVault);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -2012,22 +1936,16 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller holds neither the yrf_admin role nor the admin role.
     ///      - `token_` is the share or the reserve token of a registered asset.
     function rescue(address token_) external override onlyYrfAdminOrAdminRole {
-        uint256 rescuable;
-        if (token_ == address(_OHM)) {
-            // The purchased OHM backs the burn accounting and must stay on the facility
-            rescuable = Math.saturatingSub(_selfBalance(token_), _ohmPurchased);
-        } else {
-            address[] storage vaults = _vaults;
-            uint256 vaultsLength = vaults.length;
-            for (uint256 i = 0; i < vaultsLength; ++i) {
-                address vault = vaults[i];
-                if (token_ == vault || token_ == _assetConfigs[vault].reserve)
-                    revert IYieldRepurchaseFacilityV2_TokenNotRescuable(token_);
-            }
-            rescuable = _selfBalance(token_);
-        }
-
-        _transferToTrsry(token_, rescuable);
+        _transferToTrsry(
+            token_,
+            YRFAssetConfigLib.rescuableAmount(
+                _assetConfigs,
+                _vaults,
+                token_,
+                address(_OHM),
+                _ohmPurchased
+            )
+        );
     }
 
     // ============ ERC165 ============ //
