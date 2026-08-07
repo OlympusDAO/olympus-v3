@@ -59,16 +59,16 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     uint256 public mainnetForkId;
     uint256 public polygonForkId;
 
-    // Pin the blocks so that RPC responses are cached
+    // Pin the block so that RPC responses are cached.
+    // Sepolia serves archive state, so this pin is stable.
     uint256 public constant MAINNET_BLOCK = 8360176;
-    uint256 public constant POLYGON_BLOCK = 21855529;
 
     function setUp() public {
         // Set up forks
         // Mainnet is active
         // These use Sepolia RPCs, as CCIPLocalSimulatorFork only supports sepolia testnets
         mainnetForkId = vm.createFork("sepolia", MAINNET_BLOCK);
-        polygonForkId = vm.createFork("polygon-amoy", POLYGON_BLOCK);
+        polygonForkId = vm.createFork("polygon-amoy");
         vm.selectFork(mainnetForkId);
 
         // Addresses
