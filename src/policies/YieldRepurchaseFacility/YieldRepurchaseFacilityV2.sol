@@ -249,6 +249,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, or `bondAuctioneer_` is
     ///        the zero address.
+    ///      - The timelock does not report `kernel_` as its kernel.
     ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - The auctioneer reports the zero address as its teller.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
@@ -270,6 +271,13 @@ contract YieldRepurchaseFacilityV2 is
         _requireNonzeroAddress(ohm_, "ohm");
         _requireNonzeroAddress(timelock_, "timelock");
         _requireValidGracePeriod(gracePeriod_);
+
+        // The timelock is pinned immutably, so a timelock wired to a different kernel is
+        // rejected at deployment. The timelock's reported kernel is read directly: the
+        // timelock policy does not have to be active yet. The registry-side check of the
+        // pairing runs in the timelock's `setFacility`.
+        if (address(Policy(timelock_).kernel()) != address(kernel_))
+            revert IYieldRepurchaseFacilityV2_TimelockKernelMismatch(timelock_);
 
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
@@ -1466,8 +1474,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Sets the initial discount.
     /// @dev Reverts if `initialDiscount_` is not less than 100% (`1e18`).
     function _setInitialDiscount(uint256 initialDiscount_) internal {
-        if (initialDiscount_ >= _ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
+        _requireValidInitialDiscount(initialDiscount_);
 
         initialDiscount = initialDiscount_;
         emit InitialDiscountSet(initialDiscount_);
@@ -1521,21 +1528,11 @@ contract YieldRepurchaseFacilityV2 is
         uint256 expectedNextYield_,
         uint256 newNextYield_
     ) external override onlyTimelockOrAdminRole {
-        ReserveAsset storage config = _requireRegistered(vault_);
-
-        uint256 currentNextYield = config.nextYield;
-        if (currentNextYield != expectedNextYield_)
-            revert IYieldRepurchaseFacilityV2_NextYieldMismatch(
-                vault_,
-                expectedNextYield_,
-                currentNextYield
-            );
-        if (newNextYield_ >= currentNextYield)
-            revert IYieldRepurchaseFacilityV2_NextYieldNotDecreased(
-                vault_,
-                newNextYield_,
-                currentNextYield
-            );
+        ReserveAsset storage config = _validateDecreaseNextYield(
+            vault_,
+            expectedNextYield_,
+            newNextYield_
+        );
 
         _setNextYield(config, newNextYield_);
     }
@@ -1586,8 +1583,7 @@ contract YieldRepurchaseFacilityV2 is
     function excludeClearinghouse(
         address clearinghouse_
     ) external override onlyTimelockOrAdminRole {
-        if (!_includedClearinghouses[clearinghouse_])
-            revert IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
+        _requireClearinghouseIncluded(clearinghouse_);
 
         _includedClearinghouses[clearinghouse_] = false;
         emit ClearinghouseExcluded(clearinghouse_);
@@ -1640,6 +1636,106 @@ contract YieldRepurchaseFacilityV2 is
         config.isAssetEnabled = false;
         _closeVaultMarket(vault_);
         emit AssetDisabled(vault_);
+    }
+
+    // ============ VALIDATION ============ //
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The vault is not registered.
+    ///      - The share exceeds 100% (`1e18`).
+    function validateSetYieldBuybackShare(
+        address vault_,
+        uint256 newShare_
+    ) external view override {
+        _requireRegistered(vault_);
+        _requireValidYieldBuybackShare(newShare_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The discount is not less than 100% (`1e18`).
+    function validateSetInitialDiscount(uint256 initialDiscount_) external pure override {
+        _requireValidInitialDiscount(initialDiscount_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The vault is not registered.
+    ///      - The vault is already enabled.
+    function validateEnableAsset(address vault_) external view override {
+        _requireAssetDisabled(_requireRegistered(vault_));
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The vault is not registered.
+    ///      - The vault is already disabled.
+    ///      - The vault is the backing vault.
+    function validateDisableAsset(address vault_) external view override {
+        _requireAssetEnabled(_requireRegistered(vault_));
+        _requireNotBackingVault(vault_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The Clearinghouse is not included.
+    function validateExcludeClearinghouse(address clearinghouse_) external view override {
+        _requireClearinghouseIncluded(clearinghouse_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The Clearinghouse is the zero address.
+    ///      - The resulting offset exceeds the current `principalReceivables`.
+    function validateIncreaseClearinghouseOffset(
+        address clearinghouse_,
+        uint256 additionalOffset_
+    ) external view override {
+        _validateClearinghouseOffset(
+            clearinghouse_,
+            _receivablesOffsets[clearinghouse_] + additionalOffset_
+        );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The vault is not registered.
+    ///      - The stored next yield does not equal `expectedNextYield_`.
+    ///      - `newNextYield_` is not lower than the stored value.
+    function validateDecreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external view override {
+        _validateDecreaseNextYield(vault_, expectedNextYield_, newNextYield_);
+    }
+
+    /// @notice Validates a next-yield correction against the stored value.
+    /// @dev Reverts if:
+    ///      - The vault is not registered.
+    ///      - The stored next yield does not equal `expectedNextYield_`.
+    ///      - `newNextYield_` is not lower than the stored value.
+    function _validateDecreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) private view returns (ReserveAsset storage config_) {
+        config_ = _requireRegistered(vault_);
+
+        uint256 currentNextYield = config_.nextYield;
+        if (currentNextYield != expectedNextYield_)
+            revert IYieldRepurchaseFacilityV2_NextYieldMismatch(
+                vault_,
+                expectedNextYield_,
+                currentNextYield
+            );
+        if (newNextYield_ >= currentNextYield)
+            revert IYieldRepurchaseFacilityV2_NextYieldNotDecreased(
+                vault_,
+                newNextYield_,
+                currentNextYield
+            );
     }
 
     // ============ HELPERS ============ //
@@ -1699,6 +1795,18 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `clearinghouse_` is the zero address.
     ///      - `offset_` exceeds the current `principalReceivables`.
     function _setClearinghouseOffset(address clearinghouse_, uint256 offset_) internal {
+        _validateClearinghouseOffset(clearinghouse_, offset_);
+
+        _receivablesOffsets[clearinghouse_] = offset_;
+        emit ClearinghouseOffsetSet(clearinghouse_, offset_);
+    }
+
+    /// @notice Validates a cumulative receivables offset against the Clearinghouse's live
+    ///         `principalReceivables`.
+    /// @dev Reverts if:
+    ///      - `clearinghouse_` is the zero address.
+    ///      - `offset_` exceeds the current `principalReceivables`.
+    function _validateClearinghouseOffset(address clearinghouse_, uint256 offset_) internal view {
         _requireNonzeroAddress(clearinghouse_, "clearinghouse");
 
         uint256 receivables = YRFClearinghouseLib.readPrincipalReceivables(clearinghouse_);
@@ -1708,9 +1816,6 @@ contract YieldRepurchaseFacilityV2 is
                 offset_,
                 receivables
             );
-
-        _receivablesOffsets[clearinghouse_] = offset_;
-        emit ClearinghouseOffsetSet(clearinghouse_, offset_);
     }
 
     /// @notice Scales an 18-decimal value down to the target decimals, flooring.
@@ -1827,6 +1932,18 @@ contract YieldRepurchaseFacilityV2 is
     function _requireValidYieldBuybackShare(uint256 share_) private pure {
         if (share_ > _ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+    }
+
+    /// @notice Reverts unless the discount is less than 100% (`1e18`).
+    function _requireValidInitialDiscount(uint256 initialDiscount_) private pure {
+        if (initialDiscount_ >= _ONE_HUNDRED_PERCENT)
+            revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
+    }
+
+    /// @notice Reverts unless the Clearinghouse is included in the backing yield.
+    function _requireClearinghouseIncluded(address clearinghouse_) private view {
+        if (!_includedClearinghouses[clearinghouse_])
+            revert IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
     }
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.

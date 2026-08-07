@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghouse.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYRFTimelock} from "src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol";
@@ -68,9 +67,6 @@ contract YRFTimelock is
 
     /// @inheritdoc IYRFTimelock
     uint32 public constant override MAX_GRACE_PERIOD = 7 days;
-
-    /// @notice The facility's scale of the yield buyback share and the initial discount.
-    uint256 internal constant _ONE_HUNDRED_PERCENT = 1e18;
 
     /// @notice Expected `abi.encode` payload lengths of the supported selectors, named by
     ///         parameter types.
@@ -434,13 +430,17 @@ contract YRFTimelock is
             _validatePreState(
                 actionId_,
                 index_,
-                keccak256(abi.encode(vault, yrf.getAssetConfig(vault).yieldBuybackShare))
+                _yieldBuybackSharePreStateHash(vault, yrf.getAssetConfig(vault).yieldBuybackShare)
             );
             _clearSubActionState(actionId_, index_);
             yrf.setYieldBuybackShare(vault, newShare);
         } else if (sel == IYieldRepurchaseFacilityV2.setInitialDiscount.selector) {
             uint256 initialDiscount = abi.decode(action_.payload, (uint256));
-            _validatePreState(actionId_, index_, keccak256(abi.encode(yrf.initialDiscount())));
+            _validatePreState(
+                actionId_,
+                index_,
+                _initialDiscountPreStateHash(yrf.initialDiscount())
+            );
             _clearSubActionState(actionId_, index_);
             yrf.setInitialDiscount(initialDiscount);
         } else if (sel == IYieldRepurchaseFacilityV2.enableAsset.selector) {
@@ -513,19 +513,26 @@ contract YRFTimelock is
     ///      overwrite setters are keyed by parameter, not by facility, so a stale action
     ///      keeps holding its slot until it is cancelled.
     ///
+    ///      The facility must be registered as an active policy of this policy's own
+    ///      kernel; the check queries the kernel's registry and does not consult a kernel
+    ///      the facility itself reports.
+    ///
     ///      Reverts if:
     ///      - The caller does not hold the `admin` role.
     ///      - `facility_` is the zero address.
+    ///      - `facility_` is not an active policy of this policy's kernel.
     ///      - `facility_` does not advertise `IYieldRepurchaseFacilityV2` support through
     ///        ERC165.
     ///      - `facility_` does not pin this policy as its timelock.
     function setFacility(address facility_) external override onlyAdminRole {
         _requireNonzeroAddress(facility_, "facility");
         if (
+            !kernel.isPolicyActive(Policy(facility_)) ||
             !ERC165Checker.supportsInterface(
                 facility_,
                 type(IYieldRepurchaseFacilityV2).interfaceId
-            ) || IYieldRepurchaseFacilityV2(facility_).timelock() != address(this)
+            ) ||
+            IYieldRepurchaseFacilityV2(facility_).timelock() != address(this)
         ) revert IYRFTimelock_InvalidFacility(facility_);
 
         facility = facility_;
@@ -562,11 +569,10 @@ contract YRFTimelock is
 
     /// @notice Validates a queued sub-action against the live facility state and records the
     ///         pre-state binding for the overwrite setters.
-    /// @dev The checks mirror the facility's own execution-time checks, so a queued action
-    ///      can only be invalidated by state that changes between queue and execution.
-    ///      Value-bound failures revert with the facility's error types; a malformed payload
-    ///      reverts with `ITimelockBatchQueue_ActionInvalid` and a zero clearinghouse with
-    ///      `IYRFTimelock_InvalidAddress`.
+    /// @dev The value checks are performed by the facility's own `validate*` views, which
+    ///      the facility's setters share, so the queue-time validation matches the checks the
+    ///      facility applies at execution. Value-bound failures revert with the facility's
+    ///      error types; a malformed payload reverts with `ITimelockBatchQueue_ActionInvalid`.
     function _validateQueuedFacilityAction(
         uint64 actionId_,
         uint256 index_,
@@ -578,71 +584,45 @@ contract YRFTimelock is
         if (selector == IYieldRepurchaseFacilityV2.setYieldBuybackShare.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS_UINT256, selector);
             (address vault, uint256 newShare) = abi.decode(action_.payload, (address, uint256));
-            IYieldRepurchaseFacilityV2.ReserveAsset memory config = _requireRegisteredAsset(
-                yrf,
-                vault
-            );
-            if (newShare > _ONE_HUNDRED_PERCENT)
-                revert IYieldRepurchaseFacilityV2
-                    .IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+            yrf.validateSetYieldBuybackShare(vault, newShare);
             _recordPreState(
                 actionId_,
                 index_,
                 selector,
                 _yieldBuybackShareLockKey(vault),
-                keccak256(abi.encode(vault, config.yieldBuybackShare))
+                _yieldBuybackSharePreStateHash(vault, yrf.getAssetConfig(vault).yieldBuybackShare)
             );
             return;
         }
 
         if (selector == IYieldRepurchaseFacilityV2.setInitialDiscount.selector) {
             _requirePayloadLength(action_.payload, _LEN_UINT256, selector);
-            uint256 initialDiscount = abi.decode(action_.payload, (uint256));
-            if (initialDiscount >= _ONE_HUNDRED_PERCENT)
-                revert IYieldRepurchaseFacilityV2
-                    .IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
+            yrf.validateSetInitialDiscount(abi.decode(action_.payload, (uint256)));
             _recordPreState(
                 actionId_,
                 index_,
                 selector,
                 _initialDiscountLockKey(),
-                keccak256(abi.encode(yrf.initialDiscount()))
+                _initialDiscountPreStateHash(yrf.initialDiscount())
             );
             return;
         }
 
         if (selector == IYieldRepurchaseFacilityV2.enableAsset.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS, selector);
-            address vault = abi.decode(action_.payload, (address));
-            IYieldRepurchaseFacilityV2.ReserveAsset memory config = _requireRegisteredAsset(
-                yrf,
-                vault
-            );
-            if (config.isAssetEnabled)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetEnabled();
+            yrf.validateEnableAsset(abi.decode(action_.payload, (address)));
             return;
         }
 
         if (selector == IYieldRepurchaseFacilityV2.disableAsset.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS, selector);
-            address vault = abi.decode(action_.payload, (address));
-            IYieldRepurchaseFacilityV2.ReserveAsset memory config = _requireRegisteredAsset(
-                yrf,
-                vault
-            );
-            if (!config.isAssetEnabled)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetDisabled();
-            if (vault == yrf.backingVault())
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+            yrf.validateDisableAsset(abi.decode(action_.payload, (address)));
             return;
         }
 
         if (selector == IYieldRepurchaseFacilityV2.excludeClearinghouse.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS, selector);
-            address clearinghouse = abi.decode(action_.payload, (address));
-            if (!yrf.isClearinghouseIncluded(clearinghouse))
-                revert IYieldRepurchaseFacilityV2
-                    .IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
+            yrf.validateExcludeClearinghouse(abi.decode(action_.payload, (address)));
             return;
         }
 
@@ -652,16 +632,7 @@ contract YRFTimelock is
                 action_.payload,
                 (address, uint256)
             );
-            _requireNonzeroAddress(clearinghouse, "clearinghouse");
-            uint256 newOffset = yrf.clearinghouseOffset(clearinghouse) + additionalOffset;
-            uint256 receivables = _readClearinghousePrincipal(clearinghouse);
-            if (newOffset > receivables)
-                revert IYieldRepurchaseFacilityV2
-                    .IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
-                        clearinghouse,
-                        newOffset,
-                        receivables
-                    );
+            yrf.validateIncreaseClearinghouseOffset(clearinghouse, additionalOffset);
             return;
         }
 
@@ -671,22 +642,7 @@ contract YRFTimelock is
                 action_.payload,
                 (address, uint256, uint256)
             );
-            IYieldRepurchaseFacilityV2.ReserveAsset memory config = _requireRegisteredAsset(
-                yrf,
-                vault
-            );
-            if (config.nextYield != expectedNextYield)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_NextYieldMismatch(
-                    vault,
-                    expectedNextYield,
-                    config.nextYield
-                );
-            if (newNextYield >= config.nextYield)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_NextYieldNotDecreased(
-                    vault,
-                    newNextYield,
-                    config.nextYield
-                );
+            yrf.validateDecreaseNextYield(vault, expectedNextYield, newNextYield);
             return;
         }
 
@@ -749,30 +705,21 @@ contract YRFTimelock is
         return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setInitialDiscount.selector));
     }
 
-    /// @notice Returns the facility's config of a registered vault, reverting for an
-    ///         unregistered one.
-    /// @dev The facility's `getAssetConfig` itself reverts for an unregistered vault; the
-    ///      zero-check guards against an implementation that returns an empty config instead.
-    function _requireRegisteredAsset(
-        IYieldRepurchaseFacilityV2 yrf_,
-        address vault_
-    ) private view returns (IYieldRepurchaseFacilityV2.ReserveAsset memory config) {
-        config = yrf_.getAssetConfig(vault_);
-        if (config.vault == address(0))
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
+    /// @notice Hashes the pre-state of a vault's yield buyback share.
+    /// @dev Shared by the queue-time recording and the execution-time re-check, so both
+    ///      sites use one encoding.
+    function _yieldBuybackSharePreStateHash(
+        address vault_,
+        uint256 share_
+    ) private pure returns (bytes32) {
+        return keccak256(abi.encode(vault_, share_));
     }
 
-    /// @notice Reads the Clearinghouse's `principalReceivables`, treating a revert as zero.
-    /// @dev Mirrors the facility's read, so that the queue-time offset bound matches the
-    ///      execution-time bound.
-    function _readClearinghousePrincipal(address clearinghouse_) private view returns (uint256) {
-        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
-            uint256 receivables
-        ) {
-            return receivables;
-        } catch {
-            return 0;
-        }
+    /// @notice Hashes the pre-state of the initial discount.
+    /// @dev Shared by the queue-time recording and the execution-time re-check, so both
+    ///      sites use one encoding.
+    function _initialDiscountPreStateHash(uint256 initialDiscount_) private pure returns (bytes32) {
+        return keccak256(abi.encode(initialDiscount_));
     }
 
     /// @notice Reverts unless the payload has the exact `abi.encode` length of the selector's

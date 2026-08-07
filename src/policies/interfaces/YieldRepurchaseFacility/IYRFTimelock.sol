@@ -19,9 +19,9 @@ interface IYRFTimelock is ITimelockBatchQueue {
     /// @notice Thrown when an action is queued before the facility slot has been set.
     error IYRFTimelock_FacilityNotSet();
 
-    /// @notice Thrown when a proposed facility does not advertise
-    ///         `IYieldRepurchaseFacilityV2` support through ERC165 or does not pin this
-    ///         policy as its timelock.
+    /// @notice Thrown when a proposed facility is not an active policy of this policy's
+    ///         kernel, does not advertise `IYieldRepurchaseFacilityV2` support through
+    ///         ERC165, or does not pin this policy as its timelock.
     /// @param facility The rejected facility address.
     error IYRFTimelock_InvalidFacility(address facility);
 

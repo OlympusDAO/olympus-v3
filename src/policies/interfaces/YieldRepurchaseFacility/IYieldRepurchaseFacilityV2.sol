@@ -381,6 +381,11 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the seeded epoch is not below the weekly epoch count of 21.
     error IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
 
+    /// @notice Thrown by the constructor when the supplied timelock does not report the
+    ///         facility's kernel as its own.
+    /// @param timelock The rejected timelock address.
+    error IYieldRepurchaseFacilityV2_TimelockKernelMismatch(address timelock);
+
     // ============ STRUCTS ============ //
 
     /// @notice The configuration and accounting of a registered reserve asset. The
@@ -680,6 +685,74 @@ interface IYieldRepurchaseFacilityV2 {
     ///      whose sweep fails is skipped with `FundsReturnSkipped`, keeping its balances,
     ///      and is retried by the next call. Emits `FundsReturnedToTreasury`.
     function returnFundsToTreasury() external;
+
+    // ============ VALIDATION ============ //
+
+    /// @notice Validates the parameters of `setYieldBuybackShare` against the live
+    ///         facility state, reverting when the setter's value checks would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      YRF timelock when a `setYieldBuybackShare` action is queued.
+    /// @param vault_ The registered vault.
+    /// @param newShare_ The proposed share (`1e18` = 100%).
+    function validateSetYieldBuybackShare(address vault_, uint256 newShare_) external view;
+
+    /// @notice Validates the parameter of `setInitialDiscount`, reverting when the
+    ///         setter's value check would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      YRF timelock when a `setInitialDiscount` action is queued.
+    /// @param initialDiscount_ The proposed discount (`1e18` = 100%).
+    function validateSetInitialDiscount(uint256 initialDiscount_) external view;
+
+    /// @notice Validates the parameter of `enableAsset` against the live facility state,
+    ///         reverting when the setter's value checks would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      YRF timelock when an `enableAsset` action is queued.
+    /// @param vault_ The vault to enable.
+    function validateEnableAsset(address vault_) external view;
+
+    /// @notice Validates the parameter of `disableAsset` against the live facility state,
+    ///         reverting when the setter's value checks would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      YRF timelock when a `disableAsset` action is queued.
+    /// @param vault_ The vault to disable.
+    function validateDisableAsset(address vault_) external view;
+
+    /// @notice Validates the parameter of `excludeClearinghouse` against the live
+    ///         facility state, reverting when the setter's value check would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      YRF timelock when an `excludeClearinghouse` action is queued.
+    /// @param clearinghouse_ The Clearinghouse address.
+    function validateExcludeClearinghouse(address clearinghouse_) external view;
+
+    /// @notice Validates the parameters of `increaseClearinghouseOffset` against the live
+    ///         facility state, reverting when the setter's value checks would fail.
+    /// @dev The validation applies no authorization gate. The receivables are read live,
+    ///      so a validation that passes can be invalidated by repayments before the
+    ///      setter runs. Intended to be called by the YRF timelock when an
+    ///      `increaseClearinghouseOffset` action is queued.
+    /// @param clearinghouse_ The Clearinghouse address.
+    /// @param additionalOffset_ The amount added to the existing offset, in the
+    ///        receivables' units.
+    function validateIncreaseClearinghouseOffset(
+        address clearinghouse_,
+        uint256 additionalOffset_
+    ) external view;
+
+    /// @notice Validates the parameters of `decreaseNextYield` against the live facility
+    ///         state, reverting when the setter's value checks would fail.
+    /// @dev The validation applies no authorization gate. The stored next yield is read
+    ///      live, so a validation that passes can be invalidated by a weekly reset before
+    ///      the setter runs. Intended to be called by the YRF timelock when a
+    ///      `decreaseNextYield` action is queued.
+    /// @param vault_ The registered vault.
+    /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
+    ///        units.
+    /// @param newNextYield_ The corrected next yield, in reserve units.
+    function validateDecreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external view;
 
     // ============ VIEW FUNCTIONS ============ //
 
