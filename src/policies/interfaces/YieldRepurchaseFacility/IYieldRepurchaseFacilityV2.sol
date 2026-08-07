@@ -288,6 +288,16 @@ interface IYieldRepurchaseFacilityV2 {
     ///         included in the backing yield.
     error IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
 
+    /// @notice Thrown when `includeClearinghouse` targets an address that is not present
+    ///         in the CHREG registry.
+    /// @param clearinghouse The address that is not a registered Clearinghouse.
+    error IYieldRepurchaseFacilityV2_ClearinghouseNotInRegistry(address clearinghouse);
+
+    /// @notice Thrown when `includeClearinghouse` targets a Clearinghouse whose
+    ///         `principalReceivables()` read reverts.
+    /// @param clearinghouse The Clearinghouse whose receivables could not be read.
+    error IYieldRepurchaseFacilityV2_ClearinghouseReceivablesNotReadable(address clearinghouse);
+
     /// @notice Thrown when `excludeClearinghouse` targets a Clearinghouse that is not
     ///         included in the backing yield.
     error IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
@@ -627,11 +637,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///      receivables must be denominated in a token with the same decimals as the
     ///      backing reserve. The receivables offset of the Clearinghouse applies as
     ///      usual, and `ClearinghouseDebtTokenMismatch` is not emitted for an included
-    ///      Clearinghouse. Only Clearinghouses present in the CHREG registry are
-    ///      iterated, so including any other address has no effect. Emits
+    ///      Clearinghouse. The address must be present in the CHREG registry and its
+    ///      `principalReceivables()` must be readable (a zero value is valid). Emits
     ///      `ClearinghouseIncluded`.
-    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address and
-    ///        must not be included already.
+    /// @param clearinghouse_ The Clearinghouse address; must not be included already.
     function includeClearinghouse(address clearinghouse_) external;
 
     /// @notice Removes a Clearinghouse from the backing vault's yield projection,

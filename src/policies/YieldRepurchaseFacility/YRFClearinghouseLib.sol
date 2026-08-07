@@ -77,6 +77,40 @@ library YRFClearinghouseLib {
         }
     }
 
+    /// @notice Validates that a Clearinghouse is includable into the backing yield: it is
+    ///         present in the CHREG registry and its `principalReceivables()` is
+    ///         readable.
+    /// @dev A zero receivables value is valid; only a read that reverts is rejected. The
+    ///      errors are defined by the facility interface, so the calling facility reverts
+    ///      with its own error surface.
+    ///
+    ///      Reverts if:
+    ///      - `clearinghouse_` is not present in the CHREG registry.
+    ///      - The `principalReceivables()` read reverts.
+    /// @param chreg_ The Clearinghouse registry module.
+    /// @param clearinghouse_ The Clearinghouse address to validate.
+    function validateIncludable(CHREGv1 chreg_, address clearinghouse_) external view {
+        bool registered = false;
+        uint256 len = chreg_.registryCount();
+        for (uint256 i = 0; i < len; ++i) {
+            if (chreg_.registry(i) == clearinghouse_) {
+                registered = true;
+                break;
+            }
+        }
+        if (!registered)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ClearinghouseNotInRegistry(
+                clearinghouse_
+            );
+
+        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
+            uint256
+        ) {} catch {
+            revert IYieldRepurchaseFacilityV2
+                .IYieldRepurchaseFacilityV2_ClearinghouseReceivablesNotReadable(clearinghouse_);
+        }
+    }
+
     /// @notice Reads the Clearinghouse's `principalReceivables`, treating a revert as
     ///         zero.
     /// @param clearinghouse_ The Clearinghouse address.

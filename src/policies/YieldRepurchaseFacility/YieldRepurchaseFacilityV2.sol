@@ -1603,17 +1603,25 @@ contract YieldRepurchaseFacilityV2 is
     ///      counted. Inclusion is meant for Clearinghouses whose receivables accrue to the
     ///      backing reserve, so the receivables must be denominated in a token with the same
     ///      decimals as the backing reserve. The receivables offset of the Clearinghouse
-    ///      applies as usual. Only Clearinghouses present in the CHREG registry are iterated,
-    ///      so including any other address has no effect.
+    ///      applies as usual.
+    ///
+    ///      The inclusion is validated: the address must be present in the CHREG
+    ///      registry (the registry is append-only, so an included Clearinghouse stays
+    ///      iterable), and its `principalReceivables()` must be readable (a zero value
+    ///      is valid). The weekly reset still treats a receivables read that reverts
+    ///      later as zero, so a Clearinghouse that breaks after the inclusion degrades
+    ///      to a zero contribution instead of blocking the reset.
     ///
     ///      The function reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - `clearinghouse_` is the zero address.
     ///      - The Clearinghouse is already included.
+    ///      - `clearinghouse_` is not present in the CHREG registry.
+    ///      - The `principalReceivables()` read reverts.
     function includeClearinghouse(address clearinghouse_) external override onlyAdminRole {
-        _requireNonzeroAddress(clearinghouse_, "clearinghouse");
         if (_includedClearinghouses[clearinghouse_])
             revert IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
+
+        YRFClearinghouseLib.validateIncludable(CHREG, clearinghouse_);
 
         _includedClearinghouses[clearinghouse_] = true;
         emit ClearinghouseIncluded(clearinghouse_);
