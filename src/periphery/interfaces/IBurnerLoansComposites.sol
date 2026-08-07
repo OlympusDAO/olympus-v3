@@ -9,6 +9,8 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 interface IBurnerLoansComposites {
     error BurnerLoansComposites_ZeroAddress();
     error BurnerLoansComposites_ZeroAmount();
+    error BurnerLoansComposites_InvalidBurnerLoans(address burnerLoans);
+    error BurnerLoansComposites_OhmMismatch(address expectedOhm, address actualOhm);
     error BurnerLoansComposites_InvalidAuthorizationAccount(address account, address caller);
     error BurnerLoansComposites_InvalidAuthorizationOperator(address operator);
     error BurnerLoansComposites_InvalidRecipient(address recipient);

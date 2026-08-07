@@ -30,7 +30,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
 
         vm.startPrank(admin);
-        seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4);
+        seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
         seizer.addAsset(address(usds));

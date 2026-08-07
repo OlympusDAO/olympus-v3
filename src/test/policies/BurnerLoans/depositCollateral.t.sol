@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -14,8 +15,10 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
 contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     address internal operator;
@@ -723,6 +726,118 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
 
         assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
+    }
+
+    // Condition tree:
+    // - Token behavior: transferFrom returns false without reverting
+    // - Parameters: asset is configured and the caller has sufficient balance and allowance
+    // - Expected branch: TransferHelper reverts and no collateral is credited
+    function test_givenTransferFromReturnsFalse_revertsWithoutCredit() public {
+        _mintAndApprove(address(usds), alice, 1e6);
+        vm.mockCall(
+            address(usds),
+            abi.encodeWithSelector(ERC20.transferFrom.selector, alice, address(burnerLoans), 1e6),
+            abi.encode(false)
+        );
+
+        vm.prank(alice);
+        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        burnerLoans.depositCollateral(address(usds), 1e6, alice);
+
+        assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
+        assertEq(usds.balanceOf(address(burnerLoans)), 0, "burner loans balance");
+        assertEq(usds.balanceOf(address(depositManager)), 0, "deposit manager balance");
+    }
+
+    // Condition tree:
+    // - Token behavior: both transferFrom legs charge a fee
+    // - Onboarding state: asset is configured in DepositManager and BurnerLoansConfig
+    // - Expected branch: DepositManager's exact-receipt check rejects the first custody deposit
+    function test_givenFeeOnTransferAsset_revertsAtCustodyEntry() public {
+        address feeRecipient = makeAddr("feeRecipient");
+        MockERC20FeeOnTransfer feeToken = new MockERC20FeeOnTransfer(
+            "Fee On Transfer",
+            "FOT",
+            feeRecipient
+        );
+        _configurePrice(address(feeToken), 1e18);
+        _configureDepositManagerAsset(address(feeToken));
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(feeToken),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+
+        uint128 amount = 1_000e18;
+        uint256 transferFee = (amount * feeToken.FEE()) / feeToken.FEE_DENOMINATOR();
+        feeToken.mint(address(burnerLoans), transferFee);
+        feeToken.mint(alice, amount);
+        vm.prank(alice);
+        feeToken.approve(address(burnerLoans), amount);
+
+        vm.prank(alice);
+        vm.expectRevert(IAssetManager.AssetManager_InvalidAsset.selector);
+        burnerLoans.depositCollateral(address(feeToken), amount, alice);
+
+        assertEq(feeToken.balanceOf(alice), amount, "alice balance rollback");
+        assertEq(feeToken.balanceOf(address(burnerLoans)), transferFee, "dust rollback");
+        assertEq(feeToken.balanceOf(address(depositManager)), 0, "custody balance");
+        assertEq(feeToken.balanceOf(feeRecipient), 0, "fee rollback");
+        assertEq(
+            burnerLoans.getPosition(address(feeToken), alice).depositedCollateral,
+            0,
+            "position"
+        );
+    }
+
+    // Condition tree:
+    // - Token behavior: transferFrom attempts a nested collateral deposit
+    // - Authorization: callback token is authorized for the same borrower
+    // - Expected branch: the nested call hits the shared guard and the outer deposit credits once
+    function test_givenCallbackToken_cannotReenterDeposit() public {
+        ReentrantFeeToken callbackToken = new ReentrantFeeToken();
+        _configurePrice(address(callbackToken), 1e18);
+        _configureDepositManagerAsset(address(callbackToken));
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(callbackToken),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+
+        uint128 amount = 1_000e18;
+        callbackToken.mint(alice, amount);
+        vm.prank(alice);
+        callbackToken.approve(address(burnerLoans), amount);
+        vm.prank(alice);
+        burnerLoans.setAuthorization(address(callbackToken), uint48(block.timestamp + 1 days));
+        callbackToken.setCallback(
+            address(burnerLoans),
+            abi.encodeCall(
+                burnerLoans.depositCollateral,
+                (address(callbackToken), uint128(1), alice)
+            )
+        );
+
+        vm.prank(alice);
+        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+            address(callbackToken),
+            amount,
+            alice
+        );
+
+        assertFalse(callbackToken.callbackSucceeded(), "callback succeeded");
+        assertEq(
+            callbackToken.callbackRevertSelector(),
+            ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+            "callback revert"
+        );
+        assertEq(deposited, amount, "deposited once");
+        assertEq(total, amount, "total collateral");
+        _assertPositionAndActiveDebt(address(callbackToken), alice, amount, 0, 0);
     }
 
     // Condition tree:

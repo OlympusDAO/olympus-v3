@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -16,6 +17,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
 contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     address internal operator;
@@ -990,6 +992,93 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             "position"
         );
         assertEq(usds.balanceOf(alice), 0, "alice balance");
+    }
+
+    // Condition tree:
+    // - Token behavior: transfer returns false without reverting
+    // - Position state: borrower has sufficient debt-free collateral
+    // - Expected branch: TransferHelper reverts and both FLOAN and custody accounting roll back
+    function test_givenTransferReturnsFalse_revertsWithoutRemovingCollateral() public {
+        uint128 amount = 1_000e6;
+        uint128 withdrawal = 400e6;
+        _depositForAlice(amount);
+        vm.mockCall(
+            address(usds),
+            abi.encodeWithSelector(ERC20.transfer.selector, alice, withdrawal),
+            abi.encode(false)
+        );
+
+        vm.prank(alice);
+        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        burnerLoans.withdrawCollateral(address(usds), withdrawal, alice, alice);
+
+        _assertPositionAndActiveDebt(address(usds), alice, amount, 0, 0);
+        assertEq(usds.balanceOf(alice), 0, "alice balance");
+        assertEq(usds.balanceOf(address(depositManager)), amount, "custody balance");
+        assertEq(
+            depositManager.getOperatorLiabilities(IERC20(address(usds)), address(burnerLoans)),
+            amount,
+            "custody liabilities"
+        );
+    }
+
+    // Condition tree:
+    // - Token behavior: DepositManager's outgoing transfer attempts a nested withdrawal
+    // - Authorization: callback token is authorized for the same borrower
+    // - Expected branch: the nested call hits the shared guard and the outer withdrawal applies once
+    function test_givenCallbackToken_cannotReenterWithdrawal() public {
+        ReentrantFeeToken callbackToken = new ReentrantFeeToken();
+        _configurePrice(address(callbackToken), 1e18);
+        _configureDepositManagerAsset(address(callbackToken));
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(callbackToken),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+
+        uint128 amount = 1_000e18;
+        uint128 withdrawal = 400e18;
+        callbackToken.mint(alice, amount);
+        vm.prank(alice);
+        callbackToken.approve(address(burnerLoans), amount);
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(callbackToken), amount, alice);
+        vm.prank(alice);
+        burnerLoans.setAuthorization(address(callbackToken), uint48(block.timestamp + 1 days));
+        callbackToken.setCallbackFrom(
+            address(depositManager),
+            address(burnerLoans),
+            abi.encodeCall(
+                burnerLoans.withdrawCollateral,
+                (address(callbackToken), uint128(1), alice, alice)
+            )
+        );
+
+        vm.prank(alice);
+        (, uint256 amountOut, uint256 remaining, ) = burnerLoans.withdrawCollateral(
+            address(callbackToken),
+            withdrawal,
+            alice,
+            alice
+        );
+
+        assertFalse(callbackToken.callbackSucceeded(), "callback succeeded");
+        assertEq(
+            callbackToken.callbackRevertSelector(),
+            ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+            "callback revert"
+        );
+        assertEq(amountOut, withdrawal, "withdrawn once");
+        assertEq(remaining, amount - withdrawal, "remaining collateral");
+        _assertPositionAndActiveDebt(address(callbackToken), alice, amount - withdrawal, 0, 0);
+        assertEq(callbackToken.balanceOf(alice), withdrawal, "recipient balance");
+        assertEq(
+            callbackToken.balanceOf(address(depositManager)),
+            amount - withdrawal,
+            "custody balance"
+        );
     }
 
     function _withdrawAndAssertPreview(uint128 amount_) internal returns (uint256 remaining_) {

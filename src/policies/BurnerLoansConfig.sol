@@ -218,6 +218,9 @@ contract BurnerLoansConfig is
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager does not configure the asset or BurnerLoans deposit period.
     ///      - DepositManager has not enabled the deposit period.
+    /// @dev This function does not attempt a token transfer and therefore cannot detect conditional
+    ///      or fee-on-transfer behavior. Governance must admit only exact-transfer collateral;
+    ///      DepositManager enforces exact receipt when the asset first enters custody.
     /// @param asset_ Collateral asset to add.
     /// @param debtCapOhm_ Initial active debt cap, in OHM decimals.
     /// @param riskConfig_ Initial risk and term configuration.

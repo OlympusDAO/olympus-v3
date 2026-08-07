@@ -1,17 +1,22 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {Vm} from "forge-std/Vm.sol";
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
+import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
@@ -19,11 +24,31 @@ import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.
 contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     uint128 internal constant _COLLATERAL = 2_000e18;
     uint128 internal constant _DEBT = 100e9;
+    uint16 internal constant _MAX_BORROWERS_TO_CHECK = 500;
+    uint8 internal constant _MAX_BORROWERS_TO_SEIZE = 50;
+
+    BurnerLoansSeizer internal _seizer;
+    address internal _heart;
 
     function setUp() public override {
         super.setUp();
         _setDefaultConfigurator();
         _enableConfigTimelock();
+
+        _heart = makeAddr("gasHeart");
+        vm.startPrank(admin);
+        _seizer = new BurnerLoansSeizer(
+            kernel,
+            address(burnerLoans),
+            _MAX_BORROWERS_TO_CHECK,
+            _MAX_BORROWERS_TO_SEIZE,
+            10_000_000
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(_seizer));
+        rolesAdmin.grantRole(HEART_ROLE, _heart);
+        rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
+        _seizer.addAsset(address(usds));
+        vm.stopPrank();
     }
 
     // depositCollateral
@@ -281,17 +306,141 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     }
 
     // syncMintApproval
-    // given the caller is the Burner Loans admin
+    // given MINTR approval already equals unused global capacity
     //  when it reconciles MINTR approval with active debt
-    //   then it records the operational admin gas cost
-    function test_gasSnapshot_admin_syncMintApproval() public {
+    //   then it records the no-op reconciliation gas cost
+    function test_gasSnapshot_syncMintApproval_noop() public {
+        vm.recordLogs();
         vm.startPrank(burnerLoansAdmin);
-        vm.startSnapshotGas("BurnerLoans.admin.syncMintApproval");
+        vm.startSnapshotGas("BurnerLoans.syncMintApproval.noop");
         uint256 approval = burnerLoans.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
         assertEq(approval, burnerLoans.globalDebtCapOhm(), "mint approval");
+        _assertEventEmitted(
+            vm.getRecordedLogs(),
+            address(burnerLoans),
+            keccak256("MintApprovalSynchronized(uint256)")
+        );
+        _assertGasRecorded(gasUsed);
+    }
+
+    // syncMintApproval
+    // given a full-cap position has defaulted without restoring MINTR approval
+    //  when the admin reconciles approval
+    //   then it records the capacity-restoration gas cost
+    function test_gasSnapshot_syncMintApproval_restoreAfterDefault() public {
+        vm.prank(admin);
+        burnerLoans.setGlobalDebtCap(_DEBT);
+        _makeUnhealthy(alice);
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        vm.recordLogs();
+        vm.startPrank(burnerLoansAdmin);
+        vm.startSnapshotGas("BurnerLoans.syncMintApproval.restoreAfterDefault");
+        uint256 approval = burnerLoans.syncMintApproval();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(approval, _DEBT, "returned approval");
+        assertEq(mintr.mintApproval(address(burnerLoans)), _DEBT, "stored approval");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active principal");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
+        _assertEventEmitted(
+            vm.getRecordedLogs(),
+            address(burnerLoans),
+            keccak256("MintApprovalSynchronized(uint256)")
+        );
+        _assertGasRecorded(gasUsed);
+    }
+
+    // execute
+    // given no borrowers are seizable
+    //  when Heart executes the seizer task
+    //   then it records scanning and no-op reconciliation gas
+    function test_gasSnapshot_seizer_execute_noSeizures() public {
+        vm.recordLogs();
+        vm.startPrank(_heart);
+        vm.startSnapshotGas("BurnerLoansSeizer.execute.noSeizures");
+        _seizer.execute();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active principal");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
+        assertEq(
+            mintr.mintApproval(address(burnerLoans)),
+            burnerLoans.globalDebtCapOhm(),
+            "mint approval"
+        );
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        _assertSeizerExecutionEvents(logs, false);
+        _assertGasRecorded(gasUsed);
+    }
+
+    // execute
+    // given one equivalent position is seizable
+    //  when Heart executes the seizer task
+    //   then it records seizure and reconciliation gas
+    function test_gasSnapshot_seizer_execute_oneSeizure() public {
+        _makeUnhealthyBatch(1);
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+
+        vm.recordLogs();
+        vm.startPrank(_heart);
+        vm.startSnapshotGas("BurnerLoansSeizer.execute.oneSeizure");
+        _seizer.execute();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        _assertSeizerBatchResult(1, treasuryBefore);
+        _assertSeizerExecutionEvents(logs, true);
+        _assertGasRecorded(gasUsed);
+    }
+
+    // execute
+    // given ten equivalent positions are seizable
+    //  when Heart executes the seizer task
+    //   then it records medium-batch seizure and reconciliation gas
+    function test_gasSnapshot_seizer_execute_batch10() public {
+        _makeUnhealthyBatch(10);
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+
+        vm.recordLogs();
+        vm.startPrank(_heart);
+        vm.startSnapshotGas("BurnerLoansSeizer.execute.batch10");
+        _seizer.execute();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        _assertSeizerBatchResult(10, treasuryBefore);
+        _assertSeizerExecutionEvents(logs, true);
+        _assertGasRecorded(gasUsed);
+    }
+
+    // execute
+    // given the maximum batch of fifty equivalent positions is seizable
+    //  when Heart executes the seizer task
+    //   then it records maximum-batch seizure and reconciliation gas
+    function test_gasSnapshot_seizer_execute_maximumBatch() public {
+        uint256 borrowerCount = _seizer.MAX_BORROWERS_TO_SEIZE();
+        _makeUnhealthyBatch(borrowerCount);
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+
+        vm.recordLogs();
+        vm.startPrank(_heart);
+        vm.startSnapshotGas("BurnerLoansSeizer.execute.maximumBatch");
+        _seizer.execute();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        _assertSeizerBatchResult(borrowerCount, treasuryBefore);
+        _assertSeizerExecutionEvents(logs, true);
         _assertGasRecorded(gasUsed);
     }
 
@@ -534,5 +683,91 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
 
     function _assertGasRecorded(uint256 gasUsed_) internal pure {
         assertGt(gasUsed_, 0, "gas snapshot should record gas");
+    }
+
+    function _makeUnhealthyBatch(uint256 borrowerCount_) internal {
+        for (uint256 i; i < borrowerCount_; ++i) {
+            _borrow(address(uint160(10_000 + i)), _COLLATERAL, _DEBT);
+        }
+        _configurePrice(address(ohm), 20e18);
+    }
+
+    function _assertSeizerBatchResult(
+        uint256 borrowerCount_,
+        uint256 treasuryBefore_
+    ) internal view {
+        for (uint256 i; i < borrowerCount_; ++i) {
+            IBurnerLoans.Position memory position = burnerLoans.getPosition(
+                address(usds),
+                address(uint160(10_000 + i))
+            );
+            assertEq(
+                uint8(position.status),
+                uint8(IBurnerLoans.PositionStatus.Seized),
+                "position status"
+            );
+            assertEq(position.depositedCollateral, 0, "position collateral");
+            assertEq(position.debtOhm, 0, "position principal");
+        }
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "facility principal");
+        assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 0, "market principal");
+        assertEq(
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),
+            borrowerCount_ * _DEBT,
+            "market defaulted principal"
+        );
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
+        assertEq(
+            mintr.mintApproval(address(burnerLoans)),
+            burnerLoans.globalDebtCapOhm(),
+            "mint approval"
+        );
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBefore_ + borrowerCount_ * _COLLATERAL,
+            "treasury collateral"
+        );
+    }
+
+    function _assertSeizerExecutionEvents(Vm.Log[] memory logs_, bool seizure_) internal view {
+        if (seizure_) {
+            _assertEventEmitted(
+                logs_,
+                address(burnerLoans),
+                keccak256(
+                    "SeizureBatchSettled(address,address,uint256,uint256,uint256,uint256,uint256)"
+                )
+            );
+        }
+        _assertEventEmitted(
+            logs_,
+            address(_seizer),
+            keccak256("Executed(address,uint256,uint256,uint256)")
+        );
+        _assertEventEmitted(
+            logs_,
+            address(burnerLoans),
+            keccak256("MintApprovalSynchronized(uint256)")
+        );
+        _assertEventEmitted(
+            logs_,
+            address(_seizer),
+            keccak256("MintApprovalSynchronized(uint256)")
+        );
+    }
+
+    function _assertEventEmitted(
+        Vm.Log[] memory logs_,
+        address emitter_,
+        bytes32 topic_
+    ) internal pure {
+        for (uint256 i; i < logs_.length; ++i) {
+            if (
+                logs_[i].emitter == emitter_ &&
+                logs_[i].topics.length != 0 &&
+                logs_[i].topics[0] == topic_
+            ) return;
+        }
+        assertTrue(false, "expected event not emitted");
     }
 }

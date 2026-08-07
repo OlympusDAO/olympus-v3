@@ -101,8 +101,8 @@ library BurnerLoansCustody {
     }
 
     /// @notice Deposits collateral into custody and credits the borrower position.
-    /// @dev Reverts when custody is unsupported, limits are exceeded, credit rounds to zero, or
-    ///      FLOAN rejects the position mutation.
+    /// @dev Reverts when custody is unsupported, limits are exceeded, DepositManager observes an
+    ///      inexact transfer, credit rounds to zero, or FLOAN rejects the position mutation.
     /// @return depositedCollateral Actual collateral credited after vault rounding.
     /// @return totalCollateral Resulting position collateral.
     function depositCollateral(
@@ -341,8 +341,8 @@ library BurnerLoansCustody {
     }
 
     /// @notice Transfers collateral into DepositManager custody.
-    /// @dev Reverts on transfer failure, residual collateral, receipt approval failure, or a
-    ///      DepositManager error.
+    /// @dev Reverts on safe-transfer failure, DepositManager's exact-receipt rejection, residual
+    ///      collateral, receipt approval failure, or another DepositManager error.
     /// @return depositedCollateral Actual collateral credited after vault rounding.
     function deposit(
         IDepositManager depositManager_,

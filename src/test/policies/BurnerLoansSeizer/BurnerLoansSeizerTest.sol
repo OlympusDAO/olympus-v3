@@ -12,6 +12,8 @@ import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROL
 import {MockBurnerLoansSeizerTarget} from "./MockBurnerLoansSeizerTarget.sol";
 
 abstract contract BurnerLoansSeizerTest is Test {
+    uint32 internal constant _EXECUTION_GAS_LIMIT = 10_000_000;
+
     address internal admin;
     address internal burnerLoansAdmin;
     address internal heart;
@@ -37,8 +39,8 @@ abstract contract BurnerLoansSeizerTest is Test {
         kernel = new Kernel();
         roles = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        target = new MockBurnerLoansSeizerTarget();
-        seizer = new BurnerLoansSeizer(kernel, address(target), 10, 5);
+        target = new MockBurnerLoansSeizerTarget(kernel);
+        seizer = new BurnerLoansSeizer(kernel, address(target), 10, 5, _EXECUTION_GAS_LIMIT);
 
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));

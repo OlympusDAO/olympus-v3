@@ -32,6 +32,11 @@ policy configure markets without either policy depending on the other.
 | Facility        | Position lifecycle and product rules                        | Kernel permissions or another facility's markets |
 | Product custody | Collateral and debt-token movement                          | FLOAN records                                    |
 
+FLOAN records token-denominated amounts but never transfers tokens. Each facility is responsible
+for defining supported token behavior, using safe transfers, and protecting callback-capable token
+interactions. Burner Loans, for example, admits only exact-transfer collateral and enforces receipt
+through DepositManager.
+
 Every mutation requires the relevant Kernel selector permission. After creation, configuration
 also requires the current manager and position servicing requires the current facility. Migration
 selectors are intended for a temporary, separately permissioned policy.

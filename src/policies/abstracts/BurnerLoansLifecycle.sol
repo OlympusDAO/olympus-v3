@@ -24,7 +24,7 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
-import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Lifecycle Base
 /// @notice Lifecycle-only state and adapters after configuration and positions are externalized.
@@ -126,8 +126,12 @@ abstract contract BurnerLoansLifecycle is
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
-    function _onlyBurnerLoansAdmin() internal view {
-        _requireRole(msg.sender, BURNER_LOANS_ADMIN_ROLE);
+    /// @dev Restricts MINTR approval repair so arbitrary callers cannot undo an emergency reduction.
+    function _onlyBurnerLoansAdminOrSeizer() internal view {
+        _requireAuthorized(
+            !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE) &&
+                !_hasRole(msg.sender, BURNER_LOANS_SEIZER_ROLE)
+        );
     }
 
     function _authorizeReEnable() internal view override {

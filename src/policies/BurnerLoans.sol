@@ -26,7 +26,9 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 
 /// @title Burner Loans
 /// @notice Fixed-term, zero-interest OHM shorting facility skeleton.
-/// @dev U0-U3A implement shared enablement, policy wiring, scale-aware math, and configuration.
+/// @dev Collateral assets must have exact ERC20 transfer semantics. Asset admission relies on
+///      governance review; DepositManager verifies exact receipt when collateral enters custody.
+///      All token-touching lifecycle entry points share one transient reentrancy guard.
 contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     /// @notice Maximum active OHM principal across all Burner Loans markets.
     uint128 public globalDebtCapOhm;
@@ -115,7 +117,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
 
     /// @inheritdoc IBurnerLoansLifecycle
     function syncMintApproval() external override returns (uint256 approval) {
-        _onlyBurnerLoansAdmin();
+        _onlyBurnerLoansAdminOrSeizer();
         approval = BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, globalDebtCapOhm);
         emit MintApprovalSynchronized(approval);
     }
@@ -128,13 +130,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ///      - The caller is not the owner or an authorized operator.
     ///      - Custody is unsupported.
     ///      - `amount_` is zero, below the DepositManager minimum, or exceeds its operator cap.
-    ///      - Token transfer fails, custody leaves residual collateral, or vault rounding produces
-    ///        zero credit.
+    ///      - Token transfer fails, DepositManager detects inexact receipt, custody leaves residual
+    ///        collateral, or vault rounding produces zero credit.
     function depositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external returns (uint256, uint256) {
+    ) external nonReentrant returns (uint256, uint256) {
         _requireEnabled();
         (uint32 marketId, ) = _requireAssetOriginationsEnabled(asset_);
         if (amount_ == 0) revert BurnerLoans_ZeroAmount();
@@ -158,6 +160,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ///      - `amount_` is zero, exceeds credited collateral, or rounds to zero output.
     ///      - `recipient_` is zero, PRICE is unavailable or stale with debt, or health falls below
     ///        1e18 after the withdrawal.
+    /// @dev Exact outgoing transfer behavior is an asset-onboarding assumption; it is not checked
+    ///      again on every withdrawal.
     function withdrawCollateral(
         address asset_,
         uint128 amount_,
@@ -165,6 +169,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address recipient_
     )
         external
+        nonReentrant
         returns (
             address tokenOut,
             uint256 amountOut,

@@ -8,14 +8,20 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @notice State-changing borrower lifecycle operations.
 interface IBurnerLoansLifecycle is IBurnerLoans {
     /// @notice Reconciles MINTR approval to the global cap less active FLOAN principal.
-    /// @dev Restricted to the `burner_loans_admin` role.
+    /// @dev Restricted to the `burner_loans_admin` or `burner_loans_seizer` role so governance can
+    ///      repair approval manually and the Heart seizer task can reconcile it automatically.
     /// @return approval Remaining bounded MINTR approval after reconciliation.
     function syncMintApproval() external returns (uint256 approval);
 
-    /// @notice Deposits collateral into a borrower's position.
+    /// @notice Deposits exact-transfer collateral into a borrower's position.
+    /// @dev Reverts when the safe token transfer fails or DepositManager observes an inexact receipt.
+    ///      Callback attempts to another lifecycle action revert through the shared reentrancy guard.
     function depositCollateral(address, uint128, address) external returns (uint256, uint256);
 
     /// @notice Withdraws credited collateral from a borrower's position.
+    /// @dev Assumes governance admitted an exact-transfer asset. Reverts when the safe outgoing
+    ///      transfer fails. Callback attempts to another lifecycle action revert through the shared
+    ///      reentrancy guard.
     function withdrawCollateral(
         address,
         uint128,

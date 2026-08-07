@@ -6,10 +6,12 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
@@ -21,10 +23,33 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ReentrancyGuardTransie
     address public immutable override burnerLoans;
     address public immutable override ohm;
 
+    /// @notice Binds the composite flows to one Burner Loans policy and its configured OHM token.
+    /// @dev Reverts for zero addresses, unsupported target interfaces, an unavailable target
+    ///      context, or an OHM address that differs from the target's immutable debt token.
     constructor(address burnerLoans_, address ohm_) {
         if (burnerLoans_ == address(0) || ohm_ == address(0)) {
             revert BurnerLoansComposites_ZeroAddress();
         }
+        if (
+            !ERC165Checker.supportsInterface(
+                burnerLoans_,
+                type(IBurnerLoansLifecycle).interfaceId
+            ) ||
+            !ERC165Checker.supportsInterface(burnerLoans_, type(IBurnerLoansView).interfaceId) ||
+            !ERC165Checker.supportsInterface(burnerLoans_, type(IOperatorAuth).interfaceId)
+        ) {
+            revert BurnerLoansComposites_InvalidBurnerLoans(burnerLoans_);
+        }
+        BurnerLoansContext memory context;
+        try IBurnerLoansSeizureContext(burnerLoans_).context() returns (
+            BurnerLoansContext memory targetContext
+        ) {
+            context = targetContext;
+        } catch {
+            revert BurnerLoansComposites_InvalidBurnerLoans(burnerLoans_);
+        }
+        address expectedOhm = address(context.ohm);
+        if (expectedOhm != ohm_) revert BurnerLoansComposites_OhmMismatch(expectedOhm, ohm_);
         burnerLoans = burnerLoans_;
         ohm = ohm_;
     }

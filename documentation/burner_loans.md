@@ -24,7 +24,7 @@ flowchart LR
     BL --> MINTR["MINTR"]
     BL --> TRSRY["TRSRY"]
     HEART["Heart"] --> SEIZER["BurnerLoansSeizer"]
-    SEIZER -->|"bounded scans and seizure attempts"| BL
+    SEIZER -->|"scan, seize, reconcile MINTR approval"| BL
 ```
 
 `BurnerLoansConfig` is immutably bound to a deployer-trusted `BurnerLoans` facility that reports the
@@ -33,13 +33,16 @@ markets through FLOAN using `(bound facility, collateral asset, OHM)`.
 `BurnerLoansConfigTimelock` similarly verifies that Config reports the same Kernel but does not
 require Config to be active during deployment. FLOAN permits multiple matching markets; Burner
 Loans deliberately requires exactly one and fails closed if the lookup is missing or ambiguous.
+`BurnerLoansSeizer` verifies that its lifecycle target reports the same Kernel. The optional
+`BurnerLoansComposites` periphery verifies the target interfaces and rejects an OHM token that does
+not match the target's configured debt token.
 
 | Contract                    | Responsibility                                                                        |
 | --------------------------- | ------------------------------------------------------------------------------------- |
 | `BurnerLoans`               | User lifecycle, previews, global cap, backing oracle, custody, mint/burn, and seizure |
 | `BurnerLoansConfig`         | Opinionated creation and configuration of Burner Loans FLOAN markets                  |
 | `BurnerLoansConfigTimelock` | Queues delayed asset-cap, risk, and fee changes                                       |
-| `BurnerLoansSeizer`         | Periodically scans a bounded number of active borrowers without blocking Heart        |
+| `BurnerLoansSeizer`         | Fail-open Heart task for bounded seizure scans and MINTR approval reconciliation       |
 | `FLOAN`                     | Generic market, position, index, and aggregate ledger                                 |
 
 Linked libraries split bytecode-heavy implementation from the deployable policies; they do not own
@@ -163,13 +166,23 @@ facilityPrincipalDue + newPrincipal <= globalDebtCap
 | ----------------- | ---------------- | ------------- | --------------------------------------------- |
 | Borrow            | Increases        | Decreases     | Consumed by minted amount                     |
 | Repay             | Decreases        | Increases     | Restored by repaid amount                     |
-| Seize/default     | Decreases        | Increases     | Reconciled separately with `syncMintApproval` |
+| Seize/default     | Decreases        | Increases     | Reconciled by the next seizer Heart execution |
 | Global cap change | Unchanged        | Recalculated  | Reconciled to `cap - active principal`        |
 
 `BurnerLoans` stores the global cap; FLOAN stores each market cap and reports live facility OHM
-principal. Mint approval is finite rather than unlimited. The `burner_loans_admin` role may call
-`syncMintApproval` to repair drift and restore capacity released by default without making seizure
-depend on MINTR availability.
+principal. Mint approval is finite rather than unlimited. Reconciliation always targets:
+
+```text
+MINTR approval = max(globalDebtCap - facilityPrincipalDue, 0)
+```
+
+The `burner_loans_admin` role may call `syncMintApproval` manually. `BurnerLoansSeizer` also calls it
+after every Heart execution, including executions with no managed assets, no seizable borrowers, or
+failed scans/seizures. The call is separate from seizure settlement and caught on failure, so MINTR
+unavailability cannot roll back a completed default or block later Heart tasks. Sync access is not
+permissionless: only `burner_loans_admin` and `burner_loans_seizer` may restore approval, preventing
+an arbitrary caller from undoing an intentional emergency approval reduction. Governance can stop
+automatic restoration by revoking the seizer policy's `burner_loans_seizer` role.
 
 ## Custody And Settlement
 
@@ -202,6 +215,28 @@ Vault yield does not increase borrower health. `harvestYield` may claim only sur
 to `TRSRY`. If an external transfer, vault operation, fee collection, mint, burn, or seizure
 settlement fails, the transaction reverts with FLOAN and token state unchanged.
 
+### Token Compatibility And Transfer Safety
+
+Burner Loans supports collateral with exact ERC-20 transfer semantics. Fee-on-transfer, rebasing,
+or otherwise balance-changing collateral is unsupported. ERC-20 has no standard capability flag
+for these behaviors, and a transfer probe in `addAsset` could be bypassed by amount-dependent,
+address-dependent, or upgradeable token logic. Asset admission is therefore a governance-reviewed
+compatibility decision rather than an automated claim made by `BurnerLoansConfig`.
+
+| Stage                            | Enforcement or assumption                                                                 |
+| -------------------------------- | ----------------------------------------------------------------------------------------- |
+| Governance asset review          | Tests both `transfer` directions, `transferFrom`, and any configured ERC-4626 custody path |
+| `BurnerLoansConfig.addAsset`      | Requires PRICE and DepositManager configuration; performs no token-transfer probe          |
+| Collateral custody entry         | Safe transfer failures revert; DepositManager requires its exact requested balance increase |
+| Fees, withdrawal, yield, seizure | Safe transfer failures revert; exact outgoing behavior relies on the admission invariant   |
+| Token callback                   | Every token-touching Burner Loans lifecycle action uses the shared reentrancy guard         |
+
+Safe-transfer helpers accept standard boolean returns and successful no-return tokens. A reverted
+call, malformed return, or explicit `false` return reverts the complete lifecycle transaction, so
+callers do not separately monitor the ERC-20 return value. The exact-receipt check remains active
+on every custody deposit as defense in depth; outgoing balance-delta checks are not repeated on hot
+paths.
+
 ## Seizure And Automation
 
 A debt-bearing position is seizable when it is matured or has `healthFactor < 1e18`. Seizure closes
@@ -218,9 +253,13 @@ The Heart account needs `heart` to call `BurnerLoansSeizer.execute`. The seizer 
 needs `burner_loans_seizer` when it calls Burner Loans. Either protocol role suppresses the product
 keeper reward when its holder calls the seizure surface directly.
 
-The seizer scans bounded borrower batches and advances across configured assets. Scan or seizure
-failure emits a failure event and does not revert the periodic Heart transaction; later executions
-can retry the same borrower range.
+The seizer scans bounded borrower batches and advances across configured assets, then independently
+reconciles MINTR approval. Heart forwards the complete task body through a configurable gas limit.
+Ordinary scan, seizure, or reconciliation failures emit specific events; exhaustion of the task
+budget rolls back that execution and emits `ExecutionFailed`. In either case `execute` returns to
+Heart so subsequent periodic tasks can run, and later executions can retry the same borrower range
+or approval repair. Heart callers must still supply enough transaction gas for the configured task
+budget and the tasks that follow it.
 
 ## Configuration And Governance
 
@@ -233,7 +272,7 @@ can retry the same borrower range.
 | Asset origination state               | `burner_loans_admin` via config timelock  | Queued Burner Loans delay                                       |
 | Global disable                        | `admin` or `burner_loans_admin`           | Immediate risk reduction                                        |
 | Re-enable                             | Governed grace-period rules               | Prevents indefinite emergency authority                         |
-| Reconcile mint approval               | `burner_loans_admin`                      | Operational maintenance                                         |
+| Reconcile mint approval               | `burner_loans_admin` or seizer policy     | Manual repair or every seizer Heart execution                    |
 
 `BurnerLoansConfig` creates exactly one FLOAN market for each collateral/OHM pair under its bound
 facility and stores Burner Loans-specific values in `configData` under

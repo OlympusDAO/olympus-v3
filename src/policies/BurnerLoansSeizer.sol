@@ -8,6 +8,7 @@ import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Contracts
@@ -17,31 +18,70 @@ import {PolicyAdminOptimized} from "src/policies/utils/PolicyAdminOptimized.sol"
 import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Seizer
-/// @notice Bounded round-robin periodic seizure across configured collateral assets.
+/// @notice Heart task for bounded round-robin seizure and MINTR approval reconciliation.
+/// @dev Scan, seizure, and reconciliation failures are isolated so this non-essential task cannot
+///      revert the Heart transaction or block later periodic tasks.
 contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
     using EnumerableSet for EnumerableSet.AddressSet;
 
+    /// @notice Maximum borrowers that one execution may scan.
     uint16 public constant MAX_BORROWERS_TO_CHECK = 500;
+
+    /// @notice Maximum borrowers that one execution may seize.
     uint8 public constant MAX_BORROWERS_TO_SEIZE = 50;
 
+    /// @dev Burner Loans lifecycle policy scanned and reconciled by this task.
     address internal immutable _BURNER_LOANS;
 
+    /// @inheritdoc IBurnerLoansSeizer
     uint16 public override maxBorrowersToCheck;
+
+    /// @inheritdoc IBurnerLoansSeizer
     uint8 public override maxBorrowersToSeize;
+
+    /// @inheritdoc IBurnerLoansSeizer
+    uint32 public override executionGasLimit;
+
+    /// @inheritdoc IBurnerLoansSeizer
     uint256 public override nextAssetIndex;
+
+    /// @inheritdoc IBurnerLoansSeizer
     mapping(address => uint256) public override assetCursor;
 
+    /// @dev Collateral assets included in round-robin scanning.
     EnumerableSet.AddressSet private _assets;
 
+    /// @notice Deploys a gas-bounded Heart task for a same-Kernel Burner Loans policy.
+    /// @dev Reverts if the target is zero, does not expose the required lifecycle/view interfaces,
+    ///      belongs to a different Kernel, or any initial execution/scan limit is invalid.
+    /// @param kernel_ Kernel shared with the Burner Loans target.
+    /// @param burnerLoans_ Burner Loans lifecycle policy scanned and reconciled by this task.
+    /// @param maxBorrowersToCheck_ Maximum active borrowers inspected per execution.
+    /// @param maxBorrowersToSeize_ Maximum seizable borrowers settled per execution.
+    /// @param executionGasLimit_ Maximum gas forwarded to the complete task body.
     constructor(
         Kernel kernel_,
         address burnerLoans_,
         uint16 maxBorrowersToCheck_,
-        uint8 maxBorrowersToSeize_
+        uint8 maxBorrowersToSeize_,
+        uint32 executionGasLimit_
     ) Policy(kernel_) {
         if (burnerLoans_ == address(0)) revert BurnerLoansSeizer_ZeroAddress();
+        if (
+            !ERC165Checker.supportsInterface(
+                burnerLoans_,
+                type(IBurnerLoansLifecycle).interfaceId
+            ) || !ERC165Checker.supportsInterface(burnerLoans_, type(IBurnerLoansView).interfaceId)
+        ) {
+            revert BurnerLoansSeizer_InvalidBurnerLoans(burnerLoans_);
+        }
+        address burnerLoansKernel = address(Policy(burnerLoans_).kernel());
+        if (burnerLoansKernel != address(kernel_)) {
+            revert BurnerLoansSeizer_KernelMismatch(address(kernel_), burnerLoansKernel);
+        }
         _BURNER_LOANS = burnerLoans_;
         _setScanLimits(maxBorrowersToCheck_, maxBorrowersToSeize_);
+        _setExecutionGasLimit(executionGasLimit_);
     }
 
     /// @inheritdoc Policy
@@ -96,8 +136,29 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
         _setScanLimits(maxBorrowersToCheck_, maxBorrowersToSeize_);
     }
 
+    /// @inheritdoc IBurnerLoansSeizer
+    function setExecutionGasLimit(uint32 executionGasLimit_) external override {
+        _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
+        _setExecutionGasLimit(executionGasLimit_);
+    }
+
     /// @inheritdoc IPeriodicTask
     function execute() external override onlyRole(HEART_ROLE) {
+        (bool success, bytes memory reason) = address(this).call{gas: executionGasLimit}(
+            abi.encodeCall(this.selfExecuteTask, ())
+        );
+        if (!success) emit ExecutionFailed(_reasonSelector(reason));
+    }
+
+    /// @inheritdoc IBurnerLoansSeizer
+    function selfExecuteTask() external override {
+        if (msg.sender != address(this)) revert BurnerLoansSeizer_OnlySelf();
+        _scanAndSeize();
+        _syncMintApproval();
+    }
+
+    /// @dev Scans and optionally seizes one managed asset. All external failures are reported.
+    function _scanAndSeize() private {
         uint256 assetCount = _assets.length();
         if (assetCount == 0) return;
 
@@ -136,6 +197,15 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
         }
     }
 
+    /// @dev Reconciles finite MINTR approval after seizure work without propagating a failure.
+    function _syncMintApproval() private {
+        try IBurnerLoansLifecycle(_BURNER_LOANS).syncMintApproval() returns (uint256 approval) {
+            emit MintApprovalSynchronized(approval);
+        } catch (bytes memory reason) {
+            emit MintApprovalSyncFailed(_reasonSelector(reason));
+        }
+    }
+
     /// @inheritdoc IBurnerLoansSeizer
     function isAssetManaged(address asset_) external view override returns (bool) {
         return _assets.contains(asset_);
@@ -171,6 +241,12 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
         maxBorrowersToCheck = maxBorrowersToCheck_;
         maxBorrowersToSeize = maxBorrowersToSeize_;
         emit ScanLimitsSet(maxBorrowersToCheck_, maxBorrowersToSeize_);
+    }
+
+    function _setExecutionGasLimit(uint32 executionGasLimit_) private {
+        if (executionGasLimit_ == 0) revert BurnerLoansSeizer_InvalidExecutionGasLimit();
+        executionGasLimit = executionGasLimit_;
+        emit ExecutionGasLimitSet(executionGasLimit_);
     }
 
     function _reasonSelector(bytes memory reason_) private pure returns (bytes4 selector) {
