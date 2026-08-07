@@ -386,7 +386,9 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "sUSDe next yield does not match the fixed seed"
             );
 
-            require(yrf.isCycleSeeded() == true, "YRF v2 cycle was not seeded");
+            // The activator's `seedCycle` consumes the seeding window that its `enable`
+            // opened (no heart beat runs inside the proposal execution).
+            require(yrf.isCycleSeedable() == false, "YRF v2 cycle was not seeded");
             // The seeded epoch resumes the v1.2 counter, which the shutdown leaves in
             // place.
             require(

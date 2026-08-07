@@ -327,13 +327,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///         bond auctioneer.
     error IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
 
-    /// @notice Thrown when `seedCycle` is invoked after the one-shot seeding has been
-    ///         consumed.
-    error IYieldRepurchaseFacilityV2_CycleAlreadySeeded();
-
-    /// @notice Thrown when `seedCycle` is invoked while the epoch counter does not hold
-    ///         the restart value of 20 that `enable` sets.
-    error IYieldRepurchaseFacilityV2_CycleAlreadyStarted();
+    /// @notice Thrown when `seedCycle` is invoked while its seeding window is closed:
+    ///         the restart performed by `enable` has already been seeded, or a heart beat
+    ///         has run since the restart.
+    error IYieldRepurchaseFacilityV2_CycleNotSeedable();
 
     /// @notice Thrown when the seeded epoch is not below the weekly epoch count of 21.
     error IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
@@ -442,20 +439,20 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Seeds the weekly cycle: sets the epoch counter to the supplied value and
     ///         withdraws each seeded amount from the treasury into its vault's buyback
     ///         pool.
-    /// @dev Callable by the admin role, at most once over the lifetime of the contract,
-    ///      only while the facility is enabled, and only while the epoch counter holds
-    ///      the restart value of 20 that `enable` sets, so a heart beat between the
-    ///      restart and the seeding is rejected. The expected call order is `enable`
-    ///      first, then `addAsset` for every seeded vault, then this function: the
-    ///      restart performed by `enable` refreshes the snapshots and zeroes the next
-    ///      yields of the enabled assets that are already registered, erasing their
+    /// @dev Callable by the admin role, at most once per `enable` restart, only while
+    ///      the facility is enabled, and only before the first heart beat of the
+    ///      restart: every `enable` opens the seeding window (see `isCycleSeedable`),
+    ///      and the seeding or the first beat closes it. The expected call order is
+    ///      `enable` first, then `addAsset` for every seeded vault, then this function:
+    ///      the restart performed by `enable` refreshes the snapshots and zeroes the
+    ///      next yields of the enabled assets that are already registered, erasing their
     ///      `addAsset` seeds.
     ///
     ///      The seeded pools fund the daily market cycles remaining in the week (an
     ///      epoch of 18 or later leaves none), and the unspent remainder stays in the
     ///      pool across the following weekly reset. The stored next yields and the yield
     ///      snapshots are not affected. An empty seed array seeds only the epoch and
-    ///      emits no event; the seeding stays observable through `isCycleSeeded` and
+    ///      emits no event; the seeding stays observable through `isCycleSeedable` and
     ///      `epoch`. A treasury balance that does not cover a seeded amount is reported
     ///      with `PrefundShortfall`, and the unfunded remainder is carried (see
     ///      `ReserveAsset.unfundedYield`) and retried at the next weekly reset. Emits
@@ -707,9 +704,11 @@ interface IYieldRepurchaseFacilityV2 {
     /// @return The epoch counter.
     function epoch() external view returns (uint48);
 
-    /// @notice Returns whether the one-shot `seedCycle` has been consumed.
-    /// @return Whether the cycle has been seeded.
-    function isCycleSeeded() external view returns (bool);
+    /// @notice Returns whether the seeding window of `seedCycle` is open: the latest
+    ///         `enable` restart has not been seeded yet and no heart beat has run since
+    ///         the restart.
+    /// @return Whether `seedCycle` is callable.
+    function isCycleSeedable() external view returns (bool);
 
     /// @notice Returns the address of the YRF timelock policy authorized to call the
     ///         timelocked operational functions.

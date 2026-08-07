@@ -77,8 +77,9 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      - `returnFundsToTreasury` (emergency or admin) burns the purchased OHM and returns
 ///        the held balances to the treasury while the facility is disabled, sweeping each
 ///        vault independently.
-///      - `seedCycle` (admin, one-shot) sets the epoch counter and seeds the running
-///        week's buyback pools with treasury withdrawals.
+///      - `seedCycle` (admin, once per `enable` restart, before its first beat) sets the
+///        epoch counter and seeds the running week's buyback pools with treasury
+///        withdrawals.
 ///
 ///      The admin role is expected to be held only by the OCG timelock, so every
 ///      admin-gated function of this contract is de-facto timelocked.
@@ -188,9 +189,15 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Running epoch counter, in the range `[0, 21)`.
     uint48 internal _epoch;
 
-    /// @notice Whether the one-shot `seedCycle` has been consumed.
-    /// @dev The flag is never reset, including by an `enable` restart.
-    bool internal _cycleSeeded;
+    /// @notice Whether the restart performed by the latest `enable` is still seedable.
+    /// @dev Armed by the `enable` restart and consumed by `seedCycle` or by the weekly
+    ///      reset; the first `execute` beat of a restart always performs the weekly
+    ///      reset, because the restart pins the epoch counter to 20. The seeding window
+    ///      is therefore exactly one seeding between an `enable` and its first beat.
+    ///      While the flag is set, the epoch counter holds the restart value of 20: only
+    ///      `enable` (which arms the flag), `seedCycle`, and `execute` (which both
+    ///      consume it) write the counter.
+    bool internal _cycleSeedable;
 
     /// @notice Accumulated OHM purchased via bond markets, not yet processed.
     /// @dev The OHM balance always covers this amount: `callback` verifies the quote
@@ -390,8 +397,8 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Restarts the weekly cycle: zeroes the yields and unfunded carries of the
     ///         enabled assets, applies the supplied next-yield seeds, refreshes their
-    ///         yield snapshots, and rewinds the epoch counter so that the next `execute`
-    ///         performs a weekly reset.
+    ///         yield snapshots, rewinds the epoch counter so that the next `execute`
+    ///         performs a weekly reset, and opens the seeding window of `seedCycle`.
     /// @dev Disabled assets are not touched and are not seedable: a seed for a disabled
     ///      vault would be erased by the reset `enableAsset` performs, so it is rejected
     ///      instead. A single `NextYieldSet` event with the resulting value is emitted
@@ -428,6 +435,8 @@ contract YieldRepurchaseFacilityV2 is
         }
 
         _epoch = _EPOCH_LENGTH - 1;
+        // The restart opens the seeding window of `seedCycle`, closed by the first beat
+        _cycleSeedable = true;
     }
 
     /// @inheritdoc EnablerV2
@@ -663,6 +672,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      anew, for one week only.
     function _weeklyReset() private {
         _epoch = 0;
+        // Closes the seeding window of `seedCycle`: the first beat of an `enable`
+        // restart always performs the weekly reset, because the restart pins the epoch
+        // counter to 20. The write shares the slot of the epoch counter.
+        _cycleSeedable = false;
 
         address backingReserve = _backingReserve();
         uint256 clearinghouseYield = YRFClearinghouseLib.clearinghouseYield(
@@ -1208,14 +1221,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
-    ///      The one-shot flag is consumed before any external interaction and is never
-    ///      re-armed, so the epoch counter is written only by `execute`, by the restart
-    ///      in `enable`, and by at most one seeding.
-    ///
-    ///      The epoch pin (`_epoch == _EPOCH_LENGTH - 1`) rejects a seeding after a
-    ///      heart beat has advanced the counter past the `enable` restart. The counter
-    ///      also holds this value on the last epoch of every week, so the pin alone
-    ///      does not prove that no beat has run.
+    ///      The seedable flag is armed by every `enable` restart and consumed here
+    ///      before any external interaction, or by the first `execute` beat of the
+    ///      restart, whichever comes first. The window is therefore hermetic: at most
+    ///      one seeding per restart, and never after a beat has advanced the counter.
+    ///      While the flag is armed the epoch counter holds the restart value of 20, so
+    ///      no separate epoch check is needed.
     ///
     ///      Per seed, `WeeklyBudgetSeeded` is emitted before the funding withdrawal
     ///      runs, so the event precedes a `PrefundShortfall` it may cause. The remainder
@@ -1225,8 +1236,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      The function reverts if:
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
-    ///      - The cycle has already been seeded.
-    ///      - The epoch counter is not at the restart value set by `enable`.
+    ///      - The seeding window is closed: the restart has already been seeded, or a
+    ///        beat has run since the `enable`.
     ///      - `epoch_` is not below the weekly epoch count of 21.
     ///      - A seed references an unregistered or disabled vault.
     ///      - A seeded amount is zero.
@@ -1235,10 +1246,8 @@ contract YieldRepurchaseFacilityV2 is
         uint48 epoch_,
         WeeklyBudgetSeed[] calldata budgetSeeds_
     ) external override nonReentrant givenEnabled onlyAdminRole {
-        if (_cycleSeeded) revert IYieldRepurchaseFacilityV2_CycleAlreadySeeded();
-        _cycleSeeded = true;
-
-        if (_epoch != _EPOCH_LENGTH - 1) revert IYieldRepurchaseFacilityV2_CycleAlreadyStarted();
+        if (!_cycleSeedable) revert IYieldRepurchaseFacilityV2_CycleNotSeedable();
+        _cycleSeedable = false;
 
         if (epoch_ >= _EPOCH_LENGTH) revert IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
         _epoch = epoch_;
@@ -1896,8 +1905,8 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    function isCycleSeeded() external view override returns (bool) {
-        return _cycleSeeded;
+    function isCycleSeedable() external view override returns (bool) {
+        return _cycleSeedable;
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
