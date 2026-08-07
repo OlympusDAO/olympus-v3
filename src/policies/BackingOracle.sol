@@ -73,6 +73,12 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
         return (1, 0);
     }
 
+    /// @inheritdoc IBackingOracle
+    /// @dev The backing value is denominated in 18 decimals. Does not revert.
+    function decimals() external pure override returns (uint8) {
+        return 18;
+    }
+
     // ========== ROLE GATES ========== //
 
     /// @notice Reverts if `account_` holds neither the `backing_admin` role nor the admin role.

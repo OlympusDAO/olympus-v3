@@ -69,7 +69,12 @@ interface IBackingOracle {
 
     // ============ VIEW FUNCTIONS ============ //
 
-    /// @notice Returns the current OHM backing value (the reserve per OHM, 18 decimals).
-    /// @return The current backing value (18 decimals).
+    /// @notice Returns the current OHM backing value (the reserve per OHM, in `decimals`
+    ///         decimals).
+    /// @return The current backing value.
     function backing() external view returns (uint256);
+
+    /// @notice Returns the decimals of the backing value reported by `backing`.
+    /// @return The decimals of the backing value.
+    function decimals() external view returns (uint8);
 }

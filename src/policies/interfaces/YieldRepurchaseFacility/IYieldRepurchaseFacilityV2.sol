@@ -319,8 +319,8 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the reserve token decimals exceed the supported maximum of 18.
     error IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
-    /// @notice Thrown when the PRICE module does not report the 18 decimals of the
-    ///         backing value.
+    /// @notice Thrown when the PRICE module or the backing oracle does not report the 18
+    ///         decimals of the backing value.
     error IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
     /// @notice Thrown when the facility is not authorized as a market callback on the
@@ -478,7 +478,8 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Sets the backing oracle consulted for the market price floor gate and for
     ///         pricing the burn of the purchased OHM.
     /// @dev Callable by the admin role. The oracle must report the backing as an
-    ///      18-decimal reserve-per-OHM value. Emits `BackingOracleSet`.
+    ///      18-decimal reserve-per-OHM value: an oracle whose `decimals()` is not 18 is
+    ///      rejected. Emits `BackingOracleSet`.
     /// @param backingOracle_ The backing oracle policy; must not be the zero address.
     function setBackingOracle(address backingOracle_) external;
 

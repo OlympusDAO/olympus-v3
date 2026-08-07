@@ -122,8 +122,9 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Maximum reserve token decimals supported when adding a vault.
     uint8 private constant _MAX_RESERVE_DECIMALS = 18;
 
-    /// @notice Decimals of the backing value, and therefore the decimals the `PRICE` oracle
-    ///         must report so that the oracle price can be compared against the backing.
+    /// @notice Decimals of the backing value, and therefore the decimals both the
+    ///         `PRICE` module and the backing oracle must report so that the oracle
+    ///         price can be compared against the backing.
     uint8 private constant _BACKING_DECIMALS = 18;
 
     /// @notice Keycode for the TRSRY module dependency.
@@ -240,6 +241,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, or `bondAuctioneer_` is
     ///        the zero address.
+    ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - The auctioneer reports the zero address as its teller.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
     /// @param kernel_ The Olympus Kernel.
@@ -1294,6 +1296,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
+    ///
+    ///      Reverts if:
+    ///      - The caller does not hold the admin role.
+    ///      - `backingOracle_` is the zero address.
+    ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
         _setBackingOracle(backingOracle_);
     }
@@ -1326,9 +1333,17 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Sets the backing oracle.
-    /// @dev Reverts if `backingOracle_` is the zero address.
+    /// @dev Reverts if:
+    ///      - `backingOracle_` is the zero address.
+    ///      - The oracle does not report the 18 decimals of the backing value.
     function _setBackingOracle(address backingOracle_) internal {
         _requireNonzeroAddress(backingOracle_, "backingOracle");
+
+        // The backing value is compared against the 18-decimal oracle prices and scaled
+        // by the 18-decimal convention in the burn pricing, so an oracle with any other
+        // scale is rejected.
+        if (IBackingOracle(backingOracle_).decimals() != _BACKING_DECIMALS)
+            revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
