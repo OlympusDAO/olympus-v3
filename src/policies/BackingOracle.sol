@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
+import {IBackingOracleConfigTimelock} from "src/policies/interfaces/IBackingOracleConfigTimelock.sol";
 import {ITimelockQueue} from "src/policies/interfaces/utils/ITimelockQueue.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 
@@ -22,7 +23,14 @@ import {BACKING_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinit
 ///      timelock delay elapses, and then anyone can execute the queued action. The emergency role
 ///      can cancel malicious or stale queued actions. The admin role can additionally update the
 ///      backing directly via `setBacking`, without the timelock.
-contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle, IVersioned {
+contract BackingOracle is
+    Policy,
+    PolicyEnablerV2,
+    TimelockQueue,
+    IBackingOracle,
+    IBackingOracleConfigTimelock,
+    IVersioned
+{
     // ========== CONSTANTS ========== //
 
     uint256 private constant _ENABLE_DATA_LENGTH = 32;
@@ -120,7 +128,7 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
         _setBacking(newBacking_);
     }
 
-    /// @inheritdoc IBackingOracle
+    /// @inheritdoc IBackingOracleConfigTimelock
     /// @dev The queued action targets this policy with the `queueSetBacking` selector and is
     ///      applied by `_executeAction` when executed.
     ///
@@ -135,7 +143,7 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
 
     // ========== TIMELOCK MANAGEMENT ========== //
 
-    /// @inheritdoc IBackingOracle
+    /// @inheritdoc IBackingOracleConfigTimelock
     /// @dev Already-queued actions keep the delay they were queued with. The admin role is
     ///      expected to be held only by the OCG timelock, so the change is de-facto
     ///      timelocked.
@@ -297,6 +305,7 @@ contract BackingOracle is Policy, PolicyEnablerV2, TimelockQueue, IBackingOracle
     ) public view virtual override(EnablerV2, TimelockQueue) returns (bool) {
         return
             interfaceId_ == type(IBackingOracle).interfaceId ||
+            interfaceId_ == type(IBackingOracleConfigTimelock).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             EnablerV2.supportsInterface(interfaceId_) ||
             TimelockQueue.supportsInterface(interfaceId_);

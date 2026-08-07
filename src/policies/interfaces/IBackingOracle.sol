@@ -3,10 +3,9 @@ pragma solidity >=0.8.24;
 
 /// @title IBackingOracle
 /// @notice The interface for the BackingOracle policy, which serves as the canonical OHM backing value.
-/// @dev Backing updates are timelocked. A proposer queues an update via `queueSetBacking`, and the
-///      update is applied when the queued action is executed through the `ITimelockQueue` surface
-///      implemented by the policy. The admin role can additionally update the backing directly via
-///      `setBacking`, without the timelock.
+/// @dev Backing updates are timelocked: a proposer queues an update through the
+///      `IBackingOracleConfigTimelock` surface implemented by the policy. The admin role can
+///      additionally update the backing directly via `setBacking`, without the timelock.
 interface IBackingOracle {
     // ============ EVENTS ============ //
 
@@ -37,15 +36,6 @@ interface IBackingOracle {
         uint256 maxBacking
     );
 
-    // ============ TIMELOCK MANAGEMENT ============ //
-
-    /// @notice Set the timelock delay applied to future queued actions.
-    /// @dev Already-queued actions keep the delay they were queued with. Intended to be
-    ///      callable only by the admin role.
-    ///
-    /// @param delay_ The new timelock delay in seconds.
-    function setTimelockDelay(uint48 delay_) external;
-
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @notice Set the backing value (the reserve per OHM, 18 decimals).
@@ -55,16 +45,6 @@ interface IBackingOracle {
     ///
     /// @param newBacking_ The new backing value (18 decimals).
     function setBacking(uint256 newBacking_) external;
-
-    /// @notice Queue a timelocked update of the backing value (the reserve per OHM, 18 decimals).
-    /// @dev The backing value is not updated until the queued action is executed. The backing
-    ///      change threshold is validated against the current backing value both when the action
-    ///      is queued and when it is executed, because the current backing may change between the
-    ///      two. Intended to be callable only by the backing_admin or admin role.
-    ///
-    /// @param newBacking_ The new backing value (18 decimals).
-    /// @return actionId_ The queued action ID.
-    function queueSetBacking(uint256 newBacking_) external returns (uint64 actionId_);
 
     // ============ VIEW FUNCTIONS ============ //
 
