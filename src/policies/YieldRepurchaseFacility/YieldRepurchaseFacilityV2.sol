@@ -1063,6 +1063,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        reserve is not registered in the PRICE module) or returns zero.
     ///      - The yield buyback share exceeds 100% (`1e18`).
     ///      - `setAsBackingVault_` is set together with `sellShares_`.
+    ///      - `setAsBackingVault_` is set while a backing vault is already designated.
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
@@ -1130,7 +1131,13 @@ contract YieldRepurchaseFacilityV2 is
         emit AssetAdded(vault_, reserve_, yieldBuybackShare_);
         _setNextYield(_assetConfigs[vault_], nextYield_);
 
-        if (setAsBackingVault_) _setBackingVault(vault_, _assetConfigs[vault_]);
+        if (setAsBackingVault_) {
+            // The registration path only designates the first backing vault; an existing
+            // designation is replaced only through the explicit `setBackingVault`.
+            if (backingVault != address(0))
+                revert IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
+            _setBackingVault(vault_, _assetConfigs[vault_]);
+        }
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2

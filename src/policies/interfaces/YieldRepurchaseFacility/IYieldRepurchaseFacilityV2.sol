@@ -219,6 +219,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when a sell-shares vault is designated as the backing vault.
     error IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
 
+    /// @notice Thrown when a registration attempts to designate the backing vault while
+    ///         one is already designated.
+    error IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
+
     /// @notice Thrown when the vault's share decimals do not match its reserve decimals.
     error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
@@ -403,7 +407,8 @@ interface IYieldRepurchaseFacilityV2 {
     ///      vault's share decimals must equal its reserve decimals, the reserve decimals
     ///      must not exceed 18, the reserve must resolve to a non-zero OHM price through
     ///      the PRICE module, and a sell-shares vault cannot be designated as the backing
-    ///      vault.
+    ///      vault. The designation is only available while no backing vault is
+    ///      designated; replacing an existing designation requires `setBackingVault`.
     ///
     ///      Every token balance held by the facility belongs to exactly one pool, so the
     ///      registration rejects any token collision: neither the vault nor the reserve
