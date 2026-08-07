@@ -174,7 +174,7 @@ contract YieldRepurchaseFacilityV2 is
     address public override backingOracle;
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    address public override teller;
+    address public override bondTeller;
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     address public override bondAuctioneer;
@@ -1086,7 +1086,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 inputAmount_,
         uint256 outputAmount_
     ) external override nonReentrant {
-        _requireCaller(teller);
+        _requireCaller(bondTeller);
 
         _requireEnabled();
 
@@ -1396,15 +1396,15 @@ contract YieldRepurchaseFacilityV2 is
     ///        supplied auctioneer.
     function _setBondContracts(address bondAuctioneer_) internal {
         _requireNonzeroAddress(bondAuctioneer_, "bondAuctioneer");
-        address teller_ = address(IBondAuctioneer(bondAuctioneer_).getTeller());
-        _requireNonzeroAddress(teller_, "teller");
+        address bondTeller_ = address(IBondAuctioneer(bondAuctioneer_).getTeller());
+        _requireNonzeroAddress(bondTeller_, "bondTeller");
 
         bondAuctioneer = bondAuctioneer_;
-        teller = teller_;
+        bondTeller = bondTeller_;
 
         if (isEnabled) _requireCallbackAuthorized();
 
-        emit BondContractsSet(bondAuctioneer_, teller_);
+        emit BondContractsSet(bondAuctioneer_, bondTeller_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2

@@ -97,8 +97,8 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Emitted when the bond auctioneer and the teller are set.
     /// @param bondAuctioneer The SDA auctioneer used to create markets.
-    /// @param teller The teller trusted to invoke the bond callback.
-    event BondContractsSet(address indexed bondAuctioneer, address indexed teller);
+    /// @param bondTeller The teller trusted to invoke the bond callback.
+    event BondContractsSet(address indexed bondAuctioneer, address indexed bondTeller);
 
     /// @notice Emitted when the initial bond market discount is set.
     /// @param initialDiscount The new discount (`1e18` = 100%).
@@ -738,7 +738,7 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Returns the teller trusted to invoke the bond callback.
     /// @return The teller address.
-    function teller() external view returns (address);
+    function bondTeller() external view returns (address);
 
     /// @notice Returns the SDA auctioneer used to create bond markets.
     /// @return The auctioneer address.

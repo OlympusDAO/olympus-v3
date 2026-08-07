@@ -358,7 +358,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 yrf.bondAuctioneer() == activator.BOND_AUCTIONEER(),
                 "YRF v2 bond auctioneer is incorrect"
             );
-            require(yrf.teller() == activator.BOND_TELLER(), "YRF v2 teller is incorrect");
+            require(yrf.bondTeller() == activator.BOND_TELLER(), "YRF v2 teller is incorrect");
 
             address[] memory vaults = yrf.getVaults();
             require(vaults.length == 2, "YRF v2 does not have exactly two vaults");

@@ -159,7 +159,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.epoch(), 20, "initial epoch");
         assertEq(yieldRepo.backingVault(), SUSDS, "backing vault");
         assertEq(yieldRepo.backingOracle(), address(backingOracle), "backing oracle");
-        assertEq(yieldRepo.teller(), BOND_TELLER, "teller");
+        assertEq(yieldRepo.bondTeller(), BOND_TELLER, "bondTeller");
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
         assertEq(yieldRepo.timelock(), address(yrfTimelock), "timelock");
         assertEq(yieldRepo.initialDiscount(), INITIAL_DISCOUNT, "initial discount");
