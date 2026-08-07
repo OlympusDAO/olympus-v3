@@ -635,11 +635,13 @@ interface IYieldRepurchaseFacilityV2 {
     ///      matches the backing reserve are counted; inclusion is meant for
     ///      Clearinghouses whose receivables accrue to the backing reserve, so the
     ///      receivables must be denominated in a token with the same decimals as the
-    ///      backing reserve. The receivables offset of the Clearinghouse applies as
-    ///      usual, and `ClearinghouseDebtTokenMismatch` is not emitted for an included
-    ///      Clearinghouse. The address must be present in the CHREG registry and its
-    ///      `principalReceivables()` must be readable (a zero value is valid). Emits
-    ///      `ClearinghouseIncluded`.
+    ///      backing reserve. A Clearinghouse whose `reserve()` read reverts (for
+    ///      example when the function is not exposed) never matches the backing
+    ///      reserve, so it is counted only while included. The receivables offset of
+    ///      the Clearinghouse applies as usual, and `ClearinghouseDebtTokenMismatch`
+    ///      is not emitted for an included Clearinghouse. The address must be present
+    ///      in the CHREG registry and its `principalReceivables()` must be readable (a
+    ///      zero value is valid). Emits `ClearinghouseIncluded`.
     /// @param clearinghouse_ The Clearinghouse address; must not be included already.
     function includeClearinghouse(address clearinghouse_) external;
 
@@ -697,8 +699,12 @@ interface IYieldRepurchaseFacilityV2 {
     ///         the vault yield accrued since the snapshots, plus the weekly Clearinghouse
     ///         interest for the backing vault, multiplied by the vault's buyback share.
     /// @dev This is a live projection; the stored next yield is available through
-    ///      `getAssetConfig`. Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered`
-    ///      for an unregistered vault.
+    ///      `getAssetConfig`. The projection applies the rate change since the last
+    ///      weekly reset to the balance snapshot taken at that reset: protocol balance
+    ///      changes made after the snapshot do not enter the projection until the
+    ///      following reset, and a stored projection overstated by an outflow can be
+    ///      lowered through `decreaseNextYield`. Reverts with
+    ///      `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered vault.
     /// @param vault_ The registered vault.
     /// @return yield The projected yield, in reserve units.
     function getNextYield(address vault_) external view returns (uint256 yield);

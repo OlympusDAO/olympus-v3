@@ -1603,7 +1603,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      counted. Inclusion is meant for Clearinghouses whose receivables accrue to the
     ///      backing reserve, so the receivables must be denominated in a token with the same
     ///      decimals as the backing reserve. The receivables offset of the Clearinghouse
-    ///      applies as usual.
+    ///      applies as usual. A Clearinghouse whose `reserve()` read reverts (for
+    ///      example when the function is not exposed) never matches the backing
+    ///      reserve, so it is counted only while included.
     ///
     ///      The inclusion is validated: the address must be present in the CHREG
     ///      registry (the registry is append-only, so an included Clearinghouse stays
@@ -1714,6 +1716,13 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Returns the vault yield accrued since the snapshots, in reserve units.
     /// @dev `lastReserveBalance * (currentRate - lastRate) / lastRate`, floored. Zero
     ///      when the rate has not increased or the rate snapshot is unset.
+    ///
+    ///      The basis is the balance snapshot of the last weekly reset, so balance
+    ///      changes between the snapshots do not enter the yield: the rate delta is
+    ///      credited on the full snapshot balance even when a part of it has left the
+    ///      protocol during the week, and a balance added during the week starts
+    ///      accruing only from the following snapshot, which rebases the projection to
+    ///      the actual balance.
     function _computeVaultYield(ReserveAsset storage config_) private view returns (uint256 yield) {
         uint256 lastRate = config_.lastConversionRate;
         if (lastRate == 0) return 0;

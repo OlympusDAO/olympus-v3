@@ -123,8 +123,11 @@ library YRFBondMarketLib {
         pure
         returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
     {
-        // discount = 1e18 - initialDiscount; e.g. 1e18 - 3e16 = 0.97e18
+        // discountFactor = 1e18 - initialDiscount (both 18 decimals);
+        // e.g. 1e18 - 3e16 = 0.97e18.
         uint256 discountFactor = ONE_HUNDRED_PERCENT - config_.initialDiscount;
+        // effectivePrice = oraclePrice (oracleDecimals) * discountFactor (18 decimals)
+        // / 1e18 -> oracleDecimals (floor).
         uint256 effectivePrice = config_.oraclePrice.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
         uint256 oracleSquare = 10 ** (uint256(config_.oracleDecimals) * 2);
 
