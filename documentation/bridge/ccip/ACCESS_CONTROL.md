@@ -7,14 +7,25 @@
 | `admin` role | OCG timelock | `0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39` |
 | `bridge_admin` role | DAO MS | `0x245cc372C84B3645Bf0Ffe6538620B04a217988B` |
 | `emergency` role | Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` |
-| Grace-period re-enabler | DAO MS | `0x245cc372C84B3645Bf0Ffe6538620B04a217988B` |
 | `bridge_rate_limiter` role | Unassigned at launch | - |
 | Config policy configurator | `CCIPBridgeConfigTimelock` | deployed |
 | Token pool owner | `CCIPBridgeConfig` | deployed |
-| Lock/release pool rebalancer | DAO MS | `0x245cc372C84B3645Bf0Ffe6538620B04a217988B` |
+| Lock/release pool rebalancer | OCG timelock | `0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39` |
 | Native pool `rateLimitAdmin` | Zero address | `0x0000000000000000000000000000000000000000` |
 | `CCIPCrossChainBridge` owner | DAO MS | `0x245cc372C84B3645Bf0Ffe6538620B04a217988B` |
 | OHM administrator in `TokenAdminRegistry` | OCG timelock | `0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39` |
+
+Holders above are the Ethereum end state. `CCIPBridgeConfig`, `CCIPBridgeConfigTimelock`, and the burn/mint pool are also deployed on Arbitrum, Optimism, Base, and Berachain, where `admin` and `bridge_admin` are held by the local DAO MS, a different address on each chain. The Emergency MS is deployed at the same address everywhere.
+
+## Timelock parameters
+
+| Parameter | Value |
+| --- | --- |
+| Initial delay | 1 day |
+| Delay bounds | 1 to 30 days |
+| Execution window | 3 days |
+| Max sub-actions per batch | 15 |
+| Grace period | 3 days |
 
 ## New contracts
 
@@ -28,25 +39,29 @@ Owns the local CCIP token pool.
 | `transferPoolOwnership` | `admin` | OCG timelock |
 | `setConfigurator` | `admin` | OCG timelock |
 | `setRouter` | `admin` | OCG timelock |
-| `setRebalancer` | `admin` | OCG timelock |
 | `setRateLimitAdmin` | `admin` | OCG timelock |
-| `setReEnabler` | `admin` | OCG timelock |
 | `setGracePeriod` | `admin` | OCG timelock |
-| `transferLiquidity` | `admin` | OCG timelock |
 | `enable` | `admin` | OCG timelock |
-| `setRemoteToken` | `admin` | OCG timelock |
 | `addChain` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `removeChain` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
+| `recreateChainWithNewRemoteToken` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `addRemotePool` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `removeRemotePool` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `applyAllowListUpdates` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `setChainRateLimits` | `bridge_rate_limiter`, configurator, or `admin` | unassigned; timelock; OCG timelock |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `disableChain` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `disableAllChains` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `reEnable` | re-enabler | DAO MS |
+| `disableChain` | `emergency` or `admin`; works while disabled | Emergency MS; OCG timelock |
+| `disableAllChains` | `emergency` or `admin`; works while disabled | Emergency MS; OCG timelock |
+| `reEnable` | `bridge_admin` | DAO MS |
 | `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
+
+The two functions below are present on every deployment of the config policy, but revert unless the owned pool supports `ILiquidityContainer`, which only `LockReleaseTokenPool` does.
+
+| Function | Access | Holder |
+| --- | --- | --- |
+| `setRebalancer` | `admin` | OCG timelock |
+| `transferLiquidity` | `admin` | OCG timelock |
 
 ### `CCIPBridgeConfigTimelock` policy
 
@@ -57,6 +72,7 @@ Owns the local CCIP token pool.
 | `setTimelockDelay` | `admin` | OCG timelock |
 | `queueAddChain` | `bridge_admin` | DAO MS |
 | `queueRemoveChain` | `bridge_admin` | DAO MS |
+| `queueRecreateChainWithNewRemoteToken` | `bridge_admin` | DAO MS |
 | `queueAddRemotePool` | `bridge_admin` | DAO MS |
 | `queueRemoveRemotePool` | `bridge_admin` | DAO MS |
 | `queueApplyAllowListUpdates` | `bridge_admin` | DAO MS |
@@ -65,26 +81,30 @@ Owns the local CCIP token pool.
 | `executeQueuedAction` | permissionless after the delay | any address |
 | `cancelQueuedAction` | `admin`, `emergency`, or the original proposer | OCG timelock; Emergency MS; DAO MS |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `reEnable` | re-enabler | DAO MS |
+| `reEnable` | `bridge_admin` | DAO MS |
 | `changeKernel` | Kernel  | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
+The `admin` role is not a queue proposer: every queued action targets a function it can call directly on the config policy.
+
 ## Existing contracts
 
-### `CCIPBurnMintTokenPool` policy (for non-Ethereum chains; not deployed on main networks)
+### `CCIPBurnMintTokenPool` policy (non-Ethereum chains)
+
+Currently live only on Sepolia and Base Sepolia; in scope for deployment on Arbitrum, Optimism, Base, and Berachain. The existing instances were constructed with an empty allowlist, so `applyAllowListUpdates` reverts with `AllowListNotEnabled`; whether new deployments enable one is a constructor decision.
 
 | Function | Access | Holder |
 | --- | --- | --- |
-| `acceptOwnership` | pending owner | `CCIPBridgeConfig` |
-| `transferOwnership` | owner | `CCIPBridgeConfig` |
-| `applyChainUpdates` | owner | `CCIPBridgeConfig` |
-| `addRemotePool` | owner | `CCIPBridgeConfig` |
-| `removeRemotePool` | owner | `CCIPBridgeConfig` |
-| `applyAllowListUpdates` | owner | `CCIPBridgeConfig` |
-| `setRouter` | owner | `CCIPBridgeConfig` |
-| `setRateLimitAdmin` | owner | `CCIPBridgeConfig` |
-| `setChainRateLimiterConfig` | owner or `rateLimitAdmin` | `CCIPBridgeConfig`; zero |
-| `setChainRateLimiterConfigs` | owner or `rateLimitAdmin` | `CCIPBridgeConfig`; zero |
+| `acceptOwnership` | pending owner | local `CCIPBridgeConfig` |
+| `transferOwnership` | owner | local `CCIPBridgeConfig` |
+| `applyChainUpdates` | owner | local `CCIPBridgeConfig` |
+| `addRemotePool` | owner | local `CCIPBridgeConfig` |
+| `removeRemotePool` | owner | local `CCIPBridgeConfig` |
+| `applyAllowListUpdates` | owner | local `CCIPBridgeConfig` |
+| `setRouter` | owner | local `CCIPBridgeConfig` |
+| `setRateLimitAdmin` | owner | local `CCIPBridgeConfig` |
+| `setChainRateLimiterConfig` | owner or `rateLimitAdmin` | local `CCIPBridgeConfig`; zero |
+| `setChainRateLimiterConfigs` | owner or `rateLimitAdmin` | local `CCIPBridgeConfig`; zero |
 | `enable` | local `admin` | local DAO MS |
 | `disable` | `emergency` or local `admin` | Emergency MS; local DAO MS |
 | `lockOrBurn` | on-ramp of the configured router | Chainlink |
@@ -96,8 +116,8 @@ If implemented:
 
 | Function | Access | Holder |
 | --- | --- | --- |
-| `reEnable` | re-enabler | local DAO MS |
 | `setGracePeriod` | local `admin` | local DAO MS |
+| `reEnable` | local `bridge_admin` | local DAO MS |
 
 ### `LockReleaseTokenPool` (deployed on Ethereum)
 
@@ -107,7 +127,7 @@ Its owner changes from the DAO MS to `CCIPBridgeConfig`. Deployed with an empty 
 | --- | --- | --- |
 | `acceptOwnership` | pending owner | `CCIPBridgeConfig` |
 | `transferOwnership` | owner | `CCIPBridgeConfig` |
-| `applyChainUpdates` | owner | `CCIPBridgeConfig` | 
+| `applyChainUpdates` | owner | `CCIPBridgeConfig` |
 | `addRemotePool` | owner | `CCIPBridgeConfig` |
 | `removeRemotePool` | owner | `CCIPBridgeConfig` |
 | `applyAllowListUpdates` | owner | `CCIPBridgeConfig` |
@@ -117,14 +137,16 @@ Its owner changes from the DAO MS to `CCIPBridgeConfig`. Deployed with an empty 
 | `transferLiquidity` | owner | `CCIPBridgeConfig` |
 | `setChainRateLimiterConfig` | owner or `rateLimitAdmin` | `CCIPBridgeConfig`; zero |
 | `setChainRateLimiterConfigs` | owner or `rateLimitAdmin` | `CCIPBridgeConfig`; zero |
-| `provideLiquidity` | rebalancer | DAO MS |
-| `withdrawLiquidity` | rebalancer | DAO MS |
+| `provideLiquidity` | rebalancer | OCG timelock |
+| `withdrawLiquidity` | rebalancer | OCG timelock |
 | `lockOrBurn` | on-ramp of the configured router | Chainlink |
 | `releaseOrMint` | off-ramp of the configured router | Chainlink |
 
-### `CCIPCrossChainBridge` periphery (deployed on Ethereum)
+Depositing does not require the rebalancer role: a direct ERC20 transfer has the same effect as `provideLiquidity` minus the `LiquidityAdded` event.
 
-No changes.
+### `CCIPCrossChainBridge` periphery
+
+No changes. Disabling it does not stop CCIP transfers of OHM: the pool only checks that the caller is an on-ramp of the configured router, so any address can call `Router.ccipSend` directly.
 
 | Function | Access | Holder |
 | --- | --- | --- |
@@ -136,7 +158,7 @@ No changes.
 | `setGasLimit` | owner | DAO MS |
 | `enable` | owner | DAO MS |
 | `disable` | owner | DAO MS |
-| `withdraw` | owner | DAO MS |
+| `withdraw` | owner; native balance only, not OHM | DAO MS |
 | `ccipReceive` | configured router | Chainlink |
 | `receiveMessage` | this contract | self |
 | `sendToEVM` payable | unrestricted | any user |
