@@ -42,7 +42,7 @@ not match the target's configured debt token.
 | `BurnerLoans`               | User lifecycle, previews, global cap, backing oracle, custody, mint/burn, and seizure |
 | `BurnerLoansConfig`         | Opinionated creation and configuration of Burner Loans FLOAN markets                  |
 | `BurnerLoansConfigTimelock` | Queues delayed asset-cap, risk, and fee changes                                       |
-| `BurnerLoansSeizer`         | Fail-open Heart task for bounded seizure scans and MINTR approval reconciliation       |
+| `BurnerLoansSeizer`         | Fail-open Heart task for bounded seizure scans and MINTR approval reconciliation      |
 | `FLOAN`                     | Generic market, position, index, and aggregate ledger                                 |
 
 Linked libraries split bytecode-heavy implementation from the deployable policies; they do not own
@@ -113,6 +113,57 @@ requiredCollateralUsd = max(marketRequirementUsd, backingRequirementUsd)
 riskAdjustedCollateralUsd = collateralValueUsd * collateralFactorBps / 10_000
 healthFactor = floor(riskAdjustedCollateralUsd * 1e18 / requiredCollateralUsd)
 ```
+
+The three risk controls apply independently. The collateral factor discounts the value of the
+collateral in the numerator. The minimum collateral ratio and backing multiplier produce separate
+requirements in the denominator; Burner Loans uses the larger requirement rather than multiplying
+the controls together.
+
+| Control                  | Applied to                   | Why it is needed                                                                     | More conservative setting |
+| ------------------------ | ---------------------------- | ------------------------------------------------------------------------------------ | ------------------------- |
+| Collateral factor        | Deposited collateral value   | Discounts collateral for depeg, liquidity, oracle, or liquidation risk               | Lower                     |
+| Minimum collateral ratio | OHM debt at its market price | Adds a buffer against OHM appreciation before a position becomes undercollateralized | Higher                    |
+| Backing multiplier       | Backing value per OHM        | Sets a minimum amount of collateral required for each borrowed OHM at low prices     | Higher                    |
+
+For example, consider a position with 1,000 OHM of debt, $24,000 of collateral, a 100% collateral
+factor, a 115% minimum collateral ratio, $10 of backing per OHM, and a 150% backing multiplier. At
+an OHM market price of $5:
+
+```text
+marketRequirementUsd = 1,000 * $5 * 115% = $5,750
+backingRequirementUsd = 1,000 * $10 * 150% = $15,000
+requiredCollateralUsd = max($5,750, $15,000) = $15,000
+healthFactor = $24,000 / $15,000 = 1.60
+```
+
+The backing requirement controls below an OHM price of approximately $13.04. Above that crossover,
+the market requirement controls, and the position reaches a health factor of one at approximately
+$20.87. A 90% collateral factor would instead count only $21,600 of collateral and move that market
+price boundary down to approximately $18.78.
+
+### Why The Backing Multiplier Matters For OHM
+
+The backing oracle supplies the base governance backing value per OHM. The multiplier determines
+how much collateral Burner Loans requires relative to that value. A 100% multiplier preserves the
+base backing requirement; a 150% multiplier requires $15 of collateral for every borrowed OHM when
+backing is $10, providing an additional buffer against collateral deterioration and price movement.
+
+Without any backing-based requirement, falling OHM prices would mechanically increase borrowing
+and collateral-withdrawal capacity. In the example above, the market-price rule alone would allow
+approximately 4,174 OHM of debt against $24,000 of collateral at a $5 OHM price, or only $5.75 of
+collateral per borrowed OHM. The 150% backing requirement instead limits debt to 1,600 OHM, or $15
+of collateral per borrowed OHM.
+
+This protects OHM from a procyclical feedback loop: a weaker OHM price cannot be used to mint and
+potentially sell progressively more OHM, or to remove collateral supporting existing debt. If an
+undercollateralized borrower later defaults, the protocol could otherwise recover less collateral
+than the governance backing target for the borrowed OHM that remains in circulation. Once the
+backing floor is binding, capacity no longer expands as the OHM market price falls.
+
+If the configurable multiplier did not exist but the backing floor remained fixed at 100%, this
+feedback protection would remain, but governance could not require a safety margin above the base
+backing value. Removing the backing requirement entirely would remove the protection described
+above.
 
 | Result                    | Meaning                            | Borrow/withdraw                       | Seizure                    |
 | ------------------------- | ---------------------------------- | ------------------------------------- | -------------------------- |
@@ -229,12 +280,12 @@ for these behaviors, and a transfer probe in `addAsset` could be bypassed by amo
 address-dependent, or upgradeable token logic. Asset admission is therefore a governance-reviewed
 compatibility decision rather than an automated claim made by `BurnerLoansConfig`.
 
-| Stage                            | Enforcement or assumption                                                                 |
-| -------------------------------- | ----------------------------------------------------------------------------------------- |
-| Governance asset review          | Tests both `transfer` directions, `transferFrom`, and any configured ERC-4626 custody path |
-| `BurnerLoansConfig.addAsset`      | Requires PRICE and DepositManager configuration; performs no token-transfer probe          |
+| Stage                            | Enforcement or assumption                                                                   |
+| -------------------------------- | ------------------------------------------------------------------------------------------- |
+| Governance asset review          | Tests both `transfer` directions, `transferFrom`, and any configured ERC-4626 custody path  |
+| `BurnerLoansConfig.addAsset`     | Requires PRICE and DepositManager configuration; performs no token-transfer probe           |
 | Collateral custody entry         | Safe transfer failures revert; DepositManager requires its exact requested balance increase |
-| Fees, withdrawal, yield, seizure | Safe transfer failures revert; exact outgoing behavior relies on the admission invariant   |
+| Fees, withdrawal, yield, seizure | Safe transfer failures revert; exact outgoing behavior relies on the admission invariant    |
 | Token callback                   | Every token-touching Burner Loans lifecycle action uses the shared reentrancy guard         |
 
 Safe-transfer helpers accept standard boolean returns and successful no-return tokens. A reverted
@@ -270,16 +321,16 @@ budget and the tasks that follow it.
 
 ## Configuration And Governance
 
-| Change                                | Normal authority                          | Delay model                                                     |
-| ------------------------------------- | ----------------------------------------- | --------------------------------------------------------------- |
-| Add asset or rotate facility          | `admin`                                   | OCG governance timelock                                         |
-| Set global cap or backing oracle      | `admin` on `BurnerLoans`                  | OCG governance timelock                                         |
-| Asset cap, risk, or fee configuration | `admin` or configured timelock            | Delayed through `BurnerLoansConfigTimelock` for delegated admin |
-| Asset origination state               | `admin` directly                          | OCG governance timelock                                         |
-| Asset origination state               | `burner_loans_admin` via config timelock  | Queued Burner Loans delay                                       |
-| Global disable                        | `admin` or `burner_loans_admin`           | Immediate risk reduction                                        |
-| Re-enable                             | Governed grace-period rules               | Prevents indefinite emergency authority                         |
-| Reconcile mint approval               | `burner_loans_admin` or seizer policy     | Manual repair or every seizer Heart execution                    |
+| Change                                | Normal authority                         | Delay model                                                     |
+| ------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
+| Add asset or rotate facility          | `admin`                                  | OCG governance timelock                                         |
+| Set global cap or backing oracle      | `admin` on `BurnerLoans`                 | OCG governance timelock                                         |
+| Asset cap, risk, or fee configuration | `admin` or configured timelock           | Delayed through `BurnerLoansConfigTimelock` for delegated admin |
+| Asset origination state               | `admin` directly                         | OCG governance timelock                                         |
+| Asset origination state               | `burner_loans_admin` via config timelock | Queued Burner Loans delay                                       |
+| Global disable                        | `admin` or `burner_loans_admin`          | Immediate risk reduction                                        |
+| Re-enable                             | Governed grace-period rules              | Prevents indefinite emergency authority                         |
+| Reconcile mint approval               | `burner_loans_admin` or seizer policy    | Manual repair or every seizer Heart execution                   |
 
 `BurnerLoansConfig` creates exactly one FLOAN market for each collateral/OHM pair under its bound
 facility and stores Burner Loans-specific values in `configData` under
