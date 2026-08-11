@@ -70,23 +70,6 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     }
 
     // removeCollateral
-    // given a defaulted position
-    //  when removeCollateral is called
-    //   then it reverts
-    function test_givenDefaultedPosition_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-
-        vm.startPrank(facility);
-        floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.removeCollateral(positionId, 1);
-        vm.stopPrank();
-    }
-
-    // removeCollateral
     // given market originations are disabled
     //  when removeCollateral is called
     //   then it still decreases collateral

@@ -2,11 +2,13 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-
+// Interfaces
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
+// Contracts
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 
 contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
@@ -173,10 +175,18 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     //  when all borrowed OHM is repaid and burned
     //   then the exact capacity is restored
     //   then the same amount can be borrowed again
+    //   then the reused position receives a fresh maturity
     function test_givenGlobalMintCapacityConsumed_repayRestoresCapacityForAnotherBorrow() public {
         vm.prank(admin);
         burnerLoans.setGlobalDebtCap(100e9);
         _borrowForAlice(100e9);
+        uint48 firstMaturity = burnerLoans.getPosition(address(usds), alice).maturity;
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+        uint256[] memory positionIdsBefore = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+        uint256 positionCountBefore = floan.getPositionCount();
         assertEq(mintr.mintApproval(address(burnerLoans)), 0, "consumed approval");
 
         vm.roll(block.number + 1);
@@ -184,6 +194,13 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.prank(alice);
         burnerLoans.repay(address(usds), 100e9, alice);
         assertEq(mintr.mintApproval(address(burnerLoans)), 100e9, "restored approval");
+        IFLOANv1.Position memory closedPosition = floan.getPosition(uint64(positionIdsBefore[0]));
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+        assertEq(closedPosition.principalDrawn, 0, "closed principal drawn");
+        assertEq(closedPosition.maturity, 0, "closed maturity");
+
+        vm.warp(block.timestamp + 1 days);
+        price.setTimestamp(uint48(block.timestamp));
 
         vm.startPrank(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
@@ -191,11 +208,26 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
             100e9,
             alice
         );
+        assertEq(preview.maturity, block.timestamp + 30 days, "new episode maturity");
+        assertGt(preview.maturity, firstMaturity, "new maturity should not reuse old maturity");
         burnerLoans.borrow(address(usds), 100e9, alice, alice, preview.fee);
         vm.stopPrank();
 
+        uint256[] memory positionIdsAfter = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+        assertEq(floan.getPositionCount(), positionCountBefore, "position count unchanged");
+        assertEq(positionIdsAfter.length, 1, "one position retained");
+        assertEq(positionIdsAfter[0], positionIdsBefore[0], "same position ID reused");
         assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt");
         assertEq(mintr.mintApproval(address(burnerLoans)), 0, "reconsumed approval");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).maturity,
+            preview.maturity,
+            "stored new episode maturity"
+        );
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // repay
@@ -272,8 +304,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: 1e18,
                 debtOhm: 0,
                 maturity: 0,
-                lastBorrowBlock: 0,
-                status: IBurnerLoans.PositionStatus.NoDebt
+                lastBorrowBlock: 0
             })
         );
         vm.expectRevert(IBurnerLoans.BurnerLoans_NoDebt.selector);

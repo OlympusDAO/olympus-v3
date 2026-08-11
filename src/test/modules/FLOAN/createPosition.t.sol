@@ -25,6 +25,13 @@ contract FLOANCreatePositionTest is FLOANTest {
             0,
             "missing market borrower positions"
         );
+        (bool exists, uint64 positionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            0,
+            borrower,
+            0
+        );
+        assertFalse(exists, "missing indexed position exists");
+        assertEq(positionId, 0, "missing indexed position ID");
     }
 
     // createPosition
@@ -133,12 +140,26 @@ contract FLOANCreatePositionTest is FLOANTest {
             principalDue: 0,
             interestDue: 0,
             maturity: 0,
-            lastBorrowBlock: 0,
-            defaulted: false
+            lastBorrowBlock: 0
         });
         assertEq(positionId, 0, "position ID");
         _assertPosition(positionId, expected);
         _assertPositionIndexes(positionId, marketId, borrower, 1, 1, 1, 1);
+        (bool exists, uint64 indexedPositionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            marketId,
+            borrower,
+            0
+        );
+        assertTrue(exists, "indexed position exists");
+        assertEq(indexedPositionId, positionId, "indexed position ID");
+
+        (exists, indexedPositionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            marketId,
+            borrower,
+            1
+        );
+        assertFalse(exists, "out-of-range indexed position exists");
+        assertEq(indexedPositionId, 0, "out-of-range indexed position ID");
         assertEq(floan.getActiveBorrowerCount(marketId), 0, "active borrower count");
     }
 
@@ -183,6 +204,30 @@ contract FLOANCreatePositionTest is FLOANTest {
         assertEq(pairIds.length, 2, "pair index length");
         assertEq(pairIds[0], firstPositionId, "first pair position");
         assertEq(pairIds[1], secondPositionId, "second pair position");
+
+        (bool exists, uint64 indexedPositionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            marketId,
+            borrower,
+            0
+        );
+        assertTrue(exists, "first indexed position exists");
+        assertEq(indexedPositionId, firstPositionId, "first indexed position ID");
+
+        (exists, indexedPositionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            marketId,
+            borrower,
+            1
+        );
+        assertTrue(exists, "second indexed position exists");
+        assertEq(indexedPositionId, secondPositionId, "second indexed position ID");
+
+        (exists, indexedPositionId) = floan.getPositionIdForMarketAndBorrowerAt(
+            marketId,
+            borrower,
+            2
+        );
+        assertFalse(exists, "out-of-range indexed position exists");
+        assertEq(indexedPositionId, 0, "out-of-range indexed position ID");
     }
 
     // createPosition

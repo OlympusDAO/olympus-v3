@@ -91,7 +91,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
     ) public {
         activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
         cap_ = uint128(bound(cap_, 0, activeDebtOhm_ - 1));
-        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
+        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_);
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
@@ -107,7 +107,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-        burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm + 1, debtCapOhm + 1);
+        burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm + 1);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
@@ -129,7 +129,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-        burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm - 1, debtCapOhm - 1);
+        burnerLoans.setActiveDebtForTest(address(usds), debtCapOhm - 1);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));

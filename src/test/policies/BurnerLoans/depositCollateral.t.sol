@@ -1237,10 +1237,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
                 depositedCollateral: collateral_,
                 debtOhm: debtOhm_,
                 maturity: maturity_,
-                lastBorrowBlock: uint48(block.number),
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: uint48(block.number)
             })
         );
-        burnerLoans.setActiveDebtForTest(address(usds), debtOhm_, debtOhm_);
+        burnerLoans.setActiveDebtForTest(address(usds), debtOhm_);
     }
 }

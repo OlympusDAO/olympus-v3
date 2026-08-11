@@ -276,11 +276,6 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
 
         IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
-        assertEq(
-            uint256(position.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "position status"
-        );
         assertEq(position.lastBorrowBlock, uint48(block.number), "last borrow block");
         _assertPositionAndActiveDebt(
             address(usds),
@@ -528,16 +523,6 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         IBurnerLoans.Position memory bobPosition = burnerLoans.getPosition(address(usds), bob);
         assertEq(alicePosition.debtOhm, aliceAmount, "alice debt isolated");
         assertEq(bobPosition.debtOhm, bobAmount, "bob debt isolated");
-        assertEq(
-            uint256(alicePosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "alice position active"
-        );
-        assertEq(
-            uint256(bobPosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "bob position active"
-        );
         assertEq(alicePosition.depositedCollateral, DEFAULT_COLLATERAL_AMOUNT, "alice collateral");
         assertEq(bobPosition.depositedCollateral, DEFAULT_COLLATERAL_AMOUNT, "bob collateral");
         assertEq(
@@ -582,16 +567,6 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
         assertEq(usdsPosition.debtOhm, usdsAmount, "USDS position debt");
         assertEq(secondPosition.debtOhm, secondAssetAmount, "second-asset position debt");
-        assertEq(
-            uint256(usdsPosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "USDS position active"
-        );
-        assertEq(
-            uint256(secondPosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "second-asset position active"
-        );
         assertEq(usdsPosition.depositedCollateral, DEFAULT_COLLATERAL_AMOUNT, "USDS collateral");
         assertEq(
             secondPosition.depositedCollateral,
@@ -645,16 +620,6 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
         assertEq(alicePosition.debtOhm, aliceAmount, "alice USDS debt");
         assertEq(bobPosition.debtOhm, bobAmount, "bob second-asset debt");
-        assertEq(
-            uint256(alicePosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "alice position active"
-        );
-        assertEq(
-            uint256(bobPosition.status),
-            uint256(IBurnerLoans.PositionStatus.Active),
-            "bob position active"
-        );
         assertEq(
             burnerLoans.getPosition(address(usds), bob).debtOhm,
             0,
@@ -819,7 +784,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _depositDefaultCollateral(alice);
         uint256 assetCap = burnerLoansConfig.getAssetConfig(address(usds)).debtCap;
         uint256 existingAssetDebt = assetCap - availableRoom;
-        burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt, existingAssetDebt);
+        burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt);
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetDebtCapExceeded.selector,
@@ -880,11 +845,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: DEFAULT_COLLATERAL_AMOUNT,
                 debtOhm: 10e9,
                 maturity: maturity,
-                lastBorrowBlock: uint48(block.number - 1),
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: uint48(block.number - 1)
             })
         );
-        burnerLoans.setActiveDebtForTest(address(usds), 10e9, 10e9);
+        burnerLoans.setActiveDebtForTest(address(usds), 10e9);
         vm.warp(maturity);
 
         bytes memory error = abi.encodeWithSelector(
@@ -914,11 +878,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: 1e18,
                 debtOhm: 100e9,
                 maturity: uint48(block.timestamp + 1 days),
-                lastBorrowBlock: uint48(block.number - 1),
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: uint48(block.number - 1)
             })
         );
-        burnerLoans.setActiveDebtForTest(address(usds), 100e9, 100e9);
+        burnerLoans.setActiveDebtForTest(address(usds), 100e9);
 
         _expectBorrowAndPreviewPartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
@@ -938,11 +901,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: 1e18,
                 debtOhm: 100e9,
                 maturity: uint48(block.timestamp + 1 days),
-                lastBorrowBlock: uint48(block.number - 1),
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: uint48(block.number - 1)
             })
         );
-        burnerLoans.setActiveDebtForTest(address(usds), 100e9, 100e9);
+        burnerLoans.setActiveDebtForTest(address(usds), 100e9);
 
         _expectBorrowAndPreviewRevert(
             abi.encodeWithSelector(IBurnerLoans.BurnerLoans_ZeroAmount.selector),
@@ -1342,7 +1304,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             DEFAULT_BORROW_AMOUNT,
             alice
         );
-        burnerLoans.setActiveDebtForTest(address(usds), 900_000e9, 0);
+        _setOtherMarketDebtForTest(900_000e9);
 
         IBurnerLoans.BorrowPreview memory highGlobal = burnerLoans.previewBorrow(
             address(usds),
@@ -1360,7 +1322,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Expected branch: fee is ceil(1,150 * 1.25%) = 14.375 USDS
     function test_givenAssetAtKink_previewFeeUsesPreBorrowUtilization() public {
         _depositDefaultCollateral(alice);
-        burnerLoans.setActiveDebtForTest(address(usds), 80_000e9, 80_000e9);
+        burnerLoans.setActiveDebtForTest(address(usds), 80_000e9);
 
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
             address(usds),
@@ -1483,11 +1445,6 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertEq(position.debtOhm, 0, "rollback debt");
         assertEq(position.maturity, 0, "rollback maturity");
         assertEq(position.lastBorrowBlock, 0, "rollback last borrow block");
-        assertEq(
-            uint256(position.status),
-            uint256(IBurnerLoans.PositionStatus.NoDebt),
-            "rollback status"
-        );
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "rollback global debt");
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 0, "rollback asset debt");
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "rollback index");
@@ -1668,7 +1625,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 assetCap = burnerLoansConfig.getAssetConfig(address(usds)).debtCap;
         uint256 existingAssetDebt = assetCap - remainingCapacity;
         _depositDefaultCollateral(alice);
-        burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt, existingAssetDebt);
+        burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt);
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetDebtCapExceeded.selector,
@@ -1690,7 +1647,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 existingDebt = assetCap - amount;
         _depositDefaultCollateral(alice);
         usds.mint(alice, 100e18);
-        burnerLoans.setActiveDebtForTest(address(usds), existingDebt, existingDebt);
+        burnerLoans.setActiveDebtForTest(address(usds), existingDebt);
 
         _borrowWithPreview(alice, alice, alice, amount);
 

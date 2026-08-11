@@ -192,7 +192,6 @@ abstract contract FLOANTest is Test {
         assertEq(actual.interestDue, expected_.interestDue, "position interest due");
         assertEq(actual.maturity, expected_.maturity, "position maturity");
         assertEq(actual.lastBorrowBlock, expected_.lastBorrowBlock, "position last borrow block");
-        assertEq(actual.defaulted, expected_.defaulted, "position defaulted");
     }
 
     function _assertPositionIndexes(

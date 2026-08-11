@@ -72,7 +72,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
         activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
         cap_ = uint128(bound(cap_, 0, activeDebtOhm_ - 1));
-        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
+        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_);
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
@@ -156,7 +156,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     function test_givenCapEqualsActiveDebt_setsCap(uint128 activeDebtOhm_) public {
         _addDefaultUsdsAsset();
         activeDebtOhm_ = uint128(bound(activeDebtOhm_, 1, _defaultAssetDebtCap()));
-        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_, activeDebtOhm_);
+        burnerLoans.setActiveDebtForTest(address(usds), activeDebtOhm_);
 
         vm.prank(admin);
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));

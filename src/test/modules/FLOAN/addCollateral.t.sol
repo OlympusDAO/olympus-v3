@@ -39,20 +39,23 @@ contract FLOANAddCollateralTest is FLOANTest {
     }
 
     // addCollateral
-    // given a defaulted position
+    // given a position whose previous episode defaulted
     //  when addCollateral is called
-    //   then it reverts
-    function test_givenDefaultedPosition_reverts() public {
+    //   then it starts collateral for a reusable position
+    function test_givenDefaultedPosition_addsCollateralForNewEpisode() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
 
         vm.startPrank(facility);
         floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.addCollateral(positionId, 1);
+        vm.expectEmit(true, false, false, true, address(floan));
+        emit IFLOANv1.PositionCollateralChanged(positionId, 1);
+        uint128 collateral = floan.addCollateral(positionId, 1);
         vm.stopPrank();
+
+        assertEq(collateral, 1, "new episode collateral");
+        assertEq(floan.getPosition(positionId).collateral, 1, "stored collateral");
+        assertEq(floan.getPositionCount(), 1, "position ID reused");
     }
 
     // addCollateral

@@ -61,23 +61,6 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     }
 
     // decreaseDebt
-    // given a defaulted position
-    //  when decreaseDebt is called
-    //   then it reverts
-    function test_givenDefaultedPosition_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-
-        vm.startPrank(facility);
-        floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.decreaseDebt(positionId, 1, 0);
-        vm.stopPrank();
-    }
-
-    // decreaseDebt
     // given a position without principal or interest due
     //  when decreaseDebt is called
     //   then it reverts
@@ -182,31 +165,63 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // decreaseDebt
     // given full closure
     //  when decreaseDebt is called
-    //   then it clears episode and active borrower
-    function test_givenFullClosure_clearsEpisodeAndActiveBorrower() public {
+    //   then it emits history, clears the episode, and allows the position ID to be reused
+    function test_givenFullClosure_clearsEpisodeAndAllowsPositionReuse() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint48 maturity = uint48(block.timestamp + 30 days);
 
         vm.startPrank(facility);
         uint64 positionId = floan.createPosition(marketId, borrower);
-        floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
+        floan.addCollateral(positionId, 50e18);
+        floan.increaseDebt(positionId, 100e9, 25e9, maturity);
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.PositionClosed(
+            positionId,
+            marketId,
+            borrower,
+            50e18,
+            100e9,
+            maturity,
+            uint32(block.number)
+        );
         floan.decreaseDebt(positionId, 100e9, 25e9);
         vm.stopPrank();
 
-        IFLOANv1.Position memory position = floan.getPosition(positionId);
-        assertEq(position.principalDrawn, 0, "principal drawn cleared");
-        assertEq(position.principalDue, 0, "principal due cleared");
-        assertEq(position.interestDue, 0, "interest due cleared");
-        assertEq(position.maturity, 0, "maturity cleared");
-        assertEq(position.lastBorrowBlock, 0, "last borrow block cleared");
+        _assertPosition(
+            positionId,
+            IFLOANv1.Position({
+                borrower: borrower,
+                marketId: marketId,
+                collateral: 50e18,
+                principalDrawn: 0,
+                principalDue: 0,
+                interestDue: 0,
+                maturity: 0,
+                lastBorrowBlock: 0
+            })
+        );
         assertEq(floan.getActiveBorrowers(marketId).length, 0, "active borrower removed");
         assertEq(floan.getActiveBorrowerCount(marketId), 0, "active borrower count");
         assertEq(floan.getMarketPrincipalDue(marketId), 0, "market principal cleared");
         assertEq(floan.getMarketInterestDue(marketId), 0, "market interest cleared");
+        assertEq(floan.getMarketCollateral(marketId), 50e18, "market collateral retained");
         assertEq(
             floan.getFacilityPrincipalDue(facility, debtToken),
             0,
             "facility principal cleared"
         );
+
+        uint48 newMaturity = uint48(block.timestamp + 60 days);
+        vm.prank(facility);
+        floan.increaseDebt(positionId, 150e9, 10e9, newMaturity);
+
+        IFLOANv1.Position memory position = floan.getPosition(positionId);
+        assertEq(floan.getPositionCount(), 1, "position ID reused");
+        assertEq(position.principalDrawn, 150e9, "new episode principal drawn");
+        assertEq(position.principalDue, 150e9, "new episode principal due");
+        assertEq(position.interestDue, 10e9, "new episode interest due");
+        assertEq(position.maturity, newMaturity, "new episode maturity");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "borrower reactivated");
     }
 
     // decreaseDebt

@@ -132,16 +132,12 @@ contract FLOANImportPositionTest is FLOANTest {
     }
 
     // importPosition
-    // given a previously defaulted position
+    // given a reusable position with historical defaulted principal
     //  when it is imported
     //   then it remains inactive
     //   then it reconstructs defaulted principal aggregates
-    function test_givenDefaultedPosition_reconstructsDefaultAggregates() public {
-        IFLOANv1.Position memory imported = _activePosition(borrower, 0);
-        imported.collateral = 0;
-        imported.principalDue = 0;
-        imported.interestDue = 0;
-        imported.defaulted = true;
+    function test_givenReusablePositionWithDefaultHistory_reconstructsDefaultAggregates() public {
+        IFLOANv1.Position memory imported = _closedPosition(borrower);
 
         vm.prank(manager);
         floan.importPosition(0, imported, 80e9);
@@ -153,29 +149,16 @@ contract FLOANImportPositionTest is FLOANTest {
     }
 
     // importPosition
-    // given a non-defaulted position with a defaulted principal amount
+    // given an active reused position with historical defaulted principal
     //  when it is imported
-    //   then it reverts
-    function test_givenNonDefaultedPositionWithPrincipalDefaulted_reverts() public {
+    //   then it reconstructs both live and historical accounting
+    function test_givenActiveReusedPositionWithDefaultHistory_reconstructsBothAggregates() public {
         vm.prank(manager);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
-        floan.importPosition(0, _activePosition(borrower, 80e9), 1);
-    }
+        floan.importPosition(0, _activePosition(borrower, 80e9), 120e9);
 
-    // importPosition
-    // given defaulted principal above principal drawn
-    //  when importPosition is called
-    //   then it reverts
-    function test_givenDefaultedPrincipalAbovePrincipalDrawn_reverts() public {
-        IFLOANv1.Position memory imported = _activePosition(borrower, 0);
-        imported.collateral = 0;
-        imported.principalDue = 0;
-        imported.interestDue = 0;
-        imported.defaulted = true;
-
-        vm.prank(manager);
-        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
-        floan.importPosition(0, imported, imported.principalDrawn + 1);
+        assertEq(floan.getMarketPrincipalDue(marketId), 80e9, "live principal");
+        assertEq(floan.getMarketPrincipalDefaulted(marketId), 120e9, "historical default");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
     }
 
     // importPosition
@@ -189,49 +172,6 @@ contract FLOANImportPositionTest is FLOANTest {
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
         floan.importPosition(0, imported, 0);
-    }
-
-    // importPosition
-    // given a defaulted position retains principal due
-    //  when it is imported
-    //   then it reverts
-    function test_givenDefaultedPositionWithPrincipalDue_reverts() public {
-        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
-        imported.principalDue = 1;
-
-        _expectInvalidConfig(imported, 100e9);
-    }
-
-    // importPosition
-    // given a defaulted position retains interest due
-    //  when it is imported
-    //   then it reverts
-    function test_givenDefaultedPositionWithInterestDue_reverts() public {
-        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
-        imported.interestDue = 1;
-
-        _expectInvalidConfig(imported, 100e9);
-    }
-
-    // importPosition
-    // given a defaulted position retains collateral
-    //  when it is imported
-    //   then it reverts
-    function test_givenDefaultedPositionWithCollateral_reverts() public {
-        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
-        imported.collateral = 1;
-
-        _expectInvalidConfig(imported, 100e9);
-    }
-
-    // importPosition
-    // given a defaulted position has no principal defaulted
-    //  when it is imported
-    //   then it reverts
-    function test_givenDefaultedPositionWithoutPrincipalDefaulted_reverts() public {
-        IFLOANv1.Position memory imported = _defaultedPosition(borrower, 100e9);
-
-        _expectInvalidConfig(imported, 0);
     }
 
     // importPosition
@@ -334,26 +274,7 @@ contract FLOANImportPositionTest is FLOANTest {
                 principalDue: principalDue_,
                 interestDue: principalDue_ == 0 ? 0 : 5e9,
                 maturity: uint48(block.timestamp - 1),
-                lastBorrowBlock: uint32(block.number - 1),
-                defaulted: false
-            });
-    }
-
-    function _defaultedPosition(
-        address borrower_,
-        uint128 principalDrawn_
-    ) internal view returns (IFLOANv1.Position memory) {
-        return
-            IFLOANv1.Position({
-                borrower: borrower_,
-                marketId: marketId,
-                collateral: 0,
-                principalDrawn: principalDrawn_,
-                principalDue: 0,
-                interestDue: 0,
-                maturity: uint48(block.timestamp - 1),
-                lastBorrowBlock: uint32(block.number - 1),
-                defaulted: true
+                lastBorrowBlock: uint32(block.number - 1)
             });
     }
 
@@ -367,8 +288,7 @@ contract FLOANImportPositionTest is FLOANTest {
                 principalDue: 0,
                 interestDue: 0,
                 maturity: 0,
-                lastBorrowBlock: 0,
-                defaulted: false
+                lastBorrowBlock: 0
             });
     }
 

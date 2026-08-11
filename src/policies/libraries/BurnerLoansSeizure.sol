@@ -398,7 +398,6 @@ library BurnerLoansSeizure {
         );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoDebt();
         position = dependencies_.floan.getPosition(positionId);
-        if (position.defaulted) revert IBurnerLoans.BurnerLoans_PositionSeized();
         if (position.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
         if (!_isSeizable(dependencies_.ohmDecimals, position, context_.config, context_.pricing)) {
             revert IBurnerLoans.BurnerLoans_PositionNotSeizable(borrower_);
@@ -487,7 +486,7 @@ library BurnerLoansSeizure {
         IBurnerLoans.AssetConfig memory config_,
         Pricing memory pricing_
     ) private view returns (bool) {
-        if (position_.principalDue == 0 || position_.defaulted) return false;
+        if (position_.principalDue == 0) return false;
         if (block.timestamp >= position_.maturity) return true;
 
         uint256 collateralUsd = BurnerLoansCalculator.collateralValueUsd(

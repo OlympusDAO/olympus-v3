@@ -61,7 +61,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.borrow(0, 100e9);
         vm.roll(block.number + 1);
 
-        bytes4[] memory selectors = new bytes4[](15);
+        bytes4[] memory selectors = new bytes4[](16);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -77,6 +77,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[12] = handler.toggleAsset.selector;
         selectors[13] = handler.compositeDepositAndBorrow.selector;
         selectors[14] = handler.compositeRepayAndWithdraw.selector;
+        selectors[15] = handler.reuseDebtFreePosition.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -212,24 +213,26 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
 
     // invariant
     // given any sequence of Burner Loans handler calls
-    //  when seized positions are checked
-    //   then seizure closes debt and collateral and removes the active borrower
-    function invariant_SeizureClosesEntirePosition() public view {
+    //  when a debt-free position is reused
+    //   then the same position ID can begin a new debt episode
+    function invariant_DebtFreePositionIdsAreReusable() public view {
+        assertEq(handler.positionReuseViolations(), 0, "closed position could not be reused");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when borrowers are returned by the seizure scan
+    //   then every returned borrower is seizable
+    function invariant_SeizureScanReturnsOnlyEligibleBorrowers() public view {
         assertEq(handler.seizureEligibilityViolations(), 0, "scan returned ineligible borrower");
-        address[] memory activeBorrowers = burnerLoans.getActiveBorrowers(address(usds));
-        for (uint256 i; i < invariantActors.length; ++i) {
-            IBurnerLoans.Position memory position = burnerLoans.getPosition(
-                address(usds),
-                invariantActors[i]
-            );
-            if (position.status != IBurnerLoans.PositionStatus.Seized) continue;
-            assertEq(position.debtOhm, 0, "seized debt remains");
-            assertEq(position.depositedCollateral, 0, "seized collateral remains");
-            assertFalse(
-                _contains(activeBorrowers, invariantActors[i]),
-                "seized borrower remains active"
-            );
-        }
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when a position is seized
+    //   then its collateral, debt episode, and active membership are cleared
+    function invariant_SeizureClearsReusablePositionState() public view {
+        assertEq(handler.seizureClosureViolations(), 0, "seizure did not clear position state");
     }
 
     // invariant

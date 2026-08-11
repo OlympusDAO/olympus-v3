@@ -63,20 +63,24 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     }
 
     // increaseDebt
-    // given a defaulted position
+    // given a position whose previous episode defaulted
     //  when increaseDebt is called
-    //   then it reverts
-    function test_givenDefaultedPosition_reverts() public {
+    //   then it starts a new debt episode on the same position ID
+    function test_givenDefaultedPosition_startsNewEpisode() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        uint48 maturity = uint48(block.timestamp + 60 days);
 
         vm.startPrank(facility);
         floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.increaseDebt(positionId, 1, 0, uint48(block.timestamp + 30 days));
+        floan.increaseDebt(positionId, 1, 0, maturity);
         vm.stopPrank();
+
+        IFLOANv1.Position memory position = floan.getPosition(positionId);
+        assertEq(position.principalDrawn, 1, "new principal drawn");
+        assertEq(position.principalDue, 1, "new principal due");
+        assertEq(position.maturity, maturity, "new maturity");
+        assertEq(floan.getPositionCount(), 1, "position ID reused");
     }
 
     // increaseDebt

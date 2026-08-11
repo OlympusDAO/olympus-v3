@@ -56,11 +56,6 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
         IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
         assertEq(position.debtOhm, 0, "seized debt");
         assertEq(position.depositedCollateral, 0, "seized collateral");
-        assertEq(
-            uint256(position.status),
-            uint256(IBurnerLoans.PositionStatus.Seized),
-            "seized status"
-        );
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt after seizure");
         assertEq(
             floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),

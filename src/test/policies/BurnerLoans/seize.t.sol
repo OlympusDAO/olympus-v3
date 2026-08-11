@@ -2,12 +2,17 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+
+// Libraries
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
+// Contracts
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
@@ -45,7 +50,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         );
         assertEq(position.debtOhm, 0, "debt cleared");
         assertEq(position.depositedCollateral, 0, "collateral cleared");
-        assertEq(uint8(position.status), uint8(IBurnerLoans.PositionStatus.Seized), "status");
+        assertEq(position.maturity, 0, "maturity cleared");
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "global active debt");
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 0, "asset active debt");
         assertEq(
@@ -119,10 +124,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         vm.prank(keeper);
         burnerLoans.seize(address(usds), _single(alice));
 
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "debt cleared");
         assertEq(
-            uint8(burnerLoans.getPosition(address(usds), alice).status),
-            uint8(IBurnerLoans.PositionStatus.Seized),
-            "seized status"
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            0,
+            "collateral cleared"
         );
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
@@ -139,8 +145,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
                 depositedCollateral: 0,
                 debtOhm: 100e9,
                 maturity: uint48(block.timestamp + 30 days),
-                lastBorrowBlock: 0,
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: 0
             })
         );
 
@@ -150,11 +155,6 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(reward, 0, "reward");
         assertEq(treasuryAmount, 0, "treasury amount");
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt");
-        assertEq(
-            uint8(burnerLoans.getPosition(address(usds), alice).status),
-            uint8(IBurnerLoans.PositionStatus.Seized),
-            "status"
-        );
     }
 
     // seize
@@ -250,19 +250,59 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     }
 
     // seize
-    // given already seized position
-    //  when seize is called
-    //   then it reverts
-    function test_givenAlreadySeizedPosition_seizeReverts() public {
+    // given a position has been seized and its episode state cleared
+    //  when the borrower deposits collateral and borrows again
+    //   then Burner Loans reuses the same FLOAN position ID
+    //   then the reused position receives a fresh maturity
+    function test_givenSeizedPosition_borrowerCanStartNewEpisodeWithSamePositionId() public {
         _makeUnhealthy(alice);
+        uint48 firstMaturity = burnerLoans.getPosition(address(usds), alice).maturity;
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+        uint256[] memory positionIdsBefore = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+        uint256 positionCountBefore = floan.getPositionCount();
+
         vm.prank(keeper);
         burnerLoans.seize(address(usds), _single(alice));
 
-        vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
-        burnerLoans.previewSeize(address(usds), _single(alice));
+        IFLOANv1.Position memory closedPosition = floan.getPosition(uint64(positionIdsBefore[0]));
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+        assertEq(closedPosition.principalDrawn, 0, "seized principal drawn cleared");
+        assertEq(closedPosition.maturity, 0, "seized maturity cleared");
 
-        vm.expectRevert(IBurnerLoans.BurnerLoans_PositionSeized.selector);
-        burnerLoans.seize(address(usds), _single(alice));
+        vm.warp(block.timestamp + 1 days);
+        _configurePrice(address(ohm), 10e18);
+        price.setTimestamp(uint48(block.timestamp));
+        usds.mint(alice, 2_100e18);
+        vm.startPrank(alice);
+        burnerLoans.depositCollateral(address(usds), 2_000e18, alice);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            100e9,
+            alice
+        );
+        assertEq(preview.maturity, block.timestamp + 30 days, "new episode maturity");
+        assertGt(preview.maturity, firstMaturity, "new maturity should not reuse old maturity");
+        burnerLoans.borrow(address(usds), 100e9, alice, alice, preview.fee);
+        vm.stopPrank();
+
+        uint256[] memory positionIdsAfter = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+        assertEq(floan.getPositionCount(), positionCountBefore, "position count unchanged");
+        assertEq(positionIdsAfter.length, 1, "one position retained");
+        assertEq(positionIdsAfter[0], positionIdsBefore[0], "same position ID reused");
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "new debt");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).maturity,
+            preview.maturity,
+            "stored new episode maturity"
+        );
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "borrower active");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
     // seize
@@ -398,8 +438,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
                     depositedCollateral: 0,
                     debtOhm: 1e9,
                     maturity: uint48(block.timestamp + 30 days),
-                    lastBorrowBlock: 0,
-                    status: IBurnerLoans.PositionStatus.Active
+                    lastBorrowBlock: 0
                 })
             );
         }
@@ -731,10 +770,7 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: collateral_,
                 debtOhm: debt_,
                 maturity: maturity_,
-                lastBorrowBlock: 0,
-                status: debt_ == 0
-                    ? IBurnerLoans.PositionStatus.NoDebt
-                    : IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: 0
             });
     }
 

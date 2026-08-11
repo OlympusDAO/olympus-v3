@@ -29,12 +29,7 @@ library BurnerLoansView {
                 depositedCollateral: position.collateral,
                 debtOhm: position.principalDue,
                 maturity: position.maturity,
-                lastBorrowBlock: position.lastBorrowBlock,
-                status: position.defaulted
-                    ? IBurnerLoans.PositionStatus.Seized
-                    : position.principalDue == 0
-                    ? IBurnerLoans.PositionStatus.NoDebt
-                    : IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: position.lastBorrowBlock
             });
     }
 
@@ -64,15 +59,15 @@ library BurnerLoansView {
     }
 
     /// @notice Returns whether a supplied FLOAN position is currently seizable.
-    /// @dev Debt-free/defaulted positions are not seizable; matured positions are seizable without
-    ///      a price read.
+    /// @dev Debt-free positions are not seizable; matured positions are seizable without a price
+    ///      read.
     function isSeizable(
         BurnerLoansContext memory dependencies_,
         address asset_,
         IFLOANv1.Position memory position
     ) public view returns (bool) {
         _requireAssetConfigured(dependencies_, asset_);
-        if (position.principalDue == 0 || position.defaulted) return false;
+        if (position.principalDue == 0) return false;
         if (block.timestamp >= position.maturity) return true;
         return
             BurnerLoansQuote.positionHealthFactor(

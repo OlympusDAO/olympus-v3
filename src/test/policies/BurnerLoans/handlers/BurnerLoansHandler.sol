@@ -1,19 +1,24 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Test} from "forge-std/Test.sol";
+// Interfaces
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-
+// Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
+
+// Contracts
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {Test} from "forge-std/Test.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
-import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
@@ -45,6 +50,8 @@ contract BurnerLoansHandler is Test {
     uint256 public harvestBoundViolations;
     uint256 public backingViolations;
     uint256 public seizureEligibilityViolations;
+    uint256 public seizureClosureViolations;
+    uint256 public positionReuseViolations;
 
     struct Dependencies {
         BurnerLoansHarness burnerLoans;
@@ -326,9 +333,68 @@ contract BurnerLoansHandler is Test {
                 }
             }
             try burnerLoans.seize(address(collateral), borrowers) {
+                _checkSeizureClosure(borrowers);
                 _checkBacking();
             } catch {}
         } catch {}
+    }
+
+    function reuseDebtFreePosition(uint256 actorSeed_) external {
+        address actor = _actor(actorSeed_);
+        uint32 marketId = burnerLoansConfig.marketId(address(collateral));
+        (bool exists, uint64 positionIdBefore) = BurnerLoansPositions.find(floan, marketId, actor);
+        if (!exists) return;
+        if (floan.getPosition(positionIdBefore).principalDue != 0) return;
+
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(
+            address(collateral)
+        );
+        if (!config.originationsEnabled) return;
+        if (burnerLoans.totalActiveDebtOhm() + _OHM_SCALE > burnerLoans.globalDebtCapOhm()) {
+            return;
+        }
+        if (burnerLoans.assetActiveDebtOhm(address(collateral)) + _OHM_SCALE > config.debtCap) {
+            return;
+        }
+
+        uint256 positionCountBefore = floan.getPositionCount();
+        collateral.mint(actor, 200e18);
+        vm.prank(actor);
+        try burnerLoans.depositCollateral(address(collateral), 100e18, actor) {} catch {
+            ++positionReuseViolations;
+            return;
+        }
+
+        try burnerLoans.previewBorrow(address(collateral), uint128(_OHM_SCALE), actor) returns (
+            IBurnerLoans.BorrowPreview memory preview
+        ) {
+            vm.prank(actor);
+            try
+                burnerLoans.borrow(
+                    address(collateral),
+                    uint128(_OHM_SCALE),
+                    actor,
+                    actor,
+                    preview.fee
+                )
+            {} catch {
+                ++positionReuseViolations;
+                return;
+            }
+        } catch {
+            ++positionReuseViolations;
+            return;
+        }
+
+        IFLOANv1.Position memory positionAfter = floan.getPosition(positionIdBefore);
+        if (
+            floan.getPositionCount() != positionCountBefore ||
+            positionAfter.principalDue != _OHM_SCALE
+        ) {
+            ++positionReuseViolations;
+        }
+        _probeSameBlockRepay(actor);
+        _checkBacking();
     }
 
     function executePeriodicSeizer() external {
@@ -397,5 +463,34 @@ contract BurnerLoansHandler is Test {
             floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(collateral)));
         uint256 requiredBackingUsd = FullMath.mulDiv(totalBackedDebt, _WAD, _OHM_SCALE);
         if (liquidBackingUsd < requiredBackingUsd) ++backingViolations;
+    }
+
+    function _checkSeizureClosure(address[] memory borrowers_) private {
+        uint32 marketId = burnerLoansConfig.marketId(address(collateral));
+        address[] memory activeBorrowers = burnerLoans.getActiveBorrowers(address(collateral));
+
+        for (uint256 i; i < borrowers_.length; ++i) {
+            address borrower = borrowers_[i];
+            (bool exists, uint64 positionId) = BurnerLoansPositions.find(floan, marketId, borrower);
+            bool invalidClosure = !exists;
+
+            if (!invalidClosure) {
+                IFLOANv1.Position memory floanPosition = floan.getPosition(positionId);
+                invalidClosure =
+                    floanPosition.collateral != 0 ||
+                    floanPosition.principalDrawn != 0 ||
+                    floanPosition.principalDue != 0 ||
+                    floanPosition.interestDue != 0 ||
+                    floanPosition.maturity != 0 ||
+                    floanPosition.lastBorrowBlock != 0;
+            }
+
+            for (uint256 j; j < activeBorrowers.length; ++j) {
+                if (activeBorrowers[j] != borrower) continue;
+                invalidClosure = true;
+                break;
+            }
+            if (invalidClosure) ++seizureClosureViolations;
+        }
     }
 }

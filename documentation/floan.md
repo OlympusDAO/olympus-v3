@@ -114,26 +114,32 @@ borrower in the same market and indexes positions by borrower, market, and marke
 | `principalDue`                | Current outstanding principal                    |
 | `interestDue`                 | Current deferred interest in the debt token      |
 | `maturity`, `lastBorrowBlock` | Fixed-term lifecycle data                        |
-| `defaulted`                   | Terminal default marker                          |
 
 `principalDrawn` does not decrease on partial repayment, which preserves origination and default
-reporting for the current episode. When both principal and interest reach zero, episode fields are
-cleared and a later draw starts a new episode. An active episode may add interest without adding
-principal; a new episode must begin with non-zero principal.
+reporting for the current episode. Full repayment and default both clear the episode fields, so the
+same position ID can start a later episode. Default also clears collateral. The closing events carry
+the pre-clear snapshot for indexers; cumulative defaulted principal remains available per market.
+An active episode may add interest without adding principal; a new episode must begin with non-zero
+principal.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Empty: createPosition
-    Empty --> Active: increaseDebt with principal
+    [*] --> DebtFree: createPosition
+    DebtFree --> Active: increaseDebt with principal
     Active --> Active: add or remove collateral / increase or decrease debt / extend
-    Active --> Empty: decreaseDebt clears principal and interest
-    Active --> Defaulted: defaultPosition
-    Empty --> Empty: add or remove collateral
+    Active --> DebtFree: full repayment or default
+    DebtFree --> DebtFree: add or remove collateral
 ```
 
-FLOAN stores no product-specific `Healthy`, `Matured`, or `Seizable` status. Facilities derive
-those conditions from the ledger, prices, and their own rules. A borrower remains in a market's
-active-borrower set while any of their positions in that market owes principal or interest.
+| Episode end    | Retained state                       | History source                         | Reusable |
+| -------------- | ------------------------------------ | -------------------------------------- | -------- |
+| Full repayment | Borrower, market, collateral         | `PositionClosed` snapshot              | Yes      |
+| Default        | Borrower and market                   | `PositionDefaulted` snapshot + totals  | Yes      |
+
+FLOAN stores no persistent lifecycle status and no product-specific `Healthy`, `Matured`, or
+`Seizable` status. Current activity is derived from outstanding principal or interest; facilities
+derive product conditions from the ledger, prices, and their own rules. A borrower remains in a
+market's active-borrower set while any position in that market has debt.
 
 Individual balances and mutation inputs use `uint128`; facilities should widen values before
 multiplication. Timestamps use `uint48`, and `lastBorrowBlock` uses `uint32`.
@@ -155,8 +161,9 @@ custody. Governance must coordinate those resources atomically or first reduce e
 A malicious manager can appoint a malicious facility, so both authorities are governance-critical.
 
 Migration preserves numeric IDs and reconstructs indexes and aggregates from imported records.
-Imports validate market configuration and canonical empty, active, closed, and defaulted position
-shapes. A temporary migration policy should lose its selector permissions after reconciliation.
+Imports validate canonical active or reusable position state. Historical defaulted principal is a
+separate input, so it can coexist with a later active episode on the same position ID. A temporary
+migration policy should lose its selector permissions after reconciliation.
 
 ## Product Examples
 

@@ -241,11 +241,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
-        assertEq(
-            uint8(burnerLoans.getPosition(address(usds), alice).status),
-            uint8(IBurnerLoans.PositionStatus.Seized),
-            "position status"
-        );
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "position debt");
         _assertGasRecorded(gasUsed);
     }
 
@@ -701,11 +697,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
                 address(usds),
                 address(uint160(10_000 + i))
             );
-            assertEq(
-                uint8(position.status),
-                uint8(IBurnerLoans.PositionStatus.Seized),
-                "position status"
-            );
+            assertEq(position.debtOhm, 0, "position debt");
             assertEq(position.depositedCollateral, 0, "position collateral");
             assertEq(position.debtOhm, 0, "position principal");
         }

@@ -333,7 +333,7 @@ abstract contract BurnerLoansTest is Test {
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig()
         );
-        burnerLoans.setActiveDebtForTest(address(asset), debtOhm_, debtOhm_);
+        burnerLoans.setActiveDebtForTest(address(asset), debtOhm_);
     }
 
     function _setAuthorizationAndExpectEvent(
@@ -400,11 +400,6 @@ abstract contract BurnerLoansTest is Test {
 
         IFLOANv1.Position memory floanPosition = floan.getPosition(positionIds[0].toUint64());
         IBurnerLoans.Position memory position = burnerLoans.getPosition(asset_, account_);
-        IBurnerLoans.PositionStatus expectedStatus = floanPosition.defaulted
-            ? IBurnerLoans.PositionStatus.Seized
-            : floanPosition.principalDue == 0
-            ? IBurnerLoans.PositionStatus.NoDebt
-            : IBurnerLoans.PositionStatus.Active;
 
         assertEq(floanPosition.borrower, account_, "FLOAN borrower");
         assertEq(floanPosition.marketId, marketId, "FLOAN market");
@@ -413,7 +408,6 @@ abstract contract BurnerLoansTest is Test {
         assertEq(floanPosition.interestDue, 0, "FLOAN interest");
         assertEq(floanPosition.maturity, position.maturity, "FLOAN maturity");
         assertEq(floanPosition.lastBorrowBlock, position.lastBorrowBlock, "FLOAN borrow block");
-        assertEq(uint8(position.status), uint8(expectedStatus), "FLOAN status");
     }
 
     /// @dev Replaces the real custody policy for tests that need injected impossible-state failures.

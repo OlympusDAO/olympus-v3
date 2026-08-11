@@ -47,6 +47,5 @@ abstract contract BurnerLoansHarvestTestBase is BurnerLoansTest {
         assertEq(actual_.debtOhm, expected_.debtOhm, "debt");
         assertEq(actual_.maturity, expected_.maturity, "maturity");
         assertEq(actual_.lastBorrowBlock, expected_.lastBorrowBlock, "last borrow block");
-        assertEq(uint8(actual_.status), uint8(expected_.status), "status");
     }
 }

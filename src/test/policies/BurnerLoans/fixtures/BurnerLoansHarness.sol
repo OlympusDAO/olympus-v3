@@ -203,7 +203,7 @@ contract BurnerLoansHarness is BurnerLoans {
         return configuredReward < surplus ? configuredReward : surplus;
     }
 
-    function setActiveDebtForTest(address asset_, uint256, uint256 assetActiveDebtOhm_) external {
+    function setActiveDebtForTest(address asset_, uint256 assetActiveDebtOhm_) external {
         uint64 positionId = BurnerLoansPositions.getOrCreate(
             _FLOAN,
             _marketId(asset_),

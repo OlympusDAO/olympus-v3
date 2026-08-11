@@ -4,16 +4,11 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 
-// Libraries
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
-
 /// @title Burner Loans Position Lookup
 /// @notice Resolves the first position created for a borrower in a market.
 /// @dev FLOAN permits multiple positions. Burner Loans intentionally operates only on the first
 ///      indexed position and leaves any later positions to their originating facility implementation.
 library BurnerLoansPositions {
-    using SafeCast for uint256;
-
     /// @notice Finds the first position for a borrower in a market.
     /// @param floan_ FLOAN module to query.
     /// @param marketId_ FLOAN market identifier.
@@ -25,13 +20,7 @@ library BurnerLoansPositions {
         uint32 marketId_,
         address borrower_
     ) internal view returns (bool exists, uint64 positionId) {
-        uint256[] memory positionIds = floan_.getPositionIdsForMarketAndBorrower(
-            marketId_,
-            borrower_
-        );
-        if (positionIds.length == 0) return (false, 0);
-
-        return (true, positionIds[0].toUint64());
+        return floan_.getPositionIdForMarketAndBorrowerAt(marketId_, borrower_, 0);
     }
 
     /// @notice Returns the first borrower position or an empty position for the market.
@@ -56,8 +45,7 @@ library BurnerLoansPositions {
                 principalDue: 0,
                 interestDue: 0,
                 maturity: 0,
-                lastBorrowBlock: 0,
-                defaulted: false
+                lastBorrowBlock: 0
             });
     }
 

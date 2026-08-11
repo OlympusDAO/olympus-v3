@@ -111,6 +111,21 @@ contract OlympusFixedTermLoan is FLOANv1 {
     }
 
     /// @inheritdoc IFLOANv1
+    function getPositionIdForMarketAndBorrowerAt(
+        uint32 marketId_,
+        address borrower_,
+        uint256 index_
+    ) external view override returns (bool exists, uint64 positionId) {
+        EnumerableSet.UintSet storage positionIds = _positionIdsByMarketAndBorrower[marketId_][
+            borrower_
+        ];
+        if (index_ >= positionIds.length()) return (false, 0);
+
+        // Position IDs enter this index only through uint64-typed storage helpers.
+        return (true, uint64(positionIds.at(index_)));
+    }
+
+    /// @inheritdoc IFLOANv1
     function getActiveBorrowers(
         uint32 marketId_
     ) external view override returns (address[] memory) {
@@ -265,20 +280,13 @@ contract OlympusFixedTermLoan is FLOANv1 {
         if (position_.borrower == address(0)) revert FLOAN_ZeroAddress();
 
         bool hasDebt = position_.principalDue != 0 || position_.interestDue != 0;
-        bool isClosed = !hasDebt && !position_.defaulted;
         if (
             position_.principalDrawn < position_.principalDue ||
             (hasDebt && position_.maturity == 0) ||
-            (position_.defaulted &&
-                (hasDebt ||
-                    position_.collateral != 0 ||
-                    principalDefaulted_ == 0 ||
-                    principalDefaulted_ > position_.principalDrawn)) ||
-            (isClosed &&
+            (!hasDebt &&
                 (position_.principalDrawn != 0 ||
                     position_.maturity != 0 ||
-                    position_.lastBorrowBlock != 0)) ||
-            (!position_.defaulted && principalDefaulted_ != 0)
+                    position_.lastBorrowBlock != 0))
         ) revert FLOAN_InvalidConfig();
 
         if (hasDebt) {
@@ -289,7 +297,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
                 true
             );
             _increaseInterest(position_.marketId, position_.interestDue);
-        } else if (position_.defaulted) {
+        }
+        if (principalDefaulted_ != 0) {
             getMarketPrincipalDefaulted[position_.marketId] += principalDefaulted_;
         }
 
@@ -391,13 +400,16 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _facilityPrincipalDue[market.facility][market.debtToken] -= principal_;
         getMarketInterestDue[stored.marketId] -= interest_;
         if (stored.principalDue == 0 && stored.interestDue == 0) {
-            stored.principalDrawn = 0;
-            stored.maturity = 0;
-            stored.lastBorrowBlock = 0;
-            uint32 activeCount = --_activePositionCount[stored.marketId][stored.borrower];
-            if (activeCount == 0) {
-                _activeBorrowersByMarket[stored.marketId].remove(stored.borrower);
-            }
+            emit PositionClosed(
+                positionId_,
+                stored.marketId,
+                stored.borrower,
+                stored.collateral,
+                stored.principalDrawn,
+                stored.maturity,
+                stored.lastBorrowBlock
+            );
+            _closeDebtEpisode(stored);
         }
         emit PositionDebtDecreased(positionId_, stored.principalDue, stored.interestDue);
         return stored;
@@ -447,11 +459,13 @@ contract OlympusFixedTermLoan is FLOANv1 {
         principalDefaulted = stored.principalDue;
         interestDefaulted = stored.interestDue;
         collateralSeized = stored.collateral;
+        uint128 principalDrawn = stored.principalDrawn;
+        uint48 maturity = stored.maturity;
+        uint32 lastBorrowBlock = stored.lastBorrowBlock;
 
         stored.principalDue = 0;
         stored.interestDue = 0;
         stored.collateral = 0;
-        stored.defaulted = true;
 
         getMarketCollateral[stored.marketId] -= collateralSeized;
         getMarketPrincipalDue[stored.marketId] -= principalDefaulted;
@@ -459,18 +473,20 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _facilityPrincipalDue[market.facility][market.debtToken] -= principalDefaulted;
         getMarketInterestDue[stored.marketId] -= interestDefaulted;
         getMarketPrincipalDefaulted[stored.marketId] += principalDefaulted;
-        uint32 activeCount = --_activePositionCount[stored.marketId][stored.borrower];
-        if (activeCount == 0) {
-            _activeBorrowersByMarket[stored.marketId].remove(stored.borrower);
-        }
+        _closeDebtEpisode(stored);
 
         emit PositionDebtDecreased(positionId_, 0, 0);
         emit PositionCollateralChanged(positionId_, 0);
         emit PositionDefaulted(
             positionId_,
+            stored.marketId,
+            stored.borrower,
+            principalDrawn,
             principalDefaulted,
             interestDefaulted,
-            collateralSeized
+            collateralSeized,
+            maturity,
+            lastBorrowBlock
         );
     }
 
@@ -498,8 +514,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
             principalDue: 0,
             interestDue: 0,
             maturity: 0,
-            lastBorrowBlock: 0,
-            defaulted: false
+            lastBorrowBlock: 0
         });
         _indexPosition(positionId, marketId_, borrower_);
         emit PositionCreated(positionId, marketId_, borrower_);
@@ -576,6 +591,17 @@ contract OlympusFixedTermLoan is FLOANv1 {
         getMarketInterestDue[marketId_] += interest_;
     }
 
+    function _closeDebtEpisode(Position storage position_) internal {
+        position_.principalDrawn = 0;
+        position_.maturity = 0;
+        position_.lastBorrowBlock = 0;
+
+        uint32 activeCount = --_activePositionCount[position_.marketId][position_.borrower];
+        if (activeCount == 0) {
+            _activeBorrowersByMarket[position_.marketId].remove(position_.borrower);
+        }
+    }
+
     function _validateMarketConfig(MarketInput calldata market_) internal pure {
         _validateRiskConfig(
             market_.termLength,
@@ -630,7 +656,6 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requirePosition(positionId_);
         position = _positions[positionId_];
         _requireFacility(position.marketId);
-        if (position.defaulted) revert FLOAN_PositionDefaulted(positionId_);
     }
 
     function _requireOriginatingPosition(

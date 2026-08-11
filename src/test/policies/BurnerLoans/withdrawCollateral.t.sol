@@ -1134,11 +1134,10 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
                 depositedCollateral: collateral_,
                 debtOhm: debtOhm_,
                 maturity: uint48(block.timestamp + 30 days),
-                lastBorrowBlock: uint48(block.number),
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: uint48(block.number)
             })
         );
-        burnerLoans.setActiveDebtForTest(address(usds), debtOhm_, debtOhm_);
+        burnerLoans.setActiveDebtForTest(address(usds), debtOhm_);
     }
 
     function _setFreshPrices(uint256 ohmPrice_, uint256 collateralPrice_) internal {

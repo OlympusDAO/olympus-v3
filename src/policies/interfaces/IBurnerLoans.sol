@@ -38,7 +38,6 @@ interface IBurnerLoans {
     error BurnerLoans_UnhealthyPosition(uint256 healthFactor);
     error BurnerLoans_UnhealthyBorrow(uint256 healthFactor);
     error BurnerLoans_PositionMatured(uint48 maturity);
-    error BurnerLoans_PositionSeized();
     error BurnerLoans_GlobalDebtCapExceeded(uint256 requestedDebtOhm, uint256 availableDebtOhm);
     error BurnerLoans_AssetDebtCapExceeded(
         address asset,
@@ -76,18 +75,11 @@ interface IBurnerLoans {
     /// @notice Emitted when remaining MINTR approval is reconciled to active debt capacity.
     event MintApprovalSynchronized(uint256 approval);
 
-    enum PositionStatus {
-        NoDebt,
-        Active,
-        Seized
-    }
-
     struct Position {
         uint256 depositedCollateral;
         uint256 debtOhm;
         uint48 maturity;
         uint48 lastBorrowBlock;
-        PositionStatus status;
     }
 
     struct AssetConfig {

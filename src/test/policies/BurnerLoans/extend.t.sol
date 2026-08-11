@@ -79,8 +79,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
                 depositedCollateral: 2_000e18,
                 debtOhm: 100e9,
                 maturity: uint48(block.timestamp + 30 days),
-                lastBorrowBlock: 0,
-                status: IBurnerLoans.PositionStatus.Active
+                lastBorrowBlock: 0
             })
         );
     }

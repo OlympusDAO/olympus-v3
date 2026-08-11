@@ -64,31 +64,16 @@ contract FLOANDefaultPositionTest is FLOANTest {
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
         floan.defaultPosition(positionId);
 
-        assertFalse(floan.getPosition(positionId).defaulted, "position not defaulted");
-    }
-
-    // defaultPosition
-    // given an already-defaulted position
-    //  when defaultPosition is called
-    //   then it reverts
-    function test_givenAlreadyDefaultedPosition_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-
-        vm.startPrank(facility);
-        floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.defaultPosition(positionId);
-        vm.stopPrank();
+        assertEq(floan.getPosition(positionId).principalDue, 0, "position remains debt free");
     }
 
     // defaultPosition
     // given a position with collateral, principal, and interest due
     //  when defaultPosition is called
-    //   then it closes debt and collateral and preserves episode history
-    function test_closesDebtAndCollateralAndPreservesEpisodeHistory() public {
+    //   then it emits episode history and clears reusable state
+    function test_givenPositionWithCollateralPrincipalAndInterestDue_emitsHistoryAndClearsReusableState()
+        public
+    {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint48 maturity = uint48(block.timestamp + 30 days);
 
@@ -96,12 +81,22 @@ contract FLOANDefaultPositionTest is FLOANTest {
         uint64 positionId = floan.createPosition(marketId, borrower);
         floan.addCollateral(positionId, 150e18);
         floan.increaseDebt(positionId, 100e9, 25e9, maturity);
-        vm.expectEmit(true, false, false, true, address(floan));
+        vm.expectEmit(true, true, true, true, address(floan));
         emit IFLOANv1.PositionDebtDecreased(positionId, 0, 0);
-        vm.expectEmit(true, false, false, true, address(floan));
+        vm.expectEmit(true, true, true, true, address(floan));
         emit IFLOANv1.PositionCollateralChanged(positionId, 0);
-        vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.PositionDefaulted(positionId, 100e9, 25e9, 150e18);
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.PositionDefaulted(
+            positionId,
+            marketId,
+            borrower,
+            100e9,
+            100e9,
+            25e9,
+            150e18,
+            maturity,
+            uint32(block.number)
+        );
         (uint128 principalDefaulted, uint128 interestDefaulted, uint128 collateralSeized) = floan
             .defaultPosition(positionId);
         vm.stopPrank();
@@ -110,14 +105,20 @@ contract FLOANDefaultPositionTest is FLOANTest {
         assertEq(interestDefaulted, 25e9, "interest defaulted");
         assertEq(collateralSeized, 150e18, "collateral seized");
 
-        IFLOANv1.Position memory position = floan.getPosition(positionId);
-        assertEq(position.principalDrawn, 100e9, "original principal preserved");
-        assertEq(position.principalDue, 0, "principal due cleared");
-        assertEq(position.interestDue, 0, "interest due cleared");
-        assertEq(position.collateral, 0, "collateral cleared");
+        _assertPosition(
+            positionId,
+            IFLOANv1.Position({
+                borrower: borrower,
+                marketId: marketId,
+                collateral: 0,
+                principalDrawn: 0,
+                principalDue: 0,
+                interestDue: 0,
+                maturity: 0,
+                lastBorrowBlock: 0
+            })
+        );
         assertEq(floan.getMarketCollateral(marketId), 0, "market collateral cleared");
-        assertEq(position.maturity, maturity, "maturity preserved");
-        assertTrue(position.defaulted, "position defaulted");
         assertEq(floan.getActiveBorrowers(marketId).length, 0, "active borrower removed");
         assertEq(floan.getActiveBorrowerCount(marketId), 0, "active borrower count");
         assertEq(floan.getMarketPrincipalDue(marketId), 0, "market principal cleared");
@@ -137,10 +138,21 @@ contract FLOANDefaultPositionTest is FLOANTest {
     function test_givenPrincipalOnly_recordsPrincipalDefault() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        IFLOANv1.Position memory before = floan.getPosition(positionId);
 
         vm.prank(facility);
         vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.PositionDefaulted(positionId, 100e9, 0, 0);
+        emit IFLOANv1.PositionDefaulted(
+            positionId,
+            marketId,
+            borrower,
+            before.principalDrawn,
+            100e9,
+            0,
+            0,
+            before.maturity,
+            before.lastBorrowBlock
+        );
         (uint128 principalDefaulted, uint128 interestDefaulted, ) = floan.defaultPosition(
             positionId
         );
@@ -159,10 +171,21 @@ contract FLOANDefaultPositionTest is FLOANTest {
 
         vm.startPrank(facility);
         uint64 positionId = floan.createPosition(marketId, borrower);
-        floan.increaseDebt(positionId, 100e9, 25e9, uint48(block.timestamp + 30 days));
+        uint48 maturity = uint48(block.timestamp + 30 days);
+        floan.increaseDebt(positionId, 100e9, 25e9, maturity);
         floan.decreaseDebt(positionId, 100e9, 0);
         vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.PositionDefaulted(positionId, 0, 25e9, 0);
+        emit IFLOANv1.PositionDefaulted(
+            positionId,
+            marketId,
+            borrower,
+            100e9,
+            0,
+            25e9,
+            0,
+            maturity,
+            uint32(block.number)
+        );
         (uint128 principalDefaulted, uint128 interestDefaulted, ) = floan.defaultPosition(
             positionId
         );
@@ -187,7 +210,9 @@ contract FLOANDefaultPositionTest is FLOANTest {
         vm.prank(facility);
         floan.defaultPosition(positionId);
 
-        assertTrue(floan.getPosition(positionId).defaulted, "position defaulted");
+        assertEq(floan.getPosition(positionId).principalDrawn, 0, "principal drawn cleared");
+        assertEq(floan.getPosition(positionId).principalDue, 0, "principal due cleared");
+        assertEq(floan.getPosition(positionId).maturity, 0, "maturity cleared");
         assertEq(floan.getMarketPrincipalDue(marketId), 0, "market principal cleared");
         assertEq(
             floan.getFacilityPrincipalDue(facility, debtToken),
@@ -221,5 +246,70 @@ contract FLOANDefaultPositionTest is FLOANTest {
         assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower by index");
         assertEq(floan.getMarketPrincipalDue(marketId), 200e9, "remaining market principal");
         assertEq(floan.getMarketCollateral(marketId), 250e18, "remaining market collateral");
+    }
+
+    // defaultPosition
+    // given a position is reused after an earlier default
+    //  when the new debt episode is defaulted
+    //   then the event contains only the new episode and cumulative defaults include both episodes
+    function test_givenReusedPosition_defaultsNewEpisodeAndAccumulatesHistory() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        uint48 newMaturity = uint48(block.timestamp + 60 days);
+
+        vm.startPrank(facility);
+        floan.defaultPosition(positionId);
+        floan.addCollateral(positionId, 200e18);
+        floan.increaseDebt(positionId, 150e9, 10e9, newMaturity);
+
+        IFLOANv1.Position memory reusedPosition = floan.getPosition(positionId);
+        assertEq(floan.getPositionCount(), 1, "position ID should be reused");
+        assertEq(reusedPosition.borrower, borrower, "borrower should be retained");
+        assertEq(reusedPosition.marketId, marketId, "market ID should be retained");
+        assertEq(reusedPosition.collateral, 200e18, "new episode collateral");
+        assertEq(reusedPosition.principalDrawn, 150e9, "new episode principal drawn");
+        assertEq(reusedPosition.principalDue, 150e9, "new episode principal due");
+        assertEq(reusedPosition.interestDue, 10e9, "new episode interest due");
+        assertEq(reusedPosition.maturity, newMaturity, "new episode maturity");
+        assertEq(floan.getMarketPrincipalDue(marketId), 150e9, "market principal due");
+        assertEq(floan.getMarketInterestDue(marketId), 10e9, "market interest due");
+        assertEq(floan.getMarketCollateral(marketId), 200e18, "market collateral");
+        assertEq(floan.getActiveBorrowerCount(marketId), 1, "active borrower count");
+        assertEq(floan.getActiveBorrowerAt(marketId, 0), borrower, "active borrower");
+
+        vm.expectEmit(true, false, false, true, address(floan));
+        emit IFLOANv1.PositionDebtDecreased(positionId, 0, 0);
+        vm.expectEmit(true, false, false, true, address(floan));
+        emit IFLOANv1.PositionCollateralChanged(positionId, 0);
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.PositionDefaulted(
+            positionId,
+            marketId,
+            borrower,
+            150e9,
+            150e9,
+            10e9,
+            200e18,
+            newMaturity,
+            uint32(block.number)
+        );
+        floan.defaultPosition(positionId);
+        vm.stopPrank();
+
+        assertEq(floan.getPositionCount(), 1, "position ID retained");
+        assertEq(floan.getMarketPrincipalDefaulted(marketId), 250e9, "cumulative defaults");
+        _assertPosition(
+            positionId,
+            IFLOANv1.Position({
+                borrower: borrower,
+                marketId: marketId,
+                collateral: 0,
+                principalDrawn: 0,
+                principalDue: 0,
+                interestDue: 0,
+                maturity: 0,
+                lastBorrowBlock: 0
+            })
+        );
     }
 }

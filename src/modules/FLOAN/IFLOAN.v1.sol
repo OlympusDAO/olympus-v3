@@ -27,9 +27,6 @@ interface IFLOANv1 is IERC165 {
     error FLOAN_InvalidPosition(uint64 positionId);
     /// @notice An active-borrower index is outside the market's current set.
     error FLOAN_ActiveBorrowerIndexOutOfBounds();
-    /// @notice A mutation was attempted on a position already recorded as defaulted.
-    /// @param positionId Defaulted position identifier.
-    error FLOAN_PositionDefaulted(uint64 positionId);
     /// @notice The caller is not the manager of the specified market.
     /// @param marketId Market whose configuration was targeted.
     /// @param caller Unauthorized caller.
@@ -123,7 +120,6 @@ interface IFLOANv1 is IERC165 {
     /// @param interestDue Current deferred interest in debt-token decimals.
     /// @param maturity Current maturity timestamp.
     /// @param lastBorrowBlock Block number of the latest principal increase.
-    /// @param defaulted Whether the position was terminally defaulted.
     struct Position {
         address borrower;
         uint32 marketId;
@@ -133,7 +129,6 @@ interface IFLOANv1 is IERC165 {
         uint128 interestDue;
         uint48 maturity;
         uint32 lastBorrowBlock;
-        bool defaulted;
     }
 
     /// @notice Emitted when a market is created with the next sequential identifier.
@@ -190,12 +185,27 @@ interface IFLOANv1 is IERC165 {
         uint48 oldMaturity,
         uint48 newMaturity
     );
-    /// @notice Emitted after a position is terminally defaulted.
+    /// @notice Emitted before a fully repaid position's episode fields are cleared.
+    event PositionClosed(
+        uint64 indexed positionId,
+        uint32 indexed marketId,
+        address indexed borrower,
+        uint128 collateral,
+        uint128 principalDrawn,
+        uint48 maturity,
+        uint32 lastBorrowBlock
+    );
+    /// @notice Emitted with the pre-default snapshot after financial and episode fields are cleared.
     event PositionDefaulted(
         uint64 indexed positionId,
+        uint32 indexed marketId,
+        address indexed borrower,
+        uint128 principalDrawn,
         uint128 principalDefaulted,
         uint128 interestDefaulted,
-        uint128 collateralSeized
+        uint128 collateralSeized,
+        uint48 maturity,
+        uint32 lastBorrowBlock
     );
     /// @notice Emitted after a market is imported from a previous ledger.
     event MarketImported(uint32 indexed marketId);
@@ -297,6 +307,20 @@ interface IFLOANv1 is IERC165 {
         uint32 marketId_,
         address borrower_
     ) external view returns (uint256[] memory positionIds);
+
+    /// @notice Returns one position ID indexed to both a market and borrower.
+    /// @dev Returns `(false, 0)` when `index_` is outside the indexed positions, including when
+    ///      `marketId_` does not identify a stored market.
+    /// @param marketId_ Market to query.
+    /// @param borrower_ Borrower to query.
+    /// @param index_ Zero-based position index.
+    /// @return exists Whether a position exists at `index_`.
+    /// @return positionId Position identifier at `index_`, or zero when absent.
+    function getPositionIdForMarketAndBorrowerAt(
+        uint32 marketId_,
+        address borrower_,
+        uint256 index_
+    ) external view returns (bool exists, uint64 positionId);
 
     /// @notice Returns borrowers with at least one active position in a market.
     /// @dev Returns an empty array when `marketId_` does not identify a stored market.
@@ -421,7 +445,8 @@ interface IFLOANv1 is IERC165 {
 
     /// @notice Imports the next position and reconstructs its indexes and aggregate accounting.
     /// @dev Kernel-permissioned. Reverts for a noncontiguous ID, invalid market, zero borrower,
-    ///      inconsistent position/default state, or live principal above the market cap.
+    ///      inconsistent active/closed state, or live principal above the market cap. Historical
+    ///      defaulted principal may coexist with a reusable current position.
     /// @param positionId_ Original position identifier.
     /// @param position_ Complete position state to import.
     /// @param principalDefaulted_ Historical principal defaulted by the position.
@@ -432,8 +457,8 @@ interface IFLOANv1 is IERC165 {
     ) external;
 
     /// @notice Increases credited collateral on a position.
-    /// @dev Kernel-permissioned. Reverts for an invalid/defaulted position, a caller other than the
-    ///      position market's facility, disabled originations, or a zero amount.
+    /// @dev Kernel-permissioned. Reverts for an invalid position, a caller other than the position
+    ///      market's facility, disabled originations, or a zero amount.
     /// @param positionId_ Position to mutate.
     /// @param amount_ Collateral increase in collateral-token decimals.
     /// @return collateral Resulting credited collateral.
@@ -443,8 +468,8 @@ interface IFLOANv1 is IERC165 {
     ) external returns (uint128 collateral);
 
     /// @notice Decreases credited collateral on a position.
-    /// @dev Kernel-permissioned. Reverts for an invalid/defaulted position, a caller other than the
-    ///      position market's facility, zero amount, or amount above current collateral.
+    /// @dev Kernel-permissioned. Reverts for an invalid position, a caller other than the position
+    ///      market's facility, zero amount, or amount above current collateral.
     /// @param positionId_ Position to mutate.
     /// @param amount_ Collateral decrease in collateral-token decimals.
     /// @return collateral Resulting credited collateral.
@@ -454,8 +479,8 @@ interface IFLOANv1 is IERC165 {
     ) external returns (uint128 collateral);
 
     /// @notice Increases principal and optional deferred interest for a position.
-    /// @dev Kernel-permissioned. Reverts for an invalid/defaulted position, caller other than the
-    ///      facility, disabled originations, invalid amount or maturity, a maturity differing from
+    /// @dev Kernel-permissioned. Reverts for an invalid position, caller other than the facility,
+    ///      disabled originations, invalid amount or maturity, a maturity differing from
     ///      the active episode, or resulting principal above the cap. A new episode requires
     ///      nonzero principal; an active episode may accrue interest alone.
     /// @param positionId_ Position to mutate.
@@ -471,8 +496,8 @@ interface IFLOANv1 is IERC165 {
     ) external returns (Position memory position);
 
     /// @notice Decreases principal and optional deferred interest for a position.
-    /// @dev Kernel-permissioned. Reverts for an invalid/defaulted position, caller other than the
-    ///      facility, zero combined payment, no outstanding debt, or payment above either balance.
+    /// @dev Kernel-permissioned. Reverts for an invalid position, caller other than the facility,
+    ///      zero combined payment, no outstanding debt, or payment above either balance.
     ///      Clearing both balances ends the debt episode and may remove the active borrower.
     /// @param positionId_ Position to mutate.
     /// @param principal_ Principal decrease in debt-token decimals.
@@ -485,8 +510,8 @@ interface IFLOANv1 is IERC165 {
     ) external returns (Position memory position);
 
     /// @notice Extends an active position's maturity.
-    /// @dev Kernel-permissioned. Reverts for an invalid/defaulted position, caller other than the
-    ///      facility, no outstanding debt, disabled originations, non-increasing or elapsed
+    /// @dev Kernel-permissioned. Reverts for an invalid position, caller other than the facility,
+    ///      no outstanding debt, disabled originations, non-increasing or elapsed
     ///      maturity, or a maturity beyond the configured horizon.
     /// @param positionId_ Position to mutate.
     /// @param newMaturity_ New maturity timestamp.
@@ -496,10 +521,11 @@ interface IFLOANv1 is IERC165 {
         uint48 newMaturity_
     ) external returns (Position memory position);
 
-    /// @notice Closes a defaulted position and removes its debt and collateral from active totals.
-    /// @dev Kernel-permissioned. Reverts for an invalid/already-defaulted position, caller other
-    ///      than the facility, or no outstanding debt. Preserves origination and maturity fields;
-    ///      the facility remains responsible for custody settlement using the returned amounts.
+    /// @notice Defaults the current debt episode and removes its debt and collateral from live totals.
+    /// @dev Kernel-permissioned. Reverts for an invalid position, caller other than the facility,
+    ///      or no outstanding debt. Emits the complete pre-default episode snapshot, then clears
+    ///      every financial and episode field so the retained position ID can be originated again.
+    ///      The facility remains responsible for custody settlement using the returned amounts.
     /// @param positionId_ Position to default.
     /// @return principalDefaulted Principal removed from active accounting.
     /// @return interestDefaulted Deferred interest removed from the position.

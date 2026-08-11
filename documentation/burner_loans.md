@@ -60,7 +60,8 @@ stateDiagram-v2
     CollateralOnly --> Active: borrow starts a term
     Active --> Active: borrow / repay partially / add collateral / withdraw / extend
     Active --> CollateralOnly: repay in full
-    Active --> Seized: seize matured or unhealthy position
+    Active --> Empty: seize matured or unhealthy position
+    Empty --> CollateralOnly: depositCollateral reuses position ID
     CollateralOnly --> [*]: withdraw in full
 ```
 
@@ -78,6 +79,11 @@ Owner/operator authorization applies to deposit, borrow, withdrawal, and extensi
 permissionless because it can only reduce another account's debt. Fees are paid by the caller, not
 by `onBehalfOf`, and do not reduce credited collateral. Seizure is permissionless when the position
 is eligible, subject to the keeper-reward rules below.
+
+Full repayment and seizure end the current debt episode without deleting the FLOAN identity or its
+indexes. Episode fields are zeroed, and a later deposit/borrow reuses the same position ID. FLOAN's
+`PositionClosed` and `PositionDefaulted` events contain the pre-clear episode snapshot; defaulted
+principal also remains in the market's cumulative historical total.
 
 ## Operating States
 
@@ -240,8 +246,9 @@ paths.
 ## Seizure And Automation
 
 A debt-bearing position is seizable when it is matured or has `healthFactor < 1e18`. Seizure closes
-the entire position, removes it from active indexes, transfers the capped keeper reward when
-applicable, and routes the remainder to `TRSRY`.
+the entire episode, zeroes its financial fields, removes it from active indexes, transfers the
+capped keeper reward when applicable, and routes the remainder to `TRSRY`. The retained position ID
+can be used for a later episode; historical details come from the seizure/default events.
 
 | Caller                       | Required role                                | Burner Loans keeper reward |
 | ---------------------------- | -------------------------------------------- | -------------------------- |
