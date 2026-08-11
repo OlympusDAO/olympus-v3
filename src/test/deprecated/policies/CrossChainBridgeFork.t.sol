@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.0;
 
+// DEPRECATED: LayerZero V1 bridge. Superseded by the LayerZero V2 gateway
+// (src/test/policies/bridge/LZBridgeGateway/) and the CCIP token pool.
+//
+// `testCorrectness_SendOhm` is EXPECTED TO FAIL: the V1 endpoint at 0x66A7...d675 now routes
+// through the V2 ULN, which reverts with `LZ_ULN_InvalidWorkerOptions(0)` on the empty adapter
+// params the V1 interface sends. The test is retained for reference only.
+//
+// This file is excluded from CI by the path-based filters described in
+// src/test/deprecated/README.md. Run it with `pnpm run test:deprecated`.
+
 import {Test, Vm} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";

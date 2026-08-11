@@ -59,16 +59,23 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     uint256 public mainnetForkId;
     uint256 public polygonForkId;
 
-    // Pin the blocks so that RPC responses are cached
+    // Pin the block so that RPC responses are cached.
+    // Sepolia serves archive state, so this pin is stable.
     uint256 public constant MAINNET_BLOCK = 8360176;
-    uint256 public constant POLYGON_BLOCK = 21855529;
+
+    // The Polygon Amoy fork is deliberately NOT pinned.
+    // The `polygon-amoy` alias in foundry.toml points at Alchemy, which serves Amoy from a full
+    // node rather than an archive node: state reads more than ~128 blocks (~4 minutes) behind the
+    // chain head fail with `-32001 Unable to complete request`. Any pinned block therefore breaks
+    // within minutes of being committed. Do not re-add a POLYGON_BLOCK constant unless the
+    // `polygon-amoy` RPC alias is first moved to a provider that serves Amoy archive state.
 
     function setUp() public {
         // Set up forks
         // Mainnet is active
         // These use Sepolia RPCs, as CCIPLocalSimulatorFork only supports sepolia testnets
         mainnetForkId = vm.createFork("sepolia", MAINNET_BLOCK);
-        polygonForkId = vm.createFork("polygon-amoy", POLYGON_BLOCK);
+        polygonForkId = vm.createFork("polygon-amoy");
         vm.selectFork(mainnetForkId);
 
         // Addresses
