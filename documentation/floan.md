@@ -35,7 +35,8 @@ policy configure markets without either policy depending on the other.
 FLOAN records token-denominated amounts but never transfers tokens. Each facility is responsible
 for defining supported token behavior, using safe transfers, and protecting callback-capable token
 interactions. Burner Loans, for example, admits only exact-transfer collateral and enforces receipt
-through DepositManager.
+through DepositManager, while [BurnerLoansInventory](./burner_loans_inventory.md) funds OHM without
+reading FLOAN.
 
 Every mutation requires the relevant Kernel selector permission. After creation, configuration
 also requires the current manager and position servicing requires the current facility. Migration
@@ -131,10 +132,10 @@ stateDiagram-v2
     DebtFree --> DebtFree: add or remove collateral
 ```
 
-| Episode end    | Retained state                       | History source                         | Reusable |
-| -------------- | ------------------------------------ | -------------------------------------- | -------- |
-| Full repayment | Borrower, market, collateral         | `PositionClosed` snapshot              | Yes      |
-| Default        | Borrower and market                   | `PositionDefaulted` snapshot + totals  | Yes      |
+| Episode end    | Retained state               | History source                        | Reusable |
+| -------------- | ---------------------------- | ------------------------------------- | -------- |
+| Full repayment | Borrower, market, collateral | `PositionClosed` snapshot             | Yes      |
+| Default        | Borrower and market          | `PositionDefaulted` snapshot + totals | Yes      |
 
 FLOAN stores no persistent lifecycle status and no product-specific `Healthy`, `Matured`, or
 `Seizable` status. Current activity is derived from outstanding principal or interest; facilities

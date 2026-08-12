@@ -44,11 +44,13 @@ abstract contract BurnerLoansSeizerTest is Test {
 
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(target));
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, burnerLoansAdmin);
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
         rolesAdmin.grantRole(HEART_ROLE, heart);
+        seizer.enable("");
         vm.stopPrank();
     }
 

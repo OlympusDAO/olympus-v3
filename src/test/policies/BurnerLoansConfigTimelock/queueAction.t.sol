@@ -221,7 +221,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
 
     function _authorizeHarness() internal {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
     }
 
     function _riskAction(

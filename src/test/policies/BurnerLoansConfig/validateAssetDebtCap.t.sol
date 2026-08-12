@@ -39,7 +39,7 @@ contract BurnerLoansConfigValidateAssetDebtCapTest is BurnerLoansTest {
     //   then validation succeeds because the caps are independent
     function test_givenCapAboveGlobalCap_succeeds(uint128 cap_) public {
         _addDefaultUsdsAsset();
-        cap_ = uint128(bound(cap_, burnerLoans.globalDebtCapOhm() + 1, type(uint128).max));
+        cap_ = uint128(bound(cap_, inventory.globalDebtCapOhm() + 1, type(uint128).max));
 
         burnerLoansConfig.validateAssetDebtCap(address(usds), cap_);
     }

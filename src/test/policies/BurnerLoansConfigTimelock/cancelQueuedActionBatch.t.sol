@@ -57,7 +57,7 @@ contract BurnerLoansConfigTimelockCancelQueuedActionBatchTest is BurnerLoansConf
     //   then pre-state and projected post-state storage is cleared for every sub-action
     function test_givenQueuedBatch_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedStateBatch();
 

@@ -2,7 +2,9 @@
 pragma solidity >=0.8.24;
 
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {Actions} from "src/Kernel.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
@@ -35,6 +37,26 @@ contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest 
     function test_givenAlreadyEnabled_reverts() public {
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(IEnabler.NotDisabled.selector);
+        configTimelock.reEnable();
+    }
+
+    // reEnable
+    // given the constructor-bound Burner Loans Config is no longer active
+    //  when admin re-enables within the grace period
+    //   then it reverts
+    function test_givenBurnerLoansConfigInactive_reverts() public {
+        vm.prank(emergency);
+        configTimelock.disable("");
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
+                address(burnerLoansConfig)
+            )
+        );
+        vm.prank(admin);
         configTimelock.reEnable();
     }
 

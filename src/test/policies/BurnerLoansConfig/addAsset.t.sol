@@ -202,7 +202,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
         debtCapOhm_ = uint128(
-            bound(debtCapOhm_, burnerLoans.globalDebtCapOhm() + 1, type(uint128).max)
+            bound(debtCapOhm_, inventory.globalDebtCapOhm() + 1, type(uint128).max)
         );
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
 

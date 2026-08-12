@@ -5,8 +5,9 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
@@ -46,12 +47,12 @@ library BurnerLoansQuote {
     /// @dev Reverts on invalid configuration, disabled originations, custody shortfall, cap breach,
     ///      stale pricing, matured debt, or unhealthy current/resulting debt.
     function previewBorrow(
-        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 ohmAmount_,
         uint32 marketId_,
         address borrower_
     ) public view returns (IBurnerLoans.BorrowPreview memory) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         return
             quoteBorrow(
                 dependencies_,
@@ -69,6 +70,7 @@ library BurnerLoansQuote {
         uint128 ohmAmount_,
         IFLOANv1.Position memory position
     ) public view returns (IBurnerLoans.BorrowPreview memory) {
+        if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
         (
             uint32 marketId,
             IBurnerLoans.AssetConfig memory config
@@ -93,9 +95,7 @@ library BurnerLoansQuote {
 
         uint256 assetDebt = _validateCaps(
             dependencies_.floan,
-            dependencies_.facility,
-            address(dependencies_.ohm),
-            dependencies_.globalDebtCapOhm,
+            dependencies_.inventory.availableCapacity(),
             asset_,
             marketId,
             ohmAmount_,
@@ -156,12 +156,12 @@ library BurnerLoansQuote {
     /// @dev Reverts on invalid configuration, disabled originations, custody shortfall, missing
     ///      debt, stale pricing, unhealthy debt, or an invalid resulting maturity.
     function previewExtend(
-        BurnerLoansContext memory dependencies_,
         address asset_,
         uint16 termCount_,
         uint32 marketId_,
         address borrower_
     ) public view returns (IBurnerLoans.ExtendPreview memory) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         return
             quoteExtend(
                 dependencies_,
@@ -172,6 +172,17 @@ library BurnerLoansQuote {
     }
 
     /// @notice Calculates current health for supplied collateral and debt.
+    /// @dev Returns max uint for zero debt and otherwise reverts when configuration or prices are
+    ///      unavailable.
+    function positionHealthFactor(
+        address asset_,
+        uint256 collateral_,
+        uint256 debtOhm_
+    ) public view returns (uint256) {
+        return positionHealthFactor(_dependencies(), asset_, collateral_, debtOhm_);
+    }
+
+    /// @notice Calculates current health from an already-loaded dependency context.
     /// @dev Returns max uint for zero debt and otherwise reverts when configuration or prices are
     ///      unavailable.
     function positionHealthFactor(
@@ -260,18 +271,14 @@ library BurnerLoansQuote {
 
     function _validateCaps(
         IFLOANv1 floan_,
-        address facility_,
-        address debtToken_,
-        uint128 globalCap_,
+        uint256 globalRoom_,
         address asset_,
         uint32 marketId_,
         uint128 ohmAmount_,
         uint256 assetCap_
     ) private view returns (uint256 assetDebt) {
-        uint256 totalDebt = floan_.getFacilityPrincipalDue(facility_, debtToken_);
-        uint256 globalRoom = totalDebt <= globalCap_ ? globalCap_ - totalDebt : 0;
-        if (ohmAmount_ > globalRoom) {
-            revert IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded(ohmAmount_, globalRoom);
+        if (ohmAmount_ > globalRoom_) {
+            revert IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded(ohmAmount_, globalRoom_);
         }
 
         assetDebt = floan_.getMarketPrincipalDue(marketId_);
@@ -508,5 +515,9 @@ library BurnerLoansQuote {
         (marketId_, config) = _requireAssetConfigured(floan_, facility_, debtToken_, asset_);
         if (!config.originationsEnabled)
             revert IBurnerLoans.BurnerLoans_AssetOriginationsDisabled(asset_);
+    }
+
+    function _dependencies() private view returns (BurnerLoansContext memory) {
+        return IBurnerLoansSeizureContext(address(this)).context();
     }
 }

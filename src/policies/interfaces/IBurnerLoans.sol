@@ -7,13 +7,24 @@ pragma solidity >=0.8.24;
 ///      view, and configuration contracts to implement each other's selectors.
 interface IBurnerLoans {
     error BurnerLoans_ZeroAddress();
-    error BurnerLoans_NotImplemented();
     error BurnerLoans_InvalidDecimals(uint8 decimals);
     error BurnerLoans_InvalidPrice();
     error BurnerLoans_InvalidParam();
     error BurnerLoans_InvalidBps(uint256 bps);
     error BurnerLoans_InvalidCap();
     error BurnerLoans_InvalidDepositManager(address depositManager);
+    /// @notice The supplied Burner Loans Inventory does not implement the expected interface.
+    error BurnerLoans_InvalidInventory(address inventory);
+    /// @notice The supplied Burner Loans Inventory funds a different OHM token.
+    error BurnerLoans_InventoryOhmMismatch(address expectedOhm, address actualOhm);
+    /// @notice The supplied Burner Loans Inventory is permanently bound to another facility.
+    error BurnerLoans_InventoryFacilityMismatch(address expectedFacility, address actualFacility);
+    /// @notice The supplied Burner Loans Inventory is not an active policy in Burner Loans' Kernel.
+    error BurnerLoans_InventoryNotActive(address inventory);
+    /// @notice The supplied Burner Loans Inventory is globally disabled.
+    error BurnerLoans_InventoryNotEnabled(address inventory);
+    /// @notice A repayment transfer delivered a different amount to Burner Loans Inventory.
+    error BurnerLoans_InexactRepaymentTransfer(uint256 expected, uint256 actual);
     /// @notice The configured backing oracle does not implement IOlympusBackingOracle.
     /// @param backingOracle Invalid backing oracle address.
     error BurnerLoans_InvalidBackingOracle(address backingOracle);
@@ -60,7 +71,6 @@ interface IBurnerLoans {
     error BurnerLoans_InvalidMarketConfigData(uint32 marketId, uint256 length);
     error BurnerLoans_AssetOriginationsDisabled(address asset);
     error BurnerLoans_InvalidFeeConfig();
-    error BurnerLoans_UnauthorizedConfigurator(address caller);
     error BurnerLoans_InvalidModuleVersion();
     error BurnerLoans_InvalidBatch();
     error BurnerLoans_DuplicateBorrower(address borrower);
@@ -71,9 +81,6 @@ interface IBurnerLoans {
         uint256 assets,
         uint256 borrowed
     );
-
-    /// @notice Emitted when remaining MINTR approval is reconciled to active debt capacity.
-    event MintApprovalSynchronized(uint256 approval);
 
     struct Position {
         uint256 depositedCollateral;
@@ -186,6 +193,13 @@ interface IBurnerLoans {
         uint256 ohmAmount,
         uint256 fee
     );
+    /// @notice Emitted when the Burner Loans Inventory contract is bound or replaced.
+    /// @param inventory New Burner Loans Inventory policy.
+    event InventorySet(address indexed inventory);
+
+    /// @notice Emitted when the Burner Loans Config policy is bound or replaced.
+    /// @param configurator New Burner Loans Config policy.
+    event ConfiguratorSet(address indexed configurator);
 
     event Repaid(
         address indexed caller,
@@ -224,11 +238,9 @@ interface IBurnerLoans {
         uint256 collateralToTreasury
     );
     event YieldHarvested(address indexed asset, uint256 amount);
-    event GlobalDebtCapSet(uint256 debtCapOhm);
     event BackingOracleSet(address indexed backingOracle);
     event AssetAdded(address indexed asset, AssetConfig config);
     event AssetDebtCapSet(address indexed asset, uint256 debtCapOhm);
-    event ConfiguratorSet(address indexed configurator);
     event AssetRiskConfigSet(address indexed asset, AssetRiskConfigInput config);
     event AssetFeeConfigSet(address indexed asset, AssetFeeConfig config);
     event AssetOriginationsSet(address indexed asset, bool enabled);

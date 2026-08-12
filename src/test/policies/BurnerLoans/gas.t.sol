@@ -32,7 +32,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
 
     function setUp() public override {
         super.setUp();
-        _setDefaultConfigurator();
+        _setDefaultConfigOperator();
         _enableConfigTimelock();
 
         _heart = makeAddr("gasHeart");
@@ -117,6 +117,44 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         _assertGasRecorded(gasUsed);
     }
 
+    // supply
+    // given the protocol provider has approved OHM
+    //  when it supplies funding inventory
+    //   then it records provider funding and approval-adjustment gas
+    function test_gasSnapshot_inventory_supply() public {
+        ohm.mint(protocolProvider, _DEBT);
+        vm.prank(protocolProvider);
+        ohm.approve(address(inventory), _DEBT);
+
+        vm.startPrank(protocolProvider);
+        vm.startSnapshotGas("BurnerLoansInventory.supply");
+        inventory.supply(_DEBT);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedOhm(), _DEBT, "provider claim");
+        assertEq(inventory.suppliedIdleOhm(), _DEBT, "supplied idle");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // withdraw
+    // given the provider's full claim is idle
+    //  when it withdraws part of that claim
+    //   then it records provider exit and approval-restoration gas
+    function test_gasSnapshot_inventory_withdraw() public {
+        _supplyOhm(_DEBT);
+
+        vm.startPrank(protocolProvider);
+        vm.startSnapshotGas("BurnerLoansInventory.withdraw");
+        inventory.withdraw(40e9, protocolProvider);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedOhm(), 60e9, "remaining claim");
+        assertEq(inventory.suppliedIdleOhm(), 60e9, "remaining supplied idle");
+        _assertGasRecorded(gasUsed);
+    }
+
     // borrow
     // given a borrower has sufficient collateral and no debt
     //  when the borrower originates debt
@@ -136,6 +174,54 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
 
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, _DEBT, "position debt");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // borrow
+    // given supplied idle OHM covers the full debt amount
+    //  when the borrower originates debt
+    //   then it records the inventory-funded path without minting
+    function test_gasSnapshot_borrow_inventoryFunded() public {
+        _supplyOhm(_DEBT);
+        _depositForAlice(_COLLATERAL);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            _DEBT,
+            alice
+        );
+
+        vm.startPrank(alice);
+        vm.startSnapshotGas("BurnerLoans.borrow.inventoryFunded");
+        burnerLoans.borrow(address(usds), _DEBT, alice, alice, preview.fee);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedIdleOhm(), 0, "supplied idle consumed");
+        assertEq(inventory.activePrincipalOhm(), _DEBT, "active principal");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // borrow
+    // given supplied idle OHM covers part of the debt amount
+    //  when the borrower originates debt
+    //   then it records the mixed inventory-and-mint path
+    function test_gasSnapshot_borrow_mixedFunded() public {
+        _supplyOhm(40e9);
+        _depositForAlice(_COLLATERAL);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            _DEBT,
+            alice
+        );
+
+        vm.startPrank(alice);
+        vm.startSnapshotGas("BurnerLoans.borrow.mixedFunded");
+        burnerLoans.borrow(address(usds), _DEBT, alice, alice, preview.fee);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedIdleOhm(), 0, "supplied idle consumed");
+        assertEq(inventory.activePrincipalOhm(), _DEBT, "active principal");
         _assertGasRecorded(gasUsed);
     }
 
@@ -178,6 +264,50 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
 
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 60e9, "remaining debt");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // repay
+    // given the repayment is fully needed to replenish the provider claim
+    //  when the borrower partially repays
+    //   then it records the retained-repayment path
+    function test_gasSnapshot_repay_retained() public {
+        _supplyOhm(_DEBT);
+        _borrowForAlice(_DEBT);
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        ohm.approve(address(burnerLoans), 40e9);
+
+        vm.startPrank(alice);
+        vm.startSnapshotGas("BurnerLoans.repay.retained");
+        burnerLoans.repay(address(usds), 40e9, alice);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedIdleOhm(), 40e9, "replenished supplied idle");
+        assertEq(inventory.activePrincipalOhm(), 60e9, "remaining principal");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // repay
+    // given repayment exceeds the provider claim deficit
+    //  when the borrower partially repays
+    //   then it records the retain-then-burn path
+    function test_gasSnapshot_repay_split() public {
+        _supplyOhm(40e9);
+        _borrowForAlice(_DEBT);
+        vm.roll(block.number + 1);
+        vm.prank(alice);
+        ohm.approve(address(burnerLoans), 60e9);
+
+        vm.startPrank(alice);
+        vm.startSnapshotGas("BurnerLoans.repay.split");
+        burnerLoans.repay(address(usds), 60e9, alice);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(inventory.suppliedIdleOhm(), 40e9, "claim replenished");
+        assertEq(inventory.activePrincipalOhm(), 40e9, "remaining principal");
         _assertGasRecorded(gasUsed);
     }
 
@@ -275,12 +405,12 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         uint128 newCap = 2_000_000e9;
 
         vm.startPrank(admin);
-        vm.startSnapshotGas("BurnerLoans.admin.setGlobalDebtCap");
-        burnerLoans.setGlobalDebtCap(newCap);
+        vm.startSnapshotGas("BurnerLoansConfig.admin.setGlobalDebtCap");
+        burnerLoansConfig.setGlobalDebtCap(newCap);
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
-        assertEq(burnerLoans.globalDebtCapOhm(), newCap, "global debt cap");
+        assertEq(inventory.globalDebtCapOhm(), newCap, "global debt cap");
         _assertGasRecorded(gasUsed);
     }
 
@@ -308,45 +438,47 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     function test_gasSnapshot_syncMintApproval_noop() public {
         vm.recordLogs();
         vm.startPrank(burnerLoansAdmin);
-        vm.startSnapshotGas("BurnerLoans.syncMintApproval.noop");
-        uint256 approval = burnerLoans.syncMintApproval();
+        vm.startSnapshotGas("BurnerLoansInventory.syncMintApproval.noop");
+        uint256 approval = inventory.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
-        assertEq(approval, burnerLoans.globalDebtCapOhm(), "mint approval");
+        assertEq(approval, inventory.globalDebtCapOhm(), "mint approval");
         _assertEventEmitted(
             vm.getRecordedLogs(),
-            address(burnerLoans),
+            address(inventory),
             keccak256("MintApprovalSynchronized(uint256)")
         );
         _assertGasRecorded(gasUsed);
     }
 
     // syncMintApproval
-    // given a full-cap position has defaulted without restoring MINTR approval
+    // given a full-cap position has defaulted and its restored approval is subsequently reduced
     //  when the admin reconciles approval
     //   then it records the capacity-restoration gas cost
     function test_gasSnapshot_syncMintApproval_restoreAfterDefault() public {
         vm.prank(admin);
-        burnerLoans.setGlobalDebtCap(_DEBT);
+        burnerLoansConfig.setGlobalDebtCap(_DEBT);
         _makeUnhealthy(alice);
         vm.prank(keeper);
         burnerLoans.seize(address(usds), _single(alice));
+        vm.prank(address(inventory));
+        mintr.decreaseMintApproval(address(inventory), _DEBT);
 
         vm.recordLogs();
         vm.startPrank(burnerLoansAdmin);
-        vm.startSnapshotGas("BurnerLoans.syncMintApproval.restoreAfterDefault");
-        uint256 approval = burnerLoans.syncMintApproval();
+        vm.startSnapshotGas("BurnerLoansInventory.syncMintApproval.restoreAfterDefault");
+        uint256 approval = inventory.syncMintApproval();
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
         assertEq(approval, _DEBT, "returned approval");
-        assertEq(mintr.mintApproval(address(burnerLoans)), _DEBT, "stored approval");
+        assertEq(mintr.mintApproval(address(inventory)), _DEBT, "stored approval");
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active principal");
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         _assertEventEmitted(
             vm.getRecordedLogs(),
-            address(burnerLoans),
+            address(inventory),
             keccak256("MintApprovalSynchronized(uint256)")
         );
         _assertGasRecorded(gasUsed);
@@ -367,8 +499,8 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active principal");
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(
-            mintr.mintApproval(address(burnerLoans)),
-            burnerLoans.globalDebtCapOhm(),
+            mintr.mintApproval(address(inventory)),
+            inventory.globalDebtCapOhm(),
             "mint approval"
         );
         Vm.Log[] memory logs = vm.getRecordedLogs();
@@ -649,6 +781,14 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
     }
 
+    function _supplyOhm(uint128 amount_) internal {
+        ohm.mint(protocolProvider, amount_);
+        vm.startPrank(protocolProvider);
+        ohm.approve(address(inventory), amount_);
+        inventory.supply(amount_);
+        vm.stopPrank();
+    }
+
     function _configBatch()
         internal
         view
@@ -710,8 +850,8 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         );
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(
-            mintr.mintApproval(address(burnerLoans)),
-            burnerLoans.globalDebtCapOhm(),
+            mintr.mintApproval(address(inventory)),
+            inventory.globalDebtCapOhm(),
             "mint approval"
         );
         assertEq(
@@ -735,16 +875,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             logs_,
             address(_seizer),
             keccak256("Executed(address,uint256,uint256,uint256)")
-        );
-        _assertEventEmitted(
-            logs_,
-            address(burnerLoans),
-            keccak256("MintApprovalSynchronized(uint256)")
-        );
-        _assertEventEmitted(
-            logs_,
-            address(_seizer),
-            keccak256("MintApprovalSynchronized(uint256)")
         );
     }
 

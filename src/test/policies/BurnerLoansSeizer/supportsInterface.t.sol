@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
 
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
@@ -20,6 +21,7 @@ contract BurnerLoansSeizerSupportsInterfaceTest is BurnerLoansSeizerTest {
             seizer.supportsInterface(type(IBurnerLoansSeizer).interfaceId),
             "seizer interface"
         );
+        assertTrue(seizer.supportsInterface(type(IEnabler).interfaceId), "enabler interface");
         assertFalse(seizer.supportsInterface(bytes4(0xffffffff)), "invalid interface");
     }
 }

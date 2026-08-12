@@ -5,6 +5,7 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
@@ -14,7 +15,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
     function setUp() public override {
         super.setUp();
         _addDefaultUsdsAsset();
-        _setDefaultConfigurator();
+        _setDefaultConfigOperator();
         _enableConfigTimelock();
 
         vm.prank(admin);
@@ -22,7 +23,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
     }
 
     // setAssetFeeConfig
-    // given caller is neither admin nor configurator
+    // given caller is neither admin nor timelock
     //  when setAssetFeeConfig is called
     //   then it reverts before validating the config
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
@@ -34,7 +35,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
         vm.prank(caller_);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 caller_
             )
         );
@@ -78,8 +79,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
     function test_givenBoundFacilityMarketDoesNotExist_reverts() public {
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
 
-        vm.prank(address(burnerLoansConfig));
-        floan.setMarketFacility(marketId, makeAddr("otherFacility"));
+        _setMarketFacilityForTest(marketId, makeAddr("otherFacility"));
 
         vm.prank(admin);
         vm.expectRevert(
@@ -398,10 +398,10 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
     }
 
     // setAssetFeeConfig
-    // given caller is the configurator
+    // given caller is the timelock
     //  when a valid full config is provided
     //   then the fee config is updated
-    function test_givenConfiguratorCaller_setsFullConfig() public {
+    function test_givenTimelockCaller_setsFullConfig() public {
         IBurnerLoans.AssetFeeConfig memory config = _defaultAssetFeeConfig();
         config.baseFeeBps = 30;
 

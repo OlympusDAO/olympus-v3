@@ -6,11 +6,9 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
@@ -52,43 +50,36 @@ library BurnerLoansCustody {
     }
 
     /// @notice Quotes and executes a borrow against the first borrower position.
-    /// @dev Reverts on quote validation failure, excessive fees, transfer failure, or FLOAN/MINTR
+    /// @dev Reverts on quote validation failure, excessive fees, transfer failure, or a
+    ///      FLOAN/Burner Loans Inventory
     ///      mutation failure.
-    /// @param dependencies_ Burner Loans dependency context.
-    /// @param mintr_ MINTR module used to mint debt.
-    /// @param treasury_ Treasury receiving collateral-denominated fees.
     /// @param params_ Borrow execution parameters.
     /// @return preview Executed borrow quote.
     function borrow(
-        BurnerLoansContext memory dependencies_,
-        MINTRv1 mintr_,
-        TRSRYv1 treasury_,
         BorrowParams memory params_
     ) public returns (IBurnerLoans.BorrowPreview memory preview) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        (, uint64 positionId, IFLOANv1.Position memory position) = BurnerLoansPositions
+            .getWithIdOrEmpty(dependencies_.floan, params_.marketId, params_.onBehalfOf);
         preview = BurnerLoansQuote.quoteBorrow(
             dependencies_,
             params_.asset,
             params_.ohmAmount,
-            BurnerLoansPositions.getOrEmpty(
-                dependencies_.floan,
-                params_.marketId,
-                params_.onBehalfOf
-            )
+            position
         );
         if (preview.fee > params_.maxFee) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, params_.maxFee);
         }
 
-        (, uint64 positionId) = BurnerLoansPositions.find(
-            dependencies_.floan,
-            params_.marketId,
-            params_.onBehalfOf
-        );
         dependencies_.floan.increaseDebt(positionId, params_.ohmAmount, 0, preview.maturity);
         if (preview.fee != 0) {
-            ERC20(params_.asset).safeTransferFrom(msg.sender, address(treasury_), preview.fee);
+            ERC20(params_.asset).safeTransferFrom(
+                msg.sender,
+                address(dependencies_.treasury),
+                preview.fee
+            );
         }
-        mintr_.mintOhm(params_.recipient, params_.ohmAmount);
+        dependencies_.inventory.draw(params_.recipient, params_.ohmAmount);
 
         emit IBurnerLoans.Borrowed(
             msg.sender,
@@ -149,8 +140,6 @@ library BurnerLoansCustody {
     /// @return remainingCollateral Resulting credited collateral.
     /// @return healthFactor Resulting position health factor.
     function withdrawCollateral(
-        BurnerLoansContext memory dependencies_,
-        IDepositManager depositManager_,
         WithdrawParams memory params_
     )
         public
@@ -161,10 +150,11 @@ library BurnerLoansCustody {
             uint256 healthFactor
         )
     {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         if (params_.amount == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
         if (params_.recipient == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
         IDepositManager.AssetConfiguration memory assetConfiguration = validateCustodySupport(
-            depositManager_,
+            dependencies_.depositManager,
             params_.asset,
             BurnerLoansConstants.DEPOSIT_PERIOD,
             false
@@ -173,11 +163,8 @@ library BurnerLoansCustody {
             revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
         }
 
-        IFLOANv1.Position memory position = BurnerLoansPositions.getOrEmpty(
-            dependencies_.floan,
-            params_.marketId,
-            params_.onBehalfOf
-        );
+        (, uint64 positionId, IFLOANv1.Position memory position) = BurnerLoansPositions
+            .getWithIdOrEmpty(dependencies_.floan, params_.marketId, params_.onBehalfOf);
         if (params_.amount > position.collateral) {
             revert IBurnerLoans.BurnerLoans_InsufficientCollateral(
                 params_.amount,
@@ -195,14 +182,9 @@ library BurnerLoansCustody {
             revert IBurnerLoans.BurnerLoans_UnhealthyWithdrawal(healthFactor);
         }
 
-        (, uint64 positionId) = BurnerLoansPositions.find(
-            dependencies_.floan,
-            params_.marketId,
-            params_.onBehalfOf
-        );
         dependencies_.floan.removeCollateral(positionId, params_.amount);
         amountOut = withdraw(
-            depositManager_,
+            dependencies_.depositManager,
             params_.asset,
             BurnerLoansConstants.DEPOSIT_PERIOD,
             params_.amount,
@@ -454,46 +436,27 @@ library BurnerLoansCustody {
         emit IBurnerLoans.YieldHarvested(asset_, claimed);
     }
 
-    /// @notice Reconciles MINTR approval to unused global debt capacity.
-    /// @dev Increases or decreases approval by the exact delta from the current allowance.
-    /// @return desiredApproval Remaining mint capacity after active principal.
-    function reconcileMintApproval(
-        IFLOANv1 floan_,
-        MINTRv1 mintr_,
-        IERC20 ohm_,
-        uint128 debtCapOhm_
-    ) public returns (uint256 desiredApproval) {
-        uint256 activePrincipal = floan_.getFacilityPrincipalDue(address(this), address(ohm_));
-        desiredApproval = debtCapOhm_ > activePrincipal ? debtCapOhm_ - activePrincipal : 0;
-        uint256 currentApproval = mintr_.mintApproval(address(this));
-        if (desiredApproval > currentApproval) {
-            mintr_.increaseMintApproval(address(this), desiredApproval - currentApproval);
-        } else if (desiredApproval < currentApproval) {
-            mintr_.decreaseMintApproval(address(this), currentApproval - desiredApproval);
-        }
-    }
-
-    /// @notice Repays principal, burns OHM, and restores equivalent MINTR capacity.
+    /// @notice Repays principal and transfers exact OHM to Burner Loans Inventory for settlement.
     /// @dev Reverts for a missing/debt-free position, excessive or same-block repayment, token
-    ///      transfer failure, or an underlying FLOAN/MINTR failure.
+    ///      transfer failure, inexact Burner Loans Inventory receipt, or an underlying
+    ///      FLOAN/Burner Loans Inventory failure.
     /// @return healthFactor Max uint after full repayment, otherwise the conservative zero sentinel.
     function repay(
-        IFLOANv1 floan_,
-        MINTRv1 mintr_,
-        IERC20 ohm_,
         uint32 marketId_,
         address asset_,
         address onBehalfOf_,
         uint128 repayOhm_
     ) public returns (uint256 healthFactor) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
         (bool exists, uint64 positionId) = BurnerLoansPositions.find(
-            floan_,
+            dependencies_.floan,
             marketId_,
             onBehalfOf_
         );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
 
-        IFLOANv1.Position memory position = floan_.getPosition(positionId);
+        IFLOANv1.Position memory position = dependencies_.floan.getPosition(positionId);
         uint256 debtOhm = position.principalDue;
         if (debtOhm == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
         if (repayOhm_ > debtOhm) {
@@ -504,10 +467,22 @@ library BurnerLoansCustody {
         }
         uint256 remainingDebtOhm = debtOhm - repayOhm_;
 
-        floan_.decreaseDebt(positionId, repayOhm_, 0);
-        ERC20(address(ohm_)).safeTransferFrom(msg.sender, address(this), repayOhm_);
-        mintr_.burnOhm(address(this), repayOhm_);
-        mintr_.increaseMintApproval(address(this), repayOhm_);
+        dependencies_.floan.decreaseDebt(positionId, repayOhm_, 0);
+        // Pull repayment OHM directly from the payer into Burner Loans Inventory. Burner Loans
+        // never takes temporary custody; Burner Loans Inventory only records settlement after
+        // verifying the exact receipt.
+        uint256 beforeBalance = dependencies_.ohm.balanceOf(address(dependencies_.inventory));
+        ERC20(address(dependencies_.ohm)).safeTransferFrom(
+            msg.sender,
+            address(dependencies_.inventory),
+            repayOhm_
+        );
+        uint256 received = dependencies_.ohm.balanceOf(address(dependencies_.inventory)) -
+            beforeBalance;
+        if (received != repayOhm_) {
+            revert IBurnerLoans.BurnerLoans_InexactRepaymentTransfer(repayOhm_, received);
+        }
+        dependencies_.inventory.settleRepayment(repayOhm_);
 
         emit IBurnerLoans.Repaid(msg.sender, asset_, onBehalfOf_, repayOhm_, remainingDebtOhm);
         return remainingDebtOhm == 0 ? type(uint256).max : 0;
@@ -518,14 +493,13 @@ library BurnerLoansCustody {
     ///      underlying FLOAN mutation failure.
     /// @return preview Executed extension quote.
     function extend(
-        BurnerLoansContext memory dependencies_,
-        TRSRYv1 treasury_,
         uint32 marketId_,
         address asset_,
         address onBehalfOf_,
         uint16 termCount_,
         uint256 maxFee_
     ) public returns (IBurnerLoans.ExtendPreview memory preview) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         (bool exists, uint64 positionId) = BurnerLoansPositions.find(
             dependencies_.floan,
             marketId_,
@@ -544,7 +518,11 @@ library BurnerLoansCustody {
 
         dependencies_.floan.extendMaturity(positionId, preview.maturity);
         if (preview.fee != 0) {
-            ERC20(asset_).safeTransferFrom(msg.sender, address(treasury_), preview.fee);
+            ERC20(asset_).safeTransferFrom(
+                msg.sender,
+                address(dependencies_.treasury),
+                preview.fee
+            );
         }
 
         emit IBurnerLoans.Extended(msg.sender, asset_, onBehalfOf_, preview.maturity, preview.fee);
@@ -578,5 +556,9 @@ library BurnerLoansCustody {
         ) {
             revert IBurnerLoans.BurnerLoans_ReceiptApprovalFailed(address(receiptTokenManager));
         }
+    }
+
+    function _dependencies() private view returns (BurnerLoansContext memory) {
+        return IBurnerLoansSeizureContext(address(this)).context();
     }
 }

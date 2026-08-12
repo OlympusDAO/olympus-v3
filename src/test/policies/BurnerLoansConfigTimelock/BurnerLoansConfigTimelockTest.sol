@@ -50,7 +50,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
         vm.prank(admin);
         burnerLoansConfig.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
-        _setDefaultConfigurator();
+        _setDefaultConfigOperator();
         _enableConfigTimelock();
 
         vm.startPrank(admin);

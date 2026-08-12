@@ -58,14 +58,9 @@ contract BurnerLoansConfigTimelockConfigureDependenciesTest is BurnerLoansConfig
     function _deployTimelock(
         Kernel kernel_
     ) internal returns (BurnerLoansConfigTimelock localTimelock) {
-        MockBurnerLoansPolicy facility = new MockBurnerLoansPolicy(kernel_);
+        MockBurnerLoansPolicy facility = new MockBurnerLoansPolicy(kernel_, address(ohm));
         kernel_.executeAction(Actions.ActivatePolicy, address(facility));
-        BurnerLoansConfig localConfig = new BurnerLoansConfig(
-            kernel_,
-            IERC20(address(ohm)),
-            depositManager,
-            address(facility)
-        );
+        BurnerLoansConfig localConfig = new BurnerLoansConfig(kernel_, IERC20(address(ohm)));
         localTimelock = new BurnerLoansConfigTimelock(kernel_, localConfig);
     }
 }

@@ -19,15 +19,27 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
     }
 
     // execute
+    // given the seizer is disabled
+    //  when Heart calls execute
+    //   then it remains a no-op
+    function test_givenDisabled_isNoOp() public {
+        target.setScanResult(assetOne, _single(alice), 3, 0);
+        vm.prank(admin);
+        seizer.disable("");
+
+        vm.prank(heart);
+        seizer.execute();
+
+        assertEq(seizer.assetCursor(assetOne), 0, "asset cursor");
+        assertEq(target.seizureCalls(), 0, "seizure calls");
+    }
+
+    // execute
     // given seizable borrowers
     //  when execute is called
     //   then it scans advances and seizes
     function test_givenSeizableBorrowers_scansAdvancesAndSeizes() public {
         target.setScanResult(assetOne, _single(alice), 3, 0);
-        target.setSyncApproval(77);
-
-        vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.MintApprovalSynchronized(77);
 
         vm.prank(heart);
         seizer.execute();
@@ -36,23 +48,20 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(target.seizureCalls(), 1, "seizure calls");
         assertEq(target.lastSeizedAsset(), assetOne, "seized asset");
         assertEq(target.getLastSeizedBorrowers(), _single(alice), "seized borrowers");
-        assertEq(target.syncCalls(), 1, "sync calls");
     }
 
     // execute
     // given no managed assets
     //  when execute is called
-    //   then it still synchronizes mint approval
-    function test_givenNoManagedAssets_synchronizesMintApproval() public {
+    //   then it remains a no-op
+    function test_givenNoManagedAssets_isNoOp() public {
         vm.prank(admin);
         seizer.removeAsset(assetOne);
-        target.setSyncApproval(88);
 
         vm.prank(heart);
         seizer.execute();
 
         assertEq(target.seizureCalls(), 0, "seizure calls");
-        assertEq(target.syncCalls(), 1, "sync calls");
         assertEq(seizer.nextAssetIndex(), 0, "next asset index");
     }
 
@@ -68,7 +77,6 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
 
         assertEq(seizer.assetCursor(assetOne), 4, "asset cursor");
         assertEq(target.seizureCalls(), 0, "seizure calls");
-        assertEq(target.syncCalls(), 1, "sync calls");
     }
 
     // execute
@@ -112,7 +120,6 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
 
         assertEq(seizer.assetCursor(assetOne), 0, "failed asset cursor");
         assertEq(seizer.nextAssetIndex(), 1, "next asset index");
-        assertEq(target.syncCalls(), 1, "sync after failed seizure");
 
         target.setSeizureReverts(false);
         target.setScanResult(assetTwo, _single(alice), 4, 0);
@@ -121,7 +128,6 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
 
         assertEq(seizer.assetCursor(assetTwo), 4, "next asset cursor");
         assertEq(target.lastSeizedAsset(), assetTwo, "next seized asset");
-        assertEq(target.syncCalls(), 2, "sync after successful retry");
     }
 
     // execute
@@ -143,7 +149,6 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
 
         assertEq(seizer.assetCursor(assetOne), 0, "failed asset cursor");
         assertEq(seizer.nextAssetIndex(), 1, "next asset index");
-        assertEq(target.syncCalls(), 1, "sync after failed scan");
     }
 
     // execute
@@ -163,60 +168,14 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         vm.prank(admin);
         rolesAdmin.revokeRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
         target.setScanResult(assetOne, _single(alice), 3, 100);
-        target.setSyncReverts(true);
 
         vm.expectEmit(true, false, false, false, address(seizer));
         emit IBurnerLoansSeizer.SeizerRoleMissing(assetOne);
-        vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.MintApprovalSyncFailed(
-            MockBurnerLoansSeizerTarget.SyncReverted.selector
-        );
         vm.prank(heart);
         seizer.execute();
 
         assertEq(seizer.assetCursor(assetOne), 0, "asset cursor");
         assertEq(target.seizureCalls(), 0, "seizure calls");
-        assertEq(target.syncCalls(), 0, "successful sync calls");
-    }
-
-    // execute
-    // given mint approval synchronization reverts
-    //  when execute is called
-    //   then it reports the failure without reverting
-    function test_givenMintApprovalSyncReverts_reportsFailureWithoutReverting() public {
-        target.setScanResult(assetOne, new address[](0), 2, 0);
-        target.setSyncReverts(true);
-
-        vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.MintApprovalSyncFailed(
-            MockBurnerLoansSeizerTarget.SyncReverted.selector
-        );
-        vm.prank(heart);
-        seizer.execute();
-
-        assertEq(seizer.assetCursor(assetOne), 2, "asset cursor");
-        assertEq(target.syncCalls(), 0, "successful sync calls");
-    }
-
-    // execute
-    // given mint approval synchronization reverts and another Heart task follows the seizer
-    //  when the periodic task manager executes all tasks
-    //   then the later task still executes
-    function test_givenMintApprovalSyncReverts_laterHeartTaskStillExecutes() public {
-        MockPeriodicTaskManager taskManager = new MockPeriodicTaskManager(kernel);
-        MockPeriodicTask laterTask = new MockPeriodicTask();
-        target.setSyncReverts(true);
-
-        vm.startPrank(admin);
-        kernel.executeAction(Actions.ActivatePolicy, address(taskManager));
-        rolesAdmin.grantRole(HEART_ROLE, address(taskManager));
-        taskManager.addPeriodicTask(address(seizer));
-        taskManager.addPeriodicTask(address(laterTask));
-        vm.stopPrank();
-
-        taskManager.executeAllTasks();
-
-        assertEq(laterTask.count(), 1, "later task count");
     }
 
     // execute
@@ -236,12 +195,11 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         taskManager.addPeriodicTask(address(laterTask));
         vm.stopPrank();
 
-        vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.ExecutionFailed(bytes4(0));
+        vm.expectEmit(true, false, false, true, address(seizer));
+        emit IBurnerLoansSeizer.ScanFailed(assetOne, bytes4(0));
         taskManager.executeAllTasks{gas: 1_000_000}();
 
         assertEq(laterTask.count(), 1, "later task count");
-        assertEq(target.syncCalls(), 0, "sync calls");
         assertEq(seizer.nextAssetIndex(), 0, "next asset index");
     }
 

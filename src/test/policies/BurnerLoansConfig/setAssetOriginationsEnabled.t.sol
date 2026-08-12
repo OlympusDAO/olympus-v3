@@ -8,6 +8,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
@@ -29,7 +30,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
     }
 
     // setAssetOriginationsEnabled
-    // given caller is neither admin nor the configured timelock
+    // given caller is neither admin nor the configured config operator
     //  when setAssetOriginationsEnabled is called
     //   then it reverts
     function test_givenNonAdminCaller_reverts(address caller_) public {
@@ -41,7 +42,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
         vm.prank(caller_);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 caller_
             )
         );
@@ -49,7 +50,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
     }
 
     // setAssetOriginationsEnabled
-    // given caller has burner_loans_admin but is not the configured timelock
+    // given caller has burner_loans_admin but is not the configured config operator
     //  when originations are disabled directly
     //   then it reverts because the role must use the queued timelock path
     function test_givenBurnerLoansAdminCallsDirectly_reverts() public {
@@ -58,7 +59,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 burnerLoansAdmin
             )
         );
@@ -129,8 +130,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
         uint32 marketId_ = burnerLoansConfig.marketId(address(usds));
 
-        vm.prank(address(burnerLoansConfig));
-        floan.setMarketFacility(marketId_, makeAddr("otherFacility"));
+        _setMarketFacilityForTest(marketId_, makeAddr("otherFacility"));
 
         vm.prank(admin);
         vm.expectRevert(

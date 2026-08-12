@@ -107,10 +107,40 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //   then global and market principal remain within their caps
     function invariant_Capacity() public view {
         IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertLe(
+        uint256 activePrincipal = inventory.activePrincipalOhm();
+        uint256 globalCap = inventory.globalDebtCapOhm();
+        uint256 suppliedIdle = inventory.suppliedIdleOhm();
+        uint256 suppliedClaim = inventory.suppliedOhm();
+        uint256 approval = mintr.mintApproval(address(inventory));
+        uint256 desiredApproval = globalCap > activePrincipal + suppliedIdle
+            ? globalCap - activePrincipal - suppliedIdle
+            : 0;
+
+        assertEq(
+            activePrincipal,
             burnerLoans.totalActiveDebtOhm(),
-            burnerLoans.globalDebtCapOhm(),
-            "global debt cap exceeded"
+            "Burner Loans Inventory and FLOAN principal differ"
+        );
+        assertLe(activePrincipal, globalCap, "global debt cap exceeded");
+        assertLe(approval, desiredApproval, "mint approval exceeds desired approval");
+        assertLe(
+            suppliedIdle,
+            ohm.balanceOf(address(inventory)),
+            "supplied idle exceeds Burner Loans Inventory balance"
+        );
+        assertLe(suppliedIdle, suppliedClaim, "supplied idle exceeds supplied claim");
+
+        uint256 capRoom = globalCap - activePrincipal;
+        uint256 expectedCapacity;
+        if (suppliedIdle >= capRoom) expectedCapacity = capRoom;
+        else {
+            uint256 requiredApproval = capRoom - suppliedIdle;
+            expectedCapacity = approval < requiredApproval ? suppliedIdle + approval : capRoom;
+        }
+        assertEq(
+            inventory.availableCapacity(),
+            expectedCapacity,
+            "Burner Loans Inventory capacity formula mismatch"
         );
         assertLe(
             burnerLoans.assetActiveDebtOhm(address(usds)),

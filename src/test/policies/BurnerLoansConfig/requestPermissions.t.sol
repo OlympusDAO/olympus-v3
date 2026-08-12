@@ -13,7 +13,7 @@ contract BurnerLoansConfigRequestPermissionsTest is BurnerLoansTest {
     function test_givenConfigPolicy_requestPermissions_returnsFloanMutators() public view {
         Permissions[] memory permissions = burnerLoansConfig.requestPermissions();
 
-        assertEq(permissions.length, 7, "permission count");
+        assertEq(permissions.length, 6, "permission count");
         for (uint256 i; i < permissions.length; ++i) {
             assertEq(
                 Keycode.unwrap(permissions[i].keycode),
@@ -27,20 +27,19 @@ contract BurnerLoansConfigRequestPermissionsTest is BurnerLoansTest {
             IFLOANv1.setMarketOriginationsEnabled.selector,
             "set originations"
         );
-        assertEq(permissions[2].funcSelector, IFLOANv1.setMarketFacility.selector, "set facility");
         assertEq(
-            permissions[3].funcSelector,
+            permissions[2].funcSelector,
             IFLOANv1.setMarketPrincipalCap.selector,
             "set principal cap"
         );
         assertEq(
-            permissions[4].funcSelector,
+            permissions[3].funcSelector,
             IFLOANv1.setMarketRiskConfig.selector,
             "set risk config"
         );
-        assertEq(permissions[5].funcSelector, IFLOANv1.setMarketBaseFee.selector, "set base fee");
+        assertEq(permissions[4].funcSelector, IFLOANv1.setMarketBaseFee.selector, "set base fee");
         assertEq(
-            permissions[6].funcSelector,
+            permissions[5].funcSelector,
             IFLOANv1.setMarketConfigData.selector,
             "set config data"
         );

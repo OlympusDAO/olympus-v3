@@ -149,7 +149,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then stale pre-state and post-state storage is cleared
     function test_givenQueuedAction_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
@@ -193,7 +193,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then stale pre-state and fee post-state storage is cleared
     function test_givenQueuedFeeAction_clearsStoredStateOnCancellation() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         IBurnerLoans.AssetFeeConfig memory update;
         update.baseFeeBps = 50;
@@ -241,7 +241,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     //   then validation uses the earlier pending projection, not the cancelled batch post-state
     function test_givenCancelledRiskBatch_laterRiskActionUsesEarlierPendingProjection() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
         termUpdate.termLength = 14 days;

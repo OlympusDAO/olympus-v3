@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {Kernel} from "src/Kernel.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
@@ -216,14 +215,13 @@ contract BurnerLoansHarness is BurnerLoans {
         if (assetActiveDebtOhm_ < debtWithoutPosition) revert BurnerLoans_InvalidCap();
         uint256 targetPositionDebt = assetActiveDebtOhm_ - debtWithoutPosition;
         if (targetPositionDebt > positionDebt) {
-            _FLOAN.increaseDebt(
-                positionId,
-                uint128(targetPositionDebt - positionDebt),
-                0,
-                uint48(block.timestamp + 30 days)
-            );
+            uint128 increase = uint128(targetPositionDebt - positionDebt);
+            _FLOAN.increaseDebt(positionId, increase, 0, uint48(block.timestamp + 30 days));
+            _INVENTORY.draw(address(this), increase);
         } else if (targetPositionDebt < positionDebt) {
-            _FLOAN.decreaseDebt(positionId, uint128(positionDebt - targetPositionDebt), 0);
+            uint128 decrease = uint128(positionDebt - targetPositionDebt);
+            _FLOAN.decreaseDebt(positionId, decrease, 0);
+            _INVENTORY.recordDefault(decrease);
         }
     }
 
@@ -246,19 +244,14 @@ contract BurnerLoansHarness is BurnerLoans {
             );
         }
         if (position_.debtOhm > current.principalDue) {
-            _FLOAN.increaseDebt(
-                positionId,
-                uint128(position_.debtOhm - current.principalDue),
-                0,
-                position_.maturity
-            );
+            uint128 increase = uint128(position_.debtOhm - current.principalDue);
+            _FLOAN.increaseDebt(positionId, increase, 0, position_.maturity);
+            _INVENTORY.draw(address(this), increase);
         } else if (position_.debtOhm < current.principalDue) {
-            _FLOAN.decreaseDebt(positionId, uint128(current.principalDue - position_.debtOhm), 0);
+            uint128 decrease = uint128(current.principalDue - position_.debtOhm);
+            _FLOAN.decreaseDebt(positionId, decrease, 0);
+            _INVENTORY.recordDefault(decrease);
         }
-    }
-
-    function MINTR() external view returns (MINTRv1) {
-        return _MINTR;
     }
 
     function PRICE() external view returns (IPRICEv2) {

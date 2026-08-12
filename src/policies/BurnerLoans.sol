@@ -6,11 +6,13 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
@@ -18,8 +20,7 @@ import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol"
 import {BurnerLoansView} from "src/policies/libraries/BurnerLoansView.sol";
 
 // Contracts
-import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
+import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.sol";
@@ -30,9 +31,6 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 ///      governance review; DepositManager verifies exact receipt when collateral enters custody.
 ///      All token-touching lifecycle entry points share one transient reentrancy guard.
 contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
-    /// @notice Maximum active OHM principal across all Burner Loans markets.
-    uint128 public globalDebtCapOhm;
-
     /// @notice Oracle supplying the canonical backing value per OHM.
     address public backingOracle;
 
@@ -82,14 +80,11 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         dependencies = BurnerLoansDependencies.keycodes();
 
         _FLOAN = IFLOANv1(getModuleAddress(dependencies[0]));
-        _MINTR = MINTRv1(getModuleAddress(dependencies[1]));
-        address priceAddress = getModuleAddress(dependencies[2]);
-        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
-        _TRSRY = TRSRYv1(getModuleAddress(dependencies[4]));
+        address priceAddress = getModuleAddress(dependencies[1]);
+        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        _TRSRY = TRSRYv1(getModuleAddress(dependencies[3]));
 
-        _PRICE = BurnerLoansDependencies.validate(_FLOAN, _MINTR, priceAddress, ROLES, _TRSRY);
-
-        _OHM.approve(address(_MINTR), type(uint256).max);
+        _PRICE = BurnerLoansDependencies.validate(_FLOAN, priceAddress, ROLES, _TRSRY);
     }
 
     /// @inheritdoc Policy
@@ -99,13 +94,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice Sets the maximum active principal for this Burner Loans facility.
-    function setGlobalDebtCap(uint128 debtCapOhm_) external givenEnabled onlyAdminRole {
-        if (debtCapOhm_ < totalActiveDebtOhm()) revert BurnerLoans_InvalidCap();
-        globalDebtCapOhm = debtCapOhm_;
+    /// @inheritdoc IBurnerLoansLifecycle
+    function setInventory(address inventory_) external override givenDisabled onlyAdminRole {
+        _setInventory(inventory_);
+    }
 
-        BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, debtCapOhm_);
-        emit GlobalDebtCapSet(debtCapOhm_);
+    /// @inheritdoc IBurnerLoansLifecycle
+    function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
+        _setConfigurator(configurator_);
     }
 
     /// @notice Sets the oracle supplying canonical OHM backing.
@@ -113,13 +109,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         BurnerLoansDependencies.validateBackingOracle(backingOracle_);
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
-    }
-
-    /// @inheritdoc IBurnerLoansLifecycle
-    function syncMintApproval() external override returns (uint256 approval) {
-        _onlyBurnerLoansAdminOrSeizer();
-        approval = BurnerLoansCustody.reconcileMintApproval(_FLOAN, _MINTR, _OHM, globalDebtCapOhm);
-        emit MintApprovalSynchronized(approval);
     }
 
     // ========== USER FUNCTIONS ========== //
@@ -186,7 +175,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         params.onBehalfOf = onBehalfOf_;
         params.recipient = recipient_;
         params.amount = amount_;
-        return BurnerLoansCustody.withdrawCollateral(this.context(), _DEPOSIT_MANAGER, params);
+        return BurnerLoansCustody.withdrawCollateral(params);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -199,7 +188,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     ///      - The resulting global or asset active debt exceeds its cap.
     ///      - The position is seized, matured, currently unhealthy, or unhealthy after borrowing.
     ///      - The collateral fee exceeds `maxFee_` or cannot be transferred from the caller.
-    ///      - MINTR cannot mint exactly `ohmAmount_` to `recipient_`.
+    ///      - Burner Loans Inventory cannot fund or transfer exactly `ohmAmount_` to `recipient_`.
     function borrow(
         address asset_,
         uint128 ohmAmount_,
@@ -208,6 +197,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         uint256 maxFee_
     ) external nonReentrant returns (uint256, uint256, uint256, uint48, uint256) {
         _requireEnabled();
+        _requireInventoryActive(address(_INVENTORY));
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
         BurnerLoansCustody.BorrowParams memory params;
@@ -217,12 +207,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         params.recipient = recipient_;
         params.ohmAmount = ohmAmount_;
         params.maxFee = maxFee_;
-        BorrowPreview memory quote = BurnerLoansCustody.borrow(
-            this.context(),
-            _MINTR,
-            _TRSRY,
-            params
-        );
+        BorrowPreview memory quote = BurnerLoansCustody.borrow(params);
         return (
             ohmAmount_,
             quote.fee,
@@ -243,16 +228,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
         (uint32 marketId, ) = _requireAssetConfigured(asset_);
-        return
-            BurnerLoansCustody.repay(
-                _FLOAN,
-                _MINTR,
-                _OHM,
-                marketId,
-                asset_,
-                onBehalfOf_,
-                repayOhm_
-            );
+        return BurnerLoansCustody.repay(marketId, asset_, onBehalfOf_, repayOhm_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -265,8 +241,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
         ExtendPreview memory preview = BurnerLoansCustody.extend(
-            this.context(),
-            _TRSRY,
             _marketId(asset_),
             asset_,
             onBehalfOf_,
@@ -305,6 +279,40 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
 
     // ========== VIEW FUNCTIONS ========== //
 
+    /// @inheritdoc IBurnerLoansView
+    function validateAssetDependencies(address asset_) external view override {
+        if (
+            address(_PRICE) == address(0) ||
+            address(kernel.getModuleForKeycode(toKeycode("PRICE"))) != address(_PRICE) ||
+            !_PRICE.isAssetApproved(asset_)
+        ) {
+            revert BurnerLoans_InvalidPrice();
+        }
+        if (_PRICE.getPrice(asset_) == 0) revert BurnerLoans_InvalidPrice();
+        BurnerLoansCustody.validateCustodySupport(
+            _DEPOSIT_MANAGER,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            true
+        );
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function ohm() external view override returns (address) {
+        return address(_OHM);
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function inventory() external view override returns (address) {
+        return address(_INVENTORY);
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function configurator() external view override returns (address) {
+        return address(_CONFIGURATOR);
+    }
+
+    /// @inheritdoc IBurnerLoansView
     function floan() external view override returns (address) {
         return address(_FLOAN);
     }
@@ -329,13 +337,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     function isSeizable(address asset_, address borrower_) external view override returns (bool) {
-        return
-            BurnerLoansView.isBorrowerSeizable(
-                this.context(),
-                asset_,
-                _marketId(asset_),
-                borrower_
-            );
+        return BurnerLoansView.isBorrowerSeizable(asset_, _marketId(asset_), borrower_);
     }
 
     function previewSeize(
@@ -372,7 +374,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansView.previewDepositCollateralForBorrower(
-                this.context(),
                 asset_,
                 amount_,
                 _marketId(asset_),
@@ -388,7 +389,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         _requireEnabled();
         return
             BurnerLoansView.previewWithdrawCollateralForBorrower(
-                this.context(),
                 asset_,
                 amount_,
                 _marketId(asset_),
@@ -402,14 +402,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address onBehalfOf_
     ) external view override returns (BorrowPreview memory) {
         _requireEnabled();
-        return
-            BurnerLoansQuote.previewBorrow(
-                this.context(),
-                asset_,
-                ohmAmount_,
-                _marketId(asset_),
-                onBehalfOf_
-            );
+        _requireInventoryActive(address(_INVENTORY));
+        return BurnerLoansQuote.previewBorrow(asset_, ohmAmount_, _marketId(asset_), onBehalfOf_);
     }
 
     function previewRepay(
@@ -418,9 +412,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address onBehalfOf_
     ) external view override returns (RepayPreview memory) {
         _requireEnabled();
-        if (repayOhm_ == 0) revert BurnerLoans_ZeroAmount();
-        (uint32 marketId, ) = _requireAssetConfigured(asset_);
-        return BurnerLoansView.previewRepayForBorrower(_FLOAN, marketId, onBehalfOf_, repayOhm_);
+        return BurnerLoansView.previewRepayForBorrower(asset_, onBehalfOf_, repayOhm_);
     }
 
     function previewExtend(
@@ -429,14 +421,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         uint16 termCount_
     ) external view override returns (ExtendPreview memory) {
         _requireEnabled();
-        return
-            BurnerLoansQuote.previewExtend(
-                this.context(),
-                asset_,
-                termCount_,
-                _marketId(asset_),
-                onBehalfOf_
-            );
+        return BurnerLoansQuote.previewExtend(asset_, termCount_, _marketId(asset_), onBehalfOf_);
     }
 
     function positionHealthFactor(
@@ -444,7 +429,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         uint256 collateral_,
         uint256 debtOhm_
     ) external view override returns (uint256) {
-        return BurnerLoansQuote.positionHealthFactor(this.context(), asset_, collateral_, debtOhm_);
+        return BurnerLoansQuote.positionHealthFactor(asset_, collateral_, debtOhm_);
     }
 
     /// @notice Quotes currently claimable custody yield for an asset.
@@ -452,7 +437,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         address asset_
     ) external view override returns (HarvestPreview memory) {
         _requireEnabled();
-        AssetCollateralStatus memory collateralStatus = this.getAssetCollateralStatus(asset_);
+        _requireAssetConfigured(asset_);
+        AssetCollateralStatus memory collateralStatus = BurnerLoansCustody.getAssetCollateralStatus(
+            _DEPOSIT_MANAGER,
+            asset_,
+            address(this)
+        );
         return
             HarvestPreview({
                 amount: collateralStatus.claimableYield,
@@ -475,7 +465,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
                 ohmDecimals: _OHM_DECIMALS,
                 depositManager: _DEPOSIT_MANAGER,
                 facility: address(this),
-                globalDebtCapOhm: globalDebtCapOhm,
+                inventory: _INVENTORY,
                 backingOracle: backingOracle,
                 floan: _FLOAN,
                 price: _PRICE,

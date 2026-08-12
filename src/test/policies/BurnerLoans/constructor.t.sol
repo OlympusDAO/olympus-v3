@@ -133,6 +133,7 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
             "reenable grace period"
         );
         assertEq(burnerLoans.backingOracle(), address(backingOracle), "backing oracle");
+        assertEq(burnerLoans.inventory(), address(inventory), "configured inventory");
     }
 }
 
@@ -143,6 +144,12 @@ contract MockInvalidDepositManager is IERC165 {
 }
 
 contract MockInvalidBackingOracle is IERC165 {
+    function supportsInterface(bytes4) external pure returns (bool) {
+        return false;
+    }
+}
+
+contract MockInvalidInventory is IERC165 {
     function supportsInterface(bytes4) external pure returns (bool) {
         return false;
     }

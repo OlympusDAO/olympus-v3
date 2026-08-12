@@ -22,7 +22,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
     //  when configured module dependencies are inspected
     //   then expected module references are stored
     function test_configureDependencies_setsModules() public view {
-        assertEq(address(burnerLoans.MINTR()), address(mintr), "MINTR");
         assertEq(address(burnerLoans.floanForTest()), address(floan), "FLOAN");
         assertEq(burnerLoans.floan(), address(floan), "public FLOAN getter");
         assertEq(address(burnerLoans.PRICE()), address(price), "PRICE");
@@ -40,24 +39,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         _expectActivatePolicyWithModulesReverts(
             localKernel,
             new MockUnsupportedFloan(localKernel),
-            new OlympusMinter(localKernel, address(ohm)),
-            new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
-            new OlympusRoles(localKernel),
-            new OlympusTreasury(localKernel)
-        );
-    }
-
-    // configureDependencies
-    // given the MINTR module uses an unsupported major version
-    //  when BurnerLoans is activated by the kernel
-    //   then activation reverts with InvalidModuleVersion
-    function test_givenMintrModuleVersionUnsupported_configureDependenciesReverts() public {
-        Kernel localKernel = new Kernel();
-
-        _expectActivatePolicyWithModulesReverts(
-            localKernel,
-            new OlympusFixedTermLoan(localKernel),
-            new MockUnsupportedMintr(localKernel),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new OlympusRoles(localKernel),
             new OlympusTreasury(localKernel)
@@ -74,7 +55,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         _expectActivatePolicyWithModulesReverts(
             localKernel,
             new OlympusFixedTermLoan(localKernel),
-            new OlympusMinter(localKernel, address(ohm)),
             new MockUnsupportedPrice(localKernel),
             new OlympusRoles(localKernel),
             new OlympusTreasury(localKernel)
@@ -91,7 +71,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         _expectActivatePolicyWithModulesReverts(
             localKernel,
             new OlympusFixedTermLoan(localKernel),
-            new OlympusMinter(localKernel, address(ohm)),
             new MockPriceWithoutV2(localKernel),
             new OlympusRoles(localKernel),
             new OlympusTreasury(localKernel)
@@ -108,7 +87,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         _expectActivatePolicyWithModulesReverts(
             localKernel,
             new OlympusFixedTermLoan(localKernel),
-            new OlympusMinter(localKernel, address(ohm)),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new MockUnsupportedRoles(localKernel),
             new OlympusTreasury(localKernel)
@@ -125,7 +103,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         _expectActivatePolicyWithModulesReverts(
             localKernel,
             new OlympusFixedTermLoan(localKernel),
-            new OlympusMinter(localKernel, address(ohm)),
             new MockPrice(localKernel, PRICE_DECIMALS, uint32(8 hours)),
             new OlympusRoles(localKernel),
             new MockUnsupportedTrsry(localKernel)
@@ -135,7 +112,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
     function _expectActivatePolicyWithModulesReverts(
         Kernel kernel_,
         Module floan_,
-        Module mintr_,
         Module price_,
         Module roles_,
         Module trsry_
@@ -148,7 +124,6 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
         );
 
         kernel_.executeAction(Actions.InstallModule, address(floan_));
-        kernel_.executeAction(Actions.InstallModule, address(mintr_));
         kernel_.executeAction(Actions.InstallModule, address(price_));
         kernel_.executeAction(Actions.InstallModule, address(roles_));
         kernel_.executeAction(Actions.InstallModule, address(trsry_));
@@ -163,19 +138,6 @@ contract MockUnsupportedFloan is Module {
 
     function KEYCODE() public pure override returns (Keycode) {
         return toKeycode("FLOAN");
-    }
-
-    function VERSION() external pure override returns (uint8 major, uint8 minor) {
-        major = 2;
-        minor = 0;
-    }
-}
-
-contract MockUnsupportedMintr is Module {
-    constructor(Kernel kernel_) Module(kernel_) {}
-
-    function KEYCODE() public pure override returns (Keycode) {
-        return toKeycode("MINTR");
     }
 
     function VERSION() external pure override returns (uint8 major, uint8 minor) {

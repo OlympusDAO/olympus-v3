@@ -2,9 +2,13 @@
 pragma solidity >=0.8.24;
 
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {Actions} from "src/Kernel.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
+import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigReEnableTest is BurnerLoansTest {
@@ -28,17 +32,87 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansTest {
     }
 
     // reEnable
-    // given the configurator has no admin or burner_loans_admin role
+    // given the timelock has no admin or burner_loans_admin role
     //  when it attempts to re-enable the disabled config
     //   then it reverts
-    function test_givenConfiguratorOnly_reverts() public {
-        _setDefaultConfigurator();
+    function test_givenTimelockOnly_reverts() public {
+        _setDefaultConfigOperator();
         vm.prank(emergency);
         burnerLoansConfig.disable("");
 
         vm.prank(address(configTimelock));
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         burnerLoansConfig.reEnable();
+    }
+
+    function test_givenFacilityConfiguratorMismatch_reverts() public {
+        BurnerLoansConfig replacement = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        vm.prank(emergency);
+        burnerLoansConfig.disable("");
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        replacement.setFacility(address(burnerLoans));
+        burnerLoans.disable("");
+        burnerLoans.setConfigurator(address(replacement));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_InvalidFacility.selector,
+                address(burnerLoans)
+            )
+        );
+        burnerLoansConfig.reEnable();
+        vm.stopPrank();
+    }
+
+    function test_givenInventoryConfiguratorMismatch_reverts() public {
+        BurnerLoansConfig replacement = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        vm.prank(emergency);
+        burnerLoansConfig.disable("");
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        replacement.setFacility(address(burnerLoans));
+        inventory.disable("");
+        inventory.setConfigurator(address(replacement));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_InvalidInventory.selector,
+                address(inventory)
+            )
+        );
+        burnerLoansConfig.reEnable();
+        vm.stopPrank();
+    }
+
+    function test_givenFacilityIsNoLongerActive_reverts() public {
+        vm.startPrank(admin);
+        burnerLoansConfig.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_InvalidFacility.selector,
+                address(burnerLoans)
+            )
+        );
+        burnerLoansConfig.reEnable();
+        vm.stopPrank();
+    }
+
+    function test_givenInventoryIsNoLongerActive_reverts() public {
+        vm.startPrank(admin);
+        burnerLoansConfig.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_InvalidInventory.selector,
+                address(inventory)
+            )
+        );
+        burnerLoansConfig.reEnable();
+        vm.stopPrank();
     }
 
     // reEnable

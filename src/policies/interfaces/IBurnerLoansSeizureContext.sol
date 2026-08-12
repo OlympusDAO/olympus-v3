@@ -6,6 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 struct BurnerLoansContext {
@@ -13,7 +14,7 @@ struct BurnerLoansContext {
     uint8 ohmDecimals;
     IDepositManager depositManager;
     address facility;
-    uint128 globalDebtCapOhm;
+    IBurnerLoansInventory inventory;
     address backingOracle;
     IFLOANv1 floan;
     IPRICEv2 price;
@@ -25,5 +26,6 @@ struct BurnerLoansContext {
 /// @notice Exposes one dependency snapshot shared by the linked lifecycle libraries.
 interface IBurnerLoansSeizureContext {
     /// @notice Returns the policy's current module, token, custody, and risk dependencies.
+    /// @return BurnerLoansContext The current Burner Loans dependency snapshot.
     function context() external view returns (BurnerLoansContext memory);
 }

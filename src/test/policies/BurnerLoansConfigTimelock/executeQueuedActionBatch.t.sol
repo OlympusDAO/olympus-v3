@@ -15,7 +15,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
     //   then pre-state and post-state are captured against each intermediate asset config
     function test_givenSameAssetRiskBatch_capturesIntermediatePreAndPostState() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _riskAction(_termUpdate(14 days), _termSelection());
@@ -101,7 +101,7 @@ contract BurnerLoansConfigTimelockExecuteQueuedActionBatchTest is BurnerLoansCon
     //   then pre-state and post-state are captured against each intermediate fee config
     function test_givenSameAssetFeeBatch_capturesIntermediatePreAndPostState() public {
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _feeAction(_baseFeeUpdate(50), _baseFeeSelection());

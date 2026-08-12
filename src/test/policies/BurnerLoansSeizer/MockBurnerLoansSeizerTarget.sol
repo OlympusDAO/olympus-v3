@@ -10,7 +10,6 @@ import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 contract MockBurnerLoansSeizerTarget is Policy, IERC165 {
     error ScanReverted();
     error SeizureReverted();
-    error SyncReverted();
 
     mapping(address => address[]) internal _borrowers;
     mapping(address => uint256) internal _nextIndexes;
@@ -19,10 +18,7 @@ contract MockBurnerLoansSeizerTarget is Policy, IERC165 {
     bool public scanReverts;
     bool public scanConsumesAllGas;
     bool public seizureReverts;
-    bool public syncReverts;
     uint256 public seizureCalls;
-    uint256 public syncCalls;
-    uint256 public syncApproval;
     address public lastSeizedAsset;
     address[] internal _lastSeizedBorrowers;
 
@@ -69,14 +65,6 @@ contract MockBurnerLoansSeizerTarget is Policy, IERC165 {
         seizureReverts = reverts_;
     }
 
-    function setSyncReverts(bool reverts_) external {
-        syncReverts = reverts_;
-    }
-
-    function setSyncApproval(uint256 approval_) external {
-        syncApproval = approval_;
-    }
-
     function getSeizableBorrowers(
         address asset_,
         uint256,
@@ -103,10 +91,8 @@ contract MockBurnerLoansSeizerTarget is Policy, IERC165 {
         return (0, 0);
     }
 
-    function syncMintApproval() external returns (uint256 approval) {
-        if (syncReverts) revert SyncReverted();
-        ++syncCalls;
-        return syncApproval;
+    function inventory() external pure returns (address) {
+        return address(0);
     }
 
     function getLastSeizedBorrowers() external view returns (address[] memory) {

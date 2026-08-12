@@ -5,6 +5,9 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {Actions} from "src/Kernel.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
@@ -147,5 +150,54 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
 
         assertTrue(burnerLoans.isEnabled(), "enabled");
         assertEq(burnerLoans.lastTransitionAt(), uint48(block.timestamp), "last transition");
+    }
+
+    // reEnable
+    // given the configured Burner Loans Inventory was deactivated after Burner Loans was disabled
+    //  when admin re-enables Burner Loans
+    //   then it revalidates the pointer and reverts
+    function test_givenInventoryIsNoLongerActive_reverts() public {
+        vm.startPrank(admin);
+        burnerLoans.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                address(inventory)
+            )
+        );
+        burnerLoans.reEnable();
+        vm.stopPrank();
+    }
+
+    function test_givenConfiguratorIsNoLongerActive_reverts() public {
+        vm.startPrank(admin);
+        burnerLoans.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfig.BurnerLoansConfig_InvalidFacility.selector,
+                address(burnerLoansConfig)
+            )
+        );
+        burnerLoans.reEnable();
+        vm.stopPrank();
+    }
+
+    function test_givenDepositManagerIsNoLongerActive_reverts() public {
+        vm.startPrank(admin);
+        burnerLoans.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(depositManager));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidDepositManager.selector,
+                address(depositManager)
+            )
+        );
+        burnerLoans.reEnable();
+        vm.stopPrank();
     }
 }

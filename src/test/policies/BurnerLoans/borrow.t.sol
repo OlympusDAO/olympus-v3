@@ -11,7 +11,9 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
@@ -288,6 +290,51 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         address[] memory borrowers = burnerLoans.getActiveBorrowers(address(usds));
         assertEq(borrowers.length, 1, "active borrower count");
         assertEq(borrowers[0], alice, "active borrower");
+    }
+
+    // Condition tree:
+    // - Funding: provider-supplied idle OHM covers the full borrow
+    // - Expected branch: Burner Loans Inventory transfers supplied OHM without minting
+    function test_givenSufficientSuppliedIdle_borrowUsesInventoryWithoutMinting() public {
+        _depositDefaultCollateral(alice);
+        ohm.mint(protocolProvider, DEFAULT_BORROW_AMOUNT);
+        vm.startPrank(protocolProvider);
+        ohm.approve(address(inventory), DEFAULT_BORROW_AMOUNT);
+        inventory.supply(DEFAULT_BORROW_AMOUNT);
+        vm.stopPrank();
+        uint256 totalSupplyBefore = ohm.totalSupply();
+
+        _borrowWithPreview(alice, alice, alice, DEFAULT_BORROW_AMOUNT);
+
+        assertEq(ohm.totalSupply(), totalSupplyBefore, "no OHM minted");
+        assertEq(inventory.suppliedOhm(), DEFAULT_BORROW_AMOUNT, "provider claim");
+        assertEq(inventory.suppliedIdleOhm(), 0, "supplied idle consumed");
+        assertEq(inventory.activePrincipalOhm(), DEFAULT_BORROW_AMOUNT, "active principal");
+    }
+
+    // Condition tree:
+    // - Funding: provider-supplied idle OHM covers only part of the borrow
+    // - Expected branch: Burner Loans Inventory consumes idle, mints the shortfall, and transfers once
+    function test_givenPartialSuppliedIdle_borrowMintsOnlyShortfall() public {
+        uint128 supplied = 40e9;
+        _depositDefaultCollateral(alice);
+        ohm.mint(protocolProvider, supplied);
+        vm.startPrank(protocolProvider);
+        ohm.approve(address(inventory), supplied);
+        inventory.supply(supplied);
+        vm.stopPrank();
+        uint256 totalSupplyBefore = ohm.totalSupply();
+
+        _borrowWithPreview(alice, alice, alice, DEFAULT_BORROW_AMOUNT);
+
+        assertEq(
+            ohm.totalSupply(),
+            totalSupplyBefore + DEFAULT_BORROW_AMOUNT - supplied,
+            "only shortfall minted"
+        );
+        assertEq(inventory.suppliedOhm(), supplied, "provider claim");
+        assertEq(inventory.suppliedIdleOhm(), 0, "supplied idle consumed");
+        assertEq(inventory.activePrincipalOhm(), DEFAULT_BORROW_AMOUNT, "active principal");
     }
 
     // Condition tree:
@@ -760,7 +807,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         uint256 availableRoom = bound(uint256(availableRoom_), 0, amount - 1);
         _depositDefaultCollateral(alice);
-        uint256 existingGlobalDebt = burnerLoans.globalDebtCapOhm() - availableRoom;
+        uint256 existingGlobalDebt = inventory.globalDebtCapOhm() - availableRoom;
         _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
         bytes memory error = abi.encodeWithSelector(
@@ -829,6 +876,40 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         vm.prank(alice);
         vm.expectRevert(error);
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+    }
+
+    // Condition tree:
+    // - Burner Loans Inventory: globally disabled while Burner Loans and the market remain enabled
+    // - Expected branch: preview and execution report the strict Burner Loans Inventory pause
+    function test_givenInventoryDisabled_borrowAndPreviewRevert() public {
+        _depositDefaultCollateral(alice);
+        vm.prank(emergency);
+        inventory.disable("");
+
+        _expectBorrowAndPreviewRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector), 1e9);
+    }
+
+    // Condition tree:
+    // - Burner Loans Inventory: inactive while Burner Loans and the market remain enabled
+    // - Funding: supplied idle OHM would otherwise cover the borrow without MINTR permissions
+    // - Expected branch: preview and execution reject the inactive policy
+    function test_givenInventoryInactive_idleFundedBorrowAndPreviewRevert() public {
+        _depositDefaultCollateral(alice);
+        ohm.mint(protocolProvider, DEFAULT_BORROW_AMOUNT);
+        vm.startPrank(protocolProvider);
+        ohm.approve(address(inventory), DEFAULT_BORROW_AMOUNT);
+        inventory.supply(DEFAULT_BORROW_AMOUNT);
+        vm.stopPrank();
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+
+        _expectBorrowAndPreviewRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                address(inventory)
+            ),
+            DEFAULT_BORROW_AMOUNT
+        );
     }
 
     // Condition tree:
@@ -1602,7 +1683,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _depositDefaultCollateral(alice);
         vm.startPrank(admin);
         burnerLoansConfig.setAssetDebtCap(address(usds), amount);
-        burnerLoans.setGlobalDebtCap(amount);
+        burnerLoansConfig.setGlobalDebtCap(amount);
         vm.stopPrank();
 
         _borrowWithPreview(alice, alice, alice, amount);
@@ -1668,7 +1749,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 remainingCapacity = bound(uint256(remainingCapacity_), 1, DEFAULT_BORROW_AMOUNT);
         uint256 excess = bound(uint256(excess_), 1, DEFAULT_BORROW_AMOUNT);
         uint128 borrowAmount = uint128(remainingCapacity + excess);
-        uint256 globalCap = burnerLoans.globalDebtCapOhm();
+        uint256 globalCap = inventory.globalDebtCapOhm();
         uint256 existingGlobalDebt = globalCap - remainingCapacity;
         _depositDefaultCollateral(alice);
         _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
@@ -1690,7 +1771,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint96 ohmAmount_
     ) public {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
-        uint256 globalCap = burnerLoans.globalDebtCapOhm();
+        uint256 globalCap = inventory.globalDebtCapOhm();
         uint256 existingGlobalDebt = globalCap - amount;
         _depositDefaultCollateral(alice);
         _setOtherMarketDebtForTest(uint128(existingGlobalDebt));

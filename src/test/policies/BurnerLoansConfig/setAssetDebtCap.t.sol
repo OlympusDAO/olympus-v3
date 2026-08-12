@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
@@ -10,19 +11,19 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     event AssetDebtCapSet(address indexed asset, uint256 debtCapOhm);
 
     // setAssetDebtCap
-    // given caller is neither admin nor configurator
+    // given caller is neither admin nor timelock
     //  when setAssetDebtCap is called
     //   then it reverts
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != address(configTimelock));
         _addDefaultUsdsAsset();
-        _setDefaultConfigurator();
+        _setDefaultConfigOperator();
 
         vm.prank(caller_);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 caller_
             )
         );
@@ -51,8 +52,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
         _addDefaultUsdsAsset();
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
 
-        vm.prank(address(burnerLoansConfig));
-        floan.setMarketFacility(marketId, makeAddr("otherFacility"));
+        _setMarketFacilityForTest(marketId, makeAddr("otherFacility"));
 
         vm.prank(admin);
         vm.expectRevert(
@@ -85,7 +85,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     //   then the independent market cap is still accepted
     function test_givenCapAboveGlobalCap_setsIndependentMarketCap(uint128 cap_) public {
         _addDefaultUsdsAsset();
-        cap_ = uint128(bound(cap_, burnerLoans.globalDebtCapOhm() + 1, type(uint128).max));
+        cap_ = uint128(bound(cap_, inventory.globalDebtCapOhm() + 1, type(uint128).max));
 
         vm.prank(admin);
         burnerLoansConfig.setAssetDebtCap(address(usds), cap_);
@@ -129,12 +129,12 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     }
 
     // setAssetDebtCap
-    // given caller is the configurator
+    // given caller is the timelock
     //  when new asset debt cap is within bounds
     //   then it stores the cap
-    function test_givenConfiguratorCaller_setsCap(uint128 debtCapOhm_) public {
+    function test_givenTimelockCaller_setsCap(uint128 debtCapOhm_) public {
         _addDefaultUsdsAsset();
-        _setDefaultConfigurator();
+        _setDefaultConfigOperator();
         debtCapOhm_ = uint128(bound(debtCapOhm_, 1, type(uint128).max));
 
         vm.prank(address(configTimelock));

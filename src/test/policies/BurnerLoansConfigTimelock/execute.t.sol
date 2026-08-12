@@ -98,18 +98,18 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
     // executeQueuedAction
     // given a queued action
-    //  when the BurnerLoans configurator has been rotated
+    //  when the configured config operator has been rotated
     //   then execution reverts and the queued action is stale
-    function test_givenConfiguratorRotated_reverts() public {
+    function test_givenConfigOperatorRotated_reverts() public {
         uint64 actionId = _queueCollateralFactorUpdate();
 
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(burnerLoans));
+        burnerLoansConfig.setConfigOperator(address(burnerLoans));
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 address(configTimelock)
             )
         );
@@ -1209,7 +1209,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
 
     // executeQueuedAction
     // given a batch of valid actions
-    //  when called at any timestamp within the execution window and the harness is the configurator
+    //  when called at any timestamp within the execution window and the harness is the timelock
     //   then all sub-actions execute atomically in order
     function test_givenBatch_executesAllSubActions(address executor_, uint48 elapsed_) public {
         uint64 actionId = _queueBatch();
@@ -1421,7 +1421,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
 
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);
@@ -1448,7 +1448,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
 
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);
@@ -1484,7 +1484,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
 
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(configTimelockHarness));
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelockHarness.queueBatch(actions);

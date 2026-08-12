@@ -5,6 +5,7 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -12,6 +13,7 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
@@ -25,6 +27,7 @@ import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefin
 /// @notice Separately linked batch validation, scanning, default settlement, and reward routing.
 library BurnerLoansSeizure {
     using TransferHelper for ERC20;
+    using SafeCast for uint256;
 
     /// @notice Maximum number of positions in one seizure batch.
     uint256 internal constant MAX_BATCH_SIZE = 50;
@@ -113,6 +116,7 @@ library BurnerLoansSeizure {
         for (uint256 i; i < batch.positionIds.length; ++i) {
             dependencies_.floan.defaultPosition(batch.positionIds[i]);
         }
+        dependencies_.inventory.recordDefault(batch.preview.seizedDebtOhm.toUint128());
 
         uint256 startingBalance = IERC20(asset_).balanceOf(address(this));
         uint256 amountOut;
@@ -313,6 +317,7 @@ library BurnerLoansSeizure {
         address[] memory borrowers_,
         bool isProtocolCaller_
     ) private view returns (Batch memory batch) {
+        if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
         uint256 borrowerCount = borrowers_.length;
         if (borrowerCount == 0 || borrowerCount > MAX_BATCH_SIZE) {
             revert IBurnerLoans.BurnerLoans_InvalidBatch();

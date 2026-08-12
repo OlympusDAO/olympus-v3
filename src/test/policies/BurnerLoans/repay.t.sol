@@ -99,11 +99,117 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 60e9, "asset debt");
         assertEq(burnerLoans.totalActiveDebtOhm(), 60e9, "facility debt");
         assertEq(
-            mintr.mintApproval(address(burnerLoans)),
-            burnerLoans.globalDebtCapOhm() - 60e9,
+            mintr.mintApproval(address(inventory)),
+            inventory.globalDebtCapOhm() - 60e9,
             "recycled mint approval"
         );
         assertEq(health, 0, "unknown partial health sentinel");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+    }
+
+    // repay
+    // given a mixed inventory- and mint-funded loan with an outstanding provider claim
+    //  when repayment exceeds the claim deficit
+    //   then it replenishes supplied idle first and burns only the excess
+    function test_givenOutstandingProviderClaim_repayRetainsThenBurnsExcess() public {
+        uint128 supplied = 40e9;
+        uint128 repayment = 60e9;
+        ohm.mint(protocolProvider, supplied);
+        vm.startPrank(protocolProvider);
+        ohm.approve(address(inventory), supplied);
+        inventory.supply(supplied);
+        vm.stopPrank();
+        _borrowForAlice(100e9);
+        uint256 supplyBeforeRepayment = ohm.totalSupply();
+
+        vm.roll(block.number + 1);
+        _approveOhm(alice, repayment);
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            repayment,
+            alice
+        );
+        assertEq(preview.repayAmount, repayment, "preview repayment");
+        assertEq(preview.remainingDebtOhm, 40e9, "preview remaining debt");
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), repayment, alice);
+
+        assertEq(ohm.totalSupply(), supplyBeforeRepayment - 20e9, "excess repayment burned");
+        assertEq(inventory.suppliedOhm(), supplied, "provider claim survives");
+        assertEq(inventory.suppliedIdleOhm(), supplied, "provider claim replenished");
+        assertEq(inventory.activePrincipalOhm(), 40e9, "active principal reduced");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 40e9, "FLOAN principal reduced");
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+    }
+
+    // repay
+    // given Burner Loans Inventory already holds donated surplus and the OHM transfer reports success without
+    // delivering the repayment
+    //  when repay is called
+    //   then Burner Loans rejects the inexact balance delta and rolls back FLOAN and Burner Loans Inventory
+    function test_givenSurplusAndUnderDeliveredTransfer_repayRevertsWithoutConsumingSurplus()
+        public
+    {
+        uint128 repayment = 10e9;
+        uint128 donation = 25e9;
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, repayment);
+        ohm.mint(address(inventory), donation);
+
+        vm.mockCall(
+            address(ohm),
+            abi.encodeCall(ohm.transferFrom, (alice, address(inventory), repayment)),
+            abi.encode(true)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InexactRepaymentTransfer.selector,
+                repayment,
+                0
+            )
+        );
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), repayment, alice);
+
+        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "facility debt rolled back");
+        assertEq(
+            inventory.activePrincipalOhm(),
+            100e9,
+            "Burner Loans Inventory principal rolled back"
+        );
+        assertEq(inventory.surplusOhm(), donation, "donation remains surplus");
+        assertEq(
+            ohm.balanceOf(address(inventory)),
+            donation,
+            "Burner Loans Inventory balance unchanged"
+        );
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+    }
+
+    // repay
+    // given Burner Loans Inventory holds unaccounted donated OHM and the borrower delivers an exact repayment
+    //  when repay is called
+    //   then only the delivered repayment is settled and burned while the donation stays surplus
+    function test_givenSurplusAndExactTransfer_repayPreservesDonationSurplus() public {
+        uint128 repayment = 10e9;
+        uint128 donation = 25e9;
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, repayment);
+        ohm.mint(address(inventory), donation);
+        uint256 supplyBefore = ohm.totalSupply();
+
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), repayment, alice);
+
+        assertEq(ohm.totalSupply(), supplyBefore - repayment, "exact repayment burned");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 90e9, "facility debt reduced");
+        assertEq(inventory.activePrincipalOhm(), 90e9, "Burner Loans Inventory principal reduced");
+        assertEq(inventory.surplusOhm(), donation, "donation remains surplus");
+        assertEq(ohm.balanceOf(address(inventory)), donation, "only donation remains");
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -178,7 +284,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     //   then the reused position receives a fresh maturity
     function test_givenGlobalMintCapacityConsumed_repayRestoresCapacityForAnotherBorrow() public {
         vm.prank(admin);
-        burnerLoans.setGlobalDebtCap(100e9);
+        burnerLoansConfig.setGlobalDebtCap(100e9);
         _borrowForAlice(100e9);
         uint48 firstMaturity = burnerLoans.getPosition(address(usds), alice).maturity;
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
@@ -187,13 +293,13 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
             alice
         );
         uint256 positionCountBefore = floan.getPositionCount();
-        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "consumed approval");
+        assertEq(mintr.mintApproval(address(inventory)), 0, "consumed approval");
 
         vm.roll(block.number + 1);
         _approveOhm(alice, 100e9);
         vm.prank(alice);
         burnerLoans.repay(address(usds), 100e9, alice);
-        assertEq(mintr.mintApproval(address(burnerLoans)), 100e9, "restored approval");
+        assertEq(mintr.mintApproval(address(inventory)), 100e9, "restored approval");
         IFLOANv1.Position memory closedPosition = floan.getPosition(uint64(positionIdsBefore[0]));
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
         assertEq(closedPosition.principalDrawn, 0, "closed principal drawn");
@@ -221,7 +327,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(positionIdsAfter.length, 1, "one position retained");
         assertEq(positionIdsAfter[0], positionIdsBefore[0], "same position ID reused");
         assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt");
-        assertEq(mintr.mintApproval(address(burnerLoans)), 0, "reconsumed approval");
+        assertEq(mintr.mintApproval(address(inventory)), 0, "reconsumed approval");
         assertEq(
             burnerLoans.getPosition(address(usds), alice).maturity,
             preview.maturity,
@@ -329,6 +435,25 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.repay(address(usds), 1e9, alice);
+    }
+
+    // repay
+    // given Burner Loans Inventory is globally disabled after debt was created
+    //  when repayment is previewed or executed
+    //   then both report the strict Burner Loans Inventory pause before settlement
+    function test_givenInventoryDisabled_previewAndRepayRevert() public {
+        _borrowForAlice(100e9);
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 40e9);
+        vm.prank(emergency);
+        inventory.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewRepay(address(usds), 40e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.repay(address(usds), 40e9, alice);
     }
 
     // repay

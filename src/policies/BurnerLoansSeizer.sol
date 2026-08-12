@@ -12,16 +12,17 @@ import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Check
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Contracts
+import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {PolicyAdminOptimized} from "src/policies/utils/PolicyAdminOptimized.sol";
+import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Seizer
-/// @notice Heart task for bounded round-robin seizure and MINTR approval reconciliation.
-/// @dev Scan, seizure, and reconciliation failures are isolated so this non-essential task cannot
+/// @notice Heart task for bounded round-robin seizure.
+/// @dev Scan and seizure failures are isolated so this non-essential task cannot
 ///      revert the Heart transaction or block later periodic tasks.
-contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
+contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @notice Maximum borrowers that one execution may scan.
@@ -144,6 +145,7 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
 
     /// @inheritdoc IPeriodicTask
     function execute() external override onlyRole(HEART_ROLE) {
+        if (!isEnabled) return;
         (bool success, bytes memory reason) = address(this).call{gas: executionGasLimit}(
             abi.encodeCall(this.selfExecuteTask, ())
         );
@@ -154,7 +156,6 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
     function selfExecuteTask() external override {
         if (msg.sender != address(this)) revert BurnerLoansSeizer_OnlySelf();
         _scanAndSeize();
-        _syncMintApproval();
     }
 
     /// @dev Scans and optionally seizes one managed asset. All external failures are reported.
@@ -197,15 +198,6 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
         }
     }
 
-    /// @dev Reconciles finite MINTR approval after seizure work without propagating a failure.
-    function _syncMintApproval() private {
-        try IBurnerLoansLifecycle(_BURNER_LOANS).syncMintApproval() returns (uint256 approval) {
-            emit MintApprovalSynchronized(approval);
-        } catch (bytes memory reason) {
-            emit MintApprovalSyncFailed(_reasonSelector(reason));
-        }
-    }
-
     /// @inheritdoc IBurnerLoansSeizer
     function isAssetManaged(address asset_) external view override returns (bool) {
         return _assets.contains(asset_);
@@ -221,11 +213,21 @@ contract BurnerLoansSeizer is Policy, PolicyAdminOptimized, IBurnerLoansSeizer {
         return _assets.values();
     }
 
+    /// @dev Revalidates the constructor-bound Burner Loans policy before operational enablement.
+    function _beforeEnable(bytes calldata) internal view override {
+        if (!kernel.isPolicyActive(Policy(_BURNER_LOANS))) {
+            revert BurnerLoansSeizer_InvalidBurnerLoans(_BURNER_LOANS);
+        }
+    }
+
     /// @inheritdoc IPeriodicTask
-    function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view override(EnablerV2, IPeriodicTask) returns (bool) {
         return
             interfaceId_ == type(IPeriodicTask).interfaceId ||
-            interfaceId_ == type(IBurnerLoansSeizer).interfaceId;
+            interfaceId_ == type(IBurnerLoansSeizer).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 
     function _setScanLimits(uint16 maxBorrowersToCheck_, uint8 maxBorrowersToSeize_) private {

@@ -6,15 +6,17 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock
-/// @notice Timelocked configuration surface for Burner Loans risk parameters.
+/// @notice Timelock implementation that may serve as Burner Loans Config's config operator.
+/// @dev Burner Loans Config is the configurator of Burner Loans; this interface does not represent
+///      a timelock that is bound directly to Burner Loans.
 interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     // ========== ERRORS ========== //
 
-    /// @notice Thrown when the Burner Loans policy address is zero.
+    /// @notice Thrown when the Burner Loans Config policy address is zero.
     error BurnerLoansConfigTimelock_ZeroAddress();
 
     /// @notice Thrown when Burner Loans Config is incompatible.
-    /// @param burnerLoans The invalid Burner Loans policy address.
+    /// @param burnerLoans The invalid Burner Loans Config policy address.
     error BurnerLoansConfigTimelock_InvalidBurnerLoans(address burnerLoans);
 
     /// @notice Thrown when Burner Loans Config belongs to a different Kernel.
@@ -89,7 +91,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Returns the Burner Loans Config policy controlled by this timelock.
+    /// @notice Returns the Burner Loans Config policy targeted by this timelock.
     /// @return burnerLoans_ The Burner Loans Config policy.
     function burnerLoans() external view returns (IBurnerLoansConfig burnerLoans_);
 
@@ -108,7 +110,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     // ========== QUEUE FUNCTIONS ========== //
 
     /// @notice Queues an asset fee-curve update.
-    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
+    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Partial fee curve update.
     /// @param selection_ Fields to apply from `config_`.
@@ -120,7 +122,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues an asset active debt cap update.
-    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
+    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New active debt cap, in OHM decimals.
     /// @return actionId The queued action ID.
@@ -130,7 +132,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a partial asset risk-configuration update.
-    /// @dev Reverts if the timelock or controlled Burner Loans Config policy is disabled.
+    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param update_ Partial risk and term update.
     /// @param selection_ Fields to apply from `update_`.
@@ -141,11 +143,11 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
         AssetRiskConfigUpdateSelection calldata selection_
     ) external returns (uint64 actionId);
 
-    /// @notice Queues a batch of Burner Loans configuration updates.
+    /// @notice Queues a batch of Burner Loans Config updates.
     /// @dev Every sub-action must target Burner Loans Config and use a supported setter.
-    ///      Reverts if the timelock or controlled Burner Loans Config policy is disabled.
+    ///      Reverts if the timelock or target Burner Loans Config policy is disabled.
     ///      The batch is validated and later executed atomically in array order.
-    /// @param actions_ The Burner Loans configuration sub-actions to queue.
+    /// @param actions_ The Burner Loans Config sub-actions to queue.
     /// @return actionId The queued action ID.
     function queueBatch(
         ITimelockBatchQueue.BatchAction[] memory actions_

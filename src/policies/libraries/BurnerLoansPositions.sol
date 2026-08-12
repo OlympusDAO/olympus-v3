@@ -33,20 +33,34 @@ library BurnerLoansPositions {
         uint32 marketId_,
         address borrower_
     ) internal view returns (IFLOANv1.Position memory position) {
-        (bool exists, uint64 positionId) = find(floan_, marketId_, borrower_);
-        if (exists) return floan_.getPosition(positionId);
+        (, , position) = getWithIdOrEmpty(floan_, marketId_, borrower_);
+    }
 
-        return
-            IFLOANv1.Position({
-                borrower: borrower_,
-                marketId: marketId_,
-                collateral: 0,
-                principalDrawn: 0,
-                principalDue: 0,
-                interestDue: 0,
-                maturity: 0,
-                lastBorrowBlock: 0
-            });
+    /// @notice Returns the first borrower position and its identifier, or an empty position.
+    /// @param floan_ FLOAN module to query.
+    /// @param marketId_ FLOAN market identifier.
+    /// @param borrower_ Position borrower.
+    /// @return exists Whether a matching position exists.
+    /// @return positionId First matching position identifier, or zero when absent.
+    /// @return position Existing first position or a zero-valued position preserving identity.
+    function getWithIdOrEmpty(
+        IFLOANv1 floan_,
+        uint32 marketId_,
+        address borrower_
+    ) internal view returns (bool exists, uint64 positionId, IFLOANv1.Position memory position) {
+        (exists, positionId) = find(floan_, marketId_, borrower_);
+        if (exists) return (true, positionId, floan_.getPosition(positionId));
+
+        position = IFLOANv1.Position({
+            borrower: borrower_,
+            marketId: marketId_,
+            collateral: 0,
+            principalDrawn: 0,
+            principalDue: 0,
+            interestDue: 0,
+            maturity: 0,
+            lastBorrowBlock: 0
+        });
     }
 
     /// @notice Returns the first borrower position ID, creating a position when absent.

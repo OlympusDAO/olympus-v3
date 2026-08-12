@@ -5,6 +5,7 @@ pragma solidity >=0.8.24;
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
@@ -350,7 +351,10 @@ contract BurnerLoansHandler is Test {
             address(collateral)
         );
         if (!config.originationsEnabled) return;
-        if (burnerLoans.totalActiveDebtOhm() + _OHM_SCALE > burnerLoans.globalDebtCapOhm()) {
+        if (
+            burnerLoans.totalActiveDebtOhm() + _OHM_SCALE >
+            IBurnerLoansInventory(burnerLoans.inventory()).globalDebtCapOhm()
+        ) {
             return;
         }
         if (burnerLoans.assetActiveDebtOhm(address(collateral)) + _OHM_SCALE > config.debtCap) {

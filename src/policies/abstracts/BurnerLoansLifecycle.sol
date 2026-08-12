@@ -8,23 +8,25 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
-import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
-import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Lifecycle Base
 /// @notice Lifecycle-only state and adapters after configuration and positions are externalized.
@@ -52,11 +54,14 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Custody policy that holds collateral on behalf of Burner Loans.
     IDepositManager internal immutable _DEPOSIT_MANAGER;
 
+    /// @dev OHM funding and aggregate-principal accounting policy.
+    IBurnerLoansInventory internal _INVENTORY;
+
+    /// @dev Burner Loans Config policy authorized to manage facility configuration.
+    IBurnerLoansConfig internal _CONFIGURATOR;
+
     /// @dev Fixed-term loan module holding markets and positions.
     IFLOANv1 internal _FLOAN;
-
-    /// @dev Minter module used to mint and burn OHM principal.
-    MINTRv1 internal _MINTR;
 
     /// @dev Price module used for collateral and OHM valuation.
     IPRICEv2 internal _PRICE;
@@ -84,10 +89,40 @@ abstract contract BurnerLoansLifecycle is
         if (depositManagerKernel != address(kernel_)) {
             revert BurnerLoans_DepositManagerKernelMismatch(address(kernel_), depositManagerKernel);
         }
-
         _OHM = ohm_;
         _OHM_DECIMALS = ohm_.decimals();
         _DEPOSIT_MANAGER = depositManager_;
+    }
+
+    /// @dev Validates and stores a compatible Burner Loans Inventory contract bound to this facility.
+    function _setInventory(address inventory_) internal {
+        BurnerLoansDependencies.validateInventoryLink(
+            kernel,
+            address(this),
+            address(_OHM),
+            inventory_
+        );
+        _INVENTORY = IBurnerLoansInventory(inventory_);
+        emit InventorySet(inventory_);
+    }
+
+    /// @dev Validates and stores the Burner Loans Config policy for this facility.
+    function _setConfigurator(address configurator_) internal {
+        BurnerLoansDependencies.validateConfiguratorLink(
+            kernel,
+            address(this),
+            address(_OHM),
+            configurator_
+        );
+        _CONFIGURATOR = IBurnerLoansConfig(configurator_);
+        emit ConfiguratorSet(configurator_);
+    }
+
+    /// @dev Reverts unless the configured Burner Loans Inventory is an active policy.
+    function _requireInventoryActive(address inventory_) internal view {
+        if (!kernel.isPolicyActive(Policy(inventory_))) {
+            revert BurnerLoans_InventoryNotActive(inventory_);
+        }
     }
 
     function _marketId(address asset_) internal view returns (uint32) {
@@ -126,19 +161,37 @@ abstract contract BurnerLoansLifecycle is
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
-    /// @dev Restricts MINTR approval repair so arbitrary callers cannot undo an emergency reduction.
-    function _onlyBurnerLoansAdminOrSeizer() internal view {
-        _requireAuthorized(
-            !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE) &&
-                !_hasRole(msg.sender, BURNER_LOANS_SEIZER_ROLE)
-        );
-    }
-
     function _authorizeReEnable() internal view override {
         _onlyBurnerLoansAdminOrAdmin();
     }
 
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @dev Prevents enabling Burner Loans before compatible Config and Burner Loans Inventory
+    ///      policies are bound and agree.
+    function _beforeEnable(bytes calldata) internal view override {
+        BurnerLoansDependencies.validateConfiguration(
+            kernel,
+            address(this),
+            address(_OHM),
+            address(_DEPOSIT_MANAGER),
+            address(_INVENTORY),
+            address(_CONFIGURATOR)
+        );
+    }
+
+    /// @dev Preserves the grace-period gate and revalidates configuration before re-enabling.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        BurnerLoansDependencies.validateConfiguration(
+            kernel,
+            address(this),
+            address(_OHM),
+            address(_DEPOSIT_MANAGER),
+            address(_INVENTORY),
+            address(_CONFIGURATOR)
+        );
+    }
 
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         return (1, 0);

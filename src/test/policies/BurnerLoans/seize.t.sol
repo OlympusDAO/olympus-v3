@@ -7,6 +7,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
@@ -23,7 +24,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     //   then it closes position and routes collateral
     function test_givenUnhealthyPosition_seizeClosesPositionAndRoutesCollateral() public {
         _makeUnhealthy(alice);
-        uint256 mintApprovalBefore = mintr.mintApproval(address(burnerLoans));
+        uint256 mintApprovalBefore = mintr.mintApproval(address(inventory));
         IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
             address(usds),
             _single(alice)
@@ -36,6 +37,8 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         uint256 keeperBefore = usds.balanceOf(keeper);
         uint256 treasuryBefore = usds.balanceOf(address(trsry));
 
+        vm.expectEmit(false, false, false, true, address(inventory));
+        emit IBurnerLoansInventory.PrincipalDefaulted(100e9);
         vm.prank(keeper);
         (uint256 reward, uint256 treasuryAmount) = burnerLoans.seize(address(usds), _single(alice));
 
@@ -61,10 +64,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(usds.balanceOf(address(burnerLoans)), 0, "no residual collateral");
         assertEq(
-            mintr.mintApproval(address(burnerLoans)),
-            mintApprovalBefore,
-            "seizure does not mutate mint approval"
+            mintr.mintApproval(address(inventory)),
+            mintApprovalBefore + 100e9,
+            "seizure restores defaulted capacity"
         );
+        assertEq(inventory.activePrincipalOhm(), 0, "Burner Loans Inventory active principal");
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -101,14 +105,14 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.seize(address(usds), _single(alice));
 
         vm.startPrank(admin);
-        burnerLoans.setGlobalDebtCap(50e9);
-        assertEq(mintr.mintApproval(address(burnerLoans)), 50e9, "default releases capacity");
+        burnerLoansConfig.setGlobalDebtCap(50e9);
+        assertEq(mintr.mintApproval(address(inventory)), 50e9, "default releases capacity");
 
-        burnerLoans.setGlobalDebtCap(200e9);
+        burnerLoansConfig.setGlobalDebtCap(200e9);
         vm.stopPrank();
 
         assertEq(
-            mintr.mintApproval(address(burnerLoans)),
+            mintr.mintApproval(address(inventory)),
             200e9,
             "capacity depends only on active principal"
         );
@@ -323,6 +327,22 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         burnerLoans.seize(address(usds), _single(alice));
 
         assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt unchanged");
+    }
+
+    // seize
+    // given Burner Loans Inventory is globally disabled after a position becomes unhealthy
+    //  when seizure is previewed or executed
+    //   then both report the strict Burner Loans Inventory pause
+    function test_givenInventoryDisabled_previewAndSeizeRevert() public {
+        _makeUnhealthy(alice);
+        vm.prank(emergency);
+        inventory.disable("");
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.seize(address(usds), _single(alice));
     }
 
     // seize

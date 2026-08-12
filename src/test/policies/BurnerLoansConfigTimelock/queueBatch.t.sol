@@ -102,18 +102,18 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
     }
 
     // queueBatch
-    // given the configurator has been rotated away from the timelock
+    // given the configured config operator has been rotated away
     //  when queueing a valid mixed batch
     //   then it reverts before storing an action
-    function test_givenConfiguratorRotated_reverts() public {
+    function test_givenConfigOperatorRotated_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _mixedBatch();
         vm.prank(admin);
-        burnerLoansConfig.setConfigurator(address(burnerLoans));
+        burnerLoansConfig.setConfigOperator(address(burnerLoans));
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnauthorizedConfigurator.selector,
+                IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
                 address(configTimelock)
             )
         );

@@ -27,16 +27,16 @@ library BurnerLoansConfigTimelockLib {
         }
 
         bytes4 selector = action_.selector;
-        address asset = abi.decode(action_.payload, (address));
-
         bytes32 currentHash;
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+            address asset = abi.decode(action_.payload, (address));
             currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetFeeConfig(asset)));
         } else if (
             selector == IBurnerLoansConfig.setAssetRiskConfig.selector ||
             selector == IBurnerLoansConfig.setAssetDebtCap.selector ||
             selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector
         ) {
+            address asset = abi.decode(action_.payload, (address));
             currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetConfig(asset)));
         } else {
             revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);

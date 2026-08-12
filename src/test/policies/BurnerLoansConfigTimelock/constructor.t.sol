@@ -79,14 +79,12 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     //   then it reverts
     function test_constructor_givenBurnerLoansConfigHasDifferentKernel_reverts() public {
         Kernel otherKernel = new Kernel();
-        MockBurnerLoansPolicy foreignFacility = new MockBurnerLoansPolicy(otherKernel);
-        otherKernel.executeAction(Actions.ActivatePolicy, address(foreignFacility));
-        BurnerLoansConfig foreignConfig = new BurnerLoansConfig(
+        MockBurnerLoansPolicy foreignFacility = new MockBurnerLoansPolicy(
             otherKernel,
-            IERC20(address(ohm)),
-            depositManager,
-            address(foreignFacility)
+            address(ohm)
         );
+        otherKernel.executeAction(Actions.ActivatePolicy, address(foreignFacility));
+        BurnerLoansConfig foreignConfig = new BurnerLoansConfig(otherKernel, IERC20(address(ohm)));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -102,12 +100,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     //  when BurnerLoansConfigTimelock is deployed
     //   then it binds the deployment-time Config
     function test_constructor_givenBurnerLoansConfigIsInactive_bindsConfig() public {
-        BurnerLoansConfig inactiveConfig = new BurnerLoansConfig(
-            kernel,
-            IERC20(address(ohm)),
-            depositManager,
-            address(burnerLoans)
-        );
+        BurnerLoansConfig inactiveConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
 
         BurnerLoansConfigTimelock timelock = new BurnerLoansConfigTimelock(kernel, inactiveConfig);
 

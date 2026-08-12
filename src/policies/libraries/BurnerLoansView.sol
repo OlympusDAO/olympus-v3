@@ -3,8 +3,9 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
@@ -45,11 +46,11 @@ library BurnerLoansView {
     /// @notice Returns whether the borrower's first position is currently seizable.
     /// @dev Reverts when market configuration or required pricing is unavailable.
     function isBorrowerSeizable(
-        BurnerLoansContext memory dependencies_,
         address asset_,
         uint32 marketId_,
         address borrower_
     ) public view returns (bool) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         return
             isSeizable(
                 dependencies_,
@@ -130,12 +131,12 @@ library BurnerLoansView {
 
     /// @notice Quotes a deposit against the borrower's first market position.
     function previewDepositCollateralForBorrower(
-        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 amount_,
         uint32 marketId_,
         address borrower_
     ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         return
             previewDepositCollateral(
                 dependencies_,
@@ -171,13 +172,20 @@ library BurnerLoansView {
 
     /// @notice Quotes repayment against the borrower's first market position.
     function previewRepayForBorrower(
-        IFLOANv1 floan_,
-        uint32 marketId_,
+        address asset_,
         address borrower_,
         uint128 repayOhm_
     ) public view returns (IBurnerLoans.RepayPreview memory) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
+        uint32 marketId_ = _marketId(dependencies_, asset_);
+        _assetConfig(dependencies_, marketId_);
+        if (repayOhm_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
         return
-            previewRepay(repayOhm_, BurnerLoansPositions.getOrEmpty(floan_, marketId_, borrower_));
+            previewRepay(
+                repayOhm_,
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+            );
     }
 
     /// @notice Quotes collateral withdrawal against a supplied position.
@@ -226,12 +234,12 @@ library BurnerLoansView {
 
     /// @notice Quotes withdrawal against the borrower's first market position.
     function previewWithdrawCollateralForBorrower(
-        BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 amount_,
         uint32 marketId_,
         address borrower_
     ) public view returns (IBurnerLoans.WithdrawPreview memory) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
         return
             previewWithdrawCollateral(
                 dependencies_,
@@ -245,12 +253,26 @@ library BurnerLoansView {
         BurnerLoansContext memory dependencies_,
         address asset_
     ) private view returns (IBurnerLoans.AssetConfig memory config) {
-        uint32 marketId_ = BurnerLoansMarketConfig.firstMarketId(
-            dependencies_.floan,
-            dependencies_.facility,
-            asset_,
-            address(dependencies_.ohm)
-        );
+        return _assetConfig(dependencies_, _marketId(dependencies_, asset_));
+    }
+
+    function _marketId(
+        BurnerLoansContext memory dependencies_,
+        address asset_
+    ) private view returns (uint32) {
+        return
+            BurnerLoansMarketConfig.firstMarketId(
+                dependencies_.floan,
+                dependencies_.facility,
+                asset_,
+                address(dependencies_.ohm)
+            );
+    }
+
+    function _assetConfig(
+        BurnerLoansContext memory dependencies_,
+        uint32 marketId_
+    ) private view returns (IBurnerLoans.AssetConfig memory config) {
         IFLOANv1.Market memory market = dependencies_.floan.getMarket(marketId_);
         return
             BurnerLoansMarketConfig.assetConfig(
@@ -258,5 +280,9 @@ library BurnerLoansView {
                 market,
                 dependencies_.floan.getMarketConfigData(marketId_)
             );
+    }
+
+    function _dependencies() private view returns (BurnerLoansContext memory) {
+        return IBurnerLoansSeizureContext(address(this)).context();
     }
 }

@@ -7,25 +7,38 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @title Burner Loans Config Interface
 /// @notice Opinionated administration surface for Burner Loans markets stored in FLOAN.
 interface IBurnerLoansConfig is IBurnerLoans {
-    /// @notice Thrown when the configured Burner Loans facility is not an active compatible policy.
+    /// @notice Thrown when the configured Burner Loans facility or its linkage is incompatible.
     /// @param facility_ The invalid facility address.
     error BurnerLoansConfig_InvalidFacility(address facility_);
+    /// @notice Thrown when the linked Burner Loans Inventory contract is incompatible.
+    error BurnerLoansConfig_InvalidInventory(address inventory_);
+    /// @notice Thrown when a caller is neither the configured config operator nor an admin.
+    /// @param caller_ Unauthorized caller address.
+    error BurnerLoansConfig_UnauthorizedConfigOperator(address caller_);
+
+    event FacilitySet(address indexed facility);
+    event ConfigOperatorSet(address indexed configOperator);
 
     /// @notice Returns the OHM debt token configured for new markets.
     /// @return ohm_ OHM token address.
     function ohm() external view returns (address ohm_);
 
-    /// @notice Returns the DepositManager used to validate collateral support.
-    /// @return depositManager_ DepositManager address.
-    function depositManager() external view returns (address depositManager_);
-
     /// @notice Returns the Burner Loans facility whose FLOAN markets this policy configures.
     /// @return facility_ Bound Burner Loans facility.
     function facility() external view returns (address facility_);
 
-    /// @notice Returns the policy allowed to execute timelocked configuration changes.
-    /// @return configurator_ Configurator policy address.
-    function configurator() external view returns (address configurator_);
+    /// @notice Sets the Burner Loans facility whose FLOAN markets this policy configures.
+    /// @dev Callable only by OCG admin while Burner Loans Config is globally disabled. The
+    ///      facility must be an active policy in this contract's Kernel.
+    function setFacility(address facility_) external;
+
+    /// @notice Returns Burner Loans' current Burner Loans Inventory contract.
+    /// @return inventory_ Current Burner Loans Inventory resolved through the bound facility.
+    function inventory() external view returns (address inventory_);
+
+    /// @notice Returns the optional address allowed to execute delegated configuration changes.
+    /// @return configOperator_ Config operator address, or zero when delegated access is revoked.
+    function configOperator() external view returns (address configOperator_);
 
     /// @notice Returns whether at least one bound FLOAN market exists for a collateral asset.
     /// @param asset_ Collateral asset to query.
@@ -63,11 +76,6 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @param debtCapOhm_ Proposed debt cap, in OHM decimals.
     function validateAssetDebtCap(address asset_, uint128 debtCapOhm_) external view;
 
-    /// @notice Rotates a FLOAN market to a new active Burner Loans facility.
-    /// @param marketId_ FLOAN market identifier.
-    /// @param facility_ New facility policy address.
-    function setMarketFacility(uint32 marketId_, address facility_) external;
-
     /// @notice Creates a Burner Loans FLOAN market for a collateral asset.
     /// @param asset_ Collateral asset to configure.
     /// @param debtCapOhm_ Initial market debt cap, in OHM decimals.
@@ -85,9 +93,15 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @param debtCapOhm_ New market debt cap, in OHM decimals.
     function setAssetDebtCap(address asset_, uint128 debtCapOhm_) external;
 
-    /// @notice Sets the policy allowed to execute timelocked configuration changes.
-    /// @param configurator_ New configurator policy address.
-    function setConfigurator(address configurator_) external;
+    /// @notice Updates the maximum active principal across the bound Burner Loans facility.
+    /// @dev Restricted to OCG admin and forwarded to Burner Loans' current Burner Loans Inventory.
+    function setGlobalDebtCap(uint128 debtCapOhm_) external;
+
+    /// @notice Sets the optional address allowed to execute delegated configuration changes.
+    /// @dev The config operator need not be a policy or implement a timelock. Setting zero revokes
+    ///      delegated access.
+    /// @param configOperator_ New config operator address.
+    function setConfigOperator(address configOperator_) external;
 
     /// @notice Enables or disables new originations for a configured asset.
     /// @param asset_ Collateral asset to update.

@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 
 /// @title Burner Loans Seizer Interface
-/// @notice Bounded periodic scanning, seizure, and MINTR approval reconciliation for Burner Loans.
+/// @notice Bounded periodic scanning and seizure.
 interface IBurnerLoansSeizer is IPeriodicTask {
     error BurnerLoansSeizer_ZeroAddress();
     error BurnerLoansSeizer_InvalidBurnerLoans(address burnerLoans);
@@ -33,13 +33,12 @@ interface IBurnerLoansSeizer is IPeriodicTask {
     event ScanFailed(address indexed asset, bytes4 reason);
     event SeizureFailed(address indexed asset, bytes4 reason);
     event SeizerRoleMissing(address indexed asset);
-    event MintApprovalSynchronized(uint256 approval);
-    event MintApprovalSyncFailed(bytes4 reason);
 
-    /// @notice Scans one managed asset and attempts MINTR approval reconciliation.
-    /// @dev Scan, seizure, and reconciliation failures are isolated and reported so execution does
+    /// @notice Scans one managed asset and seizes eligible positions.
+    /// @dev Scan and seizure failures are isolated and reported so execution does
     ///      not block later Heart periodic tasks. Gas exhaustion in the task body is also isolated.
-    ///      Reverts if the caller does not hold the `heart` role.
+    ///      Returns without work while the policy is disabled. Reverts if the caller does not hold
+    ///      the `heart` role.
     function execute() external override;
 
     /// @notice Executes the gas-bounded task body through an external self-call.

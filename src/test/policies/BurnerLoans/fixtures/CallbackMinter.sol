@@ -30,6 +30,9 @@ contract CallbackMinter is MINTRv1 {
     }
 
     function mintOhm(address to_, uint256 amount_) external override permissioned {
+        uint256 approval = mintApproval[msg.sender];
+        if (approval < amount_) revert MINTR_NotApproved();
+        mintApproval[msg.sender] = approval - amount_;
         bytes memory returnData;
         (callbackSucceeded, returnData) = _callbackTarget.call(_callbackData);
         if (returnData.length >= 4) {
@@ -46,9 +49,14 @@ contract CallbackMinter is MINTRv1 {
         revert MINTR_NotActive();
     }
 
-    function increaseMintApproval(address, uint256) external pure override {}
+    function increaseMintApproval(address policy_, uint256 amount_) external override permissioned {
+        mintApproval[policy_] += amount_;
+    }
 
-    function decreaseMintApproval(address, uint256) external pure override {}
+    function decreaseMintApproval(address policy_, uint256 amount_) external override permissioned {
+        uint256 approval = mintApproval[policy_];
+        mintApproval[policy_] = amount_ < approval ? approval - amount_ : 0;
+    }
 
     function deactivate() external override {
         active = false;

@@ -3,8 +3,10 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 
 // Contracts
+import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -56,5 +58,24 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotDisabled.selector);
         configTimelock.enable("");
+    }
+
+    // enable
+    // given the constructor-bound Burner Loans Config is no longer active
+    //  when admin calls enable
+    //   then it reverts
+    function test_givenBurnerLoansConfigInactive_reverts() public {
+        vm.startPrank(admin);
+        configTimelock.disable("");
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
+                address(burnerLoansConfig)
+            )
+        );
+        configTimelock.enable("");
+        vm.stopPrank();
     }
 }

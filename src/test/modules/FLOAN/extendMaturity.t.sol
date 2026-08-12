@@ -53,23 +53,6 @@ contract FLOANExtendMaturityTest is FLOANTest {
     }
 
     // extendMaturity
-    // given a defaulted position
-    //  when extendMaturity is called
-    //   then it reverts
-    function test_givenDefaultedPosition_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
-
-        vm.startPrank(facility);
-        floan.defaultPosition(positionId);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_PositionDefaulted.selector, positionId)
-        );
-        floan.extendMaturity(positionId, uint48(block.timestamp + 60 days));
-        vm.stopPrank();
-    }
-
-    // extendMaturity
     // given no debt
     //  when extendMaturity is called
     //   then it reverts

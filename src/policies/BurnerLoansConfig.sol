@@ -3,14 +3,13 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -39,92 +38,57 @@ contract BurnerLoansConfig is
     uint256 internal constant _WAD = 1e18;
     uint8 internal constant _MAX_TOKEN_DECIMALS = 36;
 
-    // ========== IMMUTABLES ========== //
+    // ========== DEPENDENCIES ========== //
 
     IERC20 internal immutable _OHM;
-    IDepositManager internal immutable _DEPOSIT_MANAGER;
-    address internal immutable _FACILITY;
+    IBurnerLoansLifecycle internal _FACILITY;
 
     // ========== MODULES ========== //
 
     IFLOANv1 internal _FLOAN;
-    IPRICEv2 internal _PRICE;
 
     // ========== STATE ========== //
 
-    address public override configurator;
+    address public override configOperator;
 
     // ========== CONSTRUCTOR ========== //
 
-    /// @notice Deploys a configuration policy bound to one Burner Loans facility.
-    /// @dev The facility may be inactive during deployment, but must advertise the Burner Loans
-    ///      lifecycle interface and report the same Kernel. These checks prevent accidental
-    ///      cross-Kernel links; the trusted deployer remains responsible for facility identity
-    ///      because an arbitrary contract can spoof both responses.
+    /// @notice Deploys an unlinked Burner Loans configuration policy.
+    /// @dev The facility is linked after deployment through `setFacility`, which requires active
+    ///      membership in this policy's Kernel.
     /// @param kernel_ Kernel that manages this policy and its module dependencies.
     /// @param ohm_ Debt token used by markets created through this policy.
-    /// @param depositManager_ DepositManager that validates supported collateral periods.
-    /// @param facility_ Burner Loans policy that will service markets created by this policy.
     constructor(
         Kernel kernel_,
-        IERC20 ohm_,
-        IDepositManager depositManager_,
-        address facility_
+        IERC20 ohm_
     ) Policy(kernel_) ReEnablerGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD) {
-        if (
-            address(ohm_) == address(0) ||
-            address(depositManager_) == address(0) ||
-            facility_ == address(0)
-        ) {
-            revert BurnerLoans_ZeroAddress();
-        }
-        if (
-            !ERC165Checker.supportsInterface(
-                address(depositManager_),
-                type(IDepositManager).interfaceId
-            )
-        ) {
-            revert BurnerLoans_InvalidDepositManager(address(depositManager_));
-        }
-        _validateFacility(facility_, false);
-
+        if (address(ohm_) == address(0)) revert BurnerLoans_ZeroAddress();
         _OHM = ohm_;
-        _DEPOSIT_MANAGER = depositManager_;
-        _FACILITY = facility_;
     }
 
     // ========== KERNEL FUNCTIONS ========== //
 
     /// @inheritdoc Policy
-    /// @dev Reverts when FLOAN, PRICE, or ROLES is missing or uses an unsupported version, or
-    ///      when PRICE does not implement `IPRICEv2`.
+    /// @dev Reverts when FLOAN or ROLES is missing or uses an unsupported version.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](3);
+        dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("FLOAN");
-        dependencies[1] = toKeycode("PRICE");
-        dependencies[2] = toKeycode("ROLES");
+        dependencies[1] = toKeycode("ROLES");
 
         _FLOAN = IFLOANv1(getModuleAddress(dependencies[0]));
-        address priceAddress = getModuleAddress(dependencies[1]);
-        ROLES = ROLESv1(getModuleAddress(dependencies[2]));
+        ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
         (uint8 floanMajor, ) = Module(address(_FLOAN)).VERSION();
-        (uint8 priceMajor, uint8 priceMinor) = Module(priceAddress).VERSION();
         (uint8 rolesMajor, ) = ROLES.VERSION();
-        bool priceVersionSupported = priceMajor == 2 || (priceMajor == 1 && priceMinor >= 2);
-        if (floanMajor != 1 || !priceVersionSupported || rolesMajor != 1) {
+        if (floanMajor != 1 || rolesMajor != 1) {
             revert BurnerLoans_InvalidModuleVersion();
         }
-        if (!IERC165(priceAddress).supportsInterface(type(IPRICEv2).interfaceId)) {
-            revert BurnerLoans_InvalidModuleVersion();
-        }
-        _PRICE = IPRICEv2(priceAddress);
     }
 
     /// @inheritdoc Policy
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
         Keycode floan = toKeycode("FLOAN");
-        requests = new Permissions[](7);
+        requests = new Permissions[](6);
         requests[0] = Permissions({keycode: floan, funcSelector: IFLOANv1.createMarket.selector});
         requests[1] = Permissions({
             keycode: floan,
@@ -132,24 +96,28 @@ contract BurnerLoansConfig is
         });
         requests[2] = Permissions({
             keycode: floan,
-            funcSelector: IFLOANv1.setMarketFacility.selector
+            funcSelector: IFLOANv1.setMarketPrincipalCap.selector
         });
         requests[3] = Permissions({
             keycode: floan,
-            funcSelector: IFLOANv1.setMarketPrincipalCap.selector
+            funcSelector: IFLOANv1.setMarketRiskConfig.selector
         });
         requests[4] = Permissions({
             keycode: floan,
-            funcSelector: IFLOANv1.setMarketRiskConfig.selector
+            funcSelector: IFLOANv1.setMarketBaseFee.selector
         });
         requests[5] = Permissions({
             keycode: floan,
-            funcSelector: IFLOANv1.setMarketBaseFee.selector
-        });
-        requests[6] = Permissions({
-            keycode: floan,
             funcSelector: IFLOANv1.setMarketConfigData.selector
         });
+    }
+
+    /// @inheritdoc IBurnerLoansConfig
+    function setFacility(address facility_) external givenDisabled onlyAdminRole {
+        _requireFacilityActive(facility_);
+        _validateFacilityCompatibility(IBurnerLoansLifecycle(facility_));
+        _FACILITY = IBurnerLoansLifecycle(facility_);
+        emit FacilitySet(facility_);
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -160,13 +128,13 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    function depositManager() external view returns (address) {
-        return address(_DEPOSIT_MANAGER);
+    function facility() external view returns (address) {
+        return address(_FACILITY);
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    function facility() external view returns (address) {
-        return _FACILITY;
+    function inventory() external view returns (address) {
+        return IBurnerLoansView(address(_FACILITY)).inventory();
     }
 
     /// @inheritdoc IBurnerLoansConfig
@@ -190,18 +158,6 @@ contract BurnerLoansConfig is
     }
 
     // ========== ADMIN FUNCTIONS ========== //
-
-    /// @notice Rotates a market to another active Burner Loans facility in this Kernel.
-    /// @dev Reverts when the contract is disabled, the caller is not admin, or the facility is
-    ///      zero, incompatible, inactive, or registered with a different Kernel.
-    function setMarketFacility(
-        uint32 marketId_,
-        address facility_
-    ) external givenEnabled onlyAdminRole {
-        if (facility_ == address(0)) revert BurnerLoans_ZeroAddress();
-        _validateFacility(facility_, true);
-        _FLOAN.setMarketFacility(marketId_, facility_);
-    }
 
     /// @notice Adds a whitelisted collateral asset.
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
@@ -246,7 +202,7 @@ contract BurnerLoansConfig is
                 collateralToken: asset_,
                 debtToken: address(_OHM),
                 manager: address(this),
-                facility: _FACILITY,
+                facility: address(_FACILITY),
                 configId: BurnerLoansMarketConfig.CONFIG_ID,
                 principalCap: debtCapOhm_,
                 termLength: riskConfig_.termLength,
@@ -264,11 +220,11 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Sets an asset's active debt cap.
-    /// @dev Callable by admin or the configurator. Direct admin calls are effectively
+    /// @dev Callable by admin or the config operator. Direct admin calls are effectively
     ///      timelocked by governance in the expected deployment.
     /// @dev Reverts if:
     ///      - The contract is disabled.
-    ///      - The caller is neither admin nor the configurator.
+    ///      - The caller is neither admin nor the config operator.
     ///      - `asset_` is not configured.
     ///      - `debtCapOhm_` is below current active debt for `asset_`.
     /// @param asset_ Collateral asset to update.
@@ -276,39 +232,48 @@ contract BurnerLoansConfig is
     function setAssetDebtCap(
         address asset_,
         uint128 debtCapOhm_
-    ) external givenEnabled onlyConfiguratorOrAdmin {
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
         uint32 marketId_ = _validateAssetDebtCap(asset_, debtCapOhm_);
 
         _FLOAN.setMarketPrincipalCap(marketId_, debtCapOhm_);
         emit AssetDebtCapSet(asset_, debtCapOhm_);
     }
 
-    /// @notice Sets the external config timelock executor.
-    /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
-    ///      function is effectively timelocked by governance. The configurator can call
-    ///      risk-parameter setters without holding admin.
+    /// @inheritdoc IBurnerLoansConfig
+    function setGlobalDebtCap(uint128 debtCapOhm_) external givenEnabled onlyAdminRole {
+        _inventory().setGlobalDebtCap(debtCapOhm_);
+    }
+
+    /// @dev Returns the Burner Loans Inventory contract currently bound by Burner Loans.
+    function _inventory() internal view returns (IBurnerLoansInventory) {
+        address inventory_ = IBurnerLoansView(address(_FACILITY)).inventory();
+        if (inventory_ == address(0)) revert BurnerLoansConfig_InvalidInventory(inventory_);
+        return IBurnerLoansInventory(inventory_);
+    }
+
+    /// @notice Sets the optional external config operator.
+    /// @dev Admin-only. The config operator need not be a policy or implement a timelock. Setting
+    ///      zero revokes delegated access.
     /// @dev Reverts if:
     ///      - The contract is disabled.
     ///      - The caller does not have the admin role.
-    ///      - `configurator_` is zero.
-    /// @param configurator_ New configurator address.
-    function setConfigurator(address configurator_) external givenEnabled onlyAdminRole {
-        if (configurator_ == address(0)) revert BurnerLoans_ZeroAddress();
-
-        configurator = configurator_;
-        emit ConfiguratorSet(configurator_);
+    /// @param configOperator_ New config operator address.
+    function setConfigOperator(address configOperator_) external givenEnabled onlyAdminRole {
+        configOperator = configOperator_;
+        emit ConfigOperatorSet(configOperator_);
     }
 
     /// @notice Sets whether a configured asset accepts new originations.
-    /// @dev Callable directly by admin or by the configured ConfigTimelock. In the expected
-    ///      deployment, direct admin calls are already timelocked by OCG governance, while
-    ///      burner_loans_admin callers must queue the transition through the ConfigTimelock.
+    /// @dev Callable directly by admin or by the configured config operator. In the expected
+    ///      deployment, direct admin calls are already timelocked by OCG governance, while the
+    ///      config operator is ConfigTimelock, through which burner_loans_admin callers queue the
+    ///      transition.
     ///      Enabling revalidates PRICE and DepositManager dependencies. Disabling does not block
     ///      repayment, withdrawal, seizure, harvest, or safe cleanup while Burner Loans remains
     ///      globally enabled. Setting the current value performs no writes and emits no events.
     /// @dev Reverts if:
     ///      - The contract is disabled.
-    ///      - The caller is neither admin nor the configured ConfigTimelock.
+    ///      - The caller is neither admin nor the configured config operator.
     ///      - `asset_` is not configured.
     ///      - When enabling, PRICE does not approve the asset or returns a zero price.
     ///      - When enabling, DepositManager does not configure and enable the asset period.
@@ -317,21 +282,21 @@ contract BurnerLoansConfig is
     function setAssetOriginationsEnabled(
         address asset_,
         bool enabled_
-    ) external givenEnabled onlyConfiguratorOrAdmin {
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
         (uint32 marketId_, AssetConfig memory currentConfig) = _requireAssetConfigured(asset_);
         if (currentConfig.originationsEnabled == enabled_) return;
-        if (enabled_) _validateAssetDependencies(asset_, true);
+        if (enabled_) _validateAssetDependencies(asset_);
 
         _FLOAN.setMarketOriginationsEnabled(marketId_, enabled_);
         emit AssetOriginationsSet(asset_, enabled_);
     }
 
     /// @notice Sets the complete asset fee curve.
-    /// @dev Callable by admin or the configurator. The Burner Loans Config Timelock
+    /// @dev Callable by admin or the config operator. The Burner Loans Config Timelock
     ///      may expose partial-update helpers, but this setter receives the full resulting curve.
     /// @dev Reverts if:
     ///      - The contract is disabled.
-    ///      - The caller is neither admin nor the configurator.
+    ///      - The caller is neither admin nor the config operator.
     ///      - `asset_` is not configured.
     ///      - Any fee component exceeds 100%.
     ///      - `kinkBps` is at or above 100%.
@@ -342,16 +307,16 @@ contract BurnerLoansConfig is
     function setAssetFeeConfig(
         address asset_,
         AssetFeeConfig calldata config_
-    ) external givenEnabled onlyConfiguratorOrAdmin {
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
         _setAssetFeeConfig(asset_, config_);
     }
 
     /// @notice Sets asset risk and term fields.
-    /// @dev Callable by admin or the configurator. Replaces all risk and term fields
+    /// @dev Callable by admin or the config operator. Replaces all risk and term fields
     ///      while preserving admin-only fields such as enabled status, collateral decimals, and debt cap.
     /// @dev Reverts if:
     ///      - The contract is disabled.
-    ///      - The caller is neither admin nor the configurator.
+    ///      - The caller is neither admin nor the config operator.
     ///      - `asset_` is not configured.
     ///      - Collateral factor is zero or above 100%.
     ///      - Minimum collateral ratio is outside protocol bounds.
@@ -365,7 +330,7 @@ contract BurnerLoansConfig is
     function setAssetRiskConfig(
         address asset_,
         AssetRiskConfigInput calldata config_
-    ) external givenEnabled onlyConfiguratorOrAdmin {
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
         _setAssetRiskConfig(asset_, config_);
     }
 
@@ -388,7 +353,7 @@ contract BurnerLoansConfig is
 
     /// @notice Validates an asset active debt cap against live Burner Loans state.
     /// @dev Reverts if `asset_` is not configured, `debtCapOhm_` is below current active
-    ///      debt for `asset_`, or `debtCapOhm_` is above the global debt cap.
+    ///      debt for `asset_`.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
     function validateAssetDebtCap(address asset_, uint128 debtCapOhm_) external view {
@@ -397,11 +362,11 @@ contract BurnerLoansConfig is
 
     // ========== CONFIGURATION HELPERS ========== //
 
-    /// @notice Restricts a function to the configured configurator or admin.
-    /// @dev Reverts with `BurnerLoans_UnauthorizedConfigurator` when the caller is neither
-    ///      `configurator` nor an admin.
-    modifier onlyConfiguratorOrAdmin() {
-        _onlyConfiguratorOrAdmin();
+    /// @notice Restricts a function to the configured config operator or admin.
+    /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` when the caller is neither
+    ///      `configOperator` nor an admin.
+    modifier onlyConfigOperatorOrAdmin() {
+        _onlyConfigOperatorOrAdmin();
         _;
     }
 
@@ -411,29 +376,72 @@ contract BurnerLoansConfig is
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
-    /// @notice Reverts unless the caller is the configured configurator or admin.
-    /// @dev Reverts with `BurnerLoans_UnauthorizedConfigurator` and the caller address when
-    ///      the caller is neither `configurator` nor an admin.
-    function _onlyConfiguratorOrAdmin() internal view {
-        if (msg.sender != configurator && !_isAdmin(msg.sender)) {
-            revert BurnerLoans_UnauthorizedConfigurator(msg.sender);
+    /// @notice Reverts unless the caller is the configured config operator or admin.
+    /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` and the caller address
+    ///      when the caller is neither `configOperator` nor an admin.
+    function _onlyConfigOperatorOrAdmin() internal view {
+        if (msg.sender != configOperator && !_isAdmin(msg.sender)) {
+            revert BurnerLoansConfig_UnauthorizedConfigOperator(msg.sender);
         }
     }
 
-    /// @notice Validates a Burner Loans facility policy at a linking boundary.
-    /// @dev The constructor permits a compatible same-Kernel facility that is not active yet.
-    ///      Runtime rotation additionally requires active-policy membership. Reverts with
-    ///      `BurnerLoansConfig_InvalidFacility` when any required condition is not satisfied.
+    /// @notice Validates the interface and token compatibility of a Burner Loans facility.
+    ///      Reverts with `BurnerLoansConfig_InvalidFacility` when validation fails.
     /// @param facility_ Facility policy to validate.
-    /// @param requireActive_ Whether the facility must currently be active in this Kernel.
-    function _validateFacility(address facility_, bool requireActive_) internal view {
+    function _validateFacilityCompatibility(IBurnerLoansLifecycle facility_) internal view {
+        bytes4[] memory interfaceIds = new bytes4[](2);
+        interfaceIds[0] = type(IBurnerLoansLifecycle).interfaceId;
+        interfaceIds[1] = type(IBurnerLoansView).interfaceId;
         if (
-            !ERC165Checker.supportsInterface(facility_, type(IBurnerLoansLifecycle).interfaceId) ||
-            address(Policy(facility_).kernel()) != address(kernel) ||
-            (requireActive_ && !kernel.isPolicyActive(Policy(facility_)))
+            !ERC165Checker.supportsAllInterfaces(address(facility_), interfaceIds) ||
+            IBurnerLoansView(address(facility_)).ohm() != address(_OHM)
         ) {
+            revert BurnerLoansConfig_InvalidFacility(address(facility_));
+        }
+    }
+
+    /// @dev Reverts unless `facility_` is active in and reports this Kernel.
+    function _requireFacilityActive(address facility_) internal view {
+        if (!kernel.isPolicyActive(Policy(facility_)) || !_reportsKernel(facility_)) {
             revert BurnerLoansConfig_InvalidFacility(facility_);
         }
+    }
+
+    /// @dev Returns whether `policy_` reports this policy's Kernel.
+    function _reportsKernel(address policy_) internal view returns (bool) {
+        try Policy(policy_).kernel() returns (Kernel reportedKernel) {
+            return address(reportedKernel) == address(kernel);
+        } catch {
+            return false;
+        }
+    }
+
+    /// @notice Validates the complete Burner Loans Config relationship before activation.
+    /// @dev Requires active Kernel membership and matching reverse links. Burner Loans Inventory
+    ///      may be globally disabled because Config does not depend on its operational state.
+    function _validateConfiguration() internal view {
+        IBurnerLoansLifecycle facility_ = _FACILITY;
+        address facilityAddress = address(facility_);
+        _requireFacilityActive(facilityAddress);
+        _validateFacilityCompatibility(facility_);
+        IBurnerLoansView facilityView = IBurnerLoansView(facilityAddress);
+        if (facilityView.configurator() != address(this)) {
+            revert BurnerLoansConfig_InvalidFacility(facilityAddress);
+        }
+
+        address inventory_ = facilityView.inventory();
+        if (
+            inventory_ == address(0) ||
+            !kernel.isPolicyActive(Policy(inventory_)) ||
+            !_reportsKernel(inventory_) ||
+            !ERC165Checker.supportsInterface(inventory_, type(IBurnerLoansInventory).interfaceId)
+        ) revert BurnerLoansConfig_InvalidInventory(inventory_);
+        IBurnerLoansInventory inventoryPolicy = IBurnerLoansInventory(inventory_);
+        if (
+            inventoryPolicy.ohm() != address(_OHM) ||
+            inventoryPolicy.facility() != facilityAddress ||
+            inventoryPolicy.configurator() != address(this)
+        ) revert BurnerLoansConfig_InvalidInventory(inventory_);
     }
 
     /// @notice Authorizes a global re-enable transition.
@@ -447,6 +455,17 @@ contract BurnerLoansConfig is
     /// @dev Reverts with `ROLESv1.ROLES_RequireRole(ADMIN_ROLE)` when the caller lacks the
     ///      admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    /// @dev Validates complete reverse links before enabling Burner Loans Config.
+    function _beforeEnable(bytes calldata) internal view override {
+        _validateConfiguration();
+    }
+
+    /// @dev Preserves the grace-period gate and revalidates links before re-enabling.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _validateConfiguration();
+    }
 
     /// @notice Resolves and decodes the unique Burner Loans market for a collateral asset.
     /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when no bound market exists, or
@@ -510,7 +529,6 @@ contract BurnerLoansConfig is
     ///      - `asset_` is zero.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - `debtCapOhm_` is below current active debt for `asset_`.
-    ///      - `debtCapOhm_` exceeds the global debt cap.
     ///      - `riskConfig_` violates risk, maturity, or keeper reward bounds.
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager has not configured and enabled the Burner Loans deposit period.
@@ -542,7 +560,7 @@ contract BurnerLoansConfig is
         });
 
         _validateRiskConfig(riskConfig_);
-        _validateAssetDependencies(asset_, true);
+        _validateAssetDependencies(asset_);
     }
 
     /// @notice Validates a risk-config input.
@@ -629,9 +647,7 @@ contract BurnerLoansConfig is
                 revert BurnerLoans_InvalidFeeConfig();
             }
         }
-        if (
-            _feeRateWad(_WAD, config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * (_WAD / _BPS)
-        ) {
+        if (_feeRateWad(config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * (_WAD / _BPS)) {
             revert BurnerLoans_InvalidFeeConfig();
         }
     }
@@ -647,7 +663,7 @@ contract BurnerLoansConfig is
     /// @notice Validates an asset active debt cap against live Burner Loans state.
     /// @dev Reverts with `BurnerLoans_AssetNotConfigured` if `asset_` is not configured.
     ///      Reverts with `BurnerLoans_InvalidCap` if `debtCapOhm_` is below current active
-    ///      debt for `asset_` or above the global debt cap.
+    ///      debt for `asset_`.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
     /// @return marketId_ Validated FLOAN market identifier for `asset_`.
@@ -664,7 +680,7 @@ contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to query.
     /// @return configured True when at least one matching FLOAN market exists.
     function _isAssetConfigured(address asset_) internal view returns (bool) {
-        return BurnerLoansMarketConfig.hasMarket(_FLOAN, _FACILITY, asset_, address(_OHM));
+        return BurnerLoansMarketConfig.hasMarket(_FLOAN, address(_FACILITY), asset_, address(_OHM));
     }
 
     /// @notice Resolves the unique FLOAN market for a collateral asset and OHM.
@@ -673,7 +689,7 @@ contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to resolve.
     /// @return marketId_ Unique matching FLOAN market identifier.
     function _marketId(address asset_) internal view returns (uint32 marketId_) {
-        return BurnerLoansMarketConfig.marketId(_FLOAN, _FACILITY, asset_, address(_OHM));
+        return BurnerLoansMarketConfig.marketId(_FLOAN, address(_FACILITY), asset_, address(_OHM));
     }
 
     /// @notice Decodes the Burner Loans asset configuration stored by a FLOAN market.
@@ -741,31 +757,12 @@ contract BurnerLoansConfig is
         }
     }
 
-    /// @notice Validates PRICE and DepositManager support for a collateral asset.
-    /// @dev Reverts with `BurnerLoans_InvalidPrice` if PRICE does not approve the asset or
-    ///      returns a zero price. Reverts with `BurnerLoans_InvalidDepositManager` if
-    ///      DepositManager has not configured the asset, the Burner Loans deposit period is not
-    ///      configured, or the period is disabled while `requirePeriodEnabled_` is true.
+    /// @notice Asks Burner Loans to validate its PRICE and custody dependencies for an asset.
+    /// @dev Keeping dependency validation on Burner Loans prevents this configuration policy from
+    ///      carrying a second, independently configured PRICE or Deposit Manager reference.
     /// @param asset_ Collateral asset to validate.
-    /// @param requirePeriodEnabled_ Whether the Burner Loans deposit period must be enabled.
-    function _validateAssetDependencies(address asset_, bool requirePeriodEnabled_) internal view {
-        if (!_PRICE.isAssetApproved(asset_)) revert BurnerLoans_InvalidPrice();
-        if (_PRICE.getPrice(asset_) == 0) revert BurnerLoans_InvalidPrice();
-
-        IDepositManager.AssetConfiguration memory assetConfiguration = _DEPOSIT_MANAGER
-            .getAssetConfiguration(IERC20(asset_));
-        if (!assetConfiguration.isConfigured) {
-            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
-        }
-
-        IDepositManager.AssetPeriodStatus memory assetPeriod = _DEPOSIT_MANAGER.isAssetPeriod(
-            IERC20(asset_),
-            BurnerLoansConstants.DEPOSIT_PERIOD,
-            _FACILITY
-        );
-        if (!assetPeriod.isConfigured || (requirePeriodEnabled_ && !assetPeriod.isEnabled)) {
-            revert BurnerLoans_InvalidDepositManager(address(_DEPOSIT_MANAGER));
-        }
+    function _validateAssetDependencies(address asset_) internal view {
+        IBurnerLoansView(address(_FACILITY)).validateAssetDependencies(asset_);
     }
 
     /// @notice Validates token-native decimals used for ERC20 balances.
@@ -784,12 +781,10 @@ contract BurnerLoansConfig is
 
     /// @notice Computes the full-utilization fee rate for validation.
     /// @dev The Burner Loans curve stores segment deltas, so the maximum rate is the base fee
-    ///      plus both slopes. The utilization argument is unused because validation only calls
-    ///      this function at full utilization.
+    ///      plus both slopes.
     /// @param feeConfig_ Fee curve to evaluate.
     /// @return feeRateWad WAD-scaled fee rate.
     function _feeRateWad(
-        uint256,
         AssetFeeConfig memory feeConfig_
     ) internal pure returns (uint256 feeRateWad) {
         return

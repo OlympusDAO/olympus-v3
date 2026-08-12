@@ -2,107 +2,104 @@
 
 ## Purpose
 
-`BurnerLoans` is a fixed-term, 0% interest OHM shorting facility. Borrowers deposit approved
-collateral, borrow newly minted OHM, and repay by burning OHM. If a position becomes seizable, its
-collateral is settled to `TRSRY`; the defaulted OHM remains circulating but is backed by the seized
-collateral.
+`BurnerLoans` is a fixed-term, 0% interest OHM shorting facility. A borrower deposits an approved
+collateral asset, draws OHM, and later repays OHM. The draw may use protocol-supplied OHM, newly
+minted OHM, or both. If a position matures or becomes unhealthy, its collateral is settled to
+`TRSRY` and its principal is recorded as defaulted.
 
-The product uses the generic [FLOAN module](./floan.md) as its ledger. Burner Loans adds custody,
-prices, fees, health rules, user authorization, global capacity, and seizure behavior.
+The generic [FLOAN module](./floan.md) owns markets, positions, and principal indexes. Burner Loans
+adds collateral custody, pricing, fees, health rules, funding inventory, and automated seizure.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-    USER["Borrower or operator"] -->|"deposit, borrow, repay, withdraw, extend"| BL["BurnerLoans"]
-    CONFIG["BurnerLoansConfig"] -->|"create and configure markets"| FLOAN["FLOAN"]
-    CONFIG -.->|"immutable facility identity"| BL
-    TIMELOCK["BurnerLoansConfigTimelock"] -->|"delayed risk changes"| CONFIG
-    BL -->|"read and service positions"| FLOAN
-    BL --> PRICE["PRICE + backing oracle"]
-    BL --> DM["DepositManager / ERC-4626 custody"]
-    BL --> MINTR["MINTR"]
-    BL --> TRSRY["TRSRY"]
+    USER["Borrower or operator"] -->|"collateral and debt actions"| BL["BurnerLoans"]
+    CONFIG["BurnerLoansConfig"] -->|"market configuration"| FLOAN["FLOAN"]
+    CONFIG -->|"global debt cap"| INV["BurnerLoansInventory"]
+    TIMELOCK["BurnerLoansConfigTimelock"] -->|"delayed delegated changes"| CONFIG
+    BL -->|"positions and principal"| FLOAN
+    BL -->|"draw, repay, default"| INV
+    INV -->|"mint, burn, approval"| MINTR["MINTR"]
+    INV -->|"surplus rescue"| TRSRY["TRSRY"]
+    BL --> PRICE["PRICE and backing oracle"]
+    BL --> DM["DepositManager / ERC-4626"]
     HEART["Heart"] --> SEIZER["BurnerLoansSeizer"]
-    SEIZER -->|"scan, seize, reconcile MINTR approval"| BL
+    SEIZER -->|"bounded scan and seize"| BL
 ```
 
-`BurnerLoansConfig` is immutably bound to a deployer-trusted `BurnerLoans` facility that reports the
-same Kernel; `BurnerLoans` does not store or call Config. Config and lifecycle operations resolve
-markets through FLOAN using `(bound facility, collateral asset, OHM)`.
-`BurnerLoansConfigTimelock` similarly verifies that Config reports the same Kernel but does not
-require Config to be active during deployment. FLOAN permits multiple matching markets; Burner
-Loans deliberately requires exactly one and fails closed if the lookup is missing or ambiguous.
-`BurnerLoansSeizer` verifies that its lifecycle target reports the same Kernel. The optional
-`BurnerLoansComposites` periphery verifies the target interfaces and rejects an OHM token that does
-not match the target's configured debt token.
+| Component                                             | Responsibility                                                                |
+| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `BurnerLoans`                                         | User lifecycle, previews, health, custody, fees, and seizure                  |
+| [`BurnerLoansInventory`](./burner_loans_inventory.md) | OHM custody, provider claim, global cap, principal total, and MINTR authority |
+| `BurnerLoansConfig`                                   | FLOAN market creation/configuration and global debt-cap administration        |
+| `BurnerLoansConfigTimelock`                           | Optional timelocked implementation of Config's config-operator role           |
+| `BurnerLoansSeizer`                                   | Gas-bounded, fail-open periodic seizure                                       |
+| `FLOAN`                                               | Generic fixed-term market, position, active-index, and aggregate state        |
+| `DepositManager`                                      | Collateral custody and optional ERC-4626 routing                              |
 
-| Contract                    | Responsibility                                                                        |
-| --------------------------- | ------------------------------------------------------------------------------------- |
-| `BurnerLoans`               | User lifecycle, previews, global cap, backing oracle, custody, mint/burn, and seizure |
-| `BurnerLoansConfig`         | Opinionated creation and configuration of Burner Loans FLOAN markets                  |
-| `BurnerLoansConfigTimelock` | Queues delayed asset-cap, risk, and fee changes                                       |
-| `BurnerLoansSeizer`         | Fail-open Heart task for bounded seizure scans and MINTR approval reconciliation      |
-| `FLOAN`                     | Generic market, position, index, and aggregate ledger                                 |
+Burner Loans requires exactly one FLOAN market for its facility, collateral token, and OHM pair.
+FLOAN itself permits more than one matching market. A missing or ambiguous Burner Loans lookup
+fails closed.
 
-Linked libraries split bytecode-heavy implementation from the deployable policies; they do not own
-state or introduce another authority layer.
+Burner Loans is deployed before Burner Loans Inventory. `BurnerLoansInventory` permanently binds
+that Burner Loans address as its facility, while Burner Loans stores a replaceable
+`BurnerLoansInventory` pointer. Burner Loans Config is deployed without a facility link. After all
+three policies are active, admin links Config to Burner Loans, Burner Loans Inventory to Config,
+and Burner Loans to both policies while each destination contract is disabled. Enablement
+revalidates the complete relationship before Burner Loans becomes operational.
 
 ## Position Lifecycle
 
-Burner Loans exposes one FLOAN position per borrower and collateral market, even though FLOAN can
-store several. Collateral and debt actions remain separate so a borrower can improve health by
-adding collateral or repaying without changing maturity.
+Burner Loans uses the first FLOAN position for a borrower and market. FLOAN remains generic and can
+store multiple positions. A completed Burner Loans debt episode reuses its position ID.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CollateralOnly: depositCollateral
+    [*] --> CollateralOnly: deposit collateral
     CollateralOnly --> Active: borrow starts a term
-    Active --> Active: borrow / repay partially / add collateral / withdraw / extend
-    Active --> CollateralOnly: repay in full
-    Active --> Empty: seize matured or unhealthy position
-    Empty --> CollateralOnly: depositCollateral reuses position ID
-    CollateralOnly --> [*]: withdraw in full
+    Active --> Active: borrow / partial repay / collateral change / extend
+    Active --> CollateralOnly: full repayment
+    Active --> Empty: seizure
+    Empty --> CollateralOnly: later deposit reuses position
+    CollateralOnly --> [*]: full withdrawal
 ```
 
-| Action              | Main effect                                  | Important rule                                                       |
-| ------------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| Deposit collateral  | Credits collateral through DepositManager    | Requires global and asset originations enabled                       |
-| Borrow              | Increases principal and mints OHM            | First borrow sets maturity; later borrows preserve it                |
-| Repay               | Burns OHM and reduces principal              | Does not require a fresh price; same-block repayment is blocked      |
-| Withdraw collateral | Reduces credit and returns custody assets    | Remaining debt must stay healthy                                     |
-| Extend              | Moves maturity by whole terms                | Charges the current fee and cannot rescue a health-seizable position |
-| Seize               | Defaults all debt and removes all collateral | Position must be matured or unhealthy; no partial seizure            |
-| Harvest yield       | Sends custody surplus to `TRSRY`             | Cannot consume borrower collateral liabilities                       |
+| Action              | Effect                                                    | Main condition                                                 |
+| ------------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
+| Deposit collateral  | Adds DepositManager credit to the position                | Burner Loans and asset originations are enabled                |
+| Borrow              | Adds principal and draws OHM from Burner Loans Inventory   | Position is healthy, within both caps, and not matured         |
+| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; no price read required                |
+| Withdraw collateral | Removes credit and returns custody assets                 | Remaining debt stays healthy                                   |
+| Extend              | Advances the prior maturity by whole terms                | Position stays healthy and maturity remains within its horizon |
+| Seize               | Defaults all principal and removes all collateral         | Position is matured or below the health boundary               |
+| Harvest yield       | Sends custody surplus to `TRSRY`                          | Custody remains solvent                                        |
 
-Owner/operator authorization applies to deposit, borrow, withdrawal, and extension. Repayment is
-permissionless because it can only reduce another account's debt. Fees are paid by the caller, not
-by `onBehalfOf`, and do not reduce credited collateral. Seizure is permissionless when the position
-is eligible, subject to the keeper-reward rules below.
-
-Full repayment and seizure end the current debt episode without deleting the FLOAN identity or its
-indexes. Episode fields are zeroed, and a later deposit/borrow reuses the same position ID. FLOAN's
-`PositionClosed` and `PositionDefaulted` events contain the pre-clear episode snapshot; defaulted
-principal also remains in the market's cumulative historical total.
+Full repayment and seizure clear the episode's financial fields and active indexes. The position
+ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
+market cumulative-default accounting preserves defaulted principal.
 
 ## Operating States
 
-Global disable is a policy pause. Disabling asset originations maps to FLOAN's origination flag and
-is a new-exposure freeze, leaving safe exits and settlement available while the policy remains enabled.
+Asset `originationsEnabled` is an exit-enabled pause. The Burner Loans global `enabled` flag is a
+strict pause.
 
-| Action              | Originations enabled | Originations disabled | Global disabled |
-| ------------------- | -------------------- | --------------------- | --------------- |
-| Deposit collateral  | Allowed              | Blocked               | Blocked         |
-| Borrow              | Allowed              | Blocked               | Blocked         |
-| Extend              | Allowed              | Blocked               | Blocked         |
-| Repay               | Allowed              | Allowed               | Blocked         |
-| Withdraw collateral | Allowed              | Allowed               | Blocked         |
-| Seize               | Allowed              | Allowed               | Blocked         |
-| Harvest yield       | Allowed              | Allowed               | Blocked         |
+| Burner Loans action | Asset originations enabled | Asset originations disabled | Burner Loans disabled |
+| ------------------- | -------------------------- | --------------------------- | --------------------- |
+| Deposit collateral  | Allowed                    | Blocked                     | Blocked               |
+| Borrow              | Allowed                    | Blocked                     | Blocked               |
+| Extend              | Allowed                    | Blocked                     | Blocked               |
+| Repay               | Allowed                    | Allowed                     | Blocked               |
+| Withdraw collateral | Allowed                    | Allowed                     | Blocked               |
+| Seize               | Allowed                    | Allowed                     | Blocked               |
+| Harvest yield       | Allowed                    | Allowed                     | Blocked               |
 
-Disabling originations therefore stops new risk without trapping borrowers or preventing settlement.
+Burner Loans Inventory has only its global enabled state; Burner Loans owns origination control at
+the asset level. See
+[Burner Loans Inventory operating states](./burner_loans_inventory.md#operating-states) for its
+complete action table and manual MINTR synchronization behavior.
 
-## Health And Pricing
+## Health, Pricing, And Fees
 
 Health is WAD-scaled; `1e18` is the seizure boundary.
 
@@ -114,83 +111,24 @@ riskAdjustedCollateralUsd = collateralValueUsd * collateralFactorBps / 10_000
 healthFactor = floor(riskAdjustedCollateralUsd * 1e18 / requiredCollateralUsd)
 ```
 
-The three risk controls apply independently. The collateral factor discounts the value of the
-collateral in the numerator. The minimum collateral ratio and backing multiplier produce separate
-requirements in the denominator; Burner Loans uses the larger requirement rather than multiplying
-the controls together.
+| State                      | Borrow or withdraw                | Seizure                       |
+| -------------------------- | --------------------------------- | ----------------------------- |
+| No debt                    | Debt-free health is max `uint256` | Not seizable                  |
+| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable           |
+| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable           |
+| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices  |
+| Maturity reached with debt | New risk is blocked               | Seizable without a price read |
 
-| Control                  | Applied to                   | Why it is needed                                                                     | More conservative setting |
-| ------------------------ | ---------------------------- | ------------------------------------------------------------------------------------ | ------------------------- |
-| Collateral factor        | Deposited collateral value   | Discounts collateral for depeg, liquidity, oracle, or liquidation risk               | Lower                     |
-| Minimum collateral ratio | OHM debt at its market price | Adds a buffer against OHM appreciation before a position becomes undercollateralized | Higher                    |
-| Backing multiplier       | Backing value per OHM        | Sets a minimum amount of collateral required for each borrowed OHM at low prices     | Higher                    |
+PRICE values use `PRICE.decimals()`. OHM and collateral amounts use their token scales. The
+backing oracle returns 18-decimal USD per OHM. Requirements and transferred fees round up; health
+and intermediate rate components round down.
 
-For example, consider a position with 1,000 OHM of debt, $24,000 of collateral, a 100% collateral
-factor, a 115% minimum collateral ratio, $10 of backing per OHM, and a 150% backing multiplier. At
-an OHM market price of $5:
-
-```text
-marketRequirementUsd = 1,000 * $5 * 115% = $5,750
-backingRequirementUsd = 1,000 * $10 * 150% = $15,000
-requiredCollateralUsd = max($5,750, $15,000) = $15,000
-healthFactor = $24,000 / $15,000 = 1.60
-```
-
-The backing requirement controls below an OHM price of approximately $13.04. Above that crossover,
-the market requirement controls, and the position reaches a health factor of one at approximately
-$20.87. A 90% collateral factor would instead count only $21,600 of collateral and move that market
-price boundary down to approximately $18.78.
-
-### Why The Backing Multiplier Matters For OHM
-
-The backing oracle supplies the base governance backing value per OHM. The multiplier determines
-how much collateral Burner Loans requires relative to that value. A 100% multiplier preserves the
-base backing requirement; a 150% multiplier requires $15 of collateral for every borrowed OHM when
-backing is $10, providing an additional buffer against collateral deterioration and price movement.
-
-Without any backing-based requirement, falling OHM prices would mechanically increase borrowing
-and collateral-withdrawal capacity. In the example above, the market-price rule alone would allow
-approximately 4,174 OHM of debt against $24,000 of collateral at a $5 OHM price, or only $5.75 of
-collateral per borrowed OHM. The 150% backing requirement instead limits debt to 1,600 OHM, or $15
-of collateral per borrowed OHM.
-
-This protects OHM from a procyclical feedback loop: a weaker OHM price cannot be used to mint and
-potentially sell progressively more OHM, or to remove collateral supporting existing debt. If an
-undercollateralized borrower later defaults, the protocol could otherwise recover less collateral
-than the governance backing target for the borrowed OHM that remains in circulation. Once the
-backing floor is binding, capacity no longer expands as the OHM market price falls.
-
-If the configurable multiplier did not exist but the backing floor remained fixed at 100%, this
-feedback protection would remain, but governance could not require a safety margin above the base
-backing value. Removing the backing requirement entirely would remove the protection described
-above.
-
-| Result                    | Meaning                            | Borrow/withdraw                       | Seizure                    |
-| ------------------------- | ---------------------------------- | ------------------------------------- | -------------------------- |
-| No debt                   | `healthFactor = type(uint256).max` | Collateral may be withdrawn           | Not seizable               |
-| `healthFactor > 1e18`     | Healthy                            | Allowed if all other checks pass      | Not health-seizable        |
-| `healthFactor == 1e18`    | Exact boundary                     | Allowed                               | Not health-seizable        |
-| `healthFactor < 1e18`     | Unhealthy                          | New debt and risky withdrawal blocked | Seizable with fresh prices |
-| Maturity passed with debt | Matured                            | New debt blocked                      | Seizable                   |
-
-PRICE values use `PRICE.decimals()`. OHM and collateral amounts use their native token scales;
-health uses 18 decimals. The backing oracle returns 18-decimal USD backing per OHM. Conversion to
-PRICE scale rounds up when reducing precision so the backing floor cannot be weakened.
-
-Borrow, withdrawal with debt, extension, and seizure require current supported prices. Repayment
-does not depend on price freshness. Requirements and transferred fees round up; health and
-intermediate rate components round down.
-
-## Fees
-
-Borrow and extension are the only fee events. Fees are denominated in the collateral asset,
-transferred from the caller directly to `TRSRY`, and never counted as deposited collateral or
-DepositManager yield.
-
-The utilization curve uses pre-action asset utilization; the global cap is not a fee input.
+Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
+credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee
+input.
 
 ```text
-utilization = ceil(assetPrincipalDue * 1e18 / assetPrincipalCap)
+utilization = ceil(marketPrincipalDue * 1e18 / marketPrincipalCap)
 
 before kink:
 feeRate = baseFee + floor(utilization * preKinkSlope / 10_000)
@@ -201,170 +139,175 @@ feeRate = baseFee
         + floor((utilization - kink) * postKinkSlope / 10_000)
 ```
 
-| Circumstance                    | Fee basis                                              | Caller protection |
-| ------------------------------- | ------------------------------------------------------ | ----------------- |
-| Borrow                          | Incremental required collateral for newly borrowed OHM | `fee <= maxFee`   |
-| Extend                          | Current required collateral, once per added term       | `fee <= maxFee`   |
-| Repay, withdraw, seize, harvest | No product fee                                         | Not applicable    |
+The final fee rounds up so a non-zero rate cannot disappear through token-decimal truncation.
+`maxFee` protects execution against a fee above the caller's accepted amount.
 
-The final collateral fee rounds up, so a non-zero fee cannot disappear through token-decimal
-truncation. Preview and execution use the same formula when state is unchanged.
+## Burner Loans Inventory Accounting
 
-## Capacity And MINTR Approval
+FLOAN owns each market cap. Burner Loans Inventory owns the facility-wide cap, OHM funding, provider
+claims, and MINTR authority. Burner Loans changes the FLOAN and Burner Loans Inventory principal
+ledgers in one transaction. See [Burner Loans Inventory](./burner_loans_inventory.md) for the
+formulas, state transitions, invariants, and failure behavior.
 
-Two independent caps constrain live OHM principal:
-
-```text
-marketPrincipalDue + newPrincipal <= assetDebtCap
-facilityPrincipalDue + newPrincipal <= globalDebtCap
-```
-
-| Event             | Active principal | Available cap | MINTR approval                                |
-| ----------------- | ---------------- | ------------- | --------------------------------------------- |
-| Borrow            | Increases        | Decreases     | Consumed by minted amount                     |
-| Repay             | Decreases        | Increases     | Restored by repaid amount                     |
-| Seize/default     | Decreases        | Increases     | Reconciled by the next seizer Heart execution |
-| Global cap change | Unchanged        | Recalculated  | Reconciled to `cap - active principal`        |
-
-`BurnerLoans` stores the global cap; FLOAN stores each market cap and reports live facility OHM
-principal. Mint approval is finite rather than unlimited. Reconciliation always targets:
-
-```text
-MINTR approval = max(globalDebtCap - facilityPrincipalDue, 0)
-```
-
-The `burner_loans_admin` role may call `syncMintApproval` manually. `BurnerLoansSeizer` also calls it
-after every Heart execution, including executions with no managed assets, no seizable borrowers, or
-failed scans/seizures. The call is separate from seizure settlement and caught on failure, so MINTR
-unavailability cannot roll back a completed default or block later Heart tasks. Sync access is not
-permissionless: only `burner_loans_admin` and `burner_loans_seizer` may restore approval, preventing
-an arbitrary caller from undoing an intentional emergency approval reduction. Governance can stop
-automatic restoration by revoking the seizer policy's `burner_loans_seizer` role.
-
-## Custody And Settlement
-
-DepositManager holds the custody accounting for Burner Loans and may route collateral into an
-ERC-4626 vault. FLOAN records only credited collateral.
+## Funding And Settlement Flows
 
 ```mermaid
 sequenceDiagram
     actor User
     participant BL as BurnerLoans
-    participant FLOAN
-    participant DM as DepositManager
-    participant Vault as ERC-4626 vault
+    participant F as FLOAN
+    participant O as OHM
+    participant I as BurnerLoansInventory
+    participant M as MINTR
 
-    User->>BL: depositCollateral(asset, amount, owner)
-    BL->>DM: deposit as facility operator
-    DM->>Vault: deposit asset
-    DM-->>BL: actual withdrawable credit
-    BL->>FLOAN: create position if needed; add collateral credit
+    User->>BL: borrow(amount)
+    BL->>F: increaseDebt(amount)
+    BL->>I: draw(User, amount)
+    I->>I: consume supplied idle first
+    opt shortfall remains
+        I->>M: mintOhm(BurnerLoansInventory, shortfall)
+    end
+    I->>User: transfer full amount once
 ```
 
-| Quantity           | Definition                                                         |
-| ------------------ | ------------------------------------------------------------------ |
-| Borrower liability | Sum of FLOAN credited collateral for the market                    |
-| Custody assets     | Assets currently returnable by DepositManager                      |
-| Claimable yield    | Custody assets above liabilities, subject to DepositManager limits |
-| Solvent            | Custody assets cover borrower liabilities                          |
+```mermaid
+sequenceDiagram
+    actor Payer
+    participant BL as BurnerLoans
+    participant F as FLOAN
+    participant I as BurnerLoansInventory
+    participant M as MINTR
 
-Vault yield does not increase borrower health. `harvestYield` may claim only surplus and routes it
-to `TRSRY`. If an external transfer, vault operation, fee collection, mint, burn, or seizure
-settlement fails, the transaction reverts with FLOAN and token state unchanged.
+    Payer->>BL: repay(amount)
+    BL->>F: decreaseDebt(amount)
+    BL->>O: transferFrom(Payer, BurnerLoansInventory, amount)
+    BL->>I: settleRepayment(amount)
+    I->>I: replenish provider claim deficit
+    opt excess remains
+        I->>M: burnOhm(excess)
+    end
+```
 
-### Token Compatibility And Transfer Safety
+FLOAN, Burner Loans Inventory, collateral fees, and token transfers normally change atomically.
+Repayment is deliberately resilient to a MINTR burn failure: principal settlement remains valid,
+the unburned OHM becomes ordinary surplus, and `OhmBurnFailed` reports the failure. A failed
+approval restoration is also conservative: the principal transition remains valid, the shortfall
+is reported by event, and an admin may reconcile it later.
 
-Burner Loans supports collateral with exact ERC-20 transfer semantics. Fee-on-transfer, rebasing,
-or otherwise balance-changing collateral is unsupported. ERC-20 has no standard capability flag
-for these behaviors, and a transfer probe in `addAsset` could be bypassed by amount-dependent,
-address-dependent, or upgradeable token logic. Asset admission is therefore a governance-reviewed
-compatibility decision rather than an automated claim made by `BurnerLoansConfig`.
+## Custody And Token Assumptions
 
-| Stage                            | Enforcement or assumption                                                                   |
-| -------------------------------- | ------------------------------------------------------------------------------------------- |
-| Governance asset review          | Tests both `transfer` directions, `transferFrom`, and any configured ERC-4626 custody path  |
-| `BurnerLoansConfig.addAsset`     | Requires PRICE and DepositManager configuration; performs no token-transfer probe           |
-| Collateral custody entry         | Safe transfer failures revert; DepositManager requires its exact requested balance increase |
-| Fees, withdrawal, yield, seizure | Safe transfer failures revert; exact outgoing behavior relies on the admission invariant    |
-| Token callback                   | Every token-touching Burner Loans lifecycle action uses the shared reentrancy guard         |
+DepositManager may route collateral into an ERC-4626 vault. FLOAN records withdrawable collateral
+credit, not vault shares. Vault yield does not increase borrower health; `harvestYield` sends only
+custody surplus to `TRSRY`.
 
-Safe-transfer helpers accept standard boolean returns and successful no-return tokens. A reverted
-call, malformed return, or explicit `false` return reverts the complete lifecycle transaction, so
-callers do not separately monitor the ERC-20 return value. The exact-receipt check remains active
-on every custody deposit as defense in depth; outgoing balance-delta checks are not repeated on hot
-paths.
+| Stage                       | Enforcement or assumption                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------- |
+| Asset admission             | Governance verifies exact-transfer collateral and any configured vault path         |
+| Collateral deposit          | Safe transfer plus DepositManager exact-receipt accounting                          |
+| Provider supply / draw      | Trusted OHM; SafeTransferLib without repeated balance-delta reads                   |
+| Repayment settlement        | Safe transfer plus exact Burner Loans Inventory balance increase                    |
+| Fees and outgoing transfers | Safe transfer; exact behavior follows the admitted-token assumption                 |
+| Token callbacks             | Token-touching lifecycle and Burner Loans Inventory functions use transient guards  |
 
-## Seizure And Automation
+Fee-on-transfer, rebasing, and otherwise balance-changing collateral is unsupported. ERC-20 has no
+reliable capability flag, and an admission-time transfer probe can be bypassed by amount-, address-,
+or upgrade-dependent behavior. Asset admission is therefore a governance-reviewed invariant.
 
-A debt-bearing position is seizable when it is matured or has `healthFactor < 1e18`. Seizure closes
-the entire episode, zeroes its financial fields, removes it from active indexes, transfers the
-capped keeper reward when applicable, and routes the remainder to `TRSRY`. The retained position ID
-can be used for a later episode; historical details come from the seizure/default events.
+## Seizure Automation
 
-| Caller                       | Required role                                | Burner Loans keeper reward |
-| ---------------------------- | -------------------------------------------- | -------------------------- |
-| Ordinary keeper              | None                                         | Capped configured reward   |
-| Heart caller acting directly | `heart`                                      | None                       |
-| `BurnerLoansSeizer`          | `burner_loans_seizer` on the seizer contract | None                       |
+Seizure clears the full debt episode, routes the capped ordinary-keeper reward, sends remaining
+collateral to `TRSRY`, and records the default in FLOAN and Burner Loans Inventory atomically.
 
-The Heart account needs `heart` to call `BurnerLoansSeizer.execute`. The seizer contract separately
-needs `burner_loans_seizer` when it calls Burner Loans. Either protocol role suppresses the product
-keeper reward when its holder calls the seizure surface directly.
+| Caller                       | Required role                                | Product reward |
+| ---------------------------- | -------------------------------------------- | -------------- |
+| Ordinary direct keeper       | None                                         | Configured cap |
+| Heart caller acting directly | `heart`                                      | None           |
+| `BurnerLoansSeizer`          | `burner_loans_seizer` on the seizer contract | None           |
 
-The seizer scans bounded borrower batches and advances across configured assets, then independently
-reconciles MINTR approval. Heart forwards the complete task body through a configurable gas limit.
-Ordinary scan, seizure, or reconciliation failures emit specific events; exhaustion of the task
-budget rolls back that execution and emits `ExecutionFailed`. In either case `execute` returns to
-Heart so subsequent periodic tasks can run, and later executions can retry the same borrower range
-or approval repair. Heart callers must still supply enough transaction gas for the configured task
-budget and the tasks that follow it.
+Heart needs `heart` to call `BurnerLoansSeizer.execute`. The seizer contract separately needs
+`burner_loans_seizer` when it calls Burner Loans. Either protocol role suppresses the product
+keeper reward on a direct seizure call.
 
-## Configuration And Governance
+The seizer bounds both its scan and its complete self-execution gas. A scan or seizure failure does
+not advance its cursor and does not fail Heart. The seizer does not reconcile MINTR approval. If
+automatic restoration does not occur, `burner_loans_admin` must call `syncMintApproval`.
 
-| Change                                | Normal authority                         | Delay model                                                     |
-| ------------------------------------- | ---------------------------------------- | --------------------------------------------------------------- |
-| Add asset or rotate facility          | `admin`                                  | OCG governance timelock                                         |
-| Set global cap or backing oracle      | `admin` on `BurnerLoans`                 | OCG governance timelock                                         |
-| Asset cap, risk, or fee configuration | `admin` or configured timelock           | Delayed through `BurnerLoansConfigTimelock` for delegated admin |
-| Asset origination state               | `admin` directly                         | OCG governance timelock                                         |
-| Asset origination state               | `burner_loans_admin` via config timelock | Queued Burner Loans delay                                       |
-| Global disable                        | `admin` or `burner_loans_admin`          | Immediate risk reduction                                        |
-| Re-enable                             | Governed grace-period rules              | Prevents indefinite emergency authority                         |
-| Reconcile mint approval               | `burner_loans_admin` or seizer policy    | Manual repair or every seizer Heart execution                   |
+## Configuration And Authority
 
-`BurnerLoansConfig` creates exactly one FLOAN market for each collateral/OHM pair under its bound
-facility and stores Burner Loans-specific values in `configData` under
-`bytes16("Burner Loans v1")`. Standard fixed-term fields remain typed in FLOAN. Constructor linkage
-checks DepositManager interface compatibility and reported-Kernel equality. The backing oracle is
-required at deployment and both constructor installation and later rotation require ERC-165 support
-for `IOlympusBackingOracle`. The deployer is responsible for supplying the intended immutable
-facility because those responses are not identity proofs.
+| Change                                               | Authority                         | Path                                |
+| ---------------------------------------------------- | --------------------------------- | ----------------------------------- |
+| Add a collateral market                              | `admin`                           | Direct Config call                  |
+| Set global cap                                       | `admin`                           | Config calls Burner Loans Inventory |
+| Set market cap, risk, fee, or asset originations     | `admin` or config operator        | Config / optional ConfigTimelock    |
+| Set backing oracle                                   | `admin`                           | Direct Burner Loans call            |
+| Set Burner Loans Inventory while Burner Loans paused | `admin`                           | Direct Burner Loans call            |
+| Set policy links while destination policy is paused  | `admin`                           | Direct destination-policy setter    |
+| Sync MINTR approval                                  | `burner_loans_admin`              | Direct Burner Loans Inventory call  |
+| Supply / withdraw protocol OHM                       | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
+
+Config creates one market per collateral/OHM pair under its currently bound Burner Loans facility.
+The facility link may change only while Config is disabled. Burner Loans-specific fields use
+`bytes16("Burner Loans v1")`; standard fixed-term fields remain typed in FLOAN. Config resolves
+Burner Loans Inventory through Burner Loans, so it follows an approved Burner Loans Inventory
+pointer change without maintaining a second link. Burner Loans Inventory's facility is immutable
+in v1.
+
+## Deployment And Activation
+
+The order below establishes every link through an active-policy check without introducing a
+circular enablement dependency.
+
+1. Install the required FLOAN, MINTR, PRICE, ROLES, and TRSRY modules.
+2. Deploy `BurnerLoans(...)`. Its Burner Loans Inventory and Config pointers are initially zero, so
+   enabling it will revert.
+3. Deploy `BurnerLoansInventory(kernel, ohm, facility = BurnerLoans)`. The immutable facility may
+   be inactive at construction, but must already be deployed and belong to the same Kernel.
+4. Deploy `BurnerLoansConfig(kernel, ohm)` without a facility link. If delegated configuration is
+   required, deploy ConfigTimelock with that Config address.
+5. Activate DepositManager, Burner Loans, Burner Loans Inventory, Config, any deployed
+   ConfigTimelock, and the other required policies. Link setters require their policy arguments to
+   be active in the same Kernel.
+6. Grant `admin`, `burner_loans_admin`, `burner_loans_inventory_provider`,
+   `burner_loans_seizer`, `heart`, and DepositManager operator permissions to the intended
+   addresses and policies.
+7. While the destination policies remain globally disabled, OCG admin calls, in order:
+   `Config.setFacility(BurnerLoans)`, `BurnerLoansInventory.setConfigurator(Config)`,
+   `BurnerLoans.setInventory(BurnerLoansInventory)`, and
+   `BurnerLoans.setConfigurator(Config)`. Each setter validates the relationship it can observe;
+   enablement later validates the complete reverse links.
+8. Enable DepositManager and Config. Config can enable while Burner Loans and Burner Loans
+   Inventory are globally disabled, but both linked policies must remain active and all reverse
+   links must agree.
+9. Optionally call `Config.setConfigOperator(ConfigTimelock)` and enable ConfigTimelock. The config
+   operator does not have to be a policy or implement a timelock, and may remain zero to disable
+   delegated execution. When ConfigTimelock is used as the operator, delayed execution additionally
+   requires Config to remain enabled and ConfigTimelock to remain the configured operator.
+10. Through Config, set the Burner Loans Inventory global cap. Its cap setter remains available
+    while Burner Loans Inventory is globally disabled so deployment can reconcile MINTR approval
+    before user operations begin.
+11. Add each collateral asset and configure its FLOAN market, custody path, PRICE support, cap,
+    risk parameters, fee curve, and asset-level originations state.
+12. Enable Burner Loans Inventory, then enable Burner Loans last. Burner Loans enablement requires
+    active Config and DepositManager policies plus an active, enabled, compatible Burner Loans
+    Inventory. Then configure and enable Seizer and other periphery contracts, including seizer
+    assets and its execution gas limit.
+
+V1 launches with zero Burner Loans Inventory active principal, supplied idle, and provider claim.
+Importing a non-zero live Burner Loans Inventory ledger requires a future migration design. See
+[replacing Burner Loans Inventory](./burner_loans_inventory.md#replacement) for the v1 replacement
+constraints.
 
 ## Preview Semantics
 
-| Preview  | Includes                                                   | Does not guarantee                                                        |
-| -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Deposit  | Expected custody credit and resulting collateral           | Post-transaction vault state                                              |
-| Borrow   | Fee, resulting debt, maturity, health, local executability | Caller authorization, recipient, balance/approval, or `maxFee` acceptance |
-| Repay    | Applied repayment, remaining debt, debt-free health        | Payer balance or approval                                                 |
-| Withdraw | Return token/amount, remaining collateral, health          | Successful future vault redemption                                        |
-| Extend   | Fee, maturity, health, local executability                 | Caller balance/approval or `maxFee` acceptance                            |
-| Seize    | Batch debt, collateral, reward, treasury amount            | Unchanged prices or custody at execution                                  |
-| Harvest  | Theoretical claimable surplus                              | Exact amount after ERC-4626 rounding                                      |
+| Preview  | Includes                                                  | Does not guarantee                                                      |
+| -------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Deposit  | Expected custody credit and resulting collateral          | Future vault state                                                      |
+| Borrow   | Fee, debt, maturity, health, and local capacity           | Caller authorization, token approval, recipient, or `maxFee` acceptance |
+| Repay    | Applied repayment, remaining debt, and debt-free sentinel | Payer balance or approval                                               |
+| Withdraw | Return token/amount, remaining collateral, and health     | Successful future vault redemption                                      |
+| Extend   | Fee, resulting maturity, and health                       | Caller token approval or `maxFee` acceptance                            |
+| Seize    | Debt, collateral, reward, and treasury amount             | Unchanged prices or custody at execution                                |
+| Harvest  | Current theoretical custody surplus                       | Exact output after vault rounding                                       |
 
-Previews enforce deterministic local eligibility. Their `executable` result is not a promise that
-caller-specific authorization, token approval, balances, or external protocol state will remain
-valid. Execution return values and events are authoritative.
-
-## Core Invariants
-
-| Invariant                                               | Consequence                                                |
-| ------------------------------------------------------- | ---------------------------------------------------------- |
-| Minted OHM equals principal added                       | No unrecorded supply is created                            |
-| Repaid OHM is burned                                    | Repayment cannot recycle borrowed OHM through the facility |
-| Market and global caps bound live principal             | No borrow can exceed remaining capacity                    |
-| Active debt is never undercollateralized at origination | Successful borrow leaves health at or above `1e18`         |
-| Debt-bearing withdrawal preserves health                | Collateral cannot leave an unhealthy active position       |
-| Seizure closes the full position                        | No residual debt or borrower collateral claim remains      |
-| Custody assets cover credited collateral                | Yield harvesting cannot consume borrower liabilities       |
-| Backing requirement is never below the configured floor | Low OHM market price cannot weaken required backing        |
+Previews enforce deterministic local eligibility. Execution return values and events remain
+authoritative.
