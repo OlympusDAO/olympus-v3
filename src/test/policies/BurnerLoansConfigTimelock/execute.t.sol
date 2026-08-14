@@ -5,11 +5,12 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
-import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 
-contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
+contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfigGuardsTest {
     // executeQueuedAction
     // given a supported target setter reverts without error data
     //  when the queued action is executed
@@ -142,64 +143,6 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
     }
 
     // executeQueuedAction
-    // given a batch of queued actions
-    //  when called at any timestamp before the timelock delay has elapsed
-    //   then it reverts and does not apply any setter
-    function test_givenBatchBeforeDelay_reverts(uint48 elapsed_) public {
-        uint64 actionId = _queueBatch();
-        ITimelockBatchQueue.QueuedAction memory action = configTimelockHarness.getQueuedAction(
-            actionId
-        );
-        uint256 queuedAt = action.queuedAt;
-        uint48 timelockDelay = configTimelockHarness.timelockDelay();
-        elapsed_ = uint48(bound(elapsed_, 0, timelockDelay - 1));
-        vm.warp(queuedAt + elapsed_);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionNotReady.selector,
-                actionId,
-                action.executableAt
-            )
-        );
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.collateralFactorBps, 10_000, "collateral factor unchanged");
-        assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio unchanged");
-    }
-
-    // executeQueuedAction
-    // given a batch of queued actions
-    //  when called at any timestamp after the execution window expires
-    //   then it reverts and does not apply any setter
-    function test_givenBatchExpired_reverts(uint48 elapsed_) public {
-        uint64 actionId = _queueBatch();
-        ITimelockBatchQueue.QueuedAction memory action = configTimelockHarness.getQueuedAction(
-            actionId
-        );
-        uint256 queuedAt = action.queuedAt;
-        uint48 firstExpiredElapsed = configTimelockHarness.timelockDelay() +
-            configTimelockHarness.EXECUTION_WINDOW() +
-            1;
-        elapsed_ = uint48(bound(elapsed_, firstExpiredElapsed, type(uint48).max));
-        vm.warp(queuedAt + elapsed_);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionExpired.selector,
-                actionId,
-                action.expiresAt
-            )
-        );
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.collateralFactorBps, 10_000, "collateral factor unchanged");
-        assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio unchanged");
-    }
-
-    // executeQueuedAction
     // given a valid queued action
     //  when called at any timestamp within the execution window
     //   then any caller can execute and the BurnerLoans setter is applied
@@ -233,505 +176,6 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
             9_500,
             "collateral factor"
         );
-    }
-
-    // executeQueuedAction
-    // given two queued actions update different fields on the same asset risk config
-    //  when both actions execute
-    //   then the second action preserves the first action's selected-field update
-    function test_givenDifferentRiskFieldsQueuedSeparately_executesIncrementally() public {
-        uint64 collateralFactorActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 minCollateralRatioActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 12_000,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: true,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The second action was queued against the projected config from the first action.
-        // Executing in order should apply each selected field without overwriting the other.
-        _expectSingleActionExecuted(
-            collateralFactorActionId,
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            address(this)
-        );
-        configTimelock.executeQueuedAction(collateralFactorActionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.collateralFactorBps, 9_500, "collateral factor after first action");
-        assertEq(config.minCollateralRatioBps, 11_500, "min collateral ratio after first action");
-
-        // The later action should preserve the collateral factor that was already applied.
-        _expectSingleActionExecuted(
-            minCollateralRatioActionId,
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            address(this)
-        );
-        configTimelock.executeQueuedAction(minCollateralRatioActionId);
-
-        config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.collateralFactorBps, 9_500, "collateral factor preserved");
-        assertEq(config.minCollateralRatioBps, 12_000, "min collateral ratio applied");
-    }
-
-    // executeQueuedAction
-    // given two queued actions update the same asset risk config field
-    //  when both actions execute in order
-    //   then the later executed action determines the final selected-field value
-    function test_givenSameRiskFieldQueuedSeparately_laterExecutionWins() public {
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection
-            memory selection = IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            });
-        uint64 firstActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            selection
-        );
-        uint64 secondActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_000,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            selection
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // Both actions target the same field, so the first execution is valid but temporary.
-        _expectSingleActionExecuted(
-            firstActionId,
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            address(this)
-        );
-        configTimelock.executeQueuedAction(firstActionId);
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_500,
-            "first value applied"
-        );
-
-        // The second execution is also valid because its expected pre-state includes the first
-        // value, and it intentionally becomes the final value.
-        _expectSingleActionExecuted(
-            secondActionId,
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            address(this)
-        );
-        configTimelock.executeQueuedAction(secondActionId);
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_000,
-            "second value applied"
-        );
-    }
-
-    // executeQueuedAction
-    // given the underlying config changes after an action is queued
-    //  when the queued action executes
-    //   then it reverts because the queue-time pre-state is stale
-    function test_givenConfigChangedAfterQueue_reverts() public {
-        uint64 actionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        // Simulate governance/admin changing the same config before the timelock action executes.
-        // The queued action should not blindly apply over a state it was not validated against.
-        IBurnerLoans.AssetConfig memory adminConfig = _defaultAssetConfig(USDS_DECIMALS);
-        adminConfig.collateralFactorBps = 9_800;
-        vm.prank(admin);
-        burnerLoansConfig.setAssetRiskConfig(address(usds), _toRiskConfig(adminConfig));
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_800,
-            "admin value applied"
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The expected hash is the queue-time config; the current hash includes the direct admin
-        // update, so execution must revert as stale.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
-        currentConfig.collateralFactorBps = 9_800;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                actionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(actionId);
-
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_800,
-            "admin value preserved"
-        );
-    }
-
-    // executeQueuedAction
-    // given two queued actions update the same asset risk config
-    //  when the later action is executed before the earlier action
-    //   then it reverts because the later action was validated against the projected earlier state
-    function test_givenPriorQueuedRiskActionNotExecuted_revertsAsStale() public {
-        uint64 collateralFactorActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 minCollateralRatioActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 12_000,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: true,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The min collateral ratio action was queued after a pending collateral-factor action,
-        // so its expected pre-state includes collateralFactorBps = 9_500.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        expectedConfig.collateralFactorBps = 9_500;
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                minCollateralRatioActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(minCollateralRatioActionId);
-
-        assertEq(collateralFactorActionId, 1, "first action id");
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            10_000,
-            "collateral factor unchanged"
-        );
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).minCollateralRatioBps,
-            11_500,
-            "min cr unchanged"
-        );
-    }
-
-    // executeQueuedAction
-    // given a later risk action was validated against an earlier queued risk action
-    //  when executing the later action first and then in order
-    //   then stale-state execution reverts and applying the earlier action first makes it executable
-    function test_givenRiskActionDependsOnEarlierRiskAction_revertsUntilEarlierActionExecutes()
-        public
-    {
-        uint64 termActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 14 days,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: true,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 horizonActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 21 days,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: true,
-                maxKeeperReward: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The horizon action was queued against the projected 14-day term. Executing it
-        // first should fail because the live config still has the default 30-day term.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        expectedConfig.termLength = 14 days;
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                horizonActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(horizonActionId);
-
-        // Once the term update executes, the horizon update's expected pre-state exists.
-        configTimelock.executeQueuedAction(termActionId);
-        configTimelock.executeQueuedAction(horizonActionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.termLength, 14 days, "term length");
-        assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
-    }
-
-    // executeQueuedAction
-    // given a later termLength action was validated against an earlier maxMaturityHorizon action
-    //  when executing the later action first and then in order
-    //   then stale-state execution reverts and applying the earlier action first makes it executable
-    function test_givenTermActionDependsOnEarlierHorizonAction_revertsUntilEarlierActionExecutes()
-        public
-    {
-        uint64 horizonActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 120 days,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: true,
-                maxKeeperReward: false
-            })
-        );
-        uint64 termActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 100 days,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: true,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The termLength update was queued against the projected state after the horizon
-        // update. Executing it first must fail because the live asset config still has the
-        // default horizon, so the queue-time pre-state hash does not match.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        expectedConfig.maxMaturityHorizon = 120 days;
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                termActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(termActionId);
-
-        // Once the horizon action has executed, the live config matches the term action's
-        // expected pre-state and the dependent termLength update can execute.
-        configTimelock.executeQueuedAction(horizonActionId);
-        configTimelock.executeQueuedAction(termActionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.termLength, 100 days, "term length");
-        assertEq(config.maxMaturityHorizon, 120 days, "max maturity horizon");
-    }
-
-    // executeQueuedAction
-    // given a later fee action was validated against an earlier queued fee action
-    //  when executing the later action first and then in order
-    //   then stale-state execution reverts and applying the earlier action first makes it executable
-    function test_givenFeeActionDependsOnEarlierFeeAction_revertsUntilEarlierActionExecutes()
-        public
-    {
-        uint64 singleSlopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 0,
-                preKinkSlopeBps: 0,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: true,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: true
-            })
-        );
-        uint64 slopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 5_000,
-                preKinkSlopeBps: 10_000,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: false,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The slope action was queued against the projected single-slope fee config.
-        // Executing it first should fail because the live config is still kinked.
-        IBurnerLoans.AssetFeeConfig memory expectedConfig = _defaultAssetFeeConfig();
-        expectedConfig.baseFeeBps = 0;
-        expectedConfig.kinkBps = 0;
-        expectedConfig.preKinkSlopeBps = 0;
-        expectedConfig.postKinkSlopeBps = 0;
-        IBurnerLoans.AssetFeeConfig memory currentConfig = _defaultAssetFeeConfig();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                slopeActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(slopeActionId);
-
-        // Once the domain-changing action executes, the slope action's expected pre-state
-        // exists and the max single-slope update can execute.
-        configTimelock.executeQueuedAction(singleSlopeActionId);
-        configTimelock.executeQueuedAction(slopeActionId);
-
-        IBurnerLoans.AssetFeeConfig memory config = burnerLoansConfig.getAssetFeeConfig(
-            address(usds)
-        );
-        assertEq(config.baseFeeBps, 0, "base fee");
-        assertEq(config.kinkBps, 5_000, "kink");
-        assertEq(config.preKinkSlopeBps, 10_000, "preKinkSlope");
-        assertEq(config.postKinkSlopeBps, 0, "postKinkSlope");
     }
 
     // executeQueuedAction
@@ -795,724 +239,209 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
         );
     }
 
-    // executeQueuedAction
-    // given a fee action is queued between two dependent risk actions
-    //  when executing out of order and then in order
-    //   then the later risk action depends only on the earlier risk action, not the fee action
-    function test_givenFeeActionBetweenRiskActions_laterRiskActionIgnoresUnrelatedFeeAction()
-        public
-    {
-        uint64 termActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 14 days,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: true,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 feeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 30,
-                kinkBps: 0,
-                preKinkSlopeBps: 0,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: true,
-                kinkBps: false,
-                preKinkSlopeBps: false,
-                postKinkSlopeBps: false
-            })
-        );
-        uint64 horizonActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 21 days,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: true,
-                maxKeeperReward: false
-            })
-        );
+    function test_givenFeeAndRiskForSameAsset_executesTogetherWithIndependentKeys() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _feeAction(30);
+        actions[1] = _riskAction(9_500);
+
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+
+        (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+        (bytes32 riskKey, ) = configTimelock.getQueuedConfigState(actionId, 1, 0);
+        assertNotEq(feeKey, riskKey, "independent domains");
+
         vm.warp(block.timestamp + configTimelock.timelockDelay());
+        configTimelock.executeQueuedAction(actionId);
 
-        // The horizon action depends on the pending term action, not on the unrelated fee
-        // action. It should fail before the term action executes because the risk pre-state
-        // is stale.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        expectedConfig.termLength = 14 days;
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                horizonActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(horizonActionId);
-
-        // The fee action remains queued, but it is unrelated to asset-risk state. The later
-        // risk action can execute as soon as its risk dependency has executed.
-        configTimelock.executeQueuedAction(termActionId);
-        configTimelock.executeQueuedAction(horizonActionId);
-        configTimelock.executeQueuedAction(feeActionId);
-
-        IBurnerLoans.AssetConfig memory assetConfig = burnerLoansConfig.getAssetConfig(
-            address(usds)
-        );
-        assertEq(assetConfig.termLength, 14 days, "term length");
-        assertEq(assetConfig.maxMaturityHorizon, 21 days, "max maturity horizon");
-        assertEq(
-            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
-            30,
-            "fee action applied"
-        );
-    }
-
-    // executeQueuedAction
-    // given a fee action between two dependent risk actions is cancelled
-    //  when executing the risk actions in order
-    //   then the later risk action still executes because it does not depend on fee config
-    function test_givenFeeActionBetweenRiskActions_whenFeeActionCancelled_executesLaterRiskAction()
-        public
-    {
-        uint64 termActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 14 days,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: true,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 feeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 30,
-                kinkBps: 0,
-                preKinkSlopeBps: 0,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: true,
-                kinkBps: false,
-                preKinkSlopeBps: false,
-                postKinkSlopeBps: false
-            })
-        );
-        uint64 horizonActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 21 days,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: true,
-                maxKeeperReward: false
-            })
-        );
-
-        // Cancel the middle fee action. The later risk action should still depend only on the
-        // earlier risk action, so cancelling the unrelated fee action must not stale it.
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(feeActionId);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // Applying the term action creates the expected pre-state for the horizon action.
-        configTimelock.executeQueuedAction(termActionId);
-        configTimelock.executeQueuedAction(horizonActionId);
-
-        IBurnerLoans.AssetConfig memory assetConfig = burnerLoansConfig.getAssetConfig(
-            address(usds)
-        );
-        assertEq(assetConfig.termLength, 14 days, "term length");
-        assertEq(assetConfig.maxMaturityHorizon, 21 days, "max maturity horizon");
-        assertEq(
-            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
-            25,
-            "fee config unchanged"
-        );
-    }
-
-    // executeQueuedAction
-    // given a risk action is queued between two dependent fee actions
-    //  when executing out of order and then in order
-    //   then the later fee action depends only on the earlier fee action, not the risk action
-    function test_givenRiskActionBetweenFeeActions_laterFeeActionIgnoresUnrelatedRiskAction()
-        public
-    {
-        uint64 singleSlopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 0,
-                preKinkSlopeBps: 0,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: true,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: true
-            })
-        );
-        uint64 riskActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 slopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 5_000,
-                preKinkSlopeBps: 10_000,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: false,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: false
-            })
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The slope action depends on the pending fee-domain action, not on the unrelated
-        // risk action. It should fail before the single-slope action executes because the
-        // fee pre-state is stale.
-        IBurnerLoans.AssetFeeConfig memory expectedConfig = _defaultAssetFeeConfig();
-        expectedConfig.baseFeeBps = 0;
-        expectedConfig.kinkBps = 0;
-        expectedConfig.preKinkSlopeBps = 0;
-        expectedConfig.postKinkSlopeBps = 0;
-        IBurnerLoans.AssetFeeConfig memory currentConfig = _defaultAssetFeeConfig();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                slopeActionId,
-                uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
-            )
-        );
-        configTimelock.executeQueuedAction(slopeActionId);
-
-        // The risk action remains queued, but it is unrelated to fee state. The later fee
-        // action can execute as soon as its fee dependency has executed.
-        configTimelock.executeQueuedAction(singleSlopeActionId);
-        configTimelock.executeQueuedAction(slopeActionId);
-        configTimelock.executeQueuedAction(riskActionId);
-
-        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoansConfig.getAssetFeeConfig(
-            address(usds)
-        );
-        assertEq(feeConfig.kinkBps, 5_000, "kink");
-        assertEq(feeConfig.preKinkSlopeBps, 10_000, "preKinkSlope");
-        assertEq(feeConfig.postKinkSlopeBps, 0, "postKinkSlope");
+        assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee update");
         assertEq(
             burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
             9_500,
-            "risk action applied"
+            "risk update"
         );
     }
 
-    // executeQueuedAction
-    // given a risk action between two dependent fee actions is cancelled
-    //  when executing the fee actions in order
-    //   then the later fee action still executes because it does not depend on risk config
-    function test_givenRiskActionBetweenFeeActions_whenRiskActionCancelled_executesLaterFeeAction()
-        public
-    {
-        uint64 singleSlopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 0,
-                preKinkSlopeBps: 0,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: true,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: true
-            })
-        );
-        uint64 riskActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 slopeActionId = _queueFeeUpdate(
-            IBurnerLoans.AssetFeeConfig({
-                baseFeeBps: 0,
-                kinkBps: 5_000,
-                preKinkSlopeBps: 10_000,
-                postKinkSlopeBps: 0
-            }),
-            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection({
-                baseFeeBps: false,
-                kinkBps: true,
-                preKinkSlopeBps: true,
-                postKinkSlopeBps: false
-            })
+    function test_givenDisjointRiskChange_queuedFeeActionExecutes() public {
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetFeeConfig(
+            address(usds),
+            _feeUpdate(30),
+            _feeSelection()
         );
 
-        // Cancel the unrelated middle risk action. The later fee action should still be executable
-        // once the earlier fee action applies the fee-domain pre-state it depends on.
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(riskActionId);
+        IBurnerLoans.AssetConfig memory current = burnerLoansConfig.getAssetConfig(address(usds));
+        IBurnerLoans.AssetRiskConfigInput memory risk = _toRiskConfig(current);
+        risk.collateralFactorBps = 9_500;
+        vm.prank(address(configTimelock));
+        burnerLoansConfig.setAssetRiskConfig(address(usds), risk);
+
         vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // The cancelled risk action is ignored by fee-domain dependency checks.
-        configTimelock.executeQueuedAction(singleSlopeActionId);
-        configTimelock.executeQueuedAction(slopeActionId);
-
-        IBurnerLoans.AssetFeeConfig memory feeConfig = burnerLoansConfig.getAssetFeeConfig(
-            address(usds)
-        );
-        assertEq(feeConfig.kinkBps, 5_000, "kink");
-        assertEq(feeConfig.preKinkSlopeBps, 10_000, "preKinkSlope");
-        assertEq(feeConfig.postKinkSlopeBps, 0, "postKinkSlope");
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            10_000,
-            "risk config unchanged"
-        );
+        configTimelock.executeQueuedAction(actionId);
+        assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee update");
     }
 
-    // executeQueuedAction
-    // given a prior queued action is cancelled after a later action was validated against it
-    //  when the later action executes
-    //   then it reverts because the projected pre-state was never applied
-    function test_givenPriorQueuedActionCancelled_revertsAsStale() public {
-        uint64 collateralFactorActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
-        uint64 minCollateralRatioActionId = _queueAssetRiskUpdate(
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 12_000,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            }),
-            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: false,
-                minCollateralRatioBps: true,
-                backingMultiplierBps: false,
-                keeperRewardBps: false,
-                termLength: false,
-                maxMaturityHorizon: false,
-                maxKeeperReward: false
-            })
-        );
+    function test_givenFeeConfigChangesAfterQueue_executionRevertsAndKeepsKey() public {
+        uint64 actionId = _queueFeeUpdate(_feeUpdate(30), _feeSelection());
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
-        // The second action was queued against the projected state from the first action.
-        // Cancelling the first action means that projected state will never exist.
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(collateralFactorActionId);
+        IBurnerLoans.AssetFeeConfig memory changedConfig = _defaultAssetFeeConfig();
+        changedConfig.baseFeeBps = 35;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetFeeConfig(address(usds), changedConfig);
+        bytes32 currentHash = keccak256(
+            abi.encode(burnerLoansConfig.facility(), address(usds), changedConfig)
+        );
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
-        // The later action should fail stale rather than applying over the unchanged live config.
-        IBurnerLoans.AssetConfig memory expectedConfig = _defaultAssetConfig(USDS_DECIMALS);
-        expectedConfig.collateralFactorBps = 9_500;
-        IBurnerLoans.AssetConfig memory currentConfig = _defaultAssetConfig(USDS_DECIMALS);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                minCollateralRatioActionId,
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
                 uint256(0),
-                keccak256(abi.encode(address(usds), expectedConfig)),
-                keccak256(abi.encode(address(usds), currentConfig))
+                key,
+                expectedHash,
+                currentHash
             )
         );
-        configTimelock.executeQueuedAction(minCollateralRatioActionId);
+        configTimelock.executeQueuedAction(actionId);
 
-        assertEq(collateralFactorActionId, 1, "first action id");
+        assertEq(configTimelock.pendingActionId(key), actionId, "fee key remains held");
+        assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains pending");
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            10_000,
-            "collateral factor unchanged"
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
+            35,
+            "direct change retained"
         );
+    }
+
+    function test_givenRiskConfigChangesAfterQueue_executionRevertsAndKeepsKey() public {
+        uint64 actionId = _queueAssetRiskUpdate(_riskUpdate(9_500), _riskSelection());
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        IBurnerLoans.AssetConfig memory current = burnerLoansConfig.getAssetConfig(address(usds));
+        IBurnerLoans.AssetRiskConfigInput memory changedConfig = _toRiskConfig(current);
+        changedConfig.minCollateralRatioBps = 12_000;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), changedConfig);
+        bytes32 currentHash = keccak256(
+            abi.encode(burnerLoansConfig.facility(), address(usds), changedConfig)
+        );
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "risk key remains held");
+        assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains pending");
         assertEq(
             burnerLoansConfig.getAssetConfig(address(usds)).minCollateralRatioBps,
-            11_500,
-            "min cr unchanged"
+            12_000,
+            "direct change retained"
         );
     }
 
-    // executeQueuedAction
-    // given a batch of valid actions
-    //  when called at any timestamp within the execution window and the harness is the timelock
-    //   then all sub-actions execute atomically in order
-    function test_givenBatch_executesAllSubActions(address executor_, uint48 elapsed_) public {
-        uint64 actionId = _queueBatch();
-        uint256 queuedAt = block.timestamp;
-        uint48 timelockDelay = configTimelockHarness.timelockDelay();
-        elapsed_ = uint48(
-            bound(elapsed_, timelockDelay, timelockDelay + configTimelockHarness.EXECUTION_WINDOW())
+    function test_givenLaterRealSetterReverts_rollsBackEarlierSetterAndKeepsBatchKeys() public {
+        uint128 queuedDebtCap = 50_000e9;
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _feeAction(30);
+        actions[1] = _singleAction(
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            abi.encode(address(usds), queuedDebtCap)
         );
-        vm.warp(queuedAt + elapsed_);
 
-        // The batch is expected to emit and apply sub-actions sequentially. The second expected
-        // resulting config includes the first sub-action's collateral factor update.
-        IBurnerLoans.AssetConfig memory resultingConfigOne = _defaultAssetConfig(USDS_DECIMALS);
-        resultingConfigOne.collateralFactorBps = 9_500;
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfigOne));
-        vm.expectEmit(true, true, true, true, address(configTimelockHarness));
-        emit TimelockSubActionExecuted(
-            actionId,
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+        (bytes32 debtCapKey, ) = configTimelock.getQueuedConfigState(actionId, 1, 0);
+        burnerLoans.setActiveDebtForTest(address(usds), queuedDebtCap + 1);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
+            _defaultAssetFeeConfig().baseFeeBps,
+            "earlier fee setter rolled back"
+        );
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(usds)).debtCap,
+            _defaultAssetDebtCap(),
+            "debt cap unchanged"
+        );
+        assertFalse(configTimelock.getQueuedAction(actionId).executed, "batch remains pending");
+        assertEq(configTimelock.pendingActionId(feeKey), actionId, "fee key remains held");
+        assertEq(configTimelock.pendingActionId(debtCapKey), actionId, "cap key remains held");
+    }
+
+    function test_givenFacilityRotation_executionRevertsAndKeepsLogicalKey() public {
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetFeeConfig(
+            address(usds),
+            _feeUpdate(30),
+            _feeSelection()
+        );
+        (bytes32 key, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        vm.mockCall(
             address(burnerLoansConfig),
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            0
+            abi.encodeCall(IBurnerLoansConfig.facility, ()),
+            abi.encode(address(0xBEEF))
         );
-        IBurnerLoans.AssetConfig memory resultingConfigTwo = resultingConfigOne;
-        resultingConfigTwo.minCollateralRatioBps = 12_000;
-        vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfigTwo));
-        vm.expectEmit(true, true, true, true, address(configTimelockHarness));
-        emit TimelockSubActionExecuted(
-            actionId,
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            1
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        vm.expectPartialRevert(
+            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector
         );
-        vm.expectEmit(true, true, false, true, address(configTimelockHarness));
-        emit TimelockActionExecuted(actionId, executor_);
-        vm.prank(executor_);
-        configTimelockHarness.executeQueuedAction(actionId);
+        configTimelock.executeQueuedAction(actionId);
 
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.collateralFactorBps, 9_500, "collateral factor");
-        assertEq(config.minCollateralRatioBps, 12_000, "min collateral ratio");
+        assertEq(configTimelock.pendingActionId(key), actionId, "logical key remains held");
     }
 
-    // executeQueuedAction
-    // given a queued risk batch has expected pre-state and projected post-state
-    //  when the batch executes
-    //   then stale pre-state and risk post-state storage is cleared for every sub-action
-    function test_givenRiskBatch_clearsStoredStateOnExecution() public {
-        uint64 actionId = _queueBatch();
-
-        for (uint256 i; i < 2; ++i) {
-            assertNotEq(
-                configTimelockHarness.expectedPreStateHash(actionId, i),
-                bytes32(0),
-                "pre-state stored"
-            );
-            (bool exists, address asset, ) = configTimelockHarness.assetConfigPostState(
-                actionId,
-                i
-            );
-            assertTrue(exists, "asset post-state stored");
-            assertEq(asset, address(usds), "asset");
-        }
-
-        vm.warp(block.timestamp + configTimelockHarness.timelockDelay());
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        for (uint256 i; i < 2; ++i) {
-            assertEq(
-                configTimelockHarness.expectedPreStateHash(actionId, i),
-                bytes32(0),
-                "pre-state cleared"
-            );
-            (
-                bool exists,
-                address asset,
-                IBurnerLoans.AssetConfig memory config
-            ) = configTimelockHarness.assetConfigPostState(actionId, i);
-            assertFalse(exists, "asset post-state cleared");
-            assertEq(asset, address(0), "asset cleared");
-            assertEq(config.collateralFactorBps, 0, "post-state config cleared");
-        }
-    }
-
-    // executeQueuedAction
-    // given a batch where a later risk sub-action depends on an earlier risk sub-action
-    //  when the batch executes
-    //   then sub-action pre-state hashes are checked against the batch-local intermediate state
-    function test_givenDependentRiskBatch_executesAgainstIntermediatePreState(
-        address executor_,
-        uint48 elapsed_
-    ) public {
-        uint64 actionId = _queueDependentRiskBatch();
-        uint256 queuedAt = block.timestamp;
-        uint48 timelockDelay = configTimelockHarness.timelockDelay();
-        elapsed_ = uint48(
-            bound(elapsed_, timelockDelay, timelockDelay + configTimelockHarness.EXECUTION_WINDOW())
-        );
-        vm.warp(queuedAt + elapsed_);
-
-        vm.prank(executor_);
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.termLength, 14 days, "term length");
-        assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
-    }
-
-    // executeQueuedAction
-    // given a batch where a later fee sub-action depends on an earlier fee sub-action
-    //  when the batch executes
-    //   then sub-action pre-state hashes are checked against the batch-local intermediate state
-    function test_givenDependentFeeBatch_executesAgainstIntermediatePreState(
-        address executor_,
-        uint48 elapsed_
-    ) public {
-        uint64 actionId = _queueDependentFeeBatch();
-        uint256 queuedAt = block.timestamp;
-        uint48 timelockDelay = configTimelockHarness.timelockDelay();
-        elapsed_ = uint48(
-            bound(elapsed_, timelockDelay, timelockDelay + configTimelockHarness.EXECUTION_WINDOW())
-        );
-        vm.warp(queuedAt + elapsed_);
-
-        vm.prank(executor_);
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        IBurnerLoans.AssetFeeConfig memory config = burnerLoansConfig.getAssetFeeConfig(
-            address(usds)
-        );
-        assertEq(config.baseFeeBps, 0, "base fee");
-        assertEq(config.kinkBps, 5_000, "kink");
-        assertEq(config.preKinkSlopeBps, 10_000, "preKinkSlope");
-        assertEq(config.postKinkSlopeBps, 0, "postKinkSlope");
-    }
-
-    // executeQueuedAction
-    // given a queued fee batch has expected pre-state and projected post-state
-    //  when the batch executes
-    //   then stale pre-state and fee post-state storage is cleared for every sub-action
-    function test_givenFeeBatch_clearsStoredStateOnExecution() public {
-        uint64 actionId = _queueDependentFeeBatch();
-
-        for (uint256 i; i < 2; ++i) {
-            assertNotEq(
-                configTimelockHarness.expectedPreStateHash(actionId, i),
-                bytes32(0),
-                "pre-state stored"
-            );
-            (bool exists, address asset, ) = configTimelockHarness.feeConfigPostState(actionId, i);
-            assertTrue(exists, "fee post-state stored");
-            assertEq(asset, address(usds), "asset");
-        }
-
-        vm.warp(block.timestamp + configTimelockHarness.timelockDelay());
-        configTimelockHarness.executeQueuedAction(actionId);
-
-        for (uint256 i; i < 2; ++i) {
-            assertEq(
-                configTimelockHarness.expectedPreStateHash(actionId, i),
-                bytes32(0),
-                "pre-state cleared"
-            );
-            (
-                bool exists,
-                address asset,
-                IBurnerLoans.AssetFeeConfig memory config
-            ) = configTimelockHarness.feeConfigPostState(actionId, i);
-            assertFalse(exists, "fee post-state cleared");
-            assertEq(asset, address(0), "asset cleared");
-            assertEq(config.preKinkSlopeBps, 0, "post-state config cleared");
-        }
-    }
-
-    function _queueBatch() internal returns (uint64 actionId) {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate
-            memory updateOne = IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            });
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate
-            memory updateTwo = IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 12_000,
-                backingMultiplierBps: 0,
-                keeperRewardBps: 0,
-                termLength: 0,
-                maxMaturityHorizon: 0,
-                maxKeeperReward: 0
-            });
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selectionOne;
-        selectionOne.collateralFactorBps = true;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selectionTwo;
-        selectionTwo.minCollateralRatioBps = true;
-        actions[0] = _singleAction(
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), updateOne, selectionOne)
-        );
-        actions[1] = _singleAction(
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), updateTwo, selectionTwo)
-        );
-
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
-
+    function test_givenDebtCapChangesAfterQueue_executionRevertsAndKeepsKey() public {
         vm.prank(burnerLoansAdmin);
-        actionId = configTimelockHarness.queueBatch(actions);
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), 90_000e9);
+        (bytes32 key, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        vm.prank(address(configTimelock));
+        burnerLoansConfig.setAssetDebtCap(address(usds), 95_000e9);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        vm.expectPartialRevert(
+            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "debt-cap key remains held");
     }
 
-    function _queueDependentRiskBatch() internal returns (uint64 actionId) {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory updateOne;
-        updateOne.termLength = 14 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selectionOne;
-        selectionOne.termLength = true;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory updateTwo;
-        updateTwo.maxMaturityHorizon = 21 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selectionTwo;
-        selectionTwo.maxMaturityHorizon = true;
-
+    function test_givenOriginationsChangeAfterQueue_executionRevertsAndKeepsKey() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), updateOne, selectionOne)
+            IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
+            abi.encode(address(usds), false)
         );
-        actions[1] = _singleAction(
-            IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), updateTwo, selectionTwo)
-        );
-
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
-
         vm.prank(burnerLoansAdmin);
-        actionId = configTimelockHarness.queueBatch(actions);
-    }
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 key, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
-    function _queueDependentFeeBatch() internal returns (uint64 actionId) {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        IBurnerLoans.AssetFeeConfig memory updateOne = IBurnerLoans.AssetFeeConfig({
-            baseFeeBps: 0,
-            kinkBps: 0,
-            preKinkSlopeBps: 0,
-            postKinkSlopeBps: 0
-        });
-        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selectionOne;
-        selectionOne.baseFeeBps = true;
-        selectionOne.kinkBps = true;
-        selectionOne.preKinkSlopeBps = true;
-        selectionOne.postKinkSlopeBps = true;
-        IBurnerLoans.AssetFeeConfig memory updateTwo;
-        updateTwo.kinkBps = 5_000;
-        updateTwo.preKinkSlopeBps = 10_000;
-        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory selectionTwo;
-        selectionTwo.kinkBps = true;
-        selectionTwo.preKinkSlopeBps = true;
-
-        actions[0] = _singleAction(
-            IBurnerLoansConfig.setAssetFeeConfig.selector,
-            abi.encode(address(usds), updateOne, selectionOne)
+        vm.prank(address(configTimelock));
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        vm.expectPartialRevert(
+            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector
         );
-        actions[1] = _singleAction(
-            IBurnerLoansConfig.setAssetFeeConfig.selector,
-            abi.encode(address(usds), updateTwo, selectionTwo)
-        );
+        configTimelock.executeQueuedAction(actionId);
 
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
-
-        vm.prank(burnerLoansAdmin);
-        actionId = configTimelockHarness.queueBatch(actions);
+        assertEq(configTimelock.pendingActionId(key), actionId, "origination key remains held");
     }
 
     function _queueAssetRiskUpdate(

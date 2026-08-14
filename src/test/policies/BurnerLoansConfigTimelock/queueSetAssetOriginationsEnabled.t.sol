@@ -100,34 +100,4 @@ contract BurnerLoansConfigTimelockQueueSetAssetOriginationsEnabledTest is
             "originations enabled"
         );
     }
-
-    // queueSetAssetOriginationsEnabled
-    // given admin changes the origination state after the action is queued
-    //  when the queued transition is executed
-    //   then the action is stale
-    function test_givenOriginationStateChangedAfterQueue_reverts() public {
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = _queueOriginationsEnabled(address(usds), false);
-        bytes32 expectedHash = keccak256(
-            abi.encode(address(usds), burnerLoansConfig.getAssetConfig(address(usds)))
-        );
-
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-        bytes32 currentHash = keccak256(
-            abi.encode(address(usds), burnerLoansConfig.getAssetConfig(address(usds)))
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged.selector,
-                actionId,
-                0,
-                expectedHash,
-                currentHash
-            )
-        );
-        configTimelock.executeQueuedAction(actionId);
-    }
 }

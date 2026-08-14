@@ -8,50 +8,8 @@ import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansCo
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock Library
-/// @notice Pure transformations used when projecting partial timelocked configuration updates.
+/// @notice Transformations and dispatch used by Burner Loans timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
-    /// @notice Validates that a queued action's relevant configuration has not changed.
-    /// @dev Reverts for an unsupported action or when the current state hash differs.
-    function validatePreState(
-        IBurnerLoansConfig burnerLoans_,
-        uint64 actionId_,
-        uint256 index_,
-        ITimelockBatchQueue.BatchAction memory action_,
-        bytes32 expectedHash_
-    ) external view {
-        if (action_.target != address(burnerLoans_) || expectedHash_ == bytes32(0)) {
-            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(
-                action_.target,
-                action_.selector
-            );
-        }
-
-        bytes4 selector = action_.selector;
-        bytes32 currentHash;
-        if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
-            address asset = abi.decode(action_.payload, (address));
-            currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetFeeConfig(asset)));
-        } else if (
-            selector == IBurnerLoansConfig.setAssetRiskConfig.selector ||
-            selector == IBurnerLoansConfig.setAssetDebtCap.selector ||
-            selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector
-        ) {
-            address asset = abi.decode(action_.payload, (address));
-            currentHash = keccak256(abi.encode(asset, burnerLoans_.getAssetConfig(asset)));
-        } else {
-            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
-        }
-
-        if (currentHash != expectedHash_) {
-            revert IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_ConfigStateChanged(
-                actionId_,
-                index_,
-                expectedHash_,
-                currentHash
-            );
-        }
-    }
-
     /// @notice Decodes and executes one supported Burner Loans configuration action.
     /// @dev Reverts for unsupported selectors and bubbles the target setter's revert data.
     function executeSubAction(

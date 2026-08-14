@@ -26,18 +26,6 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @notice Thrown when a configured module has an unsupported version.
     error BurnerLoansConfigTimelock_InvalidModuleVersion();
 
-    /// @notice Thrown when a queued sub-action no longer matches its expected pre-state.
-    /// @param actionId The queued action ID.
-    /// @param index The sub-action index within the queued action.
-    /// @param expectedHash The pre-state hash captured when the sub-action was queued.
-    /// @param currentHash The live pre-state hash observed at execution.
-    error BurnerLoansConfigTimelock_ConfigStateChanged(
-        uint64 actionId,
-        uint256 index,
-        bytes32 expectedHash,
-        bytes32 currentHash
-    );
-
     /// @notice Thrown when a supported sub-action reverts without error data.
     /// @param target The contract called by the sub-action.
     /// @param selector The function selector called on the target.
