@@ -12,6 +12,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
     error MockTimelockBatchQueue_CancellationRejected();
     error MockTimelockBatchQueue_CancellationHookReverted();
     error MockTimelockBatchQueue_ExecutionReverted(uint256 value);
+    error MockTimelockBatchQueue_CompletionReverted();
 
     struct ExecuteSubActionCall {
         uint64 actionId;
@@ -19,6 +20,12 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         address target;
         bytes4 selector;
         bytes32 payloadHash;
+    }
+
+    struct CompletionCall {
+        uint64 actionId;
+        uint256 subActionCount;
+        uint256 executionCount;
     }
 
     struct CancellationCall {
@@ -45,9 +52,11 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
     bool public rejectExecution;
     bool public rejectCancellation;
     bool public rejectCancellationHook;
+    bool public rejectCompletion;
 
     uint256[] private _executedValues;
     ExecuteSubActionCall[] private _executeSubActionCalls;
+    CompletionCall[] private _completionCalls;
     CancellationCall[] private _cancellationCalls;
 
     constructor(uint48 initialTimelockDelay_) TimelockBatchQueue(initialTimelockDelay_) {}
@@ -122,6 +131,10 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         rejectCancellationHook = reject_;
     }
 
+    function setRejectCompletion(bool reject_) external {
+        rejectCompletion = reject_;
+    }
+
     function getExecutedValues() external view returns (uint256[] memory values) {
         return _executedValues;
     }
@@ -132,6 +145,10 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         returns (ExecuteSubActionCall[] memory calls)
     {
         return _executeSubActionCalls;
+    }
+
+    function getCompletionCalls() external view returns (CompletionCall[] memory calls) {
+        return _completionCalls;
     }
 
     function getCancellationCalls() external view returns (CancellationCall[] memory calls) {
@@ -218,6 +235,17 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
             revert MockTimelockBatchQueue_ExecutionReverted(value);
         }
         _executedValues.push(value);
+    }
+
+    function _onActionExecuted(uint64 actionId_, uint256 subActionCount_) internal override {
+        if (rejectCompletion) revert MockTimelockBatchQueue_CompletionReverted();
+        _completionCalls.push(
+            CompletionCall({
+                actionId: actionId_,
+                subActionCount: subActionCount_,
+                executionCount: _executedValues.length
+            })
+        );
     }
 
     function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal override {

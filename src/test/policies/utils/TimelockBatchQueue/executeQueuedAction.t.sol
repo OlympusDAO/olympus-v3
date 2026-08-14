@@ -160,6 +160,32 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         assertEq(queue.getExecuteSubActionCalls().length, 0);
     }
 
+    function test_executeQueuedAction_callsCompletionHookAfterEverySubAction() public {
+        (uint64 actionId, ) = _queueThreeBatch();
+        _warpReady(actionId);
+        queue.executeQueuedAction(actionId);
+
+        MockTimelockBatchQueue.CompletionCall[] memory calls = queue.getCompletionCalls();
+        assertEq(calls.length, 1);
+        assertEq(calls[0].actionId, actionId);
+        assertEq(calls[0].subActionCount, 3);
+        assertEq(calls[0].executionCount, 3);
+    }
+
+    function test_executeQueuedAction_givenCompletionHookReverts_rollsBackWholeBatch() public {
+        (uint64 actionId, ) = _queueThreeBatch();
+        _warpReady(actionId);
+        queue.setRejectCompletion(true);
+
+        vm.expectRevert(MockTimelockBatchQueue.MockTimelockBatchQueue_CompletionReverted.selector);
+        queue.executeQueuedAction(actionId);
+
+        assertFalse(queue.getQueuedAction(actionId).executed);
+        assertEq(queue.getQueuedActionLength(actionId), 3);
+        assertEq(queue.getExecutedValues().length, 0);
+        assertEq(queue.getCompletionCalls().length, 0);
+    }
+
     function test_executeQueuedAction_givenReentrantExecution_revertsWholeBatch() public {
         vm.prank(proposer);
         uint64 actionId = queue.queueAction(address(reentrant), selector1, hex"01");
