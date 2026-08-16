@@ -5,6 +5,7 @@
 echo "Running code coverage"
 FOUNDRY_PROFILE=coverage forge coverage --ir-minimum --report lcov --report summary \
     --no-match-contract 'Script' \
+    --no-match-path 'src/test/deprecated/**' \
     --skip 'src/scripts/deploy' \
     --skip 'src/scripts/ops/batches' \
     --skip 'src/scripts/ops/CalculateCoolerLtvUpdate.s.sol'
