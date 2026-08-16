@@ -41,6 +41,13 @@ script_execution_protection = false
 [profile.multisig]
 script_execution_protection = false
 
+# Coverage profile, used by `shell/test_coverage.sh`: `forge coverage` merges the coverage items of
+# every compile job of one solc version into a single source-id space, so a settings constraint
+# (which creates a second job for the same solc version) misattributes items and hits between
+# files.
+[profile.coverage]
+compilation_restrictions = [{ paths = "**", version = "0.8.15" }]
+
 [fuzz]
 runs = 256
 
