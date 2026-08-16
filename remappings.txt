@@ -12,7 +12,7 @@ test/lib=src/test/lib
 
 @chainlink-ccip-1.6.0/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/
 
-@chainlink-local-0.2.5/=dependencies/chainlink-local-0.2.5/src/
+@chainlink-local-0.2.9/=dependencies/chainlink-local-029-0.2.9/src/
 @chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
 @chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
 
