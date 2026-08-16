@@ -30,7 +30,6 @@ additional_compiler_profiles = [
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", profile = "ten-runs" },
     { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
-    { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
     { paths = "src/policies/bridge/CCIPBridgeConfigTimelock.sol", profile = "four-hundred-runs" },
     { paths = "**", version = "0.8.15" },
 ]
