@@ -25,9 +25,10 @@ Holders above are the Ethereum end state. `CCIPBridgeConfig`, `CCIPBridgeConfigT
 | Delay bounds | 1 to 30 days |
 | Execution window | 3 days |
 | Max sub-actions per batch | 15 |
+| Max configuration keys per batch | 24 |
 | Grace period | 3 days |
 
-## New contracts
+## Contracts
 
 ### `CCIPBridgeConfig` policy
 
@@ -44,7 +45,7 @@ Owns the local CCIP token pool.
 | `enable` | `admin` | OCG timelock |
 | `addChain` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `removeChain` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
-| `recreateChainWithNewRemoteToken` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
+| `setRemoteToken` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `addRemotePool` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `removeRemotePool` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
 | `applyAllowListUpdates` | configurator or `admin` | `CCIPBridgeConfigTimelock`; OCG timelock |
@@ -52,9 +53,11 @@ Owns the local CCIP token pool.
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
 | `disableChain` | `emergency` or `admin`; works while disabled | Emergency MS; OCG timelock |
 | `disableAllChains` | `emergency` or `admin`; works while disabled | Emergency MS; OCG timelock |
-| `reEnable` | `bridge_admin` | DAO MS |
+| `reEnable` | `bridge_admin`; within the grace period | DAO MS |
 | `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
+
+All functions require the policy to be enabled, except `enable` and `reEnable` (require disabled), the two containment functions, and the Kernel-invoked ones.
 
 The two functions below are present on every deployment of the config policy, but revert unless the owned pool supports `ILiquidityContainer`, which only `LockReleaseTokenPool` does.
 
@@ -72,26 +75,26 @@ The two functions below are present on every deployment of the config policy, bu
 | `setTimelockDelay` | `admin` | OCG timelock |
 | `queueAddChain` | `bridge_admin` | DAO MS |
 | `queueRemoveChain` | `bridge_admin` | DAO MS |
-| `queueRecreateChainWithNewRemoteToken` | `bridge_admin` | DAO MS |
+| `queueSetRemoteToken` | `bridge_admin` | DAO MS |
 | `queueAddRemotePool` | `bridge_admin` | DAO MS |
 | `queueRemoveRemotePool` | `bridge_admin` | DAO MS |
 | `queueApplyAllowListUpdates` | `bridge_admin` | DAO MS |
 | `queueSetChainRateLimits` | `bridge_admin` | DAO MS |
 | `queueBatch` | `bridge_admin` | DAO MS |
 | `executeQueuedAction` | permissionless after the delay | any address |
-| `cancelQueuedAction` | `admin`, `emergency`, or the original proposer | OCG timelock; Emergency MS; DAO MS |
+| `cancelQueuedAction` | `admin`, `emergency`, or the original proposer; works while disabled and after expiry | OCG timelock; Emergency MS; DAO MS |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `reEnable` | `bridge_admin` | DAO MS |
+| `reEnable` | `bridge_admin`; within the grace period | DAO MS |
 | `changeKernel` | Kernel  | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
-The `admin` role is not a queue proposer: every queued action targets a function it can call directly on the config policy.
+All functions require the timelock to be enabled, except `enable` and `reEnable` (require disabled), `cancelQueuedAction`, and the Kernel-invoked ones. Queueing also requires the timelock to be the config policy's configurator; execution also requires the config policy to be enabled and the timelock to still be its configurator.
 
-## Existing contracts
+The `admin` role is not a queue proposer: every queued action targets a function it can call directly on the config policy.
 
 ### `CCIPBurnMintTokenPool` policy (non-Ethereum chains)
 
-Currently live only on Sepolia and Base Sepolia; in scope for deployment on Arbitrum, Optimism, Base, and Berachain. The existing instances were constructed with an empty allowlist, so `applyAllowListUpdates` reverts with `AllowListNotEnabled`; whether new deployments enable one is a constructor decision.
+Deployed with an empty allowlist, so `applyAllowListUpdates` reverts with `AllowListNotEnabled`.
 
 | Function | Access | Holder |
 | --- | --- | --- |
@@ -146,7 +149,7 @@ Depositing does not require the rebalancer role: a direct ERC20 transfer has the
 
 ### `CCIPCrossChainBridge` periphery
 
-No changes. Disabling it does not stop CCIP transfers of OHM: the pool only checks that the caller is an on-ramp of the configured router, so any address can call `Router.ccipSend` directly.
+Disabling it does not stop CCIP transfers of OHM: the pool only checks that the caller is an on-ramp of the configured router, so any address can call `Router.ccipSend` directly.
 
 | Function | Access | Holder |
 | --- | --- | --- |
