@@ -220,18 +220,17 @@ contract CCIPBridgeConfigTimelock is
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its configurator.
-    ///      - `validateRecreateChainWithNewRemoteToken` of the config policy rejects the
-    ///        arguments.
+    ///      - `validateSetRemoteToken` of the config policy rejects the arguments.
     ///      - Any of the three route domains of `chainSelector_` is reserved by an unresolved
     ///        action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
-    function queueRecreateChainWithNewRemoteToken(
+    function queueSetRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) external override returns (uint64 actionId) {
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.recreateChainWithNewRemoteToken.selector,
+                ICCIPBridgeConfig.setRemoteToken.selector,
                 abi.encode(chainSelector_, remoteToken_)
             );
     }
@@ -408,10 +407,10 @@ contract CCIPBridgeConfigTimelock is
             uint64 chainSelector = abi.decode(payload, (uint64));
             _requireCanonicalPayload(payload, abi.encode(chainSelector), selector);
             _CONFIG.validateRemoveChain(chainSelector);
-        } else if (selector == ICCIPBridgeConfig.recreateChainWithNewRemoteToken.selector) {
+        } else if (selector == ICCIPBridgeConfig.setRemoteToken.selector) {
             (uint64 chainSelector, bytes memory remoteToken) = abi.decode(payload, (uint64, bytes));
             _requireCanonicalPayload(payload, abi.encode(chainSelector, remoteToken), selector);
-            _CONFIG.validateRecreateChainWithNewRemoteToken(chainSelector, remoteToken);
+            _CONFIG.validateSetRemoteToken(chainSelector, remoteToken);
         } else if (selector == ICCIPBridgeConfig.addRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _requireCanonicalPayload(payload, abi.encode(chainSelector, remotePool), selector);
@@ -474,7 +473,7 @@ contract CCIPBridgeConfigTimelock is
         if (
             selector == ICCIPBridgeConfig.addChain.selector ||
             selector == ICCIPBridgeConfig.removeChain.selector ||
-            selector == ICCIPBridgeConfig.recreateChainWithNewRemoteToken.selector
+            selector == ICCIPBridgeConfig.setRemoteToken.selector
         ) {
             keys = new bytes32[](3);
             keys[0] = _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector);
@@ -564,9 +563,9 @@ contract CCIPBridgeConfigTimelock is
             _CONFIG.addChain(abi.decode(payload, (ICCIPTokenPoolAdmin.ChainUpdate)));
         } else if (selector == ICCIPBridgeConfig.removeChain.selector) {
             _CONFIG.removeChain(abi.decode(payload, (uint64)));
-        } else if (selector == ICCIPBridgeConfig.recreateChainWithNewRemoteToken.selector) {
+        } else if (selector == ICCIPBridgeConfig.setRemoteToken.selector) {
             (uint64 chainSelector, bytes memory remoteToken) = abi.decode(payload, (uint64, bytes));
-            _CONFIG.recreateChainWithNewRemoteToken(chainSelector, remoteToken);
+            _CONFIG.setRemoteToken(chainSelector, remoteToken);
         } else if (selector == ICCIPBridgeConfig.addRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _CONFIG.addRemotePool(chainSelector, remotePool);
@@ -715,7 +714,7 @@ contract CCIPBridgeConfigTimelock is
             return abi.decode(payload, (uint64));
         }
         if (
-            selector == ICCIPBridgeConfig.recreateChainWithNewRemoteToken.selector ||
+            selector == ICCIPBridgeConfig.setRemoteToken.selector ||
             selector == ICCIPBridgeConfig.addRemotePool.selector ||
             selector == ICCIPBridgeConfig.removeRemotePool.selector
         ) {

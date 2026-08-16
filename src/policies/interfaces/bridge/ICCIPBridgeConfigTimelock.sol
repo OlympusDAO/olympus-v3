@@ -37,14 +37,14 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         both sets as enumerable sets, so that `getRemotePools` and `getAllowList` return each
 ///         member exactly once and only the pool owner writes them.
 ///
-///         `addChain`, `removeChain` and `recreateChainWithNewRemoteToken` reserve all three
-///         domains of their route; `addRemotePool` and `removeRemotePool` reserve the remote
-///         pools domain; `setChainRateLimits` reserves the rate limits domain; and
-///         `applyAllowListUpdates` reserves the allowlist domain. Reserved domains are released
-///         only by execution or cancellation, so an expired or invalidated action must be
-///         cancelled before its domains can be queued again. Queueing does not require the config
-///         policy to be enabled, only execution does, so an action queued while the config policy
-///         is disabled holds its domains until it executes or is cancelled.
+///         `addChain`, `removeChain` and `setRemoteToken` reserve all three domains of their
+///         route; `addRemotePool` and `removeRemotePool` reserve the remote pools domain;
+///         `setChainRateLimits` reserves the rate limits domain; and `applyAllowListUpdates`
+///         reserves the allowlist domain. Reserved domains are released only by execution or
+///         cancellation, so an expired or invalidated action must be cancelled before its domains
+///         can be queued again. Queueing does not require the config policy to be enabled, only
+///         execution does, so an action queued while the config policy is disabled holds its
+///         domains until it executes or is cancelled.
 interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     // ========== ERRORS ========== //
 
@@ -142,13 +142,12 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueRemoveChain(uint64 chainSelector_) external returns (uint64 actionId);
 
-    /// @notice Queues a `recreateChainWithNewRemoteToken` call on the config policy. Intended to
-    ///         be callable only by the bridge admin role while the timelock is enabled and named
-    ///         as configurator.
+    /// @notice Queues a `setRemoteToken` call on the config policy. Intended to be callable only
+    ///         by the bridge admin role while the timelock is enabled and named as configurator.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
     /// @return actionId The queued action ID.
-    function queueRecreateChainWithNewRemoteToken(
+    function queueSetRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) external returns (uint64 actionId);

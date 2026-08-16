@@ -391,20 +391,20 @@ contract CCIPBridgeConfig is
     ///      in total. The first `ChainConfigured` carries the temporary configuration
     ///      `{true, max(previousTokens, 2), 1}` and does not reflect the rate limit policy of the
     ///      route; the second carries the original configuration and, together with the
-    ///      `RouteRecreated` event of this contract, confirms the result. A monitor that tracks
+    ///      `RemoteTokenSet` event of this contract, confirms the result. A monitor that tracks
     ///      the accepted remote pools of a route through pool events must re-read
     ///      `getRemotePools` after this operation.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller is neither the configurator nor an admin.
-    ///      - `validateRecreateChainWithNewRemoteToken` rejects the arguments.
+    ///      - `validateSetRemoteToken` rejects the arguments.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
-    function recreateChainWithNewRemoteToken(
+    function setRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) external override givenEnabled onlyConfiguratorOrAdmin {
-        _validateRecreateChainWithNewRemoteToken(chainSelector_, remoteToken_);
+        _validateSetRemoteToken(chainSelector_, remoteToken_);
 
         bytes memory previousRemoteToken = _POOL.getRemoteToken(chainSelector_);
         ICCIPRateLimiter.TokenBucket memory outbound = _POOL.getCurrentOutboundRateLimiterState(
@@ -424,7 +424,7 @@ contract CCIPBridgeConfig is
         );
         _POOL.setChainRateLimiterConfig(chainSelector_, _toConfig(outbound), _toConfig(inbound));
 
-        emit RouteRecreated(chainSelector_, previousRemoteToken, remoteToken_);
+        emit RemoteTokenSet(chainSelector_, previousRemoteToken, remoteToken_);
     }
 
     /// @inheritdoc ICCIPBridgeConfig
@@ -604,11 +604,11 @@ contract CCIPBridgeConfig is
     ///      - `remoteToken_` is empty.
     ///      - `remoteToken_` equals the current remote token of the route.
     ///      - Either current bucket of the route is disabled.
-    function validateRecreateChainWithNewRemoteToken(
+    function validateSetRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) external view override {
-        _validateRecreateChainWithNewRemoteToken(chainSelector_, remoteToken_);
+        _validateSetRemoteToken(chainSelector_, remoteToken_);
     }
 
     /// @inheritdoc ICCIPBridgeConfig
@@ -714,11 +714,10 @@ contract CCIPBridgeConfig is
         _requireSupportedChain(chainSelector_);
     }
 
-    /// @notice Validates the arguments of `recreateChainWithNewRemoteToken`. See
-    ///         `validateRecreateChainWithNewRemoteToken`.
+    /// @notice Validates the arguments of `setRemoteToken`. See `validateSetRemoteToken`.
     /// @param  chainSelector_ The chain selector of the route.
     /// @param  remoteToken_ The new remote token address.
-    function _validateRecreateChainWithNewRemoteToken(
+    function _validateSetRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) internal view {

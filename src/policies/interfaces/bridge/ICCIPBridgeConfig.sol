@@ -50,10 +50,10 @@ interface ICCIPBridgeConfig {
     /// @notice Thrown when a chain is added without any remote pool.
     error CCIPBridgeConfig_RemotePoolsEmpty();
 
-    /// @notice Thrown when a route is recreated with an empty remote token.
+    /// @notice Thrown when the remote token to set for a route is empty.
     error CCIPBridgeConfig_RemoteTokenEmpty();
 
-    /// @notice Thrown when a route is recreated with the remote token it already has.
+    /// @notice Thrown when the remote token to set for a route equals its current remote token.
     error CCIPBridgeConfig_RemoteTokenUnchanged();
 
     /// @notice Thrown when a supplied or current rate limiter configuration is disabled.
@@ -108,11 +108,11 @@ interface ICCIPBridgeConfig {
     /// @param chainSelector The chain selector of the route.
     event RouteRemoved(uint64 indexed chainSelector);
 
-    /// @notice Emitted when a route is recreated with a new remote token.
+    /// @notice Emitted when the remote token of a route is set.
     /// @param chainSelector The chain selector of the route.
-    /// @param previousRemoteToken The remote token before the recreation.
-    /// @param remoteToken The remote token after the recreation.
-    event RouteRecreated(
+    /// @param previousRemoteToken The remote token before the change.
+    /// @param remoteToken The remote token after the change.
+    event RemoteTokenSet(
         uint64 indexed chainSelector,
         bytes previousRemoteToken,
         bytes remoteToken
@@ -239,17 +239,15 @@ interface ICCIPBridgeConfig {
     /// @param chainSelector_ The chain selector of the route.
     function removeChain(uint64 chainSelector_) external;
 
-    /// @notice Replaces the remote token of a route by removing and re-adding the route in one
-    ///         pool call with the same remote pools and rate limiter configurations, and then
-    ///         restores the fill level of both buckets to their level before the replacement,
-    ///         with a floor of two units. Intended to be callable only by the configurator or
-    ///         the admin role while the policy is enabled.
+    /// @notice Sets the remote token of a route. The pool has no update path for the remote
+    ///         token, so the route is recreated: it is removed and re-added in one pool call with
+    ///         the same remote pools and rate limiter configurations, after which the fill level
+    ///         of both buckets is restored to its level before the replacement, with a floor of
+    ///         two units. Intended to be callable only by the configurator or the admin role
+    ///         while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
-    function recreateChainWithNewRemoteToken(
-        uint64 chainSelector_,
-        bytes calldata remoteToken_
-    ) external;
+    function setRemoteToken(uint64 chainSelector_, bytes calldata remoteToken_) external;
 
     /// @notice Adds an accepted remote pool to a route. Previously accepted pools remain
     ///         accepted. Intended to be callable only by the configurator or the admin role while
@@ -315,12 +313,12 @@ interface ICCIPBridgeConfig {
     /// @param chainSelector_ The chain selector of the route.
     function validateRemoveChain(uint64 chainSelector_) external view;
 
-    /// @notice Validates the arguments of `recreateChainWithNewRemoteToken` against the live
-    ///         pool state, with the same checks and errors as the state-changing call, and
-    ///         returns without effect when they are valid.
+    /// @notice Validates the arguments of `setRemoteToken` against the live pool state, with the
+    ///         same checks and errors as the state-changing call, and returns without effect
+    ///         when they are valid.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
-    function validateRecreateChainWithNewRemoteToken(
+    function validateSetRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
     ) external view;
