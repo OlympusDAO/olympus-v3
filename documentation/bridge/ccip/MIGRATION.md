@@ -103,6 +103,7 @@ sequenceDiagram
     participant RA as RolesAdmin
     participant AC as Activator
     participant OC as old Config
+    participant OT as old Timelock
     participant NC as new Config
     participant NT as new Timelock
     participant OP as old pool
@@ -114,6 +115,7 @@ sequenceDiagram
     DAO->>NP: transferOwnership(newConfig)
     DAO->>K: executeAction(ActivatePolicy, newConfig)
     DAO->>K: executeAction(ActivatePolicy, newTimelock)
+    DAO->>OT: cancelQueuedAction(id) for anything that must not survive
     Note over DAO: on Solana: AppendRemotePoolAddresses(new Ethereum pool)
 
     Note over DAO,REG: Phase 2: OCG proposal, 4 actions, one transaction
@@ -134,6 +136,7 @@ sequenceDiagram
     AC->>NC: setConfigurator(newTimelock)
     AC->>NT: enable("")
     AC->>OC: disable("")
+    AC->>OT: disable("")
     OCG->>REG: setPool(OHM, newPool)
     OCG->>RA: revokeRole(admin, activator)
 
@@ -157,6 +160,7 @@ sequenceDiagram
     participant OP as old pool
     participant NP as new pool
     participant OC as old Config
+    participant OT as old Timelock
     participant NC as new Config
     participant NT as new Timelock
     participant REG as local TokenAdminRegistry
@@ -167,6 +171,7 @@ sequenceDiagram
     Note over ETH,REG: Phase 2: single batch, local DAO Multisig
     Note over DAO: deploy new pool, Config, Timelock
     DAO->>NP: transferOwnership(newConfig)
+    DAO->>OT: cancelQueuedAction(id) for anything that must not survive
     DAO->>K: executeAction(ActivatePolicy, newPool)
     DAO->>K: executeAction(ActivatePolicy, newConfig)
     DAO->>K: executeAction(ActivatePolicy, newTimelock)
@@ -181,12 +186,15 @@ sequenceDiagram
     DAO->>REG: setPool(OHM, newPool)
     DAO->>OP: disable("")
     DAO->>OC: disable("")
+    DAO->>OT: disable("")
     DAO->>K: executeAction(DeactivatePolicy, oldPool)
     DAO->>K: executeAction(DeactivatePolicy, oldConfig)
     DAO->>K: executeAction(DeactivatePolicy, oldTimelock)
 
-    Note over ETH,REG: Phase 3: on Ethereum, after messages from the old pool are executed
+    Note over ETH,REG: Phase 3 (optional): on Ethereum, after messages from the old pool are executed
     ETH->>ETH: removeRemotePool(localSelector, oldLocalPool)
 ```
+
+Phase 3 is optional: once the old pool is no longer registered in its own chain's registry, no on-ramp will call it, so its stale entry on the Ethereum side cannot be exercised. Removing it is hygiene, and doing it too early rejects messages still in flight.
 
 `ActivatePolicy` on the new pool grants its MINTR permissions and must precede `setPool`, or a registered pool would be unable to mint. `enable` on the new pool must also precede `setPool`, since `_burn` and `_mint` are gated on it. `setPool` must precede disabling the old pool, for the same two reasons applied in reverse. The Ethereum steps go through the config timelock or directly under `admin`.
