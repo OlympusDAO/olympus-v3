@@ -48,6 +48,7 @@ abstract contract BurnerLoansSeizureTestBase is BurnerLoansBorrowTestBase {
     function _makeUnhealthy(address borrower_) internal {
         _borrow(borrower_, 2_000e18, 100e9);
         _configurePrice(address(ohm), 20e18);
+        price.setTimestamp(uint48(block.timestamp));
     }
 
     function _makeMatured(address borrower_) internal {

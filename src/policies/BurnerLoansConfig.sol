@@ -169,7 +169,6 @@ contract BurnerLoansConfig is
     ///      - `asset_` is zero.
     ///      - `asset_` is already configured.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
-    ///      - `debtCapOhm_` is below current active debt for `asset_`.
     ///      - Risk, bps, maturity, or fee parameters violate configured bounds.
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager does not configure the asset or BurnerLoans deposit period.
@@ -524,11 +523,10 @@ contract BurnerLoansConfig is
 
     /// @notice Builds the initial stored configuration for a new collateral asset.
     /// @dev Reads collateral decimals from the ERC20, sets the asset enabled, and validates the
-    ///      debt cap, risk config, PRICE support, and DepositManager support.
+    ///      risk config, PRICE support, and DepositManager support.
     /// @dev Reverts if:
     ///      - `asset_` is zero.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
-    ///      - `debtCapOhm_` is below current active debt for `asset_`.
     ///      - `riskConfig_` violates risk, maturity, or keeper reward bounds.
     ///      - PRICE does not approve the asset or returns a zero price.
     ///      - DepositManager has not configured and enabled the Burner Loans deposit period.

@@ -16,11 +16,14 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
-    uint16 internal constant MAX_BPS = 10_000;
-    uint16 internal constant MAX_COLLATERAL_FACTOR_BPS = 10_000;
-    uint16 internal constant MAX_COLLATERAL_RATIO_BPS = 50_000;
-    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
+    uint16 internal constant MAX_BPS = BurnerLoansConstants.MAX_BPS;
+    uint16 internal constant MAX_COLLATERAL_FACTOR_BPS =
+        BurnerLoansConstants.MAX_COLLATERAL_FACTOR_BPS;
+    uint16 internal constant MAX_COLLATERAL_RATIO_BPS =
+        BurnerLoansConstants.MAX_COLLATERAL_RATIO_BPS;
+    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS =
+        BurnerLoansConstants.MAX_BACKING_MULTIPLIER_BPS;
+    uint256 internal constant MAX_KEEPER_REWARD = BurnerLoansConstants.MAX_KEEPER_REWARD;
 
     event AssetAdded(address indexed asset, IBurnerLoans.AssetConfig config);
     event AssetFeeConfigSet(address indexed asset, IBurnerLoans.AssetFeeConfig config);
