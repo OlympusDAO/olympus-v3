@@ -21,5 +21,8 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
+            - name: Restore Foundry build cache
+              uses: ./.github/actions/foundry-cache
+
             - name: Run unit tests
               run: pnpm run test:unit

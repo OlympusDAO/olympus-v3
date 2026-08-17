@@ -34,6 +34,9 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
+            - name: Restore Foundry build cache
+              uses: ./.github/actions/foundry-cache
+
             - name: Run fork tests - ${{ matrix.shard.name }}
               run: pnpm run ${{ matrix.shard.script }}
               env:
