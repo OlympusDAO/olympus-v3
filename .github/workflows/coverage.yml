@@ -22,9 +22,6 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Build
-              run: pnpm run build
-
             - name: Setup lcov
               uses: hrishikesh-kadam/setup-lcov@6c1aa0cc9e1c02f9f58f01ac599f1064ccc83470 # v1
               with:

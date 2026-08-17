@@ -21,8 +21,5 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Build
-              run: pnpm run build
-
             - name: Run unit tests
               run: pnpm run test:unit

@@ -1,9 +1,12 @@
 [profile.default]
 ffi = true
 ast = true
+# Deployment verification and Quabi-based tests require AST artifacts from normal builds.
+evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
 fs_permissions = [
+    { access = "read", path = "./out/" },
     { access = "write", path = "./src/test/sim/out/" },
     { access = "read-write", path = "./deployments/" },
     { access = "read", path = "./src/scripts/" },
@@ -13,24 +16,21 @@ fs_permissions = [
 ]
 gas_limit = "18446744073709551615"
 
-# The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
-# solc_version = "0.8.15"
-
 optimizer = true
 optimizer_runs = 10000
 verbosity = 3
 
-# Operator is too large - it needs to only use 10 optimizer runs
-# The "size" script in package.json replicates these overrides, as "forge build --sizes" does not use the profiles defined here
+# Operator and MonoCooler need special optimizer settings to remain within bytecode-size limits.
 additional_compiler_profiles = [
     { name = "ten-runs", optimizer_runs = 10 },
     { name = "five-thousand-runs", optimizer_runs = 5000 },
 ]
+# Exact `pragma solidity 0.8.15` files remain on 0.8.15. Flexible pragmas use the
+# newest compiler permitted by this explicit upper bound.
 compilation_restrictions = [
-    { paths = "src/policies/Operator.sol", profile = "ten-runs" },
-    { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
-    { paths = "src/policies/bridge/CCIPBurnMintTokenPool.sol", version = "0.8.24" },
-    { paths = "**", version = "0.8.15" },
+    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
+    { paths = "src/policies/cooler/MonoCooler.sol", optimizer_runs = 5000 },
+    { paths = "**", version = ">=0.8.15, <=0.8.30" },
 ]
 libs = ["dependencies"]
 

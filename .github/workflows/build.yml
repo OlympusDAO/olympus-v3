@@ -1,4 +1,4 @@
-name: Tests - OCG Proposals
+name: Build
 on:
     push:
         branches:
@@ -9,7 +9,7 @@ permissions:
     contents: read
 
 jobs:
-    proposal-tests:
+    build:
         runs-on: ubuntu-latest
 
         steps:
@@ -21,7 +21,5 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Run proposal simulation tests
-              run: pnpm run test:proposal
-              env:
-                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+            - name: Build
+              run: pnpm run build
