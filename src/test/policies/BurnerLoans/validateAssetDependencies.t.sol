@@ -68,7 +68,7 @@ contract BurnerLoansValidateAssetDependenciesTest is BurnerLoansTest {
     function test_givenDepositManagerIsDisabled_reverts() public {
         _configureUsdsDependencies();
         vm.prank(admin);
-        depositManager.disable("");
+        _disableDepositManager();
 
         vm.expectRevert(
             abi.encodeWithSelector(

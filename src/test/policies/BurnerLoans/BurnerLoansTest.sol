@@ -17,6 +17,7 @@ import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
@@ -24,6 +25,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
@@ -58,7 +60,7 @@ abstract contract BurnerLoansTest is Test {
     MockOhm internal ohm;
     MockERC20 internal usds;
     ReceiptTokenManager internal receiptTokenManager;
-    DepositManager internal depositManager;
+    IDepositManager internal depositManager;
     MockDepositManager internal mockDepositManager;
     BurnerLoansHarness internal burnerLoans;
     BurnerLoansInventory internal inventory;
@@ -136,7 +138,7 @@ abstract contract BurnerLoansTest is Test {
         inventory.enable("");
         burnerLoans.setInventory(address(inventory));
         burnerLoans.setConfigurator(address(burnerLoansConfig));
-        depositManager.enable("");
+        _enableDepositManager();
         burnerLoansConfig.enable("");
         depositManager.setOperatorName(address(burnerLoans), "brn");
         burnerLoans.enable("");
@@ -163,6 +165,12 @@ abstract contract BurnerLoansTest is Test {
         pure
         returns (IBurnerLoans.AssetRiskConfigInput memory)
     {
+        return _defaultAssetRiskConfigInput(_collateralDecimals());
+    }
+
+    function _defaultAssetRiskConfigInput(
+        uint8 collateralDecimals_
+    ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
         return
             IBurnerLoans.AssetRiskConfigInput({
                 collateralFactorBps: 10_000,
@@ -171,7 +179,7 @@ abstract contract BurnerLoansTest is Test {
                 keeperRewardBps: 100,
                 termLength: 30 days,
                 maxMaturityHorizon: 90 days,
-                maxKeeperReward: 1_000e6
+                maxKeeperReward: uint128(1_000 * 10 ** collateralDecimals_)
             });
     }
 
@@ -189,7 +197,7 @@ abstract contract BurnerLoansTest is Test {
                 termLength: 30 days,
                 maxMaturityHorizon: 90 days,
                 debtCap: _defaultAssetDebtCap(),
-                maxKeeperReward: 1_000e6
+                maxKeeperReward: uint128(1_000 * 10 ** collateralDecimals_)
             });
     }
 
@@ -221,6 +229,18 @@ abstract contract BurnerLoansTest is Test {
             address(burnerLoans)
         );
         vm.stopPrank();
+    }
+
+    function _depositOperatorRole() internal view returns (bytes32) {
+        return DepositManager(address(depositManager)).ROLE_DEPOSIT_OPERATOR();
+    }
+
+    function _enableDepositManager() internal {
+        IEnabler(address(depositManager)).enable("");
+    }
+
+    function _disableDepositManager() internal {
+        IEnabler(address(depositManager)).disable("");
     }
 
     function _addVaultAssetForTest() internal returns (MockERC20 asset, MockERC4626 vault) {
@@ -444,6 +464,7 @@ abstract contract BurnerLoansTest is Test {
         kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
 
         mockDepositManager = new MockDepositManager(kernel, address(usds));
+        depositManager = IDepositManager(address(mockDepositManager));
         burnerLoans = new BurnerLoansHarness(
             kernel,
             IERC20(address(ohm)),
@@ -456,6 +477,8 @@ abstract contract BurnerLoansTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(burnerLoans));
         burnerLoansConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
         kernel.executeAction(Actions.ActivatePolicy, address(burnerLoansConfig));
+        configTimelock = new BurnerLoansConfigTimelock(kernel, burnerLoansConfig);
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
         burnerLoansConfig.setFacility(address(burnerLoans));
         rolesAdmin.grantRole("deposit_operator", address(burnerLoans));
 

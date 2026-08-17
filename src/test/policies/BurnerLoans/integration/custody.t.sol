@@ -23,7 +23,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansHarvestTestBase {
         assertTrue(period.isEnabled, "asset period enabled");
         assertEq(depositManager.getOperatorName(address(burnerLoans)), "brn", "operator name");
         assertTrue(
-            roles.hasRole(address(burnerLoans), depositManager.ROLE_DEPOSIT_OPERATOR()),
+            roles.hasRole(address(burnerLoans), _depositOperatorRole()),
             "deposit operator role"
         );
 
@@ -96,7 +96,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansHarvestTestBase {
         vaultAsset.mint(alice, _COLLATERAL_AMOUNT);
         vm.prank(alice);
         vaultAsset.approve(address(burnerLoans), _COLLATERAL_AMOUNT);
-        bytes32 depositOperatorRole = depositManager.ROLE_DEPOSIT_OPERATOR();
+        bytes32 depositOperatorRole = _depositOperatorRole();
         vm.prank(admin);
         rolesAdmin.revokeRole(depositOperatorRole, address(burnerLoans));
 

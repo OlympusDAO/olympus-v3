@@ -248,7 +248,7 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
     //   then both paths reject the disabled custody dependency
     function test_givenDepositManagerDisabled_reverts() public {
         vm.prank(admin);
-        depositManager.disable("");
+        _disableDepositManager();
 
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_InvalidDepositManager.selector,

@@ -1026,7 +1026,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         burnerLoansConfig.addAsset(
             address(weth),
             _defaultAssetDebtCap(),
-            _defaultAssetRiskConfigInput(),
+            _defaultAssetRiskConfigInput(18),
             _defaultAssetFeeConfig()
         );
 

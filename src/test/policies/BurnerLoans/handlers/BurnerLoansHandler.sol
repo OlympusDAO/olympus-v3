@@ -6,6 +6,7 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
@@ -19,7 +20,6 @@ import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
-import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
@@ -36,7 +36,7 @@ contract BurnerLoansHandler is Test {
     MockPrice public immutable price;
     MockOhm public immutable ohm;
     MockERC20 public immutable collateral;
-    DepositManager public immutable depositManager;
+    IDepositManager public immutable depositManager;
     address public immutable admin;
     address public immutable treasury;
     address public immutable inventoryProvider;
@@ -65,7 +65,7 @@ contract BurnerLoansHandler is Test {
         MockPrice price;
         MockOhm ohm;
         MockERC20 collateral;
-        DepositManager depositManager;
+        IDepositManager depositManager;
         address admin;
         address treasury;
         address inventoryProvider;

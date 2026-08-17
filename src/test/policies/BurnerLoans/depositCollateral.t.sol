@@ -567,7 +567,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Expected branch: preview remains an accounting estimate, write reverts at DepositManager and rolls back
     function test_depositCollateral_givenBurnerLoansIsNotDepositOperator_reverts() public {
         _mintAndApprove(address(usds), alice, 1_000e6);
-        bytes32 depositOperatorRole = depositManager.ROLE_DEPOSIT_OPERATOR();
+        bytes32 depositOperatorRole = _depositOperatorRole();
         vm.prank(admin);
         rolesAdmin.revokeRole(depositOperatorRole, address(burnerLoans));
 
@@ -606,7 +606,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenDepositManagerDisabled_reverts() public {
         _mintAndApprove(address(usds), alice, 1_000e6);
         vm.prank(admin);
-        depositManager.disable("");
+        _disableDepositManager();
 
         vm.expectRevert(
             abi.encodeWithSelector(

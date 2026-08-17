@@ -305,7 +305,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     function test_withdrawCollateral_givenDepositManagerDisabled_reverts() public {
         _depositForAlice(1_000e6);
         vm.prank(admin);
-        depositManager.disable("");
+        _disableDepositManager();
 
         vm.expectRevert(
             abi.encodeWithSelector(
