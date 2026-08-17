@@ -6,8 +6,8 @@ against them at compile time.
 
 ## CI behaviour
 
-These tests are **excluded from every CI workflow**. The exclusion is path-based and applied in
-`package.json`:
+These tests are **excluded from CI test commands and jobs**. The exclusion is path-based and
+applied in `package.json`:
 
 | Script                          | Exclusion                                                               |
 | ------------------------------- | ----------------------------------------------------------------------- |
