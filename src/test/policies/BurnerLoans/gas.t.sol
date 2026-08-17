@@ -48,6 +48,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         rolesAdmin.grantRole(HEART_ROLE, _heart);
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(_seizer));
         _seizer.addAsset(address(usds));
+        _seizer.enable("");
         vm.stopPrank();
     }
 
