@@ -12,6 +12,7 @@ These tests are **excluded from every CI workflow**. The exclusion is path-based
 | Script           | Exclusion                                                               |
 | ---------------- | ----------------------------------------------------------------------- |
 | `test:unit`      | `--no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'` |
+| `test:invariant` | `--no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'` |
 | `test:fork`      | `--no-match-path 'src/test/deprecated/**'`                              |
 | `test:fork:misc` | `--no-match-path 'src/test/deprecated/**'`                              |
 
