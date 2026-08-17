@@ -3,7 +3,6 @@ src/test/mocks/MockModuleWriter.sol
 src/test/lib/quabi/Quabi.sol
 src/test/sim/RangeSim.sol
 cache/
-coverage/
 docs/
 lib/
 node_modules/

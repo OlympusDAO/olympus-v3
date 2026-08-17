@@ -21,7 +21,6 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 - `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
-- `pnpm run test:coverage` - Generate test coverage report
 - `forge test -vvv --match-contract ContractTest` - Run a specific test contract
 
 **For detailed test debugging guidance (verbosity levels, setUp() issues, trace output), use the `/test-debug` skill.**
@@ -290,7 +289,6 @@ src/
 
 - Unit tests exclude fork tests and proposals: `--no-match-contract '(Fork)' --no-match-path 'src/test/proposals/*.t.sol'`
 - Proposal tests are in `src/test/proposals/` and require fork environment
-- Coverage reports generated in `coverage/` directory
 
 **For detailed test writing guidance (file structure, modifiers, naming, error handling), use the `/test-write` skill.**
 
