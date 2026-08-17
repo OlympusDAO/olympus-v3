@@ -21,6 +21,9 @@ optimizer_runs = 10000
 verbosity = 3
 
 # Operator needs special optimizer settings to remain within the bytecode-size limit.
+# Restrictions apply to the entire connected import graph, not only to the matching source file.
+# A script that imports Operator compiles all contracts in that graph at 10 runs, even when it does
+# not deploy Operator. Use IOperator for interactions and a dedicated script to deploy Operator.
 additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
 # Exact `pragma solidity 0.8.15` files remain on 0.8.15. Flexible pragmas use the
 # newest compiler permitted by this explicit upper bound.
