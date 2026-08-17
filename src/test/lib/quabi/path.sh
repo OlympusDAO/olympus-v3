@@ -13,7 +13,8 @@ if [[ "$1" == "--versioned" ]]; then
                 if [[ "$INCLUDE_PROFILE" == "false" ]]; then
                     [[ "$NAME" =~ ^${CONTRACT_NAME}\.[0-9]+\.[0-9]+\.[0-9]+\.json$ ]] || continue
                 else
-                    [[ "$NAME" =~ ^${CONTRACT_NAME}\.[0-9]+\.[0-9]+\.[0-9]+\..+\.json$ ]] || continue
+                    # Additional compiler profiles may omit the compiler-version segment.
+                    [[ "$NAME" =~ ^${CONTRACT_NAME}(\.[0-9]+\.[0-9]+\.[0-9]+)?\..+\.json$ ]] || continue
                 fi
 
                 cast abi-encode "result(string)" "$FILE"
