@@ -25,6 +25,13 @@ A facility is the policy assigned to service one or more markets; it is not a se
 object. A market manager controls configuration. Separating these roles lets an administration
 policy configure markets without either policy depending on the other.
 
+Burner Loans uses this separation as a bound pair. Burner Loans Config is stored as each market's
+manager, while Burner Loans is stored as its facility. Config resolves its markets through the
+bound facility, collateral token, and OHM debt-token tuple. Rebinding only Config would therefore
+change its lookup namespace without changing the authorities stored in existing markets. The
+Burner Loans facility address also keys that policy's external DepositManager accounting, so a
+facility change cannot migrate custody by itself.
+
 | Layer           | Owns                                                        | Does not own                                     |
 | --------------- | ----------------------------------------------------------- | ------------------------------------------------ |
 | FLOAN           | Markets, positions, indexes, caps, and aggregate accounting | Tokens, prices, health, or user authorization    |
@@ -40,7 +47,8 @@ reading FLOAN.
 
 Every mutation requires the relevant Kernel selector permission. After creation, configuration
 also requires the current manager and position servicing requires the current facility. Migration
-selectors are intended for a temporary, separately permissioned policy.
+to a future module version is outside FLOAN 1.0; v1 exposes the source ledger but does not import
+destination state.
 
 ## Markets
 
@@ -59,8 +67,7 @@ parameters.
 | Extension   | `configData`                                   | Product data interpreted according to `configId` |
 
 `termLength` is always non-zero. `type(uint48).max` permits an unlimited maturity horizon. FLOAN
-reads token decimals when a market is created or imported rather than trusting caller-supplied
-values.
+reads token decimals when a market is created rather than trusting caller-supplied values.
 
 Market IDs are globally unique and sequential. The tuple
 `(facility, collateralToken, debtToken)` is an index, not an identity: FLOAN permits multiple
@@ -80,10 +87,10 @@ matches, leaving products free to select one or enforce stricter cardinality.
 | Remove collateral                       | Allowed | Allowed  |
 | Decrease debt                           | Allowed | Allowed  |
 | Default position                        | Allowed | Allowed  |
-| Configure or import                     | Allowed | Allowed  |
+| Configure                               | Allowed | Allowed  |
 
-This design freezes new commitments while preserving repayment, withdrawal, default, and
-migration paths. The facility remains responsible for deciding whether a permitted action is safe.
+This design freezes new commitments while preserving repayment, withdrawal, and default paths. The
+facility remains responsible for deciding whether a permitted action is safe.
 
 ### Accounting
 
@@ -145,26 +152,50 @@ market's active-borrower set while any position in that market has debt.
 Individual balances and mutation inputs use `uint128`; facilities should widen values before
 multiplication. Timestamps use `uint48`, and `lastBorrowBlock` uses `uint32`.
 
-## Configuration And Migration
+## Configuration And Export
 
-| Operation                   | Authority                            | Important constraint                                      |
-| --------------------------- | ------------------------------------ | --------------------------------------------------------- |
-| Create/import market        | Kernel-permissioned creator          | Standard configuration and sequential IDs must be valid   |
-| Configure market            | Current manager                      | Standard configuration must remain valid                  |
-| Enable/disable originations | Current manager                      | Controls exposure-increasing actions                      |
-| Rotate manager              | Current manager                      | Transfers configuration authority                         |
-| Rotate facility             | Current manager                      | Transfers servicing authority and live facility principal |
-| Create/mutate position      | Current facility                     | Position must belong to its market                        |
-| Import position             | Kernel-permissioned migration policy | IDs must be imported contiguously and in order            |
+| Operation                   | Authority                   | Important constraint                                      |
+| --------------------------- | --------------------------- | --------------------------------------------------------- |
+| Create market               | Kernel-permissioned creator | Standard configuration must be valid                      |
+| Configure market            | Current manager             | Standard configuration must remain valid                  |
+| Enable/disable originations | Current manager             | Controls exposure-increasing actions                      |
+| Rotate manager              | Current manager             | Transfers configuration authority                         |
+| Rotate facility             | Current manager             | Transfers servicing authority and live facility principal |
+| Create/mutate position      | Current facility            | Position must belong to its market                        |
 
-Facility rotation does not transfer collateral, approvals, receipt tokens, or other external
-custody. Governance must coordinate those resources atomically or first reduce exposure to zero.
-A malicious manager can appoint a malicious facility, so both authorities are governance-critical.
+Generic `setMarketFacility` remains a module capability. It updates FLOAN's facility indexes and
+principal aggregate, but does not transfer collateral, approvals, receipt tokens, or other external
+custody. A product must coordinate those resources and authorities itself or first reduce exposure
+to zero. A malicious manager can appoint a malicious facility, so both authorities are
+governance-critical.
 
-Migration preserves numeric IDs and reconstructs indexes and aggregates from imported records.
-Imports validate canonical active or reusable position state. Historical defaulted principal is a
-separate input, so it can coexist with a later active episode on the same position ID. A temporary
-migration policy should lose its selector permissions after reconciliation.
+### Authoritative And Derived State
+
+FLOAN 1.0 is an export-complete source ledger, not a destination importer.
+
+```mermaid
+flowchart LR
+    V1["FLOAN 1.0 source ledger"] -->|"counts and canonical records"| READER["Migration reader"]
+    V1 -->|"cumulative principal defaults"| READER
+    V1 -->|"derived-state reconciliation"| READER
+    READER -->|"destination-specific translation and import"| FUTURE["Future FLOAN version"]
+```
+
+| State category                | FLOAN 1.0 source                                                                            | Reconstruction or reconciliation rule                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Markets                       | Iterate IDs from zero to `getMarketCount() - 1`; read `getMarket` and `getMarketConfigData` | Treat every typed field and the opaque, `configId`-scoped bytes as authoritative                      |
+| Current positions             | Iterate IDs from zero to `getPositionCount() - 1`; read `getPosition`                       | Include cleared reusable records; they remain part of the current ledger                              |
+| Cumulative principal defaults | `getMarketPrincipalDefaulted`                                                               | Read directly because cleared and reused positions cannot reproduce this history                      |
+| Market and position indexes   | Collection getters                                                                          | Rebuild from canonical records and compare IDs and membership, not array order                        |
+| Active borrowers              | Active-borrower getters                                                                     | Derive membership from current debt; `EnumerableSet` order is unstable and is not an export guarantee |
+| Live aggregates               | Market collateral, principal, interest, and facility/debt-token principal getters           | Recompute from current positions and market identities, then reconcile totals                         |
+| Closed or defaulted episodes  | `PositionClosed` and `PositionDefaulted` logs                                               | Keep as historical event data, separate from the current-state export                                 |
+
+An off-chain extractor must pin every call in a snapshot to one block. Sequential v1 reads are
+multiple calls and are not atomic. Any future on-chain destination therefore owns the freeze and
+reconciliation boundary, as well as import authorization, schema validation and translation,
+batching, gas limits, failure recovery, and activation. External collection cursors must be reset
+or reconciled against rebuilt membership instead of copied by index.
 
 ## Product Examples
 

@@ -155,19 +155,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
         MarketInput calldata market_,
         bytes calldata configData_
     ) external override permissioned returns (uint32 marketId) {
-        return _storeMarket(market_, configData_, true);
-    }
-
-    /// @inheritdoc IFLOANv1
-    function importMarket(
-        uint32 marketId_,
-        MarketInput calldata market_,
-        bytes calldata configData_,
-        bool originationsEnabled_
-    ) external override permissioned {
-        if (marketId_ != _marketCount) revert FLOAN_InvalidImportId(_marketCount, marketId_);
-        _storeMarket(market_, configData_, originationsEnabled_);
-        emit MarketImported(marketId_);
+        return _storeMarket(market_, configData_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -265,48 +253,6 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requireFacility(marketId_);
         _requireOriginationsEnabled(marketId_);
         return _createPosition(marketId_, borrower_);
-    }
-
-    /// @inheritdoc IFLOANv1
-    function importPosition(
-        uint64 positionId_,
-        Position calldata position_,
-        uint128 principalDefaulted_
-    ) external override permissioned {
-        if (positionId_ != _positionCount) {
-            revert FLOAN_InvalidImportId(_positionCount, positionId_);
-        }
-        _requireMarket(position_.marketId);
-        if (position_.borrower == address(0)) revert FLOAN_ZeroAddress();
-
-        bool hasDebt = position_.principalDue != 0 || position_.interestDue != 0;
-        if (
-            position_.principalDrawn < position_.principalDue ||
-            (hasDebt && position_.maturity == 0) ||
-            (!hasDebt &&
-                (position_.principalDrawn != 0 ||
-                    position_.maturity != 0 ||
-                    position_.lastBorrowBlock != 0))
-        ) revert FLOAN_InvalidConfig();
-
-        if (hasDebt) {
-            _increasePrincipal(
-                position_.marketId,
-                position_.borrower,
-                position_.principalDue,
-                true
-            );
-            _increaseInterest(position_.marketId, position_.interestDue);
-        }
-        if (principalDefaulted_ != 0) {
-            getMarketPrincipalDefaulted[position_.marketId] += principalDefaulted_;
-        }
-
-        ++_positionCount;
-        _positions[positionId_] = position_;
-        _indexPosition(positionId_, position_.marketId, position_.borrower);
-        getMarketCollateral[position_.marketId] += position_.collateral;
-        emit PositionImported(positionId_, principalDefaulted_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -522,8 +468,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
 
     function _storeMarket(
         MarketInput calldata market_,
-        bytes calldata configData_,
-        bool originationsEnabled_
+        bytes calldata configData_
     ) internal returns (uint32 marketId) {
         _validateNewMarket(market_);
 
@@ -545,7 +490,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
             baseFeeBps: market_.baseFeeBps,
             collateralDecimals: collateralDecimals,
             debtDecimals: debtDecimals,
-            originationsEnabled: originationsEnabled_
+            originationsEnabled: true
         });
         _marketIds[market_.facility][market_.collateralToken][market_.debtToken].add(marketId);
         _marketConfigData[marketId] = configData_;
@@ -558,7 +503,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
             market_.facility,
             market_.configId
         );
-        emit MarketOriginationsSet(marketId, originationsEnabled_);
+        emit MarketOriginationsSet(marketId, true);
     }
 
     function _indexPosition(uint64 positionId_, uint32 marketId_, address borrower_) internal {

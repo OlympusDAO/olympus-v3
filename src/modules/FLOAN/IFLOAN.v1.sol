@@ -42,14 +42,10 @@ interface IFLOANv1 is IERC165 {
     /// @param marketId Capped market identifier.
     /// @param principalCap Configured principal cap.
     error FLOAN_PrincipalCapExceeded(uint32 marketId, uint128 principalCap);
-    /// @notice An imported identifier is not the next contiguous identifier.
-    /// @param expectedId Next identifier required by the ledger.
-    /// @param providedId Identifier supplied by the importer.
-    error FLOAN_InvalidImportId(uint256 expectedId, uint256 providedId);
     /// @notice A required token, manager, facility, or borrower address is zero.
     error FLOAN_ZeroAddress();
 
-    /// @notice Caller-supplied configuration used to create or import a market.
+    /// @notice Caller-supplied configuration used to create a market.
     /// @dev Token decimals and origination state are derived by the module and are therefore not
     ///      caller-supplied fields.
     /// @param collateralToken Token accepted as collateral.
@@ -207,10 +203,6 @@ interface IFLOANv1 is IERC165 {
         uint48 maturity,
         uint32 lastBorrowBlock
     );
-    /// @notice Emitted after a market is imported from a previous ledger.
-    event MarketImported(uint32 indexed marketId);
-    /// @notice Emitted after a position and its accounting are imported.
-    event PositionImported(uint64 indexed positionId, uint128 principalDefaulted);
 
     /// @notice Returns the next market identifier and number of stored markets.
     function getMarketCount() external view returns (uint32);
@@ -359,20 +351,6 @@ interface IFLOANv1 is IERC165 {
         bytes calldata configData_
     ) external returns (uint32 marketId);
 
-    /// @notice Imports the next market while preserving its identifier from a previous FLOAN ledger.
-    /// @dev Kernel-permissioned. Reverts when the ID is not the next contiguous ID, a required
-    ///      identity address is zero, or standard market configuration is invalid.
-    /// @param marketId_ Original market identifier.
-    /// @param market_ Market input. Token decimals are read from the token contracts.
-    /// @param configData_ Opaque product configuration to import.
-    /// @param originationsEnabled_ Imported origination state.
-    function importMarket(
-        uint32 marketId_,
-        MarketInput calldata market_,
-        bytes calldata configData_,
-        bool originationsEnabled_
-    ) external;
-
     /// @notice Sets a market's live-principal cap.
     /// @dev Kernel-permissioned and manager-only. Reverts for an invalid market, a caller other
     ///      than its manager, or a cap below live market principal.
@@ -442,19 +420,6 @@ interface IFLOANv1 is IERC165 {
         uint32 marketId_,
         address borrower_
     ) external returns (uint64 positionId);
-
-    /// @notice Imports the next position and reconstructs its indexes and aggregate accounting.
-    /// @dev Kernel-permissioned. Reverts for a noncontiguous ID, invalid market, zero borrower,
-    ///      inconsistent active/closed state, or live principal above the market cap. Historical
-    ///      defaulted principal may coexist with a reusable current position.
-    /// @param positionId_ Original position identifier.
-    /// @param position_ Complete position state to import.
-    /// @param principalDefaulted_ Historical principal defaulted by the position.
-    function importPosition(
-        uint64 positionId_,
-        Position calldata position_,
-        uint128 principalDefaulted_
-    ) external;
 
     /// @notice Increases credited collateral on a position.
     /// @dev Kernel-permissioned. Reverts for an invalid position, a caller other than the position
