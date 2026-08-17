@@ -18,7 +18,7 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 **Testing:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes invariants, fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
 - `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
@@ -281,7 +281,7 @@ src/
 **Test Commands:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes invariants, fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
 - `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
