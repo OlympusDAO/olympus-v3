@@ -5,6 +5,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
@@ -43,7 +44,7 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
         vm.startPrank(admin);
         burnerLoansConfig.setConfigOperator(address(configTimelock));
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit IBurnerLoansConfig.ConfigOperatorSet(address(0));
+        emit IConfigOperator.ConfigOperatorSet(address(0));
         burnerLoansConfig.setConfigOperator(address(0));
         vm.stopPrank();
 
@@ -110,7 +111,7 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
 
         vm.prank(admin);
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit IBurnerLoansConfig.ConfigOperatorSet(newConfigOperator);
+        emit IConfigOperator.ConfigOperatorSet(newConfigOperator);
         burnerLoansConfig.setConfigOperator(newConfigOperator);
 
         assertEq(burnerLoansConfig.configOperator(), newConfigOperator, "config operator");

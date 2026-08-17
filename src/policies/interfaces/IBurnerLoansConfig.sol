@@ -19,7 +19,6 @@ interface IBurnerLoansConfig is IBurnerLoans {
     error BurnerLoansConfig_UnauthorizedConfigOperator(address caller_);
 
     event FacilitySet(address indexed facility);
-    event ConfigOperatorSet(address indexed configOperator);
 
     /// @notice Returns the OHM debt token configured for new markets.
     /// @return ohm_ OHM token address.
@@ -45,10 +44,6 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @notice Returns Burner Loans' current Burner Loans Inventory contract.
     /// @return inventory_ Current Burner Loans Inventory resolved through the bound facility.
     function inventory() external view returns (address inventory_);
-
-    /// @notice Returns the optional address allowed to execute delegated configuration changes.
-    /// @return configOperator_ Config operator address, or zero when delegated access is revoked.
-    function configOperator() external view returns (address configOperator_);
 
     /// @notice Returns whether at least one bound FLOAN market exists for a collateral asset.
     /// @param asset_ Collateral asset to query.
@@ -106,12 +101,6 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @notice Updates the maximum active principal across the bound Burner Loans facility.
     /// @dev Restricted to OCG admin and forwarded to Burner Loans' current Burner Loans Inventory.
     function setGlobalDebtCap(uint128 debtCapOhm_) external;
-
-    /// @notice Sets the optional address allowed to execute delegated configuration changes.
-    /// @dev The config operator need not be a policy or implement a timelock. Setting zero revokes
-    ///      delegated access.
-    /// @param configOperator_ New config operator address.
-    function setConfigOperator(address configOperator_) external;
 
     /// @notice Enables or disables new originations for a configured asset.
     /// @param asset_ Collateral asset to update.

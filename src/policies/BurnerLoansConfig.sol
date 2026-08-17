@@ -10,6 +10,7 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -20,8 +21,9 @@ import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
-import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Config
 /// @notice Opinionated configuration policy for Burner Loans markets stored in FLOAN.
@@ -29,6 +31,7 @@ contract BurnerLoansConfig is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
+    ConfigOperatorSingleStep,
     IBurnerLoansConfig,
     IVersioned
 {
@@ -46,10 +49,6 @@ contract BurnerLoansConfig is
     // ========== MODULES ========== //
 
     IFLOANv1 internal _FLOAN;
-
-    // ========== STATE ========== //
-
-    address public override configOperator;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -252,18 +251,6 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Admin-only. The config operator need not be a policy or implement a timelock. Setting
-    ///      zero revokes delegated access.
-    /// @dev Reverts if:
-    ///      - The contract is disabled.
-    ///      - The caller does not have the admin role.
-    /// @param configOperator_ New config operator address.
-    function setConfigOperator(address configOperator_) external givenEnabled onlyAdminRole {
-        configOperator = configOperator_;
-        emit ConfigOperatorSet(configOperator_);
-    }
-
-    /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable directly by admin or by the configured config operator. In the expected
     ///      deployment, direct admin calls are already timelocked by OCG governance, while the
     ///      config operator is ConfigTimelock, through which burner_loans_admin callers queue the
@@ -380,9 +367,17 @@ contract BurnerLoansConfig is
     /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` and the caller address
     ///      when the caller is neither `configOperator` nor an admin.
     function _onlyConfigOperatorOrAdmin() internal view {
-        if (msg.sender != configOperator && !_isAdmin(msg.sender)) {
+        if (!_isConfigOperator(msg.sender) && !_isAdmin(msg.sender)) {
             revert BurnerLoansConfig_UnauthorizedConfigOperator(msg.sender);
         }
+    }
+
+    /// @inheritdoc ConfigOperatorSingleStep
+    /// @dev Preserves the existing enabled-state check before admin-role authorization.
+    function _authorizeSetConfigOperator() internal view override returns (bool authorized) {
+        _requireEnabled();
+        _requireRole(msg.sender, ADMIN_ROLE);
+        return true;
     }
 
     /// @notice Validates the interface and token compatibility of a Burner Loans facility.
@@ -807,6 +802,7 @@ contract BurnerLoansConfig is
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansConfig).interfaceId ||
+            interfaceId_ == type(IConfigOperator).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
