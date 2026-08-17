@@ -2,12 +2,11 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 /// @title Burner Loans Composites Interface
 /// @notice One-transaction borrower flows composed from Burner Loans primitives.
-interface IBurnerLoansComposites is IERC165 {
+interface IBurnerLoansComposites {
     /// @notice Thrown when a required address is zero.
     error BurnerLoansComposites_ZeroAddress();
 

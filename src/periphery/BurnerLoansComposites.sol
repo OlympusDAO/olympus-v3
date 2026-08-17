@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
-import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
@@ -153,9 +152,7 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
     }
 
     /// @inheritdoc ERC165
-    function supportsInterface(
-        bytes4 interfaceId_
-    ) public view override(ERC165, IERC165) returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) public view override returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansComposites).interfaceId ||
             super.supportsInterface(interfaceId_);
