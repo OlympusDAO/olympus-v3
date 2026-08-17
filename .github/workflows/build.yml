@@ -1,4 +1,4 @@
-name: Build
+name: Build and Tests
 on:
     push:
         branches:
@@ -29,3 +29,145 @@ jobs:
 
             - name: Build
               run: pnpm run build
+
+            - name: Upload Foundry build artifacts
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: foundry-build
+                  path: |
+                      out
+                      cache/solidity-files-cache.json
+                  if-no-files-found: error
+                  retention-days: 1
+
+    unit-tests:
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run unit tests
+              run: pnpm run test:unit
+
+    invariant-tests:
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run invariant tests
+              run: pnpm run test:invariant
+
+    fork-tests:
+        name: Fork tests - ${{ matrix.shard.name }}
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                shard:
+                    - name: Loan Consolidator
+                      script: test:fork:loan-consolidator
+                    - name: Boosted Liquidity
+                      script: test:fork:boosted-liquidity
+                    - name: Proposal Helpers
+                      script: test:fork:proposal-helpers
+                    - name: Misc
+                      script: test:fork:misc
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run fork tests - ${{ matrix.shard.name }}
+              run: pnpm run ${{ matrix.shard.script }}
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+    proposal-tests:
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run proposal simulation tests
+              run: pnpm run test:proposal
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+    crosschain-tests:
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run cross-chain fork tests
+              run: pnpm run test:crosschainfork
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
