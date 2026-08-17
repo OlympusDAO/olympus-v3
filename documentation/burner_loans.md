@@ -177,6 +177,7 @@ sequenceDiagram
     actor Payer
     participant BL as BurnerLoans
     participant F as FLOAN
+    participant O as OHM
     participant I as BurnerLoansInventory
     participant M as MINTR
 
