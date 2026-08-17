@@ -10,8 +10,8 @@ inputs:
 runs:
     using: composite
     steps:
-        # Only the full-build job writes caches so sparse or partial test builds cannot replace
-        # the complete artifact set. Test jobs restore the same cache read-only.
+        # Only the full-build job writes caches so sparse or partial builds cannot replace the
+        # complete artifact set. Parallel test jobs use that run's uploaded build artifacts.
         - name: Restore Foundry build cache
           if: ${{ inputs.save != 'true' }}
           uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
