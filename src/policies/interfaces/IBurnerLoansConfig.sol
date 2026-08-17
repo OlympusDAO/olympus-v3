@@ -7,6 +7,8 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @title Burner Loans Config Interface
 /// @notice Opinionated administration surface for Burner Loans markets stored in FLOAN.
 interface IBurnerLoansConfig is IBurnerLoans {
+    /// @notice Thrown when attempting to bind a facility after the initial facility was set.
+    error BurnerLoansConfig_FacilityAlreadySet();
     /// @notice Thrown when the configured Burner Loans facility or its linkage is incompatible.
     /// @param facility_ The invalid facility address.
     error BurnerLoansConfig_InvalidFacility(address facility_);
@@ -27,9 +29,17 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @return facility_ Bound Burner Loans facility.
     function facility() external view returns (address facility_);
 
-    /// @notice Sets the Burner Loans facility whose FLOAN markets this policy configures.
-    /// @dev Callable only by OCG admin while Burner Loans Config is globally disabled. The
-    ///      facility must be an active policy in this contract's Kernel.
+    /// @notice Initializes the Burner Loans facility whose FLOAN markets this policy configures.
+    /// @dev Callable only once by OCG admin while Burner Loans Config is globally disabled. The
+    ///      facility must be an active, compatible policy in this contract's Kernel.
+    /// @dev Markets created through this Config store it as manager and `facility_` as facility.
+    ///      Config resolves those markets through the facility, collateral, and debt-token tuple.
+    ///      Rebinding would change that lookup without updating existing market authorities or the
+    ///      DepositManager operator namespace keyed to the old facility. A replacement Burner Loans
+    ///      stack must therefore deploy a fresh Config and facility pair.
+    /// @dev Reverts if the Config already has a facility or `facility_` is incompatible.
+    ///
+    /// @param facility_ Burner Loans facility to bind for this Config's lifetime.
     function setFacility(address facility_) external;
 
     /// @notice Returns Burner Loans' current Burner Loans Inventory contract.

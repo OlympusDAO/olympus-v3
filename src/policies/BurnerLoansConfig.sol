@@ -54,8 +54,8 @@ contract BurnerLoansConfig is
     // ========== CONSTRUCTOR ========== //
 
     /// @notice Deploys an unlinked Burner Loans configuration policy.
-    /// @dev The facility is linked after deployment through `setFacility`, which requires active
-    ///      membership in this policy's Kernel.
+    /// @dev The facility is linked once after deployment through `setFacility`, which requires
+    ///      active membership in this policy's Kernel.
     /// @param kernel_ Kernel that manages this policy and its module dependencies.
     /// @param ohm_ Debt token used by markets created through this policy.
     constructor(
@@ -114,6 +114,7 @@ contract BurnerLoansConfig is
 
     /// @inheritdoc IBurnerLoansConfig
     function setFacility(address facility_) external givenDisabled onlyAdminRole {
+        if (address(_FACILITY) != address(0)) revert BurnerLoansConfig_FacilityAlreadySet();
         _requireFacilityActive(facility_);
         _validateFacilityCompatibility(IBurnerLoansLifecycle(facility_));
         _FACILITY = IBurnerLoansLifecycle(facility_);

@@ -65,15 +65,15 @@ stateDiagram-v2
     CollateralOnly --> [*]: full withdrawal
 ```
 
-| Action              | Effect                                                    | Main condition                                                 |
-| ------------------- | --------------------------------------------------------- | -------------------------------------------------------------- |
-| Deposit collateral  | Adds DepositManager credit to the position                | Burner Loans and asset originations are enabled                |
-| Borrow              | Adds principal and draws OHM from Burner Loans Inventory   | Position is healthy, within both caps, and not matured         |
+| Action              | Effect                                                        | Main condition                                                 |
+| ------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
+| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                |
+| Borrow              | Adds principal and draws OHM from Burner Loans Inventory      | Position is healthy, within both caps, and not matured         |
 | Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; no price read required                |
-| Withdraw collateral | Removes credit and returns custody assets                 | Remaining debt stays healthy                                   |
-| Extend              | Advances the prior maturity by whole terms                | Position stays healthy and maturity remains within its horizon |
-| Seize               | Defaults all principal and removes all collateral         | Position is matured or below the health boundary               |
-| Harvest yield       | Sends custody surplus to `TRSRY`                          | Custody remains solvent                                        |
+| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                   |
+| Extend              | Advances the prior maturity by whole terms                    | Position stays healthy and maturity remains within its horizon |
+| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary               |
+| Harvest yield       | Sends custody surplus to `TRSRY`                              | Custody remains solvent                                        |
 
 Full repayment and seizure clear the episode's financial fields and active indexes. The position
 ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
@@ -203,14 +203,14 @@ DepositManager may route collateral into an ERC-4626 vault. FLOAN records withdr
 credit, not vault shares. Vault yield does not increase borrower health; `harvestYield` sends only
 custody surplus to `TRSRY`.
 
-| Stage                       | Enforcement or assumption                                                           |
-| --------------------------- | ----------------------------------------------------------------------------------- |
-| Asset admission             | Governance verifies exact-transfer collateral and any configured vault path         |
-| Collateral deposit          | Safe transfer plus DepositManager exact-receipt accounting                          |
-| Provider supply / draw      | Trusted OHM; SafeTransferLib without repeated balance-delta reads                   |
-| Repayment settlement        | Safe transfer plus exact Burner Loans Inventory balance increase                    |
-| Fees and outgoing transfers | Safe transfer; exact behavior follows the admitted-token assumption                 |
-| Token callbacks             | Token-touching lifecycle and Burner Loans Inventory functions use transient guards  |
+| Stage                       | Enforcement or assumption                                                          |
+| --------------------------- | ---------------------------------------------------------------------------------- |
+| Asset admission             | Governance verifies exact-transfer collateral and any configured vault path        |
+| Collateral deposit          | Safe transfer plus DepositManager exact-receipt accounting                         |
+| Provider supply / draw      | Trusted OHM; SafeTransferLib without repeated balance-delta reads                  |
+| Repayment settlement        | Safe transfer plus exact Burner Loans Inventory balance increase                   |
+| Fees and outgoing transfers | Safe transfer; exact behavior follows the admitted-token assumption                |
+| Token callbacks             | Token-touching lifecycle and Burner Loans Inventory functions use transient guards |
 
 Fee-on-transfer, rebasing, and otherwise balance-changing collateral is unsupported. ERC-20 has no
 reliable capability flag, and an admission-time transfer probe can be bypassed by amount-, address-,
@@ -249,11 +249,20 @@ automatic restoration does not occur, `burner_loans_admin` must call `syncMintAp
 | Supply / withdraw protocol OHM                       | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
 
 Config creates one market per collateral/OHM pair under its currently bound Burner Loans facility.
-The facility link may change only while Config is disabled. Burner Loans-specific fields use
-`bytes16("Burner Loans v1")`; standard fixed-term fields remain typed in FLOAN. Config resolves
-Burner Loans Inventory through Burner Loans, so it follows an approved Burner Loans Inventory
-pointer change without maintaining a second link. Burner Loans Inventory's facility is immutable
-in v1.
+Each market stores Config as its manager and Burner Loans as its facility: Config is the
+Kernel-permissioned pass-through for market configuration, while Burner Loans services positions.
+Config finds those markets by the bound facility, collateral token, and OHM debt-token tuple.
+
+`Config.setFacility` is disabled-state, one-time deployment wiring. Rebinding only Config would
+switch that lookup tuple without updating the manager or facility stored in existing markets, so
+Config would remain their configuration authority but could no longer discover them. It would
+also leave custody, liabilities, and receipt-token state keyed to the old Burner Loans address in
+DepositManager. After a non-zero facility is stored, Config therefore rejects every rebind.
+
+Burner Loans-specific fields use `bytes16("Burner Loans v1")`; standard fixed-term fields remain
+typed in FLOAN. Config resolves Burner Loans Inventory through Burner Loans, so it follows an
+approved Burner Loans Inventory pointer change without maintaining a second link. Burner Loans
+Inventory's facility is immutable in v1.
 
 ## Deployment And Activation
 
@@ -299,6 +308,59 @@ V1 launches with zero Burner Loans Inventory active principal, supplied idle, an
 Importing a non-zero live Burner Loans Inventory ledger requires a future migration design. See
 [replacing Burner Loans Inventory](./burner_loans_inventory.md#replacement) for the v1 replacement
 constraints.
+
+## Policy Replacement And Wind-Down
+
+A live Burner Loans policy address and its DepositManager operator namespace are not migratable in
+v1. Replacement is side by side: the old stack services its own positions to zero while a fresh
+stack originates separate positions.
+
+```mermaid
+flowchart LR
+    OLDUSER["Existing borrowers"] --> OLD["Old Burner Loans (facility)"]
+    OLDC["Old Config (manager)"] --> OLDM["Old FLOAN markets"]
+    OLD --> OLDM
+    OLD --> OLDI["Old Inventory"]
+    OLD --> OLDDM["Old DepositManager namespace"]
+    OLDS["Old Seizer"] --> OLD
+    NEWUSER["New originations"] --> NEW["New Burner Loans (facility)"]
+    NEWC["Fresh Config (manager)"] --> NEWM["Fresh FLOAN markets"]
+    NEW --> NEWM
+    NEW --> NEWI["Fresh Inventory"]
+    NEW --> NEWDM["Fresh DepositManager namespace"]
+    NEWS["Fresh Seizer"] --> NEW
+```
+
+The replacement deploys a fresh Config and Burner Loans pair, plus a fresh Inventory, Seizer,
+FLOAN markets, and DepositManager operator namespace. The old Config remains the manager of the old
+markets, and the old Burner Loans remains their facility until wind-down completes. The same
+DepositManager contract may host both namespaces, but they remain keyed to different policy
+addresses. `Config.setFacility` links each fresh pair once during deployment; it is not a migration
+operation. FLOAN's generic `setMarketFacility` remains available for products that can coordinate
+their own custody and authority transition, but Burner Loans cannot use it to transfer this
+policy-scoped state.
+
+| Path         | Old stack during wind-down                                          | New stack                                              |
+| ------------ | ------------------------------------------------------------------- | ------------------------------------------------------ |
+| Originations | Disable each old asset; deposit, borrow, and extend are blocked     | Originate only in fresh markets and custody accounting |
+| Servicing    | Keep the old policy globally enabled for repay, withdraw, and seize | Service only new positions                             |
+| Automation   | Keep the old Seizer operational until no position requires seizure  | Configure a fresh Seizer independently                 |
+| Retirement   | Allowed only after every condition below is reconciled              | Independent of old position IDs and balances           |
+
+Active-borrower membership can be reconciled from current positions, but its set order is not
+guaranteed. A fresh Seizer must reset or reconcile both `nextAssetIndex` and each per-asset
+`assetCursor`; it must not copy cursors against an assumed borrower order.
+
+### Retirement Checklist
+
+| Area                   | Required state before retiring the old stack                                                                                                                                              |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FLOAN markets          | Originations disabled; collateral, principal due, interest due, and active borrowers are zero for every old market                                                                        |
+| Facility accounting    | `getFacilityPrincipalDue(oldFacility, debtToken)` is zero for every debt token used by the old facility                                                                                   |
+| DepositManager         | Liabilities and borrowed balances are zero for every old collateral asset; remaining vault yield and dust are harvested or explicitly accepted                                            |
+| Burner Loans Inventory | Active principal, provider claims, and supplied idle are zero; the global cap and actual MINTR approval are zero; residual OHM is burned, withdrawn, or rescued through the intended path |
+| Automation             | The old Seizer has completed all required seizure work and is then disabled                                                                                                               |
+| Authority              | DepositManager operator rights and operational Burner Loans roles are revoked only after user exits and seizure work are complete; Config and lifecycle policies are deactivated last     |
 
 ## Preview Semantics
 
