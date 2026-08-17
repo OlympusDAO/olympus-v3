@@ -10,5 +10,8 @@ source .env
 print_test_event "Running non-fork tests"
 pnpm run test:unit
 
+print_test_event "Running invariant tests"
+pnpm run test:invariant
+
 print_test_event "Running fork tests"
 pnpm run test:fork
