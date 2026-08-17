@@ -20,16 +20,12 @@ optimizer = true
 optimizer_runs = 10000
 verbosity = 3
 
-# Operator and MonoCooler need special optimizer settings to remain within bytecode-size limits.
-additional_compiler_profiles = [
-    { name = "ten-runs", optimizer_runs = 10 },
-    { name = "five-thousand-runs", optimizer_runs = 5000 },
-]
+# Operator needs special optimizer settings to remain within the bytecode-size limit.
+additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
 # Exact `pragma solidity 0.8.15` files remain on 0.8.15. Flexible pragmas use the
 # newest compiler permitted by this explicit upper bound.
 compilation_restrictions = [
     { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
-    { paths = "src/policies/cooler/MonoCooler.sol", optimizer_runs = 5000 },
     { paths = "**", version = ">=0.8.15, <=0.8.30" },
 ]
 libs = ["dependencies"]

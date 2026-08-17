@@ -36,7 +36,7 @@ import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDeleg
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 
 // Bophades
-import {Actions, fromKeycode, Kernel, Keycode, Module, Policy, toKeycode} from "src/Kernel.sol";
+import {Actions, fromKeycode, Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 
 // Bophades Modules
 import {OlympusPrice} from "modules/PRICE/OlympusPrice.sol";
@@ -49,6 +49,7 @@ import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiqui
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 // Bophades Policies
+import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
 import {OlympusPriceConfig} from "src/policies/price/PriceConfig.sol";
@@ -77,7 +78,7 @@ import {EmissionManager} from "policies/EmissionManager.sol";
 import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {CoolerLtvOracle} from "policies/cooler/CoolerLtvOracle.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
-import {IMonoCooler} from "policies/interfaces/cooler/IMonoCooler.sol";
+import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";
 import {CoolerComposites} from "src/periphery/CoolerComposites.sol";
 import {CoolerV2Migrator} from "src/periphery/CoolerV2Migrator.sol";
@@ -110,7 +111,7 @@ contract OlympusDeploy is Script {
     OlympusGovDelegation public DLGTE;
 
     /// Policies
-    Policy public operator;
+    Operator public operator;
     OlympusHeart public heart;
     BondCallback public callback;
     OlympusPriceConfig public priceConfig;
@@ -133,7 +134,7 @@ contract OlympusDeploy is Script {
     EmissionManager public emissionManager;
     CoolerLtvOracle public coolerV2LtvOracle;
     CoolerTreasuryBorrower public coolerV2TreasuryBorrower;
-    IMonoCooler public coolerV2;
+    MonoCooler public coolerV2;
     CoolerComposites public coolerV2Composites;
     CoolerV2Migrator public coolerV2Migrator;
 
@@ -337,7 +338,7 @@ contract OlympusDeploy is Script {
             envAddress("olympus.periphery.DelegateEscrowFactory")
         );
         // Policies
-        operator = Policy(envAddress("olympus.policies.Operator"));
+        operator = Operator(envAddress("olympus.policies.Operator"));
         heart = OlympusHeart(envAddress("olympus.policies.OlympusHeart"));
         callback = BondCallback(envAddress("olympus.policies.BondCallback"));
         priceConfig = OlympusPriceConfig(envAddress("olympus.policies.OlympusPriceConfig"));
@@ -369,7 +370,7 @@ contract OlympusDeploy is Script {
         coolerV2TreasuryBorrower = CoolerTreasuryBorrower(
             envAddress("olympus.policies.CoolerV2TreasuryBorrower")
         );
-        coolerV2 = IMonoCooler(envAddress("olympus.policies.CoolerV2"));
+        coolerV2 = MonoCooler(envAddress("olympus.policies.CoolerV2"));
 
         // Governance
         timelock = Timelock(payable(envAddress("olympus.governance.Timelock")));
@@ -621,20 +622,15 @@ contract OlympusDeploy is Script {
         console2.log("   regenWait", regenWait);
         console2.log("   reserveFactor", reserveFactor);
 
-        // Deploy from the separately optimized artifact so DeployV2 does not combine Operator
-        // and MonoCooler, which require incompatible optimizer settings, in one compiler job.
+        // Deploy Operator policy. A future redeployment may need a dedicated script to preserve
+        // Operator's 10-run optimizer setting without applying it to the rest of this deploy graph.
         vm.broadcast();
-        operator = Policy(
-            deployCode(
-                "src/policies/Operator.sol:Operator",
-                abi.encode(
-                    kernel,
-                    bondAuctioneer,
-                    callback,
-                    [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
-                    configParams
-                )
-            )
+        operator = new Operator(
+            kernel,
+            bondAuctioneer,
+            callback,
+            [address(ohm), address(reserve), address(sReserve), address(oldReserve)],
+            configParams
         );
         console2.log("Operator deployed at:", address(operator));
 
@@ -1296,22 +1292,16 @@ contract OlympusDeploy is Script {
         console2.log("  Interest Rate Wad:", interestRateWad);
         console2.log("  Min Debt Required:", minDebtRequired);
 
-        // Deploy from the separately optimized artifact so DeployV2 does not combine MonoCooler
-        // and Operator, which require incompatible optimizer settings, in one compiler job.
+        // Deploy CoolerV2
         vm.broadcast();
-        coolerV2 = IMonoCooler(
-            deployCode(
-                "src/policies/cooler/MonoCooler.sol:MonoCooler",
-                abi.encode(
-                    address(ohm),
-                    address(gohm),
-                    address(staking),
-                    address(kernel),
-                    address(coolerV2LtvOracle),
-                    interestRateWad,
-                    minDebtRequired
-                )
-            )
+        coolerV2 = new MonoCooler(
+            address(ohm),
+            address(gohm),
+            address(staking),
+            address(kernel),
+            address(coolerV2LtvOracle),
+            interestRateWad,
+            minDebtRequired
         );
         console2.log("CoolerV2 deployed at:", address(coolerV2));
 
@@ -1559,7 +1549,7 @@ contract OlympusDeploy is Script {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
 
         /// Policies
-        operator = Policy(vm.envAddress("OPERATOR"));
+        operator = Operator(vm.envAddress("OPERATOR"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
         priceConfig = OlympusPriceConfig(vm.envAddress("PRICECONFIG"));
@@ -1615,7 +1605,7 @@ contract OlympusDeploy is Script {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
-        operator = Policy(vm.envAddress("OPERATOR"));
+        operator = Operator(vm.envAddress("OPERATOR"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
 
@@ -1660,7 +1650,7 @@ contract OlympusDeploy is Script {
         ROLES = OlympusRoles(vm.envAddress("ROLES"));
         heart = OlympusHeart(vm.envAddress("HEART"));
         callback = BondCallback(vm.envAddress("CALLBACK"));
-        operator = Policy(vm.envAddress("OPERATOR"));
+        operator = Operator(vm.envAddress("OPERATOR"));
         rolesAdmin = RolesAdmin(vm.envAddress("ROLESADMIN"));
         kernel = Kernel(vm.envAddress("KERNEL"));
         bondManager = BondManager(vm.envAddress("BONDMANAGER"));
