@@ -38,6 +38,11 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
         bytes32 currentHash
     );
 
+    /// @notice Thrown when a supported sub-action reverts without error data.
+    /// @param target The contract called by the sub-action.
+    /// @param selector The function selector called on the target.
+    error BurnerLoansConfigTimelock_SubActionCallFailed(address target, bytes4 selector);
+
     // ========== STRUCTS ========== //
 
     /// @notice Partial update payload for asset-level risk and term configuration.

@@ -20,8 +20,6 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     uint16 internal constant MAX_COLLATERAL_FACTOR_BPS = 10_000;
     uint16 internal constant MAX_COLLATERAL_RATIO_BPS = 50_000;
     uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint48 internal constant MAX_TERM_LENGTH = 365 days;
-    uint48 internal constant MAX_MATURITY_HORIZON = 366 days;
     uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
 
     event AssetAdded(address indexed asset, IBurnerLoans.AssetConfig config);
@@ -388,10 +386,12 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         _setDefaultGlobalDebtCap();
         termLength_ = useZero_
             ? 0
-            : uint48(bound(termLength_, MAX_TERM_LENGTH + 1, type(uint48).max));
+            : uint48(
+                bound(termLength_, BurnerLoansConstants.MAX_TERM_LENGTH + 1, type(uint48).max)
+            );
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.termLength = termLength_;
-        config.maxMaturityHorizon = MAX_MATURITY_HORIZON;
+        config.maxMaturityHorizon = BurnerLoansConstants.MAX_MATURITY_HORIZON;
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
@@ -412,7 +412,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         uint48 maxMaturityHorizon_
     ) public {
         _setDefaultGlobalDebtCap();
-        termLength_ = uint48(bound(termLength_, 1, MAX_TERM_LENGTH));
+        termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(bound(maxMaturityHorizon_, 0, termLength_));
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.termLength = termLength_;
@@ -435,7 +435,11 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     function test_givenMaxMaturityHorizonAboveMax_reverts_fuzz(uint48 maxMaturityHorizon_) public {
         _setDefaultGlobalDebtCap();
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, MAX_MATURITY_HORIZON + 1, type(uint48).max)
+            bound(
+                maxMaturityHorizon_,
+                BurnerLoansConstants.MAX_MATURITY_HORIZON + 1,
+                type(uint48).max
+            )
         );
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.maxMaturityHorizon = maxMaturityHorizon_;
@@ -898,9 +902,9 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
         );
         keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
-        termLength_ = uint48(bound(termLength_, 1, MAX_TERM_LENGTH));
+        termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, termLength_ + 1, MAX_MATURITY_HORIZON)
+            bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
         debtCap_ = uint128(bound(debtCap_, 0, type(uint128).max));
         maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);

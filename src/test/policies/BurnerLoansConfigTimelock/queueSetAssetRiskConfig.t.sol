@@ -5,6 +5,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -14,8 +15,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     uint16 internal constant MAX_COLLATERAL_FACTOR_BPS = 10_000;
     uint16 internal constant MAX_COLLATERAL_RATIO_BPS = 50_000;
     uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint48 internal constant MAX_TERM_LENGTH = 365 days;
-    uint48 internal constant MAX_MATURITY_HORIZON = 366 days;
     uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
 
     // queueSetAssetRiskConfig
@@ -327,7 +326,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //  when the bounds are compared
     //   then the max maturity horizon is strictly greater than the max term length
     function test_givenProtocolTermConstants_maxMaturityHorizonExceedsMaxTermLength() public pure {
-        assertGt(MAX_MATURITY_HORIZON, MAX_TERM_LENGTH, "max horizon must exceed max term");
+        assertGt(
+            BurnerLoansConstants.MAX_MATURITY_HORIZON,
+            BurnerLoansConstants.MAX_TERM_LENGTH,
+            "max horizon must exceed max term"
+        );
     }
 
     // queueSetAssetRiskConfig
@@ -350,7 +353,9 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //  when queueing the action
     //   then it reverts
     function test_givenTermLengthAboveMax_reverts(uint48 termLength_) public {
-        termLength_ = uint48(bound(termLength_, MAX_TERM_LENGTH + 1, type(uint48).max));
+        termLength_ = uint48(
+            bound(termLength_, BurnerLoansConstants.MAX_TERM_LENGTH + 1, type(uint48).max)
+        );
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.termLength = termLength_;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
@@ -385,7 +390,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //   then it reverts
     function test_givenMaxMaturityHorizonAboveMax_reverts(uint48 maxMaturityHorizon_) public {
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, MAX_MATURITY_HORIZON + 1, type(uint48).max)
+            bound(
+                maxMaturityHorizon_,
+                BurnerLoansConstants.MAX_MATURITY_HORIZON + 1,
+                type(uint48).max
+            )
         );
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.maxMaturityHorizon = maxMaturityHorizon_;
@@ -598,9 +607,9 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
             bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
         );
         keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
-        termLength_ = uint48(bound(termLength_, 1, MAX_TERM_LENGTH));
+        termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, termLength_ + 1, MAX_MATURITY_HORIZON)
+            bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
         maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
 

@@ -71,17 +71,19 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
     function test_givenValidFee_updatesOnlyBaseFee_fuzz(uint16 fee_) public {
         fee_ = uint16(bound(fee_, 0, 10_000));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        bytes32 marketBefore = keccak256(abi.encode(floan.getMarketConfigData(marketId)));
+        IFLOANv1.Market memory marketBefore = floan.getMarket(marketId);
+        bytes32 configDataBefore = keccak256(abi.encode(floan.getMarketConfigData(marketId)));
 
         vm.expectEmit(true, false, false, true, address(floan));
         emit IFLOANv1.MarketConfigUpdated(marketId);
         vm.prank(manager);
         floan.setMarketBaseFee(marketId, fee_);
 
-        assertEq(floan.getMarket(marketId).baseFeeBps, fee_, "base fee");
+        marketBefore.baseFeeBps = fee_;
+        _assertMarket(marketId, marketBefore);
         assertEq(
             keccak256(abi.encode(floan.getMarketConfigData(marketId))),
-            marketBefore,
+            configDataBefore,
             "opaque config"
         );
     }

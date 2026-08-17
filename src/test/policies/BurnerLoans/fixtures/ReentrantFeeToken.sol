@@ -47,9 +47,10 @@ contract ReentrantFeeToken is MockERC20 {
     function _invokeCallback() internal {
         if (callbackEnabled && msg.sender == _callbackInvoker) {
             callbackEnabled = false;
+            callbackRevertSelector = bytes4(0);
             bytes memory returnData;
             (callbackSucceeded, returnData) = _callbackTarget.call(_callbackData);
-            if (returnData.length >= 4) {
+            if (!callbackSucceeded && returnData.length >= 4) {
                 bytes4 selector;
                 assembly ("memory-safe") {
                     selector := mload(add(returnData, 0x20))

@@ -110,6 +110,12 @@ library BurnerLoansConfigTimelockLib {
 
         (bool success, bytes memory returnData) = action_.target.call(callData);
         if (!success) {
+            if (returnData.length == 0) {
+                revert IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_SubActionCallFailed(
+                    action_.target,
+                    selector
+                );
+            }
             assembly {
                 revert(add(returnData, 32), mload(returnData))
             }

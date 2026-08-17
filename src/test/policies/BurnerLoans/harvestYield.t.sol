@@ -203,7 +203,11 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
     //  when custody status, preview, and harvest are called
     //   then Burner Loans uses the first market
     function test_givenMultipleMatchingMarkets_usesFirstMarket() public {
-        _createDuplicateMarketForTest(address(vaultAsset));
+        _depositCollateral();
+        _addYield(10e6);
+        uint32 duplicateMarketId = _createDuplicateMarketForTest(address(vaultAsset));
+        vm.prank(address(burnerLoansConfig));
+        floan.setMarketConfigData(duplicateMarketId, hex"01");
 
         IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
             address(vaultAsset)
@@ -213,9 +217,10 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         );
         uint256 claimed = burnerLoans.harvestYield(address(vaultAsset));
 
-        assertEq(status.liabilities, 0, "first-market liabilities");
-        assertEq(preview.amount, 0, "preview yield");
-        assertEq(claimed, 0, "claimed yield");
+        assertEq(status.liabilities, _COLLATERAL_AMOUNT, "first-market liabilities");
+        assertGt(preview.amount, 0, "preview yield");
+        assertGt(claimed, 0, "claimed yield");
+        assertEq(vaultAsset.balanceOf(address(trsry)), claimed, "treasury yield");
     }
 
     // harvestYield

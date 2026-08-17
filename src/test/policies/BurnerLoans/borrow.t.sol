@@ -850,11 +850,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         vm.prank(emergency);
         burnerLoans.disable("");
 
-        vm.expectRevert(abi.encodeWithSignature("NotEnabled()"));
+        vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.previewBorrow(address(usds), 1e9, alice);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSignature("NotEnabled()"));
+        vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 

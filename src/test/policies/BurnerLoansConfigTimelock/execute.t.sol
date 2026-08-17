@@ -11,6 +11,31 @@ import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol
 
 contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockTest {
     // executeQueuedAction
+    // given a supported target setter reverts without error data
+    //  when the queued action is executed
+    //   then execution maps the empty revert to a descriptive custom error
+    function test_givenTargetRevertsWithoutData_revertsWithSubActionError() public {
+        uint128 debtCapOhm = 50_000e9;
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
+        vm.mockCallRevert(
+            address(burnerLoansConfig),
+            abi.encodeCall(IBurnerLoansConfig.setAssetDebtCap, (address(usds), debtCapOhm)),
+            bytes("")
+        );
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_SubActionCallFailed.selector,
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.setAssetDebtCap.selector
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+    }
+
+    // executeQueuedAction
     // given a queued action
     //  when called at any timestamp before the timelock delay has elapsed
     //   then it reverts and does not apply the setter

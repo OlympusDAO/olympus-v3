@@ -148,7 +148,7 @@ abstract contract BurnerLoansInventoryTest is Test {
         assertLe(idle, ohm.balanceOf(address(inventory)), "idle exceeds raw balance");
         assertLe(idle, claim, "idle exceeds provider claim");
 
-        uint256 capRoom = cap - active;
+        uint256 capRoom = cap > active ? cap - active : 0;
         uint256 requiredApproval = idle >= capRoom ? 0 : capRoom - idle;
         uint256 expectedCapacity = idle >= capRoom || approval >= requiredApproval
             ? capRoom

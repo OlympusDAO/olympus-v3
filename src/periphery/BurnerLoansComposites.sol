@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
@@ -15,9 +16,12 @@ import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Check
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 
+// Contracts
+import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+
 /// @title Burner Loans Composites
 /// @notice One-transaction borrower flows composed from Burner Loans primitives.
-contract BurnerLoansComposites is IBurnerLoansComposites, ReentrancyGuardTransient {
+contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuardTransient {
     using SafeERC20 for IERC20;
 
     address public immutable override burnerLoans;
@@ -146,6 +150,15 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ReentrancyGuardTransie
         }
 
         result.refundedOhm = _refund(ohmToken, msg.sender, startingOhmBalance);
+    }
+
+    /// @inheritdoc ERC165
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view override(ERC165, IERC165) returns (bool) {
+        return
+            interfaceId_ == type(IBurnerLoansComposites).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 
     function _authorizeIfProvided(

@@ -208,12 +208,6 @@ interface IBurnerLoans {
         uint256 repaidOhm,
         uint256 remainingDebtOhm
     );
-    event Repaid(
-        address indexed caller,
-        address indexed asset,
-        address indexed onBehalfOf,
-        uint256 ohmAmount
-    );
     event Extended(
         address indexed caller,
         address indexed asset,

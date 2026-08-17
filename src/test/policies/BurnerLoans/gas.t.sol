@@ -839,7 +839,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             );
             assertEq(position.debtOhm, 0, "position debt");
             assertEq(position.depositedCollateral, 0, "position collateral");
-            assertEq(position.debtOhm, 0, "position principal");
         }
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "facility principal");
         assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 0, "market principal");

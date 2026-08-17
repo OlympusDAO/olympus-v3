@@ -39,11 +39,13 @@ contract BurnerLoansHandler is Test {
     DepositManager public immutable depositManager;
     address public immutable admin;
     address public immutable treasury;
+    address public immutable inventoryProvider;
 
     address[] internal _actors;
     uint256 public collateralPrice = _WAD;
 
     uint256 public repaymentBurnViolations;
+    uint256 public fundingDebtViolations;
     uint256 public repaymentDebtViolations;
     uint256 public repaymentCollateralViolations;
     uint256 public unexpectedRepayFailures;
@@ -66,6 +68,7 @@ contract BurnerLoansHandler is Test {
         DepositManager depositManager;
         address admin;
         address treasury;
+        address inventoryProvider;
         address[] actors;
     }
 
@@ -81,7 +84,12 @@ contract BurnerLoansHandler is Test {
         depositManager = dependencies_.depositManager;
         admin = dependencies_.admin;
         treasury = dependencies_.treasury;
+        inventoryProvider = dependencies_.inventoryProvider;
         _actors = dependencies_.actors;
+
+        address inventory_ = dependencies_.burnerLoans.inventory();
+        vm.prank(dependencies_.inventoryProvider);
+        dependencies_.ohm.approve(inventory_, type(uint256).max);
 
         for (uint256 i; i < dependencies_.actors.length; ++i) {
             vm.startPrank(dependencies_.actors[i]);
@@ -121,6 +129,7 @@ contract BurnerLoansHandler is Test {
         collateral.mint(actor, 10_000e18);
 
         uint256 supplyBefore = ohm.totalSupply();
+        uint256 idleBefore = _inventory().suppliedIdleOhm();
         uint256 debtBefore = burnerLoans.getPosition(address(collateral), actor).debtOhm;
         vm.prank(actor);
         (bool success, ) = address(burnerLoans).call(
@@ -132,8 +141,9 @@ contract BurnerLoansHandler is Test {
         if (!success) return;
 
         uint256 debtAfter = burnerLoans.getPosition(address(collateral), actor).debtOhm;
-        if (ohm.totalSupply() - supplyBefore != debtAfter - debtBefore) {
-            ++repaymentDebtViolations;
+        uint256 idleAfter = _inventory().suppliedIdleOhm();
+        if (ohm.totalSupply() - supplyBefore + (idleBefore - idleAfter) != debtAfter - debtBefore) {
+            ++fundingDebtViolations;
         }
         _probeSameBlockRepay(actor);
         _checkBacking();
@@ -155,6 +165,7 @@ contract BurnerLoansHandler is Test {
         }
 
         uint256 supplyBefore = ohm.totalSupply();
+        uint256 idleBefore = _inventory().suppliedIdleOhm();
         vm.startPrank(actor);
         ohm.approve(address(burnerLoans), amount);
         (bool success, ) = address(burnerLoans).call(
@@ -170,7 +181,10 @@ contract BurnerLoansHandler is Test {
             address(collateral),
             actor
         );
-        if (supplyBefore - ohm.totalSupply() != amount) ++repaymentBurnViolations;
+        uint256 idleAfter = _inventory().suppliedIdleOhm();
+        if (supplyBefore - ohm.totalSupply() + (idleAfter - idleBefore) != amount) {
+            ++repaymentBurnViolations;
+        }
         if (beforePosition.debtOhm - afterPosition.debtOhm != amount) {
             ++repaymentDebtViolations;
         }
@@ -191,6 +205,7 @@ contract BurnerLoansHandler is Test {
         collateral.mint(actor, uint256(collateralAmount) + maxFee);
 
         uint256 supplyBefore = ohm.totalSupply();
+        uint256 idleBefore = _inventory().suppliedIdleOhm();
         uint256 debtBefore = burnerLoans.getPosition(address(collateral), actor).debtOhm;
         IBurnerLoansComposites.DepositAndBorrowParams memory params = IBurnerLoansComposites
             .DepositAndBorrowParams({
@@ -210,8 +225,9 @@ contract BurnerLoansHandler is Test {
         if (!success) return;
 
         uint256 debtAfter = burnerLoans.getPosition(address(collateral), actor).debtOhm;
-        if (ohm.totalSupply() - supplyBefore != debtAfter - debtBefore) {
-            ++repaymentDebtViolations;
+        uint256 idleAfter = _inventory().suppliedIdleOhm();
+        if (ohm.totalSupply() - supplyBefore + (idleBefore - idleAfter) != debtAfter - debtBefore) {
+            ++fundingDebtViolations;
         }
         _probeSameBlockRepay(actor);
         _checkBacking();
@@ -240,6 +256,7 @@ contract BurnerLoansHandler is Test {
         }
 
         uint256 supplyBefore = ohm.totalSupply();
+        uint256 idleBefore = _inventory().suppliedIdleOhm();
         vm.prank(actor);
         ohm.approve(address(composites), repayAmount);
         IBurnerLoansComposites.RepayAndWithdrawParams memory params = IBurnerLoansComposites
@@ -263,7 +280,10 @@ contract BurnerLoansHandler is Test {
             actor
         );
         uint256 repaid = beforePosition.debtOhm - afterPosition.debtOhm;
-        if (supplyBefore - ohm.totalSupply() != repaid) ++repaymentBurnViolations;
+        uint256 idleAfter = _inventory().suppliedIdleOhm();
+        if (supplyBefore - ohm.totalSupply() + (idleAfter - idleBefore) != repaid) {
+            ++repaymentBurnViolations;
+        }
         if (repaid != repayAmount) ++repaymentDebtViolations;
         if (
             beforePosition.depositedCollateral - afterPosition.depositedCollateral != withdrawAmount
@@ -286,6 +306,25 @@ contract BurnerLoansHandler is Test {
             )
         );
         if (!success) return;
+    }
+
+    function supplyInventory(uint128 amountSeed_) external {
+        uint128 amount = uint128(bound(amountSeed_, 1, 1_000e9));
+        IBurnerLoansInventory inventory_ = _inventory();
+        ohm.mint(inventoryProvider, amount);
+        vm.prank(inventoryProvider);
+        inventory_.supply(amount);
+    }
+
+    function withdrawInventory(uint128 amountSeed_) external {
+        IBurnerLoansInventory inventory_ = _inventory();
+        uint256 available = inventory_.providerClaimOhm(inventoryProvider);
+        uint256 idle = inventory_.suppliedIdleOhm();
+        if (idle < available) available = idle;
+        if (available == 0) return;
+
+        vm.prank(inventoryProvider);
+        inventory_.withdraw(uint128(bound(amountSeed_, 1, available)), inventoryProvider);
     }
 
     function extend(uint256 actorSeed_, uint16 termSeed_) external {
@@ -437,6 +476,10 @@ contract BurnerLoansHandler is Test {
 
     function _actor(uint256 seed_) private view returns (address) {
         return _actors[seed_ % _actors.length];
+    }
+
+    function _inventory() private view returns (IBurnerLoansInventory) {
+        return IBurnerLoansInventory(burnerLoans.inventory());
     }
 
     function _probeSameBlockRepay(address actor_) private {

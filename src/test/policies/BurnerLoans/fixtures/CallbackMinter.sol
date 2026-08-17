@@ -29,13 +29,14 @@ contract CallbackMinter is MINTRv1 {
         _callbackData = data_;
     }
 
-    function mintOhm(address to_, uint256 amount_) external override permissioned {
+    function mintOhm(address to_, uint256 amount_) external override permissioned onlyWhileActive {
         uint256 approval = mintApproval[msg.sender];
         if (approval < amount_) revert MINTR_NotApproved();
         mintApproval[msg.sender] = approval - amount_;
+        callbackRevertSelector = bytes4(0);
         bytes memory returnData;
         (callbackSucceeded, returnData) = _callbackTarget.call(_callbackData);
-        if (returnData.length >= 4) {
+        if (!callbackSucceeded && returnData.length >= 4) {
             bytes4 selector;
             assembly ("memory-safe") {
                 selector := mload(add(returnData, 0x20))

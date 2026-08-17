@@ -49,6 +49,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
                 depositManager: depositManager,
                 admin: admin,
                 treasury: address(trsry),
+                inventoryProvider: protocolProvider,
                 actors: invariantActors
             })
         );
@@ -56,12 +57,14 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         rolesAdmin.grantRole(HEART_ROLE, address(handler));
 
         // Seed every campaign with a live position so debt, health, repayment, maturity,
-        // seizure, and custody invariants are not dependent on a random setup sequence.
+        // seizure, custody, and mixed supplied/minted funding invariants are not dependent on a
+        // random setup sequence.
+        handler.supplyInventory(50e9);
         handler.deposit(0, 2_000e18);
         handler.borrow(0, 100e9);
         vm.roll(block.number + 1);
 
-        bytes4[] memory selectors = new bytes4[](16);
+        bytes4[] memory selectors = new bytes4[](18);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -78,6 +81,8 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[13] = handler.compositeDepositAndBorrow.selector;
         selectors[14] = handler.compositeRepayAndWithdraw.selector;
         selectors[15] = handler.reuseDebtFreePosition.selector;
+        selectors[16] = handler.supplyInventory.selector;
+        selectors[17] = handler.withdrawInventory.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -85,20 +90,39 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     // invariant
     // given any sequence of Burner Loans handler calls
     //  when OHM supply accounting is checked
-    //   then OHM supply equals active and defaulted facility principal
+    //   then OHM supply equals debt, supplied idle, and withdrawn provider inventory
     function invariant_OhmSupplyAccounting() public view {
         uint256 accountedDebt = burnerLoans.totalActiveDebtOhm() +
             floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds)));
-        assertEq(ohm.totalSupply(), accountedDebt, "OHM supply does not reconcile to loan debt");
+        uint256 accountedSupply = accountedDebt +
+            inventory.suppliedIdleOhm() +
+            ohm.balanceOf(protocolProvider);
+        assertEq(
+            ohm.totalSupply(),
+            accountedSupply,
+            "OHM supply does not reconcile to debt and supplied inventory"
+        );
     }
 
     // invariant
     // given any sequence of Burner Loans handler calls
     //  when repayment burn accounting is checked
-    //   then repayments burn exact OHM and leave no OHM in Burner Loans
+    //   then repayments burn surplus OHM or replenish supplied idle and leave no OHM in Burner Loans
     function invariant_RepaymentBurn() public view {
-        assertEq(handler.repaymentBurnViolations(), 0, "repayment did not burn exact OHM");
+        assertEq(
+            handler.repaymentBurnViolations(),
+            0,
+            "repayment did not reconcile burn and idle retention"
+        );
         assertEq(ohm.balanceOf(address(burnerLoans)), 0, "BurnerLoans retained OHM");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls with supplied or minted funding
+    //  when debt origination accounting is checked
+    //   then each debt increase equals minted OHM plus supplied-idle consumption
+    function invariant_FundingSourceAccounting() public view {
+        assertEq(handler.fundingDebtViolations(), 0, "funding source debt delta mismatch");
     }
 
     // invariant
@@ -130,7 +154,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         );
         assertLe(suppliedIdle, suppliedClaim, "supplied idle exceeds supplied claim");
 
-        uint256 capRoom = globalCap - activePrincipal;
+        uint256 capRoom = globalCap > activePrincipal ? globalCap - activePrincipal : 0;
         uint256 expectedCapacity;
         if (suppliedIdle >= capRoom) expectedCapacity = capRoom;
         else {

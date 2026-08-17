@@ -109,7 +109,7 @@ contract BurnerLoansInventorySetGlobalDebtCapTest is BurnerLoansInventoryTest {
     }
 
     // setGlobalDebtCap
-    // [X] given a capacity-restoring increase fails, the cap persists for later admin sync
+    // [X] given a capacity-restoring increase fails, the cap change rolls back
     function test_givenIncreaseFailure_revertsAndRollsBack(uint128 increase) public {
         increase = uint128(bound(increase, 1, type(uint128).max - DEFAULT_CAP));
         bytes memory failure = abi.encodeWithSelector(MINTRv1.MINTR_NotApproved.selector);
