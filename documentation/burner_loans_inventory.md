@@ -56,11 +56,14 @@ idle backing before any excess is burned.
 ## Capacity And Invariants
 
 ```text
-desiredApproval = max(globalDebtCapOhm - activePrincipalOhm - suppliedIdleOhm, 0)
+remainingCapOhm = globalDebtCapOhm - activePrincipalOhm
+desiredApproval = remainingCapOhm > suppliedIdleOhm
+    ? remainingCapOhm - suppliedIdleOhm
+    : 0
 
 availableCapacity = min(
     suppliedIdleOhm + actualApproval,
-    globalDebtCapOhm - activePrincipalOhm
+    remainingCapOhm
 )
 ```
 
@@ -147,8 +150,9 @@ complete system order.
 
 Burner Loans can point to another compatible, active Burner Loans Inventory only while Burner Loans
 is globally disabled. The setter does not require the replacement to be enabled, but Burner Loans
-cannot be enabled until it is enabled and all reverse links agree. V1 does not move or require
-draining live accounting or custody; a Burner Loans Inventory replacement with outstanding
-positions needs a separate migration or per-cohort routing design. After replacement, governance
-must explicitly manage the old Burner Loans Inventory and its remaining claims, custody, and
-principal accounting.
+cannot be enabled until it is enabled and all reverse links agree. Before re-enabling Burner Loans,
+governance must ensure either that the outgoing Burner Loans Inventory has no active principal or
+that an accounting migration or per-cohort routing mechanism keeps its outstanding positions
+serviceable. V1 does not enforce this operational requirement or move live accounting and custody.
+Governance must also explicitly manage the outgoing Burner Loans Inventory's remaining provider
+claims, custody, and principal accounting.

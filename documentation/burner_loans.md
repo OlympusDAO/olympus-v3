@@ -105,11 +105,13 @@ Health is WAD-scaled; `1e18` is the seizure boundary.
 
 ```text
 marketRequirementUsd = ceil(debtValueUsd * minCollateralRatioBps / 10_000)
-backingRequirementUsd = ceil(debtOhm * backingPerOhmUsd * backingMultiplierBps / 10_000)
+backingRequirementUsd = ceil(debtBackingValueUsd * backingMultiplierBps / 10_000)
 requiredCollateralUsd = max(marketRequirementUsd, backingRequirementUsd)
 riskAdjustedCollateralUsd = collateralValueUsd * collateralFactorBps / 10_000
 healthFactor = floor(riskAdjustedCollateralUsd * 1e18 / requiredCollateralUsd)
 ```
+
+`debtBackingValueUsd` is the backing value of the outstanding OHM debt.
 
 | State                      | Borrow or withdraw                | Seizure                       |
 | -------------------------- | --------------------------------- | ----------------------------- |
