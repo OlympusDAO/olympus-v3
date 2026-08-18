@@ -30,4 +30,4 @@ mv src/scripts/env.json.tmp src/scripts/env.json
 
 # jq writes valid JSON, but Prettier and its sort-json plugin define the
 # repository's canonical formatting and recursive key order.
-pnpm exec prettier --write "src/scripts/env.json"
+pnpm exec prettier --cache --cache-strategy content --write "src/scripts/env.json"

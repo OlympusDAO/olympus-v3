@@ -10,6 +10,9 @@ out/
 
 pnpm-lock.yaml
 
+# Generated audit reports are large and should not be reformatted
+audit/**/solidity-metrics.html
+
 # Skip deployment sequences, as order is important
 src/scripts/deploy/savedDeployments/
 

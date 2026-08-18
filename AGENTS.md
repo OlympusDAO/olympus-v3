@@ -30,7 +30,10 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 - `pnpm run lint` - Format and lint code (prettier + forge lint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
-- `pnpm run prettier` - Format code (runs quicker than linting)
+- `pnpm run prettier` - Format code using a content-based cache (runs quicker than linting)
+
+Prettier skips generated `audit/**/solidity-metrics.html` reports. Direct Prettier invocations must
+also use `--cache --cache-strategy content` so they preserve the shared cache.
 
 **For detailed linter note resolution guidance (deployed vs in-development contracts, suppression templates), use the `/lint-fix` skill.**
 
