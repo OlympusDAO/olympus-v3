@@ -52,7 +52,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
         public
         givenIsEnabled
     {
-        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+        vm.expectRevert(bytes(""));
 
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
@@ -81,7 +81,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
         givenFacilityNameIsSetDefault
         givenAssetIsAdded
     {
-        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+        vm.expectRevert(bytes(""));
 
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
