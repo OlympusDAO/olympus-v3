@@ -315,7 +315,7 @@ Key standards summary:
 
 ### Code Standards
 
-- Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
+- Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
 - Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
