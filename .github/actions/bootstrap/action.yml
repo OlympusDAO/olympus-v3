@@ -39,5 +39,11 @@ runs:
         # requires Forge and it wipes any build artifacts restored before this action runs. Restore
         # a Foundry cache after Bootstrap, never before it.
         - name: Install dependencies
-          run: pnpm install --frozen-lockfile ${{ inputs.install-solidity-dependencies == 'true' && '' || '--ignore-scripts' }}
+          if: ${{ inputs.install-solidity-dependencies != 'false' }}
+          run: pnpm install --frozen-lockfile
+          shell: bash
+
+        - name: Install Node dependencies only
+          if: ${{ inputs.install-solidity-dependencies == 'false' }}
+          run: pnpm install --frozen-lockfile --ignore-scripts
           shell: bash

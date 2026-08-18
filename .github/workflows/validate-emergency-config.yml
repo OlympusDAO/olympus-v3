@@ -44,8 +44,8 @@ jobs:
               uses: ./.github/actions/bootstrap
               with:
                   # The validation script needs Node and ajv only.
-                  install-foundry: false
-                  install-solidity-dependencies: false
+                  install-foundry: "false"
+                  install-solidity-dependencies: "false"
 
             - name: Run validation script
               run: node shell/validate-emergency-config.js
