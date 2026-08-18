@@ -207,6 +207,9 @@ This runs:
 - `forge-lint` - Check Solidity linting
 - `markdownlint` - Auto-fixes Markdown issues
 
+The Prettier scripts use a content-based cache, so repeated runs only process changed files.
+Generated `audit/**/solidity-metrics.html` reports are excluded from formatting.
+
 ### Individual Tools
 
 ```bash

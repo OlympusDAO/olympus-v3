@@ -18,10 +18,10 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 **Testing:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
+- `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
-- `pnpm run test:coverage` - Generate test coverage report
 - `forge test -vvv --match-contract ContractTest` - Run a specific test contract
 
 **For detailed test debugging guidance (verbosity levels, setUp() issues, trace output), use the `/test-debug` skill.**
@@ -30,7 +30,10 @@ This is Olympus V3 (aka Bophades), a complete rewrite of the Olympus protocol us
 
 - `pnpm run lint` - Format and lint code (prettier + forge lint + markdownlint)
 - `pnpm run lint:check` - Check formatting and linting without fixing
-- `pnpm run prettier` - Format code (runs quicker than linting)
+- `pnpm run prettier` - Format code using a content-based cache (runs quicker than linting)
+
+Prettier skips generated `audit/**/solidity-metrics.html` reports. Direct Prettier invocations must
+also use `--cache --cache-strategy content` so they preserve the shared cache.
 
 **For detailed linter note resolution guidance (deployed vs in-development contracts, suppression templates), use the `/lint-fix` skill.**
 
@@ -52,7 +55,7 @@ Ask first:
 - Git push
 - Deleting files
 - Changing file permissions
-- Full test suites (`test`, `test:unit`, `test:fork` or `test:proposal`)
+- Full test suites (`test`, `test:unit`, `test:invariant`, `test:fork` or `test:proposal`)
 
 ## Repo Workflow
 
@@ -281,16 +284,17 @@ src/
 **Test Commands:**
 
 - `pnpm run test` - Run all tests (runs `./shell/test_all.sh`)
-- `pnpm run test:unit` - Run unit tests only (excludes fork tests and proposals)
+- `pnpm run test:unit` - Run unit tests only (excludes invariants, Script and fork contracts, proposals and deprecated tests)
+- `pnpm run test:invariant` - Run invariant tests only
 - `pnpm run test:fork` - Run fork tests (requires `ALCHEMY_API_KEY` env var)
 - `pnpm run test:proposal` - Run OCG proposal tests
 - `forge test -vvv --match-contract <Contract>` - Run a specific test contract
 
 **Test Organization:**
 
-- Unit tests exclude fork tests and proposals: `--no-match-contract '(Fork)' --no-match-path 'src/test/proposals/*.t.sol'`
+- Unit tests exclude invariant functions, fork tests and proposals: `--no-match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'`
+- Invariant tests select invariant functions while applying the same contract and path exclusions: `--match-test '^invariant_'`
 - Proposal tests are in `src/test/proposals/` and require fork environment
-- Coverage reports generated in `coverage/` directory
 
 **For detailed test writing guidance (file structure, modifiers, naming, error handling), use the `/test-write` skill.**
 

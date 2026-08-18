@@ -265,10 +265,11 @@ Suggest a short, descriptive kebab-case component ID for the contract and confir
      documentation/emergency/emergency-config.json > emergency-config.tmp.json && mv emergency-config.tmp.json documentation/emergency/emergency-config.json
    ```
 
-2. **Format the JSON files** to ensure consistent formatting:
+2. **Format the JSON files** to ensure consistent formatting. `jq` remains the only tool used for
+   semantic edits to `emergency-config.json`; this final Prettier pass is formatting-only:
 
    ```bash
-   pnpm exec prettier --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
+   pnpm exec prettier --cache --cache-strategy content --write documentation/emergency/emergency-config.json documentation/emergency/emergency-abis.json documentation/emergency/emergency-config.schema.json
    ```
 
 #### B6: Validate

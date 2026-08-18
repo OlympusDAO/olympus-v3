@@ -3,13 +3,15 @@ src/test/mocks/MockModuleWriter.sol
 src/test/lib/quabi/Quabi.sol
 src/test/sim/RangeSim.sol
 cache/
-coverage/
 docs/
 lib/
 node_modules/
 out/
 
 pnpm-lock.yaml
+
+# Generated audit reports are large and should not be reformatted
+audit/**/solidity-metrics.html
 
 # Skip deployment sequences, as order is important
 src/scripts/deploy/savedDeployments/
