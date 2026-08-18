@@ -59,6 +59,20 @@ library Quabi {
             return path;
         }
 
+        // Compilation restrictions add compiler-version and optional profile suffixes to
+        // artifacts, so fall back to a deterministic versioned-artifact lookup.
+        inputs[2] = string(
+            bytes.concat(
+                "./src/test/lib/quabi/path.sh --versioned ", bytes(contractName), ""
+            )
+        );
+        res = vm.ffi(inputs);
+
+        if (res.length > 0) {
+            path = abi.decode(res, (string));
+            return path;
+        }
+
         // solhint-disable-next-line gas-custom-errors
         revert("Path not found");
     }

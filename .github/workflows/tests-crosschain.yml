@@ -21,9 +21,6 @@ jobs:
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
 
-            - name: Build
-              run: pnpm run build
-
             - name: Run cross-chain fork tests
               run: pnpm run test:crosschainfork
               env:
