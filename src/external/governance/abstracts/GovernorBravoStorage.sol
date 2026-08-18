@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {ITimelock} from "../interfaces/ITimelock.sol";

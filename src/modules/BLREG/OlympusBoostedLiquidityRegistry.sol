@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {BLREGv1} from "src/modules/BLREG/BLREG.v1.sol";
 import "src/Kernel.sol";

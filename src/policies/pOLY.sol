@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Import system dependencies
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 import {Kernel, Module, Policy, Keycode, toKeycode} from "src/Kernel.sol";
 import {RGSTYv1} from "./RGSTY.v1.sol";

@@ -1,7 +1,13 @@
 [profile.default]
 ffi = true
-ast = true
 # Deployment verification and Quabi-based tests require AST artifacts from normal builds.
+ast = true
+# Pinned so that every machine compiles with the same compiler. Without an explicit version, Forge
+# resolves each source file to the newest installed compiler that satisfies its pragma, so a
+# developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
+# into its binary, but an explicitly pinned version is fetched from the live release list on demand.
+solc_version = "0.8.36"
+# Forge 1.7.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
 evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
@@ -24,14 +30,17 @@ verbosity = 3
 # Restrictions apply to the entire connected import graph, not only to the matching source file.
 # A script that imports Operator compiles all contracts in that graph at 10 runs, even when it does
 # not deploy Operator. Use IOperator for interactions and a dedicated script to deploy Operator.
+# A restriction is never satisfied on its own: Forge picks a profile that meets it, preferring the
+# default profile and otherwise the alphabetically first entry below. Removing an entry that a
+# restriction relies on fails the build with "Missing profile satisfying settings restrictions".
 additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
-# Exact `pragma solidity 0.8.15` files remain on 0.8.15. Flexible pragmas use the
-# newest compiler permitted by this explicit upper bound.
-compilation_restrictions = [
-    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
-    { paths = "**", version = ">=0.8.15, <=0.8.30" },
-]
+compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
 libs = ["dependencies"]
+# The vendored Uniswap V3 SwapRouter test helper is referenced by nothing, and it is the only file
+# that reaches the uniswap-v3-periphery sources carrying an exact `pragma solidity =0.8.15`, which
+# cannot be satisfied under the pinned compiler. Skipping the helper keeps those sources out of the
+# compilation graph and avoids patching the dependency.
+skip = ["src/test/lib/UniswapV3/SwapRouter.sol"]
 
 [profile.deploy]
 script_execution_protection = false

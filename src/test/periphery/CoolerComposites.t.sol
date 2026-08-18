@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 // solhint-disable one-contract-per-file
-pragma solidity 0.8.15;
+pragma solidity >=0.8.15;
 
 // Interfaces
 import {IDLGTEv1} from "src/modules/DLGTE/IDLGTE.v1.sol";
