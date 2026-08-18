@@ -8,6 +8,29 @@ lib/
 node_modules/
 out/
 
+# Format runs from known Forge deployment scripts only.
+broadcast/**
+!broadcast/
+!broadcast/DeployUsdsMocks.sol/
+!broadcast/DeployUsdsMocks.sol/**/
+!broadcast/DeployUsdsMocks.sol/**/run-*.json
+!broadcast/DeployV2.sol/
+!broadcast/DeployV2.sol/**/
+!broadcast/DeployV2.sol/**/run-*.json
+!broadcast/DeployV3.s.sol/
+!broadcast/DeployV3.s.sol/**/
+!broadcast/DeployV3.s.sol/**/run-*.json
+!broadcast/L2Deploy.s.sol/
+!broadcast/L2Deploy.s.sol/**/
+!broadcast/L2Deploy.s.sol/**/run-*.json
+!broadcast/LZBridgeTestnetDeploy.s.sol/
+!broadcast/LZBridgeTestnetDeploy.s.sol/**/
+!broadcast/LZBridgeTestnetDeploy.s.sol/**/run-*.json
+
+# Never format transient Forge aliases or simulations.
+broadcast/**/dry-run/
+broadcast/**/*-latest.json
+
 pnpm-lock.yaml
 
 # Generated audit reports are large and should not be reformatted
