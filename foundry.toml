@@ -33,6 +33,7 @@ verbosity = 3
 # A restriction is never satisfied on its own: Forge picks a profile that meets it, preferring the
 # default profile and otherwise the alphabetically first entry below. Removing an entry that a
 # restriction relies on fails the build with "Missing profile satisfying settings restrictions".
+# A restriction also overrides `--optimizer-runs` on the command line.
 additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
 compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
 libs = ["dependencies"]
