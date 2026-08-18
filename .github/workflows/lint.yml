@@ -24,7 +24,12 @@ jobs:
             - name: Restore Foundry build cache
               uses: ./.github/actions/foundry-cache
 
+            # forge lint emits ABI-only artifacts. Isolate this reporting pass so it cannot replace
+            # the restored full artifacts consumed by the authoritative lint:check step below.
             - name: Run forge lint inline annotations
+              env:
+                  FOUNDRY_OUT: ${{ runner.temp }}/forge-lint-out
+                  FOUNDRY_CACHE_PATH: ${{ runner.temp }}/forge-lint-cache
               uses: 0xJem/forge-lint-inline-action@7f2d23ba91fe2839c0e16034869f4881d3fd2d41 # v0.1.0
               with:
                   install-foundry: false
