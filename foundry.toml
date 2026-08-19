@@ -37,6 +37,11 @@ verbosity = 3
 additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
 compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
 libs = ["dependencies"]
+# Tests live here, not in the default `test` directory. While this pointed at a directory that does
+# not exist, Forge replaced the `test/=src/test/` entry of remappings.txt with narrower generated
+# ones covering only the subdirectories that happen to exist, so an import from any new subdirectory
+# of src/test failed to resolve.
+test = "src/test"
 # Drops warnings originating in the dependencies from solc output. Post-processing only: it cannot
 # restore warnings solc discarded at its own limit of 256 per invocation, which applies separately
 # to each compilation job Forge runs.
