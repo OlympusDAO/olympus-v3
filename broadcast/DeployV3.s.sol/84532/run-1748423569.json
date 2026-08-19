@@ -5,11 +5,11 @@
     "pending": [],
     "receipts": [
         {
-            "blockHash": "0x741e83e5a9f77ece21b38efd839c5c21c10071d0d5b2871d2540054554acbc4b",
+            "blockHash": "0xbe325af78f7de06e90f057847b95f825aadcd011fe996220024d23971f27b17d",
             "blockNumber": "0x191ba4d",
             "contractAddress": "0xf0cb2dc0db5e6c66b9a70ac27b06b878da017028",
             "cumulativeGasUsed": "0xa1c5c8",
-            "effectiveGasPrice": "0x3a663",
+            "effectiveGasPrice": "0x13e5308f",
             "from": "0x1a5309f208f161a393e8b5a253de8ab894a67188",
             "gasUsed": "0x457b51",
             "l1BaseFeeScalar": "0x44d",
