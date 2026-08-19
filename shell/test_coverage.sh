@@ -94,9 +94,11 @@ FOUNDRY_PROFILE=coverage forge coverage \
     > "$COVERAGE_LOG" 2>&1 || coverage_status=$?
 
 if [ ! -s "$LCOV_FILE" ]; then
+    # Forge can exit zero without writing a tracefile, so this branch fails on its own rather than
+    # passing the status through.
     echo "ERROR: no ${LCOV_FILE} produced. Last lines of ${COVERAGE_LOG}:" >&2
     tail -30 "$COVERAGE_LOG" >&2
-    exit "$coverage_status"
+    exit 1
 fi
 
 # The summary table is the point of the run, so surface it even though the rest stays in the log.
