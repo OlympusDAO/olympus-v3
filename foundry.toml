@@ -58,6 +58,32 @@ script_execution_protection = false
 [profile.multisig]
 script_execution_protection = false
 
+# Used by `forge coverage`, which recompiles from scratch every run and keeps nothing in `out/`.
+[profile.coverage]
+# The report is the output; test traces are not.
+verbosity = 0
+# A coverage run must not rewrite the tracked gas snapshots, which are measured under the settings
+# of a normal build.
+gas_snapshot_emit = false
+# Coverage output is long enough without solc warnings.
+ignored_warnings_from = ["dependencies", "src"]
+# Emptied so that coverage compiles in a single job. The Operator restriction otherwise adds a
+# second job carrying the same compiler version, and coverage items of two such jobs are
+# misattributed between files.
+compilation_restrictions = []
+
+# Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
+# overrides both of the sections below, and the command line does not override that comment either,
+# so suites carrying one keep their own counts.
+[profile.coverage.fuzz]
+runs = 8
+
+[profile.coverage.invariant]
+runs = 1
+depth = 15
+# Hides the per-selector call table that every invariant suite would otherwise print.
+show_metrics = false
+
 [fuzz]
 runs = 256
 
