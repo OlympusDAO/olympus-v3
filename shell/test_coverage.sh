@@ -8,24 +8,19 @@ set -euo pipefail
 # `out/`, so this is slow and memory hungry regardless of the filters below. `--threads 1` trades
 # wall time for a lower peak.
 
-cd "$(git rev-parse --show-toplevel 2> /dev/null || pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/repo.sh"
+
+cd_repo_root
 
 COVERAGE_LOG="coverage.log"
 GENHTML_LOG="genhtml.log"
 LCOV_FILE="lcov.info"
 HTML_DIR="coverage"
 
-command -v forge > /dev/null 2>&1 || {
-    echo "ERROR: forge not found. Install Foundry: https://getfoundry.sh" >&2
-    exit 1
-}
-
-command -v genhtml > /dev/null 2>&1 || {
-    echo "ERROR: genhtml not found. It ships with lcov:" >&2
-    echo "  Debian/Ubuntu/WSL: sudo apt-get install lcov" >&2
-    echo "  macOS:             brew install lcov" >&2
-    exit 1
-}
+require_command forge "Install Foundry: https://getfoundry.sh"
+require_command genhtml "It ships with lcov:
+  Debian/Ubuntu/WSL: sudo apt-get install lcov
+  macOS:             brew install lcov"
 
 # Pick the newest tracefile format the installed genhtml can read. An older format is always safe,
 # genhtml reads it without a complaint, while a newer one fails outright. Forge accepts any

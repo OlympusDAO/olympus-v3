@@ -14,7 +14,9 @@ set -euo pipefail
 # machines.
 export LC_ALL=C
 
-cd "$(git rev-parse --show-toplevel 2> /dev/null || pwd)"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/repo.sh"
+
+cd_repo_root
 
 OUT_FILE="src/test/lib/generated/ModulePermissions.sol"
 CHECK=0
@@ -31,14 +33,8 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-command -v forge > /dev/null 2>&1 || {
-    echo "ERROR: forge not found. Install Foundry: https://getfoundry.sh" >&2
-    exit 1
-}
-command -v jq > /dev/null 2>&1 || {
-    echo "ERROR: jq not found." >&2
-    exit 1
-}
+require_command forge "Install Foundry: https://getfoundry.sh"
+require_command jq
 
 # --ast asks solc for the AST whatever `ast` is set to in foundry.toml, and --skip test is safe
 # because a `permissioned` function can only be declared on a module, while no module lives in the
