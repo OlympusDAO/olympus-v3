@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import "modules/CHREG/OlympusClearinghouseRegistry.sol";
 import "src/Kernel.sol";
@@ -50,7 +51,9 @@ contract CHREGTest is Test {
         chreg = new OlympusClearinghouseRegistry(kernel, active, inactive);
 
         // Generate fixtures
-        godmode = chreg.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        godmode = chreg.generateMultiFunctionFixture(
+            ModulePermissions.olympusClearinghouseRegistry()
+        );
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(chreg));

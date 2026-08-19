@@ -4,6 +4,7 @@ pragma solidity >=0.8.15;
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 // Bophades
 import {Actions, Kernel, Module} from "src/Kernel.sol";
@@ -35,9 +36,9 @@ contract SubmoduleInstallationTest is Test {
         price = new OlympusPricev2(kernel, 18, 3600);
 
         // Deploy mock module writer
-        moduleWriter = ModuleTestFixtureGenerator.generateGodmodeFixture(
+        moduleWriter = ModuleTestFixtureGenerator.generateMultiFunctionFixture(
             Module(address(price)),
-            type(ModuleWithSubmodules).name
+            ModulePermissions.moduleWithSubmodules()
         );
 
         // Initialize system and kernel

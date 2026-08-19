@@ -3,6 +3,7 @@ pragma solidity >=0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import "modules/BLREG/OlympusBoostedLiquidityRegistry.sol";
 import "src/Kernel.sol";
@@ -24,7 +25,9 @@ contract BLREGTest is Test {
 
         // Generate fixtures
         {
-            godmode = blreg.generateGodmodeFixture(type(OlympusBoostedLiquidityRegistry).name);
+            godmode = blreg.generateMultiFunctionFixture(
+                ModulePermissions.olympusBoostedLiquidityRegistry()
+            );
         }
 
         // Install modules and policies on Kernel

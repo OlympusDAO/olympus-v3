@@ -60,20 +60,13 @@ if forge coverage --help 2>&1 | grep -q -- '--lcov-version'; then
     LCOV_FLAG=(--lcov-version "$(detect_lcov_version)")
 fi
 
-# `forge coverage` compiles in memory and leaves `out/` untouched, while the Quabi fixtures read the
-# compiler AST straight out of the artifacts over ffi (`src/test/lib/quabi/path.sh` scans `./out/`).
-# Without a build every suite that calls `generateGodmodeFixture()` reverts in `setUp()` with "Path
-# not found" and contributes nothing to the report; with a stale one the fixtures silently miss the
-# permissioned selectors added since. These artifacts are not what the report measures, since
-# `--ir-minimum` applies to the coverage run alone, so they only have to be readable and current.
-#
-# `--skip test` covers it because every name those fixtures look up is a module declared outside the
-# test tree; a lookup for a contract declared in a `.t.sol` would need the flag dropped. Building
-# under the coverage profile keeps this cheap in turn: of the settings that profile changes, only
-# the emptied `compilation_restrictions` reaches the compiler, so a normal build and this one share
-# their cached artifacts and neither invalidates the other.
-echo "Building the artifacts that the AST-based test fixtures read"
-FOUNDRY_PROFILE=coverage forge build --skip test
+# `forge coverage` compiles in memory and leaves `out/` untouched, so a test that reads the build
+# artifacts sees whatever the last build left there, or nothing at all. No test does: the
+# permissioned selectors that the fixtures need come from
+# `src/test/lib/generated/ModulePermissions.sol`, which `shell/gen_perms.sh` writes ahead of time.
+# The build below is kept commented out because reinstating such a test would need it back.
+# echo "Building the artifacts that the AST-based test fixtures read"
+# FOUNDRY_PROFILE=coverage forge build --skip test
 
 echo "Running code coverage (log in ${COVERAGE_LOG})"
 

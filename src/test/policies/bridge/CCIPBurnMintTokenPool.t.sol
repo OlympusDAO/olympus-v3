@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
@@ -88,7 +89,7 @@ contract CCIPBurnMintTokenPoolTest is Test {
         MINTR = new OlympusMinter(kernel, address(OHM));
         ROLES = new OlympusRoles(kernel);
         rolesAdmin = new RolesAdmin(kernel);
-        mintrGodmode = MINTR.generateGodmodeFixture(type(OlympusMinter).name);
+        mintrGodmode = MINTR.generateMultiFunctionFixture(ModulePermissions.olympusMinter());
 
         // Install into kernel
         kernel.executeAction(Actions.InstallModule, address(MINTR));

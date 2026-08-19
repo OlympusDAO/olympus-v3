@@ -3,6 +3,7 @@ pragma solidity >=0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 import {MockGohm} from "test/mocks/MockGohm.sol";
 
 import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
@@ -55,8 +56,8 @@ contract DLGTETestBase is Test {
         dlgte = new OlympusGovDelegation(kernel, address(gohm), escrowFactory);
 
         // Generate fixtures
-        policy = dlgte.generateGodmodeFixture(type(OlympusGovDelegation).name);
-        policy2 = dlgte.generateGodmodeFixture(type(OlympusGovDelegation).name);
+        policy = dlgte.generateMultiFunctionFixture(ModulePermissions.olympusGovDelegation());
+        policy2 = dlgte.generateMultiFunctionFixture(ModulePermissions.olympusGovDelegation());
 
         // Install modules and policies on Kernel
         kernel.executeAction(Actions.InstallModule, address(dlgte));
