@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
 pragma solidity >=0.8.20;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 

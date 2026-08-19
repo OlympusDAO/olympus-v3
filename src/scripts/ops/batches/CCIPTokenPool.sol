@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 import {Base58} from "@base58-solidity-1.0.3/Base58.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";

@@ -9,7 +9,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Configures oracle policies
 /// @dev    Deployment happens separately - this script activates all oracle factories/policies

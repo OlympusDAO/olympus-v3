@@ -5,9 +5,9 @@ pragma solidity >=0.8.24;
 // Scripting
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
-import {stdJson} from "@forge-std-1.9.6/StdJson.sol";
-import {VmSafe} from "@forge-std-1.9.6/Vm.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
+import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
+import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
