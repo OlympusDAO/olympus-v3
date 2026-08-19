@@ -37,6 +37,10 @@ verbosity = 3
 additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
 compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
 libs = ["dependencies"]
+# Drops warnings originating in the dependencies from solc output. Post-processing only: it cannot
+# restore warnings solc discarded at its own limit of 256 per invocation, which applies separately
+# to each compilation job Forge runs.
+ignored_warnings_from = ["dependencies", "deprecated"]
 # The vendored Uniswap V3 SwapRouter test helper is referenced by nothing, and it is the only file
 # that reaches the uniswap-v3-periphery sources carrying an exact `pragma solidity =0.8.15`, which
 # cannot be satisfied under the pinned compiler. Skipping the helper keeps those sources out of the
@@ -54,6 +58,8 @@ runs = 256
 
 [lint]
 exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
+# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports them.
+lint_on_build = false
 
 [rpc_endpoints]
 # Place ALCHEMY_API_KEY in the environment or .env file

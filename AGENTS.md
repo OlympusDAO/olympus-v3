@@ -321,7 +321,7 @@ Key standards summary:
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
+- Linter notes come from `forge lint`, not from `forge build`: builds have `lint_on_build = false` in `foundry.toml` so compiler output stays readable. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
 - Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
 - For commit and push validation, follow the Repo Workflow section.
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
@@ -474,7 +474,7 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 
 ```bash
 pnpm run lint:check # Check all linting rules
-forge build         # Output forge-lint notes
+forge lint          # Output forge-lint notes
 ```
 
 **The following commands show detailed linting rule breakdown:**
