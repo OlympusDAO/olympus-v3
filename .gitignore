@@ -1,5 +1,6 @@
 /out/
 cache/
+.gen-perms/
 node_modules/
 .pnpm-store/
 .env

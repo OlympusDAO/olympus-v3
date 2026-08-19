@@ -9,6 +9,7 @@ docs/
 lib/
 node_modules/
 out/
+.gen-perms/
 
 pnpm-lock.yaml
 
