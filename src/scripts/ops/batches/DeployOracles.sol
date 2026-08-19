@@ -12,7 +12,7 @@ import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Batch script for deploying new oracles via factory policies
 /// @dev    Requires oracle_manager role (held by DAO MS and Timelock)

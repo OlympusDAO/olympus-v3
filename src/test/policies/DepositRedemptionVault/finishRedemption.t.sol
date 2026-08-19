@@ -8,7 +8,7 @@ import {IDepositPositionManager} from "src/modules/DEPOS/IDepositPositionManager
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 contract DepositRedemptionVaultFinishRedemptionTest is DepositRedemptionVaultTest {
     event RedemptionFinished(

@@ -2,8 +2,8 @@
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
 pragma solidity >=0.8.15;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 import {IOlympusTokenMigrator} from "src/interfaces/IOlympusTokenMigrator.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
