@@ -27,3 +27,7 @@ fi
 echo "Writing key-value pair to env.json"
 jq -S --indent 4 --arg contract $KEY --arg address $VALUE 'getpath($contract / ".") = $address' src/scripts/env.json > src/scripts/env.json.tmp
 mv src/scripts/env.json.tmp src/scripts/env.json
+
+# jq writes valid JSON, but Prettier and its sort-json plugin define the
+# repository's canonical formatting and recursive key order.
+pnpm exec prettier --cache --cache-strategy content --write "src/scripts/env.json"

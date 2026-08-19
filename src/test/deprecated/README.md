@@ -6,15 +6,19 @@ against them at compile time.
 
 ## CI behaviour
 
-These tests are **excluded from every CI workflow**. The exclusion is path-based, applied in
-`package.json` and `shell/test_coverage.sh`:
+These tests are **excluded from CI test commands and jobs**. The exclusion is path-based and
+applied in `package.json`:
 
-| Script                                   | Exclusion                                                       |
-| ---------------------------------------- | --------------------------------------------------------------- |
-| `test:unit`                              | `--no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'` |
-| `test:fork`                              | `--no-match-path 'src/test/deprecated/**'`                      |
-| `test:fork:misc`                         | `--no-match-path 'src/test/deprecated/**'`                      |
-| `test:coverage` (`shell/test_coverage.sh`) | `--no-match-path 'src/test/deprecated/**'`                     |
+| Script                          | Exclusion                                                               |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| `test:unit`                     | `--no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'` |
+| `test:invariant`                | `--no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}'` |
+| `test:fork`                     | `--no-match-path 'src/test/deprecated/**'`                              |
+| `test:fork:loan-consolidator`   | `--no-match-path 'src/test/deprecated/**'`                              |
+| `test:fork:boosted-liquidity`   | `--no-match-path 'src/test/deprecated/**'`                              |
+| `test:fork:proposal-helpers`     | `--no-match-path 'src/test/deprecated/**'`                              |
+| `test:fork:misc`                | `--no-match-path 'src/test/deprecated/**'`                              |
+| `test:crosschainfork`           | `--no-match-path 'src/test/deprecated/**'`                              |
 
 They are still compiled by `forge build`, so a change that breaks them fails CI at the build step.
 This is deliberate: it flags the breakage without gating on assertions that depend on long-dead

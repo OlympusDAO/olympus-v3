@@ -11,8 +11,7 @@ src/test/sim/out/*.json
 src/test/sim/sims/*.t.sol
 # deployments/* idea is that deployments should be saved for each chain, you can manually delete them from sims
 .env_deploy*
-docs/plans/
-docs/superpowers/
+docs/
 coverage/
 /solidity-metrics.html
 dependencies/
