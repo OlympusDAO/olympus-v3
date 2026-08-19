@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
-import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -25,8 +24,6 @@ interface IOwnable {
 
 // solhint-disable max-states-count
 contract CCIPBurnMintTokenPoolForkTest is Test {
-    using ModuleTestFixtureGenerator for OlympusMinter;
-
     CCIPLocalSimulatorFork public simulator;
 
     MockOhm public mainnetOHM;
@@ -50,8 +47,6 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     address public SENDER;
     address public RECIPIENT;
     address public ADMIN;
-
-    address public mintrGodmode;
 
     uint256 public constant MINT_AMOUNT = 1e9;
     uint256 public constant SEND_AMOUNT = 1e8;

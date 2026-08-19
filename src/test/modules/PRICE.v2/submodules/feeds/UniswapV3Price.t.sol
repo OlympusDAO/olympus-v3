@@ -4,7 +4,6 @@ pragma solidity >=0.8.0;
 
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks
 import {MockBalancerPool} from "test/mocks/MockBalancerPool.sol";
@@ -27,7 +26,6 @@ import {UniswapV3Price} from "modules/PRICE/submodules/feeds/UniswapV3Price.sol"
 
 contract UniswapV3PriceTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for UniswapV3Price;
 
     MockPrice internal mockPrice;
     MockUniV3Pair internal mockUniPair;

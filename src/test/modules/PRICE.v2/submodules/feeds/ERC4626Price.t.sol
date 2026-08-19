@@ -3,7 +3,6 @@ pragma solidity >=0.8.0;
 
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 
 // Mocks
 import {MockPrice} from "test/mocks/MockPrice.v2.sol";
@@ -40,7 +39,6 @@ contract MockERC4626WithDecimals {
 
 contract ERC4626Test is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for ERC4626Price;
 
     MockPrice internal mockPrice;
     ERC4626Price internal submodule;

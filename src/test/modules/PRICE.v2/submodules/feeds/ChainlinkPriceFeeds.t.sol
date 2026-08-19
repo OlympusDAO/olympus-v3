@@ -3,7 +3,6 @@
 pragma solidity >=0.8.0;
 
 // Test
-import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Mocks
@@ -26,7 +25,6 @@ import {Kernel} from "src/Kernel.sol";
 
 contract ChainlinkPriceFeedsTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for ChainlinkPriceFeeds;
 
     MockPriceFeed internal ohmEthPriceFeed;
     MockPriceFeed internal daiEthPriceFeed;

@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
-import {Quabi} from "src/test/lib/quabi/Quabi.sol";
 import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
