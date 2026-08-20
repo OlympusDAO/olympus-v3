@@ -158,7 +158,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         resultingConfig.collateralFactorBps = 9_500;
 
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
-        emit AssetRiskConfigSet(address(usds), _toRiskConfig(resultingConfig));
+        emit AssetRiskConfigSet(address(usds), _assetRiskConfigInputFromConfig(resultingConfig));
         _expectSingleActionExecuted(
             actionId,
             IBurnerLoansConfig.setAssetRiskConfig.selector,
@@ -271,7 +271,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         );
 
         IBurnerLoans.AssetConfig memory current = burnerLoansConfig.getAssetConfig(address(usds));
-        IBurnerLoans.AssetRiskConfigInput memory risk = _toRiskConfig(current);
+        IBurnerLoans.AssetRiskConfigInput memory risk = _assetRiskConfigInputFromConfig(current);
         risk.collateralFactorBps = 9_500;
         vm.prank(address(configTimelock));
         burnerLoansConfig.setAssetRiskConfig(address(usds), risk);
@@ -320,7 +320,9 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
         IBurnerLoans.AssetConfig memory current = burnerLoansConfig.getAssetConfig(address(usds));
-        IBurnerLoans.AssetRiskConfigInput memory changedConfig = _toRiskConfig(current);
+        IBurnerLoans.AssetRiskConfigInput memory changedConfig = _assetRiskConfigInputFromConfig(
+            current
+        );
         changedConfig.minCollateralRatioBps = 12_000;
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), changedConfig);

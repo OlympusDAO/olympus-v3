@@ -103,7 +103,7 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
             actionId,
             1,
             _RISK_DOMAIN,
-            keccak256(abi.encode(facility, address(usds), _toRiskConfig(config)))
+            keccak256(abi.encode(facility, address(usds), _assetRiskConfigInputFromConfig(config)))
         );
         _assertGuard(
             actionId,

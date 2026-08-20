@@ -184,21 +184,6 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         });
     }
 
-    function _toRiskConfig(
-        IBurnerLoans.AssetConfig memory config_
-    ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
-        return
-            IBurnerLoans.AssetRiskConfigInput({
-                collateralFactorBps: config_.collateralFactorBps,
-                minCollateralRatioBps: config_.minCollateralRatioBps,
-                backingMultiplierBps: config_.backingMultiplierBps,
-                keeperRewardBps: config_.keeperRewardBps,
-                termLength: config_.termLength,
-                maxMaturityHorizon: config_.maxMaturityHorizon,
-                maxKeeperReward: config_.maxKeeperReward
-            });
-    }
-
     function _selectAllRiskFields()
         internal
         pure
