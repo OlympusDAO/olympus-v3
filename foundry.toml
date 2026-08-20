@@ -49,7 +49,8 @@ ignored_warnings_from = ["dependencies", "deprecated"]
 # The vendored Uniswap V3 SwapRouter test helper is referenced by nothing, and it is the only file
 # that reaches the uniswap-v3-periphery sources carrying an exact `pragma solidity =0.8.15`, which
 # cannot be satisfied under the pinned compiler. Skipping the helper keeps those sources out of the
-# compilation graph and avoids patching the dependency.
+# compilation graph and avoids patching the dependency. `forge compiler resolve` ignores this and
+# fails on that pin; `forge build` honours it.
 skip = ["src/test/lib/UniswapV3/SwapRouter.sol"]
 
 [profile.deploy]
