@@ -69,6 +69,13 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Treasury module receiving fees, yield, and seized collateral.
     TRSRYv1 internal _TRSRY;
 
+    /// @notice Initializes the facility's immutable Kernel, OHM, and custody dependencies.
+    /// @dev Reverts with `BurnerLoans_ZeroAddress` for a zero token or DepositManager,
+    ///      `BurnerLoans_InvalidDepositManager` for an incompatible DepositManager, or
+    ///      `BurnerLoans_DepositManagerKernelMismatch` when it belongs to another Kernel.
+    /// @param kernel_ Kernel governing this policy.
+    /// @param ohm_ OHM debt token used by the facility.
+    /// @param depositManager_ DepositManager that custodies collateral.
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
@@ -125,7 +132,12 @@ abstract contract BurnerLoansLifecycle is
         }
     }
 
-    function _marketId(address asset_) internal view returns (uint32) {
+    /// @notice Resolves the earliest FLOAN market for a collateral asset and OHM.
+    /// @dev Reverts when no matching market exists. Lifecycle servicing deliberately uses the
+    ///      earliest market when FLOAN contains multiple matches.
+    /// @param asset_ Collateral asset whose market is resolved.
+    /// @return marketId_ Earliest matching market identifier.
+    function _marketId(address asset_) internal view returns (uint32 marketId_) {
         return BurnerLoansMarketConfig.firstMarketId(_FLOAN, address(this), asset_, address(_OHM));
     }
 
@@ -157,14 +169,20 @@ abstract contract BurnerLoansLifecycle is
         if (!config.originationsEnabled) revert BurnerLoans_AssetOriginationsDisabled(asset_);
     }
 
+    /// @notice Requires OCG admin or Burner Loans admin authority.
+    /// @dev Reverts with `NotAuthorised` when the caller has neither role.
     function _onlyBurnerLoansAdminOrAdmin() internal view {
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
+    /// @notice Authorizes a re-enable transition during the grace period.
+    /// @dev Reverts unless the caller is an OCG admin or Burner Loans admin.
     function _authorizeReEnable() internal view override {
         _onlyBurnerLoansAdminOrAdmin();
     }
 
+    /// @notice Authorizes a grace-period update.
+    /// @dev Reverts unless the caller has the OCG admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
     /// @dev Prevents enabling Burner Loans before compatible Config and Burner Loans Inventory
@@ -193,10 +211,12 @@ abstract contract BurnerLoansLifecycle is
         );
     }
 
+    /// @inheritdoc IVersioned
     function VERSION() external pure returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
+    /// @inheritdoc EnablerV2
     function supportsInterface(
         bytes4 interfaceId_
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {

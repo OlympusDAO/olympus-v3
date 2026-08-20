@@ -58,40 +58,49 @@ interface IBurnerLoansInventory is IERC165 {
     /// @notice Sets the Burner Loans Config policy authorized to set the global debt cap.
     /// @dev Callable only by OCG admin while Burner Loans Inventory is globally disabled. The
     ///      policy must belong to the same Kernel and point to this contract's immutable facility.
+    /// @param configurator_ Burner Loans Config policy to authorize.
     function setConfigurator(address configurator_) external;
 
     /// @notice Sets the maximum active OHM principal funded by this Burner Loans Inventory.
     /// @dev Reverts when the caller is not Burner Loans' current configurator, the cap is below
     ///      active principal, or MINTR cannot reconcile approval exactly.
+    /// @param capOhm_ Maximum active principal, in OHM token decimals.
     function setGlobalDebtCap(uint128 capOhm_) external;
 
     /// @notice Supplies protocol-owned OHM and creates an equal provider claim.
     /// @dev OHM is assumed not to charge transfer fees. Reverts when Burner Loans Inventory is
     ///      disabled, the caller lacks `burner_loans_inventory_provider`, or the amount is zero.
+    /// @param amount_ OHM supplied and credited, in OHM token decimals.
     function supply(uint128 amount_) external;
 
     /// @notice Withdraws currently idle supplied OHM and reduces the provider claim.
     /// @dev Reverts when Burner Loans Inventory is disabled, the caller lacks
     ///      `burner_loans_inventory_provider`, the amount or recipient is zero, or the amount
     ///      exceeds the caller's claim or the aggregate supplied idle balance.
+    /// @param amount_ Supplied OHM to withdraw, in OHM token decimals.
+    /// @param recipient_ Account receiving the withdrawn OHM.
     function withdraw(uint128 amount_, address recipient_) external;
 
     /// @notice Funds a loan draw using supplied OHM first and newly minted OHM second.
     /// @dev OHM is assumed not to charge transfer fees. Reverts when Burner Loans Inventory is
     ///      disabled, the caller is not Burner Loans, an input is zero, or the amount exceeds
     ///      available capacity. Burner Loans owns the origination control.
+    /// @param recipient_ Account receiving the funded OHM.
+    /// @param amount_ Principal funded, in OHM token decimals.
     function draw(address recipient_, uint128 amount_) external;
 
     /// @notice Accounts for OHM already transferred to Burner Loans Inventory as principal repayment.
     /// @dev The facility must verify an exact transfer before this call. Reverts when Burner Loans Inventory is
     ///      disabled, the caller is not the facility, the amount is zero or excessive, or the
     ///      Burner Loans Inventory balance does not contain the reported repayment in addition to supplied idle.
+    /// @param amount_ Repaid principal to settle, in OHM token decimals.
     function settleRepayment(uint128 amount_) external;
 
     /// @notice Removes defaulted principal from the active-principal ledger.
     /// @dev Reverts when Burner Loans Inventory is disabled, the caller is not the facility, or the amount is
     ///      zero or greater than active principal. A failed MINTR restoration is reported without
     ///      reverting; an admin may restore capacity later with `syncMintApproval`.
+    /// @param amount_ Defaulted principal to remove, in OHM token decimals.
     function recordDefault(uint128 amount_) external;
 
     /// @notice Administratively reconciles MINTR approval to the desired cap-derived amount.

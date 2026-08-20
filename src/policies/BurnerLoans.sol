@@ -317,14 +317,21 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return address(_FLOAN);
     }
 
-    function totalActiveDebtOhm() public view returns (uint256) {
+    /// @notice Returns aggregate active principal serviced by this facility.
+    /// @return activeDebtOhm Active principal in OHM token decimals.
+    function totalActiveDebtOhm() public view returns (uint256 activeDebtOhm) {
         return _FLOAN.getFacilityPrincipalDue(address(this), address(_OHM));
     }
 
-    function assetActiveDebtOhm(address asset_) external view returns (uint256) {
+    /// @notice Returns active principal for one collateral asset.
+    /// @dev Reverts when the asset has no compatible Burner Loans market.
+    /// @param asset_ Collateral asset whose debt is queried.
+    /// @return activeDebtOhm Active principal in OHM token decimals.
+    function assetActiveDebtOhm(address asset_) external view returns (uint256 activeDebtOhm) {
         return BurnerLoansView.assetActiveDebtOhm(_FLOAN, address(this), address(_OHM), asset_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function getPosition(
         address asset_,
         address borrower_
@@ -332,14 +339,17 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansView.getPositionForBorrower(_FLOAN, _marketId(asset_), borrower_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function getActiveBorrowers(address asset_) external view override returns (address[] memory) {
         return _FLOAN.getActiveBorrowers(_marketId(asset_));
     }
 
+    /// @inheritdoc IBurnerLoansView
     function isSeizable(address asset_, address borrower_) external view override returns (bool) {
         return BurnerLoansView.isBorrowerSeizable(asset_, _marketId(asset_), borrower_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewSeize(
         address asset_,
         address[] calldata borrowers_
@@ -348,6 +358,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansSeizure.previewSeize(asset_, borrowers_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function getSeizableBorrowers(
         address asset_,
         uint256 startIndex_,
@@ -366,6 +377,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             );
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
@@ -381,6 +393,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             );
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewWithdrawCollateral(
         address asset_,
         uint128 amount_,
@@ -396,6 +409,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             );
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewBorrow(
         address asset_,
         uint128 ohmAmount_,
@@ -406,6 +420,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansQuote.previewBorrow(asset_, ohmAmount_, _marketId(asset_), onBehalfOf_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewRepay(
         address asset_,
         uint128 repayOhm_,
@@ -415,6 +430,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansView.previewRepayForBorrower(asset_, onBehalfOf_, repayOhm_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function previewExtend(
         address asset_,
         address onBehalfOf_,
@@ -424,6 +440,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansQuote.previewExtend(asset_, termCount_, _marketId(asset_), onBehalfOf_);
     }
 
+    /// @inheritdoc IBurnerLoansView
     function positionHealthFactor(
         address asset_,
         uint256 collateral_,
@@ -432,7 +449,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansQuote.positionHealthFactor(asset_, collateral_, debtOhm_);
     }
 
-    /// @notice Quotes currently claimable custody yield for an asset.
+    /// @inheritdoc IBurnerLoansView
     function previewHarvestYield(
         address asset_
     ) external view override returns (HarvestPreview memory) {
@@ -450,7 +467,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
             });
     }
 
-    /// @notice Returns DepositManager accounting for this facility and asset.
+    /// @inheritdoc IBurnerLoansView
     function getAssetCollateralStatus(
         address asset_
     ) external view override returns (AssetCollateralStatus memory) {
@@ -458,6 +475,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
         return BurnerLoansCustody.getAssetCollateralStatus(_DEPOSIT_MANAGER, asset_, address(this));
     }
 
+    /// @notice Returns the dependency snapshot consumed by linked Burner Loans libraries.
+    /// @return dependencies Current token, module, custody, oracle, treasury, and role dependencies.
     function context() external view returns (BurnerLoansContext memory dependencies) {
         return
             BurnerLoansContext({

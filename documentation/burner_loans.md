@@ -103,6 +103,10 @@ complete action table and manual MINTR synchronization behavior.
 
 Health is WAD-scaled; `1e18` is the seizure boundary.
 
+All USD values in the calculation use `PRICE.decimals()`. The backing oracle's 18-decimal value is
+rounded up into that scale before `backingRequirementUsd` is calculated, so both requirements and
+`riskAdjustedCollateralUsd` share one scale.
+
 ```text
 marketRequirementUsd = ceil(debtValueUsd * minCollateralRatioBps / 10_000)
 backingRequirementUsd = ceil(debtBackingValueUsd * backingMultiplierBps / 10_000)
@@ -131,15 +135,25 @@ input.
 
 ```text
 utilization = ceil(marketPrincipalDue * 1e18 / marketPrincipalCap)
+baseFee = baseFeeBps * 1e14
+kink = kinkBps * 1e14
+preKinkSlope = preKinkSlopeBps * 1e14
+postKinkSlope = postKinkSlopeBps * 1e14
 
-before kink:
-feeRate = baseFee + floor(utilization * preKinkSlope / 10_000)
+zero kink (single slope):
+feeRate = baseFee + floor(utilization * preKinkSlope / 1e18)
+
+at or before a non-zero kink:
+feeRate = baseFee + floor(utilization * preKinkSlope / kink)
 
 after kink:
 feeRate = baseFee
-        + floor(kink * preKinkSlope / 10_000)
-        + floor((utilization - kink) * postKinkSlope / 10_000)
+        + preKinkSlope
+        + floor((utilization - kink) * postKinkSlope / (1e18 - kink))
 ```
+
+`utilization`, `baseFee`, `kink`, both slopes, and `feeRate` are WAD-scaled. The stored fee
+parameters are basis points and are converted to WAD before applying the piecewise curve.
 
 The final fee rounds up so a non-zero rate cannot disappear through token-decimal truncation.
 `maxFee` protects execution against a fee above the caller's accepted amount.
@@ -194,8 +208,9 @@ sequenceDiagram
 FLOAN, Burner Loans Inventory, collateral fees, and token transfers normally change atomically.
 Repayment is deliberately resilient to a MINTR burn failure: principal settlement remains valid,
 the unburned OHM becomes ordinary surplus, and `OhmBurnFailed` reports the failure. A failed
-approval restoration is also conservative: the principal transition remains valid, the shortfall
-is reported by event, and an admin may reconcile it later.
+approval increase is also conservative: the principal transition remains valid, the shortfall is
+reported by event, and an admin may reconcile it later. Approval reductions are safety-critical;
+a reduction failure reverts the transition.
 
 ## Custody And Token Assumptions
 

@@ -25,6 +25,10 @@ library BurnerLoansQuote {
     uint256 internal constant _WAD = 1e18;
 
     /// @notice Price snapshot and derived collateral valuation for one quote.
+    /// @param ohmUsdPrice OHM/USD price, in PRICE decimals.
+    /// @param backingPerOhmUsd Backing per OHM, rescaled from 1e18 to PRICE decimals.
+    /// @param collateralUsdPrice Collateral/USD price, in PRICE decimals.
+    /// @param riskAdjustedCollateralUsd Risk-adjusted collateral value, in PRICE decimals.
     struct Pricing {
         uint256 ohmUsdPrice;
         uint256 backingPerOhmUsd;

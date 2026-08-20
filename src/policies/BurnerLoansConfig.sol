@@ -160,7 +160,7 @@ contract BurnerLoansConfig is
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @notice Adds a whitelisted collateral asset.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Admin-only. In the expected deployment, `admin` is the OCG timelock, so this
     ///      function is effectively timelocked by governance. Validates PRICE approval,
     ///      DepositManager support, ERC20 decimal scale, and risk bounds.
@@ -219,7 +219,7 @@ contract BurnerLoansConfig is
         emit AssetOriginationsSet(asset_, true);
     }
 
-    /// @notice Sets an asset's active debt cap.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable by admin or the config operator. Direct admin calls are effectively
     ///      timelocked by governance in the expected deployment.
     /// @dev Reverts if:
@@ -251,7 +251,7 @@ contract BurnerLoansConfig is
         return IBurnerLoansInventory(inventory_);
     }
 
-    /// @notice Sets the optional external config operator.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Admin-only. The config operator need not be a policy or implement a timelock. Setting
     ///      zero revokes delegated access.
     /// @dev Reverts if:
@@ -263,7 +263,7 @@ contract BurnerLoansConfig is
         emit ConfigOperatorSet(configOperator_);
     }
 
-    /// @notice Sets whether a configured asset accepts new originations.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable directly by admin or by the configured config operator. In the expected
     ///      deployment, direct admin calls are already timelocked by OCG governance, while the
     ///      config operator is ConfigTimelock, through which burner_loans_admin callers queue the
@@ -291,7 +291,7 @@ contract BurnerLoansConfig is
         emit AssetOriginationsSet(asset_, enabled_);
     }
 
-    /// @notice Sets the complete asset fee curve.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable by admin or the config operator. The Burner Loans Config Timelock
     ///      may expose partial-update helpers, but this setter receives the full resulting curve.
     /// @dev Reverts if:
@@ -311,7 +311,7 @@ contract BurnerLoansConfig is
         _setAssetFeeConfig(asset_, config_);
     }
 
-    /// @notice Sets asset risk and term fields.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable by admin or the config operator. Replaces all risk and term fields
     ///      while preserving admin-only fields such as enabled status, collateral decimals, and debt cap.
     /// @dev Reverts if:
@@ -334,7 +334,7 @@ contract BurnerLoansConfig is
         _setAssetRiskConfig(asset_, config_);
     }
 
-    /// @notice Validates a complete asset risk configuration.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if collateral factor, minimum collateral ratio, backing multiplier, keeper
     ///      reward bps, term length, max maturity horizon, or max keeper reward violates
     ///      BurnerLoans bounds.
@@ -343,7 +343,7 @@ contract BurnerLoansConfig is
         _validateRiskConfig(config_);
     }
 
-    /// @notice Validates a complete utilization fee configuration.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if any bps component exceeds 100%, if kink configuration is invalid, or if
     ///      the full-utilization fee rate exceeds 100%.
     /// @param config_ Complete fee configuration to validate.
@@ -351,7 +351,7 @@ contract BurnerLoansConfig is
         _validateFeeConfig(config_);
     }
 
-    /// @notice Validates an asset active debt cap against live Burner Loans state.
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if `asset_` is not configured, `debtCapOhm_` is below current active
     ///      debt for `asset_`.
     /// @param asset_ Collateral asset to validate.

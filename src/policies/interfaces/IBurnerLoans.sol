@@ -82,6 +82,11 @@ interface IBurnerLoans {
         uint256 borrowed
     );
 
+    /// @notice Borrower position represented by the lifecycle policy.
+    /// @param depositedCollateral Credited collateral in collateral-token decimals.
+    /// @param debtOhm Outstanding principal in OHM token decimals.
+    /// @param maturity Maturity timestamp in seconds.
+    /// @param lastBorrowBlock Block number of the latest borrow.
     struct Position {
         uint256 depositedCollateral;
         uint256 debtOhm;
@@ -89,6 +94,17 @@ interface IBurnerLoans {
         uint48 lastBorrowBlock;
     }
 
+    /// @notice Complete configuration for one collateral market.
+    /// @param originationsEnabled Whether deposits, borrows, and extensions are enabled.
+    /// @param collateralDecimals Decimal precision of the collateral token.
+    /// @param collateralFactorBps Recognized collateral value in basis points.
+    /// @param minCollateralRatioBps Minimum collateral ratio in basis points.
+    /// @param backingMultiplierBps Backing requirement multiplier in basis points.
+    /// @param keeperRewardBps Keeper reward rate in basis points.
+    /// @param termLength Standard loan term in seconds.
+    /// @param maxMaturityHorizon Maximum maturity distance from the current timestamp.
+    /// @param debtCap Maximum live principal in OHM token decimals.
+    /// @param maxKeeperReward Maximum keeper reward in collateral-token decimals.
     struct AssetConfig {
         bool originationsEnabled;
         uint8 collateralDecimals;
@@ -102,6 +118,14 @@ interface IBurnerLoans {
         uint256 maxKeeperReward;
     }
 
+    /// @notice Caller-supplied risk configuration for one collateral market.
+    /// @param collateralFactorBps Recognized collateral value in basis points.
+    /// @param minCollateralRatioBps Minimum collateral ratio in basis points.
+    /// @param backingMultiplierBps Backing requirement multiplier in basis points.
+    /// @param keeperRewardBps Keeper reward rate in basis points.
+    /// @param termLength Standard loan term in seconds.
+    /// @param maxMaturityHorizon Maximum maturity distance from the current timestamp.
+    /// @param maxKeeperReward Maximum keeper reward in collateral-token decimals.
     struct AssetRiskConfigInput {
         uint16 collateralFactorBps;
         uint16 minCollateralRatioBps;
@@ -112,6 +136,11 @@ interface IBurnerLoans {
         uint256 maxKeeperReward;
     }
 
+    /// @notice Utilization-based collateral fee configuration.
+    /// @param baseFeeBps Base fee rate in basis points.
+    /// @param kinkBps Utilization kink in basis points.
+    /// @param preKinkSlopeBps Fee slope below the kink in basis points.
+    /// @param postKinkSlopeBps Fee slope above the kink in basis points.
     struct AssetFeeConfig {
         uint16 baseFeeBps;
         uint16 kinkBps;
@@ -119,6 +148,12 @@ interface IBurnerLoans {
         uint16 postKinkSlopeBps;
     }
 
+    /// @notice Projected result of an OHM borrow.
+    /// @param fee Collateral fee in collateral-token decimals.
+    /// @param resultingDebtOhm Resulting principal in OHM token decimals.
+    /// @param resultingHealthFactor Resulting health factor, scaled by 1e18.
+    /// @param maturity Resulting maturity timestamp.
+    /// @param executable Whether the quoted operation is executable.
     struct BorrowPreview {
         uint256 fee;
         uint256 resultingDebtOhm;
@@ -127,6 +162,11 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    /// @notice Projected result of an OHM repayment.
+    /// @param repayAmount Principal repaid in OHM token decimals.
+    /// @param remainingDebtOhm Remaining principal in OHM token decimals.
+    /// @param resultingHealthFactor Resulting health factor, scaled by 1e18.
+    /// @param executable Whether the quoted operation is executable.
     struct RepayPreview {
         uint256 repayAmount;
         uint256 remainingDebtOhm;
@@ -134,6 +174,12 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    /// @notice Projected result of a collateral withdrawal.
+    /// @param returnToken Token returned to the recipient.
+    /// @param returnAmount Assets returned in `returnToken` decimals.
+    /// @param remainingDepositedCollateral Remaining credited collateral in collateral-token decimals.
+    /// @param resultingHealthFactor Resulting health factor, scaled by 1e18.
+    /// @param executable Whether the quoted operation is executable.
     struct WithdrawPreview {
         address returnToken;
         uint256 returnAmount;
@@ -142,6 +188,11 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    /// @notice Projected result of a maturity extension.
+    /// @param fee Collateral fee in collateral-token decimals.
+    /// @param maturity Resulting maturity timestamp.
+    /// @param healthFactor Current health factor, scaled by 1e18.
+    /// @param executable Whether the quoted operation is executable.
     struct ExtendPreview {
         uint256 fee;
         uint48 maturity;
@@ -149,6 +200,12 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    /// @notice Projected result of a seizure batch.
+    /// @param seizedDebtOhm Defaulted principal in OHM token decimals.
+    /// @param seizedCollateral Collateral removed in collateral-token decimals.
+    /// @param collateralToTreasury Collateral routed to treasury in collateral-token decimals.
+    /// @param keeperReward Keeper reward in collateral-token decimals.
+    /// @param executable Whether the quoted operation is executable.
     struct SeizePreview {
         uint256 seizedDebtOhm;
         uint256 seizedCollateral;
@@ -157,11 +214,21 @@ interface IBurnerLoans {
         bool executable;
     }
 
+    /// @notice Projected collateral-yield harvest.
+    /// @param amount Claimable yield in collateral-token decimals.
+    /// @param executable Whether custody is solvent and the harvest is executable.
     struct HarvestPreview {
         uint256 amount;
         bool executable;
     }
 
+    /// @notice Custody accounting for one collateral asset.
+    /// @param shares DepositManager shares credited to the facility.
+    /// @param assets Redeemable collateral assets in collateral-token decimals.
+    /// @param borrowed Collateral borrowed from custody in collateral-token decimals.
+    /// @param liabilities Receipt-token liabilities in collateral-token decimals.
+    /// @param claimableYield Excess collateral assets in collateral-token decimals.
+    /// @param solvent Whether assets plus borrowed collateral cover liabilities.
     struct AssetCollateralStatus {
         uint256 shares;
         uint256 assets;

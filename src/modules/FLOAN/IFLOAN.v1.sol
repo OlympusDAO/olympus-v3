@@ -205,10 +205,12 @@ interface IFLOANv1 is IERC165 {
     );
 
     /// @notice Returns the next market identifier and number of stored markets.
-    function getMarketCount() external view returns (uint32);
+    /// @return marketCount Next market identifier and number of stored markets.
+    function getMarketCount() external view returns (uint32 marketCount);
 
     /// @notice Returns the next position identifier and number of stored positions.
-    function getPositionCount() external view returns (uint64);
+    /// @return positionCount Next position identifier and number of stored positions.
+    function getPositionCount() external view returns (uint64 positionCount);
 
     /// @notice Returns current credited collateral for one market.
     /// @dev Returns zero when `marketId_` does not identify a stored market.

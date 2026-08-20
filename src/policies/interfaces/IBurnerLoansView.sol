@@ -29,58 +29,151 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @return address The FLOAN module address.
     function floan() external view returns (address);
 
-    /// @return Position The borrower's position for the collateral asset.
-    function getPosition(address, address) external view returns (Position memory);
+    /// @notice Returns a borrower's position for a collateral asset.
+    /// @dev Reverts when the asset is not configured or its market is incompatible.
+    /// @param asset_ Collateral asset whose market contains the position.
+    /// @param borrower_ Borrower whose position is queried.
+    /// @return position The current Burner Loans position.
+    function getPosition(
+        address asset_,
+        address borrower_
+    ) external view returns (Position memory position);
 
-    /// @return address[] The active borrowers for the collateral asset.
-    function getActiveBorrowers(address) external view returns (address[] memory);
+    /// @notice Returns all active borrowers for a collateral asset.
+    /// @dev Reverts when the asset is not configured or its market is incompatible.
+    /// @param asset_ Collateral asset whose active borrowers are queried.
+    /// @return borrowers Active borrowers in FLOAN order.
+    function getActiveBorrowers(address asset_) external view returns (address[] memory borrowers);
 
-    /// @return bool True when the borrower can be seized for the collateral asset.
-    function isSeizable(address, address) external view returns (bool);
+    /// @notice Returns whether a borrower is currently eligible for seizure.
+    /// @dev Reverts when the asset configuration or required prices are unavailable.
+    /// @param asset_ Collateral asset securing the position.
+    /// @param borrower_ Borrower whose position is checked.
+    /// @return seizable True when the position can be seized.
+    function isSeizable(address asset_, address borrower_) external view returns (bool seizable);
 
-    /// @return SeizePreview The projected seizure result.
-    function previewSeize(address, address[] calldata) external view returns (SeizePreview memory);
+    /// @notice Quotes seizure of a borrower batch for one collateral asset.
+    /// @dev Reverts for an invalid batch, duplicate borrower, missing debt, unavailable custody or
+    ///      pricing, or any position that is not seizable.
+    /// @param asset_ Collateral asset securing every position in the batch.
+    /// @param borrowers_ Borrowers whose positions would be seized.
+    /// @return preview Projected seizure accounting.
+    function previewSeize(
+        address asset_,
+        address[] calldata borrowers_
+    ) external view returns (SeizePreview memory preview);
 
-    /// @return address[] The seizable borrowers found in the requested scan range.
-    /// @return uint256 The next borrower index to scan.
-    /// @return uint256 The number of borrowers inspected.
+    /// @notice Scans active borrowers and returns a bounded set of seizable addresses.
+    /// @dev Reverts when the asset configuration or pricing is unavailable or the return limit is
+    ///      above the supported batch size.
+    /// @param asset_ Collateral asset whose active borrowers are scanned.
+    /// @param startIndex_ Active-borrower index at which to begin.
+    /// @param maxBorrowersToCheck_ Maximum borrowers to inspect.
+    /// @param maxBorrowersToReturn_ Maximum seizable borrowers to return.
+    /// @return borrowers Seizable borrowers found in the requested scan range.
+    /// @return nextIndex Next borrower index to scan.
+    /// @return expectedKeeperReward Projected keeper reward in collateral-token decimals.
     function getSeizableBorrowers(
-        address,
-        uint256,
-        uint256,
-        uint256
-    ) external view returns (address[] memory, uint256, uint256);
+        address asset_,
+        uint256 startIndex_,
+        uint256 maxBorrowersToCheck_,
+        uint256 maxBorrowersToReturn_
+    )
+        external
+        view
+        returns (address[] memory borrowers, uint256 nextIndex, uint256 expectedKeeperReward);
 
-    /// @return uint256 The projected collateral shares after the deposit.
-    /// @return uint256 The projected health factor after the deposit.
+    /// @notice Quotes a collateral deposit for a borrower.
+    /// @dev Reverts when the facility or asset is disabled, the amount is zero, or custody cannot
+    ///      accept and credit the deposit.
+    /// @param asset_ Collateral asset to deposit.
+    /// @param amount_ Deposit amount in collateral-token decimals.
+    /// @param onBehalfOf_ Borrower receiving the collateral credit.
+    /// @return depositedCollateral Projected collateral credited in collateral-token decimals.
+    /// @return totalCollateral Projected total credited collateral in collateral-token decimals.
     function previewDepositCollateral(
-        address,
-        uint128,
-        address
-    ) external view returns (uint256, uint256);
+        address asset_,
+        uint128 amount_,
+        address onBehalfOf_
+    ) external view returns (uint256 depositedCollateral, uint256 totalCollateral);
 
-    /// @return WithdrawPreview The projected collateral withdrawal result.
+    /// @notice Quotes a collateral withdrawal for a borrower.
+    /// @dev Reverts for unavailable custody or pricing, an invalid amount, or an unhealthy result.
+    /// @param asset_ Collateral asset to withdraw.
+    /// @param amount_ Credited collateral to remove, in collateral-token decimals.
+    /// @param onBehalfOf_ Borrower whose position is quoted.
+    /// @return preview Projected withdrawal accounting.
     function previewWithdrawCollateral(
-        address,
-        uint128,
-        address
-    ) external view returns (WithdrawPreview memory);
+        address asset_,
+        uint128 amount_,
+        address onBehalfOf_
+    ) external view returns (WithdrawPreview memory preview);
 
-    /// @return BorrowPreview The projected borrow result.
-    function previewBorrow(address, uint128, address) external view returns (BorrowPreview memory);
+    /// @notice Quotes an OHM borrow against a collateral position.
+    /// @dev Reverts for disabled originations, missing collateral, cap breach, unavailable prices,
+    ///      matured debt, or an unhealthy current or resulting position.
+    /// @param asset_ Collateral asset securing the loan.
+    /// @param ohmAmount_ Principal requested in OHM token decimals.
+    /// @param onBehalfOf_ Borrower whose position is quoted.
+    /// @return preview Projected borrow accounting.
+    function previewBorrow(
+        address asset_,
+        uint128 ohmAmount_,
+        address onBehalfOf_
+    ) external view returns (BorrowPreview memory preview);
 
-    /// @return RepayPreview The projected repayment result.
-    function previewRepay(address, uint128, address) external view returns (RepayPreview memory);
+    /// @notice Quotes repayment of a borrower's OHM principal.
+    /// @dev Reverts when the asset is unconfigured, the amount is zero, there is no debt, the
+    ///      amount exceeds debt, or repayment occurs in the borrow block.
+    /// @param asset_ Collateral asset identifying the market.
+    /// @param repayOhm_ Principal to repay in OHM token decimals.
+    /// @param onBehalfOf_ Borrower whose debt is quoted.
+    /// @return preview Projected repayment accounting.
+    function previewRepay(
+        address asset_,
+        uint128 repayOhm_,
+        address onBehalfOf_
+    ) external view returns (RepayPreview memory preview);
 
-    /// @return ExtendPreview The projected extension result.
-    function previewExtend(address, address, uint16) external view returns (ExtendPreview memory);
+    /// @notice Quotes an active position maturity extension.
+    /// @dev Reverts for disabled originations, missing debt, unavailable custody or pricing,
+    ///      unhealthy debt, a zero term count, or a maturity outside the configured horizon.
+    /// @param asset_ Collateral asset identifying the market.
+    /// @param onBehalfOf_ Borrower whose position is quoted.
+    /// @param termCount_ Number of configured terms to add.
+    /// @return preview Projected extension accounting.
+    function previewExtend(
+        address asset_,
+        address onBehalfOf_,
+        uint16 termCount_
+    ) external view returns (ExtendPreview memory preview);
 
-    /// @return uint256 The position health factor.
-    function positionHealthFactor(address, uint256, uint256) external view returns (uint256);
+    /// @notice Calculates a position health factor from supplied collateral and debt.
+    /// @dev Returns max uint for zero debt and otherwise reverts when configuration or prices are
+    ///      unavailable.
+    /// @param asset_ Collateral asset used for valuation.
+    /// @param collateral_ Collateral amount in collateral-token decimals.
+    /// @param debtOhm_ Debt principal in OHM token decimals.
+    /// @return healthFactor Position health factor, scaled by 1e18.
+    function positionHealthFactor(
+        address asset_,
+        uint256 collateral_,
+        uint256 debtOhm_
+    ) external view returns (uint256 healthFactor);
 
-    /// @return HarvestPreview The projected collateral-yield harvest result.
-    function previewHarvestYield(address) external view returns (HarvestPreview memory);
+    /// @notice Quotes currently claimable collateral yield for the treasury.
+    /// @dev Reverts when the facility is disabled or the asset or custody configuration is invalid.
+    /// @param asset_ Collateral asset whose yield is queried.
+    /// @return preview Projected yield harvest.
+    function previewHarvestYield(
+        address asset_
+    ) external view returns (HarvestPreview memory preview);
 
-    /// @return AssetCollateralStatus The collateral accounting status for the asset.
-    function getAssetCollateralStatus(address) external view returns (AssetCollateralStatus memory);
+    /// @notice Returns DepositManager accounting for this facility and asset.
+    /// @dev Reverts when the asset is not configured or the custody query fails.
+    /// @param asset_ Collateral asset whose custody status is queried.
+    /// @return status Current collateral accounting status.
+    function getAssetCollateralStatus(
+        address asset_
+    ) external view returns (AssetCollateralStatus memory status);
 }
