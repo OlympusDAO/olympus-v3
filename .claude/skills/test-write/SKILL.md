@@ -447,6 +447,12 @@ function test_whenThreePrices_whenDeviationIsValid(
 ) public view {
     uint64 boundedPrice1 = uint64(bound(price1, 1e9, 1e19));
     // boundedPrice1 is now in range [1e9, 1e19]
+    uint64 boundedPrice2 = uint64(bound(price2, 1e9, 1e19));
+    // boundedPrice2 is now in range [1e9, 1e19]
+    uint64 boundedPrice3 = uint64(bound(price3, 1e9, 1e19));
+    // boundedPrice3 is now in range [1e9, 1e19]
+    uint16 boundedDeviationBps = uint16(bound(deviationBps, 0, 10_000));
+    // boundedDeviationBps is now in range [0, 10_000]
     // test logic
 }
 
