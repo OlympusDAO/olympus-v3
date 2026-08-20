@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 // solhint-disable custom-errors
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 // Interfaces
 import {console2} from "@forge-std-1.16.2/console2.sol";

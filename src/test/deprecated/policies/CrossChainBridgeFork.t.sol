@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // DEPRECATED: LayerZero V1 bridge. Superseded by the LayerZero V2 gateway
 // (src/test/policies/bridge/LZBridgeGateway/) and the CCIP token pool.

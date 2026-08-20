@@ -1,6 +1,6 @@
 // https://github.com/ensdomains/buffer
 
-pragma solidity >=0.7.0;
+pragma solidity >=0.7.0 <0.9.0;
 
 /**
  * @dev A library for working with mutable byte buffers in Solidity.

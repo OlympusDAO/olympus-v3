@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Kernel, Policy, Keycode, Permissions} from "src/Kernel.sol";
 

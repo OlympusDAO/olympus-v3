@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 // Scripting
 import {console2} from "@forge-std-1.16.2/console2.sol";

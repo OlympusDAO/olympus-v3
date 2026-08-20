@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Script} from "forge-std/Script.sol";
 import {Test} from "forge-std/Test.sol";

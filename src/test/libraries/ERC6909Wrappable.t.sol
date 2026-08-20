@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC6909Wrappable} from "../mocks/MockERC6909Wrappable.sol";

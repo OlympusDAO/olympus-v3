@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
