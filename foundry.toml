@@ -25,7 +25,8 @@ optimizer = true
 optimizer_runs = 10000
 verbosity = 3
 
-# Operator needs special optimizer settings to remain within the bytecode-size limit.
+# Operator and YieldRepurchaseFacilityV2 need special optimizer settings to remain within the
+# bytecode-size limit.
 # Restrictions apply to the entire connected import graph, not only to the matching source file.
 # A script that imports Operator compiles all contracts in that graph at 10 runs, even when it does
 # not deploy Operator. Use IOperator for interactions and a dedicated script to deploy Operator.
@@ -33,8 +34,14 @@ verbosity = 3
 # default profile and otherwise the alphabetically first entry below. Removing an entry that a
 # restriction relies on fails the build with "Missing profile satisfying settings restrictions".
 # A restriction also overrides `--optimizer-runs` on the command line.
-additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
-compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
+additional_compiler_profiles = [
+    { name = "ten-runs", optimizer_runs = 10 },
+    { name = "four-hundred-runs", optimizer_runs = 400 },
+]
+compilation_restrictions = [
+    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
+    { paths = "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol", optimizer_runs = 400 },
+]
 libs = ["dependencies"]
 # Tests live here, not in the default `test` directory. While this pointed at a directory that does
 # not exist, Forge replaced the `test/=src/test/` entry of remappings.txt with narrower generated

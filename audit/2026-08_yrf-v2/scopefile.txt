@@ -1,0 +1,21 @@
+# Yield Repurchase Facility v2 Audit Scope
+
+# Facility
+
+src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol
+src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol
+src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol
+src/policies/YieldRepurchaseFacility/YRFTimelock.sol
+src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol
+src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol
+
+# Backing Oracle
+
+src/policies/BackingOracle.sol
+src/policies/interfaces/IBackingOracle.sol
+
+# OCG Proposal & Activation
+
+src/proposals/YieldRepurchaseFacilityV2Proposal.sol
+src/proposals/YieldRepurchaseFacilityV2Activator.sol
+src/scripts/ops/batches/YieldRepoV2Install.sol

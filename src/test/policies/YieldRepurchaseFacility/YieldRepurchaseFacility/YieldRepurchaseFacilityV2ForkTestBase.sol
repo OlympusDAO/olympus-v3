@@ -1,0 +1,1290 @@
+// SPDX-License-Identifier: AGPL-3.0
+pragma solidity >=0.8.24;
+
+import {Test} from "@forge-std-1.16.2/Test.sol";
+
+import {AggregatorV2V3Interface, AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
+
+import {FullMath} from "src/libraries/FullMath.sol";
+import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+
+import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
+import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
+import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {PRICEv1} from "src/modules/PRICE/PRICE.v1.sol";
+import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+
+import {OlympusHeart} from "src/policies/Heart.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {BackingOracle} from "src/policies/BackingOracle.sol";
+import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
+import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
+
+// ============ MINIMAL MAINNET INTERFACES ============ //
+
+/// @notice The Bond Protocol SDA auctioneer surface used by the test.
+interface IBondAuctioneerLike {
+    function setCallbackAuthStatus(address creator_, bool status_) external;
+
+    function callbackAuthorized(address creator_) external view returns (bool);
+
+    function marketPrice(uint256 id_) external view returns (uint256);
+
+    function marketScale(uint256 id_) external view returns (uint256);
+
+    function maxAmountAccepted(uint256 id_, address referrer_) external view returns (uint256);
+
+    function payoutFor(
+        uint256 amount_,
+        uint256 id_,
+        address referrer_
+    ) external view returns (uint256);
+
+    function isLive(uint256 id_) external view returns (bool);
+
+    function currentCapacity(uint256 id_) external view returns (uint256);
+
+    function markets(
+        uint256 id_
+    )
+        external
+        view
+        returns (
+            address owner,
+            address payoutToken,
+            address quoteToken,
+            address callbackAddr,
+            bool capacityInQuote,
+            uint256 capacity,
+            uint256 totalDebt,
+            uint256 minPrice,
+            uint256 maxPayout,
+            uint256 sold,
+            uint256 purchased,
+            uint256 scale
+        );
+}
+
+/// @notice The Bond Protocol teller surface used by the test.
+interface IBondTellerLike {
+    function purchase(
+        address recipient_,
+        address referrer_,
+        uint256 id_,
+        uint256 amount_,
+        uint256 minAmountOut_
+    ) external returns (uint256 payout, uint48 expiry);
+}
+
+/// @notice The Bond Protocol aggregator surface used by the test.
+interface IBondAggregatorLike {
+    function marketCounter() external view returns (uint256);
+}
+
+/// @notice The OHM token surface used by the test (mint is gated to the MINTR module).
+interface IOhmLike is IERC20 {
+    function mint(address to_, uint256 amount_) external;
+}
+
+/// @title YieldRepurchaseFacilityV2ForkTestBase
+/// @notice Mainnet-fork base for the YRF v2 end-to-end tests: installs the v2 stack into the
+///         live Kernel (DAO MS for kernel actions, the OCG timelock for role-gated
+///         configuration), migrates the state of the deployed YRF v1.2 into the v2 seeds,
+///         swaps the Heart periodic task, and maintains an exact mirror model of the
+///         expected facility state that is asserted after every heart beat.
+/// @dev The mirror model replicates the arithmetic of `YieldRepurchaseFacilityV2` (same
+///      formulas, same rounding, same ordering) using ERC4626 previews evaluated at the
+///      beat timestamp, so all assertions are exact (`assertEq`).
+// solhint-disable max-states-count
+abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
+    using FullMath for uint256;
+
+    // ============ FORK CONFIGURATION ============ //
+
+    /// @notice Pinned mainnet block (2026-08-04, after the in-place PRICE v1.2 upgrade).
+    ///         YRF v1.2 is at epoch 1 with a projected `nextYield` and an unspent weekly
+    ///         budget, which the setup migrates into the v2 seeds.
+    uint256 internal constant FORK_BLOCK = 25_680_000;
+
+    // These addresses are hard-coded, as the values in env.json can change while this test
+    // operates on a pinned block.
+    address internal constant KERNEL = 0x2286d7f9639e8158FaD1169e76d1FbC38247f54b;
+    address internal constant ROLES_ADMIN = 0xb216d714d91eeC4F7120a732c11428857C659eC8;
+    address internal constant TIMELOCK = 0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39;
+    address internal constant DAO_MS = 0x245cc372C84B3645Bf0Ffe6538620B04a217988B;
+    address internal constant EMERGENCY_MS = 0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55;
+    address internal constant MINTR_MODULE = 0xa90bFe53217da78D900749eb6Ef513ee5b6a491e;
+
+    address internal constant OHM = 0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5;
+    address internal constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
+    address internal constant SUSDS = 0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD;
+    address internal constant USDE = 0x4c9EDD5852cd905f086C759E8383e09bff1E68B3;
+    address internal constant SUSDE = 0x9D39A5DE30e57443BfF2A8307A4256c8797A3497;
+
+    address internal constant BOND_AUCTIONEER = 0x007F7A1cb838A872515c8ebd16bE4b14Ef43a222;
+    address internal constant BOND_TELLER = 0x007F7735baF391e207E3aA380bb53c4Bd9a5Fed6;
+    address internal constant BOND_AGGREGATOR = 0x007A66A2a13415DB3613C1a4dd1C942A285902d1;
+    /// @notice The owner of the Bond Protocol auctioneer, which grants the callback
+    ///         authorization required by the v2 markets.
+    address internal constant BOND_OWNER = 0x007BD11FCa0dAaeaDD455b51826F9a015f2f0969;
+
+    address internal constant HEART = 0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB;
+    address internal constant YIELD_REPO_V1 = 0x271e35a8555a62F6bA76508E85dfD76D580B0692;
+    /// @notice A live policy with TRSRY withdraw permissions, impersonated to simulate a
+    ///         treasury outflow (a Cooler V2 borrow).
+    address internal constant COOLER_BORROWER = 0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0;
+
+    /// @notice The registered clearinghouses on the pinned block (all deactivated).
+    address internal constant CLEARINGHOUSE_V1 = 0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880;
+    address internal constant CLEARINGHOUSE_V1_1 = 0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c;
+    address internal constant CLEARINGHOUSE_V1_2 = 0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0;
+
+    /// @notice The PriceConfig v2 policy: the production path for registering an asset
+    ///         in the PRICE module (gated to the price_admin role, held by the DAO MS).
+    address internal constant PRICE_CONFIG = 0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd;
+
+    /// @notice The Chainlink USDe/USD aggregator, registered as the single USDe feed.
+    address internal constant CHAINLINK_USDE_USD = 0xa569d910839Ae8865Da8F8e70FfFb0cBA869F961;
+
+    /// @notice The USDe feed update threshold registered in PRICE (the production
+    ///         parameter: the 24-hour feed heartbeat).
+    uint48 internal constant USDE_UPDATE_THRESHOLD = 86_400;
+
+    // ============ DEPLOYMENT PARAMETERS ============ //
+
+    /// @notice The initial backing value (18 decimals): the value hardcoded in the
+    ///         deployed YRF v1.2 ($11.33 per OHM), fixed for the whole test.
+    uint256 internal constant BACKING = 11.33e18;
+    /// @notice The initial bond market discount (3%, 18 decimals), matching YRF v1.2.
+    uint256 internal constant INITIAL_DISCOUNT = 3e16;
+    uint32 internal constant GRACE_PERIOD = 5 days;
+    uint48 internal constant CONFIG_TIMELOCK_DELAY = 1 days;
+
+    /// @notice The sUSDS yield buyback share (100%, matching the v1.2 behaviour).
+    uint256 internal constant SUSDS_BUYBACK_SHARE = 1e18;
+    /// @notice The sUSDe yield buyback share (50%): half of the sUSDe yield is left in the
+    ///         treasury, exercising the yield split of v2.
+    uint256 internal constant SUSDE_BUYBACK_SHARE = 5e17;
+    /// @notice The annualized rate (in basis points) used both for the sUSDe next-yield
+    ///         seed estimate and for the simulated Ethena reward stream.
+    uint256 internal constant SUSDE_APR_BPS = 400;
+
+    /// @notice The receivables offset applied to the Cooler v1 Clearinghouse v1.1 when it is
+    ///         included into the backing yield (the governance estimate of its phantom
+    ///         receivables at inclusion time).
+    uint256 internal constant CLEARINGHOUSE_V1_1_INITIAL_OFFSET = 2_000_000e18;
+
+    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
+    uint48 internal constant EPOCH_LENGTH = 21;
+    uint48 internal constant EPOCHS_PER_DAY = 3;
+    uint256 internal constant DAYS_PER_WEEK = 7;
+
+    // ============ MAINNET CONTRACTS ============ //
+
+    Kernel internal kernel;
+    ROLESv1 internal roles;
+    RolesAdmin internal rolesAdmin;
+    TRSRYv1 internal treasury;
+    PRICEv1 internal price;
+    /// @notice The v2 surface of the same PRICE module (v1.2 provides both).
+    IPRICEv2 internal priceV2;
+    CHREGv1 internal chreg;
+    OlympusHeart internal heart;
+    IYieldRepoV1 internal yieldRepoV1;
+
+    IOhmLike internal ohm;
+    IERC20 internal usds;
+    IERC4626 internal susds;
+    IERC20 internal usde;
+    IERC4626 internal susde;
+
+    IBondAuctioneerLike internal auctioneer;
+    IBondTellerLike internal teller;
+    IBondAggregatorLike internal aggregator;
+
+    // ============ DEPLOYED V2 STACK ============ //
+
+    BackingOracle internal backingOracle;
+    YieldRepurchaseFacilityConfigTimelock internal configTimelock;
+    YieldRepurchaseFacilityV2 internal yieldRepo;
+
+    // ============ TEST ACCOUNTS ============ //
+
+    address internal keeper;
+    address internal buyer;
+    address internal yrfAdmin;
+    address internal backingAdmin;
+    address internal coolerRecipient;
+
+    // ============ SEEDS (COMPUTED IN setUp) ============ //
+
+    /// @notice The sUSDS next-yield seed: the v1.2 `nextYield` projected at its last weekly
+    ///         reset plus the value of the unspent weekly budget swept back to the
+    ///         treasury by the v1.2 shutdown.
+    uint256 internal susdsSeedYield;
+    /// @notice The sUSDS yield snapshots carried over from v1.2, so that the first v2
+    ///         weekly reset captures the yield accrued since the last v1.2 reset.
+    uint256 internal susdsSeedBalance;
+    uint256 internal susdsSeedRate;
+
+    /// @notice The sUSDe next-yield seed: one week of the estimated yield on the current
+    ///         treasury holding, scaled by the buyback share.
+    uint256 internal susdeSeedYield;
+    uint256 internal susdeSeedBalance;
+    uint256 internal susdeSeedRate;
+
+    /// @notice The fixed daily reward stream simulated for the whole sUSDe vault.
+    uint256 internal susdeDailyReward;
+
+    // ============ ORACLE PRICE STATE ============ //
+
+    /// @notice The steered OHM/USD price (18 decimals): every OHM feed of the PRICE
+    ///         module is mocked to this value, so the module resolves the OHM price to it
+    ///         exactly. USDS is pinned to exactly 1e18, so `getPriceIn(OHM, USDS)` equals
+    ///         this value as well.
+    uint256 internal ohmPriceUsd;
+
+    /// @notice A Chainlink-interface aggregator mocked at the source: `latestRoundData`
+    ///         returns the pinned answer with a fresh timestamp on every warp.
+    struct ChainlinkFeedMock {
+        address aggregator;
+        int256 answer;
+    }
+
+    /// @notice The aggregators behind the USDS and USDe feeds of the PRICE module,
+    ///         collected from the live feed configuration.
+    ChainlinkFeedMock[] internal chainlinkFeedMocks;
+
+    /// @notice An OHM feed of the PRICE module, mocked at the feed-submodule call
+    ///         boundary with the exact per-feed calldata.
+    /// @dev The OHM feeds resolve through Uniswap V3 TWAPs (and a Chainlink composite
+    ///      averaged with them), and a pool cannot be steered to a chosen target price,
+    ///      so the OHM price is injected at the lowest boundary that can express it: the
+    ///      staticcall the PRICE module makes to the feed submodule. The module's
+    ///      registry, strategy, and freshness logic stay live.
+    struct OhmFeedMock {
+        address submodule;
+        bytes callData;
+    }
+
+    /// @notice The mocked OHM feed calls, collected from the live feed configuration.
+    OhmFeedMock[] internal ohmFeedMocks;
+
+    /// @notice When set, the USDe aggregator is mocked with a timestamp beyond its update
+    ///         threshold, so the PRICE module rejects the USDe price as stale and the
+    ///         facility skips the sUSDe daily cycle.
+    bool internal susdeReserveFeedStale;
+
+    // ============ MIRROR MODEL ============ //
+
+    /// @notice The expected per-vault state, mirroring `ReserveAsset` plus the expected
+    ///         facility (buyback pool) and TRSRY balances of the vault.
+    struct AssetModel {
+        bool sellShares;
+        uint256 yieldBuybackShare;
+        uint256 nextYield;
+        uint256 unfundedYield;
+        uint256 heldShares;
+        uint256 heldReserve;
+        uint256 lastConversionRate;
+        uint256 lastReserveBalance;
+        uint256 trsryShares;
+    }
+
+    /// @notice The expected parameters of a bond market created at the last daily beat.
+    struct MarketModel {
+        bool live;
+        uint256 id;
+        address payoutToken;
+        uint256 capacity;
+        uint256 initialPrice;
+        uint256 minPrice;
+        uint256 scale;
+        uint256 maxPayout;
+    }
+
+    mapping(address vault => AssetModel) internal model;
+    mapping(address vault => MarketModel) internal market;
+    uint48 internal modelEpoch;
+    uint256 internal modelOhmPurchased;
+    /// @notice The number of markets the mirror model expects the pending beat to create.
+    uint256 internal modelPendingMarkets;
+    /// @notice The raw USDS balance the treasury is expected to hold after a beat (the
+    ///         ReserveWrapper normally wraps everything, so this is usually zero).
+    uint256 internal modelTrsryRawUsds;
+
+    // ============ SETUP ============ //
+
+    function setUp() public virtual {
+        vm.createSelectFork("mainnet", FORK_BLOCK);
+
+        _setupActors();
+        _loadMainnetContracts();
+        // The USDe PRICE registration precedes the facility asset registration: the
+        // facility's `addAsset` probes `PRICE.getPriceIn(OHM, USDe)`.
+        _registerUsdeInPrice();
+        _deployV2Stack();
+        _installV2Stack();
+        _computeSeeds();
+        _shutdownV1();
+        _registerAssets();
+        _configureClearinghouses();
+        _swapHeartTask();
+        _initializeOracleState();
+        _initializeModel();
+    }
+
+    function _setupActors() internal {
+        keeper = makeAddr("keeper");
+        buyer = makeAddr("buyer");
+        yrfAdmin = makeAddr("yrfAdmin");
+        backingAdmin = makeAddr("backingAdmin");
+        coolerRecipient = makeAddr("coolerRecipient");
+    }
+
+    function _loadMainnetContracts() internal {
+        kernel = Kernel(KERNEL);
+        roles = ROLESv1(address(kernel.getModuleForKeycode(toKeycode("ROLES"))));
+        treasury = TRSRYv1(address(kernel.getModuleForKeycode(toKeycode("TRSRY"))));
+        price = PRICEv1(address(kernel.getModuleForKeycode(toKeycode("PRICE"))));
+        priceV2 = IPRICEv2(address(price));
+        chreg = CHREGv1(address(kernel.getModuleForKeycode(toKeycode("CHREG"))));
+        rolesAdmin = RolesAdmin(ROLES_ADMIN);
+        heart = OlympusHeart(HEART);
+        yieldRepoV1 = IYieldRepoV1(YIELD_REPO_V1);
+
+        ohm = IOhmLike(OHM);
+        usds = IERC20(USDS);
+        susds = IERC4626(SUSDS);
+        usde = IERC20(USDE);
+        susde = IERC4626(SUSDE);
+
+        auctioneer = IBondAuctioneerLike(BOND_AUCTIONEER);
+        teller = IBondTellerLike(BOND_TELLER);
+        aggregator = IBondAggregatorLike(BOND_AGGREGATOR);
+
+        vm.label(KERNEL, "Kernel");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(treasury), "TRSRY");
+        vm.label(address(price), "PRICE");
+        vm.label(address(chreg), "CHREG");
+        vm.label(ROLES_ADMIN, "RolesAdmin");
+        vm.label(TIMELOCK, "Timelock");
+        vm.label(DAO_MS, "DaoMS");
+        vm.label(EMERGENCY_MS, "EmergencyMS");
+        vm.label(MINTR_MODULE, "MINTR");
+        vm.label(HEART, "Heart");
+        vm.label(YIELD_REPO_V1, "YieldRepoV1");
+        vm.label(COOLER_BORROWER, "CoolerBorrower");
+        vm.label(OHM, "OHM");
+        vm.label(USDS, "USDS");
+        vm.label(SUSDS, "sUSDS");
+        vm.label(USDE, "USDe");
+        vm.label(SUSDE, "sUSDe");
+        vm.label(BOND_AUCTIONEER, "BondAuctioneer");
+        vm.label(BOND_TELLER, "BondTeller");
+        vm.label(BOND_AGGREGATOR, "BondAggregator");
+        vm.label(BOND_OWNER, "BondOwner");
+        vm.label(CLEARINGHOUSE_V1, "ClearinghouseV1");
+        vm.label(CLEARINGHOUSE_V1_1, "ClearinghouseV1_1");
+        vm.label(CLEARINGHOUSE_V1_2, "ClearinghouseV1_2");
+        vm.label(PRICE_CONFIG, "PriceConfigV2");
+        vm.label(CHAINLINK_USDE_USD, "ChainlinkUsdeUsd");
+
+        // The reserve-balance model relies on the fact that no clearinghouse is active on
+        // the pinned block (the v2 backing balance then equals the TRSRY share balance).
+        assertEq(chreg.activeCount(), 0, "setup: active clearinghouses");
+    }
+
+    /// @notice Registers USDe in the PRICE module through the production path: the
+    ///         PriceConfig v2 policy, called by the price_admin role holder (the DAO MS),
+    ///         with the production feed parameters (a single Chainlink USDe/USD feed with
+    ///         the 24-hour update threshold, no moving average, no strategy).
+    function _registerUsdeInPrice() internal {
+        // On the pinned block USDe is not registered yet
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, USDE));
+        priceV2.getPriceIn(OHM, USDE);
+
+        // A single feed without a moving average needs no strategy (the sUSDS shape)
+        IPRICEv2.Component memory strategy = IPRICEv2.Component({
+            target: toSubKeycode(""),
+            selector: bytes4(0),
+            params: abi.encode("")
+        });
+
+        IPRICEv2.Component[] memory feeds = new IPRICEv2.Component[](1);
+        feeds[0] = IPRICEv2.Component({
+            target: toSubKeycode("PRICE.CHAINLINK"),
+            selector: ChainlinkPriceFeeds.getOneFeedPrice.selector,
+            params: abi.encode(
+                ChainlinkPriceFeeds.OneFeedParams({
+                    feed: AggregatorV2V3Interface(CHAINLINK_USDE_USD),
+                    updateThreshold: USDE_UPDATE_THRESHOLD
+                })
+            )
+        });
+
+        // The expectation pins the registration to the live feed answer
+        (, int256 liveAnswer, , , ) = AggregatorV3Interface(CHAINLINK_USDE_USD).latestRoundData();
+        uint8 feedDecimals = AggregatorV2V3Interface(CHAINLINK_USDE_USD).decimals();
+        IPriceConfigv2.PriceFeedExpectation[]
+            memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
+        expectations[0] = IPriceConfigv2.PriceFeedExpectation({
+            expectedPrice: uint256(liveAnswer) * 10 ** (18 - feedDecimals),
+            toleranceBps: 100
+        });
+
+        vm.prank(DAO_MS);
+        IPriceConfigv2(PRICE_CONFIG).addAsset(
+            USDE,
+            false, // storeMovingAverage
+            false, // useMovingAverage
+            0, // movingAverageDuration
+            0, // lastObservationTime
+            new uint256[](0), // observations
+            strategy,
+            feeds,
+            expectations
+        );
+
+        assertGt(priceV2.getPriceIn(OHM, USDE), 0, "setup: USDe priceable");
+    }
+
+    function _deployV2Stack() internal {
+        backingOracle = new BackingOracle(kernel);
+        vm.label(address(backingOracle), "BackingOracle");
+
+        // The facility pins the config timelock as an immutable address, so the timelock is
+        // deployed first and wired to the facility afterwards.
+        configTimelock = new YieldRepurchaseFacilityConfigTimelock(
+            kernel,
+            CONFIG_TIMELOCK_DELAY,
+            GRACE_PERIOD
+        );
+        vm.label(address(configTimelock), "YieldRepurchaseFacilityConfigTimelock");
+
+        // The teller is resolved by the facility from the auctioneer
+        yieldRepo = new YieldRepurchaseFacilityV2(
+            kernel,
+            OHM,
+            address(backingOracle),
+            BOND_AUCTIONEER,
+            address(configTimelock),
+            GRACE_PERIOD
+        );
+        vm.label(address(yieldRepo), "YieldRepoV2");
+    }
+
+    function _installV2Stack() internal {
+        // Kernel actions are performed by the kernel executor (the DAO MS)
+        vm.startPrank(DAO_MS);
+        kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
+        vm.stopPrank();
+
+        // Roles are granted by the RolesAdmin admin (the OCG timelock). The admin,
+        // emergency, and heart roles already exist on the live actors.
+        vm.startPrank(TIMELOCK);
+        rolesAdmin.grantRole("yrf_admin", yrfAdmin);
+        rolesAdmin.grantRole("backing_admin", backingAdmin);
+        vm.stopPrank();
+
+        // The v2 markets use the facility as their callback, which requires the market
+        // owner to be authorized on the auctioneer by the Bond Protocol owner.
+        vm.prank(BOND_OWNER);
+        auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
+
+        // Wire and enable the config timelock, enable the backing oracle (before the
+        // facility, so that the price gate never sees a zero backing), and enable the
+        // facility itself. `enable` is called before the assets are registered, so that
+        // its cycle reset does not overwrite the migration seeds below.
+        vm.startPrank(TIMELOCK);
+        configTimelock.setFacility(address(yieldRepo));
+        configTimelock.enable("");
+        backingOracle.enable(abi.encode(BACKING));
+        yieldRepo.enable(
+            abi.encode(INITIAL_DISCOUNT, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+        );
+        vm.stopPrank();
+    }
+
+    function _computeSeeds() internal {
+        // sUSDS: continue the v1.2 accounting.
+        // - The next-yield seed is the yield already earmarked by v1.2: its projected
+        //   `nextYield` plus the value of the unspent weekly budget still held by v1.2
+        //   (swept back to the treasury by the shutdown below).
+        // - The snapshots are carried over verbatim, so that the first v2 weekly reset
+        //   projects the yield accrued since the last v1.2 weekly reset.
+        uint256 v1Residual = usds.balanceOf(YIELD_REPO_V1) +
+            susds.previewRedeem(susds.balanceOf(YIELD_REPO_V1));
+        susdsSeedYield = yieldRepoV1.nextYield() + v1Residual;
+        susdsSeedBalance = yieldRepoV1.lastReserveBalance();
+        susdsSeedRate = yieldRepoV1.lastConversionRate();
+
+        // sUSDe: no v1 history. The snapshots start at the live values and the next-yield
+        // seed is the governance estimate of one week of yield on the current treasury
+        // holding, scaled by the buyback share:
+        // seed = value * SUSDE_APR_BPS / 10000 / 52 * share / 1e18 (floor at each step).
+        susdeSeedBalance = susde.previewRedeem(susde.balanceOf(address(treasury)));
+        susdeSeedRate = susde.previewRedeem(1e18);
+        susdeSeedYield = ((susdeSeedBalance * SUSDE_APR_BPS) / 10_000 / 52).mulDiv(
+            SUSDE_BUYBACK_SHARE,
+            ONE_HUNDRED_PERCENT
+        );
+
+        // The simulated Ethena reward stream: SUSDE_APR_BPS on the whole vault, fixed at
+        // the setup-time total assets.
+        susdeDailyReward = (susde.totalAssets() * SUSDE_APR_BPS) / 10_000 / 365;
+    }
+
+    function _shutdownV1() internal {
+        // The v1.2 shutdown burns its OHM balance and sweeps the listed tokens to the
+        // treasury; it is executed by the DAO MS (a loop_daddy holder).
+        address[] memory tokensToTransfer = new address[](2);
+        tokensToTransfer[0] = USDS;
+        tokensToTransfer[1] = SUSDS;
+        vm.prank(DAO_MS);
+        yieldRepoV1.shutdown(tokensToTransfer);
+
+        assertTrue(yieldRepoV1.isShutdown(), "setup: v1 shutdown");
+        assertEq(usds.balanceOf(YIELD_REPO_V1), 0, "setup: v1 USDS swept");
+        assertEq(susds.balanceOf(YIELD_REPO_V1), 0, "setup: v1 sUSDS swept");
+        assertEq(ohm.balanceOf(YIELD_REPO_V1), 0, "setup: v1 OHM burned");
+    }
+
+    function _registerAssets() internal {
+        vm.startPrank(TIMELOCK);
+        yieldRepo.addAsset(
+            SUSDS,
+            SUSDS_BUYBACK_SHARE,
+            susdsSeedBalance,
+            susdsSeedRate,
+            susdsSeedYield,
+            false, // sellShares
+            true // setAsBackingVault
+        );
+        yieldRepo.addAsset(
+            SUSDE,
+            SUSDE_BUYBACK_SHARE,
+            susdeSeedBalance,
+            susdeSeedRate,
+            susdeSeedYield,
+            true, // sellShares: sUSDe redeem reverts while the cooldown is active
+            false
+        );
+        vm.stopPrank();
+    }
+
+    function _configureClearinghouses() internal {
+        // The DAI-denominated clearinghouses accrue to the backing reserve through the
+        // 1:1 DAI->USDS migration, so they are included explicitly; the v1.1 inclusion is
+        // accompanied by an offset for its phantom receivables.
+        vm.startPrank(TIMELOCK);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1);
+        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1_1);
+        yieldRepo.setClearinghouseOffset(CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_INITIAL_OFFSET);
+        vm.stopPrank();
+    }
+
+    function _swapHeartTask() internal {
+        // YRF v1.2 occupies slot 4 of the Heart pipeline with a custom endEpoch selector;
+        // v2 implements IPeriodicTask, so it is registered with the default selector.
+        (address[] memory tasksBefore, ) = heart.getPeriodicTasks();
+        assertEq(tasksBefore[4], YIELD_REPO_V1, "setup: v1 heart slot");
+
+        vm.startPrank(TIMELOCK);
+        heart.removePeriodicTaskAtIndex(4);
+        heart.addPeriodicTaskAtIndex(address(yieldRepo), bytes4(0), 4);
+        vm.stopPrank();
+
+        (address[] memory tasksAfter, ) = heart.getPeriodicTasks();
+        assertEq(tasksAfter[4], address(yieldRepo), "setup: v2 heart slot");
+        assertEq(tasksAfter.length, tasksBefore.length, "setup: task count");
+    }
+
+    /// @notice Collects the mock surface of the PRICE feed layer from the live feed
+    ///         configuration and installs the initial mocks.
+    /// @dev The steered OHM/USD price starts at the live CURRENT resolution of the
+    ///      pinned block. USDS is pinned to exactly $1 (every aggregator behind its
+    ///      feeds answers exactly one unit), so `getPriceIn(OHM, USDS)` equals the
+    ///      steered OHM/USD price exactly and the v1 and v2 branches of the parity test
+    ///      price their markets identically. USDe keeps its live answer, so the sUSDe
+    ///      markets exercise a non-unit reserve price.
+    function _initializeOracleState() internal {
+        // The live CURRENT price of the pinned block seeds the steered price path (all
+        // feeds are fresh on a live block)
+        ohmPriceUsd = priceV2.getPrice(OHM);
+
+        _collectChainlinkFeedMocks(USDS, true);
+        _collectChainlinkFeedMocks(USDE, false);
+        _collectOhmFeedMocks();
+
+        _updateOracles();
+
+        assertEq(priceV2.getPrice(USDS), 1e18, "setup: USDS pinned to one");
+        assertEq(priceV2.getPriceIn(OHM, USDS), ohmPriceUsd, "setup: OHM price in USDS");
+        assertEq(priceV2.getPrice(OHM), ohmPriceUsd, "setup: OHM price mocked");
+    }
+
+    /// @notice Collects the aggregators behind the single-feed Chainlink components of an
+    ///         asset registered in PRICE.
+    /// @param asset_ The registered asset.
+    /// @param pinToUnit_ When set, the aggregator answer is pinned to exactly one unit of
+    ///        the feed's decimals; otherwise the live answer of the pinned block is kept.
+    function _collectChainlinkFeedMocks(address asset_, bool pinToUnit_) internal {
+        IPRICEv2.Asset memory assetData = priceV2.getAssetData(asset_);
+        IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+
+        for (uint256 i = 0; i < feeds.length; ++i) {
+            assertEq(
+                feeds[i].selector,
+                ChainlinkPriceFeeds.getOneFeedPrice.selector,
+                "setup: unexpected feed shape"
+            );
+            ChainlinkPriceFeeds.OneFeedParams memory params = abi.decode(
+                feeds[i].params,
+                (ChainlinkPriceFeeds.OneFeedParams)
+            );
+
+            int256 answer;
+            if (pinToUnit_) {
+                answer = int256(10 ** params.feed.decimals());
+            } else {
+                (, answer, , , ) = params.feed.latestRoundData();
+            }
+            chainlinkFeedMocks.push(
+                ChainlinkFeedMock({aggregator: address(params.feed), answer: answer})
+            );
+        }
+    }
+
+    /// @notice Collects the per-feed submodule calldata of every OHM feed, so that
+    ///         `_updateOracles` can mock each of them to the steered OHM/USD price.
+    function _collectOhmFeedMocks() internal {
+        IPRICEv2.Asset memory assetData = priceV2.getAssetData(OHM);
+        IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
+        uint8 priceDecimals = priceV2.decimals();
+
+        for (uint256 i = 0; i < feeds.length; ++i) {
+            address submodule = address(
+                ModuleWithSubmodules(address(price)).getSubmoduleForKeycode(feeds[i].target)
+            );
+            assertTrue(submodule != address(0), "setup: OHM feed submodule missing");
+
+            // The exact staticcall payload the PRICE module sends to the submodule
+            ohmFeedMocks.push(
+                OhmFeedMock({
+                    submodule: submodule,
+                    callData: abi.encodeWithSelector(
+                        feeds[i].selector,
+                        OHM,
+                        priceDecimals,
+                        feeds[i].params
+                    )
+                })
+            );
+        }
+
+        // All OHM feeds are mocked to the same value, so the deviation-average strategy
+        // resolves to that value exactly
+        assertEq(ohmFeedMocks.length, 4, "setup: OHM feed count");
+    }
+
+    function _initializeModel() internal {
+        model[SUSDS] = AssetModel({
+            sellShares: false,
+            yieldBuybackShare: SUSDS_BUYBACK_SHARE,
+            nextYield: susdsSeedYield,
+            unfundedYield: 0,
+            heldShares: 0,
+            heldReserve: 0,
+            lastConversionRate: susdsSeedRate,
+            lastReserveBalance: susdsSeedBalance,
+            trsryShares: susds.balanceOf(address(treasury))
+        });
+        model[SUSDE] = AssetModel({
+            sellShares: true,
+            yieldBuybackShare: SUSDE_BUYBACK_SHARE,
+            nextYield: susdeSeedYield,
+            unfundedYield: 0,
+            heldShares: 0,
+            heldReserve: 0,
+            lastConversionRate: susdeSeedRate,
+            lastReserveBalance: susdeSeedBalance,
+            trsryShares: susde.balanceOf(address(treasury))
+        });
+        modelEpoch = 20;
+        modelOhmPurchased = 0;
+    }
+
+    // ============ BEAT DRIVER ============ //
+
+    /// @notice Advances to the next heart beat slot, refreshes the feed mocks, applies
+    ///         the expected state transition to the mirror model, executes the beat, and
+    ///         asserts the resulting on-chain state against the model.
+    function _beat() internal {
+        vm.warp(heart.lastBeat() + heart.frequency());
+        _updateOracles();
+        _measureExternalPipelineEffects();
+
+        uint256 marketCountBefore = aggregator.marketCounter();
+        _applyModelBeat(marketCountBefore);
+
+        vm.prank(keeper);
+        heart.beat();
+
+        _assertBeat(marketCountBefore);
+    }
+
+    /// @notice Measures the exact treasury effects of the non-facility pipeline tasks for
+    ///         the pending beat: executes the beat with the facility disabled on a state
+    ///         snapshot, records the treasury deltas, and reverts. The other tasks do not
+    ///         read the facility state, so the measured deltas match the real beat that
+    ///         follows. This captures the ReserveWrapper wrap of the raw USDS balance and
+    ///         the sUSDS interest swept to the treasury by the deposit facility task.
+    function _measureExternalPipelineEffects() internal {
+        uint256 susdsBefore = susds.balanceOf(address(treasury));
+        uint256 susdeBefore = susde.balanceOf(address(treasury));
+
+        uint256 snapshotId = vm.snapshotState();
+
+        vm.prank(TIMELOCK);
+        yieldRepo.disable("");
+        vm.prank(keeper);
+        heart.beat();
+
+        uint256 externalSusds = susds.balanceOf(address(treasury)) - susdsBefore;
+        uint256 externalSusde = susde.balanceOf(address(treasury)) - susdeBefore;
+        uint256 externalRawUsds = usds.balanceOf(address(treasury));
+
+        assertTrue(vm.revertToState(snapshotId), "snapshot revert failed");
+        // Cheatcode mocks are not part of the state snapshot; refresh them regardless.
+        _updateOracles();
+
+        model[SUSDS].trsryShares += externalSusds;
+        model[SUSDE].trsryShares += externalSusde;
+        modelTrsryRawUsds = externalRawUsds;
+    }
+
+    /// @notice Re-installs the whole feed mock surface: the Chainlink-interface
+    ///         aggregators behind the USDS and USDe feeds (pinned answers, fresh
+    ///         timestamps) and the per-feed submodule calls of the OHM feeds (the steered
+    ///         OHM/USD price). Required before every beat: the CURRENT price resolution
+    ///         of the PRICE module enforces the feed update thresholds, and mocks are not
+    ///         part of the state snapshots.
+    function _updateOracles() internal {
+        for (uint256 i = 0; i < chainlinkFeedMocks.length; ++i) {
+            ChainlinkFeedMock storage feedMock = chainlinkFeedMocks[i];
+            uint256 updatedAt = block.timestamp;
+            if (susdeReserveFeedStale && feedMock.aggregator == CHAINLINK_USDE_USD) {
+                updatedAt = block.timestamp - USDE_UPDATE_THRESHOLD - 1;
+            }
+            vm.mockCall(
+                feedMock.aggregator,
+                abi.encodeWithSelector(AggregatorV3Interface.latestRoundData.selector),
+                abi.encode(uint80(1), feedMock.answer, updatedAt, updatedAt, uint80(1))
+            );
+        }
+
+        for (uint256 i = 0; i < ohmFeedMocks.length; ++i) {
+            vm.mockCall(
+                ohmFeedMocks[i].submodule,
+                ohmFeedMocks[i].callData,
+                abi.encode(ohmPriceUsd)
+            );
+        }
+    }
+
+    /// @notice Applies a relative change (in signed basis points) to the steered OHM/USD
+    ///         price, moving the OHM price for the subsequent beats.
+    function _applyPriceDeltaBps(int256 deltaBps_) internal {
+        ohmPriceUsd = uint256((int256(ohmPriceUsd) * (10_000 + deltaBps_)) / 10_000);
+    }
+
+    /// @notice The oracle price of the sUSDS asset and of the price gate at the pending
+    ///         beat: the live `getPriceIn(OHM, USDS)` resolution, evaluated on the same
+    ///         mocked feeds the facility reads. USDS is pinned to exactly 1e18, so the
+    ///         value equals the steered OHM/USD price.
+    function _expectedOraclePrice() internal view returns (uint256) {
+        return priceV2.getPriceIn(OHM, USDS);
+    }
+
+    /// @notice The oracle price of the sUSDe asset at the pending beat: the live
+    ///         `getPriceIn(OHM, USDe)` resolution on the same mocked feeds.
+    function _expectedSusdeOraclePrice() internal view returns (uint256) {
+        return priceV2.getPriceIn(OHM, USDE);
+    }
+
+    // ============ MIRROR MODEL: BEAT TRANSITION ============ //
+
+    /// @notice Mirrors one `execute()` call of the facility, using previews evaluated at
+    ///         the already-warped beat timestamp. The treasury effects of the tasks that
+    ///         run before the facility in the same beat have already been applied to the
+    ///         model by `_measureExternalPipelineEffects`.
+    function _applyModelBeat(uint256 marketCountBefore_) internal {
+        modelPendingMarkets = 0;
+        market[SUSDS].live = false;
+        market[SUSDE].live = false;
+
+        modelEpoch += 1;
+        if (modelEpoch % EPOCHS_PER_DAY != 0) return;
+
+        if (modelEpoch == EPOCH_LENGTH) {
+            modelEpoch = 0;
+            _modelWeeklyReset();
+        }
+
+        _modelProcessOhmPurchases();
+
+        // The price gate compares the OHM price in the backing reserve (USDS) against
+        // the backing value; per-vault market pricing reads each vault's own reserve
+        // price below.
+        uint256 gatePrice = _expectedOraclePrice();
+        if (gatePrice < BACKING) return;
+
+        uint256 daysRemaining = DAYS_PER_WEEK - uint256(modelEpoch / EPOCHS_PER_DAY);
+        _modelDailyCycle(SUSDS, daysRemaining, gatePrice, marketCountBefore_);
+        // A stale USDe feed reverts the sUSDe price resolution; the facility skips the
+        // sUSDe daily cycle through its self-call isolation and the beat continues.
+        if (!susdeReserveFeedStale) {
+            _modelDailyCycle(SUSDE, daysRemaining, _expectedSusdeOraclePrice(), marketCountBefore_);
+        }
+    }
+
+    function _modelWeeklyReset() internal {
+        uint256 clearinghouseYield = _modelClearinghouseYield();
+        _modelWeeklyResetVault(SUSDS, clearinghouseYield);
+        _modelWeeklyResetVault(SUSDE, 0);
+    }
+
+    function _modelWeeklyResetVault(address vault_, uint256 clearinghouseYield_) internal {
+        AssetModel storage m = model[vault_];
+        IERC4626 vault = IERC4626(vault_);
+
+        // The sanctioned funding target: the stored projection plus the carried
+        // shortfall. It does not depend on the facility's balances.
+        uint256 fundingTarget = m.nextYield + m.unfundedYield;
+
+        // Projection for the next week: snapshot-based vault yield plus the clearinghouse
+        // yield (backing vault only), scaled by the buyback share.
+        uint256 currentRate = vault.previewRedeem(1e18);
+        uint256 vaultYield = 0;
+        if (m.lastConversionRate != 0 && currentRate > m.lastConversionRate) {
+            vaultYield = m.lastReserveBalance.mulDiv(
+                currentRate - m.lastConversionRate,
+                m.lastConversionRate
+            );
+        }
+        m.nextYield = (vaultYield + clearinghouseYield_).mulDiv(
+            m.yieldBuybackShare,
+            ONE_HUNDRED_PERCENT
+        );
+
+        m.lastConversionRate = currentRate;
+
+        // Funding withdrawal: shares worth the target, capped at the treasury balance;
+        // the uncovered remainder is carried.
+        uint256 funded = 0;
+        if (fundingTarget != 0) {
+            uint256 shares = vault.previewWithdraw(fundingTarget);
+            if (shares > m.trsryShares) shares = m.trsryShares;
+            if (shares != 0) {
+                funded = vault.previewRedeem(shares);
+                m.heldShares += shares;
+                m.trsryShares -= shares;
+            }
+        }
+        m.unfundedYield = Math.saturatingSub(fundingTarget, funded);
+
+        // The balance snapshot is taken after the funding withdrawal. No clearinghouse
+        // is active on the pinned block, so the protocol balance is the TRSRY share
+        // balance.
+        m.lastReserveBalance = vault.previewRedeem(m.trsryShares);
+    }
+
+    /// @notice Mirrors `_clearinghouseYield`: iterates the CHREG registry and counts the
+    ///         clearinghouses whose reserve matches USDS or that are explicitly included,
+    ///         applying the receivables offsets.
+    function _modelClearinghouseYield() internal view returns (uint256 yield) {
+        uint256 len = chreg.registryCount();
+        for (uint256 i = 0; i < len; ++i) {
+            address ch = chreg.registry(i);
+            bool counted = yieldRepo.isClearinghouseIncluded(ch) || _readReserve(ch) == USDS;
+            if (!counted) continue;
+
+            uint256 receivables = _readPrincipalReceivables(ch);
+            uint256 effective = Math.saturatingSub(receivables, yieldRepo.clearinghouseOffset(ch));
+            yield += (effective * 5) / 1000 / 52;
+        }
+    }
+
+    function _modelProcessOhmPurchases() internal {
+        if (modelOhmPurchased == 0) return;
+
+        AssetModel storage m = model[SUSDS];
+
+        // backingAmount = purchased (9 dec) * BACKING (18 dec) / 1e9 -> 18 decimals
+        uint256 backingAmount = modelOhmPurchased.mulDiv(BACKING, 1e9);
+        if (backingAmount == 0) return;
+
+        uint256 shares = susds.previewWithdraw(backingAmount);
+        if (shares > m.trsryShares) shares = m.trsryShares;
+        if (shares == 0) return;
+
+        uint256 funded = susds.previewRedeem(shares);
+        uint256 ohmToBurn = funded >= backingAmount
+            ? modelOhmPurchased
+            : modelOhmPurchased.mulDiv(funded, backingAmount);
+        if (ohmToBurn == 0) return;
+
+        // The withdrawn shares join the backing vault's buyback pool as shares
+        modelOhmPurchased -= ohmToBurn;
+        m.trsryShares -= shares;
+        m.heldShares += shares;
+    }
+
+    function _modelDailyCycle(
+        address vault_,
+        uint256 daysRemaining_,
+        uint256 oraclePrice_,
+        uint256 marketCountBefore_
+    ) internal {
+        AssetModel storage m = model[vault_];
+        IERC4626 vault = IERC4626(vault_);
+        uint256 marketOraclePrice = oraclePrice_;
+        address payoutToken;
+        uint256 capacity;
+
+        if (m.sellShares) {
+            // The idle reserve is wrapped into vault shares before the sizing
+            if (m.heldReserve != 0) {
+                m.heldShares += vault.previewDeposit(m.heldReserve);
+                m.heldReserve = 0;
+            }
+
+            uint256 bidAmount = vault.previewRedeem(m.heldShares) / daysRemaining_;
+            if (bidAmount == 0) return;
+
+            uint256 capacityShares = Math.min(vault.previewWithdraw(bidAmount), m.heldShares);
+            if (capacityShares == 0) return;
+
+            uint256 conversionRate = vault.previewRedeem(1e18);
+            if (conversionRate == 0) return;
+
+            // The oracle price is quoted per reserve token; a share is worth
+            // `conversionRate` reserve tokens, so the per-share price scales up.
+            marketOraclePrice = oraclePrice_.mulDiv(1e18, conversionRate);
+            payoutToken = vault_;
+            capacity = capacityShares;
+        } else {
+            uint256 currentReserve = m.heldReserve;
+            uint256 bidAmount = (currentReserve + vault.previewRedeem(m.heldShares)) /
+                daysRemaining_;
+            if (bidAmount == 0) return;
+
+            if (currentReserve < bidAmount) {
+                uint256 deficit = bidAmount - currentReserve;
+                uint256 sharesNeeded = vault.previewWithdraw(deficit);
+                uint256 sharesToRedeem = sharesNeeded > m.heldShares ? m.heldShares : sharesNeeded;
+                uint256 redeemed = sharesToRedeem == 0 ? 0 : vault.previewRedeem(sharesToRedeem);
+
+                m.heldShares -= sharesToRedeem;
+                m.heldReserve += redeemed;
+
+                if (redeemed < deficit) bidAmount = currentReserve + redeemed;
+            }
+            if (bidAmount == 0) return;
+
+            payoutToken = USDS;
+            capacity = bidAmount;
+        }
+
+        (uint256 initialPrice, uint256 minPrice, int8 scaleAdjustment) = _mirrorMarketPricing(
+            marketOraclePrice
+        );
+
+        market[vault_] = MarketModel({
+            live: true,
+            id: marketCountBefore_ + modelPendingMarkets,
+            payoutToken: payoutToken,
+            capacity: capacity,
+            initialPrice: initialPrice,
+            minPrice: minPrice,
+            scale: 10 ** uint8(36 + scaleAdjustment),
+            // maxPayout = capacity * depositInterval / duration = capacity / 6 (floor)
+            maxPayout: capacity / 6
+        });
+        modelPendingMarkets += 1;
+    }
+
+    /// @notice Mirrors the `YRFBondMarketLib` market pricing for 18-decimal payout tokens and the
+    ///         18-decimal oracle.
+    function _mirrorMarketPricing(
+        uint256 oraclePrice_
+    )
+        internal
+        pure
+        returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
+    {
+        uint256 discountFactor = ONE_HUNDRED_PERCENT - INITIAL_DISCOUNT;
+        uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        uint256 oracleSquare = 1e36;
+
+        uint256 initialPrice = oracleSquare / effectivePrice;
+        uint256 minPrice = oracleSquare / oraclePrice_;
+
+        int8 priceDecimals = _mirrorPriceDecimals(initialPrice);
+        // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2
+        scaleAdjustment = int8(18) - int8(9) + (priceDecimals / 2);
+
+        uint256 oracleScale = 10 ** uint8(int8(18) - priceDecimals);
+        uint256 bondScale = 10 ** uint8(36 + scaleAdjustment + int8(9) - int8(18) - priceDecimals);
+
+        formattedInitialPrice = initialPrice.mulDiv(bondScale, oracleScale);
+        formattedMinimumPrice = minPrice.mulDiv(bondScale, oracleScale);
+    }
+
+    function _mirrorPriceDecimals(uint256 price_) internal pure returns (int8) {
+        int8 decimals;
+        while (price_ >= 10) {
+            price_ = price_ / 10;
+            ++decimals;
+        }
+        return decimals - int8(18);
+    }
+
+    // ============ ASSERTIONS ============ //
+
+    /// @notice Asserts the full facility state, the treasury balances, the oracle price,
+    ///         and the parameters of any created markets against the mirror model.
+    function _assertBeat(uint256 marketCountBefore_) internal view {
+        assertEq(yieldRepo.epoch(), modelEpoch, "epoch");
+        assertEq(price.getLastPrice(), _expectedOraclePrice(), "oracle price");
+        assertEq(
+            aggregator.marketCounter(),
+            marketCountBefore_ + modelPendingMarkets,
+            "created market count"
+        );
+
+        _assertAsset(SUSDS, "sUSDS");
+        _assertAsset(SUSDE, "sUSDe");
+        _assertHoldings();
+
+        if (market[SUSDS].live) _assertMarket(SUSDS, "sUSDS");
+        if (market[SUSDE].live) _assertMarket(SUSDE, "sUSDe");
+    }
+
+    function _assertAsset(address vault_, string memory label_) internal view {
+        AssetModel storage m = model[vault_];
+        IYieldRepurchaseFacilityV2.ReserveAsset memory config = yieldRepo.getAssetConfig(vault_);
+
+        assertEq(config.nextYield, m.nextYield, string.concat(label_, ": nextYield"));
+        assertEq(config.unfundedYield, m.unfundedYield, string.concat(label_, ": unfundedYield"));
+        assertEq(
+            config.lastConversionRate,
+            m.lastConversionRate,
+            string.concat(label_, ": lastConversionRate")
+        );
+        assertEq(
+            config.lastReserveBalance,
+            m.lastReserveBalance,
+            string.concat(label_, ": lastReserveBalance")
+        );
+    }
+
+    /// @notice Asserts that the token holdings of the facility (the buyback pools) and
+    ///         the treasury match the mirror model exactly.
+    function _assertHoldings() internal view {
+        assertEq(
+            susds.balanceOf(address(yieldRepo)),
+            model[SUSDS].heldShares,
+            "holdings: facility sUSDS"
+        );
+        assertEq(
+            usds.balanceOf(address(yieldRepo)),
+            model[SUSDS].heldReserve,
+            "holdings: facility USDS"
+        );
+        assertEq(
+            susde.balanceOf(address(yieldRepo)),
+            model[SUSDE].heldShares,
+            "holdings: facility sUSDe"
+        );
+        assertEq(
+            usde.balanceOf(address(yieldRepo)),
+            model[SUSDE].heldReserve,
+            "holdings: facility USDe"
+        );
+        assertEq(ohm.balanceOf(address(yieldRepo)), modelOhmPurchased, "holdings: facility OHM");
+        assertEq(yieldRepo.ohmPurchased(), modelOhmPurchased, "holdings: ohmPurchased");
+
+        assertEq(
+            susds.balanceOf(address(treasury)),
+            model[SUSDS].trsryShares,
+            "holdings: TRSRY sUSDS"
+        );
+        assertEq(
+            susde.balanceOf(address(treasury)),
+            model[SUSDE].trsryShares,
+            "holdings: TRSRY sUSDe"
+        );
+        assertEq(usds.balanceOf(address(treasury)), modelTrsryRawUsds, "holdings: TRSRY raw USDS");
+    }
+
+    function _assertMarket(address vault_, string memory label_) internal view {
+        MarketModel storage expected = market[vault_];
+        (
+            address owner,
+            address payoutToken,
+            address quoteToken,
+            address callbackAddr,
+            bool capacityInQuote,
+            uint256 capacity,
+            ,
+            uint256 minPrice,
+            uint256 maxPayout,
+            ,
+            ,
+            uint256 scale
+        ) = auctioneer.markets(expected.id);
+
+        assertEq(owner, address(yieldRepo), string.concat(label_, " market: owner"));
+        assertEq(payoutToken, expected.payoutToken, string.concat(label_, " market: payout"));
+        assertEq(quoteToken, OHM, string.concat(label_, " market: quote"));
+        assertEq(callbackAddr, address(yieldRepo), string.concat(label_, " market: callback"));
+        assertEq(capacityInQuote, false, string.concat(label_, " market: capacityInQuote"));
+        assertEq(capacity, expected.capacity, string.concat(label_, " market: capacity"));
+        assertEq(minPrice, expected.minPrice, string.concat(label_, " market: minPrice"));
+        assertEq(maxPayout, expected.maxPayout, string.concat(label_, " market: maxPayout"));
+        assertEq(scale, expected.scale, string.concat(label_, " market: scale"));
+        assertEq(
+            auctioneer.marketPrice(expected.id),
+            expected.initialPrice,
+            string.concat(label_, " market: initial price")
+        );
+        assertEq(
+            yieldRepo.marketReserves(expected.id),
+            vault_ == SUSDS ? USDS : USDE,
+            string.concat(label_, " market: marketReserves")
+        );
+    }
+
+    // ============ BOND PURCHASES ============ //
+
+    /// @notice Buys `fractionBps_` of the capacity of the market created for `vault_` at
+    ///         the last daily beat, in chunks bounded by `maxAmountAccepted`, and applies
+    ///         the expected callback accounting to the mirror model.
+    function _buyBonds(address vault_, uint256 fractionBps_) internal {
+        MarketModel storage mkt = market[vault_];
+        if (!mkt.live || fractionBps_ == 0) return;
+
+        AssetModel storage m = model[vault_];
+        uint256 targetPayout = (mkt.capacity * fractionBps_) / 10_000;
+        uint256 boughtPayout = 0;
+
+        for (uint256 i = 0; i < 16 && boughtPayout < targetPayout; ++i) {
+            uint256 amountIn = _purchaseAmountIn(mkt.id, targetPayout - boughtPayout);
+            if (amountIn == 0) break;
+
+            uint256 expectedPayout = auctioneer.payoutFor(amountIn, mkt.id, address(0));
+
+            // Mint the quote OHM to the buyer: the MINTR module is the OHM vault
+            vm.prank(MINTR_MODULE);
+            ohm.mint(buyer, amountIn);
+
+            vm.startPrank(buyer);
+            ohm.approve(BOND_TELLER, amountIn);
+            (uint256 payout, ) = teller.purchase(
+                buyer,
+                address(0),
+                mkt.id,
+                amountIn,
+                expectedPayout
+            );
+            vm.stopPrank();
+
+            // Mirror the callback accounting: the payout leaves the buyback pool
+            modelOhmPurchased += amountIn;
+            if (m.sellShares) {
+                m.heldShares = Math.saturatingSub(m.heldShares, payout);
+            } else {
+                m.heldReserve = Math.saturatingSub(m.heldReserve, payout);
+            }
+            boughtPayout += payout;
+        }
+
+        assertGt(boughtPayout, 0, "purchase: nothing bought");
+        _assertHoldings();
+    }
+
+    /// @notice Computes the quote amount for the next purchase chunk: enough for the
+    ///         remaining payout target at the current market price, capped by
+    ///         `maxAmountAccepted` (which respects both maxPayout and capacity).
+    function _purchaseAmountIn(
+        uint256 marketId_,
+        uint256 remainingPayout_
+    ) internal view returns (uint256) {
+        uint256 currentPrice = auctioneer.marketPrice(marketId_);
+        uint256 scale = auctioneer.marketScale(marketId_);
+        // payout = amount * scale / price (floor), so amount = payout * price / scale,
+        // rounded up to not undershoot the target.
+        uint256 amountIn = remainingPayout_.mulDivUp(currentPrice, scale);
+        uint256 maxAccepted = auctioneer.maxAmountAccepted(marketId_, address(0));
+        return amountIn > maxAccepted ? maxAccepted : amountIn;
+    }
+
+    // ============ SCENARIO EVENTS ============ //
+
+    /// @notice Simulates one day of Ethena rewards: increases the USDe balance of the
+    ///         sUSDe vault, which raises `totalAssets` and the share conversion rate.
+    function _accrueSusdeRewards() internal {
+        deal(USDE, SUSDE, usde.balanceOf(SUSDE) + susdeDailyReward, true);
+    }
+
+    /// @notice Simulates a treasury revenue inflow: raw USDS lands on the TRSRY and is
+    ///         wrapped into sUSDS by the ReserveWrapper at the next beat.
+    function _trsryUsdsInflow(uint256 amount_) internal {
+        deal(USDS, address(treasury), usds.balanceOf(address(treasury)) + amount_, true);
+    }
+
+    /// @notice Simulates a treasury outflow (a Cooler V2 borrow): the treasury borrower
+    ///         policy withdraws sUSDS shares from the TRSRY.
+    function _trsrySusdsOutflow(uint256 shares_) internal {
+        vm.startPrank(COOLER_BORROWER);
+        treasury.increaseWithdrawApproval(COOLER_BORROWER, SolmateERC20(SUSDS), shares_);
+        treasury.withdrawReserves(coolerRecipient, SolmateERC20(SUSDS), shares_);
+        vm.stopPrank();
+
+        model[SUSDS].trsryShares -= shares_;
+    }
+
+    // ============ CLEARINGHOUSE HELPERS ============ //
+
+    /// @notice Reads `reserve()` of a clearinghouse, tolerating a missing selector (the
+    ///         DAI v1/v1.1 clearinghouses expose `dai()` instead).
+    function _readReserve(address clearinghouse_) internal view returns (address) {
+        (bool success, bytes memory data) = clearinghouse_.staticcall(
+            abi.encodeWithSignature("reserve()")
+        );
+        if (!success || data.length < 32) return address(0);
+        return abi.decode(data, (address));
+    }
+
+    function _readPrincipalReceivables(address clearinghouse_) internal view returns (uint256) {
+        (bool success, bytes memory data) = clearinghouse_.staticcall(
+            abi.encodeWithSignature("principalReceivables()")
+        );
+        if (!success || data.length < 32) return 0;
+        return abi.decode(data, (uint256));
+    }
+}
