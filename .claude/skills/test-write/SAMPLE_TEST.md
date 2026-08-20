@@ -200,7 +200,7 @@ contract DepositTest is SimpleVaultTest {
         deal(address(vault.asset()), user, 100e18);
         vm.prank(user);
 
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(ISimpleVault.VAULT_InsufficientAllowance.selector));
         vault.deposit(100e18, user);
     }
 

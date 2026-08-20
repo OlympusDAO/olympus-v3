@@ -627,7 +627,15 @@ function test_givenPositionExists_givenPositionIsWrapped_givenThirdPartyIsApprov
 
 ## Error Handling in Tests
 
-### Always Use Error Selectors
+### Match Specific Revert Data
+
+Match the failure path being tested, not merely the fact that some call reverted. Use the custom
+error selector, and include the encoded arguments when their values are part of the behavior being
+proved.
+
+Do not use zero-argument `vm.expectRevert()` by default. It accepts any revert and can pass when the
+call fails for the wrong reason. Use it only when an opaque external dependency provides no stable
+revert data, and document why a stronger match is impossible.
 
 **GOOD - Error selector:**
 
@@ -639,9 +647,10 @@ vm.expectRevert(
 );
 ```
 
-**BAD - String message:**
+**BAD - Any revert or string message:**
 
 ```solidity
+vm.expectRevert();
 vm.expectRevert("Insufficient remaining");
 vm.expectRevert("UNAUTHORIZED");
 ```
@@ -676,6 +685,8 @@ function test_whenCallerIsNotAdmin_reverts() public {
 
 - **Custom errors** (in contracts): Define in the contract's interface
 - **Custom errors** (in tests): Use selectors from the interface
+- **Empty revert matching**: Use only for an opaque dependency with no stable revert data, and
+  document the reason
 - **Never** use string revert messages
 
 ## Assertion Best Practices
@@ -738,7 +749,7 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 | Test naming                               | `test_somethingBad`                            | `test_givenCondition_whenParameter` (success) or `test_givenCondition_whenParameter_reverts` (revert) |
 | Fuzz test naming                          | `testFuzz_*` or `test_*_fuzz`                  | Standard branching-tree name; parameters identify fuzzing                                             |
 | Constraining numeric ranges in fuzz       | `vm.assume(value <= 1000)` for `uint256 value` | `bound(value, 0, 1000)`                                                                               |
-| Error testing                             | `vm.expectRevert("message")`                   | `abi.encodeWithSelector(Error.selector)`                                                              |
+| Error testing                             | Empty or string-based `vm.expectRevert`         | Match the selector or fully encoded custom error                                                       |
 | Assertions                                | `assertEq(a, b)`                               | `assertEq(a, b, "description")`                                                                       |
 | File organization                         | Multiple external actions per file             | One external state-changing action per file; co-locate corresponding preview/getter assertions        |
 
@@ -762,7 +773,8 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 - [ ] Corresponding preview/getter and write behavior agree without losing unique read-path coverage
 - [ ] Stateful invariant tests cover applicable accounting, custody, lifecycle, authorization, and
         enabled-state properties
-- [ ] Uses error selectors, not string messages
+- [ ] Revert tests match specific error data; any empty `vm.expectRevert()` documents why stronger
+      matching is impossible
 - [ ] All assertions have descriptive messages
 - [ ] Mathematical reasoning documented in comments
 - [ ] Tests cover applicable state and input edge cases

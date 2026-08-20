@@ -330,7 +330,9 @@ Key standards summary:
     `test_givenState_whenCondition1_whenCondition2()`.
 - Follow branching tree naming: `test_given<State>_when<Parameter1>_when<Parameter2>()`; use a
     `_reverts` suffix for revert cases
-- Always use error selectors, never string messages: `abi.encodeWithSelector(Error.selector)`
+- Match specific revert data with error selectors or encoded custom errors. Do not use empty
+    `vm.expectRevert()` unless an opaque dependency has no stable revert data and the test documents
+    why stronger matching is impossible. Never use string messages.
 - All assertions must have descriptive messages
 
 ### Deployment
