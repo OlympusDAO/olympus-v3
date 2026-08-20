@@ -18,7 +18,6 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         dispatch through the config-specific hooks below.
 abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimelockBatchQueue {
     struct QueuedConfigState {
-        bytes32 key;
         bytes32 localKey;
         bytes32 expectedStateHash;
     }
@@ -26,7 +25,6 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
     mapping(bytes32 key => uint64 actionId) private _pendingActionIds;
     mapping(uint64 actionId => mapping(uint256 index => QueuedConfigState[] states))
         private _queuedConfigStates;
-    mapping(uint64 actionId => uint256 keyCount) private _queuedConfigKeyCounts;
     mapping(uint64 actionId => mapping(uint256 index => address destination))
         private _queuedConfigDestinations;
 
@@ -76,7 +74,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         }
 
         QueuedConfigState storage state = states[configStateIndex_];
-        return (state.key, state.expectedStateHash);
+        address destination = _queuedConfigDestinations[actionId_][index_];
+        return (_scopeConfigKey(destination, state.localKey), state.expectedStateHash);
     }
 
     function _onSubActionQueued(
@@ -100,7 +99,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             revert IConfigTimelockBatchQueue_ConfigKeysEmpty(actionId_, index_);
         }
 
-        uint256 newKeyCount = _queuedConfigKeyCounts[actionId_] + keyLength;
+        uint256 newKeyCount = _queuedConfigKeyCount(actionId_, index_) + keyLength;
         uint256 maximum = _maxConfigKeysPerBatch();
         if (newKeyCount > maximum) {
             revert IConfigTimelockBatchQueue_ConfigKeysTooMany(newKeyCount, maximum);
@@ -112,7 +111,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                 revert IConfigTimelockBatchQueue_ConfigKeyZero(actionId_, index_, i);
             }
 
-            bytes32 key = keccak256(abi.encode(destination, localKey));
+            bytes32 key = _scopeConfigKey(destination, localKey);
 
             uint64 owner = _pendingActionIds[key];
             if (owner != 0) {
@@ -126,27 +125,20 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                 action_
             );
             _queuedConfigStates[actionId_][index_].push(
-                QueuedConfigState({
-                    key: key,
-                    localKey: localKey,
-                    expectedStateHash: expectedStateHash
-                })
+                QueuedConfigState({localKey: localKey, expectedStateHash: expectedStateHash})
             );
             _pendingActionIds[key] = actionId_;
 
             emit ConfigStateQueued(actionId_, index_, key, i, destination, expectedStateHash);
         }
-
-        _queuedConfigKeyCounts[actionId_] = newKeyCount;
     }
 
     function _onBatchQueued(
         address caller_,
         uint64 actionId_,
         ITimelockBatchQueue.BatchAction[] memory actions_
-    ) internal override {
+    ) internal view override {
         _validateConfigBatch(caller_, actionId_, actions_);
-        delete _queuedConfigKeyCounts[actionId_];
     }
 
     function _executeSubAction(
@@ -169,12 +161,13 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         uint256 length = states.length;
         for (uint256 i; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            uint64 owner = _pendingActionIds[state.key];
+            bytes32 key = _scopeConfigKey(expectedDestination, state.localKey);
+            uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
                     actionId_,
                     index_,
-                    state.key,
+                    key,
                     owner
                 );
             }
@@ -189,7 +182,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                 revert IConfigTimelockBatchQueue_ConfigStateChanged(
                     actionId_,
                     index_,
-                    state.key,
+                    key,
                     state.expectedStateHash,
                     currentStateHash
                 );
@@ -210,9 +203,10 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
     function _releaseConfigKeys(uint64 actionId_, uint256 subActionCount_) private {
         for (uint256 index; index < subActionCount_; ++index) {
             QueuedConfigState[] storage states = _queuedConfigStates[actionId_][index];
+            address destination = _queuedConfigDestinations[actionId_][index];
             uint256 length = states.length;
             for (uint256 i; i < length; ++i) {
-                bytes32 key = states[i].key;
+                bytes32 key = _scopeConfigKey(destination, states[i].localKey);
                 uint64 owner = _pendingActionIds[key];
                 if (owner != actionId_) {
                     revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -227,6 +221,22 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             delete _queuedConfigStates[actionId_][index];
             delete _queuedConfigDestinations[actionId_][index];
         }
+    }
+
+    function _queuedConfigKeyCount(
+        uint64 actionId_,
+        uint256 endIndex_
+    ) private view returns (uint256 count) {
+        for (uint256 index; index < endIndex_; ++index) {
+            count += _queuedConfigStates[actionId_][index].length;
+        }
+    }
+
+    function _scopeConfigKey(
+        address destination_,
+        bytes32 localKey_
+    ) private pure returns (bytes32) {
+        return keccak256(abi.encode(destination_, localKey_));
     }
 
     function _validateConfigQueue(address caller_) internal view virtual;
