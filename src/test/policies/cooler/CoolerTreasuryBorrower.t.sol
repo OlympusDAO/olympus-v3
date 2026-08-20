@@ -5,7 +5,6 @@ import {Test} from "forge-std/Test.sol";
 import {CoolerTreasuryBorrower} from "policies/cooler/CoolerTreasuryBorrower.sol";
 import {ICoolerTreasuryBorrower} from "policies/interfaces/cooler/ICoolerTreasuryBorrower.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {Permissions, Keycode, fromKeycode, toKeycode, Kernel, Module, Policy, Actions} from "policies/RolesAdmin.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";

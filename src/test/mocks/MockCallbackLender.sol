@@ -2,7 +2,6 @@
 pragma solidity ^0.8.0;
 
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
-import {Cooler} from "src/external/cooler/Cooler.sol";
 
 contract MockLender is CoolerCallback {
     constructor(address coolerFactory_) CoolerCallback(coolerFactory_) {}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";

@@ -4,8 +4,8 @@
 pragma solidity ^0.8.20;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 // Interfaces
 import {IPRICEv1} from "src/modules/PRICE/IPRICE.v1.sol";

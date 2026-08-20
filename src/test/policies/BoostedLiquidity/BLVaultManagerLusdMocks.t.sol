@@ -1,20 +1,19 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
 import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
-import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockPriceFeed} from "src/test/mocks/MockPriceFeed.sol";
 import {MockVault, MockBalancerPool} from "src/test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib, MockAuraStashToken} from "src/test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -27,8 +26,6 @@ import {BLVaultLusd} from "policies/BoostedLiquidity/BLVaultLusd.sol";
 import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVault.sol";
 
 import "src/Kernel.sol";
-
-import {console2} from "forge-std/console2.sol";
 
 // solhint-disable-next-line max-states-count
 contract BLVaultManagerLusdTest is Test {

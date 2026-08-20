@@ -1,5 +1,7 @@
 /out/
 cache/
+.gen-perms/
+.gen_perms.*.sol
 node_modules/
 .pnpm-store/
 .env
@@ -12,6 +14,11 @@ src/test/sim/sims/*.t.sol
 # deployments/* idea is that deployments should be saved for each chain, you can manually delete them from sims
 .env_deploy*
 docs/
+# Written by shell/test_coverage.sh
+coverage/
+lcov.info
+coverage.log
+genhtml.log
 /solidity-metrics.html
 dependencies/
 

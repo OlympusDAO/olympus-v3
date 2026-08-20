@@ -344,13 +344,13 @@ Key standards summary:
 
 ### Code Standards
 
-- Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
+- Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
 - Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
+- Linter notes come from `forge lint`, not from `forge build`: builds have `lint_on_build = false` in `foundry.toml` so compiler output stays readable. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
 - Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
 - For commit and push validation, follow the Repo Workflow section.
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
@@ -503,7 +503,7 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 
 ```bash
 pnpm run lint:check # Check all linting rules
-forge build         # Output forge-lint notes
+forge lint          # Output forge-lint notes
 ```
 
 **The following commands show detailed linting rule breakdown:**

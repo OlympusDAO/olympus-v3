@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity ^0.8.4;
 
 /// @title IRescueable
 /// @notice Interface for contracts that allow privileged rescue of accidentally-sent assets.

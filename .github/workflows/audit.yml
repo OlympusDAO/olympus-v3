@@ -8,9 +8,15 @@ permissions:
     contents: read
     pull-requests: write
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
     audit:
         runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 15
         steps:
             - name: Checkout
               uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -19,6 +25,10 @@ jobs:
 
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
+              with:
+                  # This job inspects the Node package tree only.
+                  install-foundry: "false"
+                  install-solidity-dependencies: "false"
 
             - name: Audit pnpm dependencies (fail on moderate+)
               uses: JamesRobertWiseman/pnpm-audit@a6a8cc297d146014c029926e49d43571e776f85e # v3.2.0
