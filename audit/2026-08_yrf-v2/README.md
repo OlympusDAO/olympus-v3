@@ -13,7 +13,7 @@ Key changes from v1.2:
 -   Multi-asset ERC4626 whitelist, replacing the fixed USDS/sUSDS asset; each asset gets its own market, and assets whose shares cannot be redeemed synchronously (sUSDe) sell the shares directly.
 -   Per-asset yield split between buybacks and retained backing, replacing the unconditional 100% burn.
 -   The facility reads the governance-set backing value from the new `BackingOracle` policy, initialized at `$12.04`; the value can be updated without redeploying the facility and replaces v1.2's hardcoded `$11.33`.
--   Non-zero bond-market minimum price, set by a configurable initial discount and a configurable max price premium, replacing v1.2's minimum price of zero.
+-   Non-zero bond-market minimum price, set by a configurable max price premium over the oracle price, replacing v1.2's minimum price of zero.
 -   Governance-controlled Clearinghouse receivables offsets and one-way downward yield correction.
 -   Accounting driven by tracked balances rather than raw token balances.
 -   Mutable teller/auctioneer, and the `IEnabler` lifecycle in place of the bespoke `isShutdown` flag.
@@ -75,7 +75,7 @@ flowchart LR
 
 **Daily cycle** (every 3rd beat) — burns accumulated purchased OHM against a fresh backing withdrawal credited to the backing vault's budget, then opens one 24-hour market per enabled asset sized at `weeklyBudgetRemaining / daysRemaining`. Market creation is skipped entirely when the OHM oracle price is zero or below backing; the burn still runs.
 
-**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount, and the minimum price applies the configured max price premium on top of that discounted price, capping the payout per OHM at `oraclePrice * (1 - initialDiscount) * (1 + maxPricePremium)`. The premium is therefore the width of the market's decay band: too small and a market cannot reach a clearing price when the OHM price rises after it opens, too large and the facility can pay more for one OHM. Both parameters are read at market creation, so a market keeps the band it was created with.
+**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount to the oracle price, and the minimum price applies the configured max price premium to the same oracle price, capping the payout per OHM at `oraclePrice * (1 + maxPricePremium)`. The two parameters are independent: the discount sets where a market opens and the premium sets the ceiling it may decay to. Together they set the width of the decay band, `(1 + maxPricePremium) / (1 - initialDiscount)`: too narrow and a market cannot reach a clearing price when the OHM price rises after it opens, too wide and the facility can pay more for one OHM. A zero premium caps the payout at the oracle price. The premium is bounded above by `10e18`, a guard against a mis-entered value rather than an economic limit. Both parameters are read at market creation, so a market keeps the band it was created with.
 
 **Activation** — the one-shot `seedCycle` carries v1.2's epoch position and unspent weekly budget into v2 so the migration does not forfeit the remainder of the current buyback week.
 

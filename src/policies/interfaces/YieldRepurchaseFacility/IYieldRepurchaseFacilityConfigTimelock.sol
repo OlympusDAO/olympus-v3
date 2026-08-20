@@ -142,7 +142,8 @@ interface IYieldRepurchaseFacilityConfigTimelock is ITimelockBatchQueue {
     function queueSetInitialDiscount(uint256 initialDiscount_) external returns (uint64 actionId);
 
     /// @notice Queues a timelocked call to the facility's setter of the max price premium.
-    /// @param maxPricePremium_ The new max price premium (`1e18` = 100%).
+    /// @param maxPricePremium_ The new max price premium (`1e18` = 100%); must not
+    ///        exceed `10e18`.
     /// @return actionId The queued action ID.
     function queueSetMaxPricePremium(uint256 maxPricePremium_) external returns (uint64 actionId);
 

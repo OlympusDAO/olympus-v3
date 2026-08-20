@@ -1043,14 +1043,29 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         pure
         returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
     {
+        // discountFactor = 1e18 - INITIAL_DISCOUNT (both 18 decimals);
+        // e.g. 1e18 - 3e16 = 0.97e18.
         uint256 discountFactor = ONE_HUNDRED_PERCENT - INITIAL_DISCOUNT;
+        // effectivePrice = oraclePrice (18 decimals) * discountFactor (18 decimals)
+        // / 1e18 -> 18 decimals (floor). This is the price a market opens at.
         uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
-        uint256 maxPrice = effectivePrice.mulDiv(
+        // The premium is measured from the oracle price, not from the discounted price,
+        // so the two parameters do not compound.
+        //
+        // maxPrice = oraclePrice (18 decimals) * (1e18 + MAX_PRICE_PREMIUM) (18 decimals)
+        // / 1e18 -> 18 decimals (floor); e.g. 1e18 + 1e17 = 1.1e18 gives 1.1x the oracle
+        // price. This is the highest payout the market can reach for one OHM.
+        uint256 maxPrice = oraclePrice_.mulDiv(
             ONE_HUNDRED_PERCENT + MAX_PRICE_PREMIUM,
             ONE_HUNDRED_PERCENT
         );
+        // The market quotes OHM per payout unit, so both prices invert the oracle price
+        // across the 18-decimal oracle scale squared: 1e18 * 1e18 = 1e36.
         uint256 oracleSquare = 1e36;
 
+        // Both inversions are 1e36 / (18 decimals) -> 18 decimals, and both round down.
+        // Inversion reverses the ordering, so maxPrice >= effectivePrice becomes
+        // minPrice <= initialPrice, which the Bond SDA requires.
         uint256 initialPrice = oracleSquare / effectivePrice;
         uint256 minPrice = oracleSquare / maxPrice;
 

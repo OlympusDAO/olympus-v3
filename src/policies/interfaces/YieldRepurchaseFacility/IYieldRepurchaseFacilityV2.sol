@@ -271,7 +271,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the initial discount is not less than 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 
-    /// @notice Thrown when the max price premium is not less than 100% (`1e18`).
+    /// @notice Thrown when the max price premium is above 1,000% (`10e18`).
     error IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
 
     /// @notice Thrown when the yield buyback share exceeds 100% (`1e18`).
@@ -615,18 +615,25 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param initialDiscount_ The new discount (`1e18` = 100%); must be less than `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external;
 
-    /// @notice Sets the premium over the initial market price at which a bond market's
-    ///         minimum price is placed: the market decays from its initial price down to
-    ///         that minimum, so the premium caps the reserve paid for one OHM at
-    ///         `oraclePrice * (1 - initialDiscount) * (1 + maxPricePremium)`.
+    /// @notice Sets the premium over the oracle price at which a bond market's minimum
+    ///         price is placed: the market decays from its initial price down to that
+    ///         minimum, so the premium caps the reserve paid for one OHM at
+    ///         `oraclePrice * (1 + maxPricePremium)`.
     /// @dev Callable by the config timelock and the admin role. Emits
     ///      `MaxPricePremiumSet`.
     ///
-    ///      The premium is the width of the market's decay band. A premium too small
-    ///      leaves a market unable to reach a clearing price when the OHM price rises
-    ///      after the market opens, which strands that day's capacity in the buyback
-    ///      pool; a premium too large raises the price the facility can pay for one OHM.
-    /// @param maxPricePremium_ The new premium (`1e18` = 100%); must be less than `1e18`.
+    ///      The premium is measured from the oracle price and is therefore independent
+    ///      of the initial discount: the discount sets where a market opens, and the
+    ///      premium sets the ceiling it may decay to. A zero premium caps the payout at
+    ///      the oracle price, leaving a market only the discount as decay room.
+    ///
+    ///      Together the two parameters set the width of the decay band,
+    ///      `(1 + maxPricePremium) / (1 - initialDiscount)`. A band too narrow leaves a
+    ///      market unable to reach a clearing price when the OHM price rises after the
+    ///      market opens, which strands that day's capacity in the buyback pool; a
+    ///      premium too large raises the price the facility can pay for one OHM.
+    /// @param maxPricePremium_ The new premium (`1e18` = 100%); must not exceed
+    ///        `10e18`.
     function setMaxPricePremium(uint256 maxPricePremium_) external;
 
     /// @notice Increases the cumulative receivables offset of a Clearinghouse.
@@ -736,7 +743,8 @@ interface IYieldRepurchaseFacilityV2 {
     ///         setter's value check would fail.
     /// @dev The validation applies no authorization gate. Intended to be called by the
     ///      config timelock when a `setMaxPricePremium` action is queued.
-    /// @param maxPricePremium_ The proposed premium (`1e18` = 100%).
+    /// @param maxPricePremium_ The proposed premium (`1e18` = 100%); must not exceed
+    ///        `10e18`.
     function validateSetMaxPricePremium(uint256 maxPricePremium_) external view;
 
     /// @notice Validates the parameter of `enableAsset` against the live facility state,
@@ -866,8 +874,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @return The discount (`1e18` = 100%).
     function initialDiscount() external view returns (uint256);
 
-    /// @notice Returns the premium over the initial market price at which a bond
-    ///         market's minimum price is placed.
+    /// @notice Returns the premium over the oracle price at which a bond market's
+    ///         minimum price is placed, capping the reserve paid for one OHM at
+    ///         `oraclePrice * (1 + maxPricePremium)`.
     /// @return The premium (`1e18` = 100%).
     function maxPricePremium() external view returns (uint256);
 

@@ -71,23 +71,38 @@ contract YieldRepurchaseFacilityConfigTimelockTests_QueueSetMaxPricePremium is
     }
 
     // queueSetMaxPricePremium
-    // given the premium is exactly 100% (1e18)
+    // given the premium is exactly the upper bound (10e18)
     //  when queueing the premium
-    //   then it reverts with IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh (exclusive bound)
-    function test_givenPremiumAtOneHundredPercent_reverts() public {
+    //   then the action is queued (inclusive bound)
+    function test_givenPremiumAtUpperBound_queuesAction() public {
+        vm.prank(yrfAdmin);
+        configTimelock.queueSetMaxPricePremium(10e18);
+
+        assertEq(
+            configTimelock.pendingMaxPricePremiumActionId(),
+            1,
+            "the premium at the upper bound was not queued"
+        );
+    }
+
+    // queueSetMaxPricePremium
+    // given the premium is one above the upper bound (10e18)
+    //  when queueing the premium
+    //   then it reverts with IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh
+    function test_givenPremiumOneAboveUpperBound_reverts() public {
         vm.prank(yrfAdmin);
         vm.expectRevert(
             IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh.selector
         );
-        configTimelock.queueSetMaxPricePremium(1e18);
+        configTimelock.queueSetMaxPricePremium(10e18 + 1);
     }
 
     // queueSetMaxPricePremium
-    // given the premium is above 100% (1e18)
+    // given the premium is above the upper bound (10e18)
     //  when queueing any such premium
     //   then it reverts with IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh
-    function test_givenPremiumAboveOneHundredPercent_reverts(uint256 premium_) public {
-        premium_ = bound(premium_, 1e18 + 1, type(uint256).max);
+    function test_givenPremiumAboveUpperBound_reverts(uint256 premium_) public {
+        premium_ = bound(premium_, 10e18 + 1, type(uint256).max);
 
         vm.prank(yrfAdmin);
         vm.expectRevert(
@@ -97,11 +112,11 @@ contract YieldRepurchaseFacilityConfigTimelockTests_QueueSetMaxPricePremium is
     }
 
     // queueSetMaxPricePremium
-    // given any premium below 100% (1e18)
+    // given any premium at or below the upper bound (10e18)
     //  when the yrf_admin queues the premium
     //   then the action is stored with the queue events and timelock timestamps
     function test_givenYrfAdminCaller_whenPremiumIsValid_queuesAction(uint256 premium_) public {
-        premium_ = bound(premium_, 0, 1e18 - 1);
+        premium_ = bound(premium_, 0, 10e18);
         uint256 queuedAt = vm.getBlockTimestamp();
         ITimelockBatchQueue.BatchAction[] memory actions = _singleAction(
             address(yieldRepo),

@@ -117,6 +117,14 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Precision denominator for the yield buyback share (`1e18` = 100%).
     uint256 private constant _ONE_HUNDRED_PERCENT = 1e18;
 
+    /// @notice Upper bound of the max price premium (`1e18` = 100%), inclusive.
+    /// @dev The bound guards against a mis-entered value; it is not an economic limit.
+    ///      The premium caps the payout at `oraclePrice * (1 + maxPricePremium)`, so the
+    ///      bound caps that payout at 11x the oracle price, far above any usable market
+    ///      ceiling. The premium only lowers the market's minimum price, so no premium
+    ///      magnitude can overflow the market pricing.
+    uint256 private constant _MAX_PRICE_PREMIUM_LIMIT = 10e18;
+
     /// @notice Minimum length of the `enable` payload.
     /// @dev Four 32-byte words: `initialDiscount`, `maxPricePremium`, the seed array
     ///      offset, and the seed array length.
@@ -393,7 +401,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The facility is not authorized as a market callback on the bond
     ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
-    ///      - The max price premium is not less than 100% (`1e18`).
+    ///      - The max price premium is above 1,000% (`10e18`).
     ///      - A seed references an unregistered or disabled vault.
     ///      - An enabled vault reverts on `previewRedeem` or `balanceOf`.
     function _beforeEnable(bytes calldata data_) internal override {
@@ -1515,13 +1523,13 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Reachable through the config timelock or directly by the admin, so a change is
     ///      de-facto timelocked.
     ///
-    ///      The only enforced bound is below 100% (`1e18`). The premium widens the decay
-    ///      band of the markets created after the change; the markets already live keep
-    ///      the band they were created with.
+    ///      The only enforced bound is at or below 1,000% (`10e18`). The premium widens
+    ///      the decay band of the markets created after the change; the markets already
+    ///      live keep the band they were created with.
     ///
     ///      Reverts if:
     ///      - The caller is neither the config timelock nor the admin.
-    ///      - The max price premium is not less than 100% (`1e18`).
+    ///      - The max price premium is above 1,000% (`10e18`).
     function setMaxPricePremium(
         uint256 maxPricePremium_
     ) external override onlyTimelockOrAdminRole {
@@ -1529,7 +1537,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Sets the max price premium.
-    /// @dev Reverts if `maxPricePremium_` is not less than 100% (`1e18`).
+    /// @dev Reverts if `maxPricePremium_` is above 1,000% (`10e18`).
     function _setMaxPricePremium(uint256 maxPricePremium_) internal {
         _requireValidMaxPricePremium(maxPricePremium_);
 
@@ -1718,7 +1726,7 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reverts if:
-    ///      - The premium is not less than 100% (`1e18`).
+    ///      - The premium is above 1,000% (`10e18`).
     function validateSetMaxPricePremium(uint256 maxPricePremium_) external pure override {
         _requireValidMaxPricePremium(maxPricePremium_);
     }
@@ -2004,9 +2012,9 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
     }
 
-    /// @notice Reverts unless the premium is less than 100% (`1e18`).
+    /// @notice Reverts unless the premium is at or below 1,000% (`10e18`).
     function _requireValidMaxPricePremium(uint256 maxPricePremium_) private pure {
-        if (maxPricePremium_ >= _ONE_HUNDRED_PERCENT)
+        if (maxPricePremium_ > _MAX_PRICE_PREMIUM_LIMIT)
             revert IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
     }
 

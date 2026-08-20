@@ -215,7 +215,7 @@ contract YieldRepurchaseFacilityConfigTimelock is
     ///      - The policy is disabled.
     ///      - The caller does not hold the `yrf_admin` role.
     ///      - The facility slot has not been set.
-    ///      - `maxPricePremium_` is not less than 100% (`1e18`).
+    ///      - `maxPricePremium_` is above 1,000% (`10e18`).
     ///      - Another max price premium update is already pending.
     function queueSetMaxPricePremium(
         uint256 maxPricePremium_
