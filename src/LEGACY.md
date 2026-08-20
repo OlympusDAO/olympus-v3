@@ -120,7 +120,7 @@ src/test/policies/pOLY.t.sol
 
 ## Deleted since
 
-Removed in commit `a1e9c29ae485bdb01c691bb92d8cf14d1caed326` as test helpers that nothing referenced:
+Removed in commit `d81a2e597c59a92ee47e1a5f4e4ac259f93862ce` as test helpers that nothing referenced:
 
 ```text
 src/test/lib/UniswapV3/SwapRouter.sol
