@@ -6,14 +6,15 @@ import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue
 import {MockTimelockBatchQueue} from "src/test/policies/utils/TimelockBatchQueue/fixtures/MockTimelockBatchQueue.sol";
 
 contract TimelockBatchQueueCancelQueuedActionTest is TimelockBatchQueueTest {
-    function test_cancelQueuedAction_givenUnknownAction_reverts() public {
+    function test_cancelQueuedAction_givenUnknownAction_reverts(uint64 actionId_) public {
+        vm.assume(actionId_ != 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector,
-                uint64(99)
+                actionId_
             )
         );
-        queue.cancelQueuedAction(99);
+        queue.cancelQueuedAction(actionId_);
     }
 
     function test_cancelQueuedAction_givenExecutedAction_reverts() public {
@@ -49,9 +50,9 @@ contract TimelockBatchQueueCancelQueuedActionTest is TimelockBatchQueueTest {
         );
         queue.cancelQueuedAction(actionId);
 
-        assertFalse(queue.getQueuedAction(actionId).cancelled);
-        assertEq(queue.getQueuedActionLength(actionId), 1);
-        assertEq(queue.getCancellationCalls().length, 0);
+        assertFalse(queue.getQueuedAction(actionId).cancelled, "not cancelled");
+        assertEq(queue.getQueuedActionLength(actionId), 1, "action retained");
+        assertEq(queue.getCancellationCalls().length, 0, "cancellation hook not called");
     }
 
     function test_cancelQueuedAction_givenWrongCaller_reverts() public {
@@ -74,40 +75,59 @@ contract TimelockBatchQueueCancelQueuedActionTest is TimelockBatchQueueTest {
         );
         queue.cancelQueuedAction(actionId);
 
-        assertFalse(queue.getQueuedAction(actionId).cancelled);
-        assertEq(queue.getQueuedActionLength(actionId), 1);
-        assertEq(queue.getCancellationCalls().length, 0);
+        assertFalse(queue.getQueuedAction(actionId).cancelled, "not cancelled");
+        assertEq(queue.getQueuedActionLength(actionId), 1, "action retained");
+        assertEq(queue.getCancellationCalls().length, 0, "cancellation hook not called");
     }
 
-    function test_cancelQueuedAction_cancelsBatchAndCallsHook() public {
+    function test_cancelQueuedAction_givenBatchQueued_whenCallerIsNonZero(address caller_) public {
+        vm.assume(caller_ != address(0));
         (uint64 actionId, ) = _queueThreeBatch();
         vm.expectEmit(true, true, false, true);
-        emit ITimelockBatchQueue.TimelockActionCancelled(actionId, canceller);
-        vm.prank(canceller);
+        emit ITimelockBatchQueue.TimelockActionCancelled(actionId, caller_);
+        vm.prank(caller_);
         queue.cancelQueuedAction(actionId);
 
         ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
-        assertTrue(action.cancelled);
-        assertFalse(action.executed);
-        assertEq(action.actions.length, 0);
+        assertTrue(action.cancelled, "cancelled");
+        assertFalse(action.executed, "not executed");
+        assertEq(action.actions.length, 0, "actions cleared");
         MockTimelockBatchQueue.CancellationCall[] memory calls = queue.getCancellationCalls();
-        assertEq(calls.length, 1);
-        assertEq(calls[0].actionId, actionId);
-        assertEq(calls[0].subActionCount, 3);
+        assertEq(calls.length, 1, "cancellation call count");
+        assertEq(calls[0].actionId, actionId, "cancellation action ID");
+        assertEq(calls[0].subActionCount, 3, "cancelled sub-action count");
     }
 
-    function test_cancelQueuedAction_succeedsAfterActionIsReady() public {
+    function test_cancelQueuedAction_givenSingleAction_whenCallerIsNonZero(address caller_) public {
+        vm.assume(caller_ != address(0));
+        uint64 actionId = _queueSingleAction();
+        vm.expectEmit(true, true, false, true);
+        emit ITimelockBatchQueue.TimelockActionCancelled(actionId, caller_);
+        vm.prank(caller_);
+        queue.cancelQueuedAction(actionId);
+
+        ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
+        assertTrue(action.cancelled, "cancelled");
+        assertEq(action.actions.length, 0, "actions cleared");
+
+        MockTimelockBatchQueue.CancellationCall[] memory calls = queue.getCancellationCalls();
+        assertEq(calls.length, 1, "cancellation call count");
+        assertEq(calls[0].actionId, actionId, "cancellation action ID");
+        assertEq(calls[0].subActionCount, 1, "cancelled sub-action count");
+    }
+
+    function test_cancelQueuedAction_givenActionReady() public {
         uint64 actionId = _queueSingleAction();
         _warpReady(actionId);
         queue.cancelQueuedAction(actionId);
-        assertTrue(queue.getQueuedAction(actionId).cancelled);
+        assertTrue(queue.getQueuedAction(actionId).cancelled, "cancelled after ready");
     }
 
-    function test_cancelQueuedAction_succeedsAfterActionExpires() public {
+    function test_cancelQueuedAction_givenActionExpired() public {
         uint64 actionId = _queueSingleAction();
         ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
         vm.warp(uint256(action.expiresAt) + 1);
         queue.cancelQueuedAction(actionId);
-        assertTrue(queue.getQueuedAction(actionId).cancelled);
+        assertTrue(queue.getQueuedAction(actionId).cancelled, "cancelled after expiry");
     }
 }

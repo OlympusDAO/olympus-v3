@@ -5,27 +5,28 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 
 contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
-    function test_getQueuedSubAction_returnsEachStoredAction() public {
+    function test_getQueuedSubAction_givenBatchQueued() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
         for (uint256 i; i < actions.length; ++i) {
             (address target, bytes4 selector, bytes memory payload) = queue.getQueuedSubAction(
                 actionId,
                 i
             );
-            assertEq(target, actions[i].target);
-            assertEq(selector, actions[i].selector);
-            assertEq(payload, actions[i].payload);
+            assertEq(target, actions[i].target, "stored target");
+            assertEq(selector, actions[i].selector, "stored selector");
+            assertEq(payload, actions[i].payload, "stored payload");
         }
     }
 
-    function test_getQueuedSubAction_givenUnknownAction_reverts() public {
+    function test_getQueuedSubAction_givenUnknownAction_reverts(uint64 actionId_) public {
+        vm.assume(actionId_ != 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector,
-                uint64(99)
+                actionId_
             )
         );
-        queue.getQueuedSubAction(99, 0);
+        queue.getQueuedSubAction(actionId_, 0);
     }
 
     function test_getQueuedSubAction_givenOutOfBoundsIndex_reverts(uint256 index_) public {
@@ -40,6 +41,14 @@ contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
             )
         );
         queue.getQueuedSubAction(actionId, index_);
+    }
+
+    function test_getQueuedSubAction_whenIndexIsAtBatchLength_reverts() public {
+        _expectBatchIndexOutOfBounds(3);
+    }
+
+    function test_getQueuedSubAction_whenIndexIsFarAboveBatchLength_reverts() public {
+        _expectBatchIndexOutOfBounds(99);
     }
 
     function test_getQueuedSubAction_givenExecutedAction_reverts() public {
@@ -64,5 +73,18 @@ contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
     function _expectTerminalRevert(uint64 actionId_, bytes4 selector_) internal {
         vm.expectRevert(abi.encodeWithSelector(selector_, actionId_));
         queue.getQueuedSubAction(actionId_, 0);
+    }
+
+    function _expectBatchIndexOutOfBounds(uint256 index_) internal {
+        (uint64 actionId, ) = _queueThreeBatch();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_SubActionIndexOutOfBounds.selector,
+                actionId,
+                index_,
+                uint256(3)
+            )
+        );
+        queue.getQueuedSubAction(actionId, index_);
     }
 }

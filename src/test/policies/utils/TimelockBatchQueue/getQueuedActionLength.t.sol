@@ -5,14 +5,15 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 
 contract TimelockBatchQueueGetQueuedActionLengthTest is TimelockBatchQueueTest {
-    function test_getQueuedActionLength_returnsStoredLength() public {
-        assertEq(queue.getQueuedActionLength(_queueSingleAction()), 1);
+    function test_getQueuedActionLength_givenSingleAndBatchActionsQueued() public {
+        assertEq(queue.getQueuedActionLength(_queueSingleAction()), 1, "single action length");
         (uint64 actionId, ) = _queueThreeBatch();
-        assertEq(queue.getQueuedActionLength(actionId), 3);
+        assertEq(queue.getQueuedActionLength(actionId), 3, "batch action length");
     }
 
-    function test_getQueuedActionLength_givenUnknownAction_reverts() public {
-        _expectRevert(99, ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector);
+    function test_getQueuedActionLength_givenUnknownAction_reverts(uint64 actionId_) public {
+        vm.assume(actionId_ != 0);
+        _expectRevert(actionId_, ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector);
     }
 
     function test_getQueuedActionLength_givenExecutedAction_reverts() public {

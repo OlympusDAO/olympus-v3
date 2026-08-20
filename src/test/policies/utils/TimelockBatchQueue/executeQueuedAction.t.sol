@@ -7,14 +7,15 @@ import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue
 import {MockTimelockBatchQueue} from "src/test/policies/utils/TimelockBatchQueue/fixtures/MockTimelockBatchQueue.sol";
 
 contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
-    function test_executeQueuedAction_givenUnknownAction_reverts() public {
+    function test_executeQueuedAction_givenUnknownAction_reverts(uint64 actionId_) public {
+        vm.assume(actionId_ != 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector,
-                uint64(99)
+                actionId_
             )
         );
-        queue.executeQueuedAction(99);
+        queue.executeQueuedAction(actionId_);
     }
 
     function test_executeQueuedAction_givenActionNotReady_reverts(uint256 timestamp_) public {
@@ -45,16 +46,18 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         queue.executeQueuedAction(actionId);
     }
 
-    function test_executeQueuedAction_succeedsAtTimestampBoundaries() public {
+    function test_executeQueuedAction_whenTimestampIsExecutionBoundary() public {
         uint64 first = _queueSingleAction();
         ITimelockBatchQueue.QueuedAction memory firstAction = queue.getQueuedAction(first);
         vm.warp(firstAction.executableAt);
         queue.executeQueuedAction(first);
+        assertTrue(queue.getQueuedAction(first).executed, "executed at executableAt");
 
         uint64 second = _queueSingleAction();
         ITimelockBatchQueue.QueuedAction memory secondAction = queue.getQueuedAction(second);
         vm.warp(secondAction.expiresAt);
         queue.executeQueuedAction(second);
+        assertTrue(queue.getQueuedAction(second).executed, "executed at expiresAt");
     }
 
     function test_executeQueuedAction_givenExecutedAction_reverts() public {
@@ -90,8 +93,8 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         vm.expectRevert(MockTimelockBatchQueue.MockTimelockBatchQueue_ExecutionRejected.selector);
         queue.executeQueuedAction(actionId);
 
-        assertFalse(queue.getQueuedAction(actionId).executed);
-        assertEq(queue.getQueuedActionLength(actionId), 1);
+        assertFalse(queue.getQueuedAction(actionId).executed, "not executed");
+        assertEq(queue.getQueuedActionLength(actionId), 1, "action retained");
     }
 
     function test_executeQueuedAction_givenWrongCaller_reverts() public {
@@ -103,7 +106,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         queue.executeQueuedAction(actionId);
     }
 
-    function test_executeQueuedAction_executesBatchInOrderAndClearsActions() public {
+    function test_executeQueuedAction_givenBatchQueued() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
         _warpReady(actionId);
 
@@ -122,23 +125,52 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         queue.executeQueuedAction(actionId);
 
         uint256[] memory values = queue.getExecutedValues();
-        assertEq(values.length, 3);
-        assertEq(values[0], 0);
-        assertEq(values[1], 1);
-        assertEq(values[2], 2);
-        assertTrue(queue.getQueuedAction(actionId).executed);
-        assertEq(queue.getQueuedAction(actionId).actions.length, 0);
+        assertEq(values.length, 3, "executed value count");
+        assertEq(values[0], 0, "first executed value");
+        assertEq(values[1], 1, "second executed value");
+        assertEq(values[2], 2, "third executed value");
+        assertTrue(queue.getQueuedAction(actionId).executed, "executed");
+        assertEq(queue.getQueuedAction(actionId).actions.length, 0, "actions cleared");
 
         MockTimelockBatchQueue.ExecuteSubActionCall[] memory calls = queue
             .getExecuteSubActionCalls();
-        assertEq(calls.length, 3);
+        assertEq(calls.length, 3, "execution call count");
         for (uint256 i; i < calls.length; ++i) {
-            assertEq(calls[i].actionId, actionId);
-            assertEq(calls[i].index, i);
-            assertEq(calls[i].target, actions[i].target);
-            assertEq(calls[i].selector, actions[i].selector);
-            assertEq(calls[i].payloadHash, keccak256(actions[i].payload));
+            assertEq(calls[i].actionId, actionId, "execution action ID");
+            assertEq(calls[i].index, i, "execution index");
+            assertEq(calls[i].target, actions[i].target, "execution target");
+            assertEq(calls[i].selector, actions[i].selector, "execution selector");
+            assertEq(calls[i].payloadHash, keccak256(actions[i].payload), "execution payload hash");
         }
+    }
+
+    function test_executeQueuedAction_givenSingleAction() public {
+        uint64 actionId = _queueSingleAction();
+        _warpReady(actionId);
+
+        vm.expectEmit(true, true, true, true);
+        emit ITimelockBatchQueue.TimelockSubActionExecuted(actionId, target1, selector1, 0);
+        vm.expectEmit(true, true, false, true);
+        emit ITimelockBatchQueue.TimelockActionExecuted(actionId, executor);
+        vm.prank(executor);
+        queue.executeQueuedAction(actionId);
+
+        ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
+        assertTrue(action.executed, "executed");
+        assertEq(action.actions.length, 0, "actions cleared");
+
+        uint256[] memory values = queue.getExecutedValues();
+        assertEq(values.length, 1, "executed value count");
+        assertEq(values[0], 11, "executed value");
+
+        MockTimelockBatchQueue.ExecuteSubActionCall[] memory calls = queue
+            .getExecuteSubActionCalls();
+        assertEq(calls.length, 1, "execution call count");
+        assertEq(calls[0].actionId, actionId, "execution action ID");
+        assertEq(calls[0].index, 0, "execution index");
+        assertEq(calls[0].target, target1, "execution target");
+        assertEq(calls[0].selector, selector1, "execution selector");
+        assertEq(queue.getCancellationCalls().length, 0, "cancellation hook not called");
     }
 
     function test_executeQueuedAction_givenLaterSubActionReverts_rollsBackWholeBatch() public {
@@ -154,10 +186,10 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         );
         queue.executeQueuedAction(actionId);
 
-        assertFalse(queue.getQueuedAction(actionId).executed);
-        assertEq(queue.getQueuedActionLength(actionId), 3);
-        assertEq(queue.getExecutedValues().length, 0);
-        assertEq(queue.getExecuteSubActionCalls().length, 0);
+        assertFalse(queue.getQueuedAction(actionId).executed, "not executed");
+        assertEq(queue.getQueuedActionLength(actionId), 3, "batch retained");
+        assertEq(queue.getExecutedValues().length, 0, "executed values rolled back");
+        assertEq(queue.getExecuteSubActionCalls().length, 0, "execution calls rolled back");
     }
 
     function test_executeQueuedAction_callsCompletionHookAfterEverySubAction() public {
@@ -166,10 +198,10 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         queue.executeQueuedAction(actionId);
 
         MockTimelockBatchQueue.CompletionCall[] memory calls = queue.getCompletionCalls();
-        assertEq(calls.length, 1);
-        assertEq(calls[0].actionId, actionId);
-        assertEq(calls[0].subActionCount, 3);
-        assertEq(calls[0].executionCount, 3);
+        assertEq(calls.length, 1, "completion call count");
+        assertEq(calls[0].actionId, actionId, "completion action ID");
+        assertEq(calls[0].subActionCount, 3, "completed sub-action count");
+        assertEq(calls[0].executionCount, 3, "execution count at completion");
     }
 
     function test_executeQueuedAction_givenCompletionHookReverts_rollsBackWholeBatch() public {
@@ -180,10 +212,10 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         vm.expectRevert(MockTimelockBatchQueue.MockTimelockBatchQueue_CompletionReverted.selector);
         queue.executeQueuedAction(actionId);
 
-        assertFalse(queue.getQueuedAction(actionId).executed);
-        assertEq(queue.getQueuedActionLength(actionId), 3);
-        assertEq(queue.getExecutedValues().length, 0);
-        assertEq(queue.getCompletionCalls().length, 0);
+        assertFalse(queue.getQueuedAction(actionId).executed, "not executed");
+        assertEq(queue.getQueuedActionLength(actionId), 3, "batch retained");
+        assertEq(queue.getExecutedValues().length, 0, "executed values rolled back");
+        assertEq(queue.getCompletionCalls().length, 0, "completion calls rolled back");
     }
 
     function test_executeQueuedAction_givenReentrantExecution_revertsWholeBatch() public {
@@ -233,9 +265,9 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
 
         queue.executeQueuedAction(actionId);
 
-        assertTrue(queue.getQueuedAction(actionId).executed);
-        assertEq(queue.getQueuedActionLength(newActionId), 1);
-        assertEq(queue.nextActionId(), newActionId + 1);
+        assertTrue(queue.getQueuedAction(actionId).executed, "outer action executed");
+        assertEq(queue.getQueuedActionLength(newActionId), 1, "reentrant action stored");
+        assertEq(queue.nextActionId(), newActionId + 1, "next action ID advanced");
     }
 
     function _warpToExecutableAt(uint64 actionId_) internal {

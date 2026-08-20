@@ -10,7 +10,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](0);
         vm.expectRevert(ITimelockBatchQueue.ITimelockBatchQueue_BatchEmpty.selector);
         queue.queueBatchAction(actions);
-        assertEq(queue.nextActionId(), 1);
+        assertEq(queue.nextActionId(), 1, "action ID not consumed");
     }
 
     function test_queueBatchAction_givenBatchAboveDefaultMaximum_reverts() public {
@@ -23,10 +23,19 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         _expectBatchTooLarge(_buildBatchOfSize(4), 3);
     }
 
-    function test_queueBatchAction_givenBatchAtMaximum_succeeds() public {
+    function test_queueBatchAction_whenBatchIsAtDefaultMaximum() public {
         uint256 maximum = queue.getMaxBatchSize();
         uint64 actionId = queue.queueBatchAction(_buildBatchOfSize(maximum));
-        assertEq(queue.getQueuedActionLength(actionId), maximum);
+        assertEq(queue.getQueuedActionLength(actionId), maximum, "stored action count");
+    }
+
+    function test_queueBatchAction_whenBatchIsAtOverrideMaximum() public {
+        uint256 maximum = 3;
+        queue.setMaxBatchSizeOverride(maximum);
+        vm.prank(proposer);
+        uint64 actionId = queue.queueBatchAction(_buildBatchOfSize(maximum));
+        assertEq(actionId, 1, "action ID");
+        assertEq(queue.getQueuedActionLength(actionId), maximum, "stored action count");
     }
 
     function test_queueBatchAction_givenSubActionRejected_revertsAllQueueState() public {
@@ -39,7 +48,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
             )
         );
         queue.queueBatchAction(_buildBatchOfThree());
-        assertEq(queue.nextActionId(), actionId);
+        assertEq(queue.nextActionId(), actionId, "action ID not consumed");
         _expectActionNotFound(actionId);
     }
 
@@ -48,7 +57,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         uint64 actionId = queue.nextActionId();
         vm.expectRevert(MockTimelockBatchQueue.MockTimelockBatchQueue_BatchRejected.selector);
         queue.queueBatchAction(_buildBatchOfThree());
-        assertEq(queue.nextActionId(), actionId);
+        assertEq(queue.nextActionId(), actionId, "action ID not consumed");
         _expectActionNotFound(actionId);
     }
 
@@ -79,22 +88,22 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         );
 
         vm.prank(proposer);
-        assertEq(queue.queueBatchAction(actions), actionId);
+        assertEq(queue.queueBatchAction(actions), actionId, "queued action ID");
 
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
-        assertEq(queued.actions.length, actions.length);
+        assertEq(queued.actions.length, actions.length, "stored action count");
         for (uint256 i; i < actions.length; ++i) {
-            assertEq(queued.actions[i].target, actions[i].target);
-            assertEq(queued.actions[i].selector, actions[i].selector);
-            assertEq(queued.actions[i].payload, actions[i].payload);
+            assertEq(queued.actions[i].target, actions[i].target, "stored target");
+            assertEq(queued.actions[i].selector, actions[i].selector, "stored selector");
+            assertEq(queued.actions[i].payload, actions[i].payload, "stored payload");
         }
     }
 
     function test_queueBatchAction_incrementsActionIdOncePerBatch() public {
         uint64 first = queue.queueBatchAction(_buildBatchOfThree());
         uint64 second = queue.queueBatchAction(_buildBatchOfThree());
-        assertEq(second, first + 1);
-        assertEq(queue.nextActionId(), second + 1);
+        assertEq(second, first + 1, "second action ID");
+        assertEq(queue.nextActionId(), second + 1, "next action ID");
     }
 
     function _expectBatchTooLarge(
@@ -109,7 +118,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
             )
         );
         queue.queueBatchAction(actions_);
-        assertEq(queue.nextActionId(), 1);
+        assertEq(queue.nextActionId(), 1, "action ID not consumed");
     }
 
     function _expectActionNotFound(uint64 actionId_) internal {
