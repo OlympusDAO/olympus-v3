@@ -138,26 +138,26 @@ For deployed contracts, suppression is acceptable since changing the code would 
 ### Suppression Template
 
 ```solidity
-/// forge-lint: disable-next-line(rule-name)
 /// Reason: Deployed contract - changing would require governance proposal
+/// forge-lint: disable-next-line(rule-name)
 ```
 
 ### Examples
 
 ```solidity
 // Example 1: Shadowing in deployed contract
-/// forge-lint: disable-next-line(var-name-mixedcase)
 /// Reason: Deployed contract - variable naming matches existing interface
+/// forge-lint: disable-next-line(var-name-mixedcase)
 uint256 depositAmount = _getDeposit();
 
 // Example 2: External constraint
-/// forge-lint: disable-next-line(avoid-low-level-calls)
 /// Reason: Required for compatibility with external contract interface
+/// forge-lint: disable-next-line(avoid-low-level-calls)
 _callExternalTarget(target, data);
 
 // Example 3: Legitimate exception
-/// forge-lint: disable-next-line(no-empty-blocks)
 /// Reason: Empty block intentionally left for future upgrade path
+/// forge-lint: disable-next-line(no-empty-blocks)
 function upgradeV2() external { }
 ```
 

@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "test/lib/generated/ModulePermissions.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 
 import {Actions} from "src/Kernel.sol";
@@ -31,8 +32,12 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
         vm.warp(30 days);
 
         _productionPrice = new OlympusPricev2(kernel, PRICE_DECIMALS, uint32(8 hours));
-        _moduleWriter = _productionPrice.generateGodmodeFixture(type(ModuleWithSubmodules).name);
-        _priceWriter = _productionPrice.generateGodmodeFixture(type(OlympusPricev2).name);
+        _moduleWriter = _productionPrice.generateMultiFunctionFixture(
+            ModulePermissions.moduleWithSubmodules()
+        );
+        _priceWriter = _productionPrice.generateMultiFunctionFixture(
+            ModulePermissions.olympusPricev2()
+        );
 
         ChainlinkPriceFeeds chainlinkPrice = new ChainlinkPriceFeeds(_productionPrice);
         _ohmUsdFeed = _newPriceFeed(10e8);

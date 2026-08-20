@@ -2,9 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 // Contracts
 import {Actions, Kernel, Module} from "src/Kernel.sol";
@@ -12,7 +13,7 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 
 abstract contract FLOANTest is Test {
-    using ModuleTestFixtureGenerator for Module;
+    using ModuleTestFixtureGenerator for OlympusFixedTermLoan;
 
     Kernel internal kernel;
     OlympusFixedTermLoan internal floan;
@@ -33,13 +34,11 @@ abstract contract FLOANTest is Test {
         floan = new OlympusFixedTermLoan(kernel);
         kernel.executeAction(Actions.InstallModule, address(floan));
 
-        manager = Module(address(floan)).generateGodmodeFixture(type(OlympusFixedTermLoan).name);
-        otherManager = Module(address(floan)).generateGodmodeFixture(
-            type(OlympusFixedTermLoan).name
-        );
-        facility = Module(address(floan)).generateGodmodeFixture(type(OlympusFixedTermLoan).name);
-        otherFacility = Module(address(floan)).generateGodmodeFixture(
-            type(OlympusFixedTermLoan).name
+        manager = floan.generateMultiFunctionFixture(ModulePermissions.olympusFixedTermLoan());
+        otherManager = floan.generateMultiFunctionFixture(ModulePermissions.olympusFixedTermLoan());
+        facility = floan.generateMultiFunctionFixture(ModulePermissions.olympusFixedTermLoan());
+        otherFacility = floan.generateMultiFunctionFixture(
+            ModulePermissions.olympusFixedTermLoan()
         );
 
         kernel.executeAction(Actions.ActivatePolicy, manager);

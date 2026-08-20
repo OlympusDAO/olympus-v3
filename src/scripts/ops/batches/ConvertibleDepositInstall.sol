@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 
@@ -23,7 +23,7 @@ import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActiv
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice Installs and activates the complete ConvertibleDeposit system including EmissionManager
 /// @dev    This script handles the complete activation sequence based on ConvertibleDepositAuctioneerTest setup

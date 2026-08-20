@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 import {MockContractRegistryPolicy, MockImmutableContractRegistryPolicy} from "src/test/mocks/MockContractRegistryPolicy.sol";
 
 import {Kernel, Actions, Module, fromKeycode} from "src/Kernel.sol";
@@ -41,7 +42,7 @@ contract ContractRegistryTest is Test {
         _policyImmutable = new MockImmutableContractRegistryPolicy(_kernel);
 
         // Generate fixtures
-        godmode = RGSTY.generateGodmodeFixture(type(OlympusContractRegistry).name);
+        godmode = RGSTY.generateMultiFunctionFixture(ModulePermissions.olympusContractRegistry());
 
         // Install modules and policies on Kernel
         _kernel.executeAction(Actions.InstallModule, address(RGSTY));

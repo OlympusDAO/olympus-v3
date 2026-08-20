@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.18;
+pragma solidity ^0.8.18;
 
 import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
-
-// Interfaces
-import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
 
 /// @dev Long-running end-to-end scenarios that complement the per-function
 ///      unit tests by locking in interactions across multiple operations.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title IVersioned
 /// @notice Interface for contracts that have a version

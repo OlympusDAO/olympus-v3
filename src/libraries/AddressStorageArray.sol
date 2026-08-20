@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title  AddressStorageArray
 /// @notice A library for managing a storage array of addresses, with support for insertion and removal at a specific index

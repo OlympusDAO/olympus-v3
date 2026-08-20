@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 

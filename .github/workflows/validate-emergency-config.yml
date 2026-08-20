@@ -23,10 +23,16 @@ on:
 permissions:
     contents: read
 
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
     validate:
         name: Validate Emergency Config
         runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 15
 
         steps:
             - name: Checkout
@@ -36,6 +42,10 @@ jobs:
 
             - name: Bootstrap
               uses: ./.github/actions/bootstrap
+              with:
+                  # The validation script needs Node and ajv only.
+                  install-foundry: "false"
+                  install-solidity-dependencies: "false"
 
             - name: Run validation script
               run: node shell/validate-emergency-config.js

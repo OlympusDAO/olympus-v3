@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pragma solidity >=0.7.0;
+pragma solidity >=0.7.0 <0.9.0;
 
 import "./IERC3156FlashBorrower.sol";
 

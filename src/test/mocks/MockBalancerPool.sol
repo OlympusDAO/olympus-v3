@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {IBasePool} from "src/libraries/Balancer/interfaces/IBasePool.sol";
 import {IWeightedPool} from "src/libraries/Balancer/interfaces/IWeightedPool.sol";
