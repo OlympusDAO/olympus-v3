@@ -2,7 +2,8 @@
 pragma solidity ^0.8.15;
 
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
-import {TransferHelper} from "libraries/TransferHelper.sol";
+// Unused: nothing here references it; kept because this contract is deployed
+// import {TransferHelper} from "libraries/TransferHelper.sol";
 
 import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 import "src/Kernel.sol";

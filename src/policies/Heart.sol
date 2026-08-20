@@ -4,10 +4,12 @@ pragma solidity ^0.8.15;
 
 // External libraries
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+// Unused: nothing here references it; kept because this contract is deployed
+// import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 // Internal libraries
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+// Unused: nothing here references it; kept because this contract is deployed
+// import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Interfaces
 import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
@@ -33,7 +35,8 @@ import {Kernel, Policy, Keycode, Permissions, toKeycode} from "src/Kernel.sol";
 ///         This version implements an auction style reward system where the reward is linearly increasing up to a max reward.
 ///         Rewards are issued in OHM.
 contract OlympusHeart is IHeart, Policy, PolicyEnabler, ReentrancyGuard, BasePeriodicTaskManager {
-    using TransferHelper for ERC20;
+    // Unused: no call resolves to it; kept because this contract is deployed
+    // using TransferHelper for ERC20;
 
     // =========  STATE ========= //
 

@@ -7,12 +7,14 @@ import {IgOHM} from "interfaces/IgOHM.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 
 // Import libraries
-import {TransferHelper} from "libraries/TransferHelper.sol";
+// Unused: nothing here references it; kept because this contract is deployed
+// import {TransferHelper} from "libraries/TransferHelper.sol";
 
 /// @title Olympus Claim Transfer Contract
 /// @dev This contract is used to fractionalize pOLY claims and transfer portions of a user's claim to other addresses
 contract ClaimTransfer {
-    using TransferHelper for ERC20;
+    // Unused: no call resolves to it; kept because this contract is deployed
+    // using TransferHelper for ERC20;
 
     // ========= ERRORS ========= //
 

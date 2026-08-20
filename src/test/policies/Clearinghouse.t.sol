@@ -15,7 +15,8 @@ import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
-import {Clearinghouse, Cooler, CoolerFactory, CoolerCallback} from "policies/Clearinghouse.sol";
+import {Clearinghouse, Cooler, CoolerCallback} from "policies/Clearinghouse.sol";
+import {CoolerFactory} from "src/external/cooler/CoolerFactory.sol";
 
 // Tests for Clearinghouse
 //

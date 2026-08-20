@@ -6,8 +6,10 @@ pragma solidity ^0.8.15;
 import {INSTRv1} from "src/modules/INSTR/INSTR.v1.sol";
 import {VOTESv1} from "src/modules/VOTES/VOTES.v1.sol";
 
-import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
-import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
+// Unused: nothing here references it
+// import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
+// Unused: nothing here references it
+// import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
 
 import "src/Kernel.sol";
 
