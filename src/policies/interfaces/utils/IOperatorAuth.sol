@@ -84,11 +84,18 @@ interface IOperatorAuth {
 
     /// @notice Sets or updates operator authorization for the caller.
     /// @dev Invalidates authorization signatures prepared with the caller's current nonce.
+    ///      Reverts with `OperatorAuth_SelfAuthorization` when `authorized_` is the caller and
+    ///      `OperatorAuth_ExpiredAuthorization` when `authorizationDeadline_` is in the past.
     /// @param authorized_ Operator to authorize.
     /// @param authorizationDeadline_ Timestamp until which the operator is authorized, in seconds.
     function setAuthorization(address authorized_, uint48 authorizationDeadline_) external;
 
     /// @notice Sets operator authorization using an EIP-712 signature from the account.
+    /// @dev Reverts with `OperatorAuth_ExpiredSignature` when the signature deadline has passed,
+    ///      `OperatorAuth_ExpiredAuthorization` when the authorization deadline has passed,
+    ///      `OperatorAuth_InvalidNonce` when the signed nonce is not current,
+    ///      `OperatorAuth_InvalidSigner` when the signature is not from the account, or
+    ///      `OperatorAuth_SelfAuthorization` when the account authorizes itself.
     /// @param authorization_ Signed authorization payload.
     /// @param signature_ ECDSA signature over `authorization_`.
     function setAuthorizationWithSig(

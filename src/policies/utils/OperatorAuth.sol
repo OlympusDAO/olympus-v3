@@ -21,8 +21,11 @@ abstract contract OperatorAuth is IOperatorAuth {
 
     // ========== IMMUTABLES ========== //
 
-    /// @inheritdoc IOperatorAuth
-    bytes32 public immutable override DOMAIN_SEPARATOR;
+    /// @dev Chain identifier used to cache the deployment domain separator.
+    uint256 internal immutable _INITIAL_CHAIN_ID;
+
+    /// @dev Deployment domain separator reused while the chain identifier is unchanged.
+    bytes32 internal immutable _INITIAL_DOMAIN_SEPARATOR;
 
     // ========== STATE ========== //
 
@@ -37,12 +40,21 @@ abstract contract OperatorAuth is IOperatorAuth {
     // ========== CONSTRUCTOR ========== //
 
     constructor() {
-        DOMAIN_SEPARATOR = keccak256(abi.encode(_DOMAIN_TYPEHASH, block.chainid, address(this)));
+        _INITIAL_CHAIN_ID = block.chainid;
+        _INITIAL_DOMAIN_SEPARATOR = _computeDomainSeparator();
+    }
+
+    /// @inheritdoc IOperatorAuth
+    function DOMAIN_SEPARATOR() public view override returns (bytes32) {
+        return
+            block.chainid == _INITIAL_CHAIN_ID
+                ? _INITIAL_DOMAIN_SEPARATOR
+                : _computeDomainSeparator();
     }
 
     // ========== AUTHORIZATION ========== //
 
-    /// @notice Sets or updates operator authorization for the caller.
+    /// @inheritdoc IOperatorAuth
     /// @dev Reverts with `OperatorAuth_ExpiredAuthorization` when `authorizationDeadline_` is
     ///      before the current block timestamp.
     ///      Reverts with `OperatorAuth_SelfAuthorization` when `authorized_` is the caller.
@@ -70,7 +82,7 @@ abstract contract OperatorAuth is IOperatorAuth {
         authorizationDeadlines[msg.sender][authorized_] = authorizationDeadline_;
     }
 
-    /// @notice Sets operator authorization using an EIP-712 signature from the account.
+    /// @inheritdoc IOperatorAuth
     /// @dev Reverts if:
     ///      - The signature submission deadline has passed.
     ///      - The authorization deadline is before the current block timestamp.
@@ -106,7 +118,7 @@ abstract contract OperatorAuth is IOperatorAuth {
         // Condition: the recovered signer must be the signed account. The transaction caller
         // is only a relayer and cannot substitute themselves for the account.
         bytes32 structHash = keccak256(abi.encode(_AUTHORIZATION_TYPEHASH, authorization_));
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR, structHash));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
         address signer = ECDSA.recover(digest, signature_.v, signature_.r, signature_.s);
         if (signer != authorization_.account) {
             revert OperatorAuth_InvalidSigner(signer, authorization_.account);
@@ -122,7 +134,7 @@ abstract contract OperatorAuth is IOperatorAuth {
             .authorizationDeadline;
     }
 
-    /// @notice Clears operator authorization for the caller.
+    /// @inheritdoc IOperatorAuth
     /// @dev Does not revert when the operator is already unauthorized. Invalidates authorization
     ///      signatures prepared with the caller's current nonce.
     /// @param authorized_ Operator whose authorization should be cancelled.
@@ -165,5 +177,11 @@ abstract contract OperatorAuth is IOperatorAuth {
         if (block.timestamp > authorizationDeadline_) {
             revert OperatorAuth_ExpiredAuthorization(authorizationDeadline_);
         }
+    }
+
+    /// @notice Computes the EIP-712 domain separator for the current chain and contract.
+    /// @return domainSeparator Current-chain domain separator.
+    function _computeDomainSeparator() internal view returns (bytes32 domainSeparator) {
+        return keccak256(abi.encode(_DOMAIN_TYPEHASH, block.chainid, address(this)));
     }
 }

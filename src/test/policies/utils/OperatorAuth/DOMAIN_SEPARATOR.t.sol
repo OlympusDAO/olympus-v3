@@ -11,4 +11,15 @@ contract OperatorAuthDomainSeparatorTest is OperatorAuthTest {
             "domain separator"
         );
     }
+
+    function test_DOMAIN_SEPARATOR_givenChainIdChanges_usesCurrentChain() public {
+        uint256 newChainId = block.chainid + 1;
+        vm.chainId(newChainId);
+
+        assertEq(
+            auth.DOMAIN_SEPARATOR(),
+            _domainSeparator(newChainId, address(auth)),
+            "current-chain domain separator"
+        );
+    }
 }
