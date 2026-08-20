@@ -11,10 +11,6 @@ contract ConfigOperatorSingleStepHarness is ConfigOperatorSingleStep {
         _AUTHORIZED_CALLER = authorizedCaller_;
     }
 
-    function requireConfigOperator() external view {
-        _requireConfigOperator();
-    }
-
     function isConfigOperator(address account_) external view returns (bool authorized) {
         return _isConfigOperator(account_);
     }
