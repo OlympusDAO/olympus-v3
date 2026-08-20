@@ -594,28 +594,34 @@ function test_givenPositionExists_whenAmountEqualsRemaining() public {
 }
 
 // given position exists
-//   given third party is approved
-//     when caller is third party
-//       [X] it decreases remaining
-//       [X] it updates owner
-//       [X] it emits Transfer event
+//   given position is wrapped
+//     given third party is approved
+//       when caller transfers the position
+//         [X] approval preserves the owner
+//         [X] transfer updates the owner
+//         [X] transfer preserves the remaining deposit
 
-function test_givenPositionExists_givenThirdPartyIsApproved_whenCallerIsThirdParty() public {
+function test_givenPositionExists_givenPositionIsWrapped_givenThirdPartyIsApproved_whenCallerTransfersPosition()
+    public
+{
     address thirdParty = makeAddr("thirdParty");
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.prank(user);
-    DEPOS.setApprovalForAll(thirdParty, true);
+    DEPOS.wrap(positionId);
 
-    vm.expectEmit(true, true, true, true);
-    emit IERC20.Transfer(user, thirdParty, 50e18);
+    vm.prank(user);
+    DEPOS.approve(thirdParty, positionId);
+
+    IDepositPositionManager.Position memory positionBefore = DEPOS.getPosition(positionId);
+    assertEq(positionBefore.owner, user, "approval should not change the position owner");
 
     vm.prank(thirdParty);
-    DEPOS.burn(positionId, 50e18);
+    DEPOS.transferFrom(user, thirdParty, positionId);
 
-    (address owner, , uint256 remaining, , , ) = DEPOS.positions(positionId);
-    assertEq(owner, thirdParty, "position owner should be third party");
-    assertEq(remaining, 50e18, "remaining should be 50");
+    IDepositPositionManager.Position memory positionAfter = DEPOS.getPosition(positionId);
+    assertEq(positionAfter.owner, thirdParty, "transfer should update the position owner");
+    assertEq(positionAfter.remainingDeposit, 100e18, "transfer should preserve the remaining deposit");
 }
 ```
 
