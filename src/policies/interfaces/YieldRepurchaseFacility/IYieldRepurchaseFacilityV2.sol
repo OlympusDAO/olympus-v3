@@ -217,7 +217,8 @@ interface IYieldRepurchaseFacilityV2 {
     // ============ ERRORS ============ //
 
     /// @notice Thrown when the `enable` payload is shorter than the minimum
-    ///         `abi.encode(uint256, NextYieldSeed[])` encoding.
+    ///         `abi.encode(uint256 initialDiscount, uint256 maxPricePremium,
+    ///         NextYieldSeed[] seeds)` encoding.
     error IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
     /// @notice Thrown when a function targets a vault that is not registered.
