@@ -117,7 +117,7 @@ abstract contract DEPOSTest {
 
 // src/test/modules/DEPOS/mint.t.sol - Inherits from parent
 contract MintTest is DEPOSTest {
-    function test_givenAmountZero_mint() public {
+    function test_whenAmountIsZero_reverts() public {
         // Can use DEPOS, godmode, admin, user directly
         // Can call _createPosition(), _dealTokens(), etc.
         // Can apply modifiers like givenPositionExists
@@ -179,7 +179,7 @@ modifier whenCallerIsNotAdmin() {
 }
 
 // Usage example
-function test_givenPositionExists_whenAmountIsZero() public
+function test_givenPositionExists_whenAmountIsZero_reverts() public
     givenPositionExists(1)
     whenAmountIsZero
 {
@@ -215,7 +215,7 @@ modifier givenUserHasAllowance(address owner_, uint256 amount_) {
 ### Usage in Tests
 
 ```solidity
-function test_givenPositionExists_whenBurn_reverts() public givenPositionExists(1) {
+function test_givenPositionExists_whenAmountIsZero_reverts() public givenPositionExists(1) {
     // Test logic here - position already exists
 }
 ```
@@ -348,17 +348,17 @@ function test_given<Condition>_when<Parameter>() {
 
 ```solidity
 // given vault is below capacity
-//   when the deposit causes the vault to hit or exceed capacity
+//   when amount causes the vault to hit or exceed capacity
 //     [X] it reverts
-//   when the deposit does not cause the vault to hit capacity
+//   when amount does not cause the vault to hit capacity
 //     [X] it mints shares
 //     [X] it emits Deposit event
 
-function test_givenVaultBelowCapacity_whenDepositExceeds_reverts() public {
+function test_givenVaultBelowCapacity_whenAmountHitsOrExceedsCapacity_reverts() public {
     // test code
 }
 
-function test_givenVaultBelowCapacity_whenDepositWithinCapacity() public {
+function test_givenVaultBelowCapacity_whenAmountIsWithinCapacity() public {
     // test code
 }
 ```
@@ -523,20 +523,19 @@ function bound(uint256 x, uint256 min, uint256 max) pure returns (uint256) {
 ```solidity
 // === ERROR CONDITIONS (write these first) ===
 
-// given the caller is not admin
-//   when mint is called
-//     [X] it reverts
+// when caller is not admin
+//   [X] it reverts
 
-function test_givenCallerNotAdmin() public {
+function test_whenCallerIsNotAdmin_reverts() public {
     vm.expectRevert(abi.encodeWithSelector(ROLES.ROLES_RequireRole.selector));
     DEPOS.mint(100e18, 1e9);
 }
 
-// given the amount is zero
-//   when burn is called
+// given position exists
+//   when amount is zero
 //     [X] it reverts
 
-function test_givenAmountIsZero() public {
+function test_givenPositionExists_whenAmountIsZero_reverts() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_InvalidAmount.selector));
@@ -547,7 +546,7 @@ function test_givenAmountIsZero() public {
 //   when amount exceeds remaining
 //     [X] it reverts with InsufficientRemaining error
 
-function test_givenPositionExists_whenAmountExceedsRemaining() public {
+function test_givenPositionExists_whenAmountExceedsRemaining_reverts() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.expectRevert(abi.encodeWithSelector(IDepositPositionManager.DEPOS_InsufficientRemaining.selector));
@@ -558,10 +557,9 @@ function test_givenPositionExists_whenAmountExceedsRemaining() public {
 
 // given position exists
 //   given position is expired
-//     when burn is called
-//       [X] it reverts
+//     [X] it reverts
 
-function test_givenPositionExists_givenPositionExpired() public {
+function test_givenPositionExists_givenPositionExpired_reverts() public {
     uint256 positionId = _createPosition(user, 100e18, 1e9);
     _warp(block.timestamp + 31 days);
 
@@ -591,13 +589,13 @@ function test_givenPositionExists_whenAmountEqualsRemaining() public {
 }
 
 // given position exists
-//   given user has allowance
-//     when third party burns
+//   given third party is approved
+//     when caller is third party
 //       [X] it decreases remaining
 //       [X] it updates owner
 //       [X] it emits Transfer event
 
-function test_givenPositionExists_givenUserHasAllowance_whenThirdPartyBurns() public {
+function test_givenPositionExists_givenThirdPartyIsApproved_whenCallerIsThirdParty() public {
     address thirdParty = makeAddr("thirdParty");
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
@@ -654,7 +652,7 @@ function _expectRevertInvalidParams(string memory param) internal {
 }
 
 // Usage
-function test_givenCallerNotAdmin_reverts() public {
+function test_whenCallerIsNotAdmin_reverts() public {
     _expectRevertNotAdmin();
     contract.restrictedFunction();
 }

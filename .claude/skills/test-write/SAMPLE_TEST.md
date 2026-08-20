@@ -152,10 +152,9 @@ contract DepositTest is SimpleVaultTest {
     // =======================================================================
 
     // given the vault is paused
-    //   when deposit is called
-    //     [X] it reverts
+    //   [X] it reverts
 
-    function test_givenVaultPaused_whenDeposit_reverts() public givenVaultPaused {
+    function test_givenVaultPaused_reverts() public givenVaultPaused {
         deal(address(vault.asset()), user, 100e18);
         vm.startPrank(user);
         vault.asset().approve(address(vault), 100e18);
@@ -166,11 +165,10 @@ contract DepositTest is SimpleVaultTest {
         vm.stopPrank();
     }
 
-    // given the amount is zero
-    //   when deposit is called
-    //     [X] it reverts
+    // when amount is zero
+    //   [X] it reverts
 
-    function test_givenAmountIsZero_whenDeposit_reverts() public {
+    function test_whenAmountIsZero_reverts() public {
         deal(address(vault.asset()), user, 100e18);
         vm.startPrank(user);
         vault.asset().approve(address(vault), 100e18);
@@ -182,10 +180,9 @@ contract DepositTest is SimpleVaultTest {
     }
 
     // given vault is at capacity
-    //   when deposit is called
-    //     [X] it reverts
+    //   [X] it reverts
 
-    function test_givenVaultAtCapacity_whenDeposit_reverts() public givenVaultAtCapacity {
+    function test_givenVaultAtCapacity_reverts() public givenVaultAtCapacity {
         deal(address(vault.asset()), user, 1e18);
         vm.startPrank(user);
         vault.asset().approve(address(vault), 1e18);
@@ -197,10 +194,9 @@ contract DepositTest is SimpleVaultTest {
     }
 
     // given user has no allowance
-    //   when deposit is called
-    //     [X] it reverts
+    //   [X] it reverts
 
-    function test_givenUserHasNoAllowance_whenDeposit_reverts() public {
+    function test_givenUserHasNoAllowance_reverts() public {
         deal(address(vault.asset()), user, 100e18);
         vm.prank(user);
 
@@ -212,14 +208,13 @@ contract DepositTest is SimpleVaultTest {
     // SUCCESS CONDITIONS WITH MULTIPLE ASSERTIONS
     // =======================================================================
 
-    // given valid parameters
-    //   when deposit is called
-    //     [X] it mints shares to receiver
-    //     [X] it transfers tokens from caller
-    //     [X] it emits Deposit event
-    //     [X] it updates total supply
+    // when parameters are valid
+    //   [X] it mints shares to receiver
+    //   [X] it transfers tokens from caller
+    //   [X] it emits Deposit event
+    //   [X] it updates total supply
 
-    function test_givenValidParams_whenDeposit_mintsShares() public {
+    function test_whenParametersAreValid() public {
         // Arrange
         uint256 depositAmount = 100e18;
         deal(address(vault.asset()), user, depositAmount);
@@ -247,13 +242,10 @@ contract DepositTest is SimpleVaultTest {
     }
 
     // given user has existing deposit
-    //   when deposit is called again
-    //     [X] it adds to existing shares
-    //     [X] it emits Deposit event
+    //   [X] it adds to existing shares
+    //   [X] it emits Deposit event
 
-    function test_givenUserHasDeposit_whenDeposit_addsToExistingShares() public
-        givenUserHasDeposit
-    {
+    function test_givenUserHasDeposit() public givenUserHasDeposit {
         // Arrange
         uint256 additionalAmount = 50e18;
         deal(address(vault.asset()), user, additionalAmount);
@@ -284,10 +276,10 @@ contract DepositTest is SimpleVaultTest {
 
     // given user has existing deposit
     //   given vault is nearly at capacity
-    //     when deposit would exceed capacity
+    //     when amount exceeds remaining capacity
     //       [X] it reverts
 
-    function test_givenUserHasDeposit_givenVaultNearlyAtCapacity_whenDepositExceeds_reverts()
+    function test_givenUserHasDeposit_givenVaultNearlyAtCapacity_whenAmountExceedsRemainingCapacity_reverts()
         public
     {
         // Arrange - fill vault to 90% capacity
@@ -315,7 +307,7 @@ contract DepositTest is SimpleVaultTest {
 | One function per file | `deposit.t.sol` only tests `deposit()` |
 | Parent contract structure | `SimpleVaultTest` with sections for state, setup, helpers, assertions, modifiers |
 | `given*` modifiers | `givenVaultPaused`, `givenUserHasDeposit` |
-| Branching tree naming | `test_givenVaultPaused_whenDeposit_reverts()` |
+| Branching tree naming | `test_givenVaultPaused_reverts()` |
 | Error selectors | `abi.encodeWithSelector(ISimpleVault.VAULT_Paused.selector)` |
 | Multiple assertions | Event check + share balance + vault balance + total supply |
 | Error conditions first | All revert tests come before success tests |
@@ -325,12 +317,12 @@ contract DepositTest is SimpleVaultTest {
 
 ```solidity
 // given vault is below capacity
-//   when the deposit causes the vault to hit or exceed capacity
+//   when amount causes the vault to hit or exceed capacity
 //     [X] it reverts
-//   when the deposit does not cause the vault to hit capacity
+//   when amount does not cause the vault to hit capacity
 //     [X] it mints shares
 //     [X] it emits Deposit event
 
-function test_givenVaultBelowCapacity_whenDepositExceeds_reverts() public { }
-function test_givenVaultBelowCapacity_whenDepositWithinCapacity_mintsShares() public { }
+function test_givenVaultBelowCapacity_whenAmountHitsOrExceedsCapacity_reverts() public { }
+function test_givenVaultBelowCapacity_whenAmountIsWithinCapacity() public { }
 ```
