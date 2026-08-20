@@ -296,9 +296,10 @@ Test the re-enabled state separately when re-enablement can refresh dependencies
 - Cover zero/non-zero addresses, empty/single-item/maximum-size collections, duplicate entries,
     malformed encodings, and enum or selector boundaries when relevant.
 - Cover rounding thresholds and decimal-scale combinations when arithmetic behavior can change.
-- Fuzz across the valid numeric range. One interior fuzz case does not prove boundary behavior.
-- Use `bound()` when constraining numeric inputs to a range; keep explicit boundary tests even when
-    the valid range is fuzzed.
+- Choose each fuzzed numeric range from the behavior being proved, including valid and invalid
+    intervals. One interior fuzz case does not prove boundary behavior.
+- Use `bound()` to map numeric inputs into that exact target interval. Never map an invalid-input
+    test into the valid interval, and keep explicit boundary tests alongside range fuzzing.
 
 ### State Transitions
 
@@ -463,14 +464,17 @@ function test_whenInputArrayLengthIsLessThanThree_fuzz(uint8 length) public {
 
 - Use the standard branching-tree name without `testFuzz_` or `_fuzz`
 - Follow the same branching tree pattern as unit tests
-- Use `bound()` when constraining numeric inputs to a range
+- Choose the numeric target range from the behavior the test proves
+- Use `bound()` to map numeric inputs into that exact valid or invalid interval
 - Use `vm.assume()` for non-numeric or complex constraints
-- Document the bounds being tested in comments
+- Document the target interval and why it matches the tested behavior
 
-**Use `bound()` instead of `vm.assume()` for numeric values:**
+**Use `bound()` to target the numeric interval under test:**
 
 Foundry has a limit on the number of discarded fuzz inputs. Using `vm.assume()` to constrain a
-numeric input can exhaust this limit when most generated values fall outside the accepted range.
+numeric input can exhaust this limit when most generated values fall outside the target interval.
+Derive that interval from the behavior being proved, then use `bound()` to map inputs into it. The
+target may be a valid interval for a success test or an invalid interval for a revert test.
 
 ```solidity
 // BAD - vm.assume() discards too many values
@@ -480,10 +484,16 @@ function test_whenAmountIsAtMostOneThousand(uint256 amount) public {
     // Test will fail with "Fuzz testing ran out of inputs"
 }
 
-// GOOD - use bound() to constrain the input
+// GOOD - the success behavior targets the exact valid interval [0, 1000]
 function test_whenAmountIsAtMostOneThousand(uint256 amount) public {
     uint256 boundedAmount = bound(amount, 0, 1000);
-    // boundedAmount is now in range [0, 1000]
+    // boundedAmount is in the valid interval this test proves
+}
+
+// GOOD - the revert behavior targets the exact invalid interval [1001, type(uint256).max]
+function test_whenAmountExceedsOneThousand_reverts(uint256 amount) public {
+    uint256 boundedAmount = bound(amount, 1001, type(uint256).max);
+    // boundedAmount remains invalid; it is never mapped into the valid interval
 }
 
 // GOOD - vm.assume() for non-numeric or complex constraints
@@ -492,25 +502,29 @@ function test_whenAddressIsNotZero(address addr) public {
     // Only discards 1 out of 2^160 values - acceptable
 }
 
-// GOOD - use bound() even for a narrow numeric range
+// GOOD - use bound() even for a narrow numeric target interval
 function test_whenArrayLengthIsBetweenOneAndTen(uint8 length) public {
     uint8 boundedLength = uint8(bound(length, 1, 10));
-    // boundedLength is now in range [1, 10]
+    // boundedLength is in the exact interval this behavior requires
 }
 ```
 
 **When to use `bound()` vs `vm.assume()`:**
 
-| Scenario                | Use           | Example                                         |
-| ----------------------- | ------------- | ----------------------------------------------- |
-| Numeric range           | `bound()`     | `uint8(bound(len, 1, 10))` for `uint8 len`      |
-| Non-numeric constraints | `vm.assume()` | `vm.assume(addr != address(0))`                 |
-| Complex multi-variable  | `vm.assume()` | `vm.assume(x > y)`                              |
-| Address is not zero     | `vm.assume()` | `vm.assume(addr != address(0))`                 |
+| Scenario                       | Use           | Example                                                    |
+| ------------------------------ | ------------- | ---------------------------------------------------------- |
+| Exact valid numeric interval   | `bound()`     | `uint8(bound(len, 1, 10))` when `[1, 10]` should succeed   |
+| Exact invalid numeric interval | `bound()`     | `bound(amount, 1001, type(uint256).max)` for a revert test |
+| Non-numeric constraints        | `vm.assume()` | `vm.assume(addr != address(0))`                            |
+| Complex multi-variable         | `vm.assume()` | `vm.assume(x > y)`                                         |
+| Address is not zero            | `vm.assume()` | `vm.assume(addr != address(0))`                            |
 
 **Why `bound()` is better for numeric ranges:**
 
-When a fuzzer generates a random `uint256`, nearly all values will be outside a small target range. For example, targeting `0 <= x <= 1000` discards 99.9999% of inputs. The `bound()` function wraps the input using modulo arithmetic to keep it in range without discarding:
+When a fuzzer generates a random `uint256`, nearly all values may be outside a small target range.
+For example, targeting `0 <= x <= 1000` discards 99.9999% of inputs. The `bound()` function wraps
+the input using modulo arithmetic to keep it in the chosen valid or invalid interval without
+discarding:
 
 ```solidity
 // bound() implementation (simplified)
@@ -604,24 +618,29 @@ function test_givenPositionExists_whenAmountEqualsRemaining() public {
 function test_givenPositionExists_givenPositionIsWrapped_givenThirdPartyIsApproved_whenCallerTransfersPosition()
     public
 {
-    address thirdParty = makeAddr("thirdParty");
+    address transferCaller = makeAddr("transferCaller");
+    address recipient = makeAddr("recipient");
     uint256 positionId = _createPosition(user, 100e18, 1e9);
 
     vm.prank(user);
     DEPOS.wrap(positionId);
 
     vm.prank(user);
-    DEPOS.approve(thirdParty, positionId);
+    DEPOS.approve(transferCaller, positionId);
 
     IDepositPositionManager.Position memory positionBefore = DEPOS.getPosition(positionId);
     assertEq(positionBefore.owner, user, "approval should not change the position owner");
 
-    vm.prank(thirdParty);
-    DEPOS.transferFrom(user, thirdParty, positionId);
+    vm.prank(transferCaller);
+    DEPOS.transferFrom(user, recipient, positionId);
 
     IDepositPositionManager.Position memory positionAfter = DEPOS.getPosition(positionId);
-    assertEq(positionAfter.owner, thirdParty, "transfer should update the position owner");
-    assertEq(positionAfter.remainingDeposit, 100e18, "transfer should preserve the remaining deposit");
+    assertEq(positionAfter.owner, recipient, "transfer should update the position owner");
+    assertEq(
+        positionAfter.remainingDeposit,
+        positionBefore.remainingDeposit,
+        "transfer should preserve the remaining deposit"
+    );
 }
 ```
 
@@ -748,7 +767,7 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 | State setup                               | Inline in each test                            | `given*` modifiers                                                                                    |
 | Test naming                               | `test_somethingBad`                            | `test_givenCondition_whenParameter` (success) or `test_givenCondition_whenParameter_reverts` (revert) |
 | Fuzz test naming                          | `testFuzz_*` or `test_*_fuzz`                  | Standard branching-tree name; parameters identify fuzzing                                             |
-| Constraining numeric ranges in fuzz       | `vm.assume(value <= 1000)` for `uint256 value` | `bound(value, 0, 1000)`                                                                               |
+| Constraining numeric ranges in fuzz       | `bound()` into a range unrelated to the named behavior | Choose the exact valid or invalid interval first, then use `bound()`                                   |
 | Error testing                             | Empty or string-based `vm.expectRevert`         | Match the selector or fully encoded custom error                                                       |
 | Assertions                                | `assertEq(a, b)`                               | `assertEq(a, b, "description")`                                                                       |
 | File organization                         | Multiple external actions per file             | One external state-changing action per file; co-locate corresponding preview/getter assertions        |
@@ -761,13 +780,13 @@ assertEq(convertibleAmount, 2e9, "Convertible amount does not equal 2e9");
 - [ ] Uses `given` for pre-existing state and `when` for function parameters or operation inputs
 - [ ] Repeats `given` and `when` segments when the test has multiple conditions
 - [ ] Fuzz test names do not use a `testFuzz_` prefix or `_fuzz` suffix
-- [ ] Fuzz tests use `bound()` for numeric ranges and `vm.assume()` for non-numeric or complex
-      constraints
+- [ ] Each numeric fuzz target is the exact valid or invalid interval for the behavior being proved;
+      `bound()` maps into that interval, while `vm.assume()` handles non-numeric or complex constraints
 - [ ] Caller matrix covers every authorized class, fuzzed unauthorized callers, and fuzzed callers
         for permissionless functions
 - [ ] Enabled, disabled, and re-enabled behavior is covered where applicable
-- [ ] Numeric tests cover valid ranges, exact semantic boundaries, adjacent values, and the type's
-        maximum representable value
+- [ ] Numeric tests cover valid and invalid ranges, exact semantic boundaries, adjacent values, and
+        the type's maximum representable value with explicit boundary tests
 - [ ] State-transition tests assert the resulting state, not only queue or preview behavior
 - [ ] Accounting tests use authoritative deltas and cover rollback and reentrancy where applicable
 - [ ] Corresponding preview/getter and write behavior agree without losing unique read-path coverage
