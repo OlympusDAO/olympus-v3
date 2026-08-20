@@ -18,8 +18,6 @@ import {MockSubmoduleNoERC165} from "test/mocks/MockSubmoduleNoERC165.sol";
 /// @author    0xJem
 /// @notice    Tests for submodule installation validation
 contract SubmoduleInstallationTest is Test {
-    using ModuleTestFixtureGenerator for Module;
-
     Kernel internal kernel;
     OlympusPricev2 internal price;
     ChainlinkPriceFeeds internal validSubmodule;

@@ -26,7 +26,6 @@ import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {MockLZEndpointDelegate} from "src/test/policies/bridge/LZEndpointDelegate/MockLZEndpointDelegate.sol";
 import {MockLZBridgeGateway} from "src/test/policies/bridge/LZEndpointDelegate/MockLZBridgeGateway.sol";
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 
 contract LZBridgeActivatorForkTest is Test {
     // Fork configuration

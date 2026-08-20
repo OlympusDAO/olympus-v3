@@ -6,7 +6,6 @@ import {LZBridgeAndDelegateConfigTestBase} from "src/test/policies/bridge/LZBrid
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {ILZBridgeAndDelegateConfig} from "src/policies/interfaces/ILZBridgeAndDelegateConfig.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";

@@ -11,7 +11,7 @@ import {ILZBridgeGateway} from "src/policies/interfaces/ILZBridgeGateway.sol";
 import {LZConfigLib} from "src/scripts/ops/lib/LZConfigLib.sol";
 
 // Contracts
-import {Actions, Kernel} from "src/Kernel.sol";
+import {Actions} from "src/Kernel.sol";
 import {LZBridgeGateway} from "src/policies/bridge/LZBridgeGateway.sol";
 
 /// @dev Public view function verification.

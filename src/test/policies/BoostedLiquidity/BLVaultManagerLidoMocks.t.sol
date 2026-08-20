@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
-import {Test, stdError} from "forge-std/Test.sol";
+import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
 
@@ -14,7 +14,6 @@ import {MockVault, MockBalancerPool} from "src/test/mocks/BalancerMocks.sol";
 import {MockAuraBooster, MockAuraRewardPool, MockAuraMiningLib} from "src/test/mocks/AuraMocks.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
-import {IAuraBooster, IAuraRewardPool} from "policies/BoostedLiquidity/interfaces/IAura.sol";
 
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
 import {OlympusTreasury} from "modules/TRSRY/OlympusTreasury.sol";
@@ -27,8 +26,6 @@ import {BLVaultLido} from "policies/BoostedLiquidity/BLVaultLido.sol";
 import {RewardsData} from "policies/BoostedLiquidity/interfaces/IBLVaultLido.sol";
 
 import "src/Kernel.sol";
-
-import {console2} from "forge-std/console2.sol";
 
 contract MockWsteth is ERC20 {
     constructor(

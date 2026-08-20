@@ -7,7 +7,6 @@ import {stdJson} from "forge-std/StdJson.sol";
 
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";

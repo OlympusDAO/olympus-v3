@@ -3,9 +3,6 @@ pragma solidity ^0.8.18;
 
 import {OffsettingRateLimiterTestBase} from "src/test/bases/OffsettingRateLimiter/OffsettingRateLimiterTestBase.sol";
 
-// Interfaces
-import {IOffsettingRateLimiter} from "src/bases/interfaces/IOffsettingRateLimiter.sol";
-
 // Libraries
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 

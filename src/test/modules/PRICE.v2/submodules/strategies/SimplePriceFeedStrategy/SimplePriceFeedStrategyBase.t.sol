@@ -9,7 +9,6 @@ import {MockPrice} from "test/mocks/MockPrice.v2.sol";
 
 // Libraries
 import {FullMath} from "libraries/FullMath.sol";
-import {QuickSort} from "libraries/QuickSort.sol";
 
 // Bophades
 import {Kernel} from "src/Kernel.sol";
@@ -20,7 +19,6 @@ import {ISimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/ISim
 /// @notice Contains shared setup, helpers, and common test infrastructure
 abstract contract SimplePriceFeedStrategyBase is Test {
     using FullMath for uint256;
-    using QuickSort for uint256[];
 
     MockPrice internal mockPrice;
     SimplePriceFeedStrategy internal strategy;

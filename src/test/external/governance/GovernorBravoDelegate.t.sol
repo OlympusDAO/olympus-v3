@@ -14,7 +14,6 @@ import {RolesAdmin} from "policies/RolesAdmin.sol";
 import {TreasuryCustodian} from "policies/TreasuryCustodian.sol";
 import "src/Kernel.sol";
 
-import {GovernorBravoDelegateStorageV1} from "src/external/governance/abstracts/GovernorBravoStorage.sol";
 import {GovernorBravoDelegator} from "src/external/governance/GovernorBravoDelegator.sol";
 import {GovernorBravoDelegate} from "src/external/governance/GovernorBravoDelegate.sol";
 import {Timelock} from "src/external/governance/Timelock.sol";

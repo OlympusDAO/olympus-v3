@@ -8,7 +8,6 @@ import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 import {WithLayerZeroConstants} from "src/scripts/WithLayerZeroConstants.sol";
 
 // Bophades
-import {Kernel, Actions} from "src/Kernel.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 
 /// @notice     Sets the Berachain Bridge as trusted

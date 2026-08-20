@@ -3,7 +3,6 @@
 pragma solidity ^0.8.15;
 
 import {ERC7726OracleFactoryTest} from "./ERC7726OracleFactoryTest.sol";
-import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {IERC7726Oracle} from "src/policies/interfaces/price/IERC7726Oracle.sol";
 
 contract ERC7726OracleFactoryEnableTest is ERC7726OracleFactoryTest {

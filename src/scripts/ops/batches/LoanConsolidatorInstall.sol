@@ -2,7 +2,6 @@
 pragma solidity ^0.8.15;
 
 import {console2} from "forge-std/console2.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 import {OlyBatch} from "src/scripts/ops/OlyBatch.sol";
 
 // Bophades

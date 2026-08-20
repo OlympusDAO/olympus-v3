@@ -8,8 +8,6 @@ import {IBondAggregator} from "./interfaces/IBondAggregator.sol";
 import {IBondTeller} from "./interfaces/IBondTeller.sol";
 import {IBondAuctioneer} from "./interfaces/IBondAuctioneer.sol";
 
-import {FullMath} from "libraries/FullMath.sol";
-
 /// @title Bond Aggregator
 /// @notice Bond Aggregator Contract
 /// @dev Bond Protocol is a permissionless system to create Olympus-style bond markets
@@ -28,7 +26,6 @@ import {FullMath} from "libraries/FullMath.sol";
 ///
 /// @author Oighty, Zeus, Potted Meat, indigo
 contract BondAggregator is IBondAggregator, Auth {
-    using FullMath for uint256;
 
     /* ========== ERRORS ========== */
     error Aggregator_OnlyAuctioneer();

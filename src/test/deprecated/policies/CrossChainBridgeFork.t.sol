@@ -12,8 +12,6 @@ pragma solidity ^0.8.0;
 // src/test/deprecated/README.md. Run it with `pnpm run test:deprecated`.
 
 import {Test, Vm} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
-import {Bytes32AddressLib} from "solmate/utils/Bytes32AddressLib.sol";
 
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {FullMath} from "libraries/FullMath.sol";
@@ -21,11 +19,9 @@ import {FullMath} from "libraries/FullMath.sol";
 //import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {OlympusRoles} from "modules/ROLES/OlympusRoles.sol";
-import {ROLESv1} from "modules/ROLES/ROLES.v1.sol";
 import {OlympusMinter} from "modules/MINTR/OlympusMinter.sol";
-import {MINTRv1} from "modules/MINTR/MINTR.v1.sol";
 
-import {CrossChainBridge, ILayerZeroEndpoint} from "policies/CrossChainBridge.sol";
+import {CrossChainBridge} from "policies/CrossChainBridge.sol";
 import {RolesAdmin} from "policies/RolesAdmin.sol";
 
 import {LayerZeroHelper} from "src/test/lib/pigeon/layerzero/LayerZeroHelper.sol";
@@ -34,7 +30,6 @@ import "src/Kernel.sol";
 
 contract CrossChainBridgeForkTest is Test {
     using FullMath for uint256;
-    using Bytes32AddressLib for address;
 
     address internal user1;
     address internal user2;

@@ -4,11 +4,10 @@ pragma solidity ^0.8.15;
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {larping} from "src/test/lib/larping.sol";
-import {console2} from "forge-std/console2.sol";
 
 import {OlympusERC20Token, IOlympusAuthority} from "src/external/OlympusERC20.sol";
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {MockERC4626, ERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "solmate/test/utils/mocks/MockERC4626.sol";
 import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 
 import "src/Kernel.sol";
