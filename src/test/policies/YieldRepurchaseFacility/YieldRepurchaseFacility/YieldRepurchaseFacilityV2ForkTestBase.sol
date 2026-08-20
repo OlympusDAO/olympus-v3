@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {AggregatorV2V3Interface, AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";

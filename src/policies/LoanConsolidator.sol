@@ -2,7 +2,8 @@
 pragma solidity ^0.8.15;
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";
-import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
+// Unused: nothing here references IERC4626; kept because this contract is deployed
+// import {IERC4626} from "forge-std/interfaces/IERC4626.sol";
 import {Kernel, Keycode, toKeycode, Permissions, Policy} from "src/Kernel.sol";
 
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";

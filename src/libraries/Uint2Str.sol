@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8;
+pragma solidity ^0.8.0;
 
 // Some fancy math to convert a uint into a string, courtesy of Provable Things.
 // Updated to work with solc 0.8.0.

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
@@ -25,8 +24,6 @@ interface IOwnable {
 
 // solhint-disable max-states-count
 contract CCIPBurnMintTokenPoolForkTest is Test {
-    using ModuleTestFixtureGenerator for OlympusMinter;
-
     CCIPLocalSimulatorFork public simulator;
 
     MockOhm public mainnetOHM;
@@ -51,24 +48,29 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     address public RECIPIENT;
     address public ADMIN;
 
-    address public mintrGodmode;
-
     uint256 public constant MINT_AMOUNT = 1e9;
     uint256 public constant SEND_AMOUNT = 1e8;
 
     uint256 public mainnetForkId;
     uint256 public polygonForkId;
 
-    // Pin the blocks so that RPC responses are cached
+    // Pin the block so that RPC responses are cached.
+    // Sepolia serves archive state, so this pin is stable.
     uint256 public constant MAINNET_BLOCK = 8360176;
-    uint256 public constant POLYGON_BLOCK = 21855529;
+
+    // The Polygon Amoy fork is deliberately NOT pinned.
+    // The `polygon-amoy` alias in foundry.toml points at Alchemy, which serves Amoy from a full
+    // node rather than an archive node: state reads more than ~128 blocks (~4 minutes) behind the
+    // chain head fail with `-32001 Unable to complete request`. Any pinned block therefore breaks
+    // within minutes of being committed. Do not re-add a POLYGON_BLOCK constant unless the
+    // `polygon-amoy` RPC alias is first moved to a provider that serves Amoy archive state.
 
     function setUp() public {
         // Set up forks
         // Mainnet is active
         // These use Sepolia RPCs, as CCIPLocalSimulatorFork only supports sepolia testnets
         mainnetForkId = vm.createFork("sepolia", MAINNET_BLOCK);
-        polygonForkId = vm.createFork("polygon-amoy", POLYGON_BLOCK);
+        polygonForkId = vm.createFork("polygon-amoy");
         vm.selectFork(mainnetForkId);
 
         // Addresses

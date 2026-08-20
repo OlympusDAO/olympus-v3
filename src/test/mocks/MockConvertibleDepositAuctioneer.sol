@@ -2,7 +2,7 @@
 /// forge-lint: disable-start(screaming-snake-case-immutable)
 // solhint-disable custom-errors
 // solhint-disable immutable-vars-naming
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {Kernel, Policy, Keycode, toKeycode, Permissions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/OlympusRoles.sol";

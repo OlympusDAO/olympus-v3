@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title  ILimitOrders
 /// @notice Interface for limit order functionality for the Convertible Deposit Auctioneer

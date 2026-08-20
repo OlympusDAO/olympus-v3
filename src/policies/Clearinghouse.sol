@@ -5,7 +5,9 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 import {ERC4626} from "solmate/mixins/ERC4626.sol";
 import {IStaking} from "interfaces/IStaking.sol";
 
-import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+// Unused: nothing here references CoolerFactory; kept because this contract is deployed
+// import {CoolerFactory, Cooler} from "src/external/cooler/CoolerFactory.sol";
+import {Cooler} from "src/external/cooler/CoolerFactory.sol";
 import {CoolerCallback} from "src/external/cooler/CoolerCallback.sol";
 
 import "src/Kernel.sol";

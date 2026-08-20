@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable one-contract-per-file
 // solhint-disable custom-errors
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 

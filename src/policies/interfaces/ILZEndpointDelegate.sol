@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.18;
+pragma solidity ^0.8.18;
 
 /// @title ILZEndpointDelegate
 /// @notice The external interface of an LZ Bridge endpoint delegate policy that acts as

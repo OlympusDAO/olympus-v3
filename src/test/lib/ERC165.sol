@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 library ERC165Helper {
     error ERC165Helper_SupportsInterfaceFailed();

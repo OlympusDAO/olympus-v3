@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {Script, console2} from "forge-std/Script.sol";
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
@@ -7,7 +7,6 @@ import {stdJson} from "forge-std/StdJson.sol";
 
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {Kernel, Actions, Policy} from "src/Kernel.sol";
-import {CHREGv1} from "modules/CHREG/CHREG.v1.sol";
 
 import {OlympusGovDelegation} from "modules/DLGTE/OlympusGovDelegation.sol";
 import {DelegateEscrowFactory} from "src/external/cooler/DelegateEscrowFactory.sol";

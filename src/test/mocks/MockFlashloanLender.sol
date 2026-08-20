@@ -4,7 +4,6 @@ pragma solidity ^0.8.15;
 import {IERC3156FlashLender} from "src/interfaces/maker-dao/IERC3156FlashLender.sol";
 import {IERC3156FlashBorrower} from "src/interfaces/maker-dao/IERC3156FlashBorrower.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
-import {console2} from "forge-std/console2.sol";
 
 contract MockFlashloanLender is IERC3156FlashLender {
     uint16 public feePercent;

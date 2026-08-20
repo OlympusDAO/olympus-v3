@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(screaming-snake-case-const)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {AggregatorV2V3Interface} from "interfaces/AggregatorV2V3Interface.sol";
 import {Module} from "src/Kernel.sol";

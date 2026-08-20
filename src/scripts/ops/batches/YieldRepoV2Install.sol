@@ -10,7 +10,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 // Interfaces
 import {IYieldRepo} from "src/policies/interfaces/IYieldRepo.sol";
 
-import {console2} from "@forge-std-1.9.6/console2.sol";
+import {console2} from "@forge-std-1.16.2/console2.sol";
 
 /// @notice DAO MS batches for the Kernel actions of the YRF v1.2 to v2 migration.
 /// @dev The DAO MS holds the kernel executor role, so the Kernel actions are run as batch

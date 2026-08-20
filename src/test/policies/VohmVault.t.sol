@@ -2,12 +2,11 @@
 pragma solidity ^0.8.15;
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
-import {ERC20} from "solmate/tokens/ERC20.sol";
 
 import {Test} from "forge-std/Test.sol";
-import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import "src/Kernel.sol";
 
@@ -53,7 +52,7 @@ contract VohmVaultTest is Test {
         kernel.executeAction(Actions.InstallModule, address(VOTES));
         kernel.executeAction(Actions.ActivatePolicy, address(vOHMvault));
 
-        godmode = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        godmode = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 

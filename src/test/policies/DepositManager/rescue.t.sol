@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -52,7 +52,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
         public
         givenIsEnabled
     {
-        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+        vm.expectRevert(bytes(""));
 
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
@@ -81,7 +81,7 @@ contract DepositManagerRescueTest is DepositManagerTest {
         givenFacilityNameIsSetDefault
         givenAssetIsAdded
     {
-        vm.expectRevert("call to non-contract address 0x0000000000000000000000000000000000000000");
+        vm.expectRevert(bytes(""));
 
         vm.prank(ADMIN);
         depositManager.rescue(address(0));
