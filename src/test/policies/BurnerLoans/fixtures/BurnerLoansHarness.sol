@@ -20,6 +20,31 @@ import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol"
 contract BurnerLoansHarness is BurnerLoans {
     using SafeCast for uint256;
 
+    struct RequiredCollateralUsdInputs {
+        uint256 debtValueUsd;
+        uint256 debtOhm;
+        uint256 backingPerOhmUsd;
+        uint256 minCollateralRatioBps;
+        uint256 backingMultiplierBps;
+    }
+
+    struct UtilizationInputs {
+        uint256 assetDebtOhm;
+        uint256 assetDebtCapOhm;
+    }
+
+    struct KeeperRewardInputs {
+        bool isProtocolSeizureCaller;
+        uint256 seizedCollateralAmount;
+        uint256 seizedUnrepaidDebtOhm;
+        uint256 backingPerOhmUsd;
+        uint256 backingMultiplierBps;
+        uint256 collateralUsdPrice;
+        uint8 collateralDecimals;
+        uint256 rewardBps;
+        uint256 maxKeeperRewardAsset;
+    }
+
     constructor(
         Kernel kernel_,
         IERC20 ohm_,

@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoans} from "src/policies/BurnerLoans.sol";
+import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
@@ -210,7 +210,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // Expected max = 1150e18
         assertEq(
             burnerLoans.requiredCollateralUsd(
-                BurnerLoans.RequiredCollateralUsdInputs({
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
                     debtValueUsd: 1000e18,
                     debtOhm: 4e9,
                     backingPerOhmUsd: 12e18,
@@ -232,7 +232,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // Expected max = 72e18
         assertEq(
             burnerLoans.requiredCollateralUsd(
-                BurnerLoans.RequiredCollateralUsdInputs({
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
                     debtValueUsd: 10e18,
                     debtOhm: 4e9,
                     backingPerOhmUsd: 12e18,
@@ -385,7 +385,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // Expected fee input = asset utilization only.
         assertEq(
             burnerLoans.effectiveUtilizationWad(
-                BurnerLoans.UtilizationInputs({assetDebtOhm: 3, assetDebtCapOhm: 4})
+                BurnerLoansHarness.UtilizationInputs({assetDebtOhm: 3, assetDebtCapOhm: 4})
             ),
             0.75e18,
             "effective utilization"
@@ -400,7 +400,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // Expected non-zero utilization instead of truncating to zero.
         assertEq(
             burnerLoans.effectiveUtilizationWad(
-                BurnerLoans.UtilizationInputs({assetDebtOhm: 1, assetDebtCapOhm: 1e36})
+                BurnerLoansHarness.UtilizationInputs({assetDebtOhm: 1, assetDebtCapOhm: 1e36})
             ),
             1,
             "effective utilization"
@@ -614,7 +614,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     function test_keeperRewardAsset_givenProtocolSeizer_returnsZero() public view {
         assertEq(
             burnerLoans.keeperRewardAsset(
-                BurnerLoans.KeeperRewardInputs({
+                BurnerLoansHarness.KeeperRewardInputs({
                     isProtocolSeizureCaller: true,
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
@@ -634,7 +634,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     function test_keeperRewardAsset_givenZeroRewardSettings_returnsZero() public view {
         assertEq(
             burnerLoans.keeperRewardAsset(
-                BurnerLoans.KeeperRewardInputs({
+                BurnerLoansHarness.KeeperRewardInputs({
                     isProtocolSeizureCaller: false,
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
@@ -651,7 +651,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
         assertEq(
             burnerLoans.keeperRewardAsset(
-                BurnerLoans.KeeperRewardInputs({
+                BurnerLoansHarness.KeeperRewardInputs({
                     isProtocolSeizureCaller: false,
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
@@ -676,7 +676,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         // Expected reward = min(150, 100) = 100 USDS
         assertEq(
             burnerLoans.keeperRewardAsset(
-                BurnerLoans.KeeperRewardInputs({
+                BurnerLoansHarness.KeeperRewardInputs({
                     isProtocolSeizureCaller: false,
                     seizedCollateralAmount: 1000e6,
                     seizedUnrepaidDebtOhm: 90e9,
