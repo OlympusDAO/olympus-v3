@@ -117,10 +117,18 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Precision denominator for the yield buyback share (`1e18` = 100%).
     uint256 private constant _ONE_HUNDRED_PERCENT = 1e18;
 
+    /// @notice Upper bound of the max price premium (`1e18` = 100%), inclusive.
+    /// @dev The bound guards against a mis-entered value; it is not an economic limit.
+    ///      The premium caps the payout at `oraclePrice * (1 + maxPricePremium)`, so the
+    ///      bound caps that payout at 11x the oracle price, far above any usable market
+    ///      ceiling. The premium only lowers the market's minimum price, so no premium
+    ///      magnitude can overflow the market pricing.
+    uint256 private constant _MAX_PRICE_PREMIUM_LIMIT = 10e18;
+
     /// @notice Minimum length of the `enable` payload.
-    /// @dev Three 32-byte words: `initialDiscount`, the seed array offset, and the seed
-    ///      array length.
-    uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 96;
+    /// @dev Four 32-byte words: `initialDiscount`, `maxPricePremium`, the seed array
+    ///      offset, and the seed array length.
+    uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 128;
 
     /// @notice Decimals of the backing value, and therefore the decimals both the
     ///         `PRICE` module and the backing oracle must report so that the oracle
@@ -152,10 +160,11 @@ contract YieldRepurchaseFacilityV2 is
     uint8 private immutable _OHM_DECIMALS;
 
     /// @notice The config timelock authorized for the timelocked operational functions.
-    /// @dev The functions `setYieldBuybackShare`, `setInitialDiscount`, `enableAsset`,
-    ///      `disableAsset`, `excludeClearinghouse`, `increaseClearinghouseOffset`, and
-    ///      `decreaseNextYield` trust only this address for the timelocked path, so the
-    ///      yrf_admin reaches them through the timelock's queue.
+    /// @dev The functions `setYieldBuybackShare`, `setInitialDiscount`,
+    ///      `setMaxPricePremium`, `enableAsset`, `disableAsset`, `excludeClearinghouse`,
+    ///      `increaseClearinghouseOffset`, and `decreaseNextYield` trust only this
+    ///      address for the timelocked path, so the yrf_admin reaches them through the
+    ///      timelock's queue.
     ///      The admin (expected to be held only by the OCG timelock) keeps a direct path to them.
     address private immutable _TIMELOCK;
 
@@ -184,6 +193,9 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     uint256 public override initialDiscount;
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    uint256 public override maxPricePremium;
 
     /// @notice Running epoch counter, in the range `[0, 21)`.
     uint48 internal _epoch;
@@ -383,11 +395,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      `reEnable`.
     ///
     ///      Reverts if:
-    ///      - The payload is shorter than the minimum `abi.encode(uint256, NextYieldSeed[])`.
-    ///      - The payload does not `abi.decode` as `(uint256, NextYieldSeed[])`.
+    ///      - The payload is shorter than the minimum
+    ///        `abi.encode(uint256, uint256, NextYieldSeed[])`.
+    ///      - The payload does not `abi.decode` as `(uint256, uint256, NextYieldSeed[])`.
     ///      - The facility is not authorized as a market callback on the bond
     ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
+    ///      - The max price premium is above 1,000% (`10e18`).
     ///      - A seed references an unregistered or disabled vault.
     ///      - An enabled vault reverts on `previewRedeem` or `balanceOf`.
     function _beforeEnable(bytes calldata data_) internal override {
@@ -396,11 +410,13 @@ contract YieldRepurchaseFacilityV2 is
 
         _requireCallbackAuthorized();
 
-        (uint256 initialDiscount_, NextYieldSeed[] memory nextYieldSeeds) = abi.decode(
-            data_,
-            (uint256, NextYieldSeed[])
-        );
+        (
+            uint256 initialDiscount_,
+            uint256 maxPricePremium_,
+            NextYieldSeed[] memory nextYieldSeeds
+        ) = abi.decode(data_, (uint256, uint256, NextYieldSeed[]));
         _setInitialDiscount(initialDiscount_);
+        _setMaxPricePremium(maxPricePremium_);
 
         _resetCycle(nextYieldSeeds);
     }
@@ -1045,6 +1061,7 @@ contract YieldRepurchaseFacilityV2 is
                 capacity: bidAmount_,
                 oraclePrice: marketOraclePrice,
                 initialDiscount: initialDiscount,
+                maxPricePremium: maxPricePremium,
                 oracleDecimals: _oracleDecimals,
                 quoteDecimals: _OHM_DECIMALS,
                 payoutDecimals: config_.reserveDecimals
@@ -1503,6 +1520,32 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reachable through the config timelock or directly by the admin, so a change is
+    ///      de-facto timelocked.
+    ///
+    ///      The only enforced bound is at or below 1,000% (`10e18`). The premium widens
+    ///      the decay band of the markets created after the change; the markets already
+    ///      live keep the band they were created with.
+    ///
+    ///      Reverts if:
+    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The max price premium is above 1,000% (`10e18`).
+    function setMaxPricePremium(
+        uint256 maxPricePremium_
+    ) external override onlyTimelockOrAdminRole {
+        _setMaxPricePremium(maxPricePremium_);
+    }
+
+    /// @notice Sets the max price premium.
+    /// @dev Reverts if `maxPricePremium_` is above 1,000% (`10e18`).
+    function _setMaxPricePremium(uint256 maxPricePremium_) internal {
+        _requireValidMaxPricePremium(maxPricePremium_);
+
+        maxPricePremium = maxPricePremium_;
+        emit MaxPricePremiumSet(maxPricePremium_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev Reachable through the config timelock or directly by the admin, so an
     ///      increase is de-facto timelocked. The offset is read live by the weekly reset
     ///      projection, so an increase that executes only after a reset misses that
@@ -1679,6 +1722,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The discount is not less than 100% (`1e18`).
     function validateSetInitialDiscount(uint256 initialDiscount_) external pure override {
         _requireValidInitialDiscount(initialDiscount_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Reverts if:
+    ///      - The premium is above 1,000% (`10e18`).
+    function validateSetMaxPricePremium(uint256 maxPricePremium_) external pure override {
+        _requireValidMaxPricePremium(maxPricePremium_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
@@ -1960,6 +2010,12 @@ contract YieldRepurchaseFacilityV2 is
     function _requireValidInitialDiscount(uint256 initialDiscount_) private pure {
         if (initialDiscount_ >= _ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
+    }
+
+    /// @notice Reverts unless the premium is at or below 1,000% (`10e18`).
+    function _requireValidMaxPricePremium(uint256 maxPricePremium_) private pure {
+        if (maxPricePremium_ > _MAX_PRICE_PREMIUM_LIMIT)
+            revert IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
     }
 
     /// @notice Reverts unless the Clearinghouse is included in the backing yield.

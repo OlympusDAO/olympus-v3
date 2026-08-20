@@ -164,6 +164,11 @@ abstract contract YieldRepurchaseFacilityConfigTimelockTestBase is
         return configTimelock.queueSetInitialDiscount(initialDiscount_);
     }
 
+    function _queueSetMaxPricePremium(uint256 maxPricePremium_) internal returns (uint64 actionId) {
+        vm.prank(yrfAdmin);
+        return configTimelock.queueSetMaxPricePremium(maxPricePremium_);
+    }
+
     function _queueEnableAsset(address vault_) internal returns (uint64 actionId) {
         vm.prank(yrfAdmin);
         return configTimelock.queueEnableAsset(vault_);
@@ -327,5 +332,10 @@ abstract contract YieldRepurchaseFacilityConfigTimelockTestBase is
     /// @notice Mirrors `YieldRepurchaseFacilityConfigTimelock`'s pending slot key of the initial discount.
     function _initialDiscountLockKey() internal pure returns (bytes32) {
         return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setInitialDiscount.selector));
+    }
+
+    /// @notice Mirrors `YieldRepurchaseFacilityConfigTimelock`'s pending slot key of the max price premium.
+    function _maxPricePremiumLockKey() internal pure returns (bytes32) {
+        return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setMaxPricePremium.selector));
     }
 }

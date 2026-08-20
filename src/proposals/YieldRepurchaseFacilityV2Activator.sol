@@ -95,6 +95,16 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
     ///         of the deployed YRF v1.2.
     uint256 public constant INITIAL_DISCOUNT = 3e16;
 
+    /// @notice The bond market max price premium (`1e18` = 100%): the ceiling of a
+    ///         market, measured from the oracle price.
+    /// @dev A market opens at `INITIAL_DISCOUNT` below the oracle price and decays toward
+    ///      its minimum price, so the facility pays at most
+    ///      `oraclePrice * (1 + 10%)` = 1.1 times the oracle price captured when the
+    ///      market opened. The premium does not compound with the discount, so the two
+    ///      can be tuned independently. The deployed YRF v1.2 has no such bound: it sets
+    ///      a market minimum price of zero.
+    uint256 public constant MAX_PRICE_PREMIUM = 10e16;
+
     /// @notice The sUSDS yield buyback share (`1e18` = 100%).
     uint256 public constant SUSDS_BUYBACK_SHARE = 1e18;
 
@@ -337,7 +347,11 @@ contract YieldRepurchaseFacilityV2Activator is Owned {
         //    refreshes the snapshots of the registered enabled assets, so it runs
         //    strictly before the `addAsset` seeding.
         IEnabler(YIELD_REPO).enable(
-            abi.encode(INITIAL_DISCOUNT, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+            abi.encode(
+                INITIAL_DISCOUNT,
+                MAX_PRICE_PREMIUM,
+                new IYieldRepurchaseFacilityV2.NextYieldSeed[](0)
+            )
         );
     }
 

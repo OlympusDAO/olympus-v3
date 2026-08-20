@@ -43,6 +43,9 @@ library YRFBondMarketLib {
     ///        payout token, in oracle decimals.
     /// @param initialDiscount The discount applied to the oracle price for the initial
     ///        market price (`1e18` = 100%).
+    /// @param maxPricePremium The premium over the oracle price at which the market
+    ///        floor is set (`1e18` = 100%), capping the payout per quote token. A zero
+    ///        premium caps the payout at the oracle price.
     /// @param oracleDecimals The decimals of `oraclePrice`.
     /// @param quoteDecimals The quote token (OHM) decimals.
     /// @param payoutDecimals The payout token decimals.
@@ -53,6 +56,7 @@ library YRFBondMarketLib {
         uint256 capacity;
         uint256 oraclePrice;
         uint256 initialDiscount;
+        uint256 maxPricePremium;
         uint8 oracleDecimals;
         uint8 quoteDecimals;
         uint8 payoutDecimals;
@@ -113,9 +117,28 @@ library YRFBondMarketLib {
     /// @notice Computes the Bond SDA price parameters for a market quoted in OHM.
     /// @dev The market quotes OHM per payout unit, so the prices are inverses of the
     ///      oracle price: the initial price applies the discount to the oracle price,
-    ///      and the minimum price corresponds to the undiscounted oracle price, capping
-    ///      the payout per OHM at the oracle-priced amount. The inversions floor, and
-    ///      the scale factors follow the Bond SDA `scaleAdjustment` convention.
+    ///      and the minimum price corresponds to the oracle price raised by the max
+    ///      price premium, capping the payout per OHM at
+    ///      `oraclePrice * (1 + maxPricePremium)`.
+    ///
+    ///      Both parameters are measured from the same oracle price, so they are
+    ///      independent: the discount sets where a market opens, and the premium sets
+    ///      the ceiling of what the facility pays for one OHM. A zero premium caps the
+    ///      payout at the oracle price itself.
+    ///
+    ///      The SDA decays the market price toward the minimum price, so the width of
+    ///      the decay band is `(1 + maxPricePremium) / (1 - initialDiscount)`: the room
+    ///      a market has to reach a clearing price. Only a zero premium combined with a
+    ///      zero discount pins the market at the oracle price.
+    ///
+    ///      The premium is non-negative and the discount is below 100%, so
+    ///      `maxPrice >= effectivePrice` and therefore
+    ///      `formattedMinimumPrice <= formattedInitialPrice` for every configuration.
+    ///      The Bond SDA rejects a market whose initial price is below its minimum
+    ///      price, so this ordering must hold.
+    ///
+    ///      The inversions floor, and the scale factors follow the Bond SDA
+    ///      `scaleAdjustment` convention.
     function _computeMarketPricing(
         MarketConfig memory config_
     )
@@ -129,10 +152,18 @@ library YRFBondMarketLib {
         // effectivePrice = oraclePrice (oracleDecimals) * discountFactor (18 decimals)
         // / 1e18 -> oracleDecimals (floor).
         uint256 effectivePrice = config_.oraclePrice.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        // premiumFactor = 1e18 + maxPricePremium (18 decimals); e.g. 1e18 + 1e17 = 1.1e18.
+        // maxPrice = oraclePrice (oracleDecimals) * premiumFactor (18 decimals)
+        // / 1e18 -> oracleDecimals (floor). This is the highest payout the market can
+        // reach for one quote token; a zero premium leaves it at the oracle price.
+        uint256 maxPrice = config_.oraclePrice.mulDiv(
+            ONE_HUNDRED_PERCENT + config_.maxPricePremium,
+            ONE_HUNDRED_PERCENT
+        );
         uint256 oracleSquare = 10 ** (uint256(config_.oracleDecimals) * 2);
 
         uint256 initialPrice = oracleSquare / effectivePrice;
-        uint256 minPrice = oracleSquare / config_.oraclePrice;
+        uint256 minPrice = oracleSquare / maxPrice;
 
         int8 priceDecimals = _getPriceDecimals(initialPrice, config_.oracleDecimals);
         scaleAdjustment =

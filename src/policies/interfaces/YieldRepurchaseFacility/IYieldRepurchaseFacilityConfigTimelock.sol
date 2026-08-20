@@ -117,6 +117,14 @@ interface IYieldRepurchaseFacilityConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID, or zero.
     function pendingInitialDiscountActionId() external view returns (uint64 actionId);
 
+    /// @notice Returns the ID of the queued action holding the pending slot of the max
+    ///         price premium, or zero if none is pending.
+    /// @dev The slot is released only by execution or cancellation, so an expired holder
+    ///      keeps blocking new updates of the same parameter until the emergency role
+    ///      cancels it.
+    /// @return actionId The queued action ID, or zero.
+    function pendingMaxPricePremiumActionId() external view returns (uint64 actionId);
+
     // ========== QUEUE ========== //
 
     /// @notice Queues a timelocked call to the facility's setter of the yield buyback share.
@@ -132,6 +140,12 @@ interface IYieldRepurchaseFacilityConfigTimelock is ITimelockBatchQueue {
     /// @param initialDiscount_ The new initial bond discount (`1e18` = 100%).
     /// @return actionId The queued action ID.
     function queueSetInitialDiscount(uint256 initialDiscount_) external returns (uint64 actionId);
+
+    /// @notice Queues a timelocked call to the facility's setter of the max price premium.
+    /// @param maxPricePremium_ The new max price premium (`1e18` = 100%); must not
+    ///        exceed `10e18`.
+    /// @return actionId The queued action ID.
+    function queueSetMaxPricePremium(uint256 maxPricePremium_) external returns (uint64 actionId);
 
     /// @notice Queues a timelocked call to the facility's function to enable the asset.
     /// @param vault_ The vault to re-enable.
