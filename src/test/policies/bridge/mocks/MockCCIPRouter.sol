@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";

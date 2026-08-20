@@ -6,6 +6,13 @@ inputs:
         description: Install foundry toolchain if required by the project.
         required: false
         default: "true"
+    install-solidity-dependencies:
+        description: |
+            Install the Solidity dependencies through the postinstall hook. The hook drives Forge,
+            so a job that sets install-foundry to false must set this to false as well. Node
+            packages are still installed either way.
+        required: false
+        default: "true"
 
 runs:
     using: composite
@@ -28,6 +35,15 @@ runs:
           with:
               version: 1.7.1
 
+        # The postinstall hook resolves the Solidity dependencies and ends with `forge clean`, so it
+        # requires Forge and it wipes any build artifacts restored before this action runs. Restore
+        # a Foundry cache after Bootstrap, never before it.
         - name: Install dependencies
+          if: ${{ inputs.install-solidity-dependencies != 'false' }}
           run: pnpm install --frozen-lockfile
+          shell: bash
+
+        - name: Install Node dependencies only
+          if: ${{ inputs.install-solidity-dependencies == 'false' }}
+          run: pnpm install --frozen-lockfile --ignore-scripts
           shell: bash

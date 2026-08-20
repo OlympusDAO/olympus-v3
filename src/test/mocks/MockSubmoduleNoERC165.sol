@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(mixed-case-function)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";

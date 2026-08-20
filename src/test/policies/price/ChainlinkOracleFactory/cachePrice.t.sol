@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {ChainlinkOracleFactoryTest} from "./ChainlinkOracleFactoryTest.sol";
 import {IOracleFactory} from "src/policies/interfaces/price/IOracleFactory.sol";

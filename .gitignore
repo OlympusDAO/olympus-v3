@@ -1,5 +1,7 @@
 /out/
 cache/
+.gen-perms/
+.gen_perms.*.sol
 node_modules/
 .pnpm-store/
 .env
@@ -31,6 +33,11 @@ src/test/sim/out/*.json
 src/test/sim/sims/*.t.sol
 .env_deploy*
 docs/
+# Written by shell/test_coverage.sh
+coverage/
+lcov.info
+coverage.log
+genhtml.log
 /solidity-metrics.html
 dependencies/
 

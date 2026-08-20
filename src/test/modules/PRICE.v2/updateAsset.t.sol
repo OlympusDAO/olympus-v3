@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(unwrapped-modifier-logic,mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
 import {PriceV2BaseTest} from "./PriceV2BaseTest.sol";

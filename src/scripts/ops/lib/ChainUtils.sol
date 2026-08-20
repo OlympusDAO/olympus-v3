@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {ArrayUtils} from "./ArrayUtils.sol";
 

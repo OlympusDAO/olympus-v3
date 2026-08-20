@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-pragma solidity 0.8.15;
+pragma solidity ^0.8.15;
 
 import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
-import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -32,7 +32,7 @@ contract ROLESTest is Test {
         kernel.executeAction(Actions.InstallModule, address(ROLES));
 
         // Generate test policy with all authorizations
-        godmode = ROLES.generateGodmodeFixture(type(OlympusRoles).name);
+        godmode = ROLES.generateMultiFunctionFixture(ModulePermissions.olympusRoles());
         kernel.executeAction(Actions.ActivatePolicy, godmode);
     }
 

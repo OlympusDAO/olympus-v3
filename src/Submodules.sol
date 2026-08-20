@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // solhint-disable one-contract-per-file
 /// forge-lint: disable-start(mixed-case-function)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Keycode, Module, fromKeycode, ensureContract} from "src/Kernel.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";

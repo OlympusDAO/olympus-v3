@@ -165,8 +165,28 @@ Never stage unrelated files. If the worktree has unrelated modifications, leave 
 
 ### Testing Discipline
 
+- Before writing or modifying Solidity tests, use the `/test-write` skill.
 - Write or update tests before implementation
 - If tests don't exist for a function you're modifying, create them first
+- Before implementation, derive the applicable coverage matrix for every external function being
+    changed and treat it as acceptance criteria:
+    - Caller authorization: cover every permitted caller class, fuzz unauthorized callers while
+        excluding all authorized identities, and fuzz the caller for permissionless functions.
+    - Contract state: cover enabled, disabled, and re-enabled behavior. Explicitly test functions
+        that are intentionally callable while disabled.
+    - Input boundaries: cover zero, one, minimum, maximum, values immediately below and above
+        semantic limits, exact caps, and rounding thresholds. For every numeric input, test the
+        numeric type's maximum representable value. Cover zero/non-zero addresses and empty,
+        single-item, and maximum-size collections when relevant. Fuzz across the valid numeric range;
+        one interior fuzz case does not prove boundary behavior.
+    - State transitions: cover absent/existing, uninitialized/initialized, current/stale, and exact
+        transition points where applicable.
+    - Accounting and external interactions: assert authoritative balance or custody deltas,
+        aggregate consistency, rounding direction, rollback on failure, and reentrancy behavior.
+    - Read/write consistency: verify that previews and getters agree with successful execution and
+        equivalent failure conditions.
+    - Invariants: add stateful invariant tests for accounting, custody, lifecycle, authorization, and
+        enabled-state properties that must hold across arbitrary call sequences.
 - Run the specific test file after changes, not the full suite
 - Only run full test suites when explicitly requested or at major milestones
 
@@ -296,14 +316,23 @@ src/
 - Invariant tests select invariant functions while applying the same contract and path exclusions: `--match-test '^invariant_'`
 - Proposal tests are in `src/test/proposals/` and require fork environment
 
-**For detailed test writing guidance (file structure, modifiers, naming, error handling), use the `/test-write` skill.**
+**For detailed test writing guidance (coverage matrices, file structure, modifiers, naming, fuzzing,
+and error handling), use the `/test-write` skill.**
 
 Key standards summary:
 
-- One test file per contract **external** function (internal functions are tested indirectly via their callers)
+- Organize tests around external state-changing actions (internal functions are tested indirectly
+    via their callers). Co-locate directly corresponding preview or getter assertions with the action
+    when doing so preserves coverage.
 - Use `given*` modifiers for state setup
-- Follow branching tree naming: `test_given<Condition>_<Action>_<ExpectedResult>()`
-- Always use error selectors, never string messages: `abi.encodeWithSelector(Error.selector)`
+- In test function names, use `given` for pre-existing state and `when` for function parameters or
+    operation inputs. Repeat the prefix for multiple conditions, such as
+    `test_givenState_whenCondition1_whenCondition2()`.
+- Follow branching tree naming: `test_given<State>_when<Parameter1>_when<Parameter2>()`; use a
+    `_reverts` suffix for revert cases
+- Match specific revert data with error selectors or encoded custom errors. Do not use empty
+    `vm.expectRevert()` unless an opaque dependency has no stable revert data and the test documents
+    why stronger matching is impossible. Never use string messages.
 - All assertions must have descriptive messages
 
 ### Deployment
@@ -315,13 +344,13 @@ Key standards summary:
 
 ### Code Standards
 
-- Solidity version: >= 0.8.24 (with some on 0.8.15 for historical reasons)
+- Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
 - Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
 - Follow best-case practices for writing Solidity code, e.g. <https://dev.to/truongpx396/solidity-limitations-solutions-best-practices-and-gas-optimization-27cb>
-- Running `forge build` will output the `forge` tool's linting output. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
+- Linter notes come from `forge lint`, not from `forge build`: builds have `lint_on_build = false` in `foundry.toml` so compiler output stays readable. For linter note resolution, use the `/lint-fix` skill for guidance on deployed vs in-development contracts.
 - Internal state variables MUST use underscore prefix: `uint256 internal _counter;`
 - For commit and push validation, follow the Repo Workflow section.
 - When completing a major milestone, the unit tests should pass: `pnpm run test:unit`
@@ -474,7 +503,7 @@ IMPORTANT: When running CodeRabbit to review code changes, don't run it more tha
 
 ```bash
 pnpm run lint:check # Check all linting rules
-forge build         # Output forge-lint notes
+forge lint          # Output forge-lint notes
 ```
 
 **The following commands show detailed linting rule breakdown:**
