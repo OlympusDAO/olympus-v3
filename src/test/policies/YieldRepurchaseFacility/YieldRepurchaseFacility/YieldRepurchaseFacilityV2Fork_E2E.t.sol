@@ -3,7 +3,7 @@ pragma solidity >=0.8.24;
 
 import {YieldRepurchaseFacilityV2ForkTestBase} from "./YieldRepurchaseFacilityV2ForkTestBase.sol";
 
-import {Vm} from "@forge-std-1.9.6/Vm.sol";
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";

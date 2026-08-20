@@ -1,17 +1,12 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
 import {SimplePriceFeedStrategyBase} from "./SimplePriceFeedStrategyBase.t.sol";
 
-// Libraries
-import {QuickSort} from "libraries/QuickSort.sol";
-
 /// @title Tests for getMedianPrice function
 /// @notice Tests the median price aggregation strategy
 contract SimplePriceFeedStrategyGetMedianPriceTest is SimplePriceFeedStrategyBase {
-    using QuickSort for uint256[];
-
     // =========  TESTS ========= //
 
     // ========== CONFIGURATION ERRORS ========== //

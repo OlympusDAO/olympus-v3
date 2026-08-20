@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 /// forge-lint: disable-start(mixed-case-function, screaming-snake-case-const)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 // Libraries
 import {ReentrancyGuard} from "@solmate-6.2.0/utils/ReentrancyGuard.sol";

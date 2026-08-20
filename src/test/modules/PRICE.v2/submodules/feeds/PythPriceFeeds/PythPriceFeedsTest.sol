@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
-import {Test} from "@forge-std-1.9.6/Test.sol";
-import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 // Mocks
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
@@ -19,7 +18,6 @@ import {PythPriceFeeds} from "src/modules/PRICE/submodules/feeds/PythPriceFeeds.
 
 contract PythPriceFeedsTest is Test {
     using FullMath for uint256;
-    using ModuleTestFixtureGenerator for PythPriceFeeds;
 
     MockPyth internal pyth;
     MockPyth internal secondPyth;

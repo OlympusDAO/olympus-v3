@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 library String {
     error EndBeforeStartIndex(uint256 startIndex, uint256 endIndex);

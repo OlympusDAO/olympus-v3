@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IV1Migrator} from "src/policies/interfaces/IV1Migrator.sol";

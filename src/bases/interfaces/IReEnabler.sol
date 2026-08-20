@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity ^0.8.4;
 
 /// @title IReEnabler
 /// @notice The external interface of a contract that exposes a parameterless `reEnable`

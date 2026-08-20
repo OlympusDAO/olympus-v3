@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 /// @title  ITimelockBatchQueue
 /// @notice Interface for contracts that queue, execute, and cancel atomic batched timelocked
