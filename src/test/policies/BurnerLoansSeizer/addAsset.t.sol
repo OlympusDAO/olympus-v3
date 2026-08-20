@@ -41,7 +41,7 @@ contract BurnerLoansSeizerAddAssetTest is BurnerLoansSeizerTest {
     // given unauthorized caller
     //  when addAsset is called
     //   then it reverts
-    function testFuzz_givenUnauthorizedCaller_reverts(address caller_) public {
+    function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
 
         vm.prank(caller_);

@@ -27,7 +27,7 @@ contract BurnerLoansSeizerSetExecutionGasLimitTest is BurnerLoansSeizerTest {
         seizer.setExecutionGasLimit(0);
     }
 
-    function testFuzz_givenUnauthorizedCaller_reverts(address caller_) public {
+    function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != burnerLoansAdmin);
 

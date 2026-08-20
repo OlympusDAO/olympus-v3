@@ -9,7 +9,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when the base fee is set
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketBaseFee(marketId, 200);
@@ -19,7 +19,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
     // given invalid market ID
     //  when the base fee is set
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
@@ -56,7 +56,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
     // given the fee is above 100 percent
     //  when the base fee is set
     //   then it reverts
-    function test_givenFeeAboveMaximum_reverts_fuzz(uint16 fee_) public {
+    function test_givenFeeAboveMaximum_reverts(uint16 fee_) public {
         fee_ = uint16(bound(fee_, 10_001, type(uint16).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(manager);
@@ -68,7 +68,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
     // given the fee is valid
     //  when the manager sets the base fee
     //   then only the base fee changes
-    function test_givenValidFee_updatesOnlyBaseFee_fuzz(uint16 fee_) public {
+    function test_givenValidFee_updatesOnlyBaseFee(uint16 fee_) public {
         fee_ = uint16(bound(fee_, 0, 10_000));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory marketBefore = floan.getMarket(marketId);

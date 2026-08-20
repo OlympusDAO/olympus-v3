@@ -24,7 +24,7 @@ contract FLOANSupportsInterfaceTest is FLOANTest {
     // given an unsupported interface
     //  when supportsInterface is called
     //   then it returns false
-    function test_givenUnsupportedInterface_returnsFalse_fuzz(bytes4 interfaceId_) public view {
+    function test_givenUnsupportedInterface_returnsFalse(bytes4 interfaceId_) public view {
         vm.assume(interfaceId_ != type(IFLOANv1).interfaceId);
         vm.assume(interfaceId_ != type(IERC165).interfaceId);
         vm.assume(interfaceId_ != type(IVersioned).interfaceId);

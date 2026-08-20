@@ -10,7 +10,7 @@ contract FLOANExtendMaturityTest is FLOANTest {
     // given caller without kernel permission
     //  when extendMaturity is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
 

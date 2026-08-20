@@ -9,7 +9,7 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     // given caller without kernel permission
     //  when removeCollateral is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
         _expectKernelPermissionRevert(caller_);
@@ -20,7 +20,7 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     // given amount at or below balance
     //  when removeCollateral is called
     //   then it decreases exactly
-    function test_givenAmountAtOrBelowBalance_decreasesExactly_fuzz(uint128 amount_) public {
+    function test_givenAmountAtOrBelowBalance_decreasesExactly(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, 1_000e18));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -40,7 +40,7 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     // given multiple positions in one market
     //  when collateral is removed from one position
     //   then it decrements only that position and the market aggregate
-    function test_givenMultiplePositions_decrementsPositionAndMarketAggregate_fuzz(
+    function test_givenMultiplePositions_decrementsPositionAndMarketAggregate(
         uint128 amount_
     ) public {
         amount_ = uint128(bound(amount_, 1, 100e18));
@@ -112,7 +112,7 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     // given amount above balance
     //  when removeCollateral is called
     //   then it reverts
-    function test_givenAmountAboveBalance_reverts_fuzz(uint128 amount_) public {
+    function test_givenAmountAboveBalance_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 101, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -129,7 +129,7 @@ contract FLOANRemoveCollateralTest is FLOANTest {
     // given invalid position id
     //  when removeCollateral is called
     //   then it reverts
-    function test_givenInvalidPositionId_reverts_fuzz(uint64 positionId_) public {
+    function test_givenInvalidPositionId_reverts(uint64 positionId_) public {
         positionId_ = uint64(bound(positionId_, floan.getPositionCount(), type(uint64).max));
         vm.prank(facility);
         vm.expectRevert(

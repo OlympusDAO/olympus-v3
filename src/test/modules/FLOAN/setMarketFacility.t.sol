@@ -9,7 +9,7 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
     // given caller without kernel permission
     //  when setMarketFacility is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketFacility(marketId, otherFacility);
@@ -19,7 +19,7 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
     // given invalid market ID
     //  when setMarketFacility is called
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
@@ -83,7 +83,7 @@ contract FLOANSetMarketFacilityTest is FLOANTest {
     // given both facilities already service principal for the debt token
     //  when a market is moved between them
     //   then only that market's principal is subtracted and added
-    function test_givenPrincipalAtBothFacilities_movesExactMarketAmount_fuzz(
+    function test_givenPrincipalAtBothFacilities_movesExactMarketAmount(
         uint128 movedPrincipal_,
         uint128 retainedPrincipal_,
         uint128 destinationPrincipal_

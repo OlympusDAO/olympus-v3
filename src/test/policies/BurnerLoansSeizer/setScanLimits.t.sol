@@ -27,7 +27,7 @@ contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
     // given invalid scan limits
     //  when setScanLimits is called
     //   then it reverts
-    function testFuzz_givenInvalidScanLimits_reverts(uint16 checkLimit_, uint8 seizeLimit_) public {
+    function test_givenInvalidScanLimits_reverts(uint16 checkLimit_, uint8 seizeLimit_) public {
         bool invalid = checkLimit_ == 0 ||
             checkLimit_ > seizer.MAX_BORROWERS_TO_CHECK() ||
             seizeLimit_ == 0 ||
@@ -50,7 +50,7 @@ contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
     // given unauthorized caller
     //  when setScanLimits is called
     //   then it reverts without changing configuration
-    function testFuzz_givenUnauthorizedCaller_reverts(address caller_) public {
+    function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin && caller_ != burnerLoansAdmin);
 
         vm.prank(caller_);

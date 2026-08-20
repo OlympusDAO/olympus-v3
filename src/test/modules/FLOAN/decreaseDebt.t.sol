@@ -9,7 +9,7 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given caller without kernel permission
     //  when decreaseDebt is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
         _expectKernelPermissionRevert(caller_);
@@ -20,7 +20,7 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given an invalid position ID
     //  when decreaseDebt is called
     //   then it reverts
-    function test_givenInvalidPosition_reverts_fuzz(uint64 positionId_) public {
+    function test_givenInvalidPosition_reverts(uint64 positionId_) public {
         positionId_ = uint64(bound(positionId_, floan.getPositionCount(), type(uint64).max));
         vm.prank(facility);
         vm.expectRevert(
@@ -93,7 +93,7 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given principal decrease above principal due
     //  when decreaseDebt is called
     //   then it reverts without state change
-    function test_givenPrincipalAboveDue_revertsWithoutStateChange_fuzz(uint128 excess_) public {
+    function test_givenPrincipalAboveDue_revertsWithoutStateChange(uint128 excess_) public {
         excess_ = uint128(bound(excess_, 1, type(uint128).max - 100e9));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -110,7 +110,7 @@ contract FLOANDecreaseDebtTest is FLOANTest {
     // given interest decrease above interest due
     //  when decreaseDebt is called
     //   then it reverts without state change
-    function test_givenInterestAboveDue_revertsWithoutStateChange_fuzz(uint128 excess_) public {
+    function test_givenInterestAboveDue_revertsWithoutStateChange(uint128 excess_) public {
         excess_ = uint128(bound(excess_, 1, type(uint128).max - 25e9));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

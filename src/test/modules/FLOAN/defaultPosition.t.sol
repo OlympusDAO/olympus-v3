@@ -9,7 +9,7 @@ contract FLOANDefaultPositionTest is FLOANTest {
     // given caller without kernel permission
     //  when defaultPosition is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
 
@@ -21,7 +21,7 @@ contract FLOANDefaultPositionTest is FLOANTest {
     // given invalid position ID
     //  when defaultPosition is called
     //   then it reverts without changing accounting
-    function test_givenInvalidPosition_reverts_fuzz(uint64 positionId_) public {
+    function test_givenInvalidPosition_reverts(uint64 positionId_) public {
         vm.assume(positionId_ != 0);
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 

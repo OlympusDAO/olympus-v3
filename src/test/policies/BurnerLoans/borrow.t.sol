@@ -1696,7 +1696,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Borrow amount: remaining capacity plus a fuzzed excess of at least one unit
     // - Global capacity: sufficient
     // - Expected branch: preview and write reject every resulting debt above the asset cap
-    function test_givenExistingAssetDebt_borrowAboveRemainingAssetCapReverts_fuzz(
+    function test_givenExistingAssetDebt_borrowAboveRemainingAssetCapReverts(
         uint96 remainingCapacity_,
         uint96 excess_
     ) public {
@@ -1742,7 +1742,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Borrow amount: remaining capacity plus a fuzzed excess of at least one unit
     // - Asset capacity: sufficient
     // - Expected branch: preview and write reject every resulting debt above the global cap
-    function test_givenExistingGlobalDebt_borrowAboveRemainingGlobalCapReverts_fuzz(
+    function test_givenExistingGlobalDebt_borrowAboveRemainingGlobalCapReverts(
         uint96 remainingCapacity_,
         uint96 excess_
     ) public {

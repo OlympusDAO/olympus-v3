@@ -693,7 +693,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function testFuzz_utilizationBps_roundsUp(uint256 debt_, uint256 cap_) public view {
+    function test_utilizationBps_roundsUp(uint256 debt_, uint256 cap_) public view {
         cap_ = bound(cap_, 1, 1e36);
         debt_ = bound(debt_, 0, cap_);
 
@@ -705,7 +705,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         }
     }
 
-    function testFuzz_assetUtilizationWad_roundsUp(uint256 debt_, uint256 cap_) public view {
+    function test_assetUtilizationWad_roundsUp(uint256 debt_, uint256 cap_) public view {
         cap_ = bound(cap_, 1, 1e36);
         debt_ = bound(debt_, 0, cap_);
 
@@ -717,10 +717,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         }
     }
 
-    function testFuzz_feeRateWad_isMonotonic(
-        uint128 utilizationA_,
-        uint128 utilizationB_
-    ) public view {
+    function test_feeRateWad_isMonotonic(uint128 utilizationA_, uint128 utilizationB_) public view {
         uint256 utilizationA = bound(utilizationA_, 0, 1e18);
         uint256 utilizationB = bound(utilizationB_, utilizationA, 1e18);
         IBurnerLoans.AssetFeeConfig memory feeConfig = _defaultAssetFeeConfig();

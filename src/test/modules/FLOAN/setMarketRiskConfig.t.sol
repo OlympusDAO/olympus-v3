@@ -9,7 +9,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when risk config is set
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_000, 15_000);
@@ -19,7 +19,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     // given invalid market ID
     //  when risk config is set
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
@@ -68,10 +68,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     // given maturity horizon at or below term length
     //  when risk config is set
     //   then it reverts
-    function test_givenInvalidMaturityHorizon_reverts_fuzz(
-        uint48 termLength_,
-        uint48 horizon_
-    ) public {
+    function test_givenInvalidMaturityHorizon_reverts(uint48 termLength_, uint48 horizon_) public {
         termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
         horizon_ = uint48(bound(horizon_, 0, termLength_));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
@@ -85,7 +82,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     // given collateral factor above 100 percent
     //  when risk config is set
     //   then it reverts
-    function test_givenInvalidCollateralFactor_reverts_fuzz(uint16 collateralFactorBps_) public {
+    function test_givenInvalidCollateralFactor_reverts(uint16 collateralFactorBps_) public {
         collateralFactorBps_ = uint16(bound(collateralFactorBps_, 10_001, type(uint16).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
@@ -98,7 +95,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     // given valid risk fields
     //  when the manager sets risk config
     //   then only the risk fields change
-    function test_givenValidRiskFields_updatesOnlyRiskFields_fuzz(
+    function test_givenValidRiskFields_updatesOnlyRiskFields(
         uint48 termLength_,
         uint16 collateralFactorBps_,
         uint16 minCollateralRatioBps_

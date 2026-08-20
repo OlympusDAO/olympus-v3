@@ -9,7 +9,7 @@ contract FLOANSetMarketOriginationsEnabledTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when originations are set
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketOriginationsEnabled(marketId, false);
@@ -19,7 +19,7 @@ contract FLOANSetMarketOriginationsEnabledTest is FLOANTest {
     // given invalid market ID
     //  when originations are set
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));

@@ -9,7 +9,7 @@ contract FLOANSetMarketConfigDataTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when opaque config is set
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketConfigData(marketId, hex"1234");
@@ -19,7 +19,7 @@ contract FLOANSetMarketConfigDataTest is FLOANTest {
     // given invalid market ID
     //  when opaque config is set
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
@@ -56,9 +56,7 @@ contract FLOANSetMarketConfigDataTest is FLOANTest {
     // given a market
     //  when the manager sets arbitrary opaque config
     //   then only opaque config changes
-    function test_givenArbitraryData_updatesOnlyOpaqueConfig_fuzz(
-        bytes calldata configData_
-    ) public {
+    function test_givenArbitraryData_updatesOnlyOpaqueConfig(bytes calldata configData_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         bytes32 marketBefore = keccak256(abi.encode(floan.getMarket(marketId)));
 

@@ -221,7 +221,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given collateralFactorBps is zero or above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenCollateralFactorBpsIsInvalid_reverts_fuzz(
+    function test_givenCollateralFactorBpsIsInvalid_reverts(
         uint16 collateralFactorBps_,
         bool useZero_
     ) public {
@@ -251,7 +251,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given minCollateralRatioBps is below 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenMinCollateralRatioBpsIsInvalid_reverts_fuzz(
+    function test_givenMinCollateralRatioBpsIsInvalid_reverts(
         uint16 minCollateralRatioBps_
     ) public {
         _setDefaultGlobalDebtCap();
@@ -273,9 +273,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given minCollateralRatioBps is above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenMinCollateralRatioBpsAboveMax_reverts_fuzz(
-        uint16 minCollateralRatioBps_
-    ) public {
+    function test_givenMinCollateralRatioBpsAboveMax_reverts(uint16 minCollateralRatioBps_) public {
         _setDefaultGlobalDebtCap();
         minCollateralRatioBps_ = uint16(
             bound(minCollateralRatioBps_, MAX_COLLATERAL_RATIO_BPS + 1, type(uint16).max)
@@ -297,9 +295,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given backingMultiplierBps is below 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenBackingMultiplierBpsIsInvalid_reverts_fuzz(
-        uint16 backingMultiplierBps_
-    ) public {
+    function test_givenBackingMultiplierBpsIsInvalid_reverts(uint16 backingMultiplierBps_) public {
         _setDefaultGlobalDebtCap();
         backingMultiplierBps_ = uint16(bound(backingMultiplierBps_, 0, 9_999));
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
@@ -319,9 +315,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given backingMultiplierBps is above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenBackingMultiplierBpsAboveMax_reverts_fuzz(
-        uint16 backingMultiplierBps_
-    ) public {
+    function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
         _setDefaultGlobalDebtCap();
         backingMultiplierBps_ = uint16(
             bound(backingMultiplierBps_, MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
@@ -343,7 +337,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given keeperRewardBps is above 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenKeeperRewardBpsIsInvalid_reverts_fuzz(uint16 keeperRewardBps_) public {
+    function test_givenKeeperRewardBpsIsInvalid_reverts(uint16 keeperRewardBps_) public {
         _setDefaultGlobalDebtCap();
         keeperRewardBps_ = uint16(bound(keeperRewardBps_, 10_001, type(uint16).max));
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
@@ -365,7 +359,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given maxKeeperReward is above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenMaxKeeperRewardAboveMax_reverts_fuzz(uint256 maxKeeperReward_) public {
+    function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
         _setDefaultGlobalDebtCap();
         maxKeeperReward_ = bound(maxKeeperReward_, MAX_KEEPER_REWARD + 1, type(uint256).max);
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
@@ -385,7 +379,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given termLength is zero or above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenTermLengthIsInvalid_reverts_fuzz(uint48 termLength_, bool useZero_) public {
+    function test_givenTermLengthIsInvalid_reverts(uint48 termLength_, bool useZero_) public {
         _setDefaultGlobalDebtCap();
         termLength_ = useZero_
             ? 0
@@ -410,7 +404,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given maxMaturityHorizon is below or equal to termLength
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenMaxMaturityHorizonBelowOrEqualToTermLength_reverts_fuzz(
+    function test_givenMaxMaturityHorizonBelowOrEqualToTermLength_reverts(
         uint48 termLength_,
         uint48 maxMaturityHorizon_
     ) public {
@@ -435,7 +429,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given maxMaturityHorizon is above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenMaxMaturityHorizonAboveMax_reverts_fuzz(uint48 maxMaturityHorizon_) public {
+    function test_givenMaxMaturityHorizonAboveMax_reverts(uint48 maxMaturityHorizon_) public {
         _setDefaultGlobalDebtCap();
         maxMaturityHorizon_ = uint48(
             bound(
@@ -461,7 +455,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given the initial baseFeeBps is above 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenBaseFeeBpsIsInvalid_reverts_fuzz(uint16 baseFeeBps_) public {
+    function test_givenBaseFeeBpsIsInvalid_reverts(uint16 baseFeeBps_) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
         baseFeeBps_ = uint16(bound(baseFeeBps_, 10_001, type(uint16).max));
@@ -484,7 +478,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given the initial kinkBps is greater than or equal to 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenKinkBpsIsInvalid_reverts_fuzz(uint16 kinkBps_) public {
+    function test_givenKinkBpsIsInvalid_reverts(uint16 kinkBps_) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
         kinkBps_ = uint16(bound(kinkBps_, 10_000, type(uint16).max));
@@ -505,7 +499,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given the initial preKinkSlopeBps is above 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenPreKinkSlopeBpsIsInvalid_reverts_fuzz(uint16 preKinkSlopeBps_) public {
+    function test_givenPreKinkSlopeBpsIsInvalid_reverts(uint16 preKinkSlopeBps_) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
         preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, 10_001, type(uint16).max));
@@ -528,7 +522,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given the initial postKinkSlopeBps is above 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenPostKinkSlopeBpsIsInvalid_reverts_fuzz(uint16 postKinkSlopeBps_) public {
+    function test_givenPostKinkSlopeBpsIsInvalid_reverts(uint16 postKinkSlopeBps_) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
         postKinkSlopeBps_ = uint16(bound(postKinkSlopeBps_, 10_001, type(uint16).max));
@@ -654,7 +648,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given each fee component is valid but their full-utilization rate exceeds 100%
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenFullUtilizationFeeRateAboveOneWad_reverts_fuzz(
+    function test_givenFullUtilizationFeeRateAboveOneWad_reverts(
         uint16 baseFeeBps_,
         uint16 preKinkSlopeBps_
     ) public {
@@ -884,7 +878,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // given asset dependencies and fuzzed risk values are valid
     //  when addAsset is called by admin
     //   then the asset stores the risk values with the fixed valid fee curve
-    function test_givenValidRiskConfig_configuresAsset_fuzz(
+    function test_givenValidRiskConfig_configuresAsset(
         uint16 collateralFactorBps_,
         uint16 minCollateralRatioBps_,
         uint16 backingMultiplierBps_,
@@ -959,7 +953,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     // The fee model does not require pre-kink and post-kink slopes to be monotonic. It requires
     // each component to fit in bps, a non-zero kink when either slope is used, and the sum of
     // base plus both slopes (the full-utilization rate) to remain at or below 100%.
-    function test_givenValidFeeConfig_configuresAsset_fuzz(
+    function test_givenValidFeeConfig_configuresAsset(
         uint16 baseFeeBps_,
         uint16 kinkBps_,
         uint16 preKinkSlopeBps_,

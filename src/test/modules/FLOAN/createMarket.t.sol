@@ -43,7 +43,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given caller without kernel permission
     //  when createMarket is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         _expectKernelPermissionRevert(caller_);
         floan.createMarket(
             _marketInput(_market(manager, facility, collateralToken, debtToken, 1_000e9)),
@@ -138,10 +138,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given maturity horizon at or below term length
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidMaturityHorizon_reverts_fuzz(
-        uint48 termLength_,
-        uint48 horizon_
-    ) public {
+    function test_givenInvalidMaturityHorizon_reverts(uint48 termLength_, uint48 horizon_) public {
         termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
         horizon_ = uint48(bound(horizon_, 0, termLength_));
         IFLOANv1.Market memory market = _market(
@@ -161,7 +158,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given collateral factor above 100 percent
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidCollateralFactor_reverts_fuzz(uint16 collateralFactorBps_) public {
+    function test_givenInvalidCollateralFactor_reverts(uint16 collateralFactorBps_) public {
         collateralFactorBps_ = uint16(bound(collateralFactorBps_, 10_001, type(uint16).max));
         IFLOANv1.Market memory market = _market(
             manager,
@@ -179,7 +176,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given base fee above 100 percent
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidBaseFee_reverts_fuzz(uint16 baseFeeBps_) public {
+    function test_givenInvalidBaseFee_reverts(uint16 baseFeeBps_) public {
         baseFeeBps_ = uint16(bound(baseFeeBps_, 10_001, type(uint16).max));
         IFLOANv1.Market memory market = _market(
             manager,
@@ -197,7 +194,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given collateral decimals above the uint256 power-of-ten limit
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidCollateralDecimals_reverts_fuzz(uint8 decimals_) public {
+    function test_givenInvalidCollateralDecimals_reverts(uint8 decimals_) public {
         decimals_ = uint8(bound(decimals_, 78, type(uint8).max));
         IFLOANv1.Market memory market = _market(
             manager,
@@ -215,7 +212,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given debt decimals above the uint256 power-of-ten limit
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidDebtDecimals_reverts_fuzz(uint8 decimals_) public {
+    function test_givenInvalidDebtDecimals_reverts(uint8 decimals_) public {
         decimals_ = uint8(bound(decimals_, 78, type(uint8).max));
         IFLOANv1.Market memory market = _market(
             manager,
@@ -270,7 +267,7 @@ contract FLOANCreateMarketTest is FLOANTest {
     // given valid fuzzed standard configuration
     //  when createMarket is called
     //   then it stores every supplied field
-    function test_givenValidConfiguration_storesEveryField_fuzz(
+    function test_givenValidConfiguration_storesEveryField(
         uint128 principalCap_,
         uint48 termLength_,
         uint16 collateralFactorBps_,

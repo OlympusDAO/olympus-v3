@@ -18,7 +18,7 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given caller without kernel permission
     //  when addCollateral is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(
+    function test_givenCallerWithoutKernelPermission_reverts(
         address caller_
     ) public givenMarketAndPositionAreCreated {
         _expectKernelPermissionRevert(caller_);
@@ -29,7 +29,7 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given valid amount
     //  when addCollateral is called
     //   then it updates only collateral
-    function test_givenValidAmount_updatesOnlyCollateral_fuzz(
+    function test_givenValidAmount_updatesOnlyCollateral(
         uint128 amount_
     ) public givenMarketAndPositionAreCreated {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
@@ -123,7 +123,7 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given invalid position id
     //  when addCollateral is called
     //   then it reverts
-    function test_givenInvalidPositionId_reverts_fuzz(uint64 positionId_) public {
+    function test_givenInvalidPositionId_reverts(uint64 positionId_) public {
         positionId_ = uint64(bound(positionId_, floan.getPositionCount(), type(uint64).max));
         vm.prank(facility);
         vm.expectRevert(

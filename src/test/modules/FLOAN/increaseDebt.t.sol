@@ -9,7 +9,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given caller without kernel permission
     //  when increaseDebt is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
         _expectKernelPermissionRevert(caller_);
@@ -20,7 +20,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given invalid position ID
     //  when increaseDebt is called
     //   then it reverts
-    function test_givenInvalidPosition_reverts_fuzz(uint64 positionId_) public {
+    function test_givenInvalidPosition_reverts(uint64 positionId_) public {
         vm.assume(positionId_ != 0);
         vm.prank(facility);
         vm.expectRevert(
@@ -100,7 +100,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given no active debt and interest-only increase
     //  when increaseDebt is called
     //   then it reverts
-    function test_givenNoActiveDebt_givenInterestOnly_reverts_fuzz(uint128 interest_) public {
+    function test_givenNoActiveDebt_givenInterestOnly_reverts(uint128 interest_) public {
         interest_ = uint128(bound(interest_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -114,7 +114,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given maturity at or before current timestamp
     //  when increaseDebt is called
     //   then it reverts
-    function test_givenInvalidMaturity_reverts_fuzz(uint48 maturity_) public {
+    function test_givenInvalidMaturity_reverts(uint48 maturity_) public {
         maturity_ = uint48(bound(maturity_, 0, block.timestamp));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPosition(marketId, facility, borrower);
@@ -128,7 +128,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given active debt
     //  when increaseDebt is called
     //   then it requires existing maturity
-    function test_givenActiveDebt_requiresExistingMaturity_fuzz(uint48 requestedMaturity_) public {
+    function test_givenActiveDebt_requiresExistingMaturity(uint48 requestedMaturity_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
         uint48 maturity = floan.getPosition(positionId).maturity;
@@ -216,7 +216,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given active debt
     //  when deferred interest is added without principal
     //   then it updates only interest and preserves debt episode metadata
-    function test_givenActiveDebt_addsInterestWithoutPrincipal_fuzz(uint128 interest_) public {
+    function test_givenActiveDebt_addsInterestWithoutPrincipal(uint128 interest_) public {
         interest_ = uint128(bound(interest_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 100e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -248,7 +248,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given a fuzzed principal increase
     //  when increaseDebt is called
     //   then it updates each principal total
-    function test_updatesEachPrincipalTotal_fuzz(uint128 principal_) public {
+    function test_updatesEachPrincipalTotal(uint128 principal_) public {
         principal_ = uint128(bound(principal_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, principal_);
 
@@ -266,7 +266,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given an empty market
     //  when increaseDebt is called
     //   then any first draw up to the cap succeeds
-    function test_givenStartingDebt_borrowsUpToCap_fuzz(
+    function test_givenStartingDebt_borrowsUpToCap(
         uint128 principalCap_,
         uint128 principal_
     ) public {
@@ -294,7 +294,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given market principal is at the cap
     //  when any additional principal is added
     //   then it reverts
-    function test_givenMarketAtCap_additionalDebtReverts_fuzz(uint128 additionalPrincipal_) public {
+    function test_givenMarketAtCap_additionalDebtReverts(uint128 additionalPrincipal_) public {
         additionalPrincipal_ = uint128(bound(additionalPrincipal_, 1, type(uint128).max));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 100e9);
         uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -321,7 +321,7 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     // given market principal below the cap
     //  when additional principal would cross the cap
     //   then it reverts
-    function test_givenExistingDebt_additionalDebtAboveCapReverts_fuzz(
+    function test_givenExistingDebt_additionalDebtAboveCapReverts(
         uint128 existingPrincipal_,
         uint128 excess_
     ) public {

@@ -9,7 +9,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
     // given the caller lacks Kernel permission
     //  when the principal cap is set
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
+    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
         floan.setMarketPrincipalCap(marketId, 2_000e9);
@@ -19,7 +19,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
     // given invalid market ID
     //  when the principal cap is set
     //   then it reverts
-    function test_givenInvalidMarket_reverts_fuzz(uint32 marketId_) public {
+    function test_givenInvalidMarket_reverts(uint32 marketId_) public {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
@@ -57,7 +57,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
     // given live principal
     //  when the cap is below live principal
     //   then it reverts without changing the cap or principal
-    function test_givenCapBelowLivePrincipal_reverts_fuzz(uint128 reduction_) public {
+    function test_givenCapBelowLivePrincipal_reverts(uint128 reduction_) public {
         reduction_ = uint128(bound(reduction_, 1, 100e9));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _createPositionWithDebt(marketId, facility, borrower, 100e9);
@@ -74,7 +74,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
     // given live principal
     //  when the manager sets the cap at or above live principal
     //   then only the cap changes
-    function test_givenCapAtOrAboveLivePrincipal_updatesOnlyCap_fuzz(uint128 surplus_) public {
+    function test_givenCapAtOrAboveLivePrincipal_updatesOnlyCap(uint128 surplus_) public {
         surplus_ = uint128(bound(surplus_, 0, type(uint128).max - 100e9));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _createPositionWithDebt(marketId, facility, borrower, 100e9);

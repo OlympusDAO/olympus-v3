@@ -95,7 +95,7 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
     // given caller has burner_loans_admin role and a fuzzed timestamp within the grace period
     //  when reEnable is called
     //   then the policy is re-enabled
-    function test_givenBurnerLoansAdminCallerWithinGracePeriod_reenablesPolicy_fuzz(
+    function test_givenBurnerLoansAdminCallerWithinGracePeriod_reenablesPolicy(
         uint48 disabledAt_,
         uint32 elapsed_
     ) public {

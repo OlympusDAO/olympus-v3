@@ -234,7 +234,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given unauthorized caller
     //  when extend is called
     //   then it reverts
-    function test_givenUnauthorizedCaller_extendReverts_fuzz(address caller_) public {
+    function test_givenUnauthorizedCaller_extendReverts(address caller_) public {
         vm.assume(caller_ != alice);
         _borrowForAlice();
 
@@ -296,7 +296,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given active position
     //  when extend is called
     //   then it succeeds within the maturity horizon
-    function test_givenActivePosition_extendWithinHorizonSucceeds_fuzz(
+    function test_givenActivePosition_extendWithinHorizonSucceeds(
         uint16 termCount_,
         uint32 elapsed_
     ) public {
@@ -338,7 +338,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given extension above horizon
     //  when extend is called
     //   then it reverts
-    function test_givenExtensionAboveHorizon_extendReverts_fuzz(
+    function test_givenExtensionAboveHorizon_extendReverts(
         uint16 termCount_,
         uint32 elapsed_
     ) public {
@@ -394,7 +394,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given updated term length
     //  when extend is called
     //   then it uses new term without changing existing maturity
-    function test_givenUpdatedTermLength_extendUsesNewTermWithoutChangingExistingMaturity_fuzz(
+    function test_givenUpdatedTermLength_extendUsesNewTermWithoutChangingExistingMaturity(
         uint32 termLength_
     ) public {
         uint48 termLength = uint48(bound(termLength_, 1 days, 29 days));
@@ -450,7 +450,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given a healthy position that matured less than one term ago
     //  when extend is called
     //   then it adds the term to the previous maturity
-    function test_givenMaturedHealthyPosition_extendUsesPreviousMaturityAsBase_fuzz(
+    function test_givenMaturedHealthyPosition_extendUsesPreviousMaturityAsBase(
         uint48 elapsed_
     ) public {
         _borrowForAlice();
@@ -481,7 +481,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     // given a healthy position whose one-term extension would remain matured
     //  when previewing or executing one term
     //   then both reject the insufficient catch-up extension
-    function test_givenExtensionDoesNotAdvanceMaturityBeyondCurrentTimestamp_reverts_fuzz(
+    function test_givenExtensionDoesNotAdvanceMaturityBeyondCurrentTimestamp_reverts(
         uint48 elapsed_
     ) public {
         _borrowForAlice();

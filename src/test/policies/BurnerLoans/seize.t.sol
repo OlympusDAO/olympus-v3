@@ -431,7 +431,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     // given batch above maximum
     //  when seizure is previewed and executed
     //   then both revert
-    function test_givenBatchAboveMaximum_seizeReverts_fuzz(uint256 batchLength_) public {
+    function test_givenBatchAboveMaximum_seizeReverts(uint256 batchLength_) public {
         uint256 batchLength = bound(batchLength_, 51, 100);
         address[] memory borrowers = new address[](batchLength);
 
@@ -648,7 +648,7 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
     // given return limit above maximum
     //  when getSeizableBorrowers is called
     //   then it reverts
-    function test_givenReturnLimitAboveMaximum_getSeizableBorrowers_reverts_fuzz(
+    function test_givenReturnLimitAboveMaximum_getSeizableBorrowers_reverts(
         uint256 returnLimit_
     ) public {
         uint256 returnLimit = bound(returnLimit_, 51, 100);
