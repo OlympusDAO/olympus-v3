@@ -317,12 +317,12 @@ contract DepositTest is SimpleVaultTest {
 
 ```solidity
 // given vault is below capacity
-//   when amount causes the vault to hit or exceed capacity
+//   when amount exceeds remaining capacity
 //     [X] it reverts
-//   when amount does not cause the vault to hit capacity
+//   when amount equals remaining capacity
 //     [X] it mints shares
 //     [X] it emits Deposit event
 
-function test_givenVaultBelowCapacity_whenAmountHitsOrExceedsCapacity_reverts() public { }
-function test_givenVaultBelowCapacity_whenAmountIsWithinCapacity() public { }
+function test_givenVaultBelowCapacity_whenAmountExceedsRemainingCapacity_reverts() public { }
+function test_givenVaultBelowCapacity_whenAmountEqualsRemainingCapacity() public { }
 ```

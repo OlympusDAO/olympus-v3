@@ -348,17 +348,17 @@ function test_given<Condition>_when<Parameter>() {
 
 ```solidity
 // given vault is below capacity
-//   when amount causes the vault to hit or exceed capacity
+//   when amount exceeds remaining capacity
 //     [X] it reverts
-//   when amount does not cause the vault to hit capacity
+//   when amount equals remaining capacity
 //     [X] it mints shares
 //     [X] it emits Deposit event
 
-function test_givenVaultBelowCapacity_whenAmountHitsOrExceedsCapacity_reverts() public {
+function test_givenVaultBelowCapacity_whenAmountExceedsRemainingCapacity_reverts() public {
     // test code
 }
 
-function test_givenVaultBelowCapacity_whenAmountIsWithinCapacity() public {
+function test_givenVaultBelowCapacity_whenAmountEqualsRemainingCapacity() public {
     // test code
 }
 ```
@@ -418,7 +418,8 @@ function test_whenStrictMode_whenOneRemains_reverts() public {
 }
 ```
 
-**Note:** Don't include the expected result in the function name. A single test often has multiple assertions/checks.
+**Note:** Don't include the expected result in the function name. A single test often has multiple
+assertions/checks. The `_reverts` suffix is the sole permitted outcome suffix.
 
 **Ordering:** Write error/revert tests first, then success tests. This makes failures easier to spot.
 
@@ -460,8 +461,9 @@ function test_whenInputArrayLengthIsLessThanThree_fuzz(uint8 length) public {
 
 - Use the standard branching-tree name without `testFuzz_` or `_fuzz`
 - Follow the same branching tree pattern as unit tests
-- Use `bound()` for constraining numeric values (preferred over `vm.assume()`)
-- Use `vm.assume()` only for non-numeric constraints or when `bound()` is not feasible
+- Use `bound()` when constraining a broad numeric domain to a narrow range
+- Use `vm.assume()` for non-numeric or complex constraints, and for tight numeric domains where it
+  discards only a small number of values
 - Document the bounds being tested in comments
 
 **Use `bound()` instead of `vm.assume()` for numeric values:**
@@ -470,14 +472,14 @@ Foundry has a limit on the number of discarded fuzz inputs. Using `vm.assume()` 
 
 ```solidity
 // BAD - vm.assume() discards too many values
-function test_whenAmountIsLarge(uint256 amount) public {
+function test_whenAmountIsAtMostOneThousand(uint256 amount) public {
     // This discards nearly all uint256 values except 0-1000
     vm.assume(amount <= 1000);
     // Test will fail with "Fuzz testing ran out of inputs"
 }
 
 // GOOD - use bound() to constrain the input
-function test_whenAmountIsLarge(uint256 amount) public {
+function test_whenAmountIsAtMostOneThousand(uint256 amount) public {
     uint256 boundedAmount = bound(amount, 0, 1000);
     // boundedAmount is now in range [0, 1000]
 }
@@ -527,7 +529,9 @@ function bound(uint256 x, uint256 min, uint256 max) pure returns (uint256) {
 //   [X] it reverts
 
 function test_whenCallerIsNotAdmin_reverts() public {
+    address nonAdmin = makeAddr("nonAdmin");
     vm.expectRevert(abi.encodeWithSelector(ROLES.ROLES_RequireRole.selector));
+    vm.prank(nonAdmin);
     DEPOS.mint(100e18, 1e9);
 }
 
@@ -653,7 +657,9 @@ function _expectRevertInvalidParams(string memory param) internal {
 
 // Usage
 function test_whenCallerIsNotAdmin_reverts() public {
+    address nonAdmin = makeAddr("nonAdmin");
     _expectRevertNotAdmin();
+    vm.prank(nonAdmin);
     contract.restrictedFunction();
 }
 ```
