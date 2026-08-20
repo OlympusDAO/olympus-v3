@@ -7,6 +7,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {OlympusInstructions} from "src/modules/INSTR/OlympusInstructions.sol";
 import {OlympusVotes} from "src/modules/VOTES/OlympusVotes.sol";
@@ -62,19 +63,19 @@ contract ParthenonTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(governance));
 
         // Generate test fixture policy addresses with different authorizations
-        voter1 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter1 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, voter1);
 
-        voter2 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter2 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, voter2);
 
-        voter3 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter3 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, voter3);
 
-        voter4 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter4 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, voter4);
 
-        voter5 = VOTES.generateGodmodeFixture(type(OlympusVotes).name);
+        voter5 = VOTES.generateMultiFunctionFixture(ModulePermissions.olympusVotes());
         kernel.executeAction(Actions.ActivatePolicy, voter5);
 
         // Change executor

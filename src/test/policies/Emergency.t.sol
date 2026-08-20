@@ -8,6 +8,7 @@ import {larping} from "src/test/lib/larping.sol";
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 import {MockLegacyAuthority} from "src/test/mocks/MockLegacyAuthority.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
@@ -86,8 +87,8 @@ contract EmergencyTest is Test {
             rolesAdmin = new RolesAdmin(kernel);
 
             // Deploy authorized policy to call MINTR and TRSRY functions
-            treasuryAdmin = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
-            minterAdmin = MINTR.generateGodmodeFixture(type(OlympusMinter).name);
+            treasuryAdmin = TRSRY.generateMultiFunctionFixture(ModulePermissions.olympusTreasury());
+            minterAdmin = MINTR.generateMultiFunctionFixture(ModulePermissions.olympusMinter());
         }
 
         {

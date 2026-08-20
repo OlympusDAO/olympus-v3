@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console2} from "forge-std/console2.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {Parthenon} from "policies/Parthenon.sol";
 import {MockModuleWriter} from "src/test/mocks/MockModuleWriter.sol";
@@ -35,7 +36,7 @@ contract InstructionsTest is Test {
         invalidModule = new MockInvalidModule(kernel);
 
         /// Deploy policies
-        writer = instr.generateGodmodeFixture(type(OlympusInstructions).name);
+        writer = instr.generateMultiFunctionFixture(ModulePermissions.olympusInstructions());
         governance = new Parthenon(kernel);
 
         /// Install modules

@@ -48,6 +48,27 @@ jobs:
                   if-no-files-found: error
                   retention-days: 1
 
+    permission-lists:
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 20
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            # The check compiles the non-test sources with the AST enabled, into artifact and cache
+            # directories of its own that it discards before each run. Neither the cache nor the
+            # build artifacts that the build job publishes carry the AST, so this job depends on
+            # neither.
+            - name: Check the generated permission lists
+              run: pnpm run gen:perms:check
+
     unit-tests:
         needs: build
         runs-on: ubuntu-latest

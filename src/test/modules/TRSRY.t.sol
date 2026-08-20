@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
 import {console2 as console} from "forge-std/console2.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -34,13 +35,13 @@ contract TRSRYTest is Test {
         kernel.executeAction(Actions.InstallModule, address(TRSRY));
 
         // Generate test fixture policy addresses with different authorizations
-        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+        godmode = TRSRY.generateMultiFunctionFixture(ModulePermissions.olympusTreasury());
         kernel.executeAction(Actions.ActivatePolicy, godmode);
 
         testUser = TRSRY.generateFunctionFixture(TRSRY.withdrawReserves.selector);
         kernel.executeAction(Actions.ActivatePolicy, testUser);
 
-        debtor = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+        debtor = TRSRY.generateMultiFunctionFixture(ModulePermissions.olympusTreasury());
         kernel.executeAction(Actions.ActivatePolicy, debtor);
 
         // Give TRSRY some tokens

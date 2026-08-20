@@ -7,6 +7,7 @@ pragma solidity ^0.8.0;
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 // Mocks
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -25,7 +26,6 @@ import {FullMath} from "libraries/FullMath.sol";
 
 // Bophades
 import {Actions, Kernel} from "src/Kernel.sol";
-import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {toSubKeycode, fromSubKeycode} from "src/Submodules.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
@@ -219,8 +219,10 @@ abstract contract PriceV2BaseTest is Test {
             price = new OlympusPricev2(kernel, 18, OBSERVATION_FREQUENCY);
 
             // Deploy mock module writer
-            moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
-            priceWriter = price.generateGodmodeFixture(type(OlympusPricev2).name);
+            moduleWriter = price.generateMultiFunctionFixture(
+                ModulePermissions.moduleWithSubmodules()
+            );
+            priceWriter = price.generateMultiFunctionFixture(ModulePermissions.olympusPricev2());
             // Deploy price submodules
             chainlinkPrice = new ChainlinkPriceFeeds(price);
             bptPrice = new BalancerPoolTokenPrice(price, IVault(address(balVault)));

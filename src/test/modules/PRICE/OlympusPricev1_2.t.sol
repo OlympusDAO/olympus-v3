@@ -6,6 +6,7 @@ pragma solidity ^0.8.0;
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 // Mocks
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -21,10 +22,8 @@ import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 // Bophades
 import {Actions, Kernel} from "src/Kernel.sol";
-import {ModuleWithSubmodules} from "src/Submodules.sol";
 import {toSubKeycode} from "src/Submodules.sol";
 import {OlympusPricev1_2} from "src/modules/PRICE/OlympusPrice.v1_2.sol";
-import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
 import {SimplePriceFeedStrategy} from "modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol";
 
@@ -107,9 +106,13 @@ contract OlympusPricev1_2Test is Test {
             );
 
             // Deploy mock module writer
-            moduleWriter = price.generateGodmodeFixture(type(ModuleWithSubmodules).name);
-            priceWriterV1_2 = price.generateGodmodeFixture(type(OlympusPricev1_2).name);
-            priceWriterV2 = price.generateGodmodeFixture(type(OlympusPricev2).name);
+            moduleWriter = price.generateMultiFunctionFixture(
+                ModulePermissions.moduleWithSubmodules()
+            );
+            priceWriterV1_2 = price.generateMultiFunctionFixture(
+                ModulePermissions.olympusPricev1_2()
+            );
+            priceWriterV2 = price.generateMultiFunctionFixture(ModulePermissions.olympusPricev2());
 
             // Deploy price submodules
             chainlinkPrice = new ChainlinkPriceFeeds(price);

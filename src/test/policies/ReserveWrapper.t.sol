@@ -7,6 +7,7 @@ import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -60,7 +61,7 @@ contract ReserveWrapperTest is Test {
         // Deploy policies
         rolesAdmin = new RolesAdmin(kernel);
         reserveWrapper = new ReserveWrapper(address(kernel), address(reserve), address(sReserve));
-        godmode = TRSRY.generateGodmodeFixture(type(OlympusTreasury).name);
+        godmode = TRSRY.generateMultiFunctionFixture(ModulePermissions.olympusTreasury());
 
         // Label the tokens for easier debugging
         vm.label(address(reserve), "reserve");

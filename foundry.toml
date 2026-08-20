@@ -1,7 +1,7 @@
 [profile.default]
 ffi = true
-# Deployment verification and Quabi-based tests require AST artifacts from normal builds.
-ast = true
+# Carrying the AST doubles the size of `out/`, which CI caches.
+ast = false
 # Pinned so that every machine compiles with the same compiler. Without an explicit version, Forge
 # resolves each source file to the newest installed compiler that satisfies its pragma, so a
 # developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
@@ -12,7 +12,6 @@ evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
 fs_permissions = [
-    { access = "read", path = "./out/" },
     { access = "write", path = "./src/test/sim/out/" },
     { access = "read-write", path = "./deployments/" },
     { access = "read", path = "./src/scripts/" },

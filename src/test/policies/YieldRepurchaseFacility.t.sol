@@ -15,6 +15,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockClearinghouse} from "src/test/mocks/MockClearinghouse.sol";
 import {ModuleTestFixtureGenerator} from "src/test/lib/ModuleTestFixtureGenerator.sol";
+import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 
 import {FullMath} from "libraries/FullMath.sol";
 
@@ -689,7 +690,9 @@ contract YieldRepurchaseFacilityTest is Test {
         vm.stopPrank();
 
         // Register the new clearinghouse
-        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        godmode = CHREG.generateMultiFunctionFixture(
+            ModulePermissions.olympusClearinghouseRegistry()
+        );
         kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.prank(godmode);
         CHREG.activateClearinghouse(address(newClearinghouse));
@@ -741,7 +744,9 @@ contract YieldRepurchaseFacilityTest is Test {
         newClearinghouse.setPrincipalReceivables(1_000_000e18);
 
         // Register the new clearinghouse
-        godmode = CHREG.generateGodmodeFixture(type(OlympusClearinghouseRegistry).name);
+        godmode = CHREG.generateMultiFunctionFixture(
+            ModulePermissions.olympusClearinghouseRegistry()
+        );
         kernel.executeAction(Actions.ActivatePolicy, godmode);
         vm.prank(godmode);
         CHREG.activateClearinghouse(address(newClearinghouse));
