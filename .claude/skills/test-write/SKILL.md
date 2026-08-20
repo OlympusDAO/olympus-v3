@@ -612,7 +612,8 @@ function test_givenPositionExists_givenThirdPartyIsApproved_whenCallerIsThirdPar
     vm.prank(thirdParty);
     DEPOS.burn(positionId, 50e18);
 
-    (, , uint256 remaining, , , ) = DEPOS.positions(positionId);
+    (address owner, , uint256 remaining, , , ) = DEPOS.positions(positionId);
+    assertEq(owner, thirdParty, "position owner should be third party");
     assertEq(remaining, 50e18, "remaining should be 50");
 }
 ```
