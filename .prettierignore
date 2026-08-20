@@ -30,6 +30,7 @@ broadcast/**
 !broadcast/LZBridgeTestnetDeploy.s.sol/**/run-*.json
 
 # Never format transient Forge aliases or simulations.
+broadcast/**/31337/
 broadcast/**/dry-run/
 broadcast/**/*-latest.json
 
