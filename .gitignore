@@ -1,6 +1,7 @@
 /out/
 cache/
 .gen-perms/
+.gen_perms.*.sol
 node_modules/
 .pnpm-store/
 .env

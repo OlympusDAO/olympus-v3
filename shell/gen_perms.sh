@@ -35,6 +35,7 @@ done
 
 require_command forge "Install Foundry: https://getfoundry.sh"
 require_command jq
+require_command pnpm "Install the Node dependencies: pnpm install"
 
 # --ast asks solc for the AST whatever `ast` is set to in foundry.toml, and --skip test is safe
 # because a `permissioned` function can only be declared on a module, while no module lives in the
@@ -116,7 +117,9 @@ to_accessor() {
     printf '%s%s' "$(printf '%s' "${1:0:1}" | tr '[:upper:]' '[:lower:]')" "${1:1}"
 }
 
-generated=$(mktemp)
+# Prettier resolves both its configuration and its Solidity plugin from the directory of the file it
+# formats, so the draft is written inside the repository.
+generated=".gen_perms.$$.sol"
 trap 'rm -f "$generated"' EXIT
 
 {
@@ -159,12 +162,9 @@ trap 'rm -f "$generated"' EXIT
     echo "}"
 } > "$generated"
 
-if command -v pnpm > /dev/null 2>&1; then
-    cp "$generated" "${generated}.sol"
-    pnpm exec prettier --cache --cache-strategy content --write "${generated}.sol" > /dev/null 2>&1 \
-        && mv "${generated}.sol" "$generated"
-    rm -f "${generated}.sol"
-fi
+# The committed file has to match what prettier produces, or `pnpm run lint` and --check disagree.
+# A failure here stops the run.
+pnpm exec prettier --cache --cache-strategy content --write "$generated" > /dev/null
 
 contracts=$(cut -d'|' -f2 <<< "$records" | wc -l | tr -d ' ')
 selectors=$(cut -d'|' -f3 <<< "$records" | tr ',' '\n' | grep -c .)
