@@ -34,33 +34,6 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     /// @notice Oracle supplying the canonical backing value per OHM.
     address public backingOracle;
 
-    // ========== INTERNAL STRUCTS ========== //
-
-    struct RequiredCollateralUsdInputs {
-        uint256 debtValueUsd;
-        uint256 debtOhm;
-        uint256 backingPerOhmUsd;
-        uint256 minCollateralRatioBps;
-        uint256 backingMultiplierBps;
-    }
-
-    struct UtilizationInputs {
-        uint256 assetDebtOhm;
-        uint256 assetDebtCapOhm;
-    }
-
-    struct KeeperRewardInputs {
-        bool isProtocolSeizureCaller;
-        uint256 seizedCollateralAmount;
-        uint256 seizedUnrepaidDebtOhm;
-        uint256 backingPerOhmUsd;
-        uint256 backingMultiplierBps;
-        uint256 collateralUsdPrice;
-        uint8 collateralDecimals;
-        uint256 rewardBps;
-        uint256 maxKeeperRewardAsset;
-    }
-
     // ========== CONSTRUCTOR ========== //
 
     constructor(
@@ -105,6 +78,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     /// @notice Sets the oracle supplying canonical OHM backing.
+    /// @dev Oracle rotation is an operational risk change and is intentionally enabled-only. This
+    ///      prevents health and seizure economics from changing while borrower actions are paused.
     function setBackingOracle(address backingOracle_) external givenEnabled onlyAdminRole {
         BurnerLoansDependencies.validateBackingOracle(backingOracle_);
         backingOracle = backingOracle_;

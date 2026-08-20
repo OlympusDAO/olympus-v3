@@ -263,6 +263,9 @@ automatic restoration does not occur, `burner_loans_admin` must call `syncMintAp
 | Sync MINTR approval                                  | `burner_loans_admin`              | Direct Burner Loans Inventory call  |
 | Supply / withdraw protocol OHM                       | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
 
+Backing-oracle rotation is intentionally available only while Burner Loans is enabled. It changes
+health and seizure economics, so it cannot be performed while borrower actions are paused.
+
 Config creates one market per collateral/OHM pair under its currently bound Burner Loans facility.
 Each market stores Config as its manager and Burner Loans as its facility: Config is the
 Kernel-permissioned pass-through for market configuration, while Burner Loans services positions.
