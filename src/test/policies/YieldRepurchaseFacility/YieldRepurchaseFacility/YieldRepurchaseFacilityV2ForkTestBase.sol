@@ -166,8 +166,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint256 internal constant BACKING = 11.33e18;
     /// @notice The initial bond market discount (3%, 18 decimals), matching YRF v1.2.
     uint256 internal constant INITIAL_DISCOUNT = 3e16;
-    /// @notice The bond market max price premium (10%, 18 decimals): the width of the
-    ///         decay band of a market, measured from its initial price.
+    /// @notice The bond market max price premium (10%, 18 decimals): the ceiling of a
+    ///         market, measured from the oracle price. The market floor is placed at
+    ///         `oraclePrice * (1 + MAX_PRICE_PREMIUM)`, so the decay band spans
+    ///         `(1 + MAX_PRICE_PREMIUM) / (1 - INITIAL_DISCOUNT)`.
     uint256 internal constant MAX_PRICE_PREMIUM = 10e16;
     uint32 internal constant GRACE_PERIOD = 5 days;
     uint48 internal constant CONFIG_TIMELOCK_DELAY = 1 days;

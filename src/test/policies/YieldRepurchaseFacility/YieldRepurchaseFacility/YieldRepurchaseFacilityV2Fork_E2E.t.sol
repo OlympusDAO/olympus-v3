@@ -391,8 +391,9 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     }
 
     /// @notice Day 3 (no purchases): with nobody buying, the SDA decay drives both market
-    ///         prices down until they rest exactly on the undiscounted oracle floor, the
-    ///         headline v2 fix over the floorless v1 markets.
+    ///         prices down until they rest exactly on the floor placed at
+    ///         `oraclePrice * (1 + MAX_PRICE_PREMIUM)`, the headline v2 fix over the
+    ///         floorless v1 markets.
     function _assertMarketsAtPriceFloor() internal view {
         assertTrue(auctioneer.isLive(market[SUSDS].id), "floor: sUSDS market live");
         assertTrue(auctioneer.isLive(market[SUSDE].id), "floor: sUSDe market live");

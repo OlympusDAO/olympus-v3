@@ -5,9 +5,9 @@
 src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol
 src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol
 src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol
-src/policies/YieldRepurchaseFacility/YRFTimelock.sol
+src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol
 src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol
-src/policies/interfaces/YieldRepurchaseFacility/IYRFTimelock.sol
+src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityConfigTimelock.sol
 
 # Backing Oracle
 
