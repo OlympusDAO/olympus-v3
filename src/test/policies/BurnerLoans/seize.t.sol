@@ -11,6 +11,7 @@ import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInvento
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -250,6 +251,59 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),
             0,
             "defaulted principal rolled back"
+        );
+    }
+
+    // seize
+    // given collateral transfers report success without moving the withdrawn collateral
+    //  when seize is called
+    //   then the residual-balance guard reverts and rolls back all seizure state
+    function test_givenCollateralTransferLeavesResidualBalance_seizeRevertsAndRollsBack() public {
+        _makeUnhealthy(alice);
+        uint256 burnerLoansBalanceBefore = usds.balanceOf(address(burnerLoans));
+        uint256 keeperBalanceBefore = usds.balanceOf(keeper);
+        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+        vm.mockCall(
+            address(usds),
+            abi.encodeCall(ERC20.transfer, (keeper, 20e18)),
+            abi.encode(true)
+        );
+        vm.mockCall(
+            address(usds),
+            abi.encodeCall(ERC20.transfer, (address(trsry), 1_980e18)),
+            abi.encode(true)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_ResidualCollateralBalance.selector,
+                address(usds),
+                2_000e18
+            )
+        );
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        assertEq(position.debtOhm, 100e9, "position debt rolled back");
+        assertEq(position.depositedCollateral, 2_000e18, "position collateral rolled back");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt rolled back");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "active set rolled back");
+        assertEq(
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),
+            0,
+            "defaulted principal rolled back"
+        );
+        assertEq(
+            usds.balanceOf(address(burnerLoans)),
+            burnerLoansBalanceBefore,
+            "Burner Loans balance rolled back"
+        );
+        assertEq(usds.balanceOf(keeper), keeperBalanceBefore, "keeper balance rolled back");
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBalanceBefore,
+            "treasury balance rolled back"
         );
     }
 

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
@@ -11,6 +12,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -1104,6 +1106,103 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         assertEq(usds.balanceOf(alice), 1e6, "alice balance");
         assertEq(usds.balanceOf(address(burnerLoans)), 0, "burner loans residual");
+    }
+
+    // Condition tree:
+    // - Caller: owner
+    // - DepositManager behavior: reports a successful deposit without pulling collateral
+    // - Expected branch: the residual-balance guard reverts and rolls back the entire deposit
+    function test_givenDepositManagerLeavesResidualCollateral_revertsAndRollsBack() public {
+        uint128 amount = 1e6;
+        _mintAndApprove(address(usds), alice, amount);
+        IDepositManager.DepositParams memory params = IDepositManager.DepositParams({
+            asset: IERC20(address(usds)),
+            depositPeriod: BurnerLoansConstants.DEPOSIT_PERIOD,
+            depositor: address(burnerLoans),
+            amount: amount,
+            shouldWrap: false
+        });
+        vm.mockCall(
+            address(depositManager),
+            abi.encodeCall(IDepositManager.deposit, (params)),
+            abi.encode(uint256(1), uint256(amount))
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_ResidualCollateralBalance.selector,
+                address(usds),
+                amount
+            )
+        );
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(usds), amount, alice);
+
+        assertEq(usds.balanceOf(alice), amount, "caller collateral rolled back");
+        assertEq(usds.balanceOf(address(burnerLoans)), 0, "Burner Loans balance rolled back");
+        assertEq(usds.balanceOf(address(depositManager)), 0, "DepositManager balance unchanged");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            0,
+            "position collateral unchanged"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(IERC20(address(usds)), address(burnerLoans)),
+            0,
+            "DepositManager liabilities unchanged"
+        );
+    }
+
+    // Condition tree:
+    // - Caller: owner
+    // - Receipt manager behavior: refuses the DepositManager burn approval
+    // - Expected branch: approval failure reverts and rolls back custody and position accounting
+    function test_givenReceiptManagerRejectsApproval_revertsAndRollsBack() public {
+        uint128 amount = 1e6;
+        _mintAndApprove(address(usds), alice, amount);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        vm.mockCall(
+            address(receiptTokenManager),
+            abi.encodeWithSelector(
+                IERC6909.approve.selector,
+                address(depositManager),
+                receiptTokenId,
+                type(uint256).max
+            ),
+            abi.encode(false)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_ReceiptApprovalFailed.selector,
+                address(receiptTokenManager)
+            )
+        );
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(usds), amount, alice);
+
+        assertEq(usds.balanceOf(alice), amount, "caller collateral rolled back");
+        assertEq(usds.balanceOf(address(burnerLoans)), 0, "Burner Loans balance rolled back");
+        assertEq(usds.balanceOf(address(depositManager)), 0, "DepositManager balance rolled back");
+        assertEq(
+            receiptTokenManager.balanceOf(address(burnerLoans), receiptTokenId),
+            0,
+            "receipt balance rolled back"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(IERC20(address(usds)), address(burnerLoans)),
+            0,
+            "DepositManager liabilities rolled back"
+        );
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            0,
+            "position collateral unchanged"
+        );
     }
 
     // Condition tree:
