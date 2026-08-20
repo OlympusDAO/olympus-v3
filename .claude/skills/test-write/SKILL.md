@@ -47,6 +47,7 @@ abstract contract DEPOSTest {
     address public godmode;
     address public admin;
     address public user;
+    uint256 internal _positionId;
 
     // =======================================================================
     // setUp() - Contract deployment and initial configuration
@@ -103,8 +104,8 @@ abstract contract DEPOSTest {
     // State Modifiers - Establish commonly-used test states
     // =======================================================================
 
-    modifier givenPositionExists(uint256 positionId_) {
-        _createPosition(user, 100e18, 1e9);
+    modifier givenPositionExists() {
+        _positionId = _createPosition(user, 100e18, 1e9);
         _;
     }
 
@@ -152,8 +153,8 @@ Two modifier prefixes with distinct purposes:
 
 ```solidity
 // Creates a position before test runs
-modifier givenPositionExists(uint256 positionId_) {
-    _createPosition(user, 100e18, 1e9);
+modifier givenPositionExists() {
+    _positionId = _createPosition(user, 100e18, 1e9);
     _;
 }
 
@@ -180,13 +181,13 @@ modifier whenCallerIsNotAdmin() {
 
 // Usage example
 function test_givenPositionExists_whenAmountIsZero_reverts() public
-    givenPositionExists(1)
+    givenPositionExists
     whenAmountIsZero
 {
     // Position exists (given*)
     // Amount is zero (when*)
     vm.expectRevert(abi.encodeWithSelector(IContract.CONTRACT_InvalidAmount.selector));
-    DEPOS.burn(1, 0);
+    DEPOS.burn(_positionId, 0);
 }
 ```
 
@@ -194,8 +195,8 @@ function test_givenPositionExists_whenAmountIsZero_reverts() public
 
 ```solidity
 // GOOD - Clear state setup via modifier
-modifier givenPositionExists(uint256 positionId_) {
-    _createPosition(positionId_);
+modifier givenPositionExists() {
+    _positionId = _createPosition(user, 100e18, 1e9);
     _;
 }
 
@@ -215,7 +216,7 @@ modifier givenUserHasAllowance(address owner_, uint256 amount_) {
 ### Usage in Tests
 
 ```solidity
-function test_givenPositionExists_whenAmountIsZero_reverts() public givenPositionExists(1) {
+function test_givenPositionExists_whenAmountIsZero_reverts() public givenPositionExists {
     // Test logic here - position already exists
 }
 ```
@@ -528,9 +529,9 @@ function test_whenArrayLengthIsBetweenOneAndTen(uint8 length) public {
 **Why `bound()` is better for numeric ranges:**
 
 When a fuzzer generates a random `uint256`, nearly all values may be outside a small target range.
-For example, targeting `0 <= x <= 1000` discards 99.9999% of inputs. The `bound()` function wraps
-the input using modulo arithmetic to keep it in the chosen valid or invalid interval without
-discarding:
+For example, targeting `0 <= x <= 1000` discards all but 1,001 of the `2^256` possible inputs. The
+`bound()` function wraps the input using modulo arithmetic to keep it in the chosen valid or invalid
+interval without discarding:
 
 ```solidity
 // bound() implementation (simplified)
