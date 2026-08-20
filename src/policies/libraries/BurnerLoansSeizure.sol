@@ -39,6 +39,9 @@ library BurnerLoansSeizure {
     uint256 private constant _WAD = 1e18;
 
     /// @notice Price snapshot shared across a seizure batch.
+    /// @param ohmUsdPrice OHM/USD price, in PRICE decimals.
+    /// @param backingPerOhmUsd Backing per OHM, rescaled from 1e18 to PRICE decimals.
+    /// @param collateralUsdPrice Collateral/USD price, in PRICE decimals.
     struct Pricing {
         uint256 ohmUsdPrice;
         uint256 backingPerOhmUsd;
@@ -454,7 +457,7 @@ library BurnerLoansSeizure {
         uint256 seizedDebt_,
         uint256 seizedCollateral_,
         bool isProtocolCaller_
-    ) private pure returns (uint256) {
+    ) internal pure returns (uint256) {
         if (isProtocolCaller_ || config_.keeperRewardBps == 0 || config_.maxKeeperReward == 0) {
             return 0;
         }

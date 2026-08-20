@@ -103,8 +103,6 @@ contract MockDepositManager is IDepositManager {
         if (withdrawReverts) revert MockDepositManager_TransferFailed();
         _requireConfiguredPeriod(params.asset, params.depositPeriod, msg.sender);
 
-        _operatorLiabilities[_getOperatorKey(params.asset, msg.sender)] -= params.amount;
-
         AssetConfiguration memory configuration = _assetConfigurations[params.asset];
         bytes32 operatorKey = _getOperatorKey(params.asset, msg.sender);
         if (configuration.vault == address(0)) {
@@ -125,6 +123,7 @@ contract MockDepositManager is IDepositManager {
                 address(this)
             );
         }
+        _operatorLiabilities[operatorKey] -= actualAmount;
         return actualAmount;
     }
 

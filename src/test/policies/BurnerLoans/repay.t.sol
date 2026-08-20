@@ -517,7 +517,11 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.prank(bob);
         burnerLoans.repay(address(usds), 25e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 75e9, "alice debt");
-        assertEq(usds.balanceOf(bob), 0, "caller collateral");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            2_000e18,
+            "alice collateral unchanged"
+        );
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -530,7 +534,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
 
         vm.prank(alice);
-        vm.expectRevert();
+        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
@@ -545,7 +549,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _approveOhm(bob, 1e9);
 
         vm.prank(bob);
-        vm.expectRevert();
+        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }

@@ -12,10 +12,14 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
+import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";
 
 contract BurnerLoansHarness is BurnerLoans {
+    using SafeCast for uint256;
+
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
@@ -165,41 +169,32 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 feeRateWad_,
         uint256 termCount_
     ) external pure returns (uint256) {
-        return FullMath.mulDivUp(currentRequiredCollateral_, feeRateWad_, _WAD) * termCount_;
+        return
+            BurnerLoansCalculator.borrowFee(currentRequiredCollateral_, feeRateWad_) * termCount_;
     }
 
     function keeperRewardAsset(
         KeeperRewardInputs calldata inputs_
     ) external view returns (uint256) {
-        if (
-            inputs_.isProtocolSeizureCaller ||
-            inputs_.rewardBps == 0 ||
-            inputs_.maxKeeperRewardAsset == 0
-        ) return 0;
-
-        uint256 configuredReward = FullMath.mulDiv(
-            inputs_.seizedCollateralAmount,
-            inputs_.rewardBps,
-            _BPS
-        );
-        if (configuredReward > inputs_.maxKeeperRewardAsset) {
-            configuredReward = inputs_.maxKeeperRewardAsset;
-        }
-        uint256 backingRequirementUsd = BurnerLoansCalculator.requiredBackingUsd(
-            inputs_.seizedUnrepaidDebtOhm,
-            inputs_.backingPerOhmUsd,
-            _OHM_DECIMALS,
-            inputs_.backingMultiplierBps
-        );
-        uint256 requiredBackingAsset = BurnerLoansCalculator.requiredCollateralAsset(
-            backingRequirementUsd,
-            inputs_.collateralUsdPrice,
-            inputs_.collateralDecimals
-        );
-        uint256 surplus = inputs_.seizedCollateralAmount > requiredBackingAsset
-            ? inputs_.seizedCollateralAmount - requiredBackingAsset
-            : 0;
-        return configuredReward < surplus ? configuredReward : surplus;
+        IBurnerLoans.AssetConfig memory config;
+        config.backingMultiplierBps = inputs_.backingMultiplierBps.toUint16();
+        config.keeperRewardBps = inputs_.rewardBps.toUint16();
+        config.collateralDecimals = inputs_.collateralDecimals;
+        config.maxKeeperReward = inputs_.maxKeeperRewardAsset;
+        BurnerLoansSeizure.Pricing memory pricing = BurnerLoansSeizure.Pricing({
+            ohmUsdPrice: 0,
+            backingPerOhmUsd: inputs_.backingPerOhmUsd,
+            collateralUsdPrice: inputs_.collateralUsdPrice
+        });
+        return
+            BurnerLoansSeizure._keeperReward(
+                _OHM_DECIMALS,
+                config,
+                pricing,
+                inputs_.seizedUnrepaidDebtOhm,
+                inputs_.seizedCollateralAmount,
+                inputs_.isProtocolSeizureCaller
+            );
     }
 
     function setActiveDebtForTest(address asset_, uint256 assetActiveDebtOhm_) external {
@@ -215,11 +210,11 @@ contract BurnerLoansHarness is BurnerLoans {
         if (assetActiveDebtOhm_ < debtWithoutPosition) revert BurnerLoans_InvalidCap();
         uint256 targetPositionDebt = assetActiveDebtOhm_ - debtWithoutPosition;
         if (targetPositionDebt > positionDebt) {
-            uint128 increase = uint128(targetPositionDebt - positionDebt);
+            uint128 increase = (targetPositionDebt - positionDebt).toUint128();
             _FLOAN.increaseDebt(positionId, increase, 0, uint48(block.timestamp + 30 days));
             _INVENTORY.draw(address(this), increase);
         } else if (targetPositionDebt < positionDebt) {
-            uint128 decrease = uint128(positionDebt - targetPositionDebt);
+            uint128 decrease = (positionDebt - targetPositionDebt).toUint128();
             _FLOAN.decreaseDebt(positionId, decrease, 0);
             _INVENTORY.recordDefault(decrease);
         }
@@ -235,22 +230,26 @@ contract BurnerLoansHarness is BurnerLoans {
         if (position_.depositedCollateral > current.collateral) {
             _FLOAN.addCollateral(
                 positionId,
-                uint128(position_.depositedCollateral - current.collateral)
+                (position_.depositedCollateral - current.collateral).toUint128()
             );
         } else if (position_.depositedCollateral < current.collateral) {
             _FLOAN.removeCollateral(
                 positionId,
-                uint128(current.collateral - position_.depositedCollateral)
+                (current.collateral - position_.depositedCollateral).toUint128()
             );
         }
         if (position_.debtOhm > current.principalDue) {
-            uint128 increase = uint128(position_.debtOhm - current.principalDue);
+            uint128 increase = (position_.debtOhm - current.principalDue).toUint128();
             _FLOAN.increaseDebt(positionId, increase, 0, position_.maturity);
             _INVENTORY.draw(address(this), increase);
         } else if (position_.debtOhm < current.principalDue) {
-            uint128 decrease = uint128(current.principalDue - position_.debtOhm);
+            uint128 decrease = (current.principalDue - position_.debtOhm).toUint128();
             _FLOAN.decreaseDebt(positionId, decrease, 0);
             _INVENTORY.recordDefault(decrease);
+        }
+        IFLOANv1.Position memory resulting = _FLOAN.getPosition(positionId);
+        if (position_.debtOhm != 0 && position_.maturity > resulting.maturity) {
+            _FLOAN.extendMaturity(positionId, position_.maturity);
         }
     }
 
