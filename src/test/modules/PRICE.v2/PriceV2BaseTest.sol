@@ -2,7 +2,7 @@
 // solhint-disable max-states-count
 // solhint-disable custom-errors
 /// forge-lint: disable-start(mixed-case-variable,mixed-case-function)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";

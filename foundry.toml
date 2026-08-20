@@ -45,11 +45,6 @@ test = "src/test"
 # restore warnings solc discarded at its own limit of 256 per invocation, which applies separately
 # to each compilation job Forge runs.
 ignored_warnings_from = ["dependencies", "deprecated"]
-# The vendored Uniswap V3 SwapRouter test helper is referenced by nothing, and it is the only file
-# that reaches the uniswap-v3-periphery sources carrying an exact `pragma solidity =0.8.15`, which
-# cannot be satisfied under the pinned compiler. Skipping the helper keeps those sources out of the
-# compilation graph and avoids patching the dependency.
-skip = ["src/test/lib/UniswapV3/SwapRouter.sol"]
 
 [profile.deploy]
 script_execution_protection = false
@@ -88,7 +83,7 @@ runs = 256
 
 [lint]
 exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
-# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports them.
+# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
 lint_on_build = false
 
 [rpc_endpoints]

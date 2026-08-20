@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 /// forge-lint: disable-start(mixed-case-variable, unwrapped-modifier-logic)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 

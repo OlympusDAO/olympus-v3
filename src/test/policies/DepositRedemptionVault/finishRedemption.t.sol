@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 /// forge-lint: disable-start(unwrapped-modifier-logic)
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {DepositRedemptionVaultTest} from "./DepositRedemptionVaultTest.sol";
 import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDepositRedemptionVault.sol";

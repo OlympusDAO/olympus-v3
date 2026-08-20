@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @notice Common surface for the `PolicyAdmin` and `PolicyAdminOptimized` test harnesses.
 /// @dev    Lets a single copy of the test logic target either mix-in through this interface.

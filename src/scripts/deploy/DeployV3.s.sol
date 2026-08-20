@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: UNLICENSED
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Scripting
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";

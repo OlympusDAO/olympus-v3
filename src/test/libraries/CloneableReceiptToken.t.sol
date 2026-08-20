@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(erc20-unchecked-transfer, unwrapped-modifier-logic)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {CloneableReceiptToken} from "src/libraries/CloneableReceiptToken.sol";

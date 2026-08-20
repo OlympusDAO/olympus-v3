@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(unwrapped-modifier-logic)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 // =========== TEST CONTRACTS ===========
 import {Test} from "@forge-std-1.16.2/Test.sol";

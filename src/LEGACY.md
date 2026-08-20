@@ -117,3 +117,13 @@ src/test/policies/Distributor.t.sol
 src/test/policies/LegacyBurner.t.sol
 src/test/policies/pOLY.t.sol
 ```
+
+## Deleted since
+
+Removed in commit `a1e9c29ae485bdb01c691bb92d8cf14d1caed326` as test helpers that nothing referenced:
+
+```text
+src/test/lib/UniswapV3/SwapRouter.sol
+src/test/libraries/ComputeAddress.sol
+src/test/mocks/Faucet.sol
+```

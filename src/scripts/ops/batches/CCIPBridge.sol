@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";

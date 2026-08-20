@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {BalancerReentrancyGuard} from "src/libraries/Balancer/contracts/BalancerReentrancyGuard.sol";

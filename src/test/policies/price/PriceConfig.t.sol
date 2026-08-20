@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable)
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {UserFactory} from "src/test/lib/UserFactory.sol";
