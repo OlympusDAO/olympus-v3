@@ -104,6 +104,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param initialDiscount The new discount (`1e18` = 100%).
     event InitialDiscountSet(uint256 initialDiscount);
 
+    /// @notice Emitted when the bond market max price premium is set.
+    /// @param maxPricePremium The new premium (`1e18` = 100%).
+    event MaxPricePremiumSet(uint256 maxPricePremium);
+
     /// @notice Emitted when the receivables offset of a Clearinghouse is set.
     /// @param clearinghouse The Clearinghouse address.
     /// @param offset The cumulative offset, in the receivables' units.
@@ -266,6 +270,9 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the initial discount is not less than 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
 
+    /// @notice Thrown when the max price premium is not less than 100% (`1e18`).
+    error IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
+
     /// @notice Thrown when the yield buyback share exceeds 100% (`1e18`).
     error IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
 
@@ -427,8 +434,9 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice A per-vault seed of the stored next yield, supplied in the `enable`
     ///         payload.
-    /// @dev The `enable` payload is `abi.encode(uint256 initialDiscount, NextYieldSeed[]
-    ///      seeds)`. The restart performed by `enable` zeroes the next yields of all
+    /// @dev The `enable` payload is `abi.encode(uint256 initialDiscount, uint256
+    ///      maxPricePremium, NextYieldSeed[] seeds)`. The restart performed by `enable`
+    ///      zeroes the next yields of all
     ///      enabled vaults first, and each seed then sets the next yield of an enabled
     ///      registered vault; when the array contains duplicates, the last entry wins. An
     ///      empty array performs a plain full restart with zero yields. Disabled vaults
@@ -601,11 +609,24 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Sets the discount applied to the oracle price when a bond market opens:
     ///         the market's initial price corresponds to the oracle price reduced by the
-    ///         discount, while its minimum price corresponds to the undiscounted oracle
-    ///         price.
+    ///         discount.
     /// @dev Callable by the config timelock and the admin role. Emits `InitialDiscountSet`.
     /// @param initialDiscount_ The new discount (`1e18` = 100%); must be less than `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external;
+
+    /// @notice Sets the premium over the initial market price at which a bond market's
+    ///         minimum price is placed: the market decays from its initial price down to
+    ///         that minimum, so the premium caps the reserve paid for one OHM at
+    ///         `oraclePrice * (1 - initialDiscount) * (1 + maxPricePremium)`.
+    /// @dev Callable by the config timelock and the admin role. Emits
+    ///      `MaxPricePremiumSet`.
+    ///
+    ///      The premium is the width of the market's decay band. A premium too small
+    ///      leaves a market unable to reach a clearing price when the OHM price rises
+    ///      after the market opens, which strands that day's capacity in the buyback
+    ///      pool; a premium too large raises the price the facility can pay for one OHM.
+    /// @param maxPricePremium_ The new premium (`1e18` = 100%); must be less than `1e18`.
+    function setMaxPricePremium(uint256 maxPricePremium_) external;
 
     /// @notice Increases the cumulative receivables offset of a Clearinghouse.
     /// @dev Callable by the config timelock and the admin role. The resulting offset is
@@ -709,6 +730,13 @@ interface IYieldRepurchaseFacilityV2 {
     ///      config timelock when a `setInitialDiscount` action is queued.
     /// @param initialDiscount_ The proposed discount (`1e18` = 100%).
     function validateSetInitialDiscount(uint256 initialDiscount_) external view;
+
+    /// @notice Validates the parameter of `setMaxPricePremium`, reverting when the
+    ///         setter's value check would fail.
+    /// @dev The validation applies no authorization gate. Intended to be called by the
+    ///      config timelock when a `setMaxPricePremium` action is queued.
+    /// @param maxPricePremium_ The proposed premium (`1e18` = 100%).
+    function validateSetMaxPricePremium(uint256 maxPricePremium_) external view;
 
     /// @notice Validates the parameter of `enableAsset` against the live facility state,
     ///         reverting when the setter's value checks would fail.
@@ -836,6 +864,11 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Returns the discount applied to the oracle price when a bond market opens.
     /// @return The discount (`1e18` = 100%).
     function initialDiscount() external view returns (uint256);
+
+    /// @notice Returns the premium over the initial market price at which a bond
+    ///         market's minimum price is placed.
+    /// @return The premium (`1e18` = 100%).
+    function maxPricePremium() external view returns (uint256);
 
     /// @notice Returns the OHM purchased through the facility's bond markets and not yet
     ///         burned.

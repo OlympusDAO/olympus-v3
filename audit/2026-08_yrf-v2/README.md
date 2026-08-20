@@ -13,7 +13,7 @@ Key changes from v1.2:
 - Multi-asset ERC4626 whitelist, replacing the fixed USDS/sUSDS asset; each asset gets its own market, and assets whose shares cannot be redeemed synchronously (sUSDe) sell the shares directly.
 - Per-asset yield split between buybacks and retained backing, replacing the unconditional 100% burn.
 - The facility reads the governance-set backing value from the new `BackingOracle` policy, initialized at `$12.04`; the value can be updated without redeploying the facility and replaces v1.2's hardcoded `$11.33`.
-- Non-zero bond-market minimum price anchored to the OHM oracle price, plus a configurable initial discount.
+- Non-zero bond-market minimum price, set by a configurable initial discount and a configurable max price premium, replacing v1.2's minimum price of zero.
 - Governance-controlled Clearinghouse receivables offsets and one-way downward yield correction.
 - Accounting driven by tracked balances rather than raw token balances.
 - Mutable teller/auctioneer, and the `IEnabler` lifecycle in place of the bespoke `isShutdown` flag.
@@ -75,7 +75,7 @@ flowchart LR
 
 **Daily cycle** (every 3rd beat) — burns accumulated purchased OHM against a fresh backing withdrawal credited to the backing vault's budget, then opens one 24-hour market per enabled asset sized at `weeklyBudgetRemaining / daysRemaining`. Market creation is skipped entirely when the OHM oracle price is zero or below backing; the burn still runs.
 
-**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount, and the minimum price corresponds to the undiscounted oracle price, capping payout per OHM.
+**Market pricing** — the market quotes OHM per payout unit, so prices invert the oracle price: the initial price applies the configured discount, and the minimum price applies the configured max price premium on top of that discounted price, capping the payout per OHM at `oraclePrice * (1 - initialDiscount) * (1 + maxPricePremium)`. The premium is therefore the width of the market's decay band: too small and a market cannot reach a clearing price when the OHM price rises after it opens, too large and the facility can pay more for one OHM. Both parameters are read at market creation, so a market keeps the band it was created with.
 
 **Activation** — the one-shot `seedCycle` carries v1.2's epoch position and unspent weekly budget into v2 so the migration does not forfeit the remainder of the current buyback week.
 
@@ -107,7 +107,7 @@ The production role holders are:
 | Caller      | Authority                                                                                                                                                                                                                                                     |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `admin`     | `enable`, `disable`, `setFacility`, `setTimelockDelay`, and `setGracePeriod`                                                                                                                                                                                  |
-| `yrf_admin` | Queue individual or batched calls to set a yield buyback share or initial discount, enable or disable an asset, exclude a Clearinghouse, increase a Clearinghouse offset, or decrease a stored next-yield projection; also `reEnable` during the grace period |
+| `yrf_admin` | Queue individual or batched calls to set a yield buyback share, initial discount, or max price premium, enable or disable an asset, exclude a Clearinghouse, increase a Clearinghouse offset, or decrease a stored next-yield projection; also `reEnable` during the grace period |
 | `emergency` | `disable` and cancel queued actions, including while the policy is disabled                                                                                                                                                                                   |
 | Anyone      | Execute a queued action after the 1-day delay and before the end of its 3-day execution window                                                                                                                                                                |
 

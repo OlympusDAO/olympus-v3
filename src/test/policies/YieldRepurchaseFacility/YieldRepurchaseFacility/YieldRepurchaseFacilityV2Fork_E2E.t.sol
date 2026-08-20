@@ -163,6 +163,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
         assertEq(yieldRepo.timelock(), address(configTimelock), "timelock");
         assertEq(yieldRepo.initialDiscount(), INITIAL_DISCOUNT, "initial discount");
+        assertEq(yieldRepo.maxPricePremium(), MAX_PRICE_PREMIUM, "max price premium");
         assertEq(backingOracle.backing(), BACKING, "backing value");
 
         address[] memory vaults = yieldRepo.getVaults();

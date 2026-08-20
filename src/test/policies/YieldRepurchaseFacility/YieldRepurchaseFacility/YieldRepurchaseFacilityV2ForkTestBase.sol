@@ -166,6 +166,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint256 internal constant BACKING = 11.33e18;
     /// @notice The initial bond market discount (3%, 18 decimals), matching YRF v1.2.
     uint256 internal constant INITIAL_DISCOUNT = 3e16;
+    /// @notice The bond market max price premium (10%, 18 decimals): the width of the
+    ///         decay band of a market, measured from its initial price.
+    uint256 internal constant MAX_PRICE_PREMIUM = 10e16;
     uint32 internal constant GRACE_PERIOD = 5 days;
     uint48 internal constant CONFIG_TIMELOCK_DELAY = 1 days;
 
@@ -513,7 +516,11 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         configTimelock.enable("");
         backingOracle.enable(abi.encode(BACKING));
         yieldRepo.enable(
-            abi.encode(INITIAL_DISCOUNT, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+            abi.encode(
+                INITIAL_DISCOUNT,
+                MAX_PRICE_PREMIUM,
+                new IYieldRepurchaseFacilityV2.NextYieldSeed[](0)
+            )
         );
         vm.stopPrank();
     }
@@ -1038,10 +1045,14 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     {
         uint256 discountFactor = ONE_HUNDRED_PERCENT - INITIAL_DISCOUNT;
         uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        uint256 maxPrice = effectivePrice.mulDiv(
+            ONE_HUNDRED_PERCENT + MAX_PRICE_PREMIUM,
+            ONE_HUNDRED_PERCENT
+        );
         uint256 oracleSquare = 1e36;
 
         uint256 initialPrice = oracleSquare / effectivePrice;
-        uint256 minPrice = oracleSquare / oraclePrice_;
+        uint256 minPrice = oracleSquare / maxPrice;
 
         int8 priceDecimals = _mirrorPriceDecimals(initialPrice);
         // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2

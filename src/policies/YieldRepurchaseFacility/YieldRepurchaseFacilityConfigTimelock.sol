@@ -24,13 +24,15 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         YieldRepurchaseFacilityV2 on behalf of the `yrf_admin` role.
 /// @dev The policy is intended to be pinned as the facility's immutable timelock. In that
 ///      deployment shape the facility's `setYieldBuybackShare`, `setInitialDiscount`,
-///      `enableAsset`, `disableAsset`, `excludeClearinghouse`, `increaseClearinghouseOffset`,
-///      and `decreaseNextYield` are reachable either through the queue exposed here or
-///      directly by the admin (expected to be held only by the OCG timelock).
+///      `setMaxPricePremium`, `enableAsset`, `disableAsset`, `excludeClearinghouse`,
+///      `increaseClearinghouseOffset`, and `decreaseNextYield` are reachable either through
+///      the queue exposed here or directly by the admin (expected to be held only by the OCG
+///      timelock).
 ///
 ///      Every queue entry point validates the queued action against the live facility
 ///      state, so an action that would revert on the facility cannot be queued. The
-///      overwrite setters `setYieldBuybackShare` and `setInitialDiscount` are additionally
+///      overwrite setters `setYieldBuybackShare`, `setInitialDiscount`, and
+///      `setMaxPricePremium` are additionally
 ///      bound to the parameter value observed at queue time: execution reverts with
 ///      `IYieldRepurchaseFacilityConfigTimelock_PreStateChanged` when the live value no longer matches, and at most
 ///      one update per parameter can be pending at a time. The other facility functions are
@@ -163,6 +165,11 @@ contract YieldRepurchaseFacilityConfigTimelock is
         return _pendingActionIds[_initialDiscountLockKey()];
     }
 
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
+    function pendingMaxPricePremiumActionId() external view override returns (uint64 actionId) {
+        return _pendingActionIds[_maxPricePremiumLockKey()];
+    }
+
     // ========== QUEUE ========== //
 
     /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
@@ -200,6 +207,24 @@ contract YieldRepurchaseFacilityConfigTimelock is
                 facility,
                 IYieldRepurchaseFacilityV2.setInitialDiscount.selector,
                 abi.encode(initialDiscount_)
+            );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityConfigTimelock
+    /// @dev Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the `yrf_admin` role.
+    ///      - The facility slot has not been set.
+    ///      - `maxPricePremium_` is not less than 100% (`1e18`).
+    ///      - Another max price premium update is already pending.
+    function queueSetMaxPricePremium(
+        uint256 maxPricePremium_
+    ) external override returns (uint64 actionId) {
+        return
+            _queueAction(
+                facility,
+                IYieldRepurchaseFacilityV2.setMaxPricePremium.selector,
+                abi.encode(maxPricePremium_)
             );
     }
 
@@ -450,6 +475,15 @@ contract YieldRepurchaseFacilityConfigTimelock is
             );
             _clearSubActionState(actionId_, index_);
             yrf.setInitialDiscount(initialDiscount);
+        } else if (sel == IYieldRepurchaseFacilityV2.setMaxPricePremium.selector) {
+            uint256 maxPricePremium = abi.decode(action_.payload, (uint256));
+            _validatePreState(
+                actionId_,
+                index_,
+                _maxPricePremiumPreStateHash(yrf.maxPricePremium())
+            );
+            _clearSubActionState(actionId_, index_);
+            yrf.setMaxPricePremium(maxPricePremium);
         } else if (sel == IYieldRepurchaseFacilityV2.enableAsset.selector) {
             yrf.enableAsset(abi.decode(action_.payload, (address)));
         } else if (sel == IYieldRepurchaseFacilityV2.disableAsset.selector) {
@@ -615,6 +649,19 @@ contract YieldRepurchaseFacilityConfigTimelock is
             return;
         }
 
+        if (selector == IYieldRepurchaseFacilityV2.setMaxPricePremium.selector) {
+            _requirePayloadLength(action_.payload, _LEN_UINT256, selector);
+            yrf.validateSetMaxPricePremium(abi.decode(action_.payload, (uint256)));
+            _recordPreState(
+                actionId_,
+                index_,
+                selector,
+                _maxPricePremiumLockKey(),
+                _maxPricePremiumPreStateHash(yrf.maxPricePremium())
+            );
+            return;
+        }
+
         if (selector == IYieldRepurchaseFacilityV2.enableAsset.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS, selector);
             yrf.validateEnableAsset(abi.decode(action_.payload, (address)));
@@ -720,6 +767,11 @@ contract YieldRepurchaseFacilityConfigTimelock is
         return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setInitialDiscount.selector));
     }
 
+    /// @notice Returns the pending slot key of the max price premium.
+    function _maxPricePremiumLockKey() private pure returns (bytes32) {
+        return keccak256(abi.encode(IYieldRepurchaseFacilityV2.setMaxPricePremium.selector));
+    }
+
     /// @notice Hashes the pre-state of a vault's yield buyback share.
     /// @dev Shared by the queue-time recording and the execution-time re-check, so both
     ///      sites use one encoding.
@@ -735,6 +787,13 @@ contract YieldRepurchaseFacilityConfigTimelock is
     ///      sites use one encoding.
     function _initialDiscountPreStateHash(uint256 initialDiscount_) private pure returns (bytes32) {
         return keccak256(abi.encode(initialDiscount_));
+    }
+
+    /// @notice Hashes the pre-state of the max price premium.
+    /// @dev Shared by the queue-time recording and the execution-time re-check, so both
+    ///      sites use one encoding.
+    function _maxPricePremiumPreStateHash(uint256 maxPricePremium_) private pure returns (bytes32) {
+        return keccak256(abi.encode(maxPricePremium_));
     }
 
     /// @notice Reverts unless the payload has the exact `abi.encode` length of the selector's
