@@ -5,35 +5,44 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANAddCollateralTest is FLOANTest {
+    uint32 internal _marketId;
+    uint64 internal _positionId;
+
+    modifier givenMarketAndPositionAreCreated() {
+        _marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        _positionId = _createPosition(_marketId, facility, borrower);
+        _;
+    }
+
     // addCollateral
     // given caller without kernel permission
     //  when addCollateral is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts_fuzz(address caller_) public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
+    function test_givenCallerWithoutKernelPermission_reverts_fuzz(
+        address caller_
+    ) public givenMarketAndPositionAreCreated {
         _expectKernelPermissionRevert(caller_);
-        floan.addCollateral(positionId, 1);
+        floan.addCollateral(_positionId, 1);
     }
 
     // addCollateral
     // given valid amount
     //  when addCollateral is called
     //   then it updates only collateral
-    function test_givenValidAmount_updatesOnlyCollateral_fuzz(uint128 amount_) public {
+    function test_givenValidAmount_updatesOnlyCollateral_fuzz(
+        uint128 amount_
+    ) public givenMarketAndPositionAreCreated {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
 
         vm.prank(facility);
         vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.PositionCollateralChanged(positionId, amount_);
-        uint128 collateral = floan.addCollateral(positionId, amount_);
+        emit IFLOANv1.PositionCollateralChanged(_positionId, amount_);
+        uint128 collateral = floan.addCollateral(_positionId, amount_);
 
-        IFLOANv1.Position memory position = floan.getPosition(positionId);
+        IFLOANv1.Position memory position = floan.getPosition(_positionId);
         assertEq(collateral, amount_, "returned collateral");
         assertEq(position.collateral, amount_, "stored collateral");
-        assertEq(floan.getMarketCollateral(marketId), amount_, "market collateral");
+        assertEq(floan.getMarketCollateral(_marketId), amount_, "market collateral");
         assertEq(position.principalDue, 0, "principal unchanged");
         assertEq(position.maturity, 0, "maturity unchanged");
     }
@@ -62,21 +71,21 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given market originations are disabled
     //  when addCollateral is called
     //   then it reverts without changing collateral
-    function test_givenOriginationsDisabled_revertsWithoutStateChange() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
-
+    function test_givenOriginationsDisabled_revertsWithoutStateChange()
+        public
+        givenMarketAndPositionAreCreated
+    {
         vm.prank(manager);
-        floan.setMarketOriginationsEnabled(marketId, false);
+        floan.setMarketOriginationsEnabled(_marketId, false);
 
         vm.prank(facility);
         vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_OriginationsDisabled.selector, marketId)
+            abi.encodeWithSelector(IFLOANv1.FLOAN_OriginationsDisabled.selector, _marketId)
         );
-        floan.addCollateral(positionId, 1);
+        floan.addCollateral(_positionId, 1);
 
-        assertEq(floan.getPosition(positionId).collateral, 0, "position collateral unchanged");
-        assertEq(floan.getMarketCollateral(marketId), 0, "market collateral unchanged");
+        assertEq(floan.getPosition(_positionId).collateral, 0, "position collateral unchanged");
+        assertEq(floan.getMarketCollateral(_marketId), 0, "market collateral unchanged");
     }
 
     // addCollateral
@@ -104,12 +113,10 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given zero amount
     //  when addCollateral is called
     //   then it reverts
-    function test_givenZeroAmount_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
+    function test_givenZeroAmount_reverts() public givenMarketAndPositionAreCreated {
         vm.prank(facility);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidAmount.selector);
-        floan.addCollateral(positionId, 0);
+        floan.addCollateral(_positionId, 0);
     }
 
     // addCollateral
@@ -129,27 +136,29 @@ contract FLOANAddCollateralTest is FLOANTest {
     // given caller is not the position market facility
     //  when addCollateral is called
     //   then it reverts
-    function test_givenCallerIsNotPositionMarketFacility_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
+    function test_givenCallerIsNotPositionMarketFacility_reverts()
+        public
+        givenMarketAndPositionAreCreated
+    {
         vm.prank(otherFacility);
         vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, marketId, otherFacility)
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, _marketId, otherFacility)
         );
-        floan.addCollateral(positionId, 1);
+        floan.addCollateral(_positionId, 1);
     }
 
     // addCollateral
     // given caller is the position market manager but not its facility
     //  when addCollateral is called
     //   then it reverts
-    function test_givenCallerIsPositionMarketManager_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        uint64 positionId = _createPosition(marketId, facility, borrower);
+    function test_givenCallerIsPositionMarketManager_reverts()
+        public
+        givenMarketAndPositionAreCreated
+    {
         vm.prank(manager);
         vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, marketId, manager)
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotFacility.selector, _marketId, manager)
         );
-        floan.addCollateral(positionId, 1);
+        floan.addCollateral(_positionId, 1);
     }
 }

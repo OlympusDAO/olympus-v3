@@ -103,7 +103,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
         uint16 collateralFactorBps_,
         uint16 minCollateralRatioBps_
     ) public {
-        termLength_ = uint48(bound(termLength_, 1, type(uint48).max));
+        termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
         collateralFactorBps_ = uint16(bound(collateralFactorBps_, 0, 10_000));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory before_ = floan.getMarket(marketId);

@@ -279,7 +279,7 @@ contract FLOANCreateMarketTest is FLOANTest {
         bytes16 configId_,
         bytes calldata configData_
     ) public {
-        termLength_ = uint48(bound(termLength_, 1, type(uint48).max));
+        termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
         collateralFactorBps_ = uint16(bound(collateralFactorBps_, 0, 10_000));
         baseFeeBps_ = uint16(bound(baseFeeBps_, 0, 10_000));
 

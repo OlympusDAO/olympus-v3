@@ -15,7 +15,7 @@ contract FLOANExportStateTest is FLOANTest {
     address[] internal _knownDebtTokens;
     address[] internal _knownBorrowers;
 
-    address internal thirdBorrower;
+    address internal _thirdBorrower;
 
     // export state
     // given the ledger is empty
@@ -106,7 +106,7 @@ contract FLOANExportStateTest is FLOANTest {
     }
 
     function _buildDiverseLedger() internal {
-        thirdBorrower = makeAddr("thirdBorrower");
+        _thirdBorrower = makeAddr("thirdBorrower");
         _knownFacilities.push(facility);
         _knownFacilities.push(otherFacility);
         _knownCollateralTokens.push(collateralToken);
@@ -115,7 +115,7 @@ contract FLOANExportStateTest is FLOANTest {
         _knownDebtTokens.push(otherDebtToken);
         _knownBorrowers.push(borrower);
         _knownBorrowers.push(otherBorrower);
-        _knownBorrowers.push(thirdBorrower);
+        _knownBorrowers.push(_thirdBorrower);
 
         _buildMarkets();
         _buildPositions();
@@ -229,7 +229,7 @@ contract FLOANExportStateTest is FLOANTest {
         _addExpectedCollateral(positionId, otherFacility, 250e6);
         _increaseExpectedDebt(positionId, otherFacility, 3e18, 3e17, longMaturity);
 
-        positionId = _createExpectedPosition(2, otherFacility, thirdBorrower);
+        positionId = _createExpectedPosition(2, otherFacility, _thirdBorrower);
         _addExpectedCollateral(positionId, otherFacility, 350e6);
         _increaseExpectedDebt(positionId, otherFacility, 4e18, 4e17, longMaturity);
 
