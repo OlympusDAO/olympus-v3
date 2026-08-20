@@ -45,6 +45,11 @@ require_command jq
 # and it would also leave the AST in the `out/` that CI uploads to every test job.
 AST_ROOT=".gen-perms"
 
+# The tree is discarded first. Forge keeps the artifact of a contract that a source file no longer
+# declares, and that artifact carries the AST of the file as it was, so reading one would regenerate
+# every contract of that file from an outdated snapshot.
+rm -rf "$AST_ROOT"
+
 echo "Building the artifacts that carry the AST"
 FOUNDRY_OUT="${AST_ROOT}/out" FOUNDRY_CACHE_PATH="${AST_ROOT}/cache" \
     forge build --skip test --ast > /dev/null
@@ -57,6 +62,8 @@ records=$(
     for source in $(grep -rl --include='*.sol' 'permissioned' src | grep -v '^src/test/' | sort); do
         artifact_dir="${AST_ROOT}/out/$(basename "$source")"
         [ -d "$artifact_dir" ] || continue
+        # Every artifact of a source shares its AST, and the directory was just rebuilt from
+        # scratch. It keeps the run repeatable.
         artifact=$(find "$artifact_dir" -maxdepth 1 -name '*.json' | sort | head -1)
         [ -n "$artifact" ] || continue
 
