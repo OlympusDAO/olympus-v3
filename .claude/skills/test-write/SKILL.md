@@ -543,11 +543,15 @@ function bound(uint256 x, uint256 min, uint256 max) pure returns (uint256) {
 // when caller is not admin
 //   [X] it reverts
 
-function test_whenCallerIsNotAdmin_reverts() public {
-    address nonAdmin = makeAddr("nonAdmin");
-    vm.expectRevert(abi.encodeWithSelector(ROLES.ROLES_RequireRole.selector));
-    vm.prank(nonAdmin);
-    DEPOS.mint(100e18, 1e9);
+function test_whenCallerIsNotAdmin_reverts(address caller_) public {
+    vm.assume(caller_ != admin);
+    vm.assume(caller_ != address(0));
+
+    vm.expectRevert(
+        abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
+    );
+    vm.prank(caller_);
+    contract.restrictedFunction(); // Uses onlyAdminRole
 }
 
 // given position exists
@@ -692,11 +696,13 @@ function _expectRevertInvalidParams(string memory param) internal {
 }
 
 // Usage
-function test_whenCallerIsNotAdmin_reverts() public {
-    address nonAdmin = makeAddr("nonAdmin");
+function test_whenCallerIsNotAdmin_reverts(address caller_) public {
+    vm.assume(caller_ != admin);
+    vm.assume(caller_ != address(0));
+
     _expectRevertNotAdmin();
-    vm.prank(nonAdmin);
-    contract.restrictedFunction();
+    vm.prank(caller_);
+    contract.restrictedFunction(); // Uses onlyAdminRole
 }
 ```
 
