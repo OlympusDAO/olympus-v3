@@ -158,7 +158,9 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
     //     derived accrual law (share-gap appreciation minus the payout feedback) and
     //     stays within the derived envelope
     // [X] the treasury share delta between the branches is constant after the reset
-    // [X] day 3 (no buys): v1 decays below the v2 floor, v2 rests exactly on the floor
+    // [X] day 3 (no buys), first intra-day beat: neither branch has reached the v2 floor
+    // [X] day 3 (no buys), second intra-day beat: v1 decays below the v2 floor, v2 rests
+    //     exactly on the floor
     // [X] both weekly projections match their formulas exactly; the difference is the
     //     clearinghouse rounding shape
 
@@ -564,7 +566,7 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
         prevPayoutDiff = int256(payoutV2) - int256(rec.payoutTotal);
 
         _beatIntraDay();
-        if (day_ == 2) _assertPriceFloorParity(rec, marketId, rec.priceMid1);
+        if (day_ == 2) _assertPriceBandParity(rec, marketId, rec.priceMid1);
         _beatIntraDay();
         if (day_ == 2) _assertPriceFloorParity(rec, marketId, rec.priceMid2);
     }
@@ -608,9 +610,14 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
         );
     }
 
-    /// @notice Day 3 intra-day: the v2 market rests exactly on its floor while the
-    ///         journaled v1 price has decayed below that floor - the v1.2 defect the
-    ///         floor fixes, demonstrated on the fork.
+    /// @notice Day 3, second intra-day beat: the v2 market rests exactly on its floor
+    ///         while the journaled v1 price has decayed below that floor - the v1.2
+    ///         defect the floor fixes, demonstrated on the fork.
+    /// @dev    The SDA decays the debt linearly over a 72-hour interval, so an unclamped
+    ///         price is `initialPrice * (1 - elapsed / 72 hours)`: 7/9 of the opening
+    ///         price here, against a floor at `(1 - INITIAL_DISCOUNT) / (1 +
+    ///         MAX_PRICE_PREMIUM)` = 0.8818 of it. The first intra-day beat sits at 8/9
+    ///         and so is still inside the band; `_assertPriceBandParity` covers it.
     function _assertPriceFloorParity(
         DayRecord memory rec_,
         uint256 marketIdV2_,
@@ -620,6 +627,25 @@ contract YieldRepurchaseFacilityV2ForkTests_V1Parity is YieldRepurchaseFacilityV
         assertEq(scaleV2, rec_.scale, "floor: same scale");
         assertEq(auctioneer.marketPrice(marketIdV2_), minPriceV2, "floor: v2 at floor");
         assertLt(v1Price_, minPriceV2, "floor: v1 decayed below the v2 floor");
+    }
+
+    /// @notice Day 3, first intra-day beat: eight hours of decay leaves both branches
+    ///         inside the decay band, so neither price has met the v2 floor yet. The
+    ///         premium is measured from the oracle price and does not compound with the
+    ///         discount, so the band is
+    ///         `(1 + maxPricePremium) / (1 - initialDiscount)` wide and one beat of decay
+    ///         does not cross it.
+    function _assertPriceBandParity(
+        DayRecord memory rec_,
+        uint256 marketIdV2_,
+        uint256 v1Price_
+    ) internal view {
+        (, uint256 minPriceV2, uint256 scaleV2) = _marketSummary(marketIdV2_);
+        assertEq(scaleV2, rec_.scale, "band: same scale");
+        // Both branches sit at 8/9 of their opening price against a floor at 0.8818 of
+        // it, so the v2 market is not yet clamped and v1 has not yet passed the floor.
+        assertGt(auctioneer.marketPrice(marketIdV2_), minPriceV2, "band: v2 above floor");
+        assertGt(v1Price_, minPriceV2, "band: v1 above the v2 floor");
     }
 
     function _assertResetTwo(WeekJournal memory journal_) internal view {

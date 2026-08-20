@@ -256,7 +256,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
             // The two intra-day beats: the facility only advances its epoch
             _beat();
-            if (day == 2) _assertMarketsAtPriceFloor();
+            if (day == 2) _assertMarketsInsidePriceBand();
             _beat();
             if (day == 2) _assertMarketsAtPriceFloor();
         }
@@ -390,10 +390,16 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
     }
 
-    /// @notice Day 3 (no purchases): with nobody buying, the SDA decay drives both market
-    ///         prices down until they rest exactly on the floor placed at
-    ///         `oraclePrice * (1 + MAX_PRICE_PREMIUM)`, the headline v2 fix over the
-    ///         floorless v1 markets.
+    /// @notice Day 3, second intra-day beat (16 hours of decay, no purchases): the SDA
+    ///         decay has driven both market prices down until they rest exactly on the
+    ///         floor placed at `oraclePrice * (1 + MAX_PRICE_PREMIUM)`, the headline v2
+    ///         fix over the floorless v1 markets.
+    /// @dev    The SDA decays the debt linearly over a 72-hour interval, so an unclamped
+    ///         price is `initialPrice * (1 - elapsed / 72 hours)`: 8/9 of the opening
+    ///         price at the first intra-day beat and 7/9 at the second. The floor sits at
+    ///         `1 / band` of the opening price, where the band is
+    ///         `(1 + MAX_PRICE_PREMIUM) / (1 - INITIAL_DISCOUNT)` = 1.134, so the floor is
+    ///         0.8818 of the opening price. Only the second beat clears it.
     function _assertMarketsAtPriceFloor() internal view {
         assertTrue(auctioneer.isLive(market[SUSDS].id), "floor: sUSDS market live");
         assertTrue(auctioneer.isLive(market[SUSDE].id), "floor: sUSDe market live");
@@ -406,6 +412,39 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             auctioneer.marketPrice(market[SUSDE].id),
             market[SUSDE].minPrice,
             "floor: sUSDe price at floor"
+        );
+    }
+
+    /// @notice Day 3, first intra-day beat (8 hours of decay, no purchases): both market
+    ///         prices have left the opening price but have not yet met the floor. The
+    ///         premium is measured from the oracle price and does not compound with the
+    ///         discount, so the decay band is
+    ///         `(1 + MAX_PRICE_PREMIUM) / (1 - INITIAL_DISCOUNT)` wide and one beat of
+    ///         decay does not cross it.
+    function _assertMarketsInsidePriceBand() internal view {
+        assertTrue(auctioneer.isLive(market[SUSDS].id), "band: sUSDS market live");
+        assertTrue(auctioneer.isLive(market[SUSDE].id), "band: sUSDe market live");
+
+        // 8/9 of the opening price against a floor at 0.8818 of it.
+        assertGt(
+            auctioneer.marketPrice(market[SUSDS].id),
+            market[SUSDS].minPrice,
+            "band: sUSDS price above floor"
+        );
+        assertLt(
+            auctioneer.marketPrice(market[SUSDS].id),
+            market[SUSDS].initialPrice,
+            "band: sUSDS price below opening"
+        );
+        assertGt(
+            auctioneer.marketPrice(market[SUSDE].id),
+            market[SUSDE].minPrice,
+            "band: sUSDe price above floor"
+        );
+        assertLt(
+            auctioneer.marketPrice(market[SUSDE].id),
+            market[SUSDE].initialPrice,
+            "band: sUSDe price below opening"
         );
     }
 
