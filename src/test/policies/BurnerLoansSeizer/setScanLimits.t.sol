@@ -60,4 +60,44 @@ contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
         assertEq(seizer.maxBorrowersToCheck(), 10, "check limit unchanged");
         assertEq(seizer.maxBorrowersToSeize(), 5, "seize limit unchanged");
     }
+
+    // setScanLimits
+    // when both limits are at their minimum accepted value
+    //  then the exact lower boundary succeeds
+    function test_whenScanLimitsAreAtMinimum_setsScanLimits() public {
+        vm.prank(admin);
+        seizer.setScanLimits(1, 1);
+
+        assertEq(seizer.maxBorrowersToCheck(), 1, "minimum check limit");
+        assertEq(seizer.maxBorrowersToSeize(), 1, "minimum seize limit");
+    }
+
+    // setScanLimits
+    // when both limits are at their semantic maximum
+    //  then the exact upper boundary succeeds
+    function test_whenScanLimitsAreAtMaximum_setsScanLimits() public {
+        uint16 maximumCheckLimit = seizer.MAX_BORROWERS_TO_CHECK();
+        uint8 maximumSeizeLimit = seizer.MAX_BORROWERS_TO_SEIZE();
+
+        vm.prank(admin);
+        seizer.setScanLimits(maximumCheckLimit, maximumSeizeLimit);
+
+        assertEq(seizer.maxBorrowersToCheck(), maximumCheckLimit, "maximum check limit");
+        assertEq(seizer.maxBorrowersToSeize(), maximumSeizeLimit, "maximum seize limit");
+    }
+
+    // setScanLimits
+    // given the seizer is disabled
+    //  when an authorized caller updates the limits
+    //   then configuration remains available while execution is paused
+    function test_givenDisabled_setsScanLimits() public {
+        vm.prank(admin);
+        seizer.disable("");
+
+        vm.prank(burnerLoansAdmin);
+        seizer.setScanLimits(20, 10);
+
+        assertEq(seizer.maxBorrowersToCheck(), 20, "disabled check limit");
+        assertEq(seizer.maxBorrowersToSeize(), 10, "disabled seize limit");
+    }
 }

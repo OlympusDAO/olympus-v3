@@ -50,4 +50,20 @@ contract BurnerLoansSeizerRemoveAssetTest is BurnerLoansSeizerTest {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         seizer.removeAsset(assetOne);
     }
+
+    // removeAsset
+    // given the seizer is disabled with a managed asset
+    //  when admin removes the asset
+    //   then configuration remains available while execution is paused
+    function test_givenDisabled_givenManagedAsset_removesAsset() public {
+        vm.prank(admin);
+        seizer.addAsset(assetOne);
+        vm.prank(admin);
+        seizer.disable("");
+
+        vm.prank(admin);
+        seizer.removeAsset(assetOne);
+
+        assertFalse(seizer.isAssetManaged(assetOne), "asset removed while disabled");
+    }
 }

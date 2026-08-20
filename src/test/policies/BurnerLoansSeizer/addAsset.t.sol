@@ -48,4 +48,18 @@ contract BurnerLoansSeizerAddAssetTest is BurnerLoansSeizerTest {
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         seizer.addAsset(assetOne);
     }
+
+    // addAsset
+    // given the seizer is disabled
+    //  when admin adds an asset
+    //   then configuration remains available while execution is paused
+    function test_givenDisabled_addsManagedAsset() public {
+        vm.prank(admin);
+        seizer.disable("");
+
+        vm.prank(admin);
+        seizer.addAsset(assetOne);
+
+        assertTrue(seizer.isAssetManaged(assetOne), "asset managed while disabled");
+    }
 }

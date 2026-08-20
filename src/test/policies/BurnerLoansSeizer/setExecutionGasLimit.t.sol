@@ -35,4 +35,37 @@ contract BurnerLoansSeizerSetExecutionGasLimitTest is BurnerLoansSeizerTest {
         vm.prank(caller_);
         seizer.setExecutionGasLimit(8_000_000);
     }
+
+    function test_whenExecutionGasLimitIsValid(uint32 executionGasLimit_) public {
+        uint32 executionGasLimit = uint32(bound(executionGasLimit_, 1, type(uint32).max));
+
+        vm.prank(admin);
+        seizer.setExecutionGasLimit(executionGasLimit);
+
+        assertEq(seizer.executionGasLimit(), executionGasLimit, "valid execution gas limit");
+    }
+
+    function test_whenExecutionGasLimitIsOne_setsMinimum() public {
+        vm.prank(admin);
+        seizer.setExecutionGasLimit(1);
+
+        assertEq(seizer.executionGasLimit(), 1, "minimum execution gas limit");
+    }
+
+    function test_whenExecutionGasLimitIsUint32Max_setsMaximum() public {
+        vm.prank(admin);
+        seizer.setExecutionGasLimit(type(uint32).max);
+
+        assertEq(seizer.executionGasLimit(), type(uint32).max, "maximum execution gas limit");
+    }
+
+    function test_givenDisabled_setsExecutionGasLimit() public {
+        vm.prank(admin);
+        seizer.disable("");
+
+        vm.prank(burnerLoansAdmin);
+        seizer.setExecutionGasLimit(8_000_000);
+
+        assertEq(seizer.executionGasLimit(), 8_000_000, "disabled execution gas limit");
+    }
 }
