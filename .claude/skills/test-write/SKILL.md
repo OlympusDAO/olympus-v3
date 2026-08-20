@@ -609,13 +609,13 @@ function test_givenPositionExists_whenAmountEqualsRemaining() public {
 
 // given position exists
 //   given position is wrapped
-//     given third party is approved
-//       when caller transfers the position
+//     given transfer caller is approved
+//       when transfer caller transfers the position
 //         [X] approval preserves the owner
 //         [X] transfer updates the owner
 //         [X] transfer preserves the remaining deposit
 
-function test_givenPositionExists_givenPositionIsWrapped_givenThirdPartyIsApproved_whenCallerTransfersPosition()
+function test_givenPositionExists_givenPositionIsWrapped_givenTransferCallerIsApproved_whenTransferCallerTransfersPosition()
     public
 {
     address transferCaller = makeAddr("transferCaller");
