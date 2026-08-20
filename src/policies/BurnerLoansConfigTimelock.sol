@@ -75,12 +75,16 @@ contract BurnerLoansConfigTimelock is
     /// @notice Projected fee config and the projection it superseded for an asset.
     /// @param previousActionId Queued action containing the preceding fee projection.
     /// @param previousIndex Sub-action index of the preceding fee projection.
+    /// @param nextActionId Queued action containing the succeeding fee projection.
+    /// @param nextIndex Sub-action index of the succeeding fee projection.
     /// @param exists Whether this projection is populated.
     /// @param asset Collateral asset whose fee config is projected.
     /// @param config Projected fee config after applying the queued sub-action.
     struct FeeConfigPostState {
         uint64 previousActionId;
         uint64 previousIndex;
+        uint64 nextActionId;
+        uint64 nextIndex;
         bool exists;
         address asset;
         IBurnerLoans.AssetFeeConfig config;
@@ -89,19 +93,23 @@ contract BurnerLoansConfigTimelock is
     /// @notice Projected asset config and the projection it superseded for an asset.
     /// @param previousActionId Queued action containing the preceding asset projection.
     /// @param previousIndex Sub-action index of the preceding asset projection.
+    /// @param nextActionId Queued action containing the succeeding asset projection.
+    /// @param nextIndex Sub-action index of the succeeding asset projection.
     /// @param exists Whether this projection is populated.
     /// @param asset Collateral asset whose configuration is projected.
     /// @param config Projected asset config after applying the queued sub-action.
     struct AssetConfigPostState {
         uint64 previousActionId;
         uint64 previousIndex;
+        uint64 nextActionId;
+        uint64 nextIndex;
         bool exists;
         address asset;
         IBurnerLoans.AssetConfig config;
     }
 
     /// @notice Burner Loans Config policy for which this contract may act as config operator.
-    IBurnerLoansConfig internal immutable BURNER_LOANS;
+    IBurnerLoansConfig internal immutable _BURNER_LOANS;
 
     /// @notice Expected live config hash for each queued sub-action.
     mapping(uint64 actionId => mapping(uint256 index => bytes32 expectedHash))
@@ -153,12 +161,12 @@ contract BurnerLoansConfigTimelock is
             revert BurnerLoansConfigTimelock_KernelMismatch(configKernel);
         }
 
-        BURNER_LOANS = burnerLoans_;
+        _BURNER_LOANS = burnerLoans_;
     }
 
     // ========== POLICY SETUP ========== //
 
-    /// @notice Configures module dependencies for the policy.
+    /// @inheritdoc Policy
     /// @dev Reverts if the installed ROLES module major version is not 1.
     /// @return dependencies Keycodes for required modules.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
@@ -172,7 +180,7 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
-    /// @notice Returns kernel permissions requested by the policy.
+    /// @inheritdoc Policy
     /// @dev This policy does not request module permissions.
     /// @return requests Empty permission request array.
     function requestPermissions() external pure override returns (Permissions[] memory requests) {
@@ -181,10 +189,9 @@ contract BurnerLoansConfigTimelock is
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @notice Returns the Burner Loans Config policy targeted by this timelock.
-    /// @return IBurnerLoansConfig The Burner Loans Config policy.
+    /// @inheritdoc IBurnerLoansConfigTimelock
     function burnerLoans() external view override returns (IBurnerLoansConfig) {
-        return BURNER_LOANS;
+        return _BURNER_LOANS;
     }
 
     // ========== QUEUE FUNCTIONS ========== //
@@ -213,7 +220,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS),
+                address(_BURNER_LOANS),
                 IBurnerLoansConfig.setAssetFeeConfig.selector,
                 abi.encode(asset_, config_, selection_)
             );
@@ -239,7 +246,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS),
+                address(_BURNER_LOANS),
                 IBurnerLoansConfig.setAssetDebtCap.selector,
                 abi.encode(asset_, debtCapOhm_)
             );
@@ -269,7 +276,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS),
+                address(_BURNER_LOANS),
                 IBurnerLoansConfig.setAssetRiskConfig.selector,
                 abi.encode(asset_, update_, selection_)
             );
@@ -317,12 +324,15 @@ contract BurnerLoansConfigTimelock is
         _validateQueuedBurnerLoansAction(actionId_, index_, action_);
     }
 
+    /// @notice Completes batch queueing without additional batch-level state.
     function _onBatchQueued(
         address,
         uint64 actionId_,
         ITimelockBatchQueue.BatchAction[] memory
     ) internal override {}
 
+    /// @notice Revalidates policy enablement and operator authority before execution.
+    /// @dev Reverts when either policy is disabled or this timelock is no longer the config operator.
     function _validateExecution(
         address,
         uint64,
@@ -333,6 +343,9 @@ contract BurnerLoansConfigTimelock is
         _requireAuthorizedConfigOperator();
     }
 
+    /// @notice Restricts queued-action cancellation to the emergency role.
+    /// @dev Reverts when `caller_` lacks `EMERGENCY_ROLE`.
+    /// @param caller_ Account requesting cancellation.
     function _validateCancellation(
         address caller_,
         uint64,
@@ -367,33 +380,47 @@ contract BurnerLoansConfigTimelock is
 
     /// @dev Reverts unless the constructor-bound Config is active in this policy's Kernel.
     function _requireBurnerLoansActive() internal view {
-        address burnerLoans_ = address(BURNER_LOANS);
+        address burnerLoans_ = address(_BURNER_LOANS);
         if (!kernel.isPolicyActive(Policy(burnerLoans_))) {
             revert BurnerLoansConfigTimelock_InvalidBurnerLoans(burnerLoans_);
         }
     }
 
+    /// @notice Clears projected pre-state and post-state after cancellation.
+    /// @param actionId_ Cancelled queued-action identifier.
+    /// @param subActionCount_ Number of projections to clear.
     function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal override {
-        for (uint256 i; i < subActionCount_; ++i) {
+        for (uint256 i = subActionCount_; i != 0; ) {
+            unchecked {
+                --i;
+            }
             delete _expectedPreStateHashes[actionId_][i];
             _clearFeeConfigPostState(actionId_, i);
             _clearAssetConfigPostState(actionId_, i);
         }
     }
 
+    /// @notice Validates and executes one queued Burner Loans Config sub-action.
+    /// @dev Reverts when live pre-state differs from the queued projection or the target setter fails.
+    /// @param actionId_ Queued-action identifier.
+    /// @param index_ Sub-action index.
+    /// @param action_ Sub-action to execute.
     function _executeSubAction(
         uint64 actionId_,
         uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
         _validatePreState(actionId_, index_, action_);
-        BurnerLoansConfigTimelockLib.executeSubAction(BURNER_LOANS, action_);
+        BurnerLoansConfigTimelockLib.executeSubAction(_BURNER_LOANS, action_);
 
         delete _expectedPreStateHashes[actionId_][index_];
         _clearFeeConfigPostState(actionId_, index_);
         _clearAssetConfigPostState(actionId_, index_);
     }
 
+    /// @notice Validates a proposed timelock delay against the supported bounds.
+    /// @dev Reverts with `ITimelockBatchQueue_TimelockDelayInvalid` outside the bounds.
+    /// @param delay_ Proposed delay in seconds.
     function _validateTimelockDelay(uint48 delay_) internal pure override {
         if (delay_ < MIN_TIMELOCK_DELAY || delay_ > MAX_TIMELOCK_DELAY) {
             revert ITimelockBatchQueue_TimelockDelayInvalid(
@@ -404,18 +431,26 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
+    /// @notice Returns the window during which a queued action may execute.
+    /// @return Execution window in seconds.
     function _executionWindow() internal pure override returns (uint48) {
         return EXECUTION_WINDOW;
     }
 
     // ========== VALIDATION ========== //
 
+    /// @notice Validates and stores projections for one queued Config sub-action.
+    /// @dev Reverts with `ITimelockBatchQueue_ActionInvalid` for an unsupported target, selector,
+    ///      or payload length, and bubbles validation errors from Burner Loans Config.
+    /// @param actionId_ Queued-action identifier.
+    /// @param index_ Sub-action index.
+    /// @param action_ Sub-action to validate.
     function _validateQueuedBurnerLoansAction(
         uint64 actionId_,
         uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal {
-        if (action_.target != address(BURNER_LOANS)) {
+        if (action_.target != address(_BURNER_LOANS)) {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
         }
 
@@ -437,7 +472,7 @@ contract BurnerLoansConfigTimelock is
                 feeConfig,
                 feeSelection
             );
-            BURNER_LOANS.validateFeeConfig(config);
+            _BURNER_LOANS.validateFeeConfig(config);
             _storeFeeConfigPostState(actionId_, index_, feeAsset, config);
             return;
         }
@@ -463,7 +498,9 @@ contract BurnerLoansConfigTimelock is
                 update,
                 selection
             );
-            BURNER_LOANS.validateAssetRiskConfig(BurnerLoansConfigTimelockLib.toRiskConfig(config));
+            _BURNER_LOANS.validateAssetRiskConfig(
+                BurnerLoansConfigTimelockLib.toRiskConfig(config)
+            );
             _storeAssetConfigPostState(actionId_, index_, asset, config);
             return;
         }
@@ -473,7 +510,7 @@ contract BurnerLoansConfigTimelock is
             (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
             IBurnerLoans.AssetConfig memory config = _projectAssetConfig(asset);
             _expectedPreStateHashes[actionId_][index_] = _hashAssetConfig(asset, config);
-            BURNER_LOANS.validateAssetDebtCap(asset, debtCapOhm);
+            _BURNER_LOANS.validateAssetDebtCap(asset, debtCapOhm);
             config.debtCap = debtCapOhm;
             _storeAssetConfigPostState(actionId_, index_, asset, config);
             return;
@@ -492,8 +529,10 @@ contract BurnerLoansConfigTimelock is
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
+    /// @notice Requires this timelock to remain the Config policy's authorized operator.
+    /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` after operator rotation.
     function _requireAuthorizedConfigOperator() internal view {
-        if (BURNER_LOANS.configOperator() != address(this)) {
+        if (_BURNER_LOANS.configOperator() != address(this)) {
             revert IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator(address(this));
         }
     }
@@ -501,9 +540,14 @@ contract BurnerLoansConfigTimelock is
     /// @notice Validates that the targeted Burner Loans Config policy is enabled.
     /// @dev Reverts with `IEnabler.NotEnabled` while Burner Loans Config is disabled.
     function _requireBurnerLoansConfigEnabled() internal view {
-        if (!IEnabler(address(BURNER_LOANS)).isEnabled()) revert IEnabler.NotEnabled();
+        if (!IEnabler(address(_BURNER_LOANS)).isEnabled()) revert IEnabler.NotEnabled();
     }
 
+    /// @notice Requires a queued payload to have the selector's exact static ABI length.
+    /// @dev Reverts with `ITimelockBatchQueue_ActionInvalid` when the length differs.
+    /// @param payload_ ABI-encoded sub-action payload.
+    /// @param expectedLength_ Required payload length in bytes.
+    /// @param selector_ Selector reported by the invalid-action error.
     function _requirePayloadLength(
         bytes memory payload_,
         uint256 expectedLength_,
@@ -519,11 +563,13 @@ contract BurnerLoansConfigTimelock is
     ///      state. Reverts with `BurnerLoans_AssetNotConfigured` when the asset is not configured.
     /// @param asset_ Collateral asset to validate.
     function _requireAssetConfigured(address asset_) internal view {
-        if (!BURNER_LOANS.isAssetConfigured(asset_)) {
+        if (!_BURNER_LOANS.isAssetConfigured(asset_)) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
         }
     }
 
+    /// @notice Requires admin or Burner Loans admin authority to queue configuration updates.
+    /// @param caller_ Account queueing the update.
     function _requireRiskConfigProposer(address caller_) internal view {
         if (!_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, BURNER_LOANS_ADMIN_ROLE)) {
             revert ROLESv1.ROLES_RequireRole(BURNER_LOANS_ADMIN_ROLE);
@@ -547,7 +593,7 @@ contract BurnerLoansConfigTimelock is
             }
         }
 
-        return BURNER_LOANS.getAssetFeeConfig(asset_);
+        return _BURNER_LOANS.getAssetFeeConfig(asset_);
     }
 
     /// @notice Returns the latest projected asset config or the canonical live config.
@@ -569,9 +615,10 @@ contract BurnerLoansConfigTimelock is
             }
         }
 
-        return BURNER_LOANS.getAssetConfig(asset_);
+        return _BURNER_LOANS.getAssetConfig(asset_);
     }
 
+    /// @notice Stores a fee-config projection and links it to the prior projection for the asset.
     function _storeFeeConfigPostState(
         uint64 actionId_,
         uint256 index_,
@@ -582,18 +629,26 @@ contract BurnerLoansConfigTimelock is
         _feeConfigPostStates[actionId_][index_] = FeeConfigPostState({
             previousActionId: previousKey.actionId,
             previousIndex: previousKey.index,
+            nextActionId: 0,
+            nextIndex: 0,
             exists: true,
             asset: asset_,
             config: config_
         });
         // Casting is safe because TimelockBatchQueue caps batch length at 15 sub-actions.
         // forge-lint: disable-next-line(unsafe-typecast)
-        _latestFeeConfigPostStateKeys[asset_] = ProjectionKey({
-            actionId: actionId_,
-            index: uint64(index_)
-        });
+        ProjectionKey memory newKey = ProjectionKey({actionId: actionId_, index: uint64(index_)});
+        if (previousKey.actionId != 0) {
+            FeeConfigPostState storage previous = _feeConfigPostStates[previousKey.actionId][
+                previousKey.index
+            ];
+            previous.nextActionId = newKey.actionId;
+            previous.nextIndex = newKey.index;
+        }
+        _latestFeeConfigPostStateKeys[asset_] = newKey;
     }
 
+    /// @notice Stores an asset-config projection and links it to the prior projection for the asset.
     function _storeAssetConfigPostState(
         uint64 actionId_,
         uint256 index_,
@@ -604,107 +659,107 @@ contract BurnerLoansConfigTimelock is
         _assetConfigPostStates[actionId_][index_] = AssetConfigPostState({
             previousActionId: previousKey.actionId,
             previousIndex: previousKey.index,
+            nextActionId: 0,
+            nextIndex: 0,
             exists: true,
             asset: asset_,
             config: config_
         });
         // Casting is safe because TimelockBatchQueue caps batch length at 15 sub-actions.
         // forge-lint: disable-next-line(unsafe-typecast)
-        _latestAssetConfigPostStateKeys[asset_] = ProjectionKey({
-            actionId: actionId_,
-            index: uint64(index_)
-        });
+        ProjectionKey memory newKey = ProjectionKey({actionId: actionId_, index: uint64(index_)});
+        if (previousKey.actionId != 0) {
+            AssetConfigPostState storage previous = _assetConfigPostStates[previousKey.actionId][
+                previousKey.index
+            ];
+            previous.nextActionId = newKey.actionId;
+            previous.nextIndex = newKey.index;
+        }
+        _latestAssetConfigPostStateKeys[asset_] = newKey;
     }
 
+    /// @notice Removes a fee-config projection and repairs the per-asset projection chain.
     function _clearFeeConfigPostState(uint64 actionId_, uint256 index_) internal {
         FeeConfigPostState storage state = _feeConfigPostStates[actionId_][index_];
         if (!state.exists) return;
 
         address asset = state.asset;
-        uint64 previousActionId = state.previousActionId;
-        uint64 previousIndex = state.previousIndex;
+        ProjectionKey memory previousKey = ProjectionKey({
+            actionId: state.previousActionId,
+            index: state.previousIndex
+        });
+        ProjectionKey memory nextKey = ProjectionKey({
+            actionId: state.nextActionId,
+            index: state.nextIndex
+        });
+        if (previousKey.actionId != 0) {
+            FeeConfigPostState storage previous = _feeConfigPostStates[previousKey.actionId][
+                previousKey.index
+            ];
+            previous.nextActionId = nextKey.actionId;
+            previous.nextIndex = nextKey.index;
+        }
+        if (nextKey.actionId != 0) {
+            FeeConfigPostState storage next = _feeConfigPostStates[nextKey.actionId][nextKey.index];
+            next.previousActionId = previousKey.actionId;
+            next.previousIndex = previousKey.index;
+        }
+
         ProjectionKey storage latest = _latestFeeConfigPostStateKeys[asset];
         if (latest.actionId == actionId_ && latest.index == index_) {
-            latest.actionId = previousActionId;
-            latest.index = previousIndex;
-        } else {
-            _relinkFeeConfigPostState(asset, actionId_, index_, previousActionId, previousIndex);
+            latest.actionId = previousKey.actionId;
+            latest.index = previousKey.index;
         }
 
         delete _feeConfigPostStates[actionId_][index_];
     }
 
+    /// @notice Removes an asset-config projection and repairs the per-asset projection chain.
     function _clearAssetConfigPostState(uint64 actionId_, uint256 index_) internal {
         AssetConfigPostState storage state = _assetConfigPostStates[actionId_][index_];
         if (!state.exists) return;
 
         address asset = state.asset;
-        uint64 previousActionId = state.previousActionId;
-        uint64 previousIndex = state.previousIndex;
+        ProjectionKey memory previousKey = ProjectionKey({
+            actionId: state.previousActionId,
+            index: state.previousIndex
+        });
+        ProjectionKey memory nextKey = ProjectionKey({
+            actionId: state.nextActionId,
+            index: state.nextIndex
+        });
+        if (previousKey.actionId != 0) {
+            AssetConfigPostState storage previous = _assetConfigPostStates[previousKey.actionId][
+                previousKey.index
+            ];
+            previous.nextActionId = nextKey.actionId;
+            previous.nextIndex = nextKey.index;
+        }
+        if (nextKey.actionId != 0) {
+            AssetConfigPostState storage next = _assetConfigPostStates[nextKey.actionId][
+                nextKey.index
+            ];
+            next.previousActionId = previousKey.actionId;
+            next.previousIndex = previousKey.index;
+        }
+
         ProjectionKey storage latest = _latestAssetConfigPostStateKeys[asset];
         if (latest.actionId == actionId_ && latest.index == index_) {
-            latest.actionId = previousActionId;
-            latest.index = previousIndex;
-        } else {
-            _relinkAssetConfigPostState(asset, actionId_, index_, previousActionId, previousIndex);
+            latest.actionId = previousKey.actionId;
+            latest.index = previousKey.index;
         }
 
         delete _assetConfigPostStates[actionId_][index_];
     }
 
-    function _relinkFeeConfigPostState(
-        address asset_,
-        uint64 actionId_,
-        uint256 index_,
-        uint64 previousActionId_,
-        uint64 previousIndex_
-    ) internal {
-        uint256 len = _maxBatchSize();
-        for (uint256 i = index_ + 1; i < len; ++i) {
-            FeeConfigPostState storage candidate = _feeConfigPostStates[actionId_][i];
-            if (
-                candidate.exists &&
-                candidate.asset == asset_ &&
-                candidate.previousActionId == actionId_ &&
-                candidate.previousIndex == index_
-            ) {
-                candidate.previousActionId = previousActionId_;
-                candidate.previousIndex = previousIndex_;
-                return;
-            }
-        }
-    }
-
-    function _relinkAssetConfigPostState(
-        address asset_,
-        uint64 actionId_,
-        uint256 index_,
-        uint64 previousActionId_,
-        uint64 previousIndex_
-    ) internal {
-        uint256 len = _maxBatchSize();
-        for (uint256 i = index_ + 1; i < len; ++i) {
-            AssetConfigPostState storage candidate = _assetConfigPostStates[actionId_][i];
-            if (
-                candidate.exists &&
-                candidate.asset == asset_ &&
-                candidate.previousActionId == actionId_ &&
-                candidate.previousIndex == index_
-            ) {
-                candidate.previousActionId = previousActionId_;
-                candidate.previousIndex = previousIndex_;
-                return;
-            }
-        }
-    }
-
+    /// @notice Requires live Config state to match the pre-state captured when the action queued.
     function _validatePreState(
         uint64 actionId_,
         uint256 index_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view {
         BurnerLoansConfigTimelockLib.validatePreState(
-            BURNER_LOANS,
+            _BURNER_LOANS,
             actionId_,
             index_,
             action_,
@@ -712,6 +767,7 @@ contract BurnerLoansConfigTimelock is
         );
     }
 
+    /// @notice Hashes an asset address and fee configuration for optimistic concurrency checks.
     function _hashFeeConfig(
         address asset_,
         IBurnerLoans.AssetFeeConfig memory config_
@@ -719,6 +775,7 @@ contract BurnerLoansConfigTimelock is
         return keccak256(abi.encode(asset_, config_));
     }
 
+    /// @notice Hashes an asset address and asset configuration for optimistic concurrency checks.
     function _hashAssetConfig(
         address asset_,
         IBurnerLoans.AssetConfig memory config_

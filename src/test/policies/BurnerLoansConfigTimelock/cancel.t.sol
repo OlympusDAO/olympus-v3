@@ -295,4 +295,67 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         assertEq(cancelledBatchActionId, 2, "cancelled batch action id");
         assertEq(horizonActionId, 3, "horizon action id");
     }
+
+    // cancelQueuedAction
+    // given a queued risk action has both an earlier and a later dependent action
+    //  when the middle and later actions are cancelled
+    //   then a new action uses the earlier pending projection
+    function test_givenMiddleAndLatestRiskProjectionsCancelled_restoresEarlierProjection() public {
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
+
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
+        termUpdate.termLength = 14 days;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory termSelection;
+        termSelection.termLength = true;
+
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory collateralFactorUpdate;
+        collateralFactorUpdate.collateralFactorBps = 9_500;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory collateralFactorSelection;
+        collateralFactorSelection.collateralFactorBps = true;
+
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory horizonUpdate;
+        horizonUpdate.maxMaturityHorizon = 21 days;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory horizonSelection;
+        horizonSelection.maxMaturityHorizon = true;
+
+        vm.startPrank(burnerLoansAdmin);
+        uint64 termActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), termUpdate, termSelection)
+        );
+        uint64 cancelledActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), collateralFactorUpdate, collateralFactorSelection)
+        );
+        uint64 horizonActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), horizonUpdate, horizonSelection)
+        );
+        vm.stopPrank();
+
+        vm.prank(emergency);
+        configTimelockHarness.cancelQueuedAction(cancelledActionId);
+        vm.prank(emergency);
+        configTimelockHarness.cancelQueuedAction(horizonActionId);
+
+        vm.prank(burnerLoansAdmin);
+        uint64 replacementHorizonActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), horizonUpdate, horizonSelection)
+        );
+        vm.warp(block.timestamp + configTimelockHarness.timelockDelay());
+
+        configTimelockHarness.executeQueuedAction(termActionId);
+        configTimelockHarness.executeQueuedAction(replacementHorizonActionId);
+
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
+        assertEq(config.termLength, 14 days, "term length");
+        assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
+        assertEq(config.collateralFactorBps, 10_000, "cancelled collateral factor not applied");
+    }
 }
