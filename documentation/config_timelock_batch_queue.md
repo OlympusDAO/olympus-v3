@@ -111,7 +111,7 @@ bytes32 scopedKey = keccak256(abi.encode(destination, localKey));
 For example, an asset fee domain can use this local key:
 
 ```solidity
-bytes32 localKey = keccak256(abi.encode(FEE_CONFIG_DOMAIN, asset));
+bytes32 localKey = keccak256(abi.encode(_FEE_CONFIG_DOMAIN, asset));
 ```
 
 The complete reserved key is then:
@@ -204,14 +204,14 @@ For a pending batch, the base performs these operations:
 5. The base compares every current state hash with its stored hash.
 6. `_executeConfigSubAction` dispatches the product call.
 7. Steps 3 through 6 repeat in array order for each sub-action.
-8. The base releases all keys after every dispatch succeeds.
+8. The base releases all keys only after every dispatch in the complete batch succeeds.
 9. `TimelockBatchQueue` removes the stored sub-actions and emits the execution event.
 
 The hash checks occur immediately before each dispatch. If an earlier sub-action changes a later
 hash, the later check fails and the complete transaction reverts.
 
-The base keeps every key until the complete batch succeeds. A reentrant target cannot queue a key
-that an earlier sub-action in the same batch owns.
+The base keeps every key until the complete batch succeeds. A reentrant target cannot queue any key
+owned by the executing batch, including a key belonging to a later sub-action.
 
 ### Cancel and expire
 
