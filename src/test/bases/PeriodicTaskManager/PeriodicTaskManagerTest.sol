@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable, unwrapped-modifier-logic)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
-import {Test} from "@forge-std-1.9.6/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {Kernel, Actions} from "src/Kernel.sol";
 import {MockPeriodicTaskManager} from "src/test/bases/PeriodicTaskManager/MockPeriodicTaskManager.sol";

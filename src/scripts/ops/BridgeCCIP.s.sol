@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicensed
-pragma solidity >=0.8.20;
+pragma solidity ^0.8.20;
 
 import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {console2} from "forge-std/console2.sol";

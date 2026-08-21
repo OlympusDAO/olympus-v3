@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function, mixed-case-variable)
-pragma solidity >=0.8.15;
+pragma solidity ^0.8.15;
 
 import {AggregatorV2V3Interface, AggregatorV3Interface, AggregatorInterface} from "src/interfaces/AggregatorV2V3Interface.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";

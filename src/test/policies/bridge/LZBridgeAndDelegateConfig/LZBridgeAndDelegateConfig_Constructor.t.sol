@@ -1,12 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.30;
+pragma solidity ^0.8.30;
 
 import {LZBridgeAndDelegateConfigTestBase} from "src/test/policies/bridge/LZBridgeAndDelegateConfig/LZBridgeAndDelegateConfigTestBase.sol";
 
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {ILZBridgeAndDelegateConfig} from "src/policies/interfaces/ILZBridgeAndDelegateConfig.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";

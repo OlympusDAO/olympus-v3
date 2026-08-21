@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {ITypeAndVersion} from "@chainlink-ccip-1.6.0/shared/interfaces/ITypeAndVersion.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.4;
+pragma solidity ^0.8.4;
 
 /// @title ICCIPRateLimiter
 /// @notice The token bucket types, events and errors of the Chainlink CCIP `RateLimiter` library.

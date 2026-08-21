@@ -1,6 +1,14 @@
 [profile.default]
 ffi = true
-ast = true
+# Carrying the AST doubles the size of `out/`, which CI caches.
+ast = false
+# Pinned so that every machine compiles with the same compiler. Without an explicit version, Forge
+# resolves each source file to the newest installed compiler that satisfies its pragma, so a
+# developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
+# into its binary, but an explicitly pinned version is fetched from the live release list on demand.
+solc_version = "0.8.36"
+# Forge 1.7.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
+evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
 fs_permissions = [
@@ -13,27 +21,36 @@ fs_permissions = [
 ]
 gas_limit = "18446744073709551615"
 
-# The solc version was previously explicitly set, but has now been moved to `compilation_restrictions` in order to compile some contracts with 0.8.24
-# solc_version = "0.8.15"
-
 optimizer = true
 optimizer_runs = 10000
 verbosity = 3
 
-# Operator is too large - it needs to only use 10 optimizer runs
-# The "size" script in package.json replicates these overrides, as "forge build --sizes" does not use the profiles defined here
+# Operator needs special optimizer settings to remain within the bytecode-size limit.
+# Restrictions apply to the entire connected import graph, not only to the matching source file.
+# A script that imports Operator compiles all contracts in that graph at 10 runs, even when it does
+# not deploy Operator. Use IOperator for interactions and a dedicated script to deploy Operator.
+# A restriction is never satisfied on its own: Forge picks a profile that meets it, preferring the
+# default profile and otherwise the alphabetically first entry below. Removing an entry that a
+# restriction relies on fails the build with "Missing profile satisfying settings restrictions".
+# A restriction also overrides `--optimizer-runs` on the command line.
 additional_compiler_profiles = [
     { name = "ten-runs", optimizer_runs = 10 },
-    { name = "four-hundred-runs", optimizer_runs = 400 },
-    { name = "five-thousand-runs", optimizer_runs = 5000 },
+    { name = "four-hundred-runs", optimizer_runs = 400 }
 ]
 compilation_restrictions = [
-    { paths = "src/policies/Operator.sol", profile = "ten-runs" },
-    { paths = "src/policies/cooler/MonoCooler.sol", profile = "five-thousand-runs" },
-    { paths = "src/policies/bridge/CCIPBridgeConfigTimelock.sol", profile = "four-hundred-runs" },
-    { paths = "**", version = "0.8.15" },
+    { paths = "src/policies/Operator.sol", optimizer_runs = 10 },
+    { paths = "src/policies/bridge/CCIPBridgeConfigTimelock.sol", profile = "four-hundred-runs" }
 ]
 libs = ["dependencies"]
+# Tests live here, not in the default `test` directory. While this pointed at a directory that does
+# not exist, Forge replaced the `test/=src/test/` entry of remappings.txt with narrower generated
+# ones covering only the subdirectories that happen to exist, so an import from any new subdirectory
+# of src/test failed to resolve.
+test = "src/test"
+# Drops warnings originating in the dependencies from solc output. Post-processing only: it cannot
+# restore warnings solc discarded at its own limit of 256 per invocation, which applies separately
+# to each compilation job Forge runs.
+ignored_warnings_from = ["dependencies", "deprecated"]
 
 [profile.deploy]
 script_execution_protection = false
@@ -41,18 +58,39 @@ script_execution_protection = false
 [profile.multisig]
 script_execution_protection = false
 
-# Coverage profile, used by `shell/test_coverage.sh`: `forge coverage` merges the coverage items of
-# every compile job of one solc version into a single source-id space, so a settings constraint
-# (which creates a second job for the same solc version) misattributes items and hits between
-# files.
+# Used by `forge coverage`, which recompiles from scratch every run and keeps nothing in `out/`.
 [profile.coverage]
-compilation_restrictions = [{ paths = "**", version = "0.8.15" }]
+# The report is the output; test traces are not.
+verbosity = 0
+# A coverage run must not rewrite the tracked gas snapshots, which are measured under the settings
+# of a normal build.
+gas_snapshot_emit = false
+# Coverage output is long enough without solc warnings.
+ignored_warnings_from = ["dependencies", "src"]
+# Emptied so that coverage compiles in a single job. The Operator restriction otherwise adds a
+# second job carrying the same compiler version, and coverage items of two such jobs are
+# misattributed between files.
+compilation_restrictions = []
+
+# Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
+# overrides both of the sections below, and the command line does not override that comment either,
+# so suites carrying one keep their own counts.
+[profile.coverage.fuzz]
+runs = 8
+
+[profile.coverage.invariant]
+runs = 1
+depth = 15
+# Hides the per-selector call table that every invariant suite would otherwise print.
+show_metrics = false
 
 [fuzz]
 runs = 256
 
 [lint]
 exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
+# Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
+lint_on_build = false
 
 [rpc_endpoints]
 # Place ALCHEMY_API_KEY in the environment or .env file
@@ -77,7 +115,7 @@ surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", re
 base64 = { version = "1.1.0", git = "https://github.com/Brechtpd/base64.git", rev = "4d85607b18d981acff392d2e99ba654305552a97" }
 chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
 chainlink-local-029 = { version = "0.2.9", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "f8c0efe8685660dac07e08f4558f1b578ae991aa" }
-forge-std = "1.9.6"
+forge-std = "1.16.2"
 safe-utils = { version = "0.0.17", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "c057d167139dc4878f10ab7133a8c069fa6b1601" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }
 clones-with-immutable-args = { version = "1.1.2", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce" }

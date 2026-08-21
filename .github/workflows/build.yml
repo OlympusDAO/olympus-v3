@@ -1,0 +1,207 @@
+name: Build and Tests
+on:
+    push:
+        branches:
+            - master
+    pull_request:
+
+permissions:
+    contents: read
+
+# Supersede in-flight pull request runs. Push runs are never cancelled, so they always finish
+# publishing their cache entry and build artifact.
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours. The jobs that wait on RPC get more room.
+        timeout-minutes: 30
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Restore and save Foundry build cache
+              uses: ./.github/actions/foundry-cache
+              with:
+                  # Fork pull requests may restore trusted caches but must not publish cache entries.
+                  save: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+            - name: Build
+              run: pnpm run build
+
+            - name: Upload Foundry build artifacts
+              uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+              with:
+                  name: foundry-build
+                  path: |
+                      out
+                      cache/solidity-files-cache.json
+                  if-no-files-found: error
+                  retention-days: 1
+
+    permission-lists:
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 20
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            # The check compiles the non-test sources with the AST enabled, into artifact and cache
+            # directories of its own that it discards before each run. Neither the cache nor the
+            # build artifacts that the build job publishes carry the AST, so this job depends on
+            # neither.
+            - name: Check the generated permission lists
+              run: pnpm run gen:perms:check
+
+    unit-tests:
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run unit tests
+              run: pnpm run test:unit
+
+    invariant-tests:
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run invariant tests
+              run: pnpm run test:invariant
+
+    fork-tests:
+        name: Fork tests - ${{ matrix.shard.name }}
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+        strategy:
+            fail-fast: false
+            matrix:
+                shard:
+                    - name: Loan Consolidator
+                      script: test:fork:loan-consolidator
+                    - name: Boosted Liquidity
+                      script: test:fork:boosted-liquidity
+                    - name: Proposal Helpers
+                      script: test:fork:proposal-helpers
+                    - name: Misc
+                      script: test:fork:misc
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run fork tests - ${{ matrix.shard.name }}
+              run: pnpm run ${{ matrix.shard.script }}
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+    proposal-tests:
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run proposal simulation tests
+              run: pnpm run test:proposal
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+    crosschain-tests:
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        needs: build
+        runs-on: ubuntu-latest
+        timeout-minutes: 45
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Download Foundry build artifacts
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+              with:
+                  name: foundry-build
+                  path: .
+
+            - name: Run cross-chain fork tests
+              run: pnpm run test:crosschainfork
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
