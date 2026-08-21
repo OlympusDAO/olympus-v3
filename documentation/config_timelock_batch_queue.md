@@ -64,6 +64,33 @@ The base does not provide these behaviors:
 
 The implementing contract owns all product rules and authorization.
 
+## Destination-side config operator
+
+`ConfigTimelockBatchQueue` is the queue-side abstraction. It deliberately does not install itself
+as an operator or define how the destination rotates delegated configuration authority. The
+separate target-side `ConfigOperatorSingleStep` mix-in provides that behavior for Config contracts
+through the shared `IConfigOperator` interface.
+
+The single-step mix-in has these semantics:
+
+- `configOperator` starts at `address(0)`, so delegated configuration is denied by default.
+- `setConfigOperator(newOperator)` replaces the operator immediately after authorization. The new
+  operator does not perform a separate acceptance transaction.
+- Setting `address(0)` revokes delegated access.
+- A successful change emits `ConfigOperatorSet`.
+- `_authorizeSetConfigOperator()` controls who may rotate or revoke the operator. Its base
+  implementation returns false, so the setter denies every caller. A Config contract must
+  explicitly override the hook to grant authority and may apply product roles, enabled-state
+  requirements, or other lifecycle checks. The hook authorizes the caller rather than validating
+  the new operator address.
+- Product setters decide whether the configured operator is their only delegated caller or is
+  accepted alongside another authority such as `admin`.
+- Products that implement ERC-165 should advertise `IConfigOperator` explicitly.
+
+This separation keeps target ownership independent from queue mechanics. A product can use
+`ConfigOperatorSingleStep` without `ConfigTimelockBatchQueue`, and a product timelock must still
+verify at queue and execution time that it remains the destination's current `configOperator`.
+
 ## Mental model
 
 Each guard has four parts.
