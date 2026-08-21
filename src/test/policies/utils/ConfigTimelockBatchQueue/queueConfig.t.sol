@@ -109,7 +109,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         _queue.queueConfig(_keys(_KEY_A), _values(12), 2);
     }
 
-    function test_givenExpiredOwner_whenKeyIsQueued_reverts() public {
+    function test_givenExpiredOwner_reverts() public {
         uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         vm.warp(uint256(_queue.getQueuedAction(owner).expiresAt) + 1);
 

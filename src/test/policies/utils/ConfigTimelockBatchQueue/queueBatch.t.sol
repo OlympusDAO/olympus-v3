@@ -7,9 +7,7 @@ import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelo
 import {ConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/ConfigTimelockBatchQueueHarness.sol";
 
 contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest {
-    function test_givenDuplicateKeyAcrossSubActions_whenQueued_revertsWithoutLeakingGuards()
-        public
-    {
+    function test_givenDuplicateKeyAcrossSubActions_revertsWithoutLeakingGuards() public {
         ITimelockBatchQueue.BatchAction[] memory actions = _batch(_KEY_A, _KEY_A);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -25,7 +23,7 @@ contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest 
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_givenPartiallyOverlappingKeySets_queueBatch_revertsWithoutLeakingGuards() public {
+    function test_givenPartiallyOverlappingKeySets_revertsWithoutLeakingGuards() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
         actions[1] = _queue.makeAction(_keys(_KEY_B, _KEY_C), _values(23, 33), 2);
@@ -57,9 +55,7 @@ contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest 
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_givenLaterSubActionValidationRejection_queueBatch_rollsBackEarlierGuards()
-        public
-    {
+    function test_givenLaterSubActionValidationRejection_rollsBackEarlierGuards() public {
         _queue.setRejectedSubActionIndex(1, true);
         ITimelockBatchQueue.BatchAction[] memory actions = _batch(_KEY_A, _KEY_B);
 
