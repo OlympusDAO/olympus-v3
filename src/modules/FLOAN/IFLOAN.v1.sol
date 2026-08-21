@@ -343,8 +343,8 @@ interface IFLOANv1 is IERC165 {
     ) external view returns (address borrower);
 
     /// @notice Creates a market with the next sequential identifier.
-    /// @dev Kernel-permissioned. Reverts when a required identity address is zero or when the
-    ///      standard market configuration is invalid.
+    /// @dev Kernel-permissioned. Reverts when a required identity address is zero, the standard
+    ///      market configuration is invalid, or either token's decimals cannot be read or exceed 77.
     /// @param market_ Initial market input. Token decimals are read from the token contracts.
     /// @param configData_ Opaque product configuration.
     /// @return marketId Assigned market identifier.

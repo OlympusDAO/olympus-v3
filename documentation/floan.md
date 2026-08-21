@@ -107,7 +107,8 @@ decimal scales cannot be summed meaningfully. Product-wide caps remain in the fa
 represent product policy rather than a single market rule.
 
 Aggregate and collection getters return zero or an empty array for an unknown market. Direct
-record getters and indexed element access revert for an unknown record or invalid index.
+record getters revert for an unknown record. `getActiveBorrowerAt` reverts for an invalid index,
+while `getPositionIdForMarketAndBorrowerAt` returns `(false, 0)`.
 
 ## Positions
 
