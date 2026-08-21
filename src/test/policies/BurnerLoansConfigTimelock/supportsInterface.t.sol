@@ -10,6 +10,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -32,6 +33,10 @@ contract BurnerLoansConfigTimelockSupportsInterfaceTest is BurnerLoansConfigTime
         assertTrue(
             configTimelock.supportsInterface(type(ITimelockBatchQueue).interfaceId),
             "Config ITimelockBatchQueue"
+        );
+        assertTrue(
+            configTimelock.supportsInterface(type(IConfigTimelockBatchQueue).interfaceId),
+            "IConfigTimelockBatchQueue"
         );
         assertFalse(
             configTimelock.supportsInterface(type(IBurnerLoans).interfaceId),

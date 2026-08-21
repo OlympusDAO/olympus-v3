@@ -9,6 +9,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansTest {
@@ -26,6 +27,10 @@ contract BurnerLoansConfigSupportsInterfaceTest is BurnerLoansTest {
         );
         assertTrue(burnerLoansConfig.supportsInterface(type(IReEnabler).interfaceId), "IReEnabler");
         assertTrue(burnerLoansConfig.supportsInterface(type(IVersioned).interfaceId), "IVersioned");
+        assertTrue(
+            burnerLoansConfig.supportsInterface(type(IConfigOperator).interfaceId),
+            "IConfigOperator"
+        );
         assertTrue(
             burnerLoansConfig.supportsInterface(type(IBurnerLoansConfig).interfaceId),
             "IBurnerLoansConfig"

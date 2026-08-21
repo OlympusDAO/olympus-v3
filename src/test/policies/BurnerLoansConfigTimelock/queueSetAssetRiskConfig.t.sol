@@ -6,6 +6,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -84,6 +85,82 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         assertEq(target, address(burnerLoansConfig), "target");
         assertEq(selector, IBurnerLoansConfig.setAssetRiskConfig.selector, "selector");
         assertEq(storedPayload, payload, "payload");
+    }
+
+    // queueSetAssetRiskConfig
+    // given a risk update is pending for an asset
+    //  when a different risk field is queued for the same asset
+    //   then it reverts with the shared risk key's owning action
+    function test_givenRiskUpdatePendingForAsset_whenDifferentRiskFieldQueued_revertsWithSharedKeyOwner()
+        public
+    {
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory collateralUpdate,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory collateralSelection
+        ) = _collateralFactorUpdate();
+        vm.prank(burnerLoansAdmin);
+        uint64 owner = configTimelock.queueSetAssetRiskConfig(
+            address(usds),
+            collateralUpdate,
+            collateralSelection
+        );
+        (bytes32 key, ) = configTimelock.getQueuedConfigState(owner, 0, 0);
+
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory ratioUpdate;
+        ratioUpdate.minCollateralRatioBps = 12_000;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory ratioSelection;
+        ratioSelection.minCollateralRatioBps = true;
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
+                key,
+                owner
+            )
+        );
+        configTimelock.queueSetAssetRiskConfig(address(usds), ratioUpdate, ratioSelection);
+
+        assertEq(configTimelock.pendingActionId(key), owner, "first risk action retains key");
+        assertEq(configTimelock.nextActionId(), owner + 1, "failed queue does not consume id");
+    }
+
+    // queueSetAssetRiskConfig
+    // given a risk update is pending for an asset
+    //  when a fee update is queued for the same asset
+    //   then both queues succeed with distinct scoped configuration keys
+    function test_givenRiskUpdatePendingForAsset_whenFeeUpdateQueuedForSameAsset_queuesDistinctKeys()
+        public
+    {
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection
+        ) = _collateralFactorUpdate();
+        vm.prank(burnerLoansAdmin);
+        uint64 riskActionId = configTimelock.queueSetAssetRiskConfig(
+            address(usds),
+            riskUpdate,
+            riskSelection
+        );
+
+        IBurnerLoans.AssetFeeConfig memory feeUpdate;
+        feeUpdate.baseFeeBps = 30;
+        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection;
+        feeSelection.baseFeeBps = true;
+        vm.prank(burnerLoansAdmin);
+        uint64 feeActionId = configTimelock.queueSetAssetFeeConfig(
+            address(usds),
+            feeUpdate,
+            feeSelection
+        );
+
+        (bytes32 riskKey, ) = configTimelock.getQueuedConfigState(riskActionId, 0, 0);
+        (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(feeActionId, 0, 0);
+        assertEq(riskActionId, 1, "risk action queued first");
+        assertEq(feeActionId, 2, "fee action queued second");
+        assertNotEq(riskKey, feeKey, "risk and fee keys are distinct");
+        assertEq(configTimelock.pendingActionId(riskKey), riskActionId, "risk key owner");
+        assertEq(configTimelock.pendingActionId(feeKey), feeActionId, "fee key owner");
     }
 
     // queueSetAssetRiskConfig
@@ -404,186 +481,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
         configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
-    }
-
-    // queueSetAssetRiskConfig
-    // given an earlier queued risk action shortens termLength below a later horizon value
-    //  when the later maxMaturityHorizon update is queued
-    //   then validation uses the projected risk config and queues the action
-    function test_givenEarlierQueuedRiskActionChangesTerm_laterHorizonActionUsesProjectedState()
-        public
-    {
-        // Live state starts as termLength = 30 days and maxMaturityHorizon = 90 days.
-        // The later 21-day horizon would be invalid against live state because 21 days <= 30 days.
-        // It is valid only if queue-time validation first projects action 1's 14-day term.
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
-        termUpdate.termLength = 14 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory termSelection;
-        termSelection.termLength = true;
-
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory horizonUpdate;
-        horizonUpdate.maxMaturityHorizon = 21 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory horizonSelection;
-        horizonSelection.maxMaturityHorizon = true;
-
-        vm.startPrank(burnerLoansAdmin);
-        uint64 firstActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            termUpdate,
-            termSelection
-        );
-        uint64 secondActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            horizonUpdate,
-            horizonSelection
-        );
-        vm.stopPrank();
-
-        assertEq(firstActionId, 1, "first action id");
-        assertEq(secondActionId, 2, "second action id");
-    }
-
-    // queueSetAssetRiskConfig
-    // given an earlier queued risk action increases termLength above a later horizon value
-    //  when the later maxMaturityHorizon update is queued
-    //   then validation uses the projected risk config and reverts
-    function test_givenEarlierQueuedRiskActionChangesTerm_laterInvalidHorizonActionRevertsAgainstProjectedState()
-        public
-    {
-        // The later 45-day horizon would be valid against live state because 45 days > 30 days.
-        // It is invalid only after projecting action 1's 60-day term.
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
-        termUpdate.termLength = 60 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory termSelection;
-        termSelection.termLength = true;
-
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory horizonUpdate;
-        horizonUpdate.maxMaturityHorizon = 45 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory horizonSelection;
-        horizonSelection.maxMaturityHorizon = true;
-
-        vm.startPrank(burnerLoansAdmin);
-        uint64 firstActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            termUpdate,
-            termSelection
-        );
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        configTimelock.queueSetAssetRiskConfig(address(usds), horizonUpdate, horizonSelection);
-        vm.stopPrank();
-
-        assertEq(firstActionId, 1, "first action id");
-    }
-
-    // queueSetAssetRiskConfig
-    // given an unrelated fee action is queued between two dependent risk actions
-    //  when the later maxMaturityHorizon update is queued
-    //   then validation ignores fee state and uses the projected risk config
-    function test_givenFeeActionBetweenRiskActions_laterRiskActionUsesProjectedRiskState() public {
-        // The fee action should not reset or influence the risk projection. The horizon update
-        // remains valid because it depends only on the earlier queued 14-day term update.
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
-        termUpdate.termLength = 14 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory termSelection;
-        termSelection.termLength = true;
-
-        IBurnerLoans.AssetFeeConfig memory feeUpdate;
-        feeUpdate.baseFeeBps = 30;
-        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection;
-        feeSelection.baseFeeBps = true;
-
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory horizonUpdate;
-        horizonUpdate.maxMaturityHorizon = 21 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory horizonSelection;
-        horizonSelection.maxMaturityHorizon = true;
-
-        vm.startPrank(burnerLoansAdmin);
-        uint64 termActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            termUpdate,
-            termSelection
-        );
-        uint64 feeActionId = configTimelock.queueSetAssetFeeConfig(
-            address(usds),
-            feeUpdate,
-            feeSelection
-        );
-        uint64 horizonActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            horizonUpdate,
-            horizonSelection
-        );
-        vm.stopPrank();
-
-        assertEq(termActionId, 1, "term action id");
-        assertEq(feeActionId, 2, "fee action id");
-        assertEq(horizonActionId, 3, "horizon action id");
-    }
-
-    // queueSetAssetRiskConfig
-    // given the latest queued risk projection is cancelled but an earlier risk action remains pending
-    //  when a later maxMaturityHorizon update is queued and executed after the earlier pending action
-    //   then validation falls back to the pending projected risk config, not the cancelled config
-    function test_givenLatestRiskProjectionCancelled_laterRiskActionUsesEarlierPendingProjection()
-        public
-    {
-        // Action 1 shortens the term to 14 days. The later 21-day horizon is valid only if
-        // that still-pending projection is used. Action 2 exists only to become the latest
-        // cached projection and then be cancelled; action 3 must not fall back to live state.
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory termUpdate;
-        termUpdate.termLength = 14 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory termSelection;
-        termSelection.termLength = true;
-
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory collateralFactorUpdate;
-        collateralFactorUpdate.collateralFactorBps = 9_500;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory collateralFactorSelection;
-        collateralFactorSelection.collateralFactorBps = true;
-
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory horizonUpdate;
-        horizonUpdate.maxMaturityHorizon = 21 days;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory horizonSelection;
-        horizonSelection.maxMaturityHorizon = true;
-
-        vm.startPrank(burnerLoansAdmin);
-        uint64 termActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            termUpdate,
-            termSelection
-        );
-        uint64 cancelledActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            collateralFactorUpdate,
-            collateralFactorSelection
-        );
-        vm.stopPrank();
-
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(cancelledActionId);
-
-        vm.prank(burnerLoansAdmin);
-        uint64 horizonActionId = configTimelock.queueSetAssetRiskConfig(
-            address(usds),
-            horizonUpdate,
-            horizonSelection
-        );
-
-        assertEq(termActionId, 1, "term action id");
-        assertEq(cancelledActionId, 2, "cancelled action id");
-        assertEq(horizonActionId, 3, "horizon action id");
-
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        // Executing action 1 then action 3 proves action 3's expected pre-state is exactly
-        // action 1's post-state. If cancellation left action 2's collateral-factor projection
-        // in the chain, action 3 would expect collateralFactorBps = 9_500 and revert here.
-        configTimelock.executeQueuedAction(termActionId);
-        configTimelock.executeQueuedAction(horizonActionId);
-
-        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(config.termLength, 14 days, "term length");
-        assertEq(config.maxMaturityHorizon, 21 days, "max maturity horizon");
-        assertEq(config.collateralFactorBps, 10_000, "cancelled collateral factor not applied");
     }
 
     // queueSetAssetRiskConfig

@@ -6,12 +6,13 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 
-contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTest {
+contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockConfigGuardsTest {
     // queueBatch
     // given caller has neither admin nor burner_loans_admin
     //  when queueing a valid batch
@@ -66,6 +67,132 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockTes
             actions.length,
             "sub-action length"
         );
+    }
+
+    // queueBatch
+    // given one action for every supported configuration setter
+    //  when the actions are queued together
+    //   then each action stores its documented configuration key and pre-state hash
+    function test_givenEverySupportedAction_whenQueuedTogether_storesDocumentedGuards() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](4);
+        actions[0] = _feeAction(30);
+        actions[1] = _riskAction(9_500);
+        actions[2] = _singleAction(
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            abi.encode(address(usds), uint128(90_000e9))
+        );
+        actions[3] = _singleAction(
+            IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
+            abi.encode(address(usds), false)
+        );
+
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+
+        address facility = burnerLoansConfig.facility();
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
+        _assertGuard(
+            actionId,
+            0,
+            _FEE_DOMAIN,
+            keccak256(
+                abi.encode(
+                    facility,
+                    address(usds),
+                    burnerLoansConfig.getAssetFeeConfig(address(usds))
+                )
+            )
+        );
+        _assertGuard(
+            actionId,
+            1,
+            _RISK_DOMAIN,
+            keccak256(abi.encode(facility, address(usds), _assetRiskConfigInputFromConfig(config)))
+        );
+        _assertGuard(
+            actionId,
+            2,
+            _DEBT_CAP_DOMAIN,
+            keccak256(abi.encode(facility, address(usds), config.debtCap))
+        );
+        _assertGuard(
+            actionId,
+            3,
+            _ORIGINATIONS_DOMAIN,
+            keccak256(abi.encode(facility, address(usds), config.originationsEnabled))
+        );
+    }
+
+    // queueBatch
+    // given different fee fields for the same asset
+    //  when the updates are queued together
+    //   then it reverts with the shared fee key's batch owner
+    function test_givenDifferentFeeFieldsForSameAsset_whenQueuedTogether_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _feeAction(30);
+
+        IBurnerLoans.AssetFeeConfig memory kinkUpdate;
+        kinkUpdate.kinkBps = 7_500;
+        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory kinkSelection;
+        kinkSelection.kinkBps = true;
+        actions[1] = _singleAction(
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
+            abi.encode(address(usds), kinkUpdate, kinkSelection)
+        );
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
+                _scopedConfigKey(_FEE_DOMAIN),
+                uint64(1)
+            )
+        );
+        configTimelock.queueBatch(actions);
+
+        assertEq(
+            configTimelock.pendingActionId(_scopedConfigKey(_FEE_DOMAIN)),
+            0,
+            "fee key not leaked"
+        );
+        assertEq(configTimelock.getQueuedConfigStateCount(1, 0), 0, "fee guard rolled back");
+        assertEq(configTimelock.nextActionId(), 1, "action id not consumed");
+    }
+
+    // queueBatch
+    // given different risk fields for the same asset
+    //  when the updates are queued together
+    //   then it reverts with the shared risk key's batch owner
+    function test_givenDifferentRiskFieldsForSameAsset_whenQueuedTogether_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _riskAction(9_500);
+
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory ratioUpdate;
+        ratioUpdate.minCollateralRatioBps = 12_000;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory ratioSelection;
+        ratioSelection.minCollateralRatioBps = true;
+        actions[1] = _singleAction(
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), ratioUpdate, ratioSelection)
+        );
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
+                _scopedConfigKey(_RISK_DOMAIN),
+                uint64(1)
+            )
+        );
+        configTimelock.queueBatch(actions);
+
+        assertEq(
+            configTimelock.pendingActionId(_scopedConfigKey(_RISK_DOMAIN)),
+            0,
+            "risk key not leaked"
+        );
+        assertEq(configTimelock.getQueuedConfigStateCount(1, 0), 0, "risk guard rolled back");
+        assertEq(configTimelock.nextActionId(), 1, "action id not consumed");
     }
 
     // queueBatch

@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
@@ -61,8 +62,26 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     // given BurnerLoansConfig does not support IEnabler
     //  when BurnerLoansConfigTimelock is deployed
     //   then it reverts
-    function test_givenBurnerLoansConfigDoesNotSupportEnabler_reverts() public {
+    function test_constructor_givenBurnerLoansConfigDoesNotSupportEnabler_reverts() public {
         MockNonEnablerBurnerLoansConfig invalidConfig = new MockNonEnablerBurnerLoansConfig(kernel);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_InvalidBurnerLoans.selector,
+                address(invalidConfig)
+            )
+        );
+        new BurnerLoansConfigTimelock(kernel, IBurnerLoansConfig(address(invalidConfig)));
+    }
+
+    // constructor
+    // given BurnerLoansConfig does not support IConfigOperator
+    //  when BurnerLoansConfigTimelock is deployed
+    //   then it reverts
+    function test_constructor_givenBurnerLoansConfigDoesNotSupportConfigOperator_reverts() public {
+        MockNonConfigOperatorBurnerLoansConfig invalidConfig = new MockNonConfigOperatorBurnerLoansConfig(
+                kernel
+            );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -156,5 +175,34 @@ contract MockNonEnablerBurnerLoansConfig is Policy, IERC165 {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IBurnerLoansConfig).interfaceId;
+    }
+}
+
+contract MockNonConfigOperatorBurnerLoansConfig is Policy, IERC165 {
+    constructor(Kernel kernel_) Policy(kernel_) {}
+
+    function configureDependencies()
+        external
+        pure
+        override
+        returns (Keycode[] memory dependencies)
+    {
+        dependencies = new Keycode[](0);
+    }
+
+    function requestPermissions()
+        external
+        pure
+        override
+        returns (Permissions[] memory permissions)
+    {
+        permissions = new Permissions[](0);
+    }
+
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IBurnerLoansConfig).interfaceId ||
+            interfaceId_ == type(IEnabler).interfaceId;
     }
 }
