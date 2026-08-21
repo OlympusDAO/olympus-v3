@@ -284,7 +284,7 @@ Inventory's facility is immutable in v1.
 
 `BurnerLoansConfig` uses the shared `ConfigOperatorSingleStep` mix-in. An enabled Config allows
 `admin` to replace the operator immediately or set it to zero to revoke delegated access. The
-mix-in returns a default-deny authorization decision; Burner Loans grants authority through its
+mix-in returns a default-deny authorization decision; Config grants authority through its
 admin-and-enabled authorization hook. Config advertises the shared `IConfigOperator` interface.
 
 ## Deployment And Activation

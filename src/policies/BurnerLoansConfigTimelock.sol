@@ -72,7 +72,7 @@ contract BurnerLoansConfigTimelock is
     // ========== STATE ========== //
 
     /// @notice Burner Loans Config policy for which this contract may act as config operator.
-    IBurnerLoansConfig internal immutable BURNER_LOANS_CONFIG;
+    IBurnerLoansConfig internal immutable _BURNER_LOANS_CONFIG;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -112,7 +112,7 @@ contract BurnerLoansConfigTimelock is
             revert BurnerLoansConfigTimelock_KernelMismatch(configKernel);
         }
 
-        BURNER_LOANS_CONFIG = burnerLoansConfig_;
+        _BURNER_LOANS_CONFIG = burnerLoansConfig_;
     }
 
     // ========== POLICY SETUP ========== //
@@ -143,7 +143,7 @@ contract BurnerLoansConfigTimelock is
     /// @notice Returns the Burner Loans Config policy targeted by this timelock.
     /// @return IBurnerLoansConfig The Burner Loans Config policy.
     function burnerLoans() external view override returns (IBurnerLoansConfig) {
-        return BURNER_LOANS_CONFIG;
+        return _BURNER_LOANS_CONFIG;
     }
 
     // ========== QUEUE FUNCTIONS ========== //
@@ -172,7 +172,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS_CONFIG),
+                address(_BURNER_LOANS_CONFIG),
                 IBurnerLoansConfig.setAssetFeeConfig.selector,
                 abi.encode(asset_, config_, selection_)
             );
@@ -198,7 +198,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS_CONFIG),
+                address(_BURNER_LOANS_CONFIG),
                 IBurnerLoansConfig.setAssetDebtCap.selector,
                 abi.encode(asset_, debtCapOhm_)
             );
@@ -228,7 +228,7 @@ contract BurnerLoansConfigTimelock is
     ) external returns (uint64 actionId) {
         return
             _queueAction(
-                address(BURNER_LOANS_CONFIG),
+                address(_BURNER_LOANS_CONFIG),
                 IBurnerLoansConfig.setAssetRiskConfig.selector,
                 abi.encode(asset_, update_, selection_)
             );
@@ -292,7 +292,7 @@ contract BurnerLoansConfigTimelock is
     function _configDestination(
         ITimelockBatchQueue.BatchAction memory
     ) internal view override returns (address destination) {
-        return address(BURNER_LOANS_CONFIG);
+        return address(_BURNER_LOANS_CONFIG);
     }
 
     function _currentConfigStateHash(
@@ -302,15 +302,15 @@ contract BurnerLoansConfigTimelock is
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
         address asset = abi.decode(action_.payload, (address));
-        address facility = BURNER_LOANS_CONFIG.facility();
+        address facility = _BURNER_LOANS_CONFIG.facility();
         if (action_.selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             return
                 keccak256(
-                    abi.encode(facility, asset, BURNER_LOANS_CONFIG.getAssetFeeConfig(asset))
+                    abi.encode(facility, asset, _BURNER_LOANS_CONFIG.getAssetFeeConfig(asset))
                 );
         }
 
-        IBurnerLoans.AssetConfig memory config = BURNER_LOANS_CONFIG.getAssetConfig(asset);
+        IBurnerLoans.AssetConfig memory config = _BURNER_LOANS_CONFIG.getAssetConfig(asset);
         if (action_.selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             return
                 keccak256(
@@ -370,7 +370,7 @@ contract BurnerLoansConfigTimelock is
 
     /// @dev Reverts unless the constructor-bound Config is active in this policy's Kernel.
     function _requireBurnerLoansActive() internal view {
-        address burnerLoansConfig_ = address(BURNER_LOANS_CONFIG);
+        address burnerLoansConfig_ = address(_BURNER_LOANS_CONFIG);
         if (!kernel.isPolicyActive(Policy(burnerLoansConfig_))) {
             revert BurnerLoansConfigTimelock_InvalidBurnerLoans(burnerLoansConfig_);
         }
@@ -381,7 +381,7 @@ contract BurnerLoansConfigTimelock is
         uint256,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
-        BurnerLoansConfigTimelockLib.executeSubAction(BURNER_LOANS_CONFIG, action_);
+        BurnerLoansConfigTimelockLib.executeSubAction(_BURNER_LOANS_CONFIG, action_);
     }
 
     function _validateTimelockDelay(uint48 delay_) internal pure override {
@@ -403,7 +403,7 @@ contract BurnerLoansConfigTimelock is
     function _validateQueuedBurnerLoansAction(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view {
-        if (action_.target != address(BURNER_LOANS_CONFIG)) {
+        if (action_.target != address(_BURNER_LOANS_CONFIG)) {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
         }
 
@@ -418,7 +418,7 @@ contract BurnerLoansConfigTimelock is
                     action_.payload,
                     (address, IBurnerLoans.AssetFeeConfig, FeeConfigUpdateSelection)
                 );
-            IBurnerLoans.AssetFeeConfig memory config = BURNER_LOANS_CONFIG.getAssetFeeConfig(
+            IBurnerLoans.AssetFeeConfig memory config = _BURNER_LOANS_CONFIG.getAssetFeeConfig(
                 feeAsset
             );
             config = BurnerLoansConfigTimelockLib.applyFeeConfigUpdate(
@@ -426,7 +426,7 @@ contract BurnerLoansConfigTimelock is
                 feeConfig,
                 feeSelection
             );
-            BURNER_LOANS_CONFIG.validateFeeConfig(config);
+            _BURNER_LOANS_CONFIG.validateFeeConfig(config);
             return;
         }
 
@@ -444,13 +444,13 @@ contract BurnerLoansConfigTimelock is
                     action_.payload,
                     (address, AssetRiskConfigUpdate, AssetRiskConfigUpdateSelection)
                 );
-            IBurnerLoans.AssetConfig memory config = BURNER_LOANS_CONFIG.getAssetConfig(asset);
+            IBurnerLoans.AssetConfig memory config = _BURNER_LOANS_CONFIG.getAssetConfig(asset);
             config = BurnerLoansConfigTimelockLib.applyAssetRiskConfigUpdate(
                 config,
                 update,
                 selection
             );
-            BURNER_LOANS_CONFIG.validateAssetRiskConfig(
+            _BURNER_LOANS_CONFIG.validateAssetRiskConfig(
                 BurnerLoansConfigTimelockLib.toRiskConfig(config)
             );
             return;
@@ -459,7 +459,7 @@ contract BurnerLoansConfigTimelock is
         if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
             _requirePayloadLength(action_.payload, _LEN_ADDRESS_UINT256, selector);
             (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
-            BURNER_LOANS_CONFIG.validateAssetDebtCap(asset, debtCapOhm);
+            _BURNER_LOANS_CONFIG.validateAssetDebtCap(asset, debtCapOhm);
             return;
         }
 
@@ -474,7 +474,7 @@ contract BurnerLoansConfigTimelock is
     }
 
     function _requireAuthorizedConfigOperator() internal view {
-        if (IConfigOperator(address(BURNER_LOANS_CONFIG)).configOperator() != address(this)) {
+        if (IConfigOperator(address(_BURNER_LOANS_CONFIG)).configOperator() != address(this)) {
             revert IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator(address(this));
         }
     }
@@ -482,7 +482,7 @@ contract BurnerLoansConfigTimelock is
     /// @notice Validates that the controlled BurnerLoansConfig policy is enabled.
     /// @dev Reverts with `IEnabler.NotEnabled` while BurnerLoansConfig is disabled.
     function _requireBurnerLoansConfigEnabled() internal view {
-        if (!IEnabler(address(BURNER_LOANS_CONFIG)).isEnabled()) revert IEnabler.NotEnabled();
+        if (!IEnabler(address(_BURNER_LOANS_CONFIG)).isEnabled()) revert IEnabler.NotEnabled();
     }
 
     function _requirePayloadLength(
@@ -499,7 +499,7 @@ contract BurnerLoansConfigTimelock is
     /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when the asset is not configured.
     /// @param asset_ Collateral asset to validate.
     function _requireAssetConfigured(address asset_) internal view {
-        if (!BURNER_LOANS_CONFIG.isAssetConfigured(asset_)) {
+        if (!_BURNER_LOANS_CONFIG.isAssetConfigured(asset_)) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
         }
     }

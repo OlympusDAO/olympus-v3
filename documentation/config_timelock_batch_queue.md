@@ -429,10 +429,10 @@ section and the remaining `TimelockBatchQueue` lifecycle hooks.
 ## Burner Loans example
 
 Burner Loans selects its immutable `BurnerLoansConfig` policy as `_configDestination`. In this
-section, `config` means `address(BURNER_LOANS)`.
+section, `config` means `address(_BURNER_LOANS_CONFIG)`.
 
 The facility is not the selected destination. It is a mutable dependency returned by
-`BURNER_LOANS.facility()`. Burner Loans includes the facility in each canonical state hash.
+`_BURNER_LOANS_CONFIG.facility()`. Burner Loans includes the facility in each canonical state hash.
 
 As a result, a facility rotation makes an old action stale. The old action keeps its
 `BurnerLoansConfig`-scoped key until emergency cancellation. A new action cannot bypass that lock by
@@ -443,10 +443,10 @@ return the facility from `_configDestination`. That choice changes the conflict 
 
 | Action                        | Local key                                                 | Scoped ownership key                      | Canonical state hash                                          |
 | ----------------------------- | --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `setAssetFeeConfig`           | `keccak256(abi.encode(FEE_DOMAIN, asset))`                | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, completeFeeConfig))`   |
-| `setAssetRiskConfig`          | `keccak256(abi.encode(RISK_DOMAIN, asset))`               | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, riskAndTermFields))`   |
-| `setAssetDebtCap`             | `keccak256(abi.encode(DEBT_CAP_DOMAIN, asset))`           | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, configuredDebtCap))`   |
-| `setAssetOriginationsEnabled` | `keccak256(abi.encode(ASSET_ORIGINATIONS_DOMAIN, asset))` | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, originationsEnabled))` |
+| `setAssetFeeConfig`           | `keccak256(abi.encode(_FEE_CONFIG_DOMAIN, asset))`         | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, completeFeeConfig))`   |
+| `setAssetRiskConfig`          | `keccak256(abi.encode(_RISK_CONFIG_DOMAIN, asset))`        | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, riskAndTermFields))`   |
+| `setAssetDebtCap`             | `keccak256(abi.encode(_DEBT_CAP_DOMAIN, asset))`           | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, configuredDebtCap))`   |
+| `setAssetOriginationsEnabled` | `keccak256(abi.encode(_ASSET_ORIGINATIONS_DOMAIN, asset))` | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, originationsEnabled))` |
 
 The risk hash excludes collateral decimals, debt cap, and origination state. The risk setter does
 not change or depend on those fields.
