@@ -267,6 +267,7 @@ contract BurnerLoansConfigTimelock is
         _validateQueuedBurnerLoansAction(action_);
     }
 
+    /// @inheritdoc ConfigTimelockBatchQueue
     function _configKeys(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal pure override returns (bytes32[] memory keys) {
@@ -295,6 +296,7 @@ contract BurnerLoansConfigTimelock is
         return address(_BURNER_LOANS_CONFIG);
     }
 
+    /// @inheritdoc ConfigTimelockBatchQueue
     function _currentConfigStateHash(
         uint64,
         uint256,
@@ -376,6 +378,7 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
+    /// @inheritdoc ConfigTimelockBatchQueue
     function _executeConfigSubAction(
         uint64,
         uint256,
@@ -400,6 +403,10 @@ contract BurnerLoansConfigTimelock is
 
     // ========== VALIDATION ========== //
 
+    /// @notice Validates a Burner Loans configuration sub-action before key acquisition.
+    /// @dev Requires the configured target, a supported selector, the exact payload shape, and all
+    ///      applicable asset and resulting-configuration invariants.
+    /// @param action_ Burner Loans configuration sub-action to validate.
     function _validateQueuedBurnerLoansAction(
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view {
