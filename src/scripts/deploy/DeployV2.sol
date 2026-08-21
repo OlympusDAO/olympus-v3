@@ -49,7 +49,7 @@ import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRe
 
 // Bophades Policies
 // IMPORTANT: Optimizer restrictions apply to an entire import graph. Importing a contract with a
-// non-default setting, such as Operator at 10 runs, compiles every contract created with `new` by
+// non-default setting, such as Operator at 400 runs, compiles every contract created with `new` by
 // this script with that setting, even when the restricted contract is not deployed. Use separate
 // scripts to isolate contracts that require different optimizer settings.
 import {Operator} from "policies/Operator.sol";
@@ -624,7 +624,7 @@ contract OlympusDeploy is Script {
         console2.log("   reserveFactor", reserveFactor);
 
         // Deploy Operator policy. Contracts with non-default optimizer settings, such as Operator
-        // at 10 runs, should use dedicated scripts so their settings do not affect unrelated graphs.
+        // at 400 runs, should use dedicated scripts so their settings do not affect unrelated graphs.
         vm.broadcast();
         operator = new Operator(
             kernel,
