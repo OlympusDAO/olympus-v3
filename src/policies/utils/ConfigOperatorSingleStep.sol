@@ -43,9 +43,4 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     function _isConfigOperator(address account_) internal view returns (bool authorized) {
         return account_ != address(0) && account_ == configOperator;
     }
-
-    /// @notice Reverts unless the caller is the current config operator.
-    function _requireConfigOperator() internal view {
-        if (!_isConfigOperator(msg.sender)) revert ConfigOperator_Unauthorized(msg.sender);
-    }
 }

@@ -98,33 +98,4 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         assertEq(configOperator.configOperator(), address(0), "config operator");
         assertFalse(configOperator.isConfigOperator(operator), "old operator unauthorized");
     }
-
-    // _requireConfigOperator
-    // given the caller is the configured operator
-    //  when the internal guard is used
-    //   then it succeeds
-    function test_givenCallerIsConfigOperator_guardSucceeds() public {
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(operator);
-
-        vm.prank(operator);
-        configOperator.requireConfigOperator();
-    }
-
-    // _requireConfigOperator
-    // given the caller is not the configured operator
-    //  when the internal guard is used
-    //   then it reverts with the rejected caller
-    function test_givenCallerIsNotConfigOperator_guardReverts(address caller_) public {
-        vm.assume(caller_ != operator);
-
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(operator);
-
-        vm.prank(caller_);
-        vm.expectRevert(
-            abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unauthorized.selector, caller_)
-        );
-        configOperator.requireConfigOperator();
-    }
 }
