@@ -192,7 +192,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         assertEq(queue.getExecuteSubActionCalls().length, 0, "execution calls rolled back");
     }
 
-    function test_executeQueuedAction_callsCompletionHookAfterEverySubAction() public {
+    function test_executeQueuedAction_callsCompletionHookOnceAfterAllSubActions() public {
         (uint64 actionId, ) = _queueThreeBatch();
         _warpReady(actionId);
         queue.executeQueuedAction(actionId);

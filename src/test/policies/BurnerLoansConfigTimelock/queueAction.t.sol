@@ -123,7 +123,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         _authorizeHarness();
 
         // Solidity's ABI decoder returns no stable custom error for a non-canonical uint128 word.
-        vm.expectRevert();
+        vm.expectRevert(bytes(""));
         vm.prank(burnerLoansAdmin);
         configTimelockHarness.queueAction(
             address(burnerLoansConfig),
@@ -153,7 +153,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         _authorizeHarness();
 
         // Solidity's ABI decoder returns no stable custom error for a non-canonical bool word.
-        vm.expectRevert();
+        vm.expectRevert(bytes(""));
         vm.prank(burnerLoansAdmin);
         configTimelockHarness.queueAction(
             address(burnerLoansConfig),

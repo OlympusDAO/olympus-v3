@@ -79,6 +79,10 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         assertEq(configTimelock.nextActionId(), 2, "next action id");
     }
 
+    // queueSetAssetFeeConfig
+    // given a fee update is pending for an asset
+    //  when a different fee field update is queued for the same asset
+    //   then it reverts with the owning action and preserves the key lock
     function test_givenDifferentFeeFieldPendingForSameAsset_revertsWithOwningAction() public {
         (
             IBurnerLoans.AssetFeeConfig memory baseFeeUpdate,
@@ -409,6 +413,10 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         assertEq(actionId, 1, "action id");
     }
 
+    // queueSetAssetFeeConfig
+    // given the current postKinkSlopeBps is non-zero
+    //  when kinkBps is set to zero
+    //   then it reverts
     function test_givenKinkBpsZeroWithCurrentPostKinkSlopeBps_reverts() public {
         (
             IBurnerLoans.AssetFeeConfig memory config,

@@ -10,7 +10,7 @@ contract TimelockBatchQueueQueueActionTest is TimelockBatchQueueTest {
         queue.setRejectSubAction(true);
         vm.expectRevert(MockTimelockBatchQueue.MockTimelockBatchQueue_SubActionRejected.selector);
         queue.queueAction(target1, selector1, abi.encode(uint256(11)));
-        assertEq(queue.nextActionId(), 1);
+        assertEq(queue.nextActionId(), 1, "rejected action does not consume ID");
     }
 
     function test_queueAction_givenWrongCaller_reverts() public {
@@ -23,7 +23,11 @@ contract TimelockBatchQueueQueueActionTest is TimelockBatchQueueTest {
     function test_queueAction_givenAllowedCaller_succeeds() public {
         queue.setQueueCaller(proposer);
         vm.prank(proposer);
-        assertEq(queue.queueAction(target1, selector1, abi.encode(uint256(11))), 1);
+        assertEq(
+            queue.queueAction(target1, selector1, abi.encode(uint256(11))),
+            1,
+            "queued action ID"
+        );
     }
 
     function test_queueAction_storesActionAndEmitsEvents() public {
@@ -57,17 +61,17 @@ contract TimelockBatchQueueQueueActionTest is TimelockBatchQueueTest {
         );
 
         vm.prank(proposer);
-        assertEq(queue.queueAction(target1, selector1, payload), actionId);
+        assertEq(queue.queueAction(target1, selector1, payload), actionId, "queued action ID");
 
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
-        assertEq(queued.proposer, proposer);
-        assertEq(queued.queuedAt, queuedAt);
-        assertEq(queued.executableAt, executableAt);
-        assertEq(queued.expiresAt, expiresAt);
-        assertEq(queued.actions.length, 1);
-        assertEq(queued.actions[0].target, target1);
-        assertEq(queued.actions[0].selector, selector1);
-        assertEq(queued.actions[0].payload, payload);
-        assertEq(queue.nextActionId(), actionId + 1);
+        assertEq(queued.proposer, proposer, "queued proposer");
+        assertEq(queued.queuedAt, queuedAt, "queued timestamp");
+        assertEq(queued.executableAt, executableAt, "executable timestamp");
+        assertEq(queued.expiresAt, expiresAt, "expiry timestamp");
+        assertEq(queued.actions.length, 1, "queued sub-action count");
+        assertEq(queued.actions[0].target, target1, "queued target");
+        assertEq(queued.actions[0].selector, selector1, "queued selector");
+        assertEq(queued.actions[0].payload, payload, "queued payload");
+        assertEq(queue.nextActionId(), actionId + 1, "next action ID");
     }
 }

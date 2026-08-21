@@ -62,7 +62,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     // given BurnerLoansConfig does not support IEnabler
     //  when BurnerLoansConfigTimelock is deployed
     //   then it reverts
-    function test_givenBurnerLoansConfigDoesNotSupportEnabler_reverts() public {
+    function test_constructor_givenBurnerLoansConfigDoesNotSupportEnabler_reverts() public {
         MockNonEnablerBurnerLoansConfig invalidConfig = new MockNonEnablerBurnerLoansConfig(kernel);
 
         vm.expectRevert(
@@ -78,7 +78,7 @@ contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTe
     // given BurnerLoansConfig does not support IConfigOperator
     //  when BurnerLoansConfigTimelock is deployed
     //   then it reverts
-    function test_givenBurnerLoansConfigDoesNotSupportConfigOperator_reverts() public {
+    function test_constructor_givenBurnerLoansConfigDoesNotSupportConfigOperator_reverts() public {
         MockNonConfigOperatorBurnerLoansConfig invalidConfig = new MockNonConfigOperatorBurnerLoansConfig(
                 kernel
             );
