@@ -79,7 +79,7 @@ contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest 
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueBatch_givenAggregateKeyLimitExceeded_revertsWithoutLeakingGuards() public {
+    function test_givenAggregateKeyLimitExceeded_revertsWithoutLeakingGuards() public {
         _queue.setMaxConfigKeys(2);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
@@ -99,7 +99,7 @@ contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest 
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueBatch_givenBatchValidationRejects_revertsWithoutLeakingGuards() public {
+    function test_givenBatchValidationRejects_revertsWithoutLeakingGuards() public {
         _queue.setRejectBatch(true);
         ITimelockBatchQueue.BatchAction[] memory actions = _batch(_KEY_A, _KEY_B);
         vm.expectRevert(
@@ -112,7 +112,7 @@ contract ConfigTimelockBatchQueueQueueBatchTest is ConfigTimelockBatchQueueTest 
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueBatch_givenMultipleKeysPerSubAction_countsAllKeysAgainstBatchLimit() public {
+    function test_givenMultipleKeysPerSubAction_countsAllKeysAgainstBatchLimit() public {
         _queue.setMaxConfigKeys(3);
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);

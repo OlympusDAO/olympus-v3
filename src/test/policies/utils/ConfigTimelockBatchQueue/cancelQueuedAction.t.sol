@@ -62,8 +62,7 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
         uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         uint64 corruptOwner = 99;
         bytes32 scopedKey = _scopedKey(_KEY_A);
-        assertEq(_queue.pendingActionId(scopedKey), actionId, "expected owner before corruption");
-        vm.store(address(_queue), _pendingActionIdSlot(scopedKey), bytes32(uint256(corruptOwner)));
+        _corruptPendingActionId(scopedKey, actionId, corruptOwner);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -87,8 +86,7 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
         uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
         uint64 corruptOwner = 99;
         bytes32 scopedKeyB = _scopedKey(_KEY_B);
-        assertEq(_queue.pendingActionId(scopedKeyB), actionId, "expected owner before corruption");
-        vm.store(address(_queue), _pendingActionIdSlot(scopedKeyB), bytes32(uint256(corruptOwner)));
+        _corruptPendingActionId(scopedKeyB, actionId, corruptOwner);
 
         vm.expectRevert(
             abi.encodeWithSelector(

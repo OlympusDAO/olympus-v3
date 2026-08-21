@@ -142,6 +142,8 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
         uint64 actionId = _queue.queueBatch(_batch(_KEY_A, _KEY_B));
         _warpReady(actionId);
 
+        // _KEY_B derives its state hash from _KEY_A: the queue-time value is 10,
+        // then the first sub-action writes 11 before _KEY_B is validated.
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
@@ -245,8 +247,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
         uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         uint64 corruptOwner = 99;
         bytes32 scopedKey = _scopedKey(_KEY_A);
-        assertEq(_queue.pendingActionId(scopedKey), actionId, "expected owner before corruption");
-        vm.store(address(_queue), _pendingActionIdSlot(scopedKey), bytes32(uint256(corruptOwner)));
+        _corruptPendingActionId(scopedKey, actionId, corruptOwner);
         _warpReady(actionId);
 
         vm.expectRevert(

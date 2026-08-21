@@ -100,4 +100,14 @@ abstract contract ConfigTimelockBatchQueueTest is Test {
     function _pendingActionIdSlot(bytes32 key_) internal pure returns (bytes32 slot) {
         return keccak256(abi.encode(key_, uint256(2)));
     }
+
+    function _corruptPendingActionId(
+        bytes32 key_,
+        uint64 expectedOwner_,
+        uint64 corruptOwner_
+    ) internal {
+        assertEq(_queue.pendingActionId(key_), expectedOwner_, "expected owner before corruption");
+        vm.store(address(_queue), _pendingActionIdSlot(key_), bytes32(uint256(corruptOwner_)));
+        assertEq(_queue.pendingActionId(key_), corruptOwner_, "corrupt owner after write");
+    }
 }
