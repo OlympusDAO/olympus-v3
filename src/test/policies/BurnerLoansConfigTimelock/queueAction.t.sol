@@ -103,23 +103,26 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
     }
 
     // queueAction
-    // when the asset debt cap payload is one byte shorter than its ABI encoding
-    //  then validation rejects the action
-    function test_whenAssetDebtCapPayloadIsOneByteShort_reverts() public {
+    // given the asset debt cap payload is one byte shorter than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetDebtCapPayloadOneByteShort_whenQueued_reverts() public {
         _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetDebtCap.selector, 63);
     }
 
     // queueAction
-    // when the asset debt cap payload is one byte longer than its ABI encoding
-    //  then validation rejects the action
-    function test_whenAssetDebtCapPayloadIsOneByteLong_reverts() public {
+    // given the asset debt cap payload is one byte longer than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetDebtCapPayloadOneByteLong_whenQueued_reverts() public {
         _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetDebtCap.selector, 65);
     }
 
     // queueAction
-    // when the asset debt cap word is not a canonical uint128 encoding
-    //  then ABI decoding rejects the action
-    function test_whenAssetDebtCapEncodingIsNonCanonical_reverts() public {
+    // given the asset debt cap word is not a canonical uint128 encoding
+    //  when the action is queued
+    //   then ABI decoding rejects the action
+    function test_givenAssetDebtCapEncodingNonCanonical_whenQueued_reverts() public {
         _authorizeHarness();
 
         // Solidity's ABI decoder returns no stable custom error for a non-canonical uint128 word.
@@ -133,23 +136,26 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
     }
 
     // queueAction
-    // when the asset originations payload is one byte shorter than its ABI encoding
-    //  then validation rejects the action
-    function test_whenAssetOriginationsEnabledPayloadIsOneByteShort_reverts() public {
+    // given the asset originations payload is one byte shorter than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetOriginationsPayloadOneByteShort_whenQueued_reverts() public {
         _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetOriginationsEnabled.selector, 63);
     }
 
     // queueAction
-    // when the asset originations payload is one byte longer than its ABI encoding
-    //  then validation rejects the action
-    function test_whenAssetOriginationsEnabledPayloadIsOneByteLong_reverts() public {
+    // given the asset originations payload is one byte longer than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetOriginationsPayloadOneByteLong_whenQueued_reverts() public {
         _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetOriginationsEnabled.selector, 65);
     }
 
     // queueAction
-    // when the asset originations word is not a canonical bool encoding
-    //  then ABI decoding rejects the action
-    function test_whenAssetOriginationsEnabledEncodingIsNonCanonical_reverts() public {
+    // given the asset originations word is not a canonical bool encoding
+    //  when the action is queued
+    //   then ABI decoding rejects the action
+    function test_givenAssetOriginationsEncodingNonCanonical_whenQueued_reverts() public {
         _authorizeHarness();
 
         // Solidity's ABI decoder returns no stable custom error for a non-canonical bool word.

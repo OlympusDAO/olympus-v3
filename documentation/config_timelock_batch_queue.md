@@ -117,7 +117,7 @@ bytes32 localKey = keccak256(abi.encode(_FEE_CONFIG_DOMAIN, asset));
 The complete reserved key is then:
 
 ```solidity
-bytes32 scopedKey = keccak256(abi.encode(configContract, localKey));
+bytes32 scopedKey = keccak256(abi.encode(destination, localKey));
 ```
 
 `pendingActionId(scopedKey)` returns the action that owns this key. It returns zero when the key is
