@@ -3,23 +3,30 @@ pragma solidity ^0.8.24;
 
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 /// @title  ICCIPBridgeConfig
 /// @notice The interface of the policy that owns the local Chainlink CCIP token pool of OHM and
 ///         exposes a typed, role-separated subset of the pool owner's authority.
 /// @dev    The policy is bound to one pool for its lifetime. Its functions form four groups:
 ///         admin functions that change root authority and pool infrastructure; route functions
-///         that change the supported chains, remote pools and allowlist, callable by the
-///         configurator or the admin; the rate limit function, additionally callable by the
-///         bridge rate limiter role; and containment functions, callable by the emergency or
-///         admin role, that only reduce capacity and remain callable while the policy is
-///         disabled. Every other state-changing function requires the policy to be enabled.
+///         that change the supported chains, remote pools and allowlist, callable by the config
+///         operator or the admin; the rate limit function, additionally callable by the bridge
+///         rate limiter role; and containment functions, callable by the emergency or admin
+///         role, that only reduce capacity and remain callable while the policy is disabled.
+///         Every other state-changing function requires the policy to be enabled.
+///
+///         The config operator is the delegated operator of `IConfigOperator`: `configOperator`
+///         returns it, or the zero address when none is set, and `setConfigOperator` replaces it
+///         immediately or revokes it with the zero address; the setter is intended to be callable
+///         only by the admin role while the policy is enabled. It is meant to be the config
+///         timelock.
 ///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
 ///         Remote addresses are ABI-encoded for EVM chains and encoded per the remote chain
 ///         family otherwise. Every operation on the pool is emitted by this contract in addition
 ///         to the events that the pool emits itself.
-interface ICCIPBridgeConfig {
+interface ICCIPBridgeConfig is IConfigOperator {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a required address argument is the zero address.
@@ -77,10 +84,6 @@ interface ICCIPBridgeConfig {
     /// @notice Emitted when the policy proposes a new owner of the pool.
     /// @param newOwner The proposed owner.
     event PoolOwnershipTransferRequested(address indexed newOwner);
-
-    /// @notice Emitted when the configurator is set.
-    /// @param configurator The configurator.
-    event ConfiguratorSet(address indexed configurator);
 
     /// @notice Emitted when the pool router is set.
     /// @param router The router.
@@ -163,11 +166,6 @@ interface ICCIPBridgeConfig {
     /// @return isContainer True if the pool is a liquidity container.
     function isLiquidityContainer() external view returns (bool isContainer);
 
-    /// @notice Returns the contract permitted to call the route and rate limit functions
-    ///         alongside the admin role, or the zero address if none is set.
-    /// @return configurator_ The configurator.
-    function configurator() external view returns (address configurator_);
-
     /// @notice Returns the rate limiter configuration written to both buckets of a route by the
     ///         containment functions. At this capacity every real transfer exceeds the bucket
     ///         size and fails immediately.
@@ -195,11 +193,6 @@ interface ICCIPBridgeConfig {
     ///         only by the admin role while the policy is enabled.
     /// @param newOwner_ The proposed owner.
     function transferPoolOwnership(address newOwner_) external;
-
-    /// @notice Sets the configurator. Intended to be callable only by the admin role while the
-    ///         policy is enabled.
-    /// @param configurator_ The configurator address.
-    function setConfigurator(address configurator_) external;
 
     /// @notice Sets the router of the pool after checking that the candidate holds code and
     ///         answers `typeAndVersion()`. Intended to be callable only by the admin role while
@@ -229,13 +222,13 @@ interface ICCIPBridgeConfig {
 
     /// @notice Adds a route with its remote token, accepted remote pools and enabled rate limits
     ///         in both directions. Both buckets start full. Intended to be callable only by the
-    ///         configurator or the admin role while the policy is enabled.
+    ///         config operator or the admin role while the policy is enabled.
     /// @param update_ The chain configuration to add.
     function addChain(ICCIPTokenPoolAdmin.ChainUpdate calldata update_) external;
 
     /// @notice Removes a route together with its remote pools, remote token and both buckets.
     ///         In-flight messages from the route are rejected afterwards. Intended to be
-    ///         callable only by the configurator or the admin role while the policy is enabled.
+    ///         callable only by the config operator or the admin role while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     function removeChain(uint64 chainSelector_) external;
 
@@ -243,14 +236,14 @@ interface ICCIPBridgeConfig {
     ///         token, so the route is recreated: it is removed and re-added in one pool call with
     ///         the same remote pools and rate limiter configurations, after which the fill level
     ///         of both buckets is restored to its level before the replacement, with a floor of
-    ///         two units. Intended to be callable only by the configurator or the admin role
+    ///         two units. Intended to be callable only by the config operator or the admin role
     ///         while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
     function setRemoteToken(uint64 chainSelector_, bytes calldata remoteToken_) external;
 
     /// @notice Adds an accepted remote pool to a route. Previously accepted pools remain
-    ///         accepted. Intended to be callable only by the configurator or the admin role while
+    ///         accepted. Intended to be callable only by the config operator or the admin role while
     ///         the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remotePool_ The remote pool address to add.
@@ -258,14 +251,14 @@ interface ICCIPBridgeConfig {
 
     /// @notice Removes an accepted remote pool from a route. The last accepted pool of a route
     ///         cannot be removed. In-flight messages from the removed pool are rejected
-    ///         afterwards. Intended to be callable only by the configurator or the admin role
+    ///         afterwards. Intended to be callable only by the config operator or the admin role
     ///         while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remotePool_ The remote pool address to remove.
     function removeRemotePool(uint64 chainSelector_, bytes calldata remotePool_) external;
 
     /// @notice Removes and then adds sender allowlist entries on a pool deployed with an
-    ///         allowlist. Intended to be callable only by the configurator or the admin role
+    ///         allowlist. Intended to be callable only by the config operator or the admin role
     ///         while the policy is enabled.
     /// @param removes_ The addresses to remove.
     /// @param adds_ The addresses to add.
@@ -276,7 +269,7 @@ interface ICCIPBridgeConfig {
     /// @notice Sets both rate limiter configurations of a route together. Both configurations
     ///         must be enabled. The fill level of each bucket is clamped to the new capacity and
     ///         is never raised. Intended to be callable only by the bridge rate limiter role, the
-    ///         configurator or the admin role while the policy is enabled.
+    ///         config operator or the admin role while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param outbound_ The outbound rate limiter configuration.
     /// @param inbound_ The inbound rate limiter configuration.

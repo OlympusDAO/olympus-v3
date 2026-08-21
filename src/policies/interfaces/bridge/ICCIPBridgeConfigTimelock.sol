@@ -60,9 +60,11 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     /// @notice Thrown when a configured module has an unsupported major version.
     error CCIPBridgeConfigTimelock_InvalidModuleVersion();
 
-    /// @notice Thrown when the config policy does not name this timelock as its configurator.
-    /// @param configurator The configurator currently named by the config policy.
-    error CCIPBridgeConfigTimelock_NotConfigurator(address configurator);
+    /// @notice Thrown when the config policy does not name this timelock as its config
+    ///         operator.
+    /// @param configOperator The config operator currently named by the config policy, or the
+    ///        zero address when none is set.
+    error CCIPBridgeConfigTimelock_NotConfigOperator(address configOperator);
 
     /// @notice Thrown when a state hash is requested for a configuration key that no supported
     ///         action reserves.
@@ -129,7 +131,7 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     // ========== QUEUE FUNCTIONS ========== //
 
     /// @notice Queues an `addChain` call on the config policy. Intended to be callable only by
-    ///         the bridge admin role while the timelock is enabled and named as configurator.
+    ///         the bridge admin role while the timelock is enabled and named as config operator.
     /// @param update_ The chain configuration to add.
     /// @return actionId The queued action ID.
     function queueAddChain(
@@ -137,13 +139,13 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a `removeChain` call on the config policy. Intended to be callable only by
-    ///         the bridge admin role while the timelock is enabled and named as configurator.
+    ///         the bridge admin role while the timelock is enabled and named as config operator.
     /// @param chainSelector_ The chain selector of the route.
     /// @return actionId The queued action ID.
     function queueRemoveChain(uint64 chainSelector_) external returns (uint64 actionId);
 
     /// @notice Queues a `setRemoteToken` call on the config policy. Intended to be callable only
-    ///         by the bridge admin role while the timelock is enabled and named as configurator.
+    ///         by the bridge admin role while the timelock is enabled and named as config operator.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
     /// @return actionId The queued action ID.
@@ -153,7 +155,7 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues an `addRemotePool` call on the config policy. Intended to be callable only
-    ///         by the bridge admin role while the timelock is enabled and named as configurator.
+    ///         by the bridge admin role while the timelock is enabled and named as config operator.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remotePool_ The remote pool address to add.
     /// @return actionId The queued action ID.
@@ -163,8 +165,8 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a `removeRemotePool` call on the config policy. Intended to be callable
-    ///         only by the bridge admin role while the timelock is enabled and named as
-    ///         configurator.
+    ///         only by the bridge admin role while the timelock is enabled and named as config
+    ///         operator.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remotePool_ The remote pool address to remove.
     /// @return actionId The queued action ID.
@@ -175,7 +177,7 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
 
     /// @notice Queues an `applyAllowListUpdates` call on the config policy. Intended to be
     ///         callable only by the bridge admin role while the timelock is enabled and named as
-    ///         configurator.
+    ///         config operator.
     /// @param removes_ The addresses to remove.
     /// @param adds_ The addresses to add.
     /// @return actionId The queued action ID.
@@ -185,8 +187,8 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a `setChainRateLimits` call on the config policy. Intended to be callable
-    ///         only by the bridge admin role while the timelock is enabled and named as
-    ///         configurator.
+    ///         only by the bridge admin role while the timelock is enabled and named as config
+    ///         operator.
     /// @param chainSelector_ The chain selector of the route.
     /// @param outbound_ The outbound rate limiter configuration.
     /// @param inbound_ The inbound rate limiter configuration.
@@ -200,7 +202,7 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     /// @notice Queues a batch of config policy calls that executes atomically in array order.
     ///         Every sub-action must target the config policy with one of the supported
     ///         selectors and a canonically encoded payload. Intended to be callable only by the
-    ///         bridge admin role while the timelock is enabled and named as configurator.
+    ///         bridge admin role while the timelock is enabled and named as config operator.
     /// @param actions_ The sub-actions to queue.
     /// @return actionId The queued action ID.
     function queueBatch(

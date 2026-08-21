@@ -9,6 +9,7 @@ import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
@@ -19,6 +20,7 @@ import {EnablerV2} from "src/bases/EnablerV2.sol";
 import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
@@ -32,11 +34,11 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///
 ///         Authorization is split into four groups:
 ///         - admin functions (callable by the admin role, enabled only): pool ownership,
-///           configurator, router, rebalancer, rate limit admin, liquidity transfer;
-///         - route functions (callable by the configurator or the admin role, enabled only):
+///           config operator, router, rebalancer, rate limit admin, liquidity transfer;
+///         - route functions (callable by the config operator or the admin role, enabled only):
 ///           supported chains, remote pools, allowlist;
-///         - the rate limit function (callable by the bridge rate limiter role, the configurator
-///           or the admin role, enabled only);
+///         - the rate limit function (callable by the bridge rate limiter role, the config
+///           operator or the admin role, enabled only);
 ///         - containment functions (callable by the emergency or admin role, whether or not the
 ///           policy is enabled): they only write the disabled rate limiter configuration and
 ///           cannot restore capacity.
@@ -44,6 +46,10 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         `enable` is restricted to the admin role, `disable` to the emergency or admin role,
 ///         `reEnable` to the bridge admin role within the grace window, and `setGracePeriod` to
 ///         the admin role while enabled.
+///
+///         The config operator is the single-step delegated operator of `ConfigOperatorSingleStep`:
+///         it starts unset, `setConfigOperator` replaces it immediately, and the zero address
+///         revokes it. The route and rate limit functions accept it alongside the admin role.
 ///
 ///         Every check that this contract adds on top of the pool is shared between the
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
@@ -57,6 +63,7 @@ contract CCIPBridgeConfig is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
+    ConfigOperatorSingleStep,
     ICCIPBridgeConfig,
     IVersioned
 {
@@ -90,11 +97,6 @@ contract CCIPBridgeConfig is
 
     /// @notice Whether the pool advertises `ICCIPLiquidityContainer` through ERC165.
     bool internal immutable _IS_LIQUIDITY_CONTAINER;
-
-    // ========== STATE ========== //
-
-    /// @inheritdoc ICCIPBridgeConfig
-    address public override configurator;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -147,19 +149,19 @@ contract CCIPBridgeConfig is
 
     // ========== MODIFIERS ========== //
 
-    /// @notice Reverts with `NotAuthorised` unless the caller is the configurator or holds the
-    ///         admin role.
-    modifier onlyConfiguratorOrAdmin() {
-        _requireAuthorized(msg.sender != configurator && !_isAdmin(msg.sender));
+    /// @notice Reverts with `NotAuthorised` unless the caller is the config operator or holds
+    ///         the admin role.
+    modifier onlyConfigOperatorOrAdmin() {
+        _requireAuthorized(!_isConfigOperator(msg.sender) && !_isAdmin(msg.sender));
         _;
     }
 
     /// @notice Reverts with `NotAuthorised` unless the caller holds the bridge rate limiter
-    ///         role, is the configurator or holds the admin role.
-    modifier onlyRateLimiterOrConfiguratorOrAdmin() {
+    ///         role, is the config operator or holds the admin role.
+    modifier onlyRateLimiterOrConfigOperatorOrAdmin() {
         _requireAuthorized(
             !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE) &&
-                msg.sender != configurator &&
+                !_isConfigOperator(msg.sender) &&
                 !_isAdmin(msg.sender)
         );
         _;
@@ -216,8 +218,8 @@ contract CCIPBridgeConfig is
     /// @dev A pending proposal is overwritten by a later one. After the recipient accepts, this
     ///      policy no longer owns the pool: every function that calls the pool reverts
     ///      (`OnlyCallableByOwner`, or `Unauthorized` for the rate limiter setters), and every
-    ///      action queued in the configurator reverts at execution and keeps its configuration
-    ///      keys until it is cancelled.
+    ///      action queued in the config operator reverts at execution and keeps its
+    ///      configuration keys until it is cancelled.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
@@ -231,22 +233,6 @@ contract CCIPBridgeConfig is
         _POOL.transferOwnership(newOwner_);
 
         emit PoolOwnershipTransferRequested(newOwner_);
-    }
-
-    /// @inheritdoc ICCIPBridgeConfig
-    /// @dev Setting the current value writes and emits. Only the configurator named at the time
-    ///      of a call is accepted by the route and rate limit functions.
-    ///
-    ///      Reverts if:
-    ///      - The policy is disabled.
-    ///      - The caller does not hold the admin role.
-    ///      - `configurator_` is the zero address.
-    function setConfigurator(address configurator_) external override givenEnabled onlyAdminRole {
-        if (configurator_ == address(0)) revert CCIPBridgeConfig_InvalidAddress("configurator");
-
-        configurator = configurator_;
-
-        emit ConfiguratorSet(configurator_);
     }
 
     /// @inheritdoc ICCIPBridgeConfig
@@ -339,12 +325,12 @@ contract CCIPBridgeConfig is
     /// @inheritdoc ICCIPBridgeConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateAddChain` rejects `update_`.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function addChain(
         ICCIPTokenPoolAdmin.ChainUpdate calldata update_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateAddChain(update_);
 
         ICCIPTokenPoolAdmin.ChainUpdate[]
@@ -358,12 +344,12 @@ contract CCIPBridgeConfig is
     /// @inheritdoc ICCIPBridgeConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateRemoveChain` rejects `chainSelector_`.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function removeChain(
         uint64 chainSelector_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateRemoveChain(chainSelector_);
 
         uint64[] memory chainsToRemove = new uint64[](1);
@@ -397,13 +383,13 @@ contract CCIPBridgeConfig is
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateSetRemoteToken` rejects the arguments.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRemoteToken(
         uint64 chainSelector_,
         bytes calldata remoteToken_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateSetRemoteToken(chainSelector_, remoteToken_);
 
         bytes memory previousRemoteToken = _POOL.getRemoteToken(chainSelector_);
@@ -430,13 +416,13 @@ contract CCIPBridgeConfig is
     /// @inheritdoc ICCIPBridgeConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateAddRemotePool` rejects the arguments.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function addRemotePool(
         uint64 chainSelector_,
         bytes calldata remotePool_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateAddRemotePool(chainSelector_, remotePool_);
 
         _POOL.addRemotePool(chainSelector_, remotePool_);
@@ -447,13 +433,13 @@ contract CCIPBridgeConfig is
     /// @inheritdoc ICCIPBridgeConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateRemoveRemotePool` rejects the arguments.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function removeRemotePool(
         uint64 chainSelector_,
         bytes calldata remotePool_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateRemoveRemotePool(chainSelector_, remotePool_);
 
         _POOL.removeRemotePool(chainSelector_, remotePool_);
@@ -467,13 +453,13 @@ contract CCIPBridgeConfig is
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
-    ///      - The caller is neither the configurator nor an admin.
+    ///      - The caller is neither the config operator nor an admin.
     ///      - `validateApplyAllowListUpdates` rejects the arguments.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function applyAllowListUpdates(
         address[] calldata removes_,
         address[] calldata adds_
-    ) external override givenEnabled onlyConfiguratorOrAdmin {
+    ) external override givenEnabled onlyConfigOperatorOrAdmin {
         _validateApplyAllowListUpdates(removes_, adds_);
 
         _POOL.applyAllowListUpdates(removes_, adds_);
@@ -489,7 +475,7 @@ contract CCIPBridgeConfig is
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller holds neither the bridge rate limiter role nor the admin role and is
-    ///        not the configurator.
+    ///        not the config operator.
     ///      - `validateSetChainRateLimits` rejects the arguments.
     ///      - This policy does not own the pool and is not its rate limit admin
     ///        (`Unauthorized`).
@@ -497,7 +483,7 @@ contract CCIPBridgeConfig is
         uint64 chainSelector_,
         ICCIPRateLimiter.Config calldata outbound_,
         ICCIPRateLimiter.Config calldata inbound_
-    ) external override givenEnabled onlyRateLimiterOrConfiguratorOrAdmin {
+    ) external override givenEnabled onlyRateLimiterOrConfigOperatorOrAdmin {
         _validateSetChainRateLimits(chainSelector_, outbound_, inbound_);
 
         ICCIPRateLimiter.Config memory previousOutbound = _toConfig(
@@ -675,6 +661,27 @@ contract CCIPBridgeConfig is
     /// @dev Reverts if:
     ///      - The caller does not hold the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
+    // ========== CONFIG OPERATOR HOOKS ========== //
+
+    /// @inheritdoc ConfigOperatorSingleStep
+    /// @dev Setting the current operator writes and emits, and setting the zero address revokes
+    ///      the operator; the mix-in setter accepts both. The hook reverts on failure, so the
+    ///      mix-in never reports `ConfigOperator_Unauthorized` through this policy.
+    ///
+    ///      Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the admin role.
+    function _authorizeSetConfigOperator()
+        internal
+        view
+        override
+        givenEnabled
+        onlyAdminRole
+        returns (bool authorized)
+    {
+        return true;
+    }
 
     // ========== INTERNAL VALIDATION ========== //
 
@@ -916,12 +923,14 @@ contract CCIPBridgeConfig is
     // ========== ERC165 ========== //
 
     /// @inheritdoc EnablerV2
-    /// @dev Adds `ICCIPBridgeConfig` and `IVersioned` to the interfaces advertised by the bases.
+    /// @dev Adds `ICCIPBridgeConfig`, `IConfigOperator` and `IVersioned` to the interfaces
+    ///      advertised by the bases.
     function supportsInterface(
         bytes4 interfaceId_
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(ICCIPBridgeConfig).interfaceId ||
+            interfaceId_ == type(IConfigOperator).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

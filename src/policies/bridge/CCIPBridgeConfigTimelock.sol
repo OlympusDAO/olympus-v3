@@ -31,20 +31,20 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         the config policy at construction and is fixed for the lifetime of that policy.
 ///
 ///         Queueing requires this policy to be enabled, the caller to hold the bridge admin
-///         role and the config policy to name this timelock as its configurator; it does not
+///         role and the config policy to name this timelock as its config operator; it does not
 ///         require the config policy to be enabled. Every sub-action must target the config
 ///         policy with a supported selector and a payload whose canonical re-encoding equals the
 ///         stored bytes, and must pass the config policy's validation mirror of the targeted
 ///         function. Execution is permissionless once the delay elapses and requires this policy
-///         and the config policy to be enabled and this timelock to still be the configurator;
+///         and the config policy to be enabled and this timelock to still be the config operator;
 ///         the shared base then checks the reserved keys and state hashes before each dispatch.
 ///         An action queued while the config policy is disabled therefore holds its
 ///         configuration keys until it is executed once the config policy is enabled again, or
 ///         until it is cancelled; so does an action whose dispatch reverts because the config
 ///         policy no longer owns the pool, or whose execution this timelock rejects because the
-///         config policy names another configurator. Cancellation is available to the admin
-///         role, the emergency role and the proposer of the action, whether or not this policy
-///         is enabled and whether or not the action has expired.
+///         config policy names another config operator or none. Cancellation is available to
+///         the admin role, the emergency role and the proposer of the action, whether or not
+///         this policy is enabled and whether or not the action has expired.
 ///
 ///         `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///         emergency or admin role, `reEnable` to the bridge admin role within the grace window,
@@ -99,7 +99,7 @@ contract CCIPBridgeConfigTimelock is
 
     /// @notice Deploys the config timelock for one config policy.
     /// @dev    The policy starts disabled. It becomes usable once the config policy names it as
-    ///         configurator.
+    ///         config operator.
     ///
     ///         Reverts if:
     ///         - `config_` is the zero address.
@@ -183,7 +183,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateAddChain` of the config policy rejects `update_`.
     ///      - Any of the three route domains of `update_.remoteChainSelector` is reserved by
     ///        an unresolved action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -202,7 +202,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateRemoveChain` of the config policy rejects `chainSelector_`.
     ///      - Any of the three route domains of `chainSelector_` is reserved by an unresolved
     ///        action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -219,7 +219,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateSetRemoteToken` of the config policy rejects the arguments.
     ///      - Any of the three route domains of `chainSelector_` is reserved by an unresolved
     ///        action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -239,7 +239,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateAddRemotePool` of the config policy rejects the arguments.
     ///      - The remote pools domain of `chainSelector_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -259,7 +259,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateRemoveRemotePool` of the config policy rejects the arguments.
     ///      - The remote pools domain of `chainSelector_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -279,7 +279,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateApplyAllowListUpdates` of the config policy rejects the arguments.
     ///      - The allowlist domain is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -299,7 +299,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateSetChainRateLimits` of the config policy rejects the arguments.
     ///      - The rate limits domain of `chainSelector_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
@@ -320,7 +320,7 @@ contract CCIPBridgeConfigTimelock is
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The caller does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     ///      - The batch is empty (`ITimelockBatchQueue_BatchEmpty`) or holds more than the
     ///        maximum number of sub-actions (`ITimelockBatchQueue_BatchTooLarge`).
     ///      - A sub-action does not target the config policy, uses an unsupported selector or
@@ -363,11 +363,11 @@ contract CCIPBridgeConfigTimelock is
     ///      Reverts if:
     ///      - This policy is disabled.
     ///      - `caller_` does not hold the bridge admin role.
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     function _validateConfigQueue(address caller_) internal view override {
         _requireEnabled();
         _requireRole(caller_, BRIDGE_ADMIN_ROLE);
-        _requireConfigurator();
+        _requireOperatorOfConfig();
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
@@ -600,17 +600,18 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc TimelockBatchQueue
     /// @dev Execution is permissionless. The delay that elapses while this policy is disabled
     ///      still counts, so an action can become executable as soon as the policy is
-    ///      re-enabled. Queued actions are not cleared by a disable, by a configurator rotation
-    ///      or by a transfer of the pool ownership: after `setConfigurator` names another
-    ///      contract this hook reverts with `CCIPBridgeConfigTimelock_NotConfigurator`, and
-    ///      after the config policy loses the ownership of the pool every dispatch reverts inside
-    ///      the pool (`OnlyCallableByOwner`, or `Unauthorized` for `setChainRateLimits`); in
-    ///      both cases the action keeps its configuration keys until it is cancelled.
+    ///      re-enabled. Queued actions are not cleared by a disable, by a rotation or revocation
+    ///      of the config operator or by a transfer of the pool ownership: after
+    ///      `setConfigOperator` names another contract or the zero address this hook reverts
+    ///      with `CCIPBridgeConfigTimelock_NotConfigOperator`, and after the config policy loses
+    ///      the ownership of the pool every dispatch reverts inside the pool
+    ///      (`OnlyCallableByOwner`, or `Unauthorized` for `setChainRateLimits`); in both cases
+    ///      the action keeps its configuration keys until it is cancelled.
     ///
     ///      Reverts if:
     ///      - This policy is disabled (`NotEnabled`).
     ///      - The config policy is disabled (`NotEnabled`).
-    ///      - The config policy does not name this timelock as its configurator.
+    ///      - The config policy does not name this timelock as its config operator.
     function _validateExecution(
         address,
         uint64,
@@ -618,7 +619,7 @@ contract CCIPBridgeConfigTimelock is
     ) internal view override {
         _requireEnabled();
         if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
-        _requireConfigurator();
+        _requireOperatorOfConfig();
     }
 
     /// @inheritdoc TimelockBatchQueue
@@ -672,12 +673,12 @@ contract CCIPBridgeConfigTimelock is
 
     // ========== INTERNAL HELPERS ========== //
 
-    /// @notice Reverts with `CCIPBridgeConfigTimelock_NotConfigurator` unless the config policy
-    ///         names this timelock as its configurator.
-    function _requireConfigurator() internal view {
-        address currentConfigurator = _CONFIG.configurator();
-        if (currentConfigurator != address(this)) {
-            revert CCIPBridgeConfigTimelock_NotConfigurator(currentConfigurator);
+    /// @notice Reverts with `CCIPBridgeConfigTimelock_NotConfigOperator` unless the config
+    ///         policy names this timelock as its config operator.
+    function _requireOperatorOfConfig() internal view {
+        address currentConfigOperator = _CONFIG.configOperator();
+        if (currentConfigOperator != address(this)) {
+            revert CCIPBridgeConfigTimelock_NotConfigOperator(currentConfigOperator);
         }
     }
 
