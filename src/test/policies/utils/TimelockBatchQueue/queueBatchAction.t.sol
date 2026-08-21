@@ -110,6 +110,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         ITimelockBatchQueue.BatchAction[] memory actions_,
         uint256 maximum_
     ) internal {
+        uint64 nextActionId = queue.nextActionId();
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_BatchTooLarge.selector,
@@ -118,7 +119,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
             )
         );
         queue.queueBatchAction(actions_);
-        assertEq(queue.nextActionId(), 1, "action ID not consumed");
+        assertEq(queue.nextActionId(), nextActionId, "action ID not consumed");
     }
 
     function _expectActionNotFound(uint64 actionId_) internal {

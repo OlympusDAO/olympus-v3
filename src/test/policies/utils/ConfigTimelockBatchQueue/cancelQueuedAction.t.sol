@@ -8,27 +8,27 @@ import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelo
 contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQueueTest {
     function test_cancelQueuedAction_releasesEveryKeyAndClearsEveryGuard() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = queue.makeAction(_keys(KEY_A, KEY_B), _values(11, 22), 1);
-        actions[1] = queue.makeAction(_keys(KEY_C), _values(33), 2);
-        uint64 actionId = queue.queueBatch(actions);
+        actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        actions[1] = _queue.makeAction(_keys(_KEY_C), _values(33), 2);
+        uint64 actionId = _queue.queueBatch(actions);
 
-        queue.cancelQueuedAction(actionId);
+        _queue.cancelQueuedAction(actionId);
 
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), 0, "first key released");
-        assertEq(queue.pendingActionId(_scopedKey(KEY_B)), 0, "second key released");
-        assertEq(queue.pendingActionId(_scopedKey(KEY_C)), 0, "third key released");
-        assertEq(queue.getQueuedConfigStateCount(actionId, 0), 0, "first guards cleared");
-        assertEq(queue.getQueuedConfigStateCount(actionId, 1), 0, "second guards cleared");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "first key released");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), 0, "second key released");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_C)), 0, "third key released");
+        assertEq(_queue.getQueuedConfigStateCount(actionId, 0), 0, "first guards cleared");
+        assertEq(_queue.getQueuedConfigStateCount(actionId, 1), 0, "second guards cleared");
     }
 
     function test_givenReleasedKey_cancelledAction_allowsKeyToBeQueuedAgain() public {
-        uint64 cancelledActionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
-        queue.cancelQueuedAction(cancelledActionId);
+        uint64 cancelledActionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.cancelQueuedAction(cancelledActionId);
 
-        uint64 replacementActionId = queue.queueConfig(_keys(KEY_A), _values(12), 2);
+        uint64 replacementActionId = _queue.queueConfig(_keys(_KEY_A), _values(12), 2);
 
         assertEq(
-            queue.pendingActionId(_scopedKey(KEY_A)),
+            _queue.pendingActionId(_scopedKey(_KEY_A)),
             replacementActionId,
             "replacement owns released key"
         );
@@ -36,8 +36,8 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
     }
 
     function test_cancelQueuedAction_afterExpiry_releasesRetainedKeys() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A, KEY_B), _values(11, 22), 1);
-        ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        ITimelockBatchQueue.QueuedAction memory action = _queue.getQueuedAction(actionId);
         vm.warp(uint256(action.expiresAt) + 1);
 
         vm.expectRevert(
@@ -47,26 +47,23 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
                 action.expiresAt
             )
         );
-        queue.executeQueuedAction(actionId);
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), actionId, "first expired key held");
-        assertEq(queue.pendingActionId(_scopedKey(KEY_B)), actionId, "second expired key held");
+        _queue.executeQueuedAction(actionId);
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionId, "first expired key held");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), actionId, "second expired key held");
 
-        queue.cancelQueuedAction(actionId);
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), 0, "first cancelled key released");
-        assertEq(queue.pendingActionId(_scopedKey(KEY_B)), 0, "second cancelled key released");
+        _queue.cancelQueuedAction(actionId);
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "first cancelled key released");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), 0, "second cancelled key released");
     }
 
     function test_cancelQueuedAction_givenOwnershipMismatch_revertsWithoutDeletingForeignLock()
         public
     {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         uint64 corruptOwner = 99;
-        bytes32 scopedKey = _scopedKey(KEY_A);
-        vm.store(
-            address(queue),
-            keccak256(abi.encode(scopedKey, uint256(2))),
-            bytes32(uint256(corruptOwner))
-        );
+        bytes32 scopedKey = _scopedKey(_KEY_A);
+        assertEq(_queue.pendingActionId(scopedKey), actionId, "expected owner before corruption");
+        vm.store(address(_queue), _pendingActionIdSlot(scopedKey), bytes32(uint256(corruptOwner)));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -79,22 +76,19 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
                 corruptOwner
             )
         );
-        queue.cancelQueuedAction(actionId);
+        _queue.cancelQueuedAction(actionId);
 
-        assertEq(queue.pendingActionId(scopedKey), corruptOwner, "foreign owner retained");
-        assertFalse(queue.getQueuedAction(actionId).cancelled, "action remains pending");
-        assertEq(queue.getQueuedConfigStateCount(actionId, 0), 1, "guard retained");
+        assertEq(_queue.pendingActionId(scopedKey), corruptOwner, "foreign owner retained");
+        assertFalse(_queue.getQueuedAction(actionId).cancelled, "action remains pending");
+        assertEq(_queue.getQueuedConfigStateCount(actionId, 0), 1, "guard retained");
     }
 
     function test_givenLaterOwnershipMismatch_cancelQueuedAction_rollsBackEarlierRelease() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A, KEY_B), _values(11, 22), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
         uint64 corruptOwner = 99;
-        bytes32 scopedKeyB = _scopedKey(KEY_B);
-        vm.store(
-            address(queue),
-            keccak256(abi.encode(scopedKeyB, uint256(2))),
-            bytes32(uint256(corruptOwner))
-        );
+        bytes32 scopedKeyB = _scopedKey(_KEY_B);
+        assertEq(_queue.pendingActionId(scopedKeyB), actionId, "expected owner before corruption");
+        vm.store(address(_queue), _pendingActionIdSlot(scopedKeyB), bytes32(uint256(corruptOwner)));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -107,19 +101,19 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
                 corruptOwner
             )
         );
-        queue.cancelQueuedAction(actionId);
+        _queue.cancelQueuedAction(actionId);
 
         assertEq(
-            queue.pendingActionId(_scopedKey(KEY_A)),
+            _queue.pendingActionId(_scopedKey(_KEY_A)),
             actionId,
             "earlier key release rolled back"
         );
-        assertEq(queue.pendingActionId(scopedKeyB), corruptOwner, "foreign owner retained");
-        assertFalse(queue.getQueuedAction(actionId).cancelled, "action remains pending");
-        assertEq(queue.getQueuedConfigStateCount(actionId, 0), 2, "guards retained");
+        assertEq(_queue.pendingActionId(scopedKeyB), corruptOwner, "foreign owner retained");
+        assertFalse(_queue.getQueuedAction(actionId).cancelled, "action remains pending");
+        assertEq(_queue.getQueuedConfigStateCount(actionId, 0), 2, "guards retained");
         assertEq(
-            queue.getQueuedConfigDestination(actionId, 0),
-            address(target),
+            _queue.getQueuedConfigDestination(actionId, 0),
+            address(_target),
             "destination retained"
         );
     }

@@ -38,8 +38,16 @@ contract TimelockBatchQueueConstructorTest is TimelockBatchQueueTest {
     }
 
     function test_constructor_givenBoundaryDelays_succeeds() public {
-        assertEq(new MockTimelockBatchQueue(queue.MIN_DELAY()).timelockDelay(), queue.MIN_DELAY());
-        assertEq(new MockTimelockBatchQueue(queue.MAX_DELAY()).timelockDelay(), queue.MAX_DELAY());
+        assertEq(
+            new MockTimelockBatchQueue(queue.MIN_DELAY()).timelockDelay(),
+            queue.MIN_DELAY(),
+            "minimum delay accepted"
+        );
+        assertEq(
+            new MockTimelockBatchQueue(queue.MAX_DELAY()).timelockDelay(),
+            queue.MAX_DELAY(),
+            "maximum delay accepted"
+        );
     }
 
     function test_constructor_emitsTimelockDelaySet() public {

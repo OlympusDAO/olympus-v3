@@ -77,7 +77,7 @@ contract TimelockBatchQueueCancelQueuedActionTest is TimelockBatchQueueTest {
 
         assertFalse(queue.getQueuedAction(actionId).cancelled, "not cancelled");
         assertEq(queue.getQueuedActionLength(actionId), 1, "action retained");
-        assertEq(queue.getCancellationCalls().length, 0, "cancellation hook not called");
+        assertEq(queue.getCancellationCalls().length, 0, "cancellation hook record rolled back");
     }
 
     function test_cancelQueuedAction_givenBatchQueued_whenCallerIsNonZero(address caller_) public {

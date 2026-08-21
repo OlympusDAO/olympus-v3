@@ -5,30 +5,30 @@ import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelo
 
 contract ConfigTimelockBatchQueueGetQueuedConfigDestinationTest is ConfigTimelockBatchQueueTest {
     function test_getQueuedConfigDestination_returnsQueueTimeDestination() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         assertEq(
-            queue.getQueuedConfigDestination(actionId, 0),
-            address(target),
+            _queue.getQueuedConfigDestination(actionId, 0),
+            address(_target),
             "queue-time destination"
         );
     }
 
     function test_getQueuedConfigDestination_afterExecution_returnsZero() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         _warpReady(actionId);
-        queue.executeQueuedAction(actionId);
+        _queue.executeQueuedAction(actionId);
         assertEq(
-            queue.getQueuedConfigDestination(actionId, 0),
+            _queue.getQueuedConfigDestination(actionId, 0),
             address(0),
             "executed destination cleared"
         );
     }
 
     function test_getQueuedConfigDestination_afterCancellation_returnsZero() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
-        queue.cancelQueuedAction(actionId);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.cancelQueuedAction(actionId);
         assertEq(
-            queue.getQueuedConfigDestination(actionId, 0),
+            _queue.getQueuedConfigDestination(actionId, 0),
             address(0),
             "cancelled destination cleared"
         );

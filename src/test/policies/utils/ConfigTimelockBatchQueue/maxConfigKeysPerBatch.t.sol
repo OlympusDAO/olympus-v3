@@ -5,11 +5,11 @@ import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelo
 
 contract ConfigTimelockBatchQueueMaxConfigKeysPerBatchTest is ConfigTimelockBatchQueueTest {
     function test_maxConfigKeysPerBatch_returnsOverride() public view {
-        assertEq(queue.maxConfigKeysPerBatch(), 4, "configured maximum");
+        assertEq(_queue.maxConfigKeysPerBatch(), 4, "configured maximum");
     }
 
     function test_maxConfigKeysPerBatch_defaultsToMaximumBatchSize() public {
-        queue.setMaxConfigKeys(0);
-        assertEq(queue.maxConfigKeysPerBatch(), 15, "default maximum batch size");
+        _queue.setMaxConfigKeys(0);
+        assertEq(_queue.maxConfigKeysPerBatch(), 15, "default maximum batch size");
     }
 }

@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+// Interfaces
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
 /// @title ConfigTimelockBatchQueue
@@ -239,8 +242,19 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         return keccak256(abi.encode(destination_, localKey_));
     }
 
+    /// @notice Validates queue-wide authorization and lifecycle requirements.
+    /// @dev Called once, before the first sub-action acquires configuration keys. Implementations
+    ///      must revert when the caller or current product lifecycle cannot queue the batch.
+    /// @param caller_ Account queueing the batch.
     function _validateConfigQueue(address caller_) internal view virtual;
 
+    /// @notice Validates one sub-action before its destination and configuration keys are stored.
+    /// @dev Implementations must revert for unsupported targets, selectors, payloads, or product
+    ///      state. Any state recorded by an earlier sub-action is rolled back if validation fails.
+    /// @param caller_ Account queueing the batch.
+    /// @param actionId_ Action ID reserved for the batch.
+    /// @param index_ Position of the sub-action within the batch.
+    /// @param action_ Sub-action to validate.
     function _validateConfigSubAction(
         address caller_,
         uint64 actionId_,
@@ -263,6 +277,15 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view virtual returns (bytes32[] memory keys);
 
+    /// @notice Hashes the live configuration state guarded by one local key.
+    /// @dev Called when queueing to store the expected hash and again immediately before execution
+    ///      to detect stale state. Implementations must hash the same canonical fields on both
+    ///      paths and exclude values that may legitimately change during the timelock delay.
+    /// @param actionId_ ID of the queued action.
+    /// @param index_ Position of the sub-action within the batch.
+    /// @param key_ Destination-local configuration key being guarded.
+    /// @param action_ Sub-action whose live configuration state is hashed.
+    /// @return stateHash Canonical hash of the guarded live state.
     function _currentConfigStateHash(
         uint64 actionId_,
         uint256 index_,
@@ -270,10 +293,16 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view virtual returns (bytes32 stateHash);
 
+    /// @notice Validates invariants spanning the complete batch after all guards are acquired.
+    /// @dev The default implementation is a no-op. An override must revert on invalid cross-action
+    ///      state; the revert rolls back every guard acquired for the batch.
+    /// @param caller_ Account queueing the batch.
+    /// @param actionId_ Action ID reserved for the batch.
+    /// @param actions_ Complete ordered set of queued sub-actions.
     function _validateConfigBatch(
-        address,
-        uint64,
-        ITimelockBatchQueue.BatchAction[] memory
+        address caller_,
+        uint64 actionId_,
+        ITimelockBatchQueue.BatchAction[] memory actions_
     ) internal view virtual {}
 
     /// @dev Subclasses must not perform a state-changing external call before the intended
