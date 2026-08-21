@@ -42,9 +42,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         `setChainRateLimits` reserves the rate limits domain; and `applyAllowListUpdates`
 ///         reserves the allowlist domain. Reserved domains are released only by execution or
 ///         cancellation, so an expired or invalidated action must be cancelled before its domains
-///         can be queued again. Queueing does not require the config policy to be enabled, only
-///         execution does, so an action queued while the config policy is disabled holds its
-///         domains until it executes or is cancelled. Enabling and re-enabling the timelock
+///         can be queued again. Queueing and execution both require the timelock and the config
+///         policy to be enabled; an action whose config policy is disabled after queueing holds
+///         its domains until it executes or is cancelled. Enabling and re-enabling the timelock
 ///         require the config policy to be an active policy of the timelock's kernel.
 interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     // ========== ERRORS ========== //

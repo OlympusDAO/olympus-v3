@@ -34,17 +34,16 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         and re-enabling this policy require the config policy to be an active policy of that
 ///         kernel.
 ///
-///         Queueing requires this policy to be enabled, the caller to hold the bridge admin
-///         role and the config policy to name this timelock as its config operator; it does not
-///         require the config policy to be enabled. Every sub-action must target the config
-///         policy with a supported selector and a payload whose canonical re-encoding equals the
-///         stored bytes, and must pass the config policy's validation mirror of the targeted
-///         function. Execution is permissionless once the delay elapses and requires this policy
+///         Queueing requires this policy and the config policy to be enabled, the caller to hold
+///         the bridge admin role and the config policy to name this timelock as its config
+///         operator. Every sub-action must target the config policy with a supported selector
+///         and a payload whose canonical re-encoding equals the stored bytes, and must pass the
+///         config policy's validation mirror of the targeted function. Execution is permissionless once the delay elapses and requires this policy
 ///         and the config policy to be enabled and this timelock to still be the config operator;
 ///         the shared base then checks the reserved keys and state hashes before each dispatch.
-///         An action queued while the config policy is disabled therefore holds its
-///         configuration keys until it is executed once the config policy is enabled again, or
-///         until it is cancelled; so does an action whose dispatch reverts because the config
+///         An action whose config policy is disabled after queueing holds its configuration
+///         keys until it is executed once the config policy is enabled again, or until it is
+///         cancelled; so does an action whose dispatch reverts because the config
 ///         policy no longer owns the pool, or whose execution this timelock rejects because the
 ///         config policy names another config operator or none. Cancellation is available to
 ///         the admin role, the emergency role and the proposer of the action, whether or not
@@ -196,6 +195,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateAddChain` of the config policy rejects `update_`.
@@ -215,6 +215,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateRemoveChain` of the config policy rejects `chainSelector_`.
@@ -232,6 +233,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateSetRemoteToken` of the config policy rejects the arguments.
@@ -252,6 +254,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateAddRemotePool` of the config policy rejects the arguments.
@@ -272,6 +275,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateRemoveRemotePool` of the config policy rejects the arguments.
@@ -292,6 +296,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateApplyAllowListUpdates` of the config policy rejects the arguments.
@@ -312,6 +317,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - `validateSetChainRateLimits` of the config policy rejects the arguments.
@@ -333,6 +339,7 @@ contract CCIPBridgeConfigTimelock is
     /// @inheritdoc ICCIPBridgeConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
+    ///      - The config policy is disabled.
     ///      - The caller does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     ///      - The batch is empty (`ITimelockBatchQueue_BatchEmpty`) or holds more than the
@@ -370,16 +377,14 @@ contract CCIPBridgeConfigTimelock is
     // ========== CONFIG TIMELOCK HOOKS ========== //
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev The enabled state of the config policy is not checked here; it is checked by
-    ///      `_validateExecution`. An action queued while the config policy is disabled holds its
-    ///      configuration keys until it executes or is cancelled.
-    ///
-    ///      Reverts if:
-    ///      - This policy is disabled.
+    /// @dev Reverts if:
+    ///      - This policy is disabled (`NotEnabled`).
+    ///      - The config policy is disabled (`NotEnabled`).
     ///      - `caller_` does not hold the bridge admin role.
     ///      - The config policy does not name this timelock as its config operator.
     function _validateConfigQueue(address caller_) internal view override {
         _requireEnabled();
+        _requireConfigEnabled();
         _requireRole(caller_, BRIDGE_ADMIN_ROLE);
         _requireOperatorOfConfig();
     }
@@ -632,7 +637,7 @@ contract CCIPBridgeConfigTimelock is
         ITimelockBatchQueue.QueuedAction storage
     ) internal view override {
         _requireEnabled();
-        if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
+        _requireConfigEnabled();
         _requireOperatorOfConfig();
     }
 
@@ -703,6 +708,11 @@ contract CCIPBridgeConfigTimelock is
     }
 
     // ========== INTERNAL HELPERS ========== //
+
+    /// @notice Reverts with `NotEnabled` unless the config policy is enabled.
+    function _requireConfigEnabled() internal view {
+        if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
+    }
 
     /// @notice Reverts with `CCIPBridgeConfigTimelock_ConfigNotActive` unless the config policy
     ///         is an active policy of this policy's kernel.
