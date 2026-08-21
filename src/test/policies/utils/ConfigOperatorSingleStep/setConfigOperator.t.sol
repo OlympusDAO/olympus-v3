@@ -14,8 +14,8 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
     //  when the config operator is read
     //   then it is unset
     function test_givenNewDeployment_operatorIsUnset() public view {
-        assertEq(configOperator.configOperator(), address(0), "config operator");
-        assertFalse(configOperator.isConfigOperator(address(0)), "zero address unauthorized");
+        assertEq(_configOperator.configOperator(), address(0), "config operator");
+        assertFalse(_configOperator.isConfigOperator(address(0)), "zero address unauthorized");
     }
 
     // setConfigOperator
@@ -39,15 +39,15 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
     //  when the caller sets the config operator
     //   then it reverts and keeps delegated access disabled
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
-        vm.assume(caller_ != authorizedCaller);
+        vm.assume(caller_ != _authorizedCaller);
 
         vm.prank(caller_);
         vm.expectRevert(
             abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unauthorized.selector, caller_)
         );
-        configOperator.setConfigOperator(operator);
+        _configOperator.setConfigOperator(_operator);
 
-        assertEq(configOperator.configOperator(), address(0), "config operator");
+        assertEq(_configOperator.configOperator(), address(0), "config operator");
     }
 
     // setConfigOperator
@@ -55,47 +55,44 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
     //  when the caller sets the config operator
     //   then it stores the operator and emits ConfigOperatorSet
     function test_givenAuthorizedCaller_setsOperator() public {
-        vm.expectEmit(true, false, false, true, address(configOperator));
-        emit IConfigOperator.ConfigOperatorSet(operator);
+        vm.expectEmit(true, false, false, true, address(_configOperator));
+        emit IConfigOperator.ConfigOperatorSet(_operator);
 
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(operator);
+        vm.prank(_authorizedCaller);
+        _configOperator.setConfigOperator(_operator);
 
-        assertEq(configOperator.configOperator(), operator, "config operator");
-        assertTrue(configOperator.isConfigOperator(operator), "operator authorized");
-        assertFalse(configOperator.isConfigOperator(other), "other unauthorized");
+        assertEq(_configOperator.configOperator(), _operator, "config operator");
+        assertTrue(_configOperator.isConfigOperator(_operator), "operator authorized");
+        assertFalse(_configOperator.isConfigOperator(_other), "other unauthorized");
     }
 
     // setConfigOperator
     // given an operator is already configured
     //  when the authorized caller sets a different operator
     //   then it replaces the operator immediately without acceptance
-    function test_givenExistingOperator_replacesOperator() public {
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(operator);
+    function test_givenExistingOperator_replacesOperator() public givenExistingOperator {
+        vm.prank(_authorizedCaller);
+        _configOperator.setConfigOperator(_other);
 
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(other);
-
-        assertEq(configOperator.configOperator(), other, "config operator");
-        assertFalse(configOperator.isConfigOperator(operator), "old operator unauthorized");
-        assertTrue(configOperator.isConfigOperator(other), "new operator authorized");
+        assertEq(_configOperator.configOperator(), _other, "config operator");
+        assertFalse(_configOperator.isConfigOperator(_operator), "old operator unauthorized");
+        assertTrue(_configOperator.isConfigOperator(_other), "new operator authorized");
     }
 
     // setConfigOperator
     // given an operator is configured
     //  when the authorized caller sets the zero address
     //   then it revokes delegated access
-    function test_givenExistingOperator_givenZeroAddress_revokesOperator() public {
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(operator);
-
-        vm.expectEmit(true, false, false, true, address(configOperator));
+    function test_givenExistingOperator_givenZeroAddress_revokesOperator()
+        public
+        givenExistingOperator
+    {
+        vm.expectEmit(true, false, false, true, address(_configOperator));
         emit IConfigOperator.ConfigOperatorSet(address(0));
-        vm.prank(authorizedCaller);
-        configOperator.setConfigOperator(address(0));
+        vm.prank(_authorizedCaller);
+        _configOperator.setConfigOperator(address(0));
 
-        assertEq(configOperator.configOperator(), address(0), "config operator");
-        assertFalse(configOperator.isConfigOperator(operator), "old operator unauthorized");
+        assertEq(_configOperator.configOperator(), address(0), "config operator");
+        assertFalse(_configOperator.isConfigOperator(_operator), "old operator unauthorized");
     }
 }

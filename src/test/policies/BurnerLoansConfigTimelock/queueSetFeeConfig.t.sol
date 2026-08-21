@@ -115,6 +115,44 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
     }
 
     // queueSetAssetFeeConfig
+    // given a fee update is pending for an asset
+    //  when a risk update is queued for the same asset
+    //   then both queues succeed with distinct scoped configuration keys
+    function test_givenFeeUpdatePendingForAsset_whenRiskUpdateQueuedForSameAsset_queuesDistinctKeys()
+        public
+    {
+        (
+            IBurnerLoans.AssetFeeConfig memory feeUpdate,
+            IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection
+        ) = _singleFeeUpdate(0);
+        vm.prank(burnerLoansAdmin);
+        uint64 feeActionId = configTimelock.queueSetAssetFeeConfig(
+            address(usds),
+            feeUpdate,
+            feeSelection
+        );
+
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection
+        ) = _collateralFactorUpdate();
+        vm.prank(burnerLoansAdmin);
+        uint64 riskActionId = configTimelock.queueSetAssetRiskConfig(
+            address(usds),
+            riskUpdate,
+            riskSelection
+        );
+
+        (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(feeActionId, 0, 0);
+        (bytes32 riskKey, ) = configTimelock.getQueuedConfigState(riskActionId, 0, 0);
+        assertEq(feeActionId, 1, "fee action queued first");
+        assertEq(riskActionId, 2, "risk action queued second");
+        assertNotEq(feeKey, riskKey, "fee and risk keys are distinct");
+        assertEq(configTimelock.pendingActionId(feeKey), feeActionId, "fee key owner");
+        assertEq(configTimelock.pendingActionId(riskKey), riskActionId, "risk key owner");
+    }
+
+    // queueSetAssetFeeConfig
     // given market originations are disabled
     //  when a fee update is queued and executed
     //   then the existing market can still be configured

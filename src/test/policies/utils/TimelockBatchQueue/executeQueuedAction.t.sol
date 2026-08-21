@@ -76,7 +76,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
     function test_executeQueuedAction_givenCancelledAction_reverts() public {
         uint64 actionId = _queueSingleAction();
         queue.cancelQueuedAction(actionId);
-        _warpToExecutableAt(actionId);
+        _warpReady(actionId);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionCancelled.selector,
@@ -268,9 +268,5 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         assertTrue(queue.getQueuedAction(actionId).executed, "outer action executed");
         assertEq(queue.getQueuedActionLength(newActionId), 1, "reentrant action stored");
         assertEq(queue.nextActionId(), newActionId + 1, "next action ID advanced");
-    }
-
-    function _warpToExecutableAt(uint64 actionId_) internal {
-        vm.warp(queue.getQueuedAction(actionId_).executableAt);
     }
 }

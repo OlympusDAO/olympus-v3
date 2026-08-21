@@ -87,7 +87,13 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         assertEq(storedPayload, payload, "payload");
     }
 
-    function test_givenDifferentRiskFieldPendingForSameAsset_revertsWithOwningAction() public {
+    // queueSetAssetRiskConfig
+    // given a risk update is pending for an asset
+    //  when a different risk field is queued for the same asset
+    //   then it reverts with the shared risk key's owning action
+    function test_givenRiskUpdatePendingForAsset_whenDifferentRiskFieldQueued_revertsWithSharedKeyOwner()
+        public
+    {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory collateralUpdate,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory collateralSelection
@@ -117,6 +123,44 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
         assertEq(configTimelock.pendingActionId(key), owner, "first risk action retains key");
         assertEq(configTimelock.nextActionId(), owner + 1, "failed queue does not consume id");
+    }
+
+    // queueSetAssetRiskConfig
+    // given a risk update is pending for an asset
+    //  when a fee update is queued for the same asset
+    //   then both queues succeed with distinct scoped configuration keys
+    function test_givenRiskUpdatePendingForAsset_whenFeeUpdateQueuedForSameAsset_queuesDistinctKeys()
+        public
+    {
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection
+        ) = _collateralFactorUpdate();
+        vm.prank(burnerLoansAdmin);
+        uint64 riskActionId = configTimelock.queueSetAssetRiskConfig(
+            address(usds),
+            riskUpdate,
+            riskSelection
+        );
+
+        IBurnerLoans.AssetFeeConfig memory feeUpdate;
+        feeUpdate.baseFeeBps = 30;
+        IBurnerLoansConfigTimelock.FeeConfigUpdateSelection memory feeSelection;
+        feeSelection.baseFeeBps = true;
+        vm.prank(burnerLoansAdmin);
+        uint64 feeActionId = configTimelock.queueSetAssetFeeConfig(
+            address(usds),
+            feeUpdate,
+            feeSelection
+        );
+
+        (bytes32 riskKey, ) = configTimelock.getQueuedConfigState(riskActionId, 0, 0);
+        (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(feeActionId, 0, 0);
+        assertEq(riskActionId, 1, "risk action queued first");
+        assertEq(feeActionId, 2, "fee action queued second");
+        assertNotEq(riskKey, feeKey, "risk and fee keys are distinct");
+        assertEq(configTimelock.pendingActionId(riskKey), riskActionId, "risk key owner");
+        assertEq(configTimelock.pendingActionId(feeKey), feeActionId, "fee key owner");
     }
 
     // queueSetAssetRiskConfig

@@ -69,7 +69,11 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         );
     }
 
-    function test_givenEverySupportedAction_queuesDocumentedConfigKeysAndStateHashes() public {
+    // queueBatch
+    // given one action for every supported configuration setter
+    //  when the actions are queued together
+    //   then each action stores its documented configuration key and pre-state hash
+    function test_givenEverySupportedAction_whenQueuedTogether_storesDocumentedGuards() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](4);
         actions[0] = _feeAction(30);
         actions[1] = _riskAction(9_500);
@@ -119,7 +123,11 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         );
     }
 
-    function test_givenDifferentFeeFieldsForSameAsset_revertsWithSameBatchOwner() public {
+    // queueBatch
+    // given different fee fields for the same asset
+    //  when the updates are queued together
+    //   then it reverts with the shared fee key's batch owner
+    function test_givenDifferentFeeFieldsForSameAsset_whenQueuedTogether_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _feeAction(30);
 
@@ -151,7 +159,11 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         assertEq(configTimelock.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_givenDifferentRiskFieldsForSameAsset_revertsWithSameBatchOwner() public {
+    // queueBatch
+    // given different risk fields for the same asset
+    //  when the updates are queued together
+    //   then it reverts with the shared risk key's batch owner
+    function test_givenDifferentRiskFieldsForSameAsset_whenQueuedTogether_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _riskAction(9_500);
 

@@ -5,24 +5,24 @@ import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelo
 
 contract ConfigTimelockBatchQueuePendingActionIdTest is ConfigTimelockBatchQueueTest {
     function test_pendingActionId_givenFreeKey_returnsZero() public view {
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), 0, "free key has no owner");
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "free key has no owner");
     }
 
     function test_pendingActionId_givenReservedKey_returnsOwner() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), actionId, "reserved key owner");
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionId, "reserved key owner");
     }
 
     function test_pendingActionId_givenExecutedAction_returnsZero() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         _warpReady(actionId);
-        queue.executeQueuedAction(actionId);
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), 0, "executed key released");
+        _queue.executeQueuedAction(actionId);
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "executed key released");
     }
 
     function test_pendingActionId_givenCancelledAction_returnsZero() public {
-        uint64 actionId = queue.queueConfig(_keys(KEY_A), _values(11), 1);
-        queue.cancelQueuedAction(actionId);
-        assertEq(queue.pendingActionId(_scopedKey(KEY_A)), 0, "cancelled key released");
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.cancelQueuedAction(actionId);
+        assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "cancelled key released");
     }
 }

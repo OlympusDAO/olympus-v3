@@ -353,19 +353,21 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     }
 
     function test_givenLaterRealSetterReverts_rollsBackEarlierSetterAndKeepsBatchKeys() public {
-        uint128 queuedDebtCap = 50_000e9;
+        // queuedDebtCapOhm = 50,000 OHM in the token's 9-decimal scale.
+        uint128 queuedDebtCapOhm = 50_000e9;
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _feeAction(30);
         actions[1] = _singleAction(
             IBurnerLoansConfig.setAssetDebtCap.selector,
-            abi.encode(address(usds), queuedDebtCap)
+            abi.encode(address(usds), queuedDebtCapOhm)
         );
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueBatch(actions);
         (bytes32 feeKey, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
         (bytes32 debtCapKey, ) = configTimelock.getQueuedConfigState(actionId, 1, 0);
-        burnerLoans.setActiveDebtForTest(address(usds), queuedDebtCap + 1);
+        // One 9-decimal base unit above the queued cap forces the real setter to revert.
+        burnerLoans.setActiveDebtForTest(address(usds), queuedDebtCapOhm + 1);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
 
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidCap.selector);
@@ -410,12 +412,15 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     }
 
     function test_givenDebtCapChangesAfterQueue_executionRevertsAndKeepsKey() public {
+        // Both values are OHM amounts in the token's 9-decimal scale.
+        uint128 queuedDebtCapOhm = 90_000e9;
+        uint128 changedDebtCapOhm = 95_000e9;
         vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), 90_000e9);
+        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), queuedDebtCapOhm);
         (bytes32 key, ) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
         vm.prank(address(configTimelock));
-        burnerLoansConfig.setAssetDebtCap(address(usds), 95_000e9);
+        burnerLoansConfig.setAssetDebtCap(address(usds), changedDebtCapOhm);
         vm.warp(block.timestamp + configTimelock.timelockDelay());
         vm.expectPartialRevert(
             IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector

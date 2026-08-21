@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfigTimelockTest {

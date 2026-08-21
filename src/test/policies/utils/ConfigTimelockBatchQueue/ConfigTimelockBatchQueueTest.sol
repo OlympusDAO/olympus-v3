@@ -3,32 +3,35 @@ pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
+// Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
 import {ConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/ConfigTimelockBatchQueueHarness.sol";
 import {MockConfigTarget} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/MockConfigTarget.sol";
 
 abstract contract ConfigTimelockBatchQueueTest is Test {
-    bytes32 internal constant KEY_A = keccak256("KEY_A");
-    bytes32 internal constant KEY_B = keccak256("KEY_B");
-    bytes32 internal constant KEY_C = keccak256("KEY_C");
+    bytes32 internal constant _KEY_A = keccak256("KEY_A");
+    bytes32 internal constant _KEY_B = keccak256("KEY_B");
+    bytes32 internal constant _KEY_C = keccak256("KEY_C");
 
-    MockConfigTarget internal target;
-    ConfigTimelockBatchQueueHarness internal queue;
+    MockConfigTarget internal _target;
+    ConfigTimelockBatchQueueHarness internal _queue;
 
     function setUp() public virtual {
-        target = new MockConfigTarget();
-        queue = new ConfigTimelockBatchQueueHarness(target);
-        target.setConfigState(KEY_A, 10);
-        target.setConfigState(KEY_B, 20);
-        target.setConfigState(KEY_C, 30);
+        _target = new MockConfigTarget();
+        _queue = new ConfigTimelockBatchQueueHarness(_target);
+        _target.setConfigState(_KEY_A, 10);
+        _target.setConfigState(_KEY_B, 20);
+        _target.setConfigState(_KEY_C, 30);
     }
 
     function _warpReady(uint64 actionId_) internal {
-        vm.warp(queue.getQueuedAction(actionId_).executableAt);
+        vm.warp(_queue.getQueuedAction(actionId_).executableAt);
     }
 
     function _scopedKey(bytes32 localKey_) internal view returns (bytes32 key) {
-        return _scopedKey(address(target), localKey_);
+        return _scopedKey(address(_target), localKey_);
     }
 
     function _scopedKey(
@@ -90,7 +93,11 @@ abstract contract ConfigTimelockBatchQueueTest is Test {
         bytes32 keyB_
     ) internal view returns (ITimelockBatchQueue.BatchAction[] memory actions) {
         actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = queue.makeAction(_keys(keyA_), _values(11), 1);
-        actions[1] = queue.makeAction(_keys(keyB_), _values(22), 2);
+        actions[0] = _queue.makeAction(_keys(keyA_), _values(11), 1);
+        actions[1] = _queue.makeAction(_keys(keyB_), _values(22), 2);
+    }
+
+    function _pendingActionIdSlot(bytes32 key_) internal pure returns (bytes32 slot) {
+        return keccak256(abi.encode(key_, uint256(2)));
     }
 }
