@@ -8,6 +8,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
 import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
@@ -27,8 +28,11 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 /// @notice Timelock policy through which the bridge admin role queues typed route, remote pool,
 ///         allowlist and rate limit changes of a `CCIPBridgeConfig` policy.
 /// @dev    The config policy address is fixed at construction and must advertise
-///         `ICCIPBridgeConfig` through ERC165. The token pool whose state is hashed is read from
-///         the config policy at construction and is fixed for the lifetime of that policy.
+///         `ICCIPBridgeConfig`, `IConfigOperator` and `IEnabler` through ERC165 and belong to the
+///         same kernel as this policy. The token pool whose state is hashed is read from the
+///         config policy at construction and is fixed for the lifetime of that policy. Enabling
+///         and re-enabling this policy require the config policy to be an active policy of that
+///         kernel.
 ///
 ///         Queueing requires this policy to be enabled, the caller to hold the bridge admin
 ///         role and the config policy to name this timelock as its config operator; it does not
@@ -103,7 +107,9 @@ contract CCIPBridgeConfigTimelock is
     ///
     ///         Reverts if:
     ///         - `config_` is the zero address.
-    ///         - `config_` does not advertise `ICCIPBridgeConfig` through ERC165.
+    ///         - `config_` does not advertise `ICCIPBridgeConfig`, `IConfigOperator` and
+    ///           `IEnabler` through ERC165.
+    ///         - `config_` reports a kernel other than `kernel_`.
     ///         - `initialTimelockDelay_` is outside `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`.
     ///         - `gracePeriod_` is zero.
     /// @param  kernel_ The kernel of the policy.
@@ -121,8 +127,16 @@ contract CCIPBridgeConfigTimelock is
         ConfigTimelockBatchQueue(initialTimelockDelay_)
     {
         if (config_ == address(0)) revert CCIPBridgeConfigTimelock_InvalidAddress("config");
-        if (!ERC165Checker.supportsInterface(config_, type(ICCIPBridgeConfig).interfaceId)) {
+        bytes4[] memory configInterfaceIds = new bytes4[](3);
+        configInterfaceIds[0] = type(ICCIPBridgeConfig).interfaceId;
+        configInterfaceIds[1] = type(IConfigOperator).interfaceId;
+        configInterfaceIds[2] = type(IEnabler).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(config_, configInterfaceIds)) {
             revert CCIPBridgeConfigTimelock_InvalidConfig(config_);
+        }
+        address configKernel = address(Policy(config_).kernel());
+        if (configKernel != address(kernel_)) {
+            revert CCIPBridgeConfigTimelock_KernelMismatch(configKernel);
         }
 
         _CONFIG = ICCIPBridgeConfig(config_);
@@ -671,7 +685,33 @@ contract CCIPBridgeConfigTimelock is
     ///      - The caller does not hold the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
+    /// @notice Validates the config policy binding before this policy is enabled.
+    /// @dev Reverts if:
+    ///      - The config policy is not an active policy of this policy's kernel.
+    function _beforeEnable(bytes calldata) internal view override {
+        _requireConfigActive();
+    }
+
+    /// @notice Validates the grace window and the config policy binding before this policy is
+    ///         re-enabled.
+    /// @dev Reverts if:
+    ///      - The grace window since the last transition has elapsed (`GracePeriod_Expired`).
+    ///      - The config policy is not an active policy of this policy's kernel.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requireConfigActive();
+    }
+
     // ========== INTERNAL HELPERS ========== //
+
+    /// @notice Reverts with `CCIPBridgeConfigTimelock_ConfigNotActive` unless the config policy
+    ///         is an active policy of this policy's kernel.
+    function _requireConfigActive() internal view {
+        address configAddress = address(_CONFIG);
+        if (!kernel.isPolicyActive(Policy(configAddress))) {
+            revert CCIPBridgeConfigTimelock_ConfigNotActive(configAddress);
+        }
+    }
 
     /// @notice Reverts with `CCIPBridgeConfigTimelock_NotConfigOperator` unless the config
     ///         policy names this timelock as its config operator.

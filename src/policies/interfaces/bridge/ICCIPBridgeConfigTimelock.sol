@@ -44,7 +44,8 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         cancellation, so an expired or invalidated action must be cancelled before its domains
 ///         can be queued again. Queueing does not require the config policy to be enabled, only
 ///         execution does, so an action queued while the config policy is disabled holds its
-///         domains until it executes or is cancelled.
+///         domains until it executes or is cancelled. Enabling and re-enabling the timelock
+///         require the config policy to be an active policy of the timelock's kernel.
 interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     // ========== ERRORS ========== //
 
@@ -53,9 +54,19 @@ interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
     error CCIPBridgeConfigTimelock_InvalidAddress(string parameter);
 
     /// @notice Thrown when the config policy supplied at construction does not advertise the
-    ///         `ICCIPBridgeConfig` interface through ERC165.
+    ///         `ICCIPBridgeConfig`, `IConfigOperator` and `IEnabler` interfaces through ERC165.
     /// @param config The rejected config policy address.
     error CCIPBridgeConfigTimelock_InvalidConfig(address config);
+
+    /// @notice Thrown when the config policy supplied at construction reports a kernel other
+    ///         than the kernel of this policy.
+    /// @param configKernel The kernel reported by the config policy.
+    error CCIPBridgeConfigTimelock_KernelMismatch(address configKernel);
+
+    /// @notice Thrown when this policy is enabled or re-enabled while the config policy is not
+    ///         an active policy of this policy's kernel.
+    /// @param config The config policy address.
+    error CCIPBridgeConfigTimelock_ConfigNotActive(address config);
 
     /// @notice Thrown when a configured module has an unsupported major version.
     error CCIPBridgeConfigTimelock_InvalidModuleVersion();
