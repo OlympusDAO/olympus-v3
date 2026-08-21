@@ -226,7 +226,7 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
         preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, 10_001 - baseFeeBps_, 10_000));
         IBurnerLoans.AssetFeeConfig memory config = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: baseFeeBps_,
-            kinkBps: 0,
+            kinkBps: 5_000,
             preKinkSlopeBps: preKinkSlopeBps_,
             postKinkSlopeBps: 0
         });
