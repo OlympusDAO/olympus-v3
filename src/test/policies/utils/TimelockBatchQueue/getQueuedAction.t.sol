@@ -16,33 +16,35 @@ contract TimelockBatchQueueGetQueuedActionTest is TimelockBatchQueueTest {
         queue.getQueuedAction(actionId_);
     }
 
-    function test_getQueuedAction_returnsCompletePendingAction() public {
+    function test_getQueuedAction_givenActionPending() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
-        assertEq(queued.proposer, proposer);
-        assertEq(queued.actions.length, actions.length);
-        assertFalse(queued.executed);
-        assertFalse(queued.cancelled);
+        assertEq(queued.proposer, proposer, "proposer");
+        assertEq(queued.actions.length, actions.length, "stored action count");
+        assertFalse(queued.executed, "not executed");
+        assertFalse(queued.cancelled, "not cancelled");
     }
 
-    function test_getQueuedAction_afterExecution_returnsHistoricalRecord() public {
+    function test_getQueuedAction_givenActionExecuted() public {
         uint64 actionId = _queueSingleAction();
         _warpReady(actionId);
         queue.executeQueuedAction(actionId);
 
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
-        assertTrue(queued.executed);
-        assertFalse(queued.cancelled);
-        assertEq(queued.actions.length, 0);
+        assertTrue(queued.executed, "executed");
+        assertFalse(queued.cancelled, "not cancelled");
+        assertEq(queued.actions.length, 0, "actions cleared");
+        assertEq(queued.proposer, proposer, "proposer retained");
     }
 
-    function test_getQueuedAction_afterCancellation_returnsHistoricalRecord() public {
+    function test_getQueuedAction_givenActionCancelled() public {
         uint64 actionId = _queueSingleAction();
         queue.cancelQueuedAction(actionId);
 
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
-        assertFalse(queued.executed);
-        assertTrue(queued.cancelled);
-        assertEq(queued.actions.length, 0);
+        assertFalse(queued.executed, "not executed");
+        assertTrue(queued.cancelled, "cancelled");
+        assertEq(queued.actions.length, 0, "actions cleared");
+        assertEq(queued.proposer, proposer, "proposer retained");
     }
 }
