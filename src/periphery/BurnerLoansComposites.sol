@@ -146,6 +146,7 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
             );
         } else {
             result.remainingCollateral = position.depositedCollateral;
+            if (position.debtOhm == 0) result.healthFactor = type(uint256).max;
         }
 
         result.refundedOhm = _refund(ohmToken, msg.sender, startingOhmBalance);

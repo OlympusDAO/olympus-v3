@@ -89,7 +89,8 @@ interface IBurnerLoansComposites {
     /// @param tokenOut The collateral token returned by Burner Loans.
     /// @param amountOut The collateral-token amount returned to the recipient.
     /// @param remainingCollateral The position's remaining collateral balance.
-    /// @param healthFactor The position's resulting health factor.
+    /// @param healthFactor Health reported after the composite operation. Zero is an unknown-health
+    ///                     sentinel for a partial repayment without a withdrawal.
     struct RepayAndWithdrawResult {
         uint256 repaidOhm;
         uint256 refundedOhm;

@@ -86,6 +86,34 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     }
 
     // repayAndWithdraw
+    // given the caller has a debt-free position
+    //  when maximum repayment is non-zero and collateral withdrawal is zero
+    //   then the input is refunded and the debt-free health factor is returned
+    function test_givenDebtFreePosition_whenMaxRepayIsNonZero_whenCollateralAmountIsZero() public {
+        _openPosition();
+        vm.startPrank(alice);
+        ohm.approve(address(burnerLoans), _BORROW);
+        burnerLoans.repay(address(usds), _BORROW, alice);
+        ohm.approve(address(composites), 1);
+        vm.stopPrank();
+        ohm.mint(alice, 1);
+
+        vm.prank(alice);
+        IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
+            _emptyAuthorization(),
+            _emptySignature(),
+            _repayParams(1, 0, alice)
+        );
+
+        assertEq(result.repaidOhm, 0, "repaid OHM");
+        assertEq(result.refundedOhm, 1, "refunded OHM");
+        assertEq(result.remainingCollateral, _COLLATERAL, "remaining collateral");
+        assertEq(result.healthFactor, type(uint256).max, "debt-free health factor");
+        assertEq(ohm.balanceOf(alice), 1, "caller OHM refund");
+        _assertCompositeBalances(address(usds));
+    }
+
+    // repayAndWithdraw
     // given the composite is not authorized to withdraw for the caller
     //  when repayment and withdrawal are requested together
     //   then the withdrawal revert rolls back the preceding repayment and token pull
