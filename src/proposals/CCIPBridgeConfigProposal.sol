@@ -12,6 +12,7 @@ import {ProposalScript} from "src/proposals/ProposalScript.sol";
 
 // Libraries
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {CCIPFeeBudgetLib} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // Interfaces
@@ -19,6 +20,7 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {ICCIPLockReleaseTokenPool} from "src/external/bridge/ICCIPLockReleaseTokenPool.sol";
 import {ICCIPTokenAdminRegistry} from "src/external/bridge/ICCIPTokenAdminRegistry.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
@@ -35,15 +37,27 @@ import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 /// @notice OCG proposal that moves the mainnet CCIP OHM token pool under the CCIPBridgeConfig
-///         policy and its CCIPBridgeConfigTimelock, and the OHM administrator position in the
-///         Chainlink TokenAdminRegistry under the OCG timelock.
+///         policy and its CCIPBridgeConfigTimelock, moves the OHM administrator position in the
+///         Chainlink TokenAdminRegistry under the OCG timelock, and opens the mainnet routes to
+///         Arbitrum, Optimism, Base and Berachain on the pool.
 ///
-///         Every action is conditional on the live state, so the proposal is idempotent with
-///         respect to steps that already happened. The actions read, in order:
+///         Every handover action is conditional on the live state, so the proposal is idempotent
+///         with respect to steps that already happened. The actions read, in order:
 ///         accept the OHM administrator role, grant `bridge_admin` to the DAO MS, enable the
 ///         config policy, accept the pool ownership, set the config timelock as config operator,
-///         set the OCG timelock as rebalancer, clear the native rate limit admin, and enable the
-///         config timelock. At most eight actions, so no activator contract is needed.
+///         set the OCG timelock as rebalancer, clear the native rate limit admin, enable the
+///         config timelock, and add the four routes through `CCIPBridgeConfig.addChain`. At most
+///         twelve actions, so no activator contract is needed.
+///
+///         The route actions come after the handover actions because `addChain` requires the
+///         config policy to be enabled and to own the pool, both of which happen earlier in the
+///         same execution. The gap between submission and execution is safe: until execution the
+///         only party able to change the pool, the registry entry or the routes is the DAO MS
+///         (the pool owner and the OHM administrator until the proposal accepts both), and any
+///         interference makes the execution revert (`ChainAlreadyExists`, `MustBeProposedOwner`,
+///         `OnlyPendingAdministrator`) rather than land in an unexpected state. If a route is
+///         added directly before submission, the build-time check of the missing set fails
+///         closed: investigate, rebuild and resubmit.
 ///
 ///         Assumes:
 ///         - CCIPBridgeConfig and CCIPBridgeConfigTimelock have been deployed on Ethereum mainnet
@@ -53,11 +67,23 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///           is the pending OHM administrator in the TokenAdminRegistry.
 ///         - The OCG timelock holds the `admin` role.
 ///         - The live Solana route of the pool matches `olympus.config.CCIP.routes` in
-///           `src/scripts/env.json`; the proposal changes no route.
+///           `src/scripts/env.json`; the exact four routes to Arbitrum, Optimism, Base and
+///           Berachain are declared there and missing from the pool.
+///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
+///           outstanding on the burn/mint chains; `CCIPTokenPool.fundPool`).
+///         - Every mainnet lane toward the four chains carries an enabled OHM fee entry with a
+///           delivery gas budget of at least 175000, obtained from Chainlink.
 contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     // ========== CONSTANTS ========== //
 
     string internal constant _ENV_PATH = "./src/scripts/env.json";
+
+    /// @dev The chain selectors of the four routes this proposal opens. The build fails closed
+    ///      unless the set of desired routes missing from the pool equals exactly this set.
+    uint64 internal constant _ARBITRUM_SELECTOR = 4949039107694359620;
+    uint64 internal constant _OPTIMISM_SELECTOR = 3734403246176062136;
+    uint64 internal constant _BASE_SELECTOR = 15971525489660198786;
+    uint64 internal constant _BERACHAIN_SELECTOR = 1294465214383781161;
 
     // ========== DATA STRUCTURES ========== //
 
@@ -104,7 +130,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             string.concat(
                 "# CCIP Bridge Config Activation\n",
                 "\n",
-                "This proposal places the Chainlink CCIP OHM token pool on Ethereum mainnet under on-chain governance through the CCIPBridgeConfig policy and the CCIPBridgeConfigTimelock policy.\n",
+                "This proposal places the Chainlink CCIP OHM token pool on Ethereum mainnet under on-chain governance through the CCIPBridgeConfig policy and the CCIPBridgeConfigTimelock policy, and opens the mainnet CCIP routes to Arbitrum, Optimism, Base and Berachain.\n",
                 "\n",
                 "## Justification\n",
                 "\n",
@@ -126,7 +152,9 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "- CCIPBridgeConfig and CCIPBridgeConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay.\n",
                 "- The DAO MS has activated both policies in the Kernel, proposed CCIPBridgeConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
                 "- The OCG timelock holds the `admin` role.\n",
-                "- The live Solana route of the pool matches the desired configuration; the proposal changes no route.\n"
+                "- The live Solana route of the pool matches the desired configuration and the four new routes are not configured yet.\n",
+                "- The pool has been funded with at least the OHM supply outstanding on Arbitrum, Optimism, Base and Berachain, so it can release against tokens burned there.\n",
+                "- Chainlink has raised the OHM delivery gas budget to at least 175,000 on every mainnet lane toward the four chains; without it every inbound transfer on those chains would fail on arrival.\n"
             );
     }
 
@@ -146,8 +174,21 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "6. Set the OCG timelock as the rebalancer of the token pool.\n",
                 "7. Clear the native rate limit admin of the token pool.\n",
                 "8. Enable the CCIPBridgeConfigTimelock policy.\n",
+                "9. Add the Arbitrum route to the token pool.\n",
+                "10. Add the Base route to the token pool.\n",
+                "11. Add the Berachain route to the token pool.\n",
+                "12. Add the Optimism route to the token pool.\n",
                 "\n",
-                "At the completion of this proposal, route configuration is proposed by the DAO MS through the CCIPBridgeConfigTimelock and executed after its delay, containment is available to the Emergency MS through CCIPBridgeConfig, and the remaining root settings of the pool require an OCG proposal.\n"
+                "## Route Limits\n",
+                "\n",
+                "Each of the four routes (Arbitrum, Optimism, Base, Berachain) opens with independent rate limit buckets in OHM base units (9 decimals), sized from the LayerZero v2 figures with a one-day window:\n",
+                "\n",
+                "- Outbound (mainnet to the chain): capacity 100,000 OHM (100000000000000), refill rate 1157407407 per second.\n",
+                "- Inbound (the chain to mainnet): capacity 55,000 OHM (55000000000000), refill rate 636574074 per second.\n",
+                "\n",
+                "The remote token of each route is the chain's OHM token and the accepted remote pool is the chain's CCIPBurnMintTokenPool policy, both read from the desired-state configuration at build time. The pool's Optimism-Berachain pair is not opened anywhere: Chainlink serves no lane between those chains.\n",
+                "\n",
+                "At the completion of this proposal, route configuration is proposed by the DAO MS through the CCIPBridgeConfigTimelock and executed after its delay, containment is available to the Emergency MS through CCIPBridgeConfig, and the remaining root settings of the pool require an OCG proposal. The four chains stay dormant until their local DAO MS enables and registers the local pool, which is expected immediately after this proposal executes.\n"
             );
     }
 
@@ -165,7 +206,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         Contracts memory c = _contracts(addresses);
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(_env, _chain());
 
-        // Preconditions: the deployment, the admin role, the routes
+        // Preconditions: the deployment, the admin role, the routes, the backing, the budgets
         _requireDeployment(c);
         require(
             desired.rebalancer == c.ocgTimelock,
@@ -175,7 +216,10 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             c.roles.hasRole(c.ocgTimelock, ADMIN_ROLE),
             "The OCG timelock does not hold the admin role"
         );
-        _requireRoutesMatchEnv(c.pool);
+        // The routes this proposal opens are allowed to be missing; _buildRouteActions requires
+        // the missing set to be exactly the four expected chains.
+        _requireRoutesMatchEnv(c.pool, false);
+        _requireBackingAndFeeBudgets(c);
 
         // 1. Accept the OHM administrator role (conditional)
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = c.registry.getTokenConfig(c.ohm);
@@ -274,6 +318,98 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "Enable CCIPBridgeConfigTimelock"
             );
         }
+
+        // 9-12. Add the four routes, after the handover actions: addChain requires the config
+        // policy to be enabled and to own the pool, both established earlier in this execution.
+        _buildRouteActions(c);
+    }
+
+    /// @notice Adds one `addChain` action per desired route missing from the pool, in remote
+    ///         chain name order, and requires the missing set to be exactly the four expected
+    ///         chains (Arbitrum, Optimism, Base, Berachain).
+    /// @dev Fails closed on any drift: a missing route outside the expected set (an undeclared
+    ///      selector cannot appear here since the routes come from `env.json`, so this means the
+    ///      declaration changed), or an expected route that is already configured (someone added
+    ///      it directly while the DAO MS still owned the pool). Both need investigation and a
+    ///      rebuild rather than a silently smaller proposal.
+    function _buildRouteActions(Contracts memory c) internal {
+        CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(_env, _chain());
+        uint64[4] memory expected = [
+            _ARBITRUM_SELECTOR,
+            _OPTIMISM_SELECTOR,
+            _BASE_SELECTOR,
+            _BERACHAIN_SELECTOR
+        ];
+        bool[4] memory added;
+        uint256 missingCount;
+
+        for (uint256 i; i < desired.length; ++i) {
+            CCIPConfigLib.DesiredRoute memory route = desired[i];
+            if (!route.enabled || route.remove) continue;
+            if (CCIPConfigLib.liveRoute(c.pool, route.chainSelector).exists) continue;
+
+            uint256 expectedIndex = type(uint256).max;
+            for (uint256 j; j < expected.length; ++j) {
+                if (expected[j] == route.chainSelector) {
+                    expectedIndex = j;
+                    break;
+                }
+            }
+            require(
+                expectedIndex != type(uint256).max,
+                string.concat(
+                    "Missing route is not among the four expected chains: ",
+                    route.remoteChain
+                )
+            );
+            added[expectedIndex] = true;
+            missingCount++;
+
+            ICCIPTokenPoolAdmin.ChainUpdate memory update = ICCIPTokenPoolAdmin.ChainUpdate({
+                remoteChainSelector: route.chainSelector,
+                remotePoolAddresses: route.remotePools,
+                remoteTokenAddress: route.remoteToken,
+                outboundRateLimiterConfig: route.outbound,
+                inboundRateLimiterConfig: route.inbound
+            });
+            // Surface the config policy's own validation at build time
+            c.config.validateAddChain(update);
+            _pushAction(
+                address(c.config),
+                abi.encodeWithSelector(ICCIPBridgeConfig.addChain.selector, update),
+                string.concat("Add the ", route.remoteChain, " route to the token pool")
+            );
+        }
+
+        require(
+            missingCount == expected.length && added[0] && added[1] && added[2] && added[3],
+            "The set of missing routes does not equal the four expected chains: investigate, rebuild and resubmit"
+        );
+    }
+
+    /// @notice Reverts unless the pool holds the minimum backing and every mainnet lane toward a
+    ///         burn/mint destination carries the raised OHM delivery gas budget. Checked at build
+    ///         time and re-checked by `_validate`.
+    function _requireBackingAndFeeBudgets(Contracts memory c) internal view {
+        uint256 minBacking = CCIPConfigLib.minimumPoolBacking(_env, _chain());
+        uint256 poolBalance = IERC20(c.ohm).balanceOf(address(c.pool));
+        require(
+            poolBalance >= minBacking,
+            string.concat(
+                "The pool backing ",
+                vm.toString(poolBalance),
+                " is below olympus.config.CCIP.minimumPoolBacking ",
+                vm.toString(minBacking),
+                ": re-read shell/calc_bridged_supply.sh and run CCIPTokenPool.fundPool first"
+            )
+        );
+
+        CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(_env, _chain());
+        for (uint256 i; i < desired.length; ++i) {
+            if (!desired[i].enabled || desired[i].remove) continue;
+            if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
+            CCIPFeeBudgetLib.requireOhmFeeBudget(_env, _chain(), desired[i].remoteChain);
+        }
     }
 
     function _run(Addresses addresses, address) internal override {
@@ -295,7 +431,8 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         _validateRegistry(c);
         _validateRoles(c, addresses.getAddress("proposer"));
         _validateParameters(c, desired);
-        _requireRoutesMatchEnv(c.pool);
+        _requireRoutesMatchEnv(c.pool, true);
+        _requireBackingAndFeeBudgets(c);
 
         // The periphery is untouched
         require(Owned(c.bridge).owner() == c.daoMS, "CCIPCrossChainBridge owner changed");
@@ -439,7 +576,13 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     ///         field (existence, remote token, accepted remote pools and both rate limits) and
     ///         every live route of the pool is declared as enabled in `env.json` with both
     ///         limiters enabled.
-    function _requireRoutesMatchEnv(ICCIPTokenPoolAdmin pool_) internal view {
+    /// @param requireDesiredLive_ Whether a desired enabled route missing from the pool reverts.
+    ///        The build passes false and requires the missing set to equal the four expected
+    ///        chains instead; the post-execution validation passes true.
+    function _requireRoutesMatchEnv(
+        ICCIPTokenPoolAdmin pool_,
+        bool requireDesiredLive_
+    ) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(_env, _chain());
         require(desired.length > 0, "env.json declares no CCIP route for this chain");
 
@@ -494,14 +637,17 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 continue;
             }
             if (!route.enabled) continue;
-            require(
-                live.exists,
-                string.concat(
-                    "Route is not configured on the pool: ",
-                    route.remoteChain,
-                    "; apply it before the proposal (direct pool owner batch before the handover, config timelock afterwards)"
-                )
-            );
+            if (!live.exists) {
+                require(
+                    !requireDesiredLive_,
+                    string.concat(
+                        "Route is not configured on the pool: ",
+                        route.remoteChain,
+                        "; apply it before the proposal (direct pool owner batch before the handover, config timelock afterwards)"
+                    )
+                );
+                continue;
+            }
             require(
                 !CCIPConfigLib.hasChanges(CCIPConfigLib.diffRoute(route, live)),
                 string.concat(
