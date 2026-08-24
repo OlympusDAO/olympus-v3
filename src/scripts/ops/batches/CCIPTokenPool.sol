@@ -203,6 +203,10 @@ contract CCIPTokenPool is BatchScriptV2 {
     /// @dev    The batch owner must be the pending administrator. On mainnet after the handover
     ///         the administrator is the OCG timelock and registry changes are OCG proposals.
     function acceptAdminRole(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+        // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
+        // burn/mint chains also deploy no OlympusHeart to validate against.
+        _skipHeartbeatValidation = true;
+
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
@@ -273,6 +277,10 @@ contract CCIPTokenPool is BatchScriptV2 {
     /// @dev    The batch owner must be the OHM administrator. On mainnet after the handover the
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
     function transferTokenPoolAdminRoleToDaoMS() external setUpWithChainId(false) {
+        // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
+        // burn/mint chains also deploy no OlympusHeart to validate against.
+        _skipHeartbeatValidation = true;
+
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
@@ -337,6 +345,52 @@ contract CCIPTokenPool is BatchScriptV2 {
 
         // Next steps:
         // - DAO MS must accept the ownership
+    }
+
+    /// @notice Proposes the local CCIPBridgeConfig policy as the new owner of the TokenPool
+    /// @dev    The batch owner must be the pool owner (the deployer, right after the deploy
+    ///         sequence). The transfer is only proposed here; the config policy accepts it with
+    ///         `acceptPoolOwnership` in the setup batch (non-canonical chains) or in the OCG
+    ///         proposal (mainnet). Skipped when the config policy already owns or is the pending
+    ///         owner of the pool.
+    function transferTokenPoolOwnershipToConfig() external setUpWithChainId(false) {
+        // The batch touches only the CCIP pool, which cannot affect the heartbeat; the
+        // burn/mint chains also deploy no OlympusHeart to validate against.
+        _skipHeartbeatValidation = true;
+
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
+        address config = _configAddress();
+        require(
+            config != address(0),
+            "CCIPTokenPool: no CCIPBridgeConfig is recorded for this chain; deploy it first"
+        );
+
+        if (ICCIPTokenPoolAdmin(tokenPool).owner() == config) {
+            console2.log("CCIPBridgeConfig already owns the pool. Skipping.");
+            return;
+        }
+        if (_pendingOwner(tokenPool) == config) {
+            console2.log("Ownership transfer to CCIPBridgeConfig is already pending. Skipping.");
+            return;
+        }
+        _requireDirectPoolOwner(
+            tokenPool,
+            "Run this entry point again with the printed pool owner as the sender (the deployer after the deploy sequence)."
+        );
+
+        console2.log("Transferring ownership of", tokenPool, "to CCIPBridgeConfig", config);
+        addToBatch(
+            tokenPool,
+            abi.encodeWithSelector(ICCIPTokenPoolAdmin.transferOwnership.selector, config)
+        );
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+
+        // Next steps:
+        // - The setup batch (or the OCG proposal on mainnet) accepts the ownership
     }
 
     /// @notice Accepts the ownership of the TokenPool
@@ -785,6 +839,96 @@ contract CCIPTokenPool is BatchScriptV2 {
         proposeBatch();
 
         console2.log("Completed");
+    }
+
+    // ===== FUNDING (DAO MS PATH) ===== //
+
+    /// @notice Funds the canonical lock/release pool up to the minimum backing declared in
+    ///         `env.json` (`olympus.config.CCIP.minimumPoolBacking`): the OHM supply outstanding
+    ///         on the burn/mint chains that the pool must be able to release.
+    /// @dev    The shortfall is computed from the live pool balance at simulation time, so the
+    ///         batch is idempotent by construction: a second run on a funded pool proposes
+    ///         nothing. The transfer is a plain `OHM.transfer` from the batch owner; the pool
+    ///         keeps no internal liquidity accounting and reads `balanceOf`, so no rebalancer
+    ///         role is needed to deposit. Re-read `shell/calc_bridged_supply.sh` and update the
+    ///         `env.json` target immediately before running this.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - The chain is not canonical (burn/mint pools hold no backing).
+    ///         - The batch owner's OHM balance does not cover the shortfall.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function fundPool(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        // The batch touches only the OHM balance of the pool
+        _skipHeartbeatValidation = true;
+        require(
+            ChainUtils._isCanonicalChain(chain),
+            "CCIPTokenPool: funding applies to the canonical lock/release pool only"
+        );
+
+        address ohm = _envAddressNotZero("olympus.legacy.OHM");
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
+        uint256 target = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
+
+        console2.log("\n=== Fund the CCIP lock/release pool ===");
+        console2.log("Pool:", tokenPool);
+        console2.log("Target backing (env.json):", target);
+        console2.log("Current pool balance:", poolBalance);
+
+        if (poolBalance >= target) {
+            console2.log("The pool already holds the target backing. Nothing to do.");
+        } else {
+            uint256 shortfall = target - poolBalance;
+            uint256 ownerBalance = IERC20(ohm).balanceOf(_owner);
+            require(
+                ownerBalance >= shortfall,
+                string.concat(
+                    "CCIPTokenPool: the batch owner holds ",
+                    vm.toString(ownerBalance),
+                    " OHM, below the funding shortfall ",
+                    vm.toString(shortfall)
+                )
+            );
+            addToBatch(ohm, abi.encodeWithSelector(IERC20.transfer.selector, tokenPool, shortfall));
+            console2.log("Added: OHM.transfer(pool,", shortfall, ")");
+        }
+
+        _setPostBatchValidateSelector(this._validateFunded.selector);
+
+        // Run
+        proposeBatch();
+
+        console2.log("Completed");
+    }
+
+    /// @notice Validates the state after `fundPool`.
+    function _validateFunded() external view {
+        address ohm = _envAddressNotZero("olympus.legacy.OHM");
+        address tokenPool = _getTokenPoolAddressNotZero(chain);
+        uint256 target = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
+        require(
+            poolBalance >= target,
+            string.concat(
+                "The pool balance ",
+                vm.toString(poolBalance),
+                " is below the target backing ",
+                vm.toString(target)
+            )
+        );
+        console2.log("The pool holds the target backing:", poolBalance);
     }
 
     // ===== LIQUIDITY (REBALANCER PATH) ===== //
