@@ -1,0 +1,10 @@
+{
+    "functions": [
+        {
+            "args": {
+                "remoteChain": "solana"
+            },
+            "name": "disableChain"
+        }
+    ]
+}
