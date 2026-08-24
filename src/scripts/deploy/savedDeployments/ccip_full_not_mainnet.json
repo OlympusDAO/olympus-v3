@@ -1,0 +1,20 @@
+{
+    "sequence": [
+        {
+            "name": "CCIPBurnMintTokenPool",
+            "args": {}
+        },
+        {
+            "name": "CCIPCrossChainBridge",
+            "args": {}
+        },
+        {
+            "name": "CCIPBridgeConfig",
+            "args": {}
+        },
+        {
+            "name": "CCIPBridgeConfigTimelock",
+            "args": {}
+        }
+    ]
+}
