@@ -1,368 +1,470 @@
 // SPDX-License-Identifier: Unlicensed
+// solhint-disable custom-errors
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
-import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
-import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 
+// Interfaces
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {Owned} from "solmate/auth/Owned.sol";
 
+// Libraries
+import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
+import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+
+// Contracts
+import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
+
+/// @title CCIPBridge
+/// @notice Declarative reconciliation of the CCIPCrossChainBridge periphery against `env.json`.
+///         The desired state is the `periphery` block of each route under
+///         `olympus.config.CCIP.routes.<remoteChain>`; the live state is the periphery contract;
+///         the batch contains only the calls that converge the two.
+///
+///         Entry points, each gated on the batch owner being the periphery owner:
+///         - `reconcileTrustedRemotes`: compare the trusted remote and the gas limit of every
+///           declared remote chain independently, and add only the differing fields. A remote is
+///           unset only for an explicit `remove` marker; a live trusted remote whose route has no
+///           `periphery` block is reported and left untouched. A second run on a converged state
+///           proposes nothing.
+///         - `enable` / `disable`: switch the periphery lifecycle flag, conditionally.
+///         - `transferOwnership`: transfer the periphery to the DAO MS (run by the deployer once
+///           after the deploy sequence).
+///
+///         The legacy `olympus.config.CCIPCrossChainBridge.chains` list is not read by the
+///         reconciler; it remains for the direct pool owner functions of `CCIPTokenPool.sol`,
+///         and a drift between it and the set of `periphery` blocks is reported.
 contract CCIPBridge is BatchScriptV2 {
-    // [X] Declarative configuration of a bridge
-    // [X] Enable trusted remotes for the specified chains
-    // [X] Management of gas limit
+    // =========== ENTRY POINTS =========== //
 
-    bytes32 public constant SOLANA_RECEIVER =
-        0x0000000000000000000000000000000000000000000000000000000000000000;
-    uint32 public constant EVM_GAS_LIMIT = 90_000;
+    /// @notice Converges the trusted remotes and the gas limits of the periphery to the
+    ///         `periphery` blocks of `env.json`.
+    /// @dev    The trusted remote and the gas limit are compared independently, so a matching
+    ///         remote does not mask a stale gas limit. Removals require the explicit marker
+    ///         (`remove: true` on the route or on its `periphery` block); removing a trusted
+    ///         remote stops the periphery from sending to and accepting from that chain, while
+    ///         messages already in flight toward this chain are then recorded as failed and stay
+    ///         retryable. A removal only unsets the trusted remote: the stored gas limit is
+    ///         left in place, since it is inert without one.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - The batch owner is not the owner of the periphery.
+    ///         - A declared periphery block is malformed (see `CCIPConfigLib`).
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function reconcileTrustedRemotes(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        // The batch touches only the CCIP periphery
+        _skipHeartbeatValidation = true;
 
-    /// @notice Sets trusted remotes and enables the bridge for the specified chain
-    function enable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
-        // Set the trusted remotes
-        _setAllTrustedRemotes(chain);
+        ICCIPCrossChainBridge bridge = _bridge();
+        CCIPConfigLib.DesiredPeriphery[] memory desired = CCIPConfigLib.desiredPeripheries(
+            env,
+            chain
+        );
 
-        // Set the bridge to enabled
-        console2.log("\n");
-        console2.log("Enabling bridge for", chain);
-        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.enable.selector, ""));
+        console2.log("\n=== Reconcile the CCIPCrossChainBridge trusted remotes ===");
+        console2.log("Periphery:", address(bridge));
+        console2.log("Declared periphery blocks:", desired.length);
 
-        // Run
+        _warnLegacyChainsDrift(desired);
+
+        uint256 planned;
+        for (uint256 i; i < desired.length; ++i) {
+            planned += _planPeriphery(bridge, desired[i]);
+        }
+        _reportUnmanagedRemotes(bridge, desired);
+
+        if (planned == 0) {
+            console2.log("\nNo change needed: the periphery matches env.json.");
+        }
+
+        _setPostBatchValidateSelector(this._validateReconciled.selector);
+
         proposeBatch();
     }
 
-    /// @notice Disables the bridge for the specified chain
-    function disable(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
-        // Set the bridge to disabled
-        console2.log("\n");
-        console2.log("Disabling bridge for", chain);
-        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        addToBatch(bridgeAddress, abi.encodeWithSelector(IEnabler.disable.selector, ""));
+    /// @notice Enables the periphery, conditionally.
+    /// @dev    Enabling does not configure trusted remotes; run `reconcileTrustedRemotes` for
+    ///         that.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - The batch owner is not the owner of the periphery.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function enable(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _skipHeartbeatValidation = true;
 
-        // Run
+        ICCIPCrossChainBridge bridge = _bridge();
+        console2.log("\n=== Enable the CCIPCrossChainBridge periphery ===");
+        if (IEnabler(address(bridge)).isEnabled()) {
+            console2.log("The periphery is already enabled. Nothing to do.");
+        } else {
+            addToBatch(address(bridge), abi.encodeWithSelector(IEnabler.enable.selector, ""));
+            console2.log("Added: enable()");
+        }
+
         proposeBatch();
-
-        console2.log("Completed");
     }
 
-    /// @notice Sets the trusted remote for an EVM chain
-    /// @dev    Handles the following scenarios:
-    ///         - No bridge for the local chain: skips
-    ///         - Trusted remote is already set: skips
-    ///         - Trusted remote is not the same: sets to the remote bridge address (or zero address if the remote chain has no bridge)
-    function _setTrustedRemoteEVM(string memory remoteChain_, bool shouldReset_) internal {
-        // Validate that the chain is an EVM chain
-        if (ChainUtils._isSVMChain(remoteChain_)) {
-            // solhint-disable-next-line gas-custom-errors
-            revert("_setTrustedRemoteEVM: Chain is not an EVM chain");
+    /// @notice Disables the periphery, conditionally.
+    /// @dev    Disabling the periphery does not stop CCIP transfers of OHM: the pool stays
+    ///         registered and any address can call the router directly. Messages received while
+    ///         disabled are recorded as failed and stay retryable.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - The batch owner is not the owner of the periphery.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function disable(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _skipHeartbeatValidation = true;
+
+        ICCIPCrossChainBridge bridge = _bridge();
+        console2.log("\n=== Disable the CCIPCrossChainBridge periphery ===");
+        if (!IEnabler(address(bridge)).isEnabled()) {
+            console2.log("The periphery is already disabled. Nothing to do.");
+        } else {
+            addToBatch(address(bridge), abi.encodeWithSelector(IEnabler.disable.selector, ""));
+            console2.log("Added: disable()");
         }
 
-        address bridgeAddress = _envAddress("olympus.periphery.CCIPCrossChainBridge");
-        if (bridgeAddress == address(0)) {
-            console2.log("\n");
-            console2.log("  No bridge found for", chain, ". Skipping.");
-            console2.log("\n");
-            return;
-        }
+        proposeBatch();
+    }
 
-        uint64 remoteChainSelector = uint64(
-            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
-        );
-        ICCIPCrossChainBridge.TrustedRemoteEVM memory trustedRemote = ICCIPCrossChainBridge(
-            bridgeAddress
-        ).getTrustedRemoteEVM(remoteChainSelector);
+    /// @notice Transfers the ownership of the periphery to the DAO MS, conditionally.
+    /// @dev    Run by the deployer once after the deploy sequence (`useDaoMS` false). The
+    ///         solmate ownership transfer is single step.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - A transfer is due and the batch owner is not the owner of the periphery.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function transferOwnership(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _skipHeartbeatValidation = true;
 
-        console2.log("\n");
-        console2.log("  Destination EVM chain:", remoteChain_);
+        address bridgeAddress = _envAddressNotZero(CCIPConfigLib.EVM_BRIDGE_KEY);
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
-        // If resetting the trusted remote, then it should be unset
-        if (shouldReset_) {
-            if (trustedRemote.isSet) {
-                addToBatch(
-                    bridgeAddress,
-                    abi.encodeWithSelector(
-                        ICCIPCrossChainBridge.unsetTrustedRemoteEVM.selector,
-                        remoteChainSelector
-                    )
-                );
-
-                console2.log("  Trusted remote unset");
-                console2.log("\n");
-                return;
-            }
-
-            console2.log("  Trusted remote is not active. No change needed.");
-            console2.log("\n");
-            return;
-        }
-
-        address remoteBridgeAddress = _envAddressNotZero(
-            remoteChain_,
-            "olympus.periphery.CCIPCrossChainBridge"
-        );
-
-        // If the trusted remote should not be set
-        if (trustedRemote.isSet && trustedRemote.remoteAddress == remoteBridgeAddress) {
-            console2.log(
-                "  Trusted remote is already set to",
-                vm.toString(remoteBridgeAddress),
-                ". No change needed."
+        console2.log("\n=== Transfer the CCIPCrossChainBridge ownership to the DAO MS ===");
+        if (Owned(bridgeAddress).owner() == daoMS) {
+            console2.log("The DAO MS already owns the periphery. Nothing to do.");
+        } else {
+            _requireBridgeOwner(bridgeAddress);
+            addToBatch(
+                bridgeAddress,
+                abi.encodeWithSelector(Owned.transferOwnership.selector, daoMS)
             );
-            console2.log("\n");
-            return;
+            console2.log("Added: transferOwnership(", daoMS, ")");
         }
 
-        // Set the trusted remote
-        addToBatch(
-            bridgeAddress,
-            abi.encodeWithSelector(
-                ICCIPCrossChainBridge.setTrustedRemoteEVM.selector,
-                remoteChainSelector,
-                remoteBridgeAddress
-            )
-        );
-
-        console2.log("  Trusted remote set to", vm.toString(remoteBridgeAddress));
-        console2.log("\n");
-
-        // Set the gas limit
-        addToBatch(
-            bridgeAddress,
-            abi.encodeWithSelector(
-                ICCIPCrossChainBridge.setGasLimit.selector,
-                remoteChainSelector,
-                EVM_GAS_LIMIT
-            )
-        );
-
-        console2.log("  Gas limit set to", EVM_GAS_LIMIT);
-        console2.log("\n");
-    }
-
-    function setTrustedRemoteEVM(
-        bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUpWithChainId(useDaoMS_) {
-        // Set the trusted remote
-        _setTrustedRemoteEVM(remoteChain_, false);
-
-        // Run
         proposeBatch();
-
-        console2.log("Completed");
     }
 
-    function _setTrustedRemoteSVM(string memory remoteChain_, bool shouldReset_) internal {
-        // Validate that the chain is an SVM chain
-        if (!ChainUtils._isSVMChain(remoteChain_)) {
-            // solhint-disable-next-line gas-custom-errors
-            revert("_setTrustedRemoteSVM: Chain is not an SVM chain");
-        }
+    // =========== VALIDATION =========== //
 
-        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        if (bridgeAddress == address(0)) {
-            console2.log("\n");
-            console2.log("  No bridge found for", chain, ". Skipping.");
-            console2.log("\n");
-            return;
-        }
-
-        uint64 remoteChainSelector = uint64(
-            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
+    /// @notice Validates the state after `reconcileTrustedRemotes`.
+    function _validateReconciled() external view {
+        ICCIPCrossChainBridge bridge = ICCIPCrossChainBridge(
+            _envAddressNotZero(CCIPConfigLib.EVM_BRIDGE_KEY)
         );
-        ICCIPCrossChainBridge.TrustedRemoteSVM memory trustedRemote = ICCIPCrossChainBridge(
-            bridgeAddress
-        ).getTrustedRemoteSVM(remoteChainSelector);
+        CCIPConfigLib.DesiredPeriphery[] memory desired = CCIPConfigLib.desiredPeripheries(
+            env,
+            chain
+        );
 
-        console2.log("\n");
-        console2.log("  Destination SVM chain:", remoteChain_);
+        console2.log("\nValidating reconcileTrustedRemotes post-batch state");
+        for (uint256 i; i < desired.length; ++i) {
+            CCIPConfigLib.DesiredPeriphery memory entry = desired[i];
+            if (entry.isSvm) {
+                ICCIPCrossChainBridge.TrustedRemoteSVM memory live = bridge.getTrustedRemoteSVM(
+                    entry.chainSelector
+                );
+                if (entry.remove) {
+                    require(
+                        !live.isSet,
+                        string.concat("SVM trusted remote is still set: ", entry.remoteChain)
+                    );
+                } else {
+                    require(
+                        live.isSet && live.remoteAddress == entry.svmTrustedRemote,
+                        string.concat("SVM trusted remote mismatch: ", entry.remoteChain)
+                    );
+                }
+            } else {
+                ICCIPCrossChainBridge.TrustedRemoteEVM memory live = bridge.getTrustedRemoteEVM(
+                    entry.chainSelector
+                );
+                if (entry.remove) {
+                    require(
+                        !live.isSet,
+                        string.concat("EVM trusted remote is still set: ", entry.remoteChain)
+                    );
+                } else {
+                    require(
+                        live.isSet && live.remoteAddress == entry.evmTrustedRemote,
+                        string.concat("EVM trusted remote mismatch: ", entry.remoteChain)
+                    );
+                }
+            }
+            if (!entry.remove) {
+                require(
+                    bridge.getGasLimit(entry.chainSelector) == entry.gasLimit,
+                    string.concat("Gas limit mismatch: ", entry.remoteChain)
+                );
+            }
+            console2.log("  Converged:", entry.remoteChain);
+        }
+        console2.log("reconcileTrustedRemotes post-batch validation passed");
+    }
 
-        // If resetting the trusted remote, then it should be unset
-        if (shouldReset_) {
-            if (trustedRemote.isSet) {
+    // =========== PLANNING =========== //
+
+    /// @return planned The number of calls added for this remote chain.
+    function _planPeriphery(
+        ICCIPCrossChainBridge bridge_,
+        CCIPConfigLib.DesiredPeriphery memory entry_
+    ) internal returns (uint256 planned) {
+        console2.log("\nRemote", entry_.remoteChain, "selector", entry_.chainSelector);
+
+        if (entry_.isSvm) {
+            ICCIPCrossChainBridge.TrustedRemoteSVM memory live = bridge_.getTrustedRemoteSVM(
+                entry_.chainSelector
+            );
+            console2.log("  live remote:", live.isSet ? vm.toString(live.remoteAddress) : "unset");
+            if (entry_.remove) {
+                return _planUnsetSvm(bridge_, entry_, live.isSet);
+            }
+            console2.log("  desired remote:", vm.toString(entry_.svmTrustedRemote));
+            if (!live.isSet || live.remoteAddress != entry_.svmTrustedRemote) {
                 addToBatch(
-                    bridgeAddress,
+                    address(bridge_),
                     abi.encodeWithSelector(
-                        ICCIPCrossChainBridge.unsetTrustedRemoteSVM.selector,
-                        remoteChainSelector
+                        ICCIPCrossChainBridge.setTrustedRemoteSVM.selector,
+                        entry_.chainSelector,
+                        entry_.svmTrustedRemote
                     )
                 );
-
-                console2.log("  Trusted remote unset");
-                console2.log("\n");
-                return;
-            }
-
-            console2.log("  Trusted remote is not active. No change needed.");
-            console2.log("\n");
-            return;
-        }
-
-        bytes32 remotePubKey = SOLANA_RECEIVER;
-
-        // If the trusted remote is already set, no need to set it again
-        if (trustedRemote.isSet && trustedRemote.remoteAddress == remotePubKey) {
-            console2.log("  Trusted remote is already set. No change needed.");
-            console2.log("\n");
-            return;
-        }
-
-        // Set the trusted remote
-        addToBatch(
-            bridgeAddress,
-            abi.encodeWithSelector(
-                ICCIPCrossChainBridge.setTrustedRemoteSVM.selector,
-                remoteChainSelector,
-                remotePubKey
-            )
-        );
-
-        console2.log("  Trusted remote set to", vm.toString(remotePubKey));
-        console2.log("\n");
-
-        // Note: at this stage, no need to set the gas limit, as it should be 0 and is 0 by default
-    }
-
-    function setTrustedRemoteSVM(
-        bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUpWithChainId(useDaoMS_) {
-        // Set the trusted remote
-        _setTrustedRemoteSVM(remoteChain_, false);
-
-        // Run
-        proposeBatch();
-
-        console2.log("Completed");
-    }
-
-    function _setAllTrustedRemotes(string memory chain) internal {
-        console2.log("\n");
-        console2.log("Setting all trusted remotes for", chain);
-
-        string[] memory allChains = ChainUtils._getChains(chain);
-        string[] memory trustedChains = _envStringArray(
-            "olympus.config.CCIPCrossChainBridge.chains"
-        );
-
-        // Iterate over all chains
-        for (uint256 i = 0; i < allChains.length; i++) {
-            string memory remoteChain = allChains[i];
-
-            // Skip the current chain
-            if (keccak256(abi.encodePacked(chain)) == keccak256(abi.encodePacked(remoteChain))) {
-                continue;
-            }
-
-            // If the chain is not in the trusted chains listed in the config, then it should be removed as a trusted remote
-            bool isTrustedChain = ArrayUtils.contains(trustedChains, remoteChain);
-
-            if (ChainUtils._isSVMChain(remoteChain)) {
-                _setTrustedRemoteSVM(remoteChain, !isTrustedChain);
+                console2.log("  Added: setTrustedRemoteSVM");
+                planned++;
             } else {
-                _setTrustedRemoteEVM(remoteChain, !isTrustedChain);
+                console2.log("  Trusted remote matches.");
+            }
+        } else {
+            ICCIPCrossChainBridge.TrustedRemoteEVM memory live = bridge_.getTrustedRemoteEVM(
+                entry_.chainSelector
+            );
+            console2.log("  live remote:", live.isSet ? vm.toString(live.remoteAddress) : "unset");
+            if (entry_.remove) {
+                return _planUnsetEvm(bridge_, entry_, live.isSet);
+            }
+            console2.log("  desired remote:", vm.toString(entry_.evmTrustedRemote));
+            if (!live.isSet || live.remoteAddress != entry_.evmTrustedRemote) {
+                addToBatch(
+                    address(bridge_),
+                    abi.encodeWithSelector(
+                        ICCIPCrossChainBridge.setTrustedRemoteEVM.selector,
+                        entry_.chainSelector,
+                        entry_.evmTrustedRemote
+                    )
+                );
+                console2.log("  Added: setTrustedRemoteEVM");
+                planned++;
+            } else {
+                console2.log("  Trusted remote matches.");
+            }
+        }
+
+        // The gas limit is compared independently, so a matching remote does not mask its drift
+        uint32 liveGas = bridge_.getGasLimit(entry_.chainSelector);
+        console2.log("  live gas limit:", liveGas, "desired:", entry_.gasLimit);
+        if (liveGas != entry_.gasLimit) {
+            addToBatch(
+                address(bridge_),
+                abi.encodeWithSelector(
+                    ICCIPCrossChainBridge.setGasLimit.selector,
+                    entry_.chainSelector,
+                    entry_.gasLimit
+                )
+            );
+            console2.log("  Added: setGasLimit");
+            planned++;
+        } else {
+            console2.log("  Gas limit matches.");
+        }
+    }
+
+    function _planUnsetSvm(
+        ICCIPCrossChainBridge bridge_,
+        CCIPConfigLib.DesiredPeriphery memory entry_,
+        bool isSet_
+    ) internal returns (uint256 planned) {
+        if (!isSet_) {
+            console2.log("  Marked for removal and not set. Nothing to do.");
+            return 0;
+        }
+        console2.log(
+            "  WARNING: unsetting the trusted remote; in-flight messages from it will be recorded as failed."
+        );
+        addToBatch(
+            address(bridge_),
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.unsetTrustedRemoteSVM.selector,
+                entry_.chainSelector
+            )
+        );
+        console2.log("  Added: unsetTrustedRemoteSVM");
+        return 1;
+    }
+
+    function _planUnsetEvm(
+        ICCIPCrossChainBridge bridge_,
+        CCIPConfigLib.DesiredPeriphery memory entry_,
+        bool isSet_
+    ) internal returns (uint256 planned) {
+        if (!isSet_) {
+            console2.log("  Marked for removal and not set. Nothing to do.");
+            return 0;
+        }
+        console2.log(
+            "  WARNING: unsetting the trusted remote; in-flight messages from it will be recorded as failed."
+        );
+        addToBatch(
+            address(bridge_),
+            abi.encodeWithSelector(
+                ICCIPCrossChainBridge.unsetTrustedRemoteEVM.selector,
+                entry_.chainSelector
+            )
+        );
+        console2.log("  Added: unsetTrustedRemoteEVM");
+        return 1;
+    }
+
+    // =========== REPORTING =========== //
+
+    /// @notice Reports a live trusted remote whose route declares no `periphery` block; it is
+    ///         left untouched, since removal requires the explicit marker.
+    function _reportUnmanagedRemotes(
+        ICCIPCrossChainBridge bridge_,
+        CCIPConfigLib.DesiredPeriphery[] memory desired_
+    ) internal view {
+        string[] memory allChains = ChainUtils._getChains(chain);
+        for (uint256 i; i < allChains.length; ++i) {
+            string memory remoteChain = allChains[i];
+            if (keccak256(bytes(remoteChain)) == keccak256(bytes(chain))) continue;
+
+            bool declared;
+            for (uint256 j; j < desired_.length; ++j) {
+                if (keccak256(bytes(desired_[j].remoteChain)) == keccak256(bytes(remoteChain))) {
+                    declared = true;
+                    break;
+                }
+            }
+            if (declared) continue;
+
+            // A chain without a recorded selector (some testnets) cannot be looked up
+            if (_envUint(remoteChain, CCIPConfigLib.CHAIN_SELECTOR_KEY) == 0) continue;
+            uint64 selector = CCIPConfigLib.chainSelector(env, remoteChain);
+
+            bool isSet = ChainUtils._isSVMChain(remoteChain)
+                ? bridge_.getTrustedRemoteSVM(selector).isSet
+                : bridge_.getTrustedRemoteEVM(selector).isSet;
+            if (isSet) {
+                console2.log(
+                    "\nWARNING: the live trusted remote for",
+                    remoteChain,
+                    "has no periphery block in env.json and is left untouched; declare it, or mark it remove: true to unset it."
+                );
             }
         }
     }
 
-    /// @notice Sets the bridges on all other chains as trusted remotes for the source chain
-    /// @dev    This function skips the function call if the trusted remote is already set to the correct value
-    ///         This function unsets the trusted remote if the chain is not in the trusted chains listed in the config
-    function setAllTrustedRemotes(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
-        // Set the trusted remotes
-        _setAllTrustedRemotes(chain);
+    /// @notice Reports a drift between the legacy `olympus.config.CCIPCrossChainBridge.chains`
+    ///         list and the set of declared `periphery` blocks. The reconciler ignores the
+    ///         legacy list; it remains for the direct pool owner functions of
+    ///         `CCIPTokenPool.sol`.
+    function _warnLegacyChainsDrift(
+        CCIPConfigLib.DesiredPeriphery[] memory desired_
+    ) internal view {
+        string[] memory legacy = _envStringArray("olympus.config.CCIPCrossChainBridge.chains");
 
-        // Run
-        proposeBatch();
+        bool drift = legacy.length != desired_.length;
+        if (!drift) {
+            for (uint256 i; i < desired_.length; ++i) {
+                if (!ArrayUtils.contains(legacy, desired_[i].remoteChain)) {
+                    drift = true;
+                    break;
+                }
+            }
+        }
+        if (drift) {
+            console2.log(
+                "\nWARNING: the legacy olympus.config.CCIPCrossChainBridge.chains list differs from the set of periphery blocks; the reconciler ignores the list, but keep them in sync for the direct pool owner functions."
+            );
+        }
     }
 
-    function _setGasLimitEVM(string memory remoteChain_, uint32 gasLimit_) internal {
-        // Validate that the chain is an EVM chain
-        if (ChainUtils._isSVMChain(remoteChain_)) {
-            // solhint-disable-next-line gas-custom-errors
-            revert("_setGasLimitEVM: Chain is not an EVM chain");
-        }
+    // =========== INTERNAL HELPERS =========== //
 
-        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        if (bridgeAddress == address(0)) {
-            console2.log("\n");
-            console2.log("  No bridge found for", chain, ". Skipping.");
-            console2.log("\n");
-            return;
-        }
+    function _bridge() internal view returns (ICCIPCrossChainBridge bridge) {
+        address bridgeAddress = _envAddressNotZero(CCIPConfigLib.EVM_BRIDGE_KEY);
+        _requireBridgeOwner(bridgeAddress);
+        return ICCIPCrossChainBridge(bridgeAddress);
+    }
 
-        uint64 remoteChainSelector = uint64(
-            _envUintNotZero(remoteChain_, "external.ccip.ChainSelector")
-        );
-
-        console2.log("\n");
-        console2.log("  Destination EVM chain:", remoteChain_);
-
-        // Get the gas limit
-        uint32 gasLimit = ICCIPCrossChainBridge(bridgeAddress).getGasLimit(remoteChainSelector);
-
-        // If the gas limit is already set, then no need to set it again
-        if (gasLimit == gasLimit_) {
-            console2.log("  Gas limit is already set to", gasLimit_, ". No change needed.");
-            console2.log("\n");
-            return;
-        }
-
-        // Set the gas limit
-        addToBatch(
-            bridgeAddress,
-            abi.encodeWithSelector(
-                ICCIPCrossChainBridge.setGasLimit.selector,
-                remoteChainSelector,
-                gasLimit_
+    function _requireBridgeOwner(address bridgeAddress_) internal view {
+        address owner = Owned(bridgeAddress_).owner();
+        require(
+            owner == _owner,
+            string.concat(
+                "CCIPBridge: the batch owner is not the owner of the periphery (",
+                vm.toString(owner),
+                ")"
             )
         );
-
-        console2.log("  Gas limit set to", gasLimit_);
-        console2.log("\n");
-    }
-
-    function setGasLimitEVM(
-        bool useDaoMS_,
-        string calldata remoteChain_,
-        uint32 gasLimit_
-    ) external setUpWithChainId(useDaoMS_) {
-        // Set the gas limit
-        _setGasLimitEVM(remoteChain_, gasLimit_);
-
-        // Run
-        proposeBatch();
-
-        console2.log("Completed");
-    }
-
-    function transferOwnership(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
-        address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        address newOwner = _envAddressNotZero("olympus.multisig.dao");
-
-        // Check if the owner is already the new owner
-        if (Owned(bridgeAddress).owner() == newOwner) {
-            console2.log("Owner", newOwner, "is already the new owner. Skipping.");
-            return;
-        }
-
-        console2.log("\n");
-        console2.log(
-            "Transferring ownership of",
-            vm.toString(bridgeAddress),
-            "to",
-            vm.toString(newOwner)
-        );
-
-        addToBatch(
-            bridgeAddress,
-            abi.encodeWithSelector(Owned.transferOwnership.selector, newOwner)
-        );
-
-        // Run
-        proposeBatch();
     }
 }
