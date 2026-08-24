@@ -39,8 +39,10 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///           (Emergency MS): cancel one action by id, which is the only way to release the
 ///           configuration keys of an expired or stale action.
 ///
-///         Each change is queued as its own action so that one stale route does not block the
-///         execution of the others. The timelock reserves one key per configuration domain and
+///         Each change is queued as its own action so that a queued action that turned stale
+///         does not block the execution of the other queued actions; the reconcile run itself is
+///         atomic and fails closed, so an invalid desired route reverts the whole run before
+///         anything is queued. The timelock reserves one key per configuration domain and
 ///         refuses a second unresolved action on the same domain, so at most one remote-pool
 ///         change and one rate-limit change per route, or one route-identity change, can be
 ///         queued per run; the remainder is reported as deferred and queued by a later run once

@@ -362,6 +362,9 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             c.roles.hasRole(c.emergencyMS, EMERGENCY_ROLE),
             "Emergency MS lost the emergency role"
         );
+        // ROLES keeps no enumeration of role holders, so only known addresses can be sampled
+        // here; the guarantee that bridge_rate_limiter is unassigned anywhere is procedural:
+        // this proposal grants it to nobody and no prior grant is recorded.
         address[6] memory noRateLimiter = [
             c.daoMS,
             c.emergencyMS,
