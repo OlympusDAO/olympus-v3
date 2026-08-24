@@ -18,11 +18,13 @@ import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
+import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
 
 // Contracts
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
+import {CCIPBridgeConfig} from "src/policies/bridge/CCIPBridgeConfig.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -368,6 +370,33 @@ contract DeployV3 is WithEnvironment {
         return uint8Array;
     }
 
+    /// @notice Reads a uint256 deployment argument, falling back to an `env.json` value of the
+    ///         current chain when the sequence file does not declare the argument.
+    /// @dev    Used for parameters whose source of truth is `env.json` (the desired-state
+    ///         configuration that the batches and proposals validate against), so that a
+    ///         sequence file only needs to name them to override them.
+    function _readDeploymentArgUint256OrEnv(
+        string memory deploymentName_,
+        string memory key_,
+        string memory envKey_
+    ) internal view returns (uint256) {
+        string memory path = string.concat(
+            ".sequence[?(@.name == '",
+            deploymentName_,
+            "')].args.",
+            key_
+        );
+        if (vm.keyExistsJson(sequenceFile, path)) {
+            uint256 value = sequenceFile.readUint(path);
+            console2.log("  %s: %s (from sequence args)", key_, value);
+            return value;
+        }
+
+        uint256 envValue = _envUintNotZero(envKey_);
+        console2.log("  %s: %s (from env.json %s)", key_, envValue, envKey_);
+        return envValue;
+    }
+
     function _readDeploymentArgBool(
         string memory deploymentName_,
         string memory key_
@@ -486,6 +515,95 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");
+    }
+
+    /// @notice Deploys the CCIPBridgeConfig policy for the local token pool.
+    /// @dev    The pool is the lock/release pool on a canonical chain and the burn/mint pool
+    ///         otherwise, resolved from the same sequence first so that the pool and the config
+    ///         policy can be deployed together. `gracePeriod` defaults to
+    ///         `olympus.config.CCIPBridgeConfig.gracePeriod` and can be overridden by the
+    ///         sequence argument of the same name.
+    function deployCCIPBridgeConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address pool = ChainUtils._isCanonicalChain(chain)
+            ? _getAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool")
+            : _getAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPBridgeConfig",
+                "gracePeriod",
+                "olympus.config.CCIPBridgeConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPBridgeConfig parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  pool", pool);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        CCIPBridgeConfig config = new CCIPBridgeConfig(Kernel(kernel), pool, gracePeriod);
+
+        return (address(config), "olympus.policies");
+    }
+
+    /// @notice Deploys the CCIPBridgeConfigTimelock policy for the CCIPBridgeConfig policy.
+    /// @dev    `CCIPBridgeConfigTimelock.sol` carries a compilation restriction (400 optimizer
+    ///         runs) that applies to the whole import graph of any file importing it, so the
+    ///         contract is not imported here: it is deployed from its compiled artifact with
+    ///         `deployCode`, which issues the same `CREATE` as `new` and is recorded by the
+    ///         broadcast. The config policy must already be deployed (in this sequence or in
+    ///         `env.json`); the timelock constructor requires it to advertise `ICCIPBridgeConfig`,
+    ///         `IConfigOperator` and `IEnabler` and to report the same Kernel.
+    ///         `initialTimelockDelay` defaults to `olympus.config.CCIPBridgeConfig.timelockDelay`
+    ///         and `gracePeriod` to `olympus.config.CCIPBridgeConfig.gracePeriod`; both can be
+    ///         overridden by the sequence arguments of the same name.
+    function deployCCIPBridgeConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address config = _getAddressNotZero("olympus.policies.CCIPBridgeConfig");
+        uint48 initialTimelockDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPBridgeConfigTimelock",
+                "initialTimelockDelay",
+                "olympus.config.CCIPBridgeConfig.timelockDelay"
+            )
+        );
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPBridgeConfigTimelock",
+                "gracePeriod",
+                "olympus.config.CCIPBridgeConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPBridgeConfigTimelock parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  config", config);
+        console2.log("  initialTimelockDelay", initialTimelockDelay);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy from the artifact (see the function NatSpec)
+        vm.startBroadcast();
+        address timelock = deployCode(
+            "CCIPBridgeConfigTimelock.sol:CCIPBridgeConfigTimelock",
+            abi.encode(kernel, config, initialTimelockDelay, gracePeriod)
+        );
+        vm.stopBroadcast();
+
+        // Sanity check the binding
+        require(
+            ICCIPBridgeConfigTimelock(timelock).config() == config,
+            "CCIPBridgeConfigTimelock: config mismatch"
+        );
+
+        return (timelock, "olympus.policies");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {

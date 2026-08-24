@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "CCIPBridgeConfig",
+            "args": {}
+        },
+        {
+            "name": "CCIPBridgeConfigTimelock",
+            "args": {}
+        }
+    ]
+}
