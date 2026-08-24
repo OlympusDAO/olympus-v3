@@ -343,7 +343,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     function laneBudget(
         string calldata localChain_,
         string calldata remoteChain_
-    ) external view returns (uint32 overhead, string memory source) {
+    ) external view returns (uint32 overhead, bool isTokenEntry, string memory source) {
         return CCIPFeeBudgetLib.readOhmDestGasOverhead(env, localChain_, remoteChain_);
     }
 
@@ -603,16 +603,22 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     function _checkLane(string memory remoteChain_) internal {
         string memory lane = string.concat("lane ", chain, " -> ", remoteChain_);
-        try this.laneBudget(chain, remoteChain_) returns (uint32 overhead, string memory source) {
+        try this.laneBudget(chain, remoteChain_) returns (
+            uint32 overhead,
+            bool isTokenEntry,
+            string memory source
+        ) {
+            // A raised chain default is not accepted: the D0 precondition is an enabled OHM
+            // token entry, since the default is shared by every token of the destination.
             _check(
-                overhead >= CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD,
+                isTokenEntry && overhead >= CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD,
                 string.concat(
                     lane,
                     ": OHM delivery gas budget ",
                     vm.toString(overhead),
                     " (",
                     source,
-                    "), required ",
+                    "), required an enabled OHM token entry of at least ",
                     vm.toString(uint256(CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD))
                 )
             );
@@ -877,7 +883,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 );
                 continue;
             }
-            (uint32 overhead, string memory source) = CCIPFeeBudgetLib.readOhmDestGasOverhead(
+            (uint32 overhead, , string memory source) = CCIPFeeBudgetLib.readOhmDestGasOverhead(
                 env,
                 chain,
                 desired[i].remoteChain

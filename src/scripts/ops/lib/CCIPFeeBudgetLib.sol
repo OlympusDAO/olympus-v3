@@ -196,19 +196,22 @@ library CCIPFeeBudgetLib {
     // ========== READS ========== //
 
     /// @notice Reads the OHM delivery gas budget of the lane from `localChain_` to
-    ///         `remoteChain_`, together with a description of where the value came from.
+    ///         `remoteChain_`, together with whether it comes from an enabled OHM token entry
+    ///         and a description of where the value came from.
     /// @dev Fails closed: reverts when the local router carries no lane to the destination or
     ///      when the on-ramp reports an unsupported version.
     /// @param env_ The contents of `env.json`.
     /// @param localChain_ The source chain of the lane.
     /// @param remoteChain_ The destination chain of the lane.
     /// @return overhead The applicable `destGasOverhead` in gas units.
+    /// @return isTokenEntry True when the value comes from an enabled OHM token entry, false
+    ///         when it is the chain default.
     /// @return source A description of the read (token entry or chain default, and the version).
     function readOhmDestGasOverhead(
         string memory env_,
         string memory localChain_,
         string memory remoteChain_
-    ) internal view returns (uint32 overhead, string memory source) {
+    ) internal view returns (uint32 overhead, bool isTokenEntry, string memory source) {
         address router = _envAddress(env_, localChain_, _ROUTER_KEY);
         address ohm = _envAddress(env_, localChain_, "olympus.legacy.OHM");
         uint64 destSelector = CCIPConfigLib.chainSelector(env_, remoteChain_);
@@ -245,17 +248,35 @@ library CCIPFeeBudgetLib {
     }
 
     /// @notice Reverts unless the lane from `localChain_` to `remoteChain_` carries an enabled
-    ///         OHM entry (or default) of at least `OHM_MIN_DEST_GAS_OVERHEAD`.
+    ///         OHM token entry of at least `OHM_MIN_DEST_GAS_OVERHEAD`.
     /// @dev Intended for lanes whose destination is a burn/mint chain; the caller selects them.
+    ///      A raised chain default is not accepted: the default is shared by every token of the
+    ///      destination and gives no per-token guarantee, so only an enabled OHM entry passes.
     function requireOhmFeeBudget(
         string memory env_,
         string memory localChain_,
         string memory remoteChain_
     ) internal view {
-        (uint32 overhead, string memory source) = readOhmDestGasOverhead(
+        (uint32 overhead, bool isTokenEntry, string memory source) = readOhmDestGasOverhead(
             env_,
             localChain_,
             remoteChain_
+        );
+        require(
+            isTokenEntry,
+            string.concat(
+                "CCIPFeeBudgetLib: the OHM delivery gas budget of the lane ",
+                localChain_,
+                " -> ",
+                remoteChain_,
+                " has no enabled OHM token entry (the applicable value is the chain default ",
+                _VM.toString(overhead),
+                "; ",
+                source,
+                "); request an enabled OHM fee entry of at least ",
+                _VM.toString(uint256(OHM_MIN_DEST_GAS_OVERHEAD)),
+                " from Chainlink before opening the route"
+            )
         );
         require(
             overhead >= OHM_MIN_DEST_GAS_OVERHEAD,
@@ -281,16 +302,17 @@ library CCIPFeeBudgetLib {
         address onRamp_,
         uint64 destSelector_,
         address ohm_
-    ) private view returns (uint32 overhead, string memory source) {
+    ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
         address feeQuoter = ICCIPFeeOnRamp16(onRamp_).getDynamicConfig().feeQuoter;
         require(feeQuoter != address(0), "CCIPFeeBudgetLib: the 1.6 on-ramp has no fee quoter");
         ICCIPFeeQuoter20.TokenTransferFeeConfig memory entry = ICCIPFeeQuoter20(feeQuoter)
             .getTokenTransferFeeConfig(destSelector_, ohm_);
         if (entry.isEnabled) {
-            return (entry.destGasOverhead, "OHM token entry, FeeQuoter 2.0.0");
+            return (entry.destGasOverhead, true, "OHM token entry, FeeQuoter 2.0.0");
         }
         return (
             ICCIPFeeQuoter20(feeQuoter).getDestChainConfig(destSelector_).defaultTokenDestGasOverhead,
+            false,
             "chain default, FeeQuoter 2.0.0 (no OHM entry)"
         );
     }
@@ -298,14 +320,15 @@ library CCIPFeeBudgetLib {
     function _read15(
         address onRamp_,
         address ohm_
-    ) private view returns (uint32 overhead, string memory source) {
+    ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
         ICCIPFeeOnRamp15.TokenTransferFeeConfig memory entry = ICCIPFeeOnRamp15(onRamp_)
             .getTokenTransferFeeConfig(ohm_);
         if (entry.isEnabled) {
-            return (entry.destGasOverhead, "OHM token entry, EVM2EVMOnRamp 1.5.0");
+            return (entry.destGasOverhead, true, "OHM token entry, EVM2EVMOnRamp 1.5.0");
         }
         return (
             ICCIPFeeOnRamp15(onRamp_).getDynamicConfig().defaultTokenDestGasOverhead,
+            false,
             "chain default, EVM2EVMOnRamp 1.5.0 (no OHM entry)"
         );
     }

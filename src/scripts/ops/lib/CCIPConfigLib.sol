@@ -486,6 +486,17 @@ library CCIPConfigLib {
             return periphery;
         }
 
+        // A zero gas limit is meaningful only toward an SVM chain (a token-only transfer with
+        // no receiver call); the EVM periphery always delivers data, which a zero budget would
+        // make undeliverable.
+        require(
+            periphery.gasLimit != 0,
+            string.concat(
+                "CCIPConfigLib: zero gas limit for the EVM periphery of route ",
+                remoteChain_
+            )
+        );
+
         string memory overrideKey = string.concat(base_, ".trustedRemote");
         if (_VM.keyExistsJson(env_, overrideKey)) {
             periphery.evmTrustedRemote = env_.readAddress(overrideKey);
