@@ -28,7 +28,11 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        remote token is `current.<remoteChain>.olympus.legacy.OHM` and the remote pool is the
 ///        remote chain's pool (lock/release on a canonical chain, burn/mint on another EVM chain,
 ///        `olympus.periphery.TokenPool` on Solana), ABI-encoded for EVM chains and packed from the
-///        base58 public key for SVM chains.
+///        base58 public key for SVM chains;
+///      - `CCIP.routes.<remoteChain>.periphery` declares the desired periphery state toward the
+///        remote chain (`gasLimit` with a defaulted `trustedRemote` for EVM, `gasLimit` and an
+///        explicit `svmReceiver` for SVM, `remove` as the explicit removal marker);
+///      - `CCIP.minimumPoolBacking` is the funding target of the canonical lock/release pool.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
 ///      or a disabled rate limiter reverts with a message naming the key.
 library CCIPConfigLib {
@@ -40,9 +44,11 @@ library CCIPConfigLib {
 
     string internal constant CONFIG_KEY = "olympus.config.CCIPBridgeConfig";
     string internal constant ROUTES_KEY = "olympus.config.CCIP.routes";
+    string internal constant MIN_POOL_BACKING_KEY = "olympus.config.CCIP.minimumPoolBacking";
     string internal constant LOCK_RELEASE_POOL_KEY = "olympus.periphery.CCIPLockReleaseTokenPool";
     string internal constant BURN_MINT_POOL_KEY = "olympus.policies.CCIPBurnMintTokenPool";
     string internal constant SVM_POOL_KEY = "olympus.periphery.TokenPool";
+    string internal constant EVM_BRIDGE_KEY = "olympus.periphery.CCIPCrossChainBridge";
     string internal constant OHM_KEY = "olympus.legacy.OHM";
     string internal constant CHAIN_SELECTOR_KEY = "external.ccip.ChainSelector";
 
@@ -85,6 +91,26 @@ library CCIPConfigLib {
         bool limitsDiffer;
     }
 
+    /// @notice The desired periphery state toward one remote chain, declared as the `periphery`
+    ///         block of a route in `env.json`.
+    /// @param remoteChain The `env.json` name of the remote chain.
+    /// @param chainSelector The CCIP chain selector of the remote chain.
+    /// @param remove Whether the trusted remote is marked for removal; no other field is read
+    ///        for a removed entry.
+    /// @param isSvm Whether the remote chain is an SVM chain.
+    /// @param gasLimit The `ccipReceive` gas limit toward the remote chain.
+    /// @param evmTrustedRemote The trusted remote address of an EVM chain.
+    /// @param svmTrustedRemote The trusted remote receiver of an SVM chain.
+    struct DesiredPeriphery {
+        string remoteChain;
+        uint64 chainSelector;
+        bool remove;
+        bool isSvm;
+        uint32 gasLimit;
+        address evmTrustedRemote;
+        bytes32 svmTrustedRemote;
+    }
+
     // ========== DESIRED STATE ========== //
 
     /// @notice Reads the desired config policy parameters of a chain.
@@ -125,6 +151,57 @@ library CCIPConfigLib {
         for (uint256 i; i < names.length; ++i) {
             routes[i] = _desiredRoute(env_, chain_, names[i]);
         }
+    }
+
+    /// @notice Reads the desired periphery states of a chain, sorted by remote chain name: one
+    ///         entry per route that carries a `periphery` block. A route without the block is not
+    ///         managed by the periphery reconciler.
+    /// @dev A block on an EVM route requires `gasLimit` and defaults the trusted remote to the
+    ///      remote chain's `olympus.periphery.CCIPCrossChainBridge`, overridable with an explicit
+    ///      `trustedRemote`; a block on an SVM route requires `gasLimit` and an explicit
+    ///      `svmReceiver` (bytes32). `remove: true` on the block or on the route marks the
+    ///      trusted remote for removal, and no other field is read then.
+    function desiredPeripheries(
+        string memory env_,
+        string memory chain_
+    ) internal view returns (DesiredPeriphery[] memory peripheries) {
+        string memory routesPath = _path(chain_, ROUTES_KEY);
+        if (!_VM.keyExistsJson(env_, routesPath)) return peripheries;
+
+        string[] memory names = _VM.parseJsonKeys(env_, routesPath);
+        _sort(names);
+
+        DesiredPeriphery[] memory buffer = new DesiredPeriphery[](names.length);
+        uint256 count;
+        for (uint256 i; i < names.length; ++i) {
+            string memory base = string.concat(routesPath, ".", names[i], ".periphery");
+            if (!_VM.keyExistsJson(env_, base)) continue;
+            buffer[count++] = _desiredPeriphery(env_, chain_, names[i], base);
+        }
+
+        peripheries = new DesiredPeriphery[](count);
+        for (uint256 i; i < count; ++i) {
+            peripheries[i] = buffer[i];
+        }
+    }
+
+    /// @notice Reads the minimum OHM backing of the canonical lock/release pool: the OHM
+    ///         outstanding on the burn/mint chains that the pool must be able to release.
+    function minimumPoolBacking(
+        string memory env_,
+        string memory chain_
+    ) internal view returns (uint256 backing) {
+        string memory key = _path(chain_, MIN_POOL_BACKING_KEY);
+        _requireKey(env_, key);
+        backing = env_.readUint(key);
+        require(backing != 0, string.concat("CCIPConfigLib: zero value for ", key));
+    }
+
+    /// @notice Returns whether a chain hosts a burn/mint pool: an EVM chain that is not
+    ///         canonical. Deliveries to such a chain mint through MINTR and need the raised OHM
+    ///         fee budget on the source lane.
+    function isBurnMintEvmChain(string memory chain_) internal pure returns (bool isBurnMint) {
+        return !ChainUtils._isSVMChain(chain_) && !ChainUtils._isCanonicalChain(chain_);
     }
 
     /// @notice Reads the CCIP chain selector of a chain.
@@ -373,6 +450,57 @@ library CCIPConfigLib {
         requireEnabledConfig(
             route.inbound,
             string.concat("inbound rate limit of route ", remoteChain_)
+        );
+    }
+
+    function _desiredPeriphery(
+        string memory env_,
+        string memory chain_,
+        string memory remoteChain_,
+        string memory base_
+    ) private view returns (DesiredPeriphery memory periphery) {
+        periphery.remoteChain = remoteChain_;
+        periphery.chainSelector = chainSelector(env_, remoteChain_);
+        periphery.isSvm = ChainUtils._isSVMChain(remoteChain_);
+
+        string memory routeRemoveKey = string.concat(
+            _path(chain_, ROUTES_KEY),
+            ".",
+            remoteChain_,
+            ".remove"
+        );
+        periphery.remove =
+            (_VM.keyExistsJson(env_, routeRemoveKey) && env_.readBool(routeRemoveKey)) ||
+            (_VM.keyExistsJson(env_, string.concat(base_, ".remove")) &&
+                env_.readBool(string.concat(base_, ".remove")));
+        if (periphery.remove) return periphery;
+
+        string memory gasKey = string.concat(base_, ".gasLimit");
+        _requireKey(env_, gasKey);
+        periphery.gasLimit = SafeCast.encodeUInt32(env_.readUint(gasKey));
+
+        if (periphery.isSvm) {
+            string memory receiverKey = string.concat(base_, ".svmReceiver");
+            _requireKey(env_, receiverKey);
+            periphery.svmTrustedRemote = env_.readBytes32(receiverKey);
+            return periphery;
+        }
+
+        string memory overrideKey = string.concat(base_, ".trustedRemote");
+        if (_VM.keyExistsJson(env_, overrideKey)) {
+            periphery.evmTrustedRemote = env_.readAddress(overrideKey);
+            require(
+                periphery.evmTrustedRemote != address(0),
+                string.concat("CCIPConfigLib: zero trusted remote override for ", remoteChain_)
+            );
+            return periphery;
+        }
+        string memory bridgeKey = _path(remoteChain_, EVM_BRIDGE_KEY);
+        _requireKey(env_, bridgeKey);
+        periphery.evmTrustedRemote = env_.readAddress(bridgeKey);
+        require(
+            periphery.evmTrustedRemote != address(0),
+            string.concat("CCIPConfigLib: zero address for ", bridgeKey)
         );
     }
 
