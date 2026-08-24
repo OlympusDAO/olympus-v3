@@ -20,7 +20,7 @@
 #   6. Print the final authority state.
 #
 # Usage:
-#   ./run-ethereum.sh [--port 8545] [--keep-fork] [--use-deployed]
+#   ./run-ethereum.sh [--port <port>] [--keep-fork] [--use-deployed]
 #
 # --use-deployed: skip step 1 and rehearse against the config addresses already
 #   in env.json / addresses.json (the real on-chain deployment).
@@ -31,7 +31,6 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/lib/common.sh"
 
 CHAIN="mainnet"
-TIMELOCK="0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39"
 SOLANA_SELECTOR="124615329519749607"
 DISABLE_ARGS="src/scripts/ops/batches/args/CCIPBridgeConfigBatch_disableChain.json"
 
@@ -55,13 +54,13 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# executeOnAnvilFork.sh health-checks http://localhost:8545 explicitly.
-[ "$PORT" = "8545" ] || die "the OCG proposal step requires --port 8545"
-
 cd "$REPO_ROOT"
 load_dotenv
 backup_tracked_files
 trap cleanup EXIT
+
+TIMELOCK="$(env_addr "$CHAIN" olympus.governance.Timelock)"
+require_addr "$TIMELOCK" "$CHAIN olympus.governance.Timelock"
 
 start_anvil "$CHAIN"
 fund "$DEPLOYER_ADDR"

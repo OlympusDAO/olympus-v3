@@ -40,7 +40,7 @@ Once the config policies are live on mainnet (their addresses recorded in `env.j
 
 ## Options
 
-- `--port <port>`: Anvil port (default `8545`; the OCG proposal step requires `8545`).
+- `--port <port>`: Anvil port (default `8545`).
 - `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
 - `--use-deployed`: skip the deploy step and run against the config addresses already in `env.json` / `addresses.json`.
 
