@@ -25,6 +25,30 @@ ADDR_JSON="src/proposals/addresses.json"
 DEPLOYER_ADDR="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
 DEPLOYER_KEY="0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
 
+# The Olympus deployer EOA that holds the OHM administrator role in the L2
+# TokenAdminRegistries; impersonated for the registry handover step.
+OLYMPUS_DEPLOYER_EOA="0x1A5309F208f161a393E8b5A253de8Ab894A67188"
+
+# The chain whose multisigs own the batches of this run; run-l2.sh overrides it.
+HARNESS_CHAIN="${HARNESS_CHAIN:-mainnet}"
+
+# Non-zero stand-in addresses for the pools and peripheries of chains that are
+# not deployed in a single-fork run. The route and trusted-remote wiring only
+# stores them as data, so any distinct non-zero address passes; all-lowercase so
+# that stdJson address parsing does not reject a mixed-case non-checksum value.
+declare -A PLACEHOLDER_POOL=(
+  [arbitrum]="0x0000000000000000000000000000000000cc1ba1"
+  [optimism]="0x0000000000000000000000000000000000cc1ba2"
+  [base]="0x0000000000000000000000000000000000cc1ba3"
+  [berachain]="0x0000000000000000000000000000000000cc1ba4"
+)
+declare -A PLACEHOLDER_PERIPHERY=(
+  [arbitrum]="0x0000000000000000000000000000000000cc1bf1"
+  [optimism]="0x0000000000000000000000000000000000cc1bf2"
+  [base]="0x0000000000000000000000000000000000cc1bf3"
+  [berachain]="0x0000000000000000000000000000000000cc1bf4"
+)
+
 # 10000 ETH in wei (hex), funded onto every account that pays gas on the fork.
 FUND_WEI_HEX="0x21E19E0C9BAB2400000"
 
@@ -175,20 +199,48 @@ deploy_sequence() {
   ) || die "deploy sequence failed; see $LOG_DIR/deploy.log"
 }
 
-# run_batch <ContractName> <function> <owner-key> [argsFileRelative] [logSuffix]
-# Sends the batch from the multisig at olympus.multisig.<owner-key> (dao or
-# emergency) via impersonation. FORK=true skips the Safe client init;
+# run_batch_from <ContractName> <function> <senderAddr> <useDaoMS> [argsFileRelative] [logSuffix]
+# Low-level batch runner: sends the standard 5-argument batch entry point from
+# an impersonated sender. FORK=true skips the Safe client init;
 # USE_ANVIL_FORK=true routes proposeBatch() to the on-fork broadcast path.
 # The batch log is tee'd to logs/batch-<Contract>-<fn><logSuffix>.log and the
 # path is exported as LAST_BATCH_LOG for the caller's assertions.
+run_batch_from() {
+  local contract="$1" fn="$2" sender="$3" useDaoMS="$4" argsfile="${5:-}" suffix="${6:-}"
+  fund "$sender"
+  LAST_BATCH_LOG="$LOG_DIR/batch-${contract}-${fn}${suffix}.log"
+  step "Batch ${contract}.${fn} (sender $sender)"
+  (
+    cd "$REPO_ROOT"
+    set -o pipefail
+    FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
+      "src/scripts/ops/batches/${contract}.sol:${contract}" \
+      --sig "${fn}(bool,bool,string,string,bytes)()" "$useDaoMS" false "$argsfile" "" 0x \
+      --rpc-url "$RPC" --sender "$sender" --unlocked --slow -vvv --broadcast \
+      2>&1 | tee "$LAST_BATCH_LOG"
+  ) || die "batch ${contract}.${fn} failed; see $LAST_BATCH_LOG"
+}
+
+# run_batch <ContractName> <function> <owner-key> [argsFileRelative] [logSuffix]
+# Sends the batch from the HARNESS_CHAIN multisig at olympus.multisig.<owner-key>
+# (dao or emergency) via impersonation.
 run_batch() {
   local contract="$1" fn="$2" ownerKey="$3" argsfile="${4:-}" suffix="${5:-}"
-  local owner; owner="$(env_addr mainnet "olympus.multisig.$ownerKey")"
-  require_addr "$owner" "mainnet olympus.multisig.$ownerKey"
+  local owner; owner="$(env_addr "$HARNESS_CHAIN" "olympus.multisig.$ownerKey")"
+  require_addr "$owner" "$HARNESS_CHAIN olympus.multisig.$ownerKey"
+  run_batch_from "$contract" "$fn" "$owner" true "$argsfile" "$suffix"
+}
+
+# run_batch_expect_fail <ContractName> <function> <owner-key> <expected-substr> [argsFileRelative] [logSuffix]
+# The batch run must fail and its log must carry the expected substring.
+run_batch_expect_fail() {
+  local contract="$1" fn="$2" ownerKey="$3" expected="$4" argsfile="${5:-}" suffix="${6:-}"
+  local owner; owner="$(env_addr "$HARNESS_CHAIN" "olympus.multisig.$ownerKey")"
+  require_addr "$owner" "$HARNESS_CHAIN olympus.multisig.$ownerKey"
   fund "$owner"
   LAST_BATCH_LOG="$LOG_DIR/batch-${contract}-${fn}${suffix}.log"
-  step "Batch ${contract}.${fn} (owner=$ownerKey MS $owner)"
-  (
+  step "Batch ${contract}.${fn} (sender $owner, expected to fail)"
+  if (
     cd "$REPO_ROOT"
     set -o pipefail
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
@@ -196,7 +248,31 @@ run_batch() {
       --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
       --rpc-url "$RPC" --sender "$owner" --unlocked --slow -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
-  ) || die "batch ${contract}.${fn} failed; see $LAST_BATCH_LOG"
+  ); then
+    die "batch ${contract}.${fn} was expected to fail; see $LAST_BATCH_LOG"
+  fi
+  grep -q "$expected" "$LAST_BATCH_LOG" \
+    || die "batch ${contract}.${fn} failed without the expected message '$expected'; see $LAST_BATCH_LOG"
+  log "OK: ${contract}.${fn} failed with the expected message"
+}
+
+# run_script_fn <ContractName> <sig> <senderAddr> <logName> [args...]
+# Runs a non-standard batch entry point (custom signature) from an impersonated
+# sender, e.g. the registry admin handover functions of CCIPTokenPool.
+run_script_fn() {
+  local contract="$1" sig="$2" sender="$3" logname="$4"; shift 4
+  fund "$sender"
+  LAST_BATCH_LOG="$LOG_DIR/script-${logname}.log"
+  step "Script ${contract} --sig '${sig}' (sender $sender)"
+  (
+    cd "$REPO_ROOT"
+    set -o pipefail
+    FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
+      "src/scripts/ops/batches/${contract}.sol:${contract}" \
+      --sig "$sig" "$@" \
+      --rpc-url "$RPC" --sender "$sender" --unlocked --slow -vvv --broadcast \
+      2>&1 | tee "$LAST_BATCH_LOG"
+  ) || die "script ${contract} ${sig} failed; see $LAST_BATCH_LOG"
 }
 
 # expect_empty_batch <log> <label>: the last batch must have proposed nothing.
@@ -222,4 +298,82 @@ cast_send_impersonated() {
   local from="$1" to="$2" sig="$3"; shift 3
   fund "$from"
   cast send "$to" "$sig" "$@" --rpc-url "$RPC" --from "$from" --unlocked >/dev/null
+}
+
+# inject_placeholder_contracts <ownChain>
+# Writes stand-in pool and periphery addresses into env.json for every burn/mint
+# chain except the one being deployed on this fork, so the route and trusted
+# remote wiring resolves. The mainnet pool and periphery keep their real values,
+# and a chain whose pool is already recorded (a real deployment) is left alone.
+inject_placeholder_contracts() {
+  local own="$1" ch existing
+  step "Inject placeholder pools and peripheries for the other burn/mint chains"
+  for ch in arbitrum optimism base berachain; do
+    [ "$ch" = "$own" ] && continue
+    existing="$(env_addr "$ch" "olympus.policies.CCIPBurnMintTokenPool")"
+    if [ -n "$existing" ] && [ "$existing" != "0x0000000000000000000000000000000000000000" ]; then
+      log "  $ch already records a real pool ($existing); pool left alone"
+    else
+      set_env_value "$ch" "olympus.policies.CCIPBurnMintTokenPool" "\"${PLACEHOLDER_POOL[$ch]}\""
+      log "  $ch pool -> ${PLACEHOLDER_POOL[$ch]}"
+    fi
+    existing="$(env_addr "$ch" "olympus.periphery.CCIPCrossChainBridge")"
+    if [ -n "$existing" ] && [ "$existing" != "0x0000000000000000000000000000000000000000" ]; then
+      log "  $ch already records a real periphery ($existing); periphery left alone"
+    else
+      set_env_value "$ch" "olympus.periphery.CCIPCrossChainBridge" "\"${PLACEHOLDER_PERIPHERY[$ch]}\""
+      log "  $ch periphery -> ${PLACEHOLDER_PERIPHERY[$ch]}"
+    fi
+  done
+}
+
+# mock_ohm_fee_entry <localChain> <remoteChain>
+# Writes an enabled OHM token transfer fee entry (destGasOverhead 175000,
+# destBytesOverhead 32) for the lane on the forked local chain, impersonating
+# the owner of the live fee contract. Dispatches on the on-ramp version:
+#   OnRamp 1.6.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates
+#   EVM2EVMOnRamp 1.5.0 -> the on-ramp's own setTokenTransferFeeConfig
+mock_ohm_fee_entry() {
+  local localChain="$1" remoteChain="$2"
+  local router ohm sel onramp version owner fq
+  router="$(env_addr "$localChain" "external.ccip.Router")"
+  ohm="$(env_addr "$localChain" "olympus.legacy.OHM")"
+  sel="$(jq -r --arg c "$remoteChain" '.current[$c].external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
+  require_addr "$router" "$localChain external.ccip.Router"
+  onramp="$(cast call "$router" 'getOnRamp(uint64)(address)' "$sel" --rpc-url "$RPC")"
+  require_addr "$onramp" "on-ramp of $localChain -> $remoteChain"
+  version="$(cast call "$onramp" 'typeAndVersion()(string)' --rpc-url "$RPC")"
+  case "$version" in
+    *"EVM2EVMOnRamp 1.5.0"*)
+      owner="$(cast call "$onramp" 'owner()(address)' --rpc-url "$RPC")"
+      fund "$owner"
+      cast send "$onramp" \
+        "setTokenTransferFeeConfig((address,uint32,uint32,uint16,uint32,uint32,bool)[],address[])" \
+        "[($ohm,0,0,0,175000,32,false)]" "[]" \
+        --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
+      log "Mocked OHM fee entry on the 1.5 on-ramp $onramp ($localChain -> $remoteChain)"
+      ;;
+    *"OnRamp 1.6.0"*)
+      fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address,address,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')"
+      require_addr "$fq" "fee quoter of $localChain -> $remoteChain"
+      owner="$(cast call "$fq" 'owner()(address)' --rpc-url "$RPC")"
+      fund "$owner"
+      cast send "$fq" \
+        "applyTokenTransferFeeConfigUpdates((uint64,(address,(uint32,uint32,uint32,bool))[])[],(uint64,address)[])" \
+        "[($sel,[($ohm,(0,175000,32,true))])]" "[]" \
+        --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
+      log "Mocked OHM fee entry on FeeQuoter $fq ($localChain -> $remoteChain)"
+      ;;
+    *)
+      die "unsupported on-ramp version '$version' for $localChain -> $remoteChain"
+      ;;
+  esac
+}
+
+# l2_route_peers <chain>  ->  the burn/mint EVM peers of a chain (its env.json
+# routes minus mainnet and any SVM chain, whose lanes bill on the SVM side and
+# cannot be mocked here), one per line.
+l2_route_peers() {
+  jq -r --arg c "$1" '.current[$c].olympus.config.CCIP.routes | keys[]
+    | select(. != "mainnet" and . != "solana" and . != "solana-devnet")' "$REPO_ROOT/$ENV_JSON"
 }
