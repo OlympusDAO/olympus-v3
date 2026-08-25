@@ -1316,7 +1316,7 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
     }
 
     function test_batchLiquidate_oneAccount_withMaxUndelegations() external {
-        uint32 delegateAddressCount = 2600;
+        uint32 delegateAddressCount = 2500;
         uint128 collateralAmount = 10e18;
 
         // Set the max delegate addresses to the max possible

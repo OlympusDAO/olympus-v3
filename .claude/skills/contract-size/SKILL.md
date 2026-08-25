@@ -128,7 +128,9 @@ Both limits are hard constraints on mainnet.
 
 ## Operator.sol
 
-The repository default is `optimizer_runs = 10000`, and `Operator.sol` does not fit at that setting. `foundry.toml` restricts it to `optimizer_runs = 10` and declares the `ten-runs` profile that satisfies the restriction. Measured sizes are in the binary search example above.
+The repository default is `optimizer_runs = 400`. At that setting, `Operator.sol` has a 24,179-byte
+runtime and a 397-byte EIP-170 margin, so it uses the default without a contract-specific
+restriction. Measured sizes are in the binary search example above.
 
 ## Workflow Summary
 

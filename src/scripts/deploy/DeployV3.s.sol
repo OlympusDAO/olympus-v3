@@ -97,10 +97,6 @@ import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 ///         - helper functions for reading deployment arguments from the sequence file
 ///         - remove the use of state variables for all of the contracts, since they can be loaded easily with `_envAddressNotZero()`
 ///         - deployment functions can reference deployments from the same sequence file (using `_getAddressNotZero()`)
-/// @dev    Do not import contracts with non-default optimizer settings into this script. Restrictions
-///         apply to the entire import graph, including every contract created with `new`, even if the
-///         restricted contract is not deployed. For example, importing Operator would apply its 10-run
-///         setting to the graph. Use interfaces for interactions and dedicated deployment scripts.
 contract DeployV3 is WithEnvironment {
     using stdJson for string;
 

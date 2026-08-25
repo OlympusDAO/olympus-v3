@@ -345,7 +345,7 @@ Key standards summary:
 ### Code Standards
 
 - Solidity compiler: pinned to 0.8.36 through `solc_version` in `foundry.toml`, so every machine builds identically. Sources declare flexible pragmas (`>=0.8.x`) and none pins an exact version; `src/LEGACY.md` lists the files that did before the pin.
-- Optimizer runs: 10,000 (except for some contracts that require specific runs to meet bytecode limits, see foundry.toml)
+- Optimizer runs: 400
 - Follow existing patterns for module/policy development
 - Use Default Framework conventions for access control and state management
 - Dependencies are installed using soldeer (`forge soldeer`) and kept in `dependencies/`
