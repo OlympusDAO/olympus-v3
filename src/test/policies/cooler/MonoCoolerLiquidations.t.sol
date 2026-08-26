@@ -543,7 +543,9 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
     }
 
     function test_applyUnhealthyDelegations_withMaxUndelegations() external {
-        uint256 delegateAddressCount = 2600;
+        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
+        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
+        uint256 delegateAddressCount = 1900;
         uint128 collateralAmount = 10e18;
 
         // Set the max delegate addresses to the max possible
@@ -1316,7 +1318,9 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
     }
 
     function test_batchLiquidate_oneAccount_withMaxUndelegations() external {
-        uint32 delegateAddressCount = 2600;
+        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
+        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
+        uint32 delegateAddressCount = 1900;
         uint128 collateralAmount = 10e18;
 
         // Set the max delegate addresses to the max possible

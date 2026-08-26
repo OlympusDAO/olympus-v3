@@ -21,20 +21,29 @@ fs_permissions = [
 ]
 gas_limit = "18446744073709551615"
 
-optimizer = true
-optimizer_runs = 10000
-verbosity = 3
+# Everyday builds favor compile speed. Use the deploy profile whenever producing bytecode for
+# deployment or checking contract sizes.
+optimizer = false
+verbosity = 2
+# Gas snapshots must use deployment-equivalent bytecode. Use `pnpm run test:gas`, or set
+# `FOUNDRY_PROFILE=deploy` when running Forge snapshot commands directly.
+gas_snapshot_emit = false
 
-# Operator needs special optimizer settings to remain within the bytecode-size limit.
-# Restrictions apply to the entire connected import graph, not only to the matching source file.
-# A script that imports Operator compiles all contracts in that graph at 10 runs, even when it does
-# not deploy Operator. Use IOperator for interactions and a dedicated script to deploy Operator.
-# A restriction is never satisfied on its own: Forge picks a profile that meets it, preferring the
-# default profile and otherwise the alphabetically first entry below. Removing an entry that a
-# restriction relies on fails the build with "Missing profile satisfying settings restrictions".
-# A restriction also overrides `--optimizer-runs` on the command line.
-additional_compiler_profiles = [{ name = "ten-runs", optimizer_runs = 10 }]
-compilation_restrictions = [{ paths = "src/policies/Operator.sol", optimizer_runs = 10 }]
+# These source graphs do not compile without the optimizer because solc exhausts the EVM stack while
+# generating their ABI encoding/decoding assembly.
+additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
+compilation_restrictions = [
+    { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
+    { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
+    { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
+    { paths = "src/policies/BoostedLiquidity/BLVaultLusd.sol", optimizer_runs = 400 },
+    { paths = "src/policies/BoostedLiquidity/BLVaultManagerLido.sol", optimizer_runs = 400 },
+    { paths = "src/policies/BoostedLiquidity/BLVaultManagerLusd.sol", optimizer_runs = 400 },
+    { paths = "src/proposals/*.sol", optimizer_runs = 400 },
+    # Upstream LayerZero test mocks fail legacy code generation unoptimized. Keeping this at the
+    # dependency root avoids optimizer exceptions for individual repository test files.
+    { paths = "dependencies/@layerzerolabs-test-devtools-evm-foundry-8.0.1/contracts/TestHelperOz5.sol", optimizer_runs = 400 },
+]
 libs = ["dependencies"]
 # Tests live here, not in the default `test` directory. While this pointed at a directory that does
 # not exist, Forge replaced the `test/=src/test/` entry of remappings.txt with narrower generated
@@ -47,6 +56,13 @@ test = "src/test"
 ignored_warnings_from = ["dependencies", "deprecated"]
 
 [profile.deploy]
+optimizer = true
+optimizer_runs = 400
+gas_snapshot_emit = true
+# The whole deployment graph already uses these settings, so the everyday-build exceptions would
+# only split this profile into redundant compiler jobs.
+additional_compiler_profiles = []
+compilation_restrictions = []
 script_execution_protection = false
 
 [profile.multisig]

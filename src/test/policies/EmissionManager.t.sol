@@ -974,22 +974,22 @@ contract EmissionManagerTest is Test {
             uint256 marketPrice = bondAuctioneer.marketPrice(nextBondMarketId);
             (
                 address owner,
-                ERC20 payoutToken,
-                ERC20 quoteToken,
+                address payoutToken,
+                address quoteToken,
                 address callbackAddr,
-                bool isCapacityInQuote,
+                bool isCapacityInQuote
+            ) = bondAuctioneer.getMarketIdentity(nextBondMarketId);
+            (
                 uint256 capacity,
-                ,
                 uint256 minPrice,
                 uint256 maxPayout,
                 ,
-                ,
                 uint256 scale
-            ) = bondAuctioneer.markets(nextBondMarketId);
+            ) = bondAuctioneer.getMarketValues(nextBondMarketId);
 
             assertEq(owner, address(emissionManager), "Owner");
-            assertEq(address(payoutToken), address(ohm), "Payout token");
-            assertEq(address(quoteToken), address(reserve), "Quote token");
+            assertEq(payoutToken, address(ohm), "Payout token");
+            assertEq(quoteToken, address(reserve), "Quote token");
             assertEq(
                 callbackAddr,
                 address(emissionManager),
@@ -1223,22 +1223,22 @@ contract EmissionManagerTest is Test {
             uint256 marketPrice = bondAuctioneer.marketPrice(nextBondMarketId);
             (
                 address owner,
-                ERC20 payoutToken,
-                ERC20 quoteToken,
+                address payoutToken,
+                address quoteToken,
                 address callbackAddr,
-                bool isCapacityInQuote,
+                bool isCapacityInQuote
+            ) = bondAuctioneer.getMarketIdentity(nextBondMarketId);
+            (
                 uint256 capacity,
-                ,
                 uint256 minPrice,
                 uint256 maxPayout,
                 ,
-                ,
                 uint256 scale
-            ) = bondAuctioneer.markets(nextBondMarketId);
+            ) = bondAuctioneer.getMarketValues(nextBondMarketId);
 
             assertEq(owner, address(emissionManager), "Owner");
-            assertEq(address(payoutToken), address(ohm), "Payout token");
-            assertEq(address(quoteToken), address(reserve), "Quote token");
+            assertEq(payoutToken, address(ohm), "Payout token");
+            assertEq(quoteToken, address(reserve), "Quote token");
             assertEq(
                 callbackAddr,
                 address(emissionManager),
@@ -3429,7 +3429,7 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
 
         // Verify the bond market has the full deficit as capacity
-        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+        (uint256 capacity, , , , ) = bondAuctioneer.getMarketValues(nextBondMarketId);
 
         assertEq(capacity, DEFICIT, "Capacity should equal the deficit");
     }
@@ -3462,7 +3462,7 @@ contract EmissionManagerTest is Test {
         assertEq(emissionManager.beatCounter(), 0, "Beat counter should be 0");
 
         // Verify the bond market has 200% of the deficit as capacity
-        (, , , , , uint256 capacity, , , , , , ) = bondAuctioneer.markets(nextBondMarketId);
+        (uint256 capacity, , , , ) = bondAuctioneer.getMarketValues(nextBondMarketId);
 
         assertEq(capacity, DEFICIT * 2, "Capacity should be 200% of the deficit");
     }
