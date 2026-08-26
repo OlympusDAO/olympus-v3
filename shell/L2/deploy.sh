@@ -64,7 +64,7 @@ set_account_address $account
 # Deploy using script
 echo ""
 echo "Running forge script"
-forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
+FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
     --sig "deploy(string,bool)()" $CHAIN $ohm \
     --rpc-url $RPC_URL --account $account --slow -vvv \
     --sender $ACCOUNT_ADDRESS \
