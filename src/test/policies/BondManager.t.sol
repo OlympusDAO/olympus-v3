@@ -506,18 +506,9 @@ contract BondManagerTest is Test {
         uint256 auctionId = bondManager.createBatchAuction(10_000_000_000_000, 1 weeks);
 
         // Verify end state
-        (
-            ERC20 auctioningToken,
-            ERC20 biddingToken,
-            uint256 orderCancellationEndDate,
-            uint256 auctionEndDate,
-            ,
-            ,
-            ,
+        (ERC20 biddingToken, uint256 orderCancellationEndDate, uint256 auctionEndDate) = easyAuction
+            .getAuctionSummary(auctionId);
 
-        ) = easyAuction.auctionData(auctionId);
-
-        // assertEq(auctioningToken, bondToken);
         assertEq(address(biddingToken), address(ohm));
         assertEq(orderCancellationEndDate, block.timestamp + 6 days);
         assertEq(auctionEndDate, block.timestamp + 1 weeks);

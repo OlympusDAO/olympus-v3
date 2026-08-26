@@ -41,4 +41,44 @@ contract BondFixedTermSDA is BondBaseSDA {
         // Create market and return market ID
         return _createMarket(params);
     }
+
+    // Tests previously destructured the inherited twelve-value markets() getter. These two narrow
+    // getters return only the fields they use, avoiding stack exhaustion in unoptimized call sites.
+    function getMarketIdentity(
+        uint256 id_
+    )
+        external
+        view
+        returns (
+            address owner,
+            address payoutToken,
+            address quoteToken,
+            address callbackAddr,
+            bool capacityInQuote
+        )
+    {
+        return (
+            markets[id_].owner,
+            address(markets[id_].payoutToken),
+            address(markets[id_].quoteToken),
+            markets[id_].callbackAddr,
+            markets[id_].capacityInQuote
+        );
+    }
+
+    function getMarketValues(
+        uint256 id_
+    )
+        external
+        view
+        returns (uint256 capacity, uint256 minPrice, uint256 maxPayout, uint256 sold, uint256 scale)
+    {
+        return (
+            markets[id_].capacity,
+            markets[id_].minPrice,
+            markets[id_].maxPayout,
+            markets[id_].sold,
+            markets[id_].scale
+        );
+    }
 }
