@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Deploys a sequence of contracts using the V3 deployment script.
 #

@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # Script to load netflows from a json file into solidity, using a filter defined in the arguments passed here.
 
 # Create filter from passed in seed

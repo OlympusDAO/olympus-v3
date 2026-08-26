@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.0;
 
 import {MockERC20, ERC20} from "solmate/test/utils/mocks/MockERC20.sol";

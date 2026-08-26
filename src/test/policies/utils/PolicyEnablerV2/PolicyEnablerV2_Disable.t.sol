@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 import {PolicyEnablerV2TestBase} from "src/test/policies/utils/PolicyEnablerV2/PolicyEnablerV2TestBase.sol";

@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # change_price.sh - Script to alter the state of the Bophades Range System on Testnet to mock different scenarios
 # Load environment variables
 source .env

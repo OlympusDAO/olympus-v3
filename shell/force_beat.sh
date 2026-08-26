@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # force_beat.sh - Script to force beat the Heart contract
 # Load environment variables
 source .env

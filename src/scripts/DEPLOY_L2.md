@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Deployment Instructions - L2
 
 This file contains instructions for deploying the different components of the Olympus protocol on L2 chains.

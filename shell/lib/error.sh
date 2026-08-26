@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # @description Displays an error message in red
 # @param {string} $1 The error message

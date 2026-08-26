@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Olympus Convertible Deposits Audit
 
 ## Purpose

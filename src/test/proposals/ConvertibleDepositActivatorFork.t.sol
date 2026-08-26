@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(erc20-unchecked-transfer,mixed-case-function)
 pragma solidity ^0.8.15;
 

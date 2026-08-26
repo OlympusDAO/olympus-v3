@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # OlympusDAO PRICE v1.2 Audit - Price Feed Improvements
 
 ## Purpose

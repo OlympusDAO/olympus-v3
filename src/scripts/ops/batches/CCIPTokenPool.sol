@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";

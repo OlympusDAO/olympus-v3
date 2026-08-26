@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 /// @notice Common surface for the `PolicyAdmin` and `PolicyAdminOptimized` test harnesses.

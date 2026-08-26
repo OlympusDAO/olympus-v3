@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # End-to-end L2 rollout of the LayerZero bridge on a local Anvil fork.
 #
 # Forks the target L2, deploys the non-canonical contract set, then runs the
