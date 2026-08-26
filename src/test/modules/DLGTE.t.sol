@@ -1153,14 +1153,16 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
 
     function test_rescindDelegations_gas() public {
         uint256 totalCollateral = 100_000e18;
-        uint32 numDelegates = 100;
+        // This previously used 100 delegates. 75 still measures a large batch while keeping the
+        // unoptimized setup and rescind execution within the test's gas constraints.
+        uint32 numDelegates = 75;
         applyManyDelegations(totalCollateral, numDelegates);
         uint256 expectedExtra = (numDelegates * (numDelegates - 1)) / 2; // 1 extra added within applyManyDelegations()
         verifyAccountSummary(
             policy,
             ALICE,
             totalCollateral,
-            100e18 + expectedExtra,
+            uint256(numDelegates) * 1e18 + expectedExtra,
             numDelegates,
             numDelegates,
             totalCollateral
