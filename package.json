@@ -32,7 +32,7 @@
         "test": "./shell/test_all.sh",
         "test:unit": "bash ./shell/test_forge.sh --no-match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}' -vv",
         "test:invariant": "bash ./shell/test_forge.sh --match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}' -vv",
-        "test:gas": "FOUNDRY_PROFILE=deploy pnpm run test:unit",
+        "test:gas": "FOUNDRY_PROFILE=deploy pnpm run test:unit && FOUNDRY_PROFILE=deploy pnpm run test:fork",
         "test:fork": "bash ./shell/test_forge.sh --match-contract 'Fork' --no-match-contract 'TokenPoolFork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",
         "test:fork:loan-consolidator": "bash ./shell/test_forge.sh --match-contract 'LoanConsolidatorFork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",
         "test:fork:boosted-liquidity": "bash ./shell/test_forge.sh --match-contract 'BLVault.*Fork|BLVaultManager.*Fork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",

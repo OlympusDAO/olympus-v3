@@ -1,0 +1,46 @@
+name: Gas Snapshots
+on:
+    push:
+        branches:
+            - master
+    pull_request:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+    gas-snapshots:
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        runs-on: ubuntu-latest
+        timeout-minutes: 60
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Run gas snapshot tests
+              run: pnpm run test:gas
+              env:
+                  ALCHEMY_API_KEY: ${{ secrets.ALCHEMY_API_KEY }}
+
+            - name: Check gas snapshots
+              run: |
+                  # Include newly-created snapshot files in the diff as intent-to-add entries.
+                  git add --intent-to-add snapshots/
+
+                  if git diff --quiet -- snapshots; then
+                    exit 0
+                  fi
+
+                  echo "::error title=Gas snapshots are out of date::Run 'pnpm run test:gas' and commit the updated files under snapshots/."
+                  git diff -- snapshots
+                  exit 1
