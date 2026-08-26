@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD
+// SPDX-License-Identifier: BSD-3-Clause
 pragma solidity ^0.8.0;
 
 import {Clone} from "@clones-with-immutable-args-1.1.2/Clone.sol";
