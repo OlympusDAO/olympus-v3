@@ -32,6 +32,7 @@
         "test": "./shell/test_all.sh",
         "test:unit": "bash ./shell/test_forge.sh --no-match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}' -vv",
         "test:invariant": "bash ./shell/test_forge.sh --match-test '^invariant_' --no-match-contract '(Fork|Script)' --no-match-path '{src/test/proposals/*.t.sol,src/test/deprecated/**}' -vv",
+        "test:gas": "FOUNDRY_PROFILE=deploy pnpm run test:unit",
         "test:fork": "bash ./shell/test_forge.sh --match-contract 'Fork' --no-match-contract 'TokenPoolFork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",
         "test:fork:loan-consolidator": "bash ./shell/test_forge.sh --match-contract 'LoanConsolidatorFork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",
         "test:fork:boosted-liquidity": "bash ./shell/test_forge.sh --match-contract 'BLVault.*Fork|BLVaultManager.*Fork' --no-match-path 'src/test/deprecated/**' --fork-url mainnet -vv",
@@ -41,7 +42,7 @@
         "test:crosschainfork": "bash ./shell/test_forge.sh --match-contract 'TokenPoolFork' --no-match-path 'src/test/deprecated/**' -vv",
         "test:deprecated": "bash ./shell/test_forge.sh --match-path 'src/test/deprecated/**' -vv",
         "test:coverage": "bash ./shell/test_coverage.sh",
-        "size": "forge clean && forge build --sizes --skip 'src/test/*' --skip 'src/scripts/*'",
+        "size": "FOUNDRY_PROFILE=deploy forge clean && FOUNDRY_PROFILE=deploy forge build --sizes --skip 'src/test/*' --skip 'src/scripts/*'",
         "metrics": "node shell/metrics.js",
         "anvil:fork": "anvil --fork-url mainnet --port 8545 --auto-impersonate"
     },
