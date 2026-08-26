@@ -14,6 +14,8 @@ concurrency:
 
 jobs:
     gas-snapshots:
+        # test:gas needs an RPC secret for its fork suite. GitHub withholds that secret from
+        # external forks and Dependabot PRs, so only trusted PRs and branch pushes run this job.
         if: ${{ github.event_name != 'pull_request' || (github.actor != 'dependabot[bot]' && github.event.pull_request.head.repo.full_name == github.repository) }}
         runs-on: ubuntu-latest
         timeout-minutes: 60
