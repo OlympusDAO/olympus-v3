@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.15;
 
 import {IUniswapV3Pool} from "@uniswap-v3-core-1.0.1/interfaces/IUniswapV3Pool.sol";
