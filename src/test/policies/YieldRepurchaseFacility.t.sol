@@ -298,9 +298,9 @@ contract YieldRepurchaseFacilityTest is Test {
             (uint256 capacity, uint256 minPrice, uint256 maxPayout, , uint256 scale) = auctioneer
                 .getMarketValues(nextBondMarketId);
 
-            assertEq(owner, address(yieldRepo));
-            assertEq(payoutToken, address(reserve));
-            assertEq(quoteToken, address(ohm));
+            assertEq(owner, address(yieldRepo), "market owner should be the facility");
+            assertEq(payoutToken, address(reserve), "payout token should be the reserve");
+            assertEq(quoteToken, address(ohm), "quote token should be OHM");
             assertEq(callbackAddr, address(0));
             assertEq(isCapacityInQuote, false);
             assertEq(capacity, uint256(initialYield) / 7);

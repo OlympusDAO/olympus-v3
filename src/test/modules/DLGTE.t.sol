@@ -1157,12 +1157,15 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         // unoptimized setup and rescind execution within the test's gas constraints.
         uint32 numDelegates = 75;
         applyManyDelegations(totalCollateral, numDelegates);
-        uint256 expectedExtra = (numDelegates * (numDelegates - 1)) / 2; // 1 extra added within applyManyDelegations()
+        // Each delegation adds 1e18 + i gOHM base units for i = 0..numDelegates - 1.
+        // Total = numDelegates * 1e18 + numDelegates * (numDelegates - 1) / 2 base units.
+        // The triangular term is exact because one factor is even, so no rounding occurs.
+        uint256 expectedExtraBaseUnits = (numDelegates * (numDelegates - 1)) / 2;
         verifyAccountSummary(
             policy,
             ALICE,
             totalCollateral,
-            uint256(numDelegates) * 1e18 + expectedExtra,
+            uint256(numDelegates) * 1e18 + expectedExtraBaseUnits,
             numDelegates,
             numDelegates,
             totalCollateral
