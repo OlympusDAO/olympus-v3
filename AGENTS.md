@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # AGENTS.md
 
 This file provides guidance to LLM tools when working with code in this repository.
@@ -223,6 +226,7 @@ Claude skills are located in `.claude/skills/` and can be invoked by name:
 | `/test-write` | Test writing guidance (file structure, modifiers, naming, error handling)            |
 | `/test-debug` | Test debugging guidance (verbosity levels, setUp() issues, trace output)             |
 | `/lint-fix`   | Linter note resolution (deployed vs in-development contracts, suppression templates) |
+| `/licensing`  | License selection, provenance checks, and third-party dependency documentation       |
 
 Invoke a skill by name, e.g., `/test-write` for test writing guidance.
 
