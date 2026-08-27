@@ -143,6 +143,12 @@ SPDX-FileCopyrightText = "2018-2019 BokkyPooBah / Bok Consulting Pty Ltd"
 SPDX-License-Identifier = "MIT"
 
 [[annotations]]
+path = "src/scripts/ops/lib/BatchScript.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to forge-safe", "Contributors to OlympusDAO"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
 path = "src/policies/BoostedLiquidity/interfaces/IAura.sol"
 precedence = "override"
 SPDX-FileCopyrightText = "Contributors to Aura Finance"
