@@ -46,17 +46,6 @@ library BurnerLoansCalculator {
         return FullMath.mulDiv(collateral_, collateralUsdPrice_, scale(collateralDecimals_));
     }
 
-    /// @notice Applies the configured collateral factor to a collateral USD value.
-    /// @param collateralValueUsd_ Gross collateral value in USD.
-    /// @param collateralFactorBps_ Collateral factor in basis points.
-    /// @return Risk-adjusted collateral value in USD, rounded down.
-    function riskAdjustedCollateralUsd(
-        uint256 collateralValueUsd_,
-        uint256 collateralFactorBps_
-    ) public pure returns (uint256) {
-        return FullMath.mulDiv(collateralValueUsd_, collateralFactorBps_, BPS);
-    }
-
     /// @notice Calculates the backing-based collateral requirement for debt.
     /// @param debt_ Debt amount in debt-token decimals.
     /// @param backingPerDebtUsd_ Backing value per whole debt token in USD.
@@ -77,12 +66,12 @@ library BurnerLoansCalculator {
             );
     }
 
-    /// @notice Returns the larger of market-ratio and backing collateral requirements.
+    /// @notice Returns the larger of market-LTV and backing collateral requirements.
     /// @param debtValueUsd_ Market value of the debt in USD.
     /// @param debt_ Debt amount in debt-token decimals.
     /// @param backingPerDebtUsd_ Backing value per whole debt token in USD.
     /// @param debtDecimals_ Decimal precision of the debt token.
-    /// @param minCollateralRatioBps_ Minimum collateral ratio in basis points.
+    /// @param maxLtvBps_ Maximum loan-to-value ratio in basis points.
     /// @param backingMultiplierBps_ Backing multiplier in basis points.
     /// @return Required collateral value in USD, rounded up.
     function requiredCollateralUsd(
@@ -90,14 +79,10 @@ library BurnerLoansCalculator {
         uint256 debt_,
         uint256 backingPerDebtUsd_,
         uint8 debtDecimals_,
-        uint256 minCollateralRatioBps_,
+        uint256 maxLtvBps_,
         uint256 backingMultiplierBps_
     ) public pure returns (uint256) {
-        uint256 marketRequirementUsd = FullMath.mulDivUp(
-            debtValueUsd_,
-            minCollateralRatioBps_,
-            BPS
-        );
+        uint256 marketRequirementUsd = FullMath.mulDivUp(debtValueUsd_, BPS, maxLtvBps_);
         uint256 backingRequirementUsd = requiredBackingUsd(
             debt_,
             backingPerDebtUsd_,
@@ -130,15 +115,15 @@ library BurnerLoansCalculator {
 
     /// @notice Calculates the WAD-scaled collateral health factor.
     /// @dev Returns `type(uint256).max` when no collateral requirement exists.
-    /// @param riskAdjustedCollateralUsd_ Risk-adjusted collateral value in USD.
+    /// @param collateralValueUsd_ Gross collateral value in USD.
     /// @param requiredCollateralUsd_ Required collateral value in USD.
     /// @return Health factor scaled by 1e18 and rounded down.
     function healthFactor(
-        uint256 riskAdjustedCollateralUsd_,
+        uint256 collateralValueUsd_,
         uint256 requiredCollateralUsd_
     ) public pure returns (uint256) {
         if (requiredCollateralUsd_ == 0) return type(uint256).max;
-        return FullMath.mulDiv(riskAdjustedCollateralUsd_, WAD, requiredCollateralUsd_);
+        return FullMath.mulDiv(collateralValueUsd_, WAD, requiredCollateralUsd_);
     }
 
     /// @notice Calculates asset debt utilization, rounded up.

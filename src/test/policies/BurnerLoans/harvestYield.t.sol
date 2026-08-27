@@ -43,7 +43,9 @@ contract BurnerLoansHarvestYieldTest is BurnerLoansHarvestTestBase {
         emit IBurnerLoans.YieldHarvested(address(vaultAsset), 0);
         uint256 claimed = burnerLoans.harvestYield(address(vaultAsset));
 
-        assertGt(claimed, 0, "claimed yield");
+        // A 100e6 deposit plus 10e6 yield loses two native units across the vault share
+        // conversion and withdrawal round-downs, so the exact executable claim is 9_999_998.
+        assertEq(claimed, 9_999_998, "claimed yield");
         assertLe(claimed, preview.amount, "claim within theoretical maximum");
         assertEq(vaultAsset.balanceOf(address(trsry)), treasuryBefore + claimed, "treasury yield");
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "policy residual");

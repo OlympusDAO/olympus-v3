@@ -351,14 +351,21 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Borrow amount: fuzzed from one OHM unit through 100 OHM
     // - Collateral: sufficient across the full range
-    // - Expected branch: exact OHM mint, positive fee, and preview/write consistency
+    // - Expected branch: exact OHM mint, exact fee, and preview/write consistency
     function test_givenFuzzedBorrowAmount_borrowMintsExactAndChargesFee(uint96 ohmAmount_) public {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(alice, alice, alice, amount);
 
-        assertGt(preview.fee, 0, "no fee-avoidance dust");
+        // debt value = amount (9 decimals) * $10e18 / 1e9, in 18-decimal USD units.
+        uint256 debtValueUsd = (uint256(amount) * 10e18) / 1e9;
+        // required collateral = ceil(debt value * 10,000 / 8,500), in 18-decimal USDS units.
+        uint256 requiredCollateral = (debtValueUsd * 10_000 + 8_499) / 8_500;
+        // utilization is zero before the first borrow, so the fee rate is the 25 bps base fee.
+        // expected fee = ceil(required collateral * 25 / 10,000), in 18-decimal USDS units.
+        uint256 expectedFee = (requiredCollateral * 25 + 9_999) / 10_000;
+        assertEq(preview.fee, expectedFee, "exact fuzzed borrow fee");
         assertEq(ohm.balanceOf(alice), amount, "exact fuzzed mint");
         assertEq(burnerLoans.totalActiveDebtOhm(), amount, "exact fuzzed debt");
     }
@@ -793,7 +800,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertEq(firstPosition.principalDue, 1e9, "first debt");
         assertEq(secondPosition.collateral, 0, "second collateral");
         assertEq(secondPosition.principalDue, 0, "second debt");
-        _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+        _assertFloanPositionMatchesBurnerLoans(address(usds), alice, 2);
     }
 
     // Condition tree:
@@ -995,10 +1002,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
     // Condition tree:
     // - Resulting health: exactly 1e18
-    // - Math: 100 OHM * $10 * 115% = 1,150 USDS required
+    // - Math: ceil(100 OHM * $10 / 85%) = 1,176.470588235294117648 USDS required
     // - Expected branch: exact seizure boundary remains borrowable
     function test_givenResultingHealthExactlyOneWad_borrowSucceeds() public {
-        _depositCollateral(alice, 1_150e18);
+        uint128 requiredCollateral = 1_176_470_588_235_294_117_648;
+        _depositCollateral(alice, requiredCollateral);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -1009,15 +1017,19 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
         assertEq(preview.resultingHealthFactor, 1e18, "exact health boundary");
         assertEq(
-            burnerLoans.positionHealthFactor(address(usds), 1_150e18, DEFAULT_BORROW_AMOUNT),
+            burnerLoans.positionHealthFactor(
+                address(usds),
+                requiredCollateral,
+                DEFAULT_BORROW_AMOUNT
+            ),
             1e18,
             "direct health getter"
         );
     }
 
     // Condition tree:
-    // - Resulting health: 1.1e18
-    // - Math: 1,265 USDS / 1,150 USDS required = 1.1
+    // - Resulting health: 1.07525e18 after integer rounding
+    // - Math: floor(1,265 USDS * 1e18 / 1,176.470588235294117648 USDS)
     // - Expected branch: borrow succeeds and returns the manually calculated health factor
     function test_givenResultingHealthAboveOneWad_borrowReturnsExpectedHealth() public {
         _depositCollateral(alice, 1_265e18);
@@ -1029,20 +1041,25 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             DEFAULT_BORROW_AMOUNT
         );
 
-        assertEq(preview.resultingHealthFactor, 1.1e18, "manual health above boundary");
+        assertEq(
+            preview.resultingHealthFactor,
+            1_075_249_999_999_999_999,
+            "manual health above boundary"
+        );
     }
 
     // Condition tree:
-    // - Borrow amount: fixed at 100 OHM, whose manual collateral boundary is 1,150 USDS
+    // - Borrow amount: fixed at 100 OHM, whose 85% maximum-LTV boundary is
+    //   1,176.470588235294117648 USDS
     // - Collateral: fuzzed positive surplus above that fixed boundary
     // - Expected branch: every sampled surplus produces health above 1e18
     function test_givenFuzzedCollateralAboveBoundary_borrowSucceeds(
         uint128 collateralSurplus_
     ) public {
-        // At a 1,150 USDS denominator, 1,150 wei is the smallest surplus that
+        // At this denominator, 1,177 collateral wei is the smallest surplus that
         // increases the 18-decimal health factor above 1e18 after rounding down.
-        uint256 collateralSurplus = bound(uint256(collateralSurplus_), 1_150, 100e18);
-        _depositCollateral(alice, uint128(1_150e18 + collateralSurplus));
+        uint256 collateralSurplus = bound(uint256(collateralSurplus_), 1_177, 100e18);
+        _depositCollateral(alice, uint128(1_176_470_588_235_294_117_648 + collateralSurplus));
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -1055,11 +1072,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
-    // - Collateral: one 18-decimal USDS unit below the manual 1,150 USDS boundary
-    // - Math: floor((1,150e18 - 1) / 1,150e18 * 1e18) = 999999999999999999
+    // - Collateral: one 18-decimal USDS unit below the 85% maximum-LTV boundary
+    // - Math: floor((required - 1) * 1e18 / required) = 999999999999999999
     // - Expected branch: preview and write return the manually calculated unhealthy factor
     function test_givenResultingHealthOneUnitBelowOneWad_borrowAndPreviewRevert() public {
-        _depositCollateral(alice, 1_150e18 - 1);
+        _depositCollateral(alice, 1_176_470_588_235_294_117_648 - 1);
 
         _expectBorrowAndPreviewRevert(
             abi.encodeWithSelector(
@@ -1071,14 +1088,20 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
-    // - Borrow amount: fixed at 100 OHM, whose manual collateral boundary is 1,150 USDS
+    // - Borrow amount: fixed at 100 OHM, whose 85% maximum-LTV boundary is
+    //   1,176.470588235294117648 USDS
     // - Collateral: fuzzed positive shortfall below that fixed boundary
     // - Expected branch: every sampled shortfall is rejected as unhealthy
     function test_givenFuzzedCollateralBelowBoundary_borrowAndPreviewRevert(
         uint128 collateralShortfall_
     ) public {
-        uint256 collateralShortfall = bound(uint256(collateralShortfall_), 1, 1_150e18 - 1);
-        _depositCollateral(alice, uint128(1_150e18 - collateralShortfall));
+        uint256 requiredCollateral = 1_176_470_588_235_294_117_648;
+        uint256 collateralShortfall = bound(
+            uint256(collateralShortfall_),
+            1,
+            requiredCollateral - 1
+        );
+        _depositCollateral(alice, uint128(requiredCollateral - collateralShortfall));
 
         _expectBorrowAndPreviewPartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
@@ -1176,13 +1199,13 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
     // Condition tree:
     // - OHM market price: $5, below the oracle's $10 backing value
-    // - Backing multiplier: 100%, so backing requires $10 per borrowed OHM
-    // - Collateral: exactly 1,000 USDS for 100 OHM
-    // - Expected branch: backing leg dominates the $575 market requirement and borrow succeeds
+    // - Backing multiplier: 125%, so backing requires $12.50 per borrowed OHM
+    // - Collateral: exactly 1,250 USDS for 100 OHM
+    // - Expected branch: backing leg dominates the $588.24 market requirement and borrow succeeds
     function test_givenBelowBackingOhmPrice_borrowSucceedsOnlyAtBackingRequirement() public {
         _configurePrice(address(ohm), 5e18);
         backingOracle.setBacking(10e18);
-        _depositCollateral(alice, 1_000e18);
+        _depositCollateral(alice, 1_250e18);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -1196,12 +1219,12 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
     // Condition tree:
     // - OHM market price: $5 while the backing oracle reports $10
-    // - Collateral: one USDS unit below the $1,000 backing requirement
+    // - Collateral: one USDS unit below the $1,250 backing requirement
     // - Expected branch: market requirement is covered but backing requirement rejects the borrow
     function test_givenBelowBackingOhmPriceAndInsufficientBacking_borrowAndPreviewRevert() public {
         _configurePrice(address(ohm), 5e18);
         backingOracle.setBacking(10e18);
-        _depositCollateral(alice, 1_000e18 - 1);
+        _depositCollateral(alice, 1_250e18 - 1);
 
         _expectBorrowAndPreviewPartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
@@ -1211,7 +1234,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
 
     // Condition tree:
     // - OHM market price: fuzzed below the point where its 115% requirement reaches $10 backing
-    // - Backing multiplier: 100%
+    // - Backing multiplier: 125%
     // - Expected branch: exact backing requirement is sufficient for every sampled lower market price
     function test_givenFuzzedMarketPriceBelowBacking_borrowUsesBackingRequirement(
         uint64 ohmMarketPrice_
@@ -1219,7 +1242,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 marketPrice = bound(uint256(ohmMarketPrice_), 1, 8e18);
         _configurePrice(address(ohm), marketPrice);
         backingOracle.setBacking(10e18);
-        _depositCollateral(alice, 1_000e18);
+        _depositCollateral(alice, 1_250e18);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -1253,14 +1276,14 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
-    // - OHM market price: $12, whose 115% requirement exceeds $10 backing
-    // - Backing multiplier: 100%
-    // - Math: 100 OHM * $12 * 115% = 1,380 USDS required
+    // - OHM market price: $12, whose 85% maximum-LTV requirement exceeds multiplied backing
+    // - Backing multiplier: 125%
+    // - Math: ceil(100 OHM * $12 / 85%) = 1,411.764705882352941177 USDS required
     // - Expected branch: exact manually calculated collateral produces health of 1e18
     function test_givenMarketRequirementAboveBacking_borrowUsesMarketRequirement() public {
         _configurePrice(address(ohm), 12e18);
         backingOracle.setBacking(10e18);
-        _depositCollateral(alice, 1_380e18);
+        _depositCollateral(alice, 1_411_764_705_882_352_941_177);
 
         IBurnerLoans.BorrowPreview memory preview = _borrowWithPreview(
             alice,
@@ -1399,8 +1422,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Asset utilization: exactly 80% before the borrow
     // - Fee curve: default kink at 80%, producing 125 bps
-    // - Incremental requirement: 1,150 USDS for 100 OHM
-    // - Expected branch: fee is ceil(1,150 * 1.25%) = 14.375 USDS
+    // - Incremental market-value requirement: ceil(1,000 / 85%) USDS for 100 OHM
+    // - Expected branch: fee is ceil(1,176.470588235294117648 * 1.25%)
     function test_givenAssetAtKink_previewFeeUsesPreBorrowUtilization() public {
         _depositDefaultCollateral(alice);
         burnerLoans.setActiveDebtForTest(address(usds), 80_000e9);
@@ -1411,7 +1434,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             alice
         );
 
-        assertEq(preview.fee, 14_375e15, "pre-borrow kink fee");
+        assertEq(preview.fee, 14_705_882_352_941_176_471, "pre-borrow kink fee");
     }
 
     // Condition tree:

@@ -753,7 +753,9 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
         assertEq(borrowers.length, 1, "seizable count");
         assertEq(borrowers[0], alice, "seizable borrower");
         assertEq(nextIndex, 0, "wrapped cursor");
-        assertGt(reward, 0, "keeper reward");
+        // Alice contributes 2,000e18 seized USDS; the configured 1% reward is 20e18 USDS.
+        // This is below both the 1,000e18 cap and the collateral surplus above required backing.
+        assertEq(reward, 20e18, "keeper reward");
     }
 
     // getSeizableBorrowers
@@ -882,12 +884,13 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
     //   then it returns false
     function test_givenHealthExactlyOneWad_isSeizable_returnsFalse() public {
         // debt value = 100 OHM * $10 = $1,000
-        // required collateral = $1,000 * 11,500 / 10,000 = $1,150
-        // health = $1,150 / $1,150 = 1e18
+        // required collateral = ceil($1,000 * 10,000 / 8,500)
+        //                     = $1,176.470588235294117648
+        // health = required collateral / required collateral = 1e18
         burnerLoans.setPositionForTest(
             address(usds),
             alice,
-            _position(1_150e18, 100e9, uint48(block.timestamp + 30 days))
+            _position(1_176_470_588_235_294_117_648, 100e9, uint48(block.timestamp + 30 days))
         );
 
         assertFalse(burnerLoans.isSeizable(address(usds), alice), "exact health boundary");

@@ -35,16 +35,14 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     /// @notice Partial update payload for asset-level risk and term configuration.
     /// @dev Fields are applied only when their matching selection boolean is true.
-    /// @param collateralFactorBps New collateral factor, in bps.
-    /// @param minCollateralRatioBps New minimum collateral ratio, in bps.
+    /// @param maxLtvBps New maximum loan-to-value ratio, in bps.
     /// @param backingMultiplierBps New backing multiplier, in bps.
     /// @param keeperRewardBps New keeper reward share, in bps.
     /// @param termLength New fixed term length, in seconds.
     /// @param maxMaturityHorizon New maximum maturity horizon, in seconds.
     /// @param maxKeeperReward New maximum keeper reward, in collateral token decimals.
     struct AssetRiskConfigUpdate {
-        uint16 collateralFactorBps;
-        uint16 minCollateralRatioBps;
+        uint16 maxLtvBps;
         uint16 backingMultiplierBps;
         uint16 keeperRewardBps;
         uint48 termLength;
@@ -53,16 +51,14 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     }
 
     /// @notice Selects which fields in an asset risk update should be applied.
-    /// @param collateralFactorBps Whether to apply `AssetRiskConfigUpdate.collateralFactorBps`.
-    /// @param minCollateralRatioBps Whether to apply `AssetRiskConfigUpdate.minCollateralRatioBps`.
+    /// @param maxLtvBps Whether to apply `AssetRiskConfigUpdate.maxLtvBps`.
     /// @param backingMultiplierBps Whether to apply `AssetRiskConfigUpdate.backingMultiplierBps`.
     /// @param keeperRewardBps Whether to apply `AssetRiskConfigUpdate.keeperRewardBps`.
     /// @param termLength Whether to apply `AssetRiskConfigUpdate.termLength`.
     /// @param maxMaturityHorizon Whether to apply `AssetRiskConfigUpdate.maxMaturityHorizon`.
     /// @param maxKeeperReward Whether to apply `AssetRiskConfigUpdate.maxKeeperReward`.
     struct AssetRiskConfigUpdateSelection {
-        bool collateralFactorBps;
-        bool minCollateralRatioBps;
+        bool maxLtvBps;
         bool backingMultiplierBps;
         bool keeperRewardBps;
         bool termLength;

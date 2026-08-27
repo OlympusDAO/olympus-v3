@@ -55,19 +55,21 @@ destination state.
 Each market defines one collateral token, one debt token, its authorities, and its fixed-term
 parameters.
 
-| Field group | Fields                                         | Meaning                                          |
-| ----------- | ---------------------------------------------- | ------------------------------------------------ |
-| Identity    | `collateralToken`, `debtToken`, `configId`     | Token pair and schema for product-specific data  |
-| Authority   | `manager`, `facility`                          | Configuration and servicing authority            |
-| Capacity    | `principalCap`                                 | Maximum live principal in debt-token units       |
-| Term        | `termLength`, `maxMaturityHorizon`             | Standard term and furthest permitted extension   |
-| Risk        | `collateralFactorBps`, `minCollateralRatioBps` | Generic collateral parameters                    |
-| Fee         | `baseFeeBps`                                   | Generic fixed fee component; zero is fee-free    |
-| Derived     | token decimals, `originationsEnabled`          | Cached scales and exposure-control state         |
-| Extension   | `configData`                                   | Product data interpreted according to `configId` |
+| Field group | Fields                                     | Meaning                                          |
+| ----------- | ------------------------------------------ | ------------------------------------------------ |
+| Identity    | `collateralToken`, `debtToken`, `configId` | Token pair and schema for product-specific data  |
+| Authority   | `manager`, `facility`                      | Configuration and servicing authority            |
+| Capacity    | `principalCap`                             | Maximum live principal in debt-token units       |
+| Term        | `termLength`, `maxMaturityHorizon`         | Standard term and furthest permitted extension   |
+| Risk        | `maxLtvBps`                                | Maximum debt value as a share of collateral      |
+| Fee         | `baseFeeBps`                               | Generic fixed fee component; zero is fee-free    |
+| Derived     | token decimals, `originationsEnabled`      | Cached scales and exposure-control state         |
+| Extension   | `configData`                               | Product data interpreted according to `configId` |
 
 `termLength` is always non-zero. `type(uint48).max` permits an unlimited maturity horizon. FLOAN
 reads token decimals when a market is created rather than trusting caller-supplied values.
+`maxLtvBps` must be between one and 10,000 basis points. FLOAN stores the boundary but leaves price
+selection, rounding, health, and liquidation behavior to the facility.
 
 Market IDs are globally unique and sequential. The tuple
 `(facility, collateralToken, debtToken)` is an index, not an identity: FLOAN permits multiple

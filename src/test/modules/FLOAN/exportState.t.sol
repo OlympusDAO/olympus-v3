@@ -140,8 +140,7 @@ contract FLOANExportStateTest is FLOANTest {
         market.configId = 0x6275726e65722d763100000000000000;
         market.termLength = 14 days;
         market.maxMaturityHorizon = 120 days;
-        market.collateralFactorBps = 8_000;
-        market.minCollateralRatioBps = 15_000;
+        market.maxLtvBps = 8_000;
         market.baseFeeBps = 75;
         _createExpectedMarket(market, abi.encode(uint32(7), address(0x1234)));
 
@@ -149,8 +148,7 @@ contract FLOANExportStateTest is FLOANTest {
         market.configId = 0x656d7074792d636f6e66696700000000;
         market.termLength = 21 days;
         market.maxMaturityHorizon = 180 days;
-        market.collateralFactorBps = 7_500;
-        market.minCollateralRatioBps = 20_000;
+        market.maxLtvBps = 7_500;
         market.baseFeeBps = 0;
         _createExpectedMarket(market, hex"");
 
@@ -164,8 +162,7 @@ contract FLOANExportStateTest is FLOANTest {
         market.configId = 0x6f746865722d646562742d7632000000;
         market.termLength = 30 days;
         market.maxMaturityHorizon = 365 days;
-        market.collateralFactorBps = 6_500;
-        market.minCollateralRatioBps = 25_000;
+        market.maxLtvBps = 6_500;
         market.baseFeeBps = 125;
         _createExpectedMarket(market, abi.encode("schema-2", uint256(42)));
 
@@ -173,8 +170,7 @@ contract FLOANExportStateTest is FLOANTest {
         market.configId = 0x726f74617461626c652d763100000000;
         market.termLength = 7 days;
         market.maxMaturityHorizon = 60 days;
-        market.collateralFactorBps = 9_500;
-        market.minCollateralRatioBps = 11_000;
+        market.maxLtvBps = 9_500;
         market.baseFeeBps = 10;
         _createExpectedMarket(market, hex"deadbeef");
     }
@@ -358,7 +354,7 @@ contract FLOANExportStateTest is FLOANTest {
         }
 
         IFLOANv1.Position storage repaid = _expectedPositions[3];
-        assertGt(repaid.collateral, 0, "repaid position retains collateral");
+        assertEq(repaid.collateral, 500e18, "repaid position retains collateral");
         assertEq(repaid.principalDrawn, 0, "repaid position clears principal drawn");
         assertEq(repaid.principalDue, 0, "repaid position clears principal due");
         assertEq(repaid.interestDue, 0, "repaid position clears interest due");
@@ -368,7 +364,11 @@ contract FLOANExportStateTest is FLOANTest {
         IFLOANv1.Position storage interestOnly = _expectedPositions[6];
         assertEq(interestOnly.principalDue, 0, "interest-only position clears principal due");
         assertEq(interestOnly.interestDue, 7e9, "interest-only position retains deferred interest");
-        assertGt(interestOnly.maturity, block.timestamp, "interest-only position retains maturity");
+        assertEq(
+            interestOnly.maturity,
+            block.timestamp + 15 days,
+            "interest-only position retains maturity"
+        );
 
         IFLOANv1.Position storage reused = _expectedPositions[0];
         assertEq(reused.principalDrawn, 80e9, "reused position has only current episode");

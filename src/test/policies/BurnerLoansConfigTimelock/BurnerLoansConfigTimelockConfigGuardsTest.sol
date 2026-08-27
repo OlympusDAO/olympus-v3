@@ -27,12 +27,12 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
     }
 
     function _riskAction(
-        uint16 collateralFactorBps_
+        uint16 maxLtvBps_
     ) internal view returns (ITimelockBatchQueue.BatchAction memory) {
         return
             _singleAction(
                 IBurnerLoansConfig.setAssetRiskConfig.selector,
-                abi.encode(address(usds), _riskUpdate(collateralFactorBps_), _riskSelection())
+                abi.encode(address(usds), _riskUpdate(maxLtvBps_), _riskSelection())
             );
     }
 
@@ -78,9 +78,9 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
     }
 
     function _riskUpdate(
-        uint16 collateralFactorBps_
+        uint16 maxLtvBps_
     ) internal pure returns (IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update) {
-        update.collateralFactorBps = collateralFactorBps_;
+        update.maxLtvBps = maxLtvBps_;
     }
 
     function _riskSelection()
@@ -88,6 +88,6 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
         pure
         returns (IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection)
     {
-        selection.collateralFactorBps = true;
+        selection.maxLtvBps = true;
     }
 }

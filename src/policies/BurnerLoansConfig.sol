@@ -207,8 +207,7 @@ contract BurnerLoansConfig is
                 principalCap: debtCapOhm_,
                 termLength: riskConfig_.termLength,
                 maxMaturityHorizon: riskConfig_.maxMaturityHorizon,
-                collateralFactorBps: riskConfig_.collateralFactorBps,
-                minCollateralRatioBps: riskConfig_.minCollateralRatioBps,
+                maxLtvBps: riskConfig_.maxLtvBps,
                 baseFeeBps: feeConfig_.baseFeeBps
             }),
             BurnerLoansMarketConfig.encode(assetConfig, feeConfig_)
@@ -306,8 +305,7 @@ contract BurnerLoansConfig is
     ///      - The contract is disabled.
     ///      - The caller is neither admin nor the config operator.
     ///      - `asset_` is not configured.
-    ///      - Collateral factor is zero or above 100%.
-    ///      - Minimum collateral ratio is outside protocol bounds.
+    ///      - Maximum LTV is zero or above 100%.
     ///      - Backing multiplier is outside protocol bounds.
     ///      - Keeper reward bps is above 100%.
     ///      - `termLength` is zero, above the protocol maximum, or not below `maxMaturityHorizon`.
@@ -323,9 +321,8 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if collateral factor, minimum collateral ratio, backing multiplier, keeper
-    ///      reward bps, term length, max maturity horizon, or max keeper reward violates
-    ///      BurnerLoans bounds.
+    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, maximum
+    ///      maturity horizon, or maximum keeper reward violates Burner Loans bounds.
     /// @param config_ Complete asset configuration to validate.
     function validateAssetRiskConfig(AssetRiskConfigInput calldata config_) external pure {
         _validateRiskConfig(config_);
@@ -511,8 +508,7 @@ contract BurnerLoansConfig is
             marketId_,
             riskConfig_.termLength,
             riskConfig_.maxMaturityHorizon,
-            riskConfig_.collateralFactorBps,
-            riskConfig_.minCollateralRatioBps
+            riskConfig_.maxLtvBps
         );
         _FLOAN.setMarketConfigData(marketId_, abi.encode(marketData));
         emit AssetRiskConfigSet(asset_, riskConfig_);
@@ -546,8 +542,7 @@ contract BurnerLoansConfig is
         assetConfig = AssetConfig({
             originationsEnabled: true,
             collateralDecimals: actualDecimals,
-            collateralFactorBps: riskConfig_.collateralFactorBps,
-            minCollateralRatioBps: riskConfig_.minCollateralRatioBps,
+            maxLtvBps: riskConfig_.maxLtvBps,
             backingMultiplierBps: riskConfig_.backingMultiplierBps,
             keeperRewardBps: riskConfig_.keeperRewardBps,
             termLength: riskConfig_.termLength,
@@ -561,42 +556,23 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates a risk-config input.
-    /// @dev Reverts if collateral factor, minimum collateral ratio, backing multiplier, keeper
-    ///      reward bps, term length, max maturity horizon, or max keeper reward violates
-    ///      Burner Loans bounds.
+    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, maximum
+    ///      maturity horizon, or maximum keeper reward violates Burner Loans bounds.
     /// @param config_ Complete risk and term input to validate.
     function _validateRiskConfig(AssetRiskConfigInput memory config_) internal pure {
-        _validateCollateralFactorBps(config_.collateralFactorBps);
-        _validateMinCollateralRatioBps(config_.minCollateralRatioBps);
+        _validateMaxLtvBps(config_.maxLtvBps);
         _validateBackingMultiplierBps(config_.backingMultiplierBps);
         _validateBps(config_.keeperRewardBps);
         _validateMaturityConfig(config_.termLength, config_.maxMaturityHorizon);
         _validateMaxKeeperReward(config_.maxKeeperReward);
     }
 
-    /// @notice Validates an asset collateral factor.
-    /// @dev Reverts with `BurnerLoans_InvalidBps` if the factor is zero or exceeds the maximum
-    ///      collateral factor.
-    /// @param collateralFactorBps_ Collateral factor, in basis points.
-    function _validateCollateralFactorBps(uint16 collateralFactorBps_) internal pure {
-        if (
-            collateralFactorBps_ == 0 ||
-            collateralFactorBps_ > BurnerLoansConstants.MAX_COLLATERAL_FACTOR_BPS
-        ) {
-            revert BurnerLoans_InvalidBps(collateralFactorBps_);
-        }
-    }
-
-    /// @notice Validates a minimum collateral ratio.
-    /// @dev Reverts with `BurnerLoans_InvalidParam` if the ratio is below 100% or above the
-    ///      maximum collateral ratio.
-    /// @param minCollateralRatioBps_ Minimum collateral ratio, in basis points.
-    function _validateMinCollateralRatioBps(uint16 minCollateralRatioBps_) internal pure {
-        if (
-            minCollateralRatioBps_ < _BPS ||
-            minCollateralRatioBps_ > BurnerLoansConstants.MAX_COLLATERAL_RATIO_BPS
-        ) {
-            revert BurnerLoans_InvalidParam();
+    /// @notice Validates an asset maximum LTV.
+    /// @dev Reverts with `BurnerLoans_InvalidBps` if maximum LTV is zero or exceeds 100%.
+    /// @param maxLtvBps_ Maximum loan-to-value ratio, in basis points.
+    function _validateMaxLtvBps(uint16 maxLtvBps_) internal pure {
+        if (maxLtvBps_ == 0 || maxLtvBps_ > BurnerLoansConstants.MAX_LTV_BPS) {
+            revert BurnerLoans_InvalidBps(maxLtvBps_);
         }
     }
 

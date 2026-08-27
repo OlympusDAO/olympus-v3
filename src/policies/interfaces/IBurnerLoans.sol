@@ -100,8 +100,7 @@ interface IBurnerLoans {
     /// @notice Complete configuration for one collateral market.
     /// @param originationsEnabled Whether deposits, borrows, and extensions are enabled.
     /// @param collateralDecimals Decimal precision of the collateral token.
-    /// @param collateralFactorBps Recognized collateral value in basis points.
-    /// @param minCollateralRatioBps Minimum collateral ratio in basis points.
+    /// @param maxLtvBps Maximum loan-to-value ratio in basis points.
     /// @param backingMultiplierBps Backing requirement multiplier in basis points.
     /// @param keeperRewardBps Keeper reward rate in basis points.
     /// @param termLength Standard loan term in seconds.
@@ -111,8 +110,7 @@ interface IBurnerLoans {
     struct AssetConfig {
         bool originationsEnabled;
         uint8 collateralDecimals;
-        uint16 collateralFactorBps;
-        uint16 minCollateralRatioBps;
+        uint16 maxLtvBps;
         uint16 backingMultiplierBps;
         uint16 keeperRewardBps;
         uint48 termLength;
@@ -122,16 +120,14 @@ interface IBurnerLoans {
     }
 
     /// @notice Caller-supplied risk configuration for one collateral market.
-    /// @param collateralFactorBps Recognized collateral value in basis points.
-    /// @param minCollateralRatioBps Minimum collateral ratio in basis points.
+    /// @param maxLtvBps Maximum loan-to-value ratio in basis points.
     /// @param backingMultiplierBps Backing requirement multiplier in basis points.
     /// @param keeperRewardBps Keeper reward rate in basis points.
     /// @param termLength Standard loan term in seconds.
     /// @param maxMaturityHorizon Maximum maturity distance from the current timestamp.
     /// @param maxKeeperReward Maximum keeper reward in collateral-token decimals.
     struct AssetRiskConfigInput {
-        uint16 collateralFactorBps;
-        uint16 minCollateralRatioBps;
+        uint16 maxLtvBps;
         uint16 backingMultiplierBps;
         uint16 keeperRewardBps;
         uint48 termLength;

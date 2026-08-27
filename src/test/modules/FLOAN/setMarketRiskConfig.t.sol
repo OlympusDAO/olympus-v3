@@ -12,7 +12,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         _expectKernelPermissionRevert(caller_);
-        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_000, 15_000);
+        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_500);
     }
 
     // setMarketRiskConfig
@@ -23,7 +23,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
         vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
-        floan.setMarketRiskConfig(marketId_, 60 days, 500 days, 8_000, 15_000);
+        floan.setMarketRiskConfig(marketId_, 60 days, 500 days, 8_500);
     }
 
     // setMarketRiskConfig
@@ -37,7 +37,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, otherManager)
         );
-        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_000, 15_000);
+        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_500);
     }
 
     // setMarketRiskConfig
@@ -50,7 +50,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
         vm.expectRevert(
             abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, facility)
         );
-        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_000, 15_000);
+        floan.setMarketRiskConfig(marketId, 60 days, 500 days, 8_500);
     }
 
     // setMarketRiskConfig
@@ -61,7 +61,7 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
-        floan.setMarketRiskConfig(marketId, 0, 365 days, 9_000, 12_000);
+        floan.setMarketRiskConfig(marketId, 0, 365 days, 8_500);
     }
 
     // setMarketRiskConfig
@@ -75,20 +75,32 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
 
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
-        floan.setMarketRiskConfig(marketId, termLength_, horizon_, 9_000, 12_000);
+        floan.setMarketRiskConfig(marketId, termLength_, horizon_, 8_500);
     }
 
     // setMarketRiskConfig
-    // given collateral factor above 100 percent
+    // given maximum LTV is zero
     //  when risk config is set
     //   then it reverts
-    function test_givenInvalidCollateralFactor_reverts(uint16 collateralFactorBps_) public {
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 10_001, type(uint16).max));
+    function test_givenMaximumLtvIsZero_reverts() public {
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
 
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
-        floan.setMarketRiskConfig(marketId, 30 days, 365 days, collateralFactorBps_, 12_000);
+        floan.setMarketRiskConfig(marketId, 30 days, 365 days, 0);
+    }
+
+    // setMarketRiskConfig
+    // given maximum LTV is above 100 percent
+    //  when risk config is set
+    //   then it reverts
+    function test_givenMaximumLtvIsAboveMax_reverts(uint16 maxLtvBps_) public {
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 10_001, type(uint16).max));
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+
+        vm.prank(manager);
+        vm.expectRevert(IFLOANv1.FLOAN_InvalidConfig.selector);
+        floan.setMarketRiskConfig(marketId, 30 days, 365 days, maxLtvBps_);
     }
 
     // setMarketRiskConfig
@@ -97,30 +109,22 @@ contract FLOANSetMarketRiskConfigTest is FLOANTest {
     //   then only the risk fields change
     function test_givenValidRiskFields_updatesOnlyRiskFields(
         uint48 termLength_,
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_
+        uint16 maxLtvBps_
     ) public {
         termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 0, 10_000));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, 10_000));
         uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
         IFLOANv1.Market memory before_ = floan.getMarket(marketId);
 
         vm.expectEmit(true, false, false, true, address(floan));
         emit IFLOANv1.MarketConfigUpdated(marketId);
         vm.prank(manager);
-        floan.setMarketRiskConfig(
-            marketId,
-            termLength_,
-            type(uint48).max,
-            collateralFactorBps_,
-            minCollateralRatioBps_
-        );
+        floan.setMarketRiskConfig(marketId, termLength_, type(uint48).max, maxLtvBps_);
 
         IFLOANv1.Market memory after_ = floan.getMarket(marketId);
         assertEq(after_.termLength, termLength_, "term length");
         assertEq(after_.maxMaturityHorizon, type(uint48).max, "maturity horizon");
-        assertEq(after_.collateralFactorBps, collateralFactorBps_, "collateral factor");
-        assertEq(after_.minCollateralRatioBps, minCollateralRatioBps_, "minimum collateral ratio");
+        assertEq(after_.maxLtvBps, maxLtvBps_, "maximum LTV");
         assertEq(after_.collateralToken, before_.collateralToken, "collateral token");
         assertEq(after_.debtToken, before_.debtToken, "debt token");
         assertEq(after_.principalCap, before_.principalCap, "principal cap");

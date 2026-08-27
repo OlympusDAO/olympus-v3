@@ -56,8 +56,7 @@ interface IFLOANv1 is IERC165 {
     /// @param principalCap Maximum live principal in debt-token decimals.
     /// @param termLength Standard origination term in seconds.
     /// @param maxMaturityHorizon Maximum maturity distance from the current timestamp.
-    /// @param collateralFactorBps Collateral value recognized by the facility, in basis points.
-    /// @param minCollateralRatioBps Minimum collateral ratio, in basis points.
+    /// @param maxLtvBps Maximum loan-to-value ratio, in basis points.
     /// @param baseFeeBps Base origination fee, in basis points.
     struct MarketInput {
         address collateralToken;
@@ -68,8 +67,7 @@ interface IFLOANv1 is IERC165 {
         uint128 principalCap;
         uint48 termLength;
         uint48 maxMaturityHorizon;
-        uint16 collateralFactorBps;
-        uint16 minCollateralRatioBps;
+        uint16 maxLtvBps;
         uint16 baseFeeBps;
     }
 
@@ -84,8 +82,7 @@ interface IFLOANv1 is IERC165 {
     /// @param principalCap Maximum live principal in debt-token decimals.
     /// @param termLength Standard origination term in seconds.
     /// @param maxMaturityHorizon Maximum maturity distance from the current timestamp.
-    /// @param collateralFactorBps Collateral value recognized by the facility, in basis points.
-    /// @param minCollateralRatioBps Minimum collateral ratio, in basis points.
+    /// @param maxLtvBps Maximum loan-to-value ratio, in basis points.
     /// @param baseFeeBps Base origination fee, in basis points.
     /// @param collateralDecimals Decimal precision of the collateral token.
     /// @param debtDecimals Decimal precision of the debt and deferred-interest token.
@@ -99,8 +96,7 @@ interface IFLOANv1 is IERC165 {
         uint128 principalCap;
         uint48 termLength;
         uint48 maxMaturityHorizon;
-        uint16 collateralFactorBps;
-        uint16 minCollateralRatioBps;
+        uint16 maxLtvBps;
         uint16 baseFeeBps;
         uint8 collateralDecimals;
         uint8 debtDecimals;
@@ -360,21 +356,19 @@ interface IFLOANv1 is IERC165 {
     /// @param principalCap_ New live-principal cap in debt-token decimals.
     function setMarketPrincipalCap(uint32 marketId_, uint128 principalCap_) external;
 
-    /// @notice Sets a market's term, horizon, and collateral-risk fields.
+    /// @notice Sets a market's term, horizon, and maximum LTV.
     /// @dev Kernel-permissioned and manager-only. Reverts for an invalid market, a caller other
-    ///      than its manager, zero term, a finite horizon at or below term, or a collateral factor
-    ///      above 10,000 basis points.
+    ///      than its manager, zero term, a finite horizon at or below term, or a maximum LTV outside
+    ///      the inclusive range of 1 to 10,000 basis points.
     /// @param marketId_ Market to configure.
     /// @param termLength_ Standard origination term in seconds.
     /// @param maxMaturityHorizon_ Maximum permitted maturity distance in seconds.
-    /// @param collateralFactorBps_ Recognized collateral value in basis points.
-    /// @param minCollateralRatioBps_ Minimum collateral ratio in basis points.
+    /// @param maxLtvBps_ Maximum loan-to-value ratio in basis points.
     function setMarketRiskConfig(
         uint32 marketId_,
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_
+        uint16 maxLtvBps_
     ) external;
 
     /// @notice Sets a market's standard base fee.

@@ -17,10 +17,7 @@ import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol
 
 contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     uint16 internal constant MAX_BPS = BurnerLoansConstants.MAX_BPS;
-    uint16 internal constant MAX_COLLATERAL_FACTOR_BPS =
-        BurnerLoansConstants.MAX_COLLATERAL_FACTOR_BPS;
-    uint16 internal constant MAX_COLLATERAL_RATIO_BPS =
-        BurnerLoansConstants.MAX_COLLATERAL_RATIO_BPS;
+    uint16 internal constant MAX_LTV_BPS = BurnerLoansConstants.MAX_LTV_BPS;
     uint16 internal constant MAX_BACKING_MULTIPLIER_BPS =
         BurnerLoansConstants.MAX_BACKING_MULTIPLIER_BPS;
     uint256 internal constant MAX_KEEPER_REWARD = BurnerLoansConstants.MAX_KEEPER_REWARD;
@@ -240,71 +237,19 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
-    // given collateralFactorBps is zero or above the protocol maximum
+    // given maxLtvBps is zero or above the protocol maximum
     //  when addAsset is called by admin
     //   then it reverts
-    function test_givenCollateralFactorBpsIsInvalid_reverts(
-        uint16 collateralFactorBps_,
-        bool useZero_
-    ) public {
+    function test_givenMaximumLtvBpsIsInvalid_reverts(uint16 maxLtvBps_, bool useZero_) public {
         _setDefaultGlobalDebtCap();
-        collateralFactorBps_ = useZero_
-            ? 0
-            : uint16(bound(collateralFactorBps_, MAX_COLLATERAL_FACTOR_BPS + 1, type(uint16).max));
+        maxLtvBps_ = useZero_ ? 0 : uint16(bound(maxLtvBps_, MAX_LTV_BPS + 1, type(uint16).max));
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
-        config.collateralFactorBps = collateralFactorBps_;
+        config.maxLtvBps = maxLtvBps_;
 
         vm.prank(admin);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InvalidBps.selector,
-                collateralFactorBps_
-            )
+            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, maxLtvBps_)
         );
-        burnerLoansConfig.addAsset(
-            address(usds),
-            _defaultAssetDebtCap(),
-            config,
-            _defaultAssetFeeConfig()
-        );
-    }
-
-    // addAsset
-    // given minCollateralRatioBps is below 100%
-    //  when addAsset is called by admin
-    //   then it reverts
-    function test_givenMinCollateralRatioBpsIsInvalid_reverts(
-        uint16 minCollateralRatioBps_
-    ) public {
-        _setDefaultGlobalDebtCap();
-        minCollateralRatioBps_ = uint16(bound(minCollateralRatioBps_, 0, 9_999));
-        IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
-        config.minCollateralRatioBps = minCollateralRatioBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        burnerLoansConfig.addAsset(
-            address(usds),
-            _defaultAssetDebtCap(),
-            config,
-            _defaultAssetFeeConfig()
-        );
-    }
-
-    // addAsset
-    // given minCollateralRatioBps is above the protocol maximum
-    //  when addAsset is called by admin
-    //   then it reverts
-    function test_givenMinCollateralRatioBpsAboveMax_reverts(uint16 minCollateralRatioBps_) public {
-        _setDefaultGlobalDebtCap();
-        minCollateralRatioBps_ = uint16(
-            bound(minCollateralRatioBps_, MAX_COLLATERAL_RATIO_BPS + 1, type(uint16).max)
-        );
-        IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
-        config.minCollateralRatioBps = minCollateralRatioBps_;
-
-        vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
         burnerLoansConfig.addAsset(
             address(usds),
             _defaultAssetDebtCap(),
@@ -856,16 +801,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         assertEq(market.principalCap, expected.debtCap, "FLOAN principal cap");
         assertEq(market.termLength, expected.termLength, "FLOAN term length");
         assertEq(market.maxMaturityHorizon, expected.maxMaturityHorizon, "FLOAN maturity horizon");
-        assertEq(
-            market.collateralFactorBps,
-            expected.collateralFactorBps,
-            "FLOAN collateral factor"
-        );
-        assertEq(
-            market.minCollateralRatioBps,
-            expected.minCollateralRatioBps,
-            "FLOAN collateral ratio"
-        );
+        assertEq(market.maxLtvBps, expected.maxLtvBps, "FLOAN maximum LTV");
         assertEq(market.baseFeeBps, storedFeeConfig.baseFeeBps, "FLOAN base fee");
         assertEq(market.collateralDecimals, USDS_DECIMALS, "FLOAN collateral decimals");
         assertEq(market.debtDecimals, OHM_DECIMALS, "FLOAN debt decimals");
@@ -901,8 +837,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     //  when addAsset is called by admin
     //   then the asset stores the risk values with the fixed valid fee curve
     function test_givenValidRiskConfig_configuresAsset(
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_,
+        uint16 maxLtvBps_,
         uint16 backingMultiplierBps_,
         uint16 keeperRewardBps_,
         uint48 termLength_,
@@ -913,10 +848,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
 
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 1, MAX_COLLATERAL_FACTOR_BPS));
-        minCollateralRatioBps_ = uint16(
-            bound(minCollateralRatioBps_, MAX_BPS, MAX_COLLATERAL_RATIO_BPS)
-        );
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
             bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
         );
@@ -929,8 +861,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
 
         IBurnerLoans.AssetRiskConfigInput memory input = IBurnerLoans.AssetRiskConfigInput({
-            collateralFactorBps: collateralFactorBps_,
-            minCollateralRatioBps: minCollateralRatioBps_,
+            maxLtvBps: maxLtvBps_,
             backingMultiplierBps: backingMultiplierBps_,
             keeperRewardBps: keeperRewardBps_,
             termLength: termLength_,
@@ -940,8 +871,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         IBurnerLoans.AssetConfig memory expected = IBurnerLoans.AssetConfig({
             originationsEnabled: true,
             collateralDecimals: USDS_DECIMALS,
-            collateralFactorBps: collateralFactorBps_,
-            minCollateralRatioBps: minCollateralRatioBps_,
+            maxLtvBps: maxLtvBps_,
             backingMultiplierBps: backingMultiplierBps_,
             keeperRewardBps: keeperRewardBps_,
             termLength: termLength_,
@@ -958,8 +888,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(stored.originationsEnabled, expected.originationsEnabled, "enabled");
         assertEq(stored.collateralDecimals, expected.collateralDecimals, "collateral decimals");
-        assertEq(stored.collateralFactorBps, expected.collateralFactorBps, "collateral factor");
-        assertEq(stored.minCollateralRatioBps, expected.minCollateralRatioBps, "min cr");
+        assertEq(stored.maxLtvBps, expected.maxLtvBps, "maximum LTV");
         assertEq(stored.backingMultiplierBps, expected.backingMultiplierBps, "backing multiplier");
         assertEq(stored.keeperRewardBps, expected.keeperRewardBps, "keeper reward bps");
         assertEq(stored.termLength, expected.termLength, "term length");

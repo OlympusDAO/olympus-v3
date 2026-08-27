@@ -173,9 +173,8 @@ abstract contract BurnerLoansTest is Test {
     ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
         return
             IBurnerLoans.AssetRiskConfigInput({
-                collateralFactorBps: 10_000,
-                minCollateralRatioBps: 11_500,
-                backingMultiplierBps: 10_000,
+                maxLtvBps: 8_500,
+                backingMultiplierBps: 12_500,
                 keeperRewardBps: 100,
                 termLength: 30 days,
                 maxMaturityHorizon: 90 days,
@@ -190,9 +189,8 @@ abstract contract BurnerLoansTest is Test {
             IBurnerLoans.AssetConfig({
                 originationsEnabled: true,
                 collateralDecimals: collateralDecimals_,
-                collateralFactorBps: 10_000,
-                minCollateralRatioBps: 11_500,
-                backingMultiplierBps: 10_000,
+                maxLtvBps: 8_500,
+                backingMultiplierBps: 12_500,
                 keeperRewardBps: 100,
                 termLength: 30 days,
                 maxMaturityHorizon: 90 days,
@@ -206,8 +204,7 @@ abstract contract BurnerLoansTest is Test {
     ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
         return
             IBurnerLoans.AssetRiskConfigInput({
-                collateralFactorBps: config_.collateralFactorBps,
-                minCollateralRatioBps: config_.minCollateralRatioBps,
+                maxLtvBps: config_.maxLtvBps,
                 backingMultiplierBps: config_.backingMultiplierBps,
                 keeperRewardBps: config_.keeperRewardBps,
                 termLength: config_.termLength,
@@ -311,8 +308,7 @@ abstract contract BurnerLoansTest is Test {
                 principalCap: market.principalCap,
                 termLength: market.termLength,
                 maxMaturityHorizon: market.maxMaturityHorizon,
-                collateralFactorBps: market.collateralFactorBps,
-                minCollateralRatioBps: market.minCollateralRatioBps,
+                maxLtvBps: market.maxLtvBps,
                 baseFeeBps: market.baseFeeBps
             }),
             configData
@@ -339,8 +335,7 @@ abstract contract BurnerLoansTest is Test {
                 principalCap: market.principalCap,
                 termLength: market.termLength,
                 maxMaturityHorizon: market.maxMaturityHorizon,
-                collateralFactorBps: market.collateralFactorBps,
-                minCollateralRatioBps: market.minCollateralRatioBps,
+                maxLtvBps: market.maxLtvBps,
                 baseFeeBps: market.baseFeeBps
             }),
             configData_
@@ -442,9 +437,17 @@ abstract contract BurnerLoansTest is Test {
         address asset_,
         address account_
     ) internal view {
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_, 1);
+    }
+
+    function _assertFloanPositionMatchesBurnerLoans(
+        address asset_,
+        address account_,
+        uint256 expectedPositionCount_
+    ) internal view {
         uint32 marketId = burnerLoansConfig.marketId(asset_);
         uint256[] memory positionIds = floan.getPositionIdsForMarketAndBorrower(marketId, account_);
-        assertGt(positionIds.length, 0, "FLOAN position count");
+        assertEq(positionIds.length, expectedPositionCount_, "FLOAN position count");
 
         IFLOANv1.Position memory floanPosition = floan.getPosition(positionIds[0].toUint64());
         IBurnerLoans.Position memory position = burnerLoans.getPosition(asset_, account_);

@@ -10,119 +10,118 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     function _assertHealthFactorLevels(
         uint256 debtOhm_,
         uint8 ohmDecimals_,
-        uint8 collateralDecimals_
+        uint8 collateralDecimals_,
+        uint256 expectedBoundaryCollateralValueUsd_,
+        uint256 expectedBoundaryHealthFactor_,
+        uint256 expectedImmediateBelowHealthFactor_,
+        uint256 expectedImmediateAboveHealthFactor_
     ) internal view {
         // debt = 100 OHM at $10 = $1,000, regardless of OHM token decimals.
         uint256 debtValueUsd = burnerLoans.debtValueUsd(debtOhm_, 10e18, ohmDecimals_);
         assertEq(debtValueUsd, 1_000e18, "manual debt USD value");
 
-        // required collateral = $1,000 * 115% = $1,150.
-        // Below: $1,035 / $1,150 = 0.9e18 health.
-        // Boundary: $1,150 / $1,150 = 1e18 health.
-        // Above: $1,265 / $1,150 = 1.1e18 health.
+        // maxLtvBps = 8,500 (basis points).
+        // required collateral = ceil($1,000 * 10,000 / 8,500)
+        //                     = 1,176.470588235294117648e18 (18 decimals).
+        // Use exactly 85%, 100%, and 115% of that requirement for the health checks.
+        uint256 requiredCollateralUsd = burnerLoans.requiredCollateralUsd(
+            BurnerLoansHarness.RequiredCollateralUsdInputs({
+                debtValueUsd: debtValueUsd,
+                debtOhm: debtOhm_,
+                backingPerOhmUsd: 0,
+                maxLtvBps: 8_500,
+                backingMultiplierBps: 10_000
+            })
+        );
+        assertEq(
+            requiredCollateralUsd,
+            1_176_470_588_235_294_117_648,
+            "85% maximum LTV requirement"
+        );
+
         uint256 collateralScale = 10 ** collateralDecimals_;
         uint256 belowCollateralValueUsd = burnerLoans.collateralValueUsd(
-            1_035 * collateralScale,
+            1_000 * collateralScale,
             1e18,
             collateralDecimals_
         );
         uint256 boundaryCollateralValueUsd = burnerLoans.collateralValueUsd(
-            1_150 * collateralScale,
+            1_176_470_588_235_294_117_648 / (10 ** (18 - collateralDecimals_)),
             1e18,
             collateralDecimals_
         );
         uint256 aboveCollateralValueUsd = burnerLoans.collateralValueUsd(
-            1_265 * collateralScale,
+            1_353 * collateralScale,
             1e18,
             collateralDecimals_
         );
 
-        assertEq(belowCollateralValueUsd, 1_035e18, "manual below-boundary USD value");
-        assertEq(boundaryCollateralValueUsd, 1_150e18, "manual boundary USD value");
-        assertEq(aboveCollateralValueUsd, 1_265e18, "manual above-boundary USD value");
-
-        // Collateral factor = 100%, so each risk-adjusted value remains unchanged.
-        uint256 belowRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
-            belowCollateralValueUsd,
-            10_000
-        );
-        uint256 boundaryRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
+        assertEq(belowCollateralValueUsd, 1_000e18, "manual below-boundary USD value");
+        assertEq(
             boundaryCollateralValueUsd,
-            10_000
+            expectedBoundaryCollateralValueUsd_,
+            "manual boundary USD value"
         );
-        uint256 aboveRiskAdjustedUsd = burnerLoans.riskAdjustedCollateralUsd(
-            aboveCollateralValueUsd,
-            10_000
-        );
-        assertEq(belowRiskAdjustedUsd, 1_035e18, "manual below-boundary risk value");
-        assertEq(boundaryRiskAdjustedUsd, 1_150e18, "manual boundary risk value");
-        assertEq(aboveRiskAdjustedUsd, 1_265e18, "manual above-boundary risk value");
+        assertEq(aboveCollateralValueUsd, 1_353e18, "manual above-boundary USD value");
 
         assertEq(
-            burnerLoans.healthFactor(belowRiskAdjustedUsd, 1_150e18),
-            0.9e18,
+            burnerLoans.healthFactor(belowCollateralValueUsd, requiredCollateralUsd),
+            849_999_999_999_999_999,
             "manual below-boundary health factor"
         );
+        uint256 boundaryHealthFactor = burnerLoans.healthFactor(
+            boundaryCollateralValueUsd,
+            requiredCollateralUsd
+        );
         assertEq(
-            burnerLoans.healthFactor(boundaryRiskAdjustedUsd, 1_150e18),
-            1e18,
+            boundaryHealthFactor,
+            expectedBoundaryHealthFactor_,
             "manual boundary health factor"
         );
         assertEq(
-            burnerLoans.healthFactor(aboveRiskAdjustedUsd, 1_150e18),
-            1.1e18,
+            burnerLoans.healthFactor(aboveCollateralValueUsd, requiredCollateralUsd),
+            1_150_049_999_999_999_999,
             "manual above-boundary health factor"
         );
 
-        _assertHealthFactorImmediatelyAroundBoundary(collateralDecimals_);
+        _assertHealthFactorImmediatelyAroundBoundary(
+            collateralDecimals_,
+            requiredCollateralUsd,
+            expectedImmediateBelowHealthFactor_,
+            expectedImmediateAboveHealthFactor_
+        );
     }
 
-    function _assertHealthFactorImmediatelyAroundBoundary(uint8 collateralDecimals_) internal view {
-        uint256 collateralScale = 10 ** collateralDecimals_;
-        uint256 oneCollateralUnitUsd = collateralDecimals_ == 6 ? 1e12 : 1;
+    function _assertHealthFactorImmediatelyAroundBoundary(
+        uint8 collateralDecimals_,
+        uint256 requiredCollateralUsd_,
+        uint256 expectedBelowHealthFactor_,
+        uint256 expectedAboveHealthFactor_
+    ) internal view {
+        uint256 boundaryCollateral = requiredCollateralUsd_ / (10 ** (18 - collateralDecimals_));
 
         uint256 belowCollateralValueUsd = burnerLoans.collateralValueUsd(
-            1_150 * collateralScale - 1,
+            boundaryCollateral - 1,
             1e18,
             collateralDecimals_
         );
         uint256 aboveCollateralValueUsd = burnerLoans.collateralValueUsd(
-            1_150 * collateralScale + 1,
+            boundaryCollateral + 1,
             1e18,
             collateralDecimals_
         );
 
-        // The nearest native collateral units map to 1e12 USD units for 6 decimals
-        // and one USD unit for 18 decimals.
-        assertEq(
-            belowCollateralValueUsd,
-            1_150e18 - oneCollateralUnitUsd,
-            "immediate below-boundary USD value"
-        );
-        assertEq(
-            aboveCollateralValueUsd,
-            1_150e18 + oneCollateralUnitUsd,
-            "immediate above-boundary USD value"
-        );
-
         uint256 belowHealthFactor = burnerLoans.healthFactor(
-            burnerLoans.riskAdjustedCollateralUsd(belowCollateralValueUsd, 10_000),
-            1_150e18
+            belowCollateralValueUsd,
+            requiredCollateralUsd_
         );
         uint256 aboveHealthFactor = burnerLoans.healthFactor(
-            burnerLoans.riskAdjustedCollateralUsd(aboveCollateralValueUsd, 10_000),
-            1_150e18
+            aboveCollateralValueUsd,
+            requiredCollateralUsd_
         );
 
-        // 6-decimal collateral moves health by floor/ceil(1e12 / 1,150).
-        // 18-decimal collateral one unit below rounds health down by one WAD unit;
-        // one unit above is below WAD precision and remains exactly 1e18.
-        uint256 expectedBelowHealth = collateralDecimals_ == 6
-            ? 999_999_999_130_434_782
-            : 999_999_999_999_999_999;
-        uint256 expectedAboveHealth = collateralDecimals_ == 6 ? 1_000_000_000_869_565_217 : 1e18;
-        assertEq(belowHealthFactor, expectedBelowHealth, "immediate below-boundary health");
-        assertEq(aboveHealthFactor, expectedAboveHealth, "immediate above-boundary health");
+        assertEq(belowHealthFactor, expectedBelowHealthFactor_, "immediate below-boundary health");
+        assertEq(aboveHealthFactor, expectedAboveHealthFactor_, "immediate above-boundary health");
     }
 
     function test_debtValueUsd_givenPriceDecimalsAreNotWad_usesPriceScale() public view {
@@ -198,50 +197,126 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_riskAdjustedCollateralUsd_roundsDown() public view {
-        // collateral value = 1000e18, collateral factor = 3333 bps
-        // Expected: floor(1000e18 * 3333 / 10000) = 333.3e18
-        assertEq(burnerLoans.riskAdjustedCollateralUsd(1000e18, 3333), 333.3e18, "risk adjusted");
-    }
-
-    function test_requiredCollateralUsd_takesMaxOfMarketAndBackingRequirement() public view {
-        // debt value = 1000e18; min CR = 11500 bps => market requirement = 1150e18
-        // debt = 4 OHM; backing = 12e18; multiplier = 10000 bps => backing requirement = 48e18
-        // Expected max = 1150e18
+    function test_requiredCollateralUsd_whenMarketBranchDominates_usesMaximumLtv() public view {
+        // debt market value = 100 OHM * $12 = 1,200e18 (18 decimals).
+        // market requirement = ceil(1,200e18 * 10,000 / 8,500)
+        //                    = 1,411.764705882352941177e18 (18 decimals).
+        // backing requirement = 100 OHM * $10 * 12,500 / 10,000 = 1,250e18.
         assertEq(
             burnerLoans.requiredCollateralUsd(
                 BurnerLoansHarness.RequiredCollateralUsdInputs({
-                    debtValueUsd: 1000e18,
-                    debtOhm: 4e9,
-                    backingPerOhmUsd: 12e18,
-                    minCollateralRatioBps: 11_500,
-                    backingMultiplierBps: 10_000
+                    debtValueUsd: 1_200e18,
+                    debtOhm: 100e9,
+                    backingPerOhmUsd: 10e18,
+                    maxLtvBps: 8_500,
+                    backingMultiplierBps: 12_500
                 })
             ),
-            1150e18,
-            "required collateral"
+            1_411_764_705_882_352_941_177,
+            "market requirement"
         );
     }
 
-    function test_requiredCollateralUsd_givenBackingDominates_takesBackingRequirement()
+    function test_requiredCollateralUsd_whenBackingBranchDominates_usesBackingMultiplier()
         public
         view
     {
-        // debt value = 10e18; min CR = 11000 bps => market requirement = 11e18
-        // debt = 4 OHM; backing = 12e18; multiplier = 15000 bps => backing requirement = 72e18
-        // Expected max = 72e18
+        // debt market value = 100 OHM * $10 = 1,000e18 (18 decimals).
+        // market requirement = ceil(1,000e18 * 10,000 / 8,500)
+        //                    = 1,176.470588235294117648e18.
+        // backing requirement = 100 OHM * $10 * 12,500 / 10,000 = 1,250e18.
         assertEq(
             burnerLoans.requiredCollateralUsd(
                 BurnerLoansHarness.RequiredCollateralUsdInputs({
-                    debtValueUsd: 10e18,
-                    debtOhm: 4e9,
-                    backingPerOhmUsd: 12e18,
-                    minCollateralRatioBps: 11_000,
-                    backingMultiplierBps: 15_000
+                    debtValueUsd: 1_000e18,
+                    debtOhm: 100e9,
+                    backingPerOhmUsd: 10e18,
+                    maxLtvBps: 8_500,
+                    backingMultiplierBps: 12_500
                 })
             ),
-            72e18,
-            "required collateral"
+            1_250e18,
+            "backing requirement"
+        );
+    }
+
+    function test_requiredCollateralUsd_whenBranchesMeetAtCrossover_returnsSameRequirement()
+        public
+        view
+    {
+        // debt market value = 1,062.5e18 (106.25% of $1,000 backing value).
+        // market requirement = 1,062.5e18 / 85% = 1,250e18.
+        // backing requirement = 1,000e18 * 125% = 1,250e18.
+        assertEq(
+            burnerLoans.requiredCollateralUsd(
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
+                    debtValueUsd: 1_062.5e18,
+                    debtOhm: 100e9,
+                    backingPerOhmUsd: 10e18,
+                    maxLtvBps: 8_500,
+                    backingMultiplierBps: 12_500
+                })
+            ),
+            1_250e18,
+            "crossover requirement"
+        );
+    }
+
+    function test_requiredCollateralUsd_whenMaximumLtvIsOneBps_usesConservativeRequirement()
+        public
+        view
+    {
+        // debt market value = 1e18 (18 decimals).
+        // requirement = ceil(1e18 * 10,000 / 1) = 10,000e18.
+        assertEq(
+            burnerLoans.requiredCollateralUsd(
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
+                    debtValueUsd: 1e18,
+                    debtOhm: 0,
+                    backingPerOhmUsd: 1e18,
+                    maxLtvBps: 1,
+                    backingMultiplierBps: 10_000
+                })
+            ),
+            10_000e18,
+            "one bps maximum LTV requirement"
+        );
+    }
+
+    function test_requiredCollateralUsd_whenMaximumLtvIsOneHundredPercent_matchesDebtValue()
+        public
+        view
+    {
+        assertEq(
+            burnerLoans.requiredCollateralUsd(
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
+                    debtValueUsd: 1_000e18,
+                    debtOhm: 0,
+                    backingPerOhmUsd: 1e18,
+                    maxLtvBps: 10_000,
+                    backingMultiplierBps: 10_000
+                })
+            ),
+            1_000e18,
+            "one hundred percent maximum LTV requirement"
+        );
+    }
+
+    function test_requiredCollateralUsd_whenMarketRequirementHasRemainder_roundsUp() public view {
+        // debt market value = 1 (18-decimal USD unit).
+        // Expected: ceil(1 * 10,000 / 8,500) = 2 USD units.
+        assertEq(
+            burnerLoans.requiredCollateralUsd(
+                BurnerLoansHarness.RequiredCollateralUsdInputs({
+                    debtValueUsd: 1,
+                    debtOhm: 0,
+                    backingPerOhmUsd: 1e18,
+                    maxLtvBps: 8_500,
+                    backingMultiplierBps: 10_000
+                })
+            ),
+            2,
+            "rounded-up market requirement"
         );
     }
 
@@ -259,6 +334,46 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         assertEq(burnerLoans.healthFactor(0, 0), type(uint256).max, "health factor");
     }
 
+    function test_launchStress_givenFivePercentCollateralDepeg_healthIsNinetyFivePercent()
+        public
+        view
+    {
+        // collateral = 1,250e6 (6 decimals), price = 0.95e18 (18 decimals).
+        // collateral value = floor(1,250e6 * 0.95e18 / 1e6) = 1,187.5e18 USD.
+        // required collateral = 1,250e18 USD under the backing branch.
+        // health = floor(1,187.5e18 * 1e18 / 1,250e18) = 0.95e18.
+        uint256 collateralValueUsd = burnerLoans.collateralValueUsd(
+            1_250e6,
+            0.95e18,
+            USDS_DECIMALS
+        );
+
+        assertEq(collateralValueUsd, 1_187.5e18, "depegged collateral value");
+        assertEq(
+            burnerLoans.healthFactor(collateralValueUsd, 1_250e18),
+            0.95e18,
+            "five percent depeg health"
+        );
+    }
+
+    function test_launchStress_givenTwentyPercentCollateralDepeg_coversBackingExactly()
+        public
+        view
+    {
+        // collateral = 1,250e6 (6 decimals), price = 0.80e18 (18 decimals).
+        // collateral value = floor(1,250e6 * 0.80e18 / 1e6) = 1,000e18 USD.
+        // required collateral = 1,250e18 USD, so health = 0.80e18.
+        // The remaining $1,000 equals 100 OHM * $10 backing before realization losses.
+        uint256 collateralValueUsd = burnerLoans.collateralValueUsd(1_250e6, 0.8e18, USDS_DECIMALS);
+
+        assertEq(collateralValueUsd, 1_000e18, "depegged collateral value");
+        assertEq(
+            burnerLoans.healthFactor(collateralValueUsd, 1_250e18),
+            0.8e18,
+            "twenty percent depeg health"
+        );
+    }
+
     function test_healthFactor_givenAtBoundary_returnsOneWad() public view {
         // debt = 4 OHM at 250 USD = 1000e18 debt value
         // required = 1000e18 * 11500 / 10000 = 1150e18
@@ -271,28 +386,69 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         public
         view
     {
-        _assertHealthFactorLevels(100e9, 9, 6);
+        // boundary collateral = floor(1_176.470588235294117648e18 / 1e12)
+        //                     = 1_176_470_588 units (6 decimals).
+        // boundary value = 1_176_470_588 * 1e12 = 1_176.470588e18 USD (18 decimals).
+        // boundary health = floor(1_176.470588e18 * 1e18 / requirement)
+        //                 = 0.999999999799999999e18 (18 decimals).
+        _assertHealthFactorLevels(
+            100e9,
+            9,
+            6,
+            1_176_470_588_000_000_000_000,
+            999_999_999_799_999_999,
+            999_999_998_949_999_999,
+            1_000_000_000_649_999_999
+        );
     }
 
     function test_healthFactor_givenEighteenDecimalDebtAndSixDecimalCollateral_returnsExpectedLevels()
         public
         view
     {
-        _assertHealthFactorLevels(100e18, 18, 6);
+        // Six-decimal collateral rounds the boundary down to 1_176_470_588 native units.
+        // The resulting 18-decimal USD value and health factors match the explicit values below.
+        _assertHealthFactorLevels(
+            100e18,
+            18,
+            6,
+            1_176_470_588_000_000_000_000,
+            999_999_999_799_999_999,
+            999_999_998_949_999_999,
+            1_000_000_000_649_999_999
+        );
     }
 
     function test_healthFactor_givenNineDecimalDebtAndEighteenDecimalCollateral_returnsExpectedLevels()
         public
         view
     {
-        _assertHealthFactorLevels(100e9, 9, 18);
+        // Eighteen-decimal collateral represents the exact required USD boundary.
+        _assertHealthFactorLevels(
+            100e9,
+            9,
+            18,
+            1_176_470_588_235_294_117_648,
+            1e18,
+            999_999_999_999_999_999,
+            1e18
+        );
     }
 
     function test_healthFactor_givenEighteenDecimalDebtAndEighteenDecimalCollateral_returnsExpectedLevels()
         public
         view
     {
-        _assertHealthFactorLevels(100e18, 18, 18);
+        // Eighteen-decimal collateral represents the exact required USD boundary.
+        _assertHealthFactorLevels(
+            100e18,
+            18,
+            18,
+            1_176_470_588_235_294_117_648,
+            1e18,
+            999_999_999_999_999_999,
+            1e18
+        );
     }
 
     function test_healthFactor_givenOneWeiAboveBoundary_roundsDownToOneWad() public view {
@@ -321,11 +477,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         view
     {
         uint256 collateralValueUsd = burnerLoans.collateralValueUsd(1150e6 + 1, 1e18, 6);
-        uint256 riskAdjustedCollateralUsd = burnerLoans.riskAdjustedCollateralUsd(
-            collateralValueUsd,
-            10_000
-        );
-
         // collateral = 1150e6 + 1 native unit, collateral price = 1e18
         // collateral value = floor((1150e6 + 1) * 1e18 / 1e6) = 1150e18 + 1e12
         // required = 1150e18
@@ -333,7 +484,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         //         = 1e18 + floor(1e12 / 1150)
         //         = 1_000_000_000_869_565_217
         assertEq(
-            burnerLoans.healthFactor(riskAdjustedCollateralUsd, 1150e18),
+            burnerLoans.healthFactor(collateralValueUsd, 1150e18),
             1_000_000_000_869_565_217,
             "health factor"
         );
@@ -344,11 +495,6 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         view
     {
         uint256 collateralValueUsd = burnerLoans.collateralValueUsd(1150e6 - 1, 1e18, 6);
-        uint256 riskAdjustedCollateralUsd = burnerLoans.riskAdjustedCollateralUsd(
-            collateralValueUsd,
-            10_000
-        );
-
         // collateral = 1150e6 - 1 native unit, collateral price = 1e18
         // collateral value = floor((1150e6 - 1) * 1e18 / 1e6) = 1150e18 - 1e12
         // required = 1150e18
@@ -356,7 +502,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         //         = 1e18 - ceil(1e12 / 1150)
         //         = 999_999_999_130_434_782
         assertEq(
-            burnerLoans.healthFactor(riskAdjustedCollateralUsd, 1150e18),
+            burnerLoans.healthFactor(collateralValueUsd, 1150e18),
             999_999_999_130_434_782,
             "health factor"
         );
@@ -691,6 +837,55 @@ contract BurnerLoansMathTest is BurnerLoansTest {
             100e6,
             "keeper reward"
         );
+    }
+
+    function test_launchStress_givenRewardBelowBackingSurplus_paysConfiguredOnePercent()
+        public
+        view
+    {
+        // seized collateral = 1,300e6 (6 decimals) at $1e18 = $1,300.
+        // backing floor = 100e9 OHM * $10e18 * 12,500 / 10,000 = $1,250.
+        // configured reward = floor(1,300e6 * 100 / 10,000) = 13e6.
+        // surplus = 50e6, so reward = min(13e6, 50e6, 100e6) = 13e6.
+        uint256 reward = burnerLoans.keeperRewardAsset(
+            BurnerLoansHarness.KeeperRewardInputs({
+                isProtocolSeizureCaller: false,
+                seizedCollateralAmount: 1_300e6,
+                seizedUnrepaidDebtOhm: 100e9,
+                backingPerOhmUsd: 10e18,
+                backingMultiplierBps: 12_500,
+                collateralUsdPrice: 1e18,
+                collateralDecimals: USDS_DECIMALS,
+                rewardBps: 100,
+                maxKeeperRewardAsset: 100e6
+            })
+        );
+
+        assertEq(reward, 13e6, "one percent keeper reward");
+        assertEq(1_300e6 - reward, 1_287e6, "treasury collateral after reward");
+    }
+
+    function test_launchStress_givenRewardAboveBackingSurplus_preservesBackingFloor() public view {
+        // seized collateral = 1,255e6 (6 decimals) at $1e18 = $1,255.
+        // backing floor = 100e9 OHM * $10e18 * 12,500 / 10,000 = $1,250.
+        // configured reward = floor(1,255e6 * 100 / 10,000) = 12.55e6.
+        // surplus = 5e6, so reward = min(12.55e6, 5e6, 100e6) = 5e6.
+        uint256 reward = burnerLoans.keeperRewardAsset(
+            BurnerLoansHarness.KeeperRewardInputs({
+                isProtocolSeizureCaller: false,
+                seizedCollateralAmount: 1_255e6,
+                seizedUnrepaidDebtOhm: 100e9,
+                backingPerOhmUsd: 10e18,
+                backingMultiplierBps: 12_500,
+                collateralUsdPrice: 1e18,
+                collateralDecimals: USDS_DECIMALS,
+                rewardBps: 100,
+                maxKeeperRewardAsset: 100e6
+            })
+        );
+
+        assertEq(reward, 5e6, "surplus-limited keeper reward");
+        assertEq(1_255e6 - reward, 1_250e6, "backing floor retained");
     }
 
     function test_utilizationBps_roundsUp(uint256 debt_, uint256 cap_) public view {

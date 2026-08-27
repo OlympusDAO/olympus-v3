@@ -27,7 +27,11 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
             .withdrawCollateral(address(usds), 100e6, alice, alice);
         assertEq(withdrawn, 100e6, "withdrawn collateral");
         assertEq(remaining, 1_900e6, "remaining collateral");
-        assertGt(withdrawalHealth, 1e18, "withdrawal health");
+        // Required collateral = ceil($1,000e18 * 10,000 / 8,500)
+        //                     = 1_176.470588235294117648e18 USD.
+        // Health = floor($1,900e18 * 1e18 / required collateral)
+        //        = 1.614999999999999999e18 WAD.
+        assertEq(withdrawalHealth, 1_614_999_999_999_999_999, "withdrawal health");
 
         IBurnerLoans.ExtendPreview memory extendPreview = burnerLoans.previewExtend(
             address(usds),

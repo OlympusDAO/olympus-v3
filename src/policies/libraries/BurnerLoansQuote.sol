@@ -28,12 +28,12 @@ library BurnerLoansQuote {
     /// @param ohmUsdPrice OHM/USD price, in PRICE decimals.
     /// @param backingPerOhmUsd Backing per OHM, rescaled from 1e18 to PRICE decimals.
     /// @param collateralUsdPrice Collateral/USD price, in PRICE decimals.
-    /// @param riskAdjustedCollateralUsd Risk-adjusted collateral value, in PRICE decimals.
+    /// @param collateralValueUsd Gross collateral value, in PRICE decimals.
     struct Pricing {
         uint256 ohmUsdPrice;
         uint256 backingPerOhmUsd;
         uint256 collateralUsdPrice;
-        uint256 riskAdjustedCollateralUsd;
+        uint256 collateralValueUsd;
     }
 
     /// @notice Cached inputs used to quote an extension.
@@ -304,13 +304,10 @@ library BurnerLoansQuote {
         pricing.ohmUsdPrice = _freshPrice(price_, address(ohm_), frequency);
         pricing.backingPerOhmUsd = _backingPerOhmUsd(backingOracle_, price_);
         pricing.collateralUsdPrice = _freshPrice(price_, asset_, frequency);
-        pricing.riskAdjustedCollateralUsd = BurnerLoansCalculator.riskAdjustedCollateralUsd(
-            BurnerLoansCalculator.collateralValueUsd(
-                collateral_,
-                pricing.collateralUsdPrice,
-                config_.collateralDecimals
-            ),
-            config_.collateralFactorBps
+        pricing.collateralValueUsd = BurnerLoansCalculator.collateralValueUsd(
+            collateral_,
+            pricing.collateralUsdPrice,
+            config_.collateralDecimals
         );
     }
 
@@ -330,10 +327,10 @@ library BurnerLoansQuote {
             debtOhm_,
             pricing_.backingPerOhmUsd,
             ohmDecimals_,
-            config_.minCollateralRatioBps,
+            config_.maxLtvBps,
             config_.backingMultiplierBps
         );
-        return BurnerLoansCalculator.healthFactor(pricing_.riskAdjustedCollateralUsd, requiredUsd);
+        return BurnerLoansCalculator.healthFactor(pricing_.collateralValueUsd, requiredUsd);
     }
 
     function _borrowFee(
@@ -355,7 +352,7 @@ library BurnerLoansQuote {
             ohmAmount_,
             pricing_.backingPerOhmUsd,
             ohmDecimals_,
-            config_.minCollateralRatioBps,
+            config_.maxLtvBps,
             config_.backingMultiplierBps
         );
         uint256 requiredAsset = BurnerLoansCalculator.requiredCollateralAsset(
@@ -437,7 +434,7 @@ library BurnerLoansQuote {
             context_.debtOhm,
             context_.pricing.backingPerOhmUsd,
             dependencies_.ohmDecimals,
-            context_.config.minCollateralRatioBps,
+            context_.config.maxLtvBps,
             context_.config.backingMultiplierBps
         );
         uint256 requiredAsset = BurnerLoansCalculator.requiredCollateralAsset(

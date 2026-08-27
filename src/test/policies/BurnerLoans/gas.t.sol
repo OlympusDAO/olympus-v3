@@ -620,7 +620,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     //   then it records the end-to-end config and FLOAN update gas cost
     function test_gasSnapshot_config_setAssetRiskConfig() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
-        config.collateralFactorBps = 9_500;
+        config.maxLtvBps = 9_500;
 
         vm.startPrank(admin);
         vm.startSnapshotGas("BurnerLoansConfig.admin.setAssetRiskConfig");
@@ -628,11 +628,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
 
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_500,
-            "collateral factor"
-        );
+        assertEq(burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps, 9_500, "maximum LTV");
         _assertGasRecorded(gasUsed);
     }
 
@@ -724,11 +720,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         configTimelock.executeQueuedAction(actionId);
         uint256 gasUsed = vm.stopSnapshotGas();
 
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_500,
-            "collateral factor"
-        );
+        assertEq(burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps, 9_500, "maximum LTV");
         assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "base fee");
         _assertGasRecorded(gasUsed);
     }
@@ -798,9 +790,9 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         actions = new ITimelockBatchQueue.BatchAction[](2);
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate;
-        riskUpdate.collateralFactorBps = 9_500;
+        riskUpdate.maxLtvBps = 9_500;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection;
-        riskSelection.collateralFactorBps = true;
+        riskSelection.maxLtvBps = true;
         actions[0] = ITimelockBatchQueue.BatchAction({
             target: address(burnerLoansConfig),
             selector: IBurnerLoansConfig.setAssetRiskConfig.selector,

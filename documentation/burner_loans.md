@@ -106,32 +106,52 @@ complete action table and manual MINTR synchronization behavior.
 Health is WAD-scaled; `1e18` is the seizure boundary.
 
 All USD values in the calculation use `PRICE.decimals()`. The backing oracle's 18-decimal value is
-rounded up into that scale before `backingRequirementUsd` is calculated, so both requirements and
-`riskAdjustedCollateralUsd` share one scale.
+rounded up into that scale before `backingRequirementUsd` is calculated, so debt, collateral, and
+both requirements share one scale.
 
 ```text
-marketRequirementUsd = ceil(debtValueUsd * minCollateralRatioBps / 10_000)
+marketRequirementUsd = ceil(debtValueUsd * 10_000 / maxLtvBps)
 backingRequirementUsd = ceil(debtBackingValueUsd * backingMultiplierBps / 10_000)
 requiredCollateralUsd = max(marketRequirementUsd, backingRequirementUsd)
-riskAdjustedCollateralUsd = collateralValueUsd * collateralFactorBps / 10_000
-healthFactor = floor(riskAdjustedCollateralUsd * 1e18 / requiredCollateralUsd)
+healthFactor = floor(collateralValueUsd * 1e18 / requiredCollateralUsd)
 ```
 
 `debtBackingValueUsd` is the backing value of the outstanding OHM debt.
 
-| State                      | Borrow or withdraw                | Seizure                      |
-| -------------------------- | --------------------------------- | ---------------------------- |
-| No debt                    | Debt-free health is max `uint256` | Not seizable                 |
-| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable          |
-| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable          |
-| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices |
-| Maturity reached with debt | New risk is blocked               | Seizable with current prices |
+Collateral uses its gross current oracle value; no separate haircut is applied. `maxLtvBps`
+converts debt market value into the market collateral requirement, so one parameter supplies the
+market-value buffer.
+
+`backingMultiplierBps` protects the liquid backing per backed OHM rate when OHM trades below its
+backing value. Protecting that rate means the backing branch requires each borrowed OHM to have
+collateral whose oracle value is at least its liquid backing multiplied by the configured factor.
+At 100%, the position could be originated with collateral equal to liquid backing. A value above
+100% requires additional collateral above that backing value.
+
+The protocol uses the larger of the market and backing requirements, so a position cannot borrow
+below either its maximum-LTV requirement or its backing requirement. The stricter branch changes at
+this OHM market-price-to-backing-value ratio:
+
+```text
+crossover ratio = maxLtvBps / 10_000 * backingMultiplierBps / 10_000
+```
+
+Above the crossover, maximum LTV is stricter. Below it, the backing multiplier is stricter. Keeper
+rewards are calculated separately and cannot consume collateral required by the backing branch.
+
+| State                      | Borrow or withdraw                | Seizure                       |
+| -------------------------- | --------------------------------- | ----------------------------- |
+| No debt                    | Debt-free health is max `uint256` | Not seizable                  |
+| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable           |
+| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable           |
+| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices  |
+| Maturity reached with debt | New risk is blocked               | Seizable without a price read |
 
 PRICE values use `PRICE.decimals()`. OHM and collateral amounts use their token scales. The
 backing oracle returns 18-decimal USD per OHM. Rounding is conservative for the protocol: debt USD,
 backing conversion, collateral requirements, required collateral-token amounts, utilization, and
-final transferred fees round up. Gross and risk-adjusted collateral values, health factors, and
-fee-curve slope contributions round down.
+final transferred fees round up. Gross collateral values, health factors, and fee-curve slope
+contributions round down.
 
 Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
 credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee
@@ -161,6 +181,11 @@ parameters are basis points and are converted to WAD before applying the piecewi
 
 The final fee rounds up so a non-zero rate cannot disappear through token-decimal truncation.
 `maxFee` protects execution against a fee above the caller's accepted amount.
+
+## Launch Parameters
+
+See [Burner Loans launch parameters](./burner_loans_launch_parameters.md) for the proposed USDS and
+USDe configuration, parameter rationale, and worked normal and stress cases.
 
 ## Burner Loans Inventory Accounting
 

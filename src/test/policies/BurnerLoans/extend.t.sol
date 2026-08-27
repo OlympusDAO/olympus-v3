@@ -126,14 +126,26 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     function test_givenHealthyActivePosition_extendAddsOneTermAndChargesCollateralFee() public {
         _borrowForAlice();
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);
+        uint256 healthBefore = burnerLoans.positionHealthFactor(
+            address(usds),
+            beforePosition.depositedCollateral,
+            beforePosition.debtOhm
+        );
         IBurnerLoans.ExtendPreview memory preview = burnerLoans.previewExtend(
             address(usds),
             alice,
             1
         );
-        assertGt(preview.fee, 0, "preview fee");
+        // Required collateral = ceil($1,000e18 * 10,000 / 8,500)
+        //                     = 1_176.470588235294117648e18 USDS.
+        // Pre-extension utilization = 100 OHM / 100,000 OHM = 0.001e18 WAD.
+        // Fee rate = 25 bps + floor(0.001e18 * 100 bps / 0.8e18)
+        //          = 0.0025125e18 WAD.
+        // Fee = ceil(1_176.470588235294117648e18 * 0.0025125e18 / 1e18)
+        //     = 2.955882352941176471e18 USDS.
+        assertEq(preview.fee, 2_955_882_352_941_176_471, "preview fee");
         assertEq(preview.maturity, beforePosition.maturity + 30 days, "preview maturity");
-        assertGt(preview.healthFactor, 1e18, "preview health");
+        assertEq(preview.healthFactor, healthBefore, "preview preserves health");
         assertTrue(preview.executable, "preview executable");
         uint256 treasuryBefore = usds.balanceOf(address(trsry));
 
@@ -435,7 +447,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         price.setPrice(address(usds), 0.1e18);
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
-            173_913_043_478_260_869
+            169_999_999_999_999_999
         );
 
         vm.expectRevert(error);
