@@ -26,9 +26,9 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 ///         Entry points, each gated on the batch owner being the periphery owner:
 ///         - `reconcileTrustedRemotes`: compare the trusted remote and the gas limit of every
 ///           declared remote chain independently, and add only the differing fields. A remote is
-///           unset only for an explicit `remove` marker; a live trusted remote whose route has no
-///           `periphery` block is reported and left untouched. A second run on a converged state
-///           proposes nothing.
+///           unset only for a route or `periphery` block declared with `enabled: false`; a live
+///           trusted remote whose route has no `periphery` block is reported and left untouched.
+///           A second run on a converged state proposes nothing.
 ///         - `enable` / `disable`: switch the periphery lifecycle flag, conditionally.
 ///         - `transferOwnership`: transfer the periphery to the DAO MS (run by the deployer once
 ///           after the deploy sequence).
@@ -43,7 +43,7 @@ contract CCIPBridge is BatchScriptV2 {
     ///         `periphery` blocks of `env.json`.
     /// @dev    The trusted remote and the gas limit are compared independently, so a matching
     ///         remote does not mask a stale gas limit. Removals require the explicit marker
-    ///         (`remove: true` on the route or on its `periphery` block); removing a trusted
+    ///         (`enabled: false` on the route or on its `periphery` block); removing a trusted
     ///         remote stops the periphery from sending to and accepting from that chain, while
     ///         messages already in flight toward this chain are then recorded as failed and stay
     ///         retryable. A removal only unsets the trusted remote: the stored gas limit is
@@ -224,7 +224,7 @@ contract CCIPBridge is BatchScriptV2 {
                 ICCIPCrossChainBridge.TrustedRemoteSVM memory live = bridge.getTrustedRemoteSVM(
                     entry.chainSelector
                 );
-                if (entry.remove) {
+                if (!entry.enabled) {
                     require(
                         !live.isSet,
                         string.concat("SVM trusted remote is still set: ", entry.remoteChain)
@@ -239,7 +239,7 @@ contract CCIPBridge is BatchScriptV2 {
                 ICCIPCrossChainBridge.TrustedRemoteEVM memory live = bridge.getTrustedRemoteEVM(
                     entry.chainSelector
                 );
-                if (entry.remove) {
+                if (!entry.enabled) {
                     require(
                         !live.isSet,
                         string.concat("EVM trusted remote is still set: ", entry.remoteChain)
@@ -251,7 +251,7 @@ contract CCIPBridge is BatchScriptV2 {
                     );
                 }
             }
-            if (!entry.remove) {
+            if (entry.enabled) {
                 require(
                     bridge.getGasLimit(entry.chainSelector) == entry.gasLimit,
                     string.concat("Gas limit mismatch: ", entry.remoteChain)
@@ -276,7 +276,7 @@ contract CCIPBridge is BatchScriptV2 {
                 entry_.chainSelector
             );
             console2.log("  live remote:", live.isSet ? vm.toString(live.remoteAddress) : "unset");
-            if (entry_.remove) {
+            if (!entry_.enabled) {
                 return _planUnsetSvm(bridge_, entry_, live.isSet);
             }
             console2.log("  desired remote:", vm.toString(entry_.svmTrustedRemote));
@@ -299,7 +299,7 @@ contract CCIPBridge is BatchScriptV2 {
                 entry_.chainSelector
             );
             console2.log("  live remote:", live.isSet ? vm.toString(live.remoteAddress) : "unset");
-            if (entry_.remove) {
+            if (!entry_.enabled) {
                 return _planUnsetEvm(bridge_, entry_, live.isSet);
             }
             console2.log("  desired remote:", vm.toString(entry_.evmTrustedRemote));
@@ -344,7 +344,7 @@ contract CCIPBridge is BatchScriptV2 {
         bool isSet_
     ) internal returns (uint256 planned) {
         if (!isSet_) {
-            console2.log("  Marked for removal and not set. Nothing to do.");
+            console2.log("  Declared with enabled=false and not set. Nothing to do.");
             return 0;
         }
         console2.log(
@@ -367,7 +367,7 @@ contract CCIPBridge is BatchScriptV2 {
         bool isSet_
     ) internal returns (uint256 planned) {
         if (!isSet_) {
-            console2.log("  Marked for removal and not set. Nothing to do.");
+            console2.log("  Declared with enabled=false and not set. Nothing to do.");
             return 0;
         }
         console2.log(
@@ -417,7 +417,7 @@ contract CCIPBridge is BatchScriptV2 {
                 console2.log(
                     "\nWARNING: the live trusted remote for",
                     remoteChain,
-                    "has no periphery block in env.json and is left untouched; declare it, or mark it remove: true to unset it."
+                    "has no periphery block in env.json and is left untouched; declare it, or declare its periphery block with enabled: false to unset it."
                 );
             }
         }

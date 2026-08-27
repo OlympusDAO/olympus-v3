@@ -86,9 +86,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The config policy is neither the owner nor the pending owner of the pool.
     ///         - A lane toward a burn/mint destination carries an OHM delivery gas budget below
     ///           175000 (the revert names the lane).
-    ///         - A desired route is marked for removal, or a live route differs from `env.json`
-    ///           (the bootstrap expects a clean pool; reconcile through the config timelock
-    ///           afterwards).
+    ///         - A desired route is declared with `enabled: false` (the removal marker), or a
+    ///           live route differs from `env.json` (the bootstrap expects a clean pool with
+    ///           every declared route enabled; reconcile through the config timelock afterwards).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -219,7 +219,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The chain is canonical.
     ///         - `setup` has not converged: the pool policy is not active, the config policy does
     ///           not own the pool, the batch owner lacks the admin role, the config policy or the
-    ///           timelock is disabled, or a desired route is missing or differs from `env.json`.
+    ///           timelock is disabled, a desired route is missing or differs from `env.json`, or
+    ///           a route declared with `enabled: false` is still configured on the pool.
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - Another pool is registered for OHM.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
@@ -531,6 +532,21 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
         }
 
+        // The bootstrap expects every declared route enabled: a route declared with
+        // enabled=false (the removal marker) would make the setup batch fail after the
+        // submission, so it is surfaced here, before it.
+        CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
+        for (uint256 i; i < desired.length; ++i) {
+            _check(
+                desired[i].enabled,
+                string.concat(
+                    "route ",
+                    desired[i].remoteChain,
+                    " is declared with enabled=false; the bootstrap expects every declared route enabled (drop the entry or enable it)"
+                )
+            );
+        }
+
         _checkLanes();
     }
 
@@ -595,7 +611,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     function _checkLanes() internal {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         for (uint256 i; i < desired.length; ++i) {
-            if (!desired[i].enabled || desired[i].remove) continue;
+            if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
             _checkLane(desired[i].remoteChain);
         }
@@ -713,17 +729,13 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             console2.log("Route", route.remoteChain, "selector", route.chainSelector);
 
             require(
-                !route.remove,
+                route.enabled,
                 string.concat(
                     "CCIPNonEthereumSetupBatch: route ",
                     route.remoteChain,
-                    " is marked for removal; the bootstrap expects no removal marker (use CCIPRouteReconcileBatch after the setup)"
+                    " is declared with enabled=false, the removal marker; the bootstrap expects every declared route enabled (use CCIPRouteReconcileBatch for removals after the setup)"
                 )
             );
-            if (!route.enabled) {
-                console2.log("  Declared with enabled=false: not configured.");
-                continue;
-            }
 
             if (live.exists) {
                 require(
@@ -874,7 +886,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         console2.log("\n--- Outgoing lane fee budgets ---");
         for (uint256 i; i < desired.length; ++i) {
-            if (!desired[i].enabled || desired[i].remove) continue;
+            if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) {
                 console2.log(
                     "Lane to",
@@ -905,8 +917,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         }
     }
 
-    /// @notice Reverts unless every desired route of `env.json` is live on the pool and matches
-    ///         it field by field.
+    /// @notice Reverts unless every enabled desired route of `env.json` is live on the pool and
+    ///         matches it field by field, and every route declared with `enabled: false` (the
+    ///         removal marker) is absent from the pool.
     function _requireRoutesConverged(ICCIPTokenPoolAdmin pool_) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
@@ -915,11 +928,21 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         for (uint256 i; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
-            if (!route.enabled || route.remove) continue;
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(
                 pool_,
                 route.chainSelector
             );
+            if (!route.enabled) {
+                require(
+                    !live.exists,
+                    string.concat(
+                        "CCIPNonEthereumSetupBatch: route ",
+                        route.remoteChain,
+                        " is declared with enabled=false but is configured on the pool; remove it through CCIPRouteReconcileBatch"
+                    )
+                );
+                continue;
+            }
             require(
                 live.exists,
                 string.concat(

@@ -22,8 +22,9 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 /// @dev The desired state of a chain lives under `current.<chain>.olympus.config`:
 ///      - `CCIPBridgeConfig.{gracePeriod,timelockDelay,rebalancer,rateLimitAdmin}` are the
 ///        deployment and validation parameters of the config policy and its timelock;
-///      - `CCIP.routes.<remoteChain>` declares one route per remote chain with `enabled`, an
-///        explicit `remove` marker, `outboundRateLimit` and `inboundRateLimit`, and optional
+///      - `CCIP.routes.<remoteChain>` declares one route per remote chain with `enabled`
+///        (whose `false` value marks the route for removal), `outboundRateLimit` and
+///        `inboundRateLimit`, and optional
 ///        `remoteToken` and `remotePools` overrides encoded as hex bytes. Without an override the
 ///        remote token is `current.<remoteChain>.olympus.legacy.OHM` and the remote pool is the
 ///        remote chain's pool (lock/release on a canonical chain, burn/mint on another EVM chain,
@@ -31,7 +32,8 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        base58 public key for SVM chains;
 ///      - `CCIP.routes.<remoteChain>.periphery` declares the desired periphery state toward the
 ///        remote chain (`gasLimit` with a defaulted `trustedRemote` for EVM, `gasLimit` and an
-///        explicit `svmReceiver` for SVM, `remove` as the explicit removal marker);
+///        explicit `svmReceiver` for SVM, and an optional `enabled` whose `false` value marks
+///        the trusted remote for removal);
 ///      - `CCIP.minimumPoolBacking` is the funding target of the canonical lock/release pool.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
 ///      or a disabled rate limiter reverts with a message naming the key.
@@ -62,12 +64,12 @@ library CCIPConfigLib {
         address rateLimitAdmin;
     }
 
-    /// @notice A route declared in `env.json`.
+    /// @notice A route declared in `env.json`. `enabled` is false for a route marked for
+    ///         removal; only `remoteChain` and `chainSelector` are read then.
     struct DesiredRoute {
         string remoteChain;
         uint64 chainSelector;
         bool enabled;
-        bool remove;
         bytes remoteToken;
         bytes[] remotePools;
         ICCIPRateLimiter.Config outbound;
@@ -95,8 +97,8 @@ library CCIPConfigLib {
     ///         block of a route in `env.json`.
     /// @param remoteChain The `env.json` name of the remote chain.
     /// @param chainSelector The CCIP chain selector of the remote chain.
-    /// @param remove Whether the trusted remote is marked for removal; no other field is read
-    ///        for a removed entry.
+    /// @param enabled Whether the trusted remote must be set; false marks it for removal, and
+    ///        no other field is read then.
     /// @param isSvm Whether the remote chain is an SVM chain.
     /// @param gasLimit The `ccipReceive` gas limit toward the remote chain.
     /// @param evmTrustedRemote The trusted remote address of an EVM chain.
@@ -104,7 +106,7 @@ library CCIPConfigLib {
     struct DesiredPeriphery {
         string remoteChain;
         uint64 chainSelector;
-        bool remove;
+        bool enabled;
         bool isSvm;
         uint32 gasLimit;
         address evmTrustedRemote;
@@ -159,7 +161,7 @@ library CCIPConfigLib {
     /// @dev A block on an EVM route requires `gasLimit` and defaults the trusted remote to the
     ///      remote chain's `olympus.periphery.CCIPCrossChainBridge`, overridable with an explicit
     ///      `trustedRemote`; a block on an SVM route requires `gasLimit` and an explicit
-    ///      `svmReceiver` (bytes32). `remove: true` on the block or on the route marks the
+    ///      `svmReceiver` (bytes32). `enabled: false` on the block or on the route marks the
     ///      trusted remote for removal, and no other field is read then.
     function desiredPeripheries(
         string memory env_,
@@ -407,9 +409,8 @@ library CCIPConfigLib {
 
         _requireKey(env_, string.concat(base, ".enabled"));
         route.enabled = env_.readBool(string.concat(base, ".enabled"));
-        route.remove =
-            _VM.keyExistsJson(env_, string.concat(base, ".remove")) &&
-            env_.readBool(string.concat(base, ".remove"));
+        // A route marked for removal needs no remote token, pools or limits
+        if (!route.enabled) return route;
 
         string memory tokenKey = string.concat(base, ".remoteToken");
         route.remoteToken = _VM.keyExistsJson(env_, tokenKey)
@@ -438,9 +439,6 @@ library CCIPConfigLib {
             );
         }
 
-        // A route that is to be removed or is not enabled needs no limits
-        if (!route.enabled || route.remove) return route;
-
         route.outbound = _readConfig(env_, string.concat(base, ".outboundRateLimit"));
         route.inbound = _readConfig(env_, string.concat(base, ".inboundRateLimit"));
         requireEnabledConfig(
@@ -463,17 +461,17 @@ library CCIPConfigLib {
         periphery.chainSelector = chainSelector(env_, remoteChain_);
         periphery.isSvm = ChainUtils._isSVMChain(remoteChain_);
 
-        string memory routeRemoveKey = string.concat(
+        string memory routeEnabledKey = string.concat(
             _path(chain_, ROUTES_KEY),
             ".",
             remoteChain_,
-            ".remove"
+            ".enabled"
         );
-        periphery.remove =
-            (_VM.keyExistsJson(env_, routeRemoveKey) && env_.readBool(routeRemoveKey)) ||
-            (_VM.keyExistsJson(env_, string.concat(base_, ".remove")) &&
-                env_.readBool(string.concat(base_, ".remove")));
-        if (periphery.remove) return periphery;
+        _requireKey(env_, routeEnabledKey);
+        bool blockEnabled = !_VM.keyExistsJson(env_, string.concat(base_, ".enabled")) ||
+            env_.readBool(string.concat(base_, ".enabled"));
+        periphery.enabled = env_.readBool(routeEnabledKey) && blockEnabled;
+        if (!periphery.enabled) return periphery;
 
         string memory gasKey = string.concat(base_, ".gasLimit");
         _requireKey(env_, gasKey);

@@ -345,7 +345,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
 
         for (uint256 i; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
-            if (!route.enabled || route.remove) continue;
+            if (!route.enabled) continue;
             if (CCIPConfigLib.liveRoute(c.pool, route.chainSelector).exists) continue;
 
             uint256 expectedIndex = type(uint256).max;
@@ -406,7 +406,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
 
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(_env, _chain());
         for (uint256 i; i < desired.length; ++i) {
-            if (!desired[i].enabled || desired[i].remove) continue;
+            if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
             CCIPFeeBudgetLib.requireOhmFeeBudget(_env, _chain(), desired[i].remoteChain);
         }
@@ -573,9 +573,10 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     }
 
     /// @notice Reverts unless every route declared in `env.json` matches the pool field by
-    ///         field (existence, remote token, accepted remote pools and both rate limits) and
+    ///         field (existence, remote token, accepted remote pools and both rate limits),
     ///         every live route of the pool is declared as enabled in `env.json` with both
-    ///         limiters enabled.
+    ///         limiters enabled, and every route declared with `enabled: false` (the removal
+    ///         marker) is absent from the pool.
     /// @param requireDesiredLive_ Whether a desired enabled route missing from the pool reverts.
     ///        The build passes false and requires the missing set to equal the four expected
     ///        chains instead; the post-execution validation passes true.
@@ -591,11 +592,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         for (uint256 i; i < liveSelectors.length; ++i) {
             bool declared;
             for (uint256 j; j < desired.length; ++j) {
-                if (
-                    desired[j].chainSelector == liveSelectors[i] &&
-                    desired[j].enabled &&
-                    !desired[j].remove
-                ) {
+                if (desired[j].chainSelector == liveSelectors[i] && desired[j].enabled) {
                     declared = true;
                     break;
                 }
@@ -626,17 +623,17 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 pool_,
                 route.chainSelector
             );
-            if (route.remove) {
+            if (!route.enabled) {
                 require(
                     !live.exists,
                     string.concat(
-                        "Route marked for removal is still configured: ",
-                        route.remoteChain
+                        "Route declared with enabled=false is still configured: ",
+                        route.remoteChain,
+                        "; remove it through CCIPRouteReconcileBatch before the proposal"
                     )
                 );
                 continue;
             }
-            if (!route.enabled) continue;
             if (!live.exists) {
                 require(
                     !requireDesiredLive_,

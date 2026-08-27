@@ -73,8 +73,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @dev    Desired routes are processed in remote chain name order; within a route the
     ///         identity change comes first, then one remote-pool change (additions before
     ///         removals), then the rate limits. A removal is queued only for a route whose entry
-    ///         carries `remove: true`; a live route that `env.json` does not declare, or
-    ///         declares with `enabled: false`, is reported and left untouched.
+    ///         carries `enabled: false`; a live route that `env.json` does not declare is
+    ///         reported and left untouched.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
@@ -348,9 +348,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(pool_, selector);
         console2.log("\nRoute", desired_.remoteChain, "selector", selector);
 
-        if (desired_.remove) {
+        if (!desired_.enabled) {
             if (!live.exists) {
-                console2.log("  Marked for removal and not configured. Nothing to do.");
+                console2.log("  Declared with enabled=false and not configured. Nothing to do.");
                 return;
             }
             console2.log(
@@ -364,14 +364,6 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 abi.encode(selector),
                 abi.encodeCall(ICCIPBridgeConfigTimelock.queueRemoveChain, (selector)),
                 _routeKeys(timelock_, selector)
-            );
-            return;
-        }
-
-        if (!desired_.enabled) {
-            console2.log(
-                "  Declared with enabled=false: not reconciled.",
-                live.exists ? "The live route is left untouched." : "The route is not configured."
             );
             return;
         }
@@ -780,10 +772,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         for (uint256 i; i < routes_.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = routes_[i];
             console2.log(route.remoteChain, "selector", route.chainSelector);
-            console2.log("  enabled:", route.enabled, "remove:", route.remove);
-            console2.log("  remote token:", vm.toString(route.remoteToken));
-            console2.log("  remote pools:", CCIPConfigLib.describe(route.remotePools));
-            if (route.enabled && !route.remove) {
+            console2.log("  enabled:", route.enabled);
+            if (route.enabled) {
+                console2.log("  remote token:", vm.toString(route.remoteToken));
+                console2.log("  remote pools:", CCIPConfigLib.describe(route.remotePools));
                 console2.log("  outbound:", CCIPConfigLib.describe(route.outbound));
                 console2.log("  inbound:", CCIPConfigLib.describe(route.inbound));
             }
@@ -806,7 +798,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 console2.log(
                     "\nWARNING: live route",
                     liveSelectors_[i],
-                    "is not declared in env.json and is left untouched; declare it, or mark it remove: true to remove it."
+                    "is not declared in env.json and is left untouched; declare it, or declare it with enabled: false to remove it."
                 );
             }
         }
