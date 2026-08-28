@@ -13,6 +13,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
     //  when the integration flow is executed
     //   then it drives borrow, withdraw, extend, and seize
     function test_supportedProductionPrices_driveBorrowWithdrawExtendAndSeize() public {
+        backingOracle.setBacking(10e18);
         _depositCollateral(_LIFECYCLE_COLLATERAL);
         IBurnerLoans.BorrowPreview memory borrowPreview = burnerLoans.previewBorrow(
             address(usds),
@@ -27,11 +28,14 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
             .withdrawCollateral(address(usds), 100e6, alice, alice);
         assertEq(withdrawn, 100e6, "withdrawn collateral");
         assertEq(remaining, 1_900e6, "remaining collateral");
-        // Required collateral = ceil($1,000e18 * 10,000 / 8,500)
-        //                     = 1_176.470588235294117648e18 USD.
-        // Health = floor($1,900e18 * 1e18 / required collateral)
-        //        = 1.614999999999999999e18 WAD.
-        assertEq(withdrawalHealth, 1_614_999_999_999_999_999, "withdrawal health");
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); backing = $10e18 per OHM (18 decimals).
+        // Backing debt value = 100e9 * $10e18 / 1e9 = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // OHM market price is $10e18, below the $10.625e18 crossover, so backing dominates.
+        // Remaining collateral value = 1,900e6 * $1e18 / 1e6 = $1,900e18.
+        // Health = floor($1,900e18 * 1e18 / $1,250e18) = 1.52e18 WAD.
+        assertEq(withdrawalHealth, 1.52e18, "backing-dominant withdrawal health");
 
         IBurnerLoans.ExtendPreview memory extendPreview = burnerLoans.previewExtend(
             address(usds),

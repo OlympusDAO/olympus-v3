@@ -23,6 +23,8 @@ abstract contract BurnerLoansWithdrawCollateralBoundaryTestBase is BurnerLoansTe
     struct BoundaryScenario {
         uint128 disabledInitialCollateral;
         uint128 disabledWithdrawal;
+        uint128 disabledRemainingCollateral;
+        uint256 disabledHealth;
         uint128 aboveInitialCollateral;
         uint128 aboveWithdrawal;
         uint128 aboveRemainingCollateral;
@@ -70,8 +72,8 @@ abstract contract BurnerLoansWithdrawCollateralBoundaryTestBase is BurnerLoansTe
 
         _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
         assertEq(amountOut, scenario.disabledWithdrawal, "amount out");
-        assertEq(remaining, scenario.boundaryRemainingCollateral, "remaining");
-        assertEq(health, scenario.boundaryHealth, "health");
+        assertEq(remaining, scenario.disabledRemainingCollateral, "remaining");
+        assertEq(health, scenario.disabledHealth, "health");
     }
 
     // Condition tree:
@@ -222,12 +224,17 @@ contract BurnerLoansWithdrawCollateralBoundaryTest is
         //                        = 119_647_058_823_529_411_765.
         // disabledInitialCollateral = minimumCollateral + 5e18
         //                           = 122_647_058_823_529_411_765.
+        // disabledWithdrawal = 5e18, so disabledRemainingCollateral
+        //                    = disabledInitialCollateral - disabledWithdrawal
+        //                    = 117_647_058_823_529_411_765.
         // belowRemainingCollateral = minimumCollateral - 1
         //                          = 117_647_058_823_529_411_764.
         // belowInitialCollateral = minimumCollateral + 1e18
         //                        = 118_647_058_823_529_411_765, so withdrawing 1e18 + 1
         // leaves belowRemainingCollateral.
         // boundaryHealth = floor(requiredUsd * 1e18 / requiredUsd) = 1e18.
+        // disabledHealth = floor($117_647_058_823_529_411_765 * 1e18 / requiredUsd)
+        //                = 1e18.
         // aboveHealth = floor($118_647_058_823_529_411_765 * 1e18 / requiredUsd)
         //             = 1_008_499_999_999_999_999.
         // belowHealth = floor($117_647_058_823_529_411_764 * 1e18 / requiredUsd)
@@ -236,6 +243,8 @@ contract BurnerLoansWithdrawCollateralBoundaryTest is
             BoundaryScenario({
                 disabledInitialCollateral: 122_647_058_823_529_411_765,
                 disabledWithdrawal: 5e18,
+                disabledRemainingCollateral: 117_647_058_823_529_411_765,
+                disabledHealth: 1e18,
                 aboveInitialCollateral: 119_647_058_823_529_411_765,
                 aboveWithdrawal: 1e18,
                 aboveRemainingCollateral: 118_647_058_823_529_411_765,
@@ -268,11 +277,16 @@ contract BurnerLoansWithdrawCollateralSixDecimalCollateralBoundaryTest is
         // aboveRemainingCollateral = minimumCollateral + 1e6 = 118_647_059.
         // aboveInitialCollateral = aboveRemainingCollateral + 1e6 = 119_647_059.
         // disabledInitialCollateral = minimumCollateral + 5e6 = 122_647_059.
+        // disabledWithdrawal = 5e6, so disabledRemainingCollateral
+        //                    = disabledInitialCollateral - disabledWithdrawal
+        //                    = 117_647_059.
         // belowRemainingCollateral = minimumCollateral - 1 = 117_647_058.
         // belowInitialCollateral = minimumCollateral + 1e6 = 118_647_059, so withdrawing 1e6 + 1
         // leaves belowRemainingCollateral.
         // The 6-decimal collateral USD value is collateral * $1e18 / 1e6 = collateral * $1e12.
         // boundaryHealth = floor($117_647_059e12 * 1e18 / requiredUsd)
+        //                = 1_000_000_001_499_999_999.
+        // disabledHealth = floor($117_647_059e12 * 1e18 / requiredUsd)
         //                = 1_000_000_001_499_999_999.
         // aboveHealth = floor($118_647_059e12 * 1e18 / requiredUsd)
         //             = 1_008_500_001_499_999_999.
@@ -282,6 +296,8 @@ contract BurnerLoansWithdrawCollateralSixDecimalCollateralBoundaryTest is
             BoundaryScenario({
                 disabledInitialCollateral: 122_647_059,
                 disabledWithdrawal: 5e6,
+                disabledRemainingCollateral: 117_647_059,
+                disabledHealth: 1_000_000_001_499_999_999,
                 aboveInitialCollateral: 119_647_059,
                 aboveWithdrawal: 1e6,
                 aboveRemainingCollateral: 118_647_059,

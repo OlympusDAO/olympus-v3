@@ -571,7 +571,7 @@ contract BurnerLoansConfig is
     /// @dev Reverts with `BurnerLoans_InvalidBps` if maximum LTV is zero or exceeds 100%.
     /// @param maxLtvBps_ Maximum loan-to-value ratio, in basis points.
     function _validateMaxLtvBps(uint16 maxLtvBps_) internal pure {
-        if (maxLtvBps_ == 0 || maxLtvBps_ > BurnerLoansConstants.MAX_LTV_BPS) {
+        if (maxLtvBps_ == 0 || maxLtvBps_ > BurnerLoansConstants._MAX_LTV_BPS) {
             revert BurnerLoans_InvalidBps(maxLtvBps_);
         }
     }

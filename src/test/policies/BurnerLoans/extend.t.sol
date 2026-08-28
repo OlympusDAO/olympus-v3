@@ -443,11 +443,19 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     //  when extend is called
     //   then it reverts
     function test_givenUnhealthyPosition_extendReverts() public {
+        backingOracle.setBacking(10e18);
         _borrowForAlice();
         price.setPrice(address(usds), 0.1e18);
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); backing = $10e18 per OHM (18 decimals).
+        // Backing debt value = 100e9 * $10e18 / 1e9 = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // OHM market price is $10e18, below the $10.625e18 crossover, so backing dominates.
+        // Collateral value after the depeg = 2,000e18 * $0.1e18 / 1e18 = $200e18.
+        // Health = floor($200e18 * 1e18 / $1,250e18) = 0.16e18 WAD.
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
-            169_999_999_999_999_999
+            0.16e18
         );
 
         vm.expectRevert(error);

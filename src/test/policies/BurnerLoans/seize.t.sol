@@ -883,17 +883,42 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
     //  when isSeizable is called
     //   then it returns false
     function test_givenHealthExactlyOneWad_isSeizable_returnsFalse() public {
-        // debt value = 100 OHM * $10 = $1,000
-        // required collateral = ceil($1,000 * 10,000 / 8,500)
-        //                     = $1,176.470588235294117648
-        // health = required collateral / required collateral = 1e18
+        backingOracle.setBacking(10e18);
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); backing = $10e18 per OHM (18 decimals).
+        // Backing debt value = 100e9 * $10e18 / 1e9 = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // OHM market price is $10e18, below the $10.625e18 crossover, so backing dominates.
+        // At $1e18 per collateral token, 1,250e18 collateral is exactly $1,250e18.
+        // Health = floor($1,250e18 * 1e18 / $1,250e18) = 1e18.
         burnerLoans.setPositionForTest(
             address(usds),
             alice,
-            _position(1_176_470_588_235_294_117_648, 100e9, uint48(block.timestamp + 30 days))
+            _position(1_250e18, 100e9, uint48(block.timestamp + 30 days))
         );
 
         assertFalse(burnerLoans.isSeizable(address(usds), alice), "exact health boundary");
+    }
+
+    // isSeizable
+    // given health one collateral unit below one WAD
+    //  when isSeizable is called
+    //   then it returns true
+    function test_givenHealthOneCollateralUnitBelowOneWad_isSeizable_returnsTrue() public {
+        backingOracle.setBacking(10e18);
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); backing = $10e18 per OHM (18 decimals).
+        // Backing requirement = $1,250e18, as worked in the exact-boundary test above.
+        // Collateral value = floor(($1,250e18 - 1) * $1e18 / 1e18) = $1,250e18 - 1.
+        // Health = floor(($1,250e18 - 1) * 1e18 / $1,250e18)
+        //        = 999_999_999_999_999_999, so the position is seizable.
+        burnerLoans.setPositionForTest(
+            address(usds),
+            alice,
+            _position(1_250e18 - 1, 100e9, uint48(block.timestamp + 30 days))
+        );
+
+        assertTrue(burnerLoans.isSeizable(address(usds), alice), "below health boundary");
     }
 
     // isSeizable

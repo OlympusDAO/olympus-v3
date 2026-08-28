@@ -17,7 +17,7 @@ import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol
 
 contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     uint16 internal constant _MAX_BPS = BurnerLoansConstants.MAX_BPS;
-    uint16 internal constant _MAX_LTV_BPS = BurnerLoansConstants.MAX_LTV_BPS;
+    uint16 internal constant _MAX_LTV_BPS = BurnerLoansConstants._MAX_LTV_BPS;
     uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS =
         BurnerLoansConstants.MAX_BACKING_MULTIPLIER_BPS;
     uint256 internal constant _MAX_KEEPER_REWARD = BurnerLoansConstants.MAX_KEEPER_REWARD;

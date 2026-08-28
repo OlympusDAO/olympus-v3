@@ -204,11 +204,18 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_requiredCollateralUsd_whenMarketBranchDominates_usesMaximumLtv() public view {
-        // debt market value = 100 OHM * $12 = 1,200e18 (18 decimals).
-        // market requirement = ceil(1,200e18 * 10,000 / 8,500)
+    function test_requiredCollateralUsd_givenLaunchParameters_whenMarketPriceAboveCrossover_usesMaximumLtv()
+        public
+        view
+    {
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); market price = $12e18 per OHM (18 decimals).
+        // Debt market value = 100e9 * $12e18 / 1e9 = $1,200e18.
+        // Market requirement = ceil($1,200e18 * 10,000 / 8,500)
         //                    = 1,411.764705882352941177e18 (18 decimals).
-        // backing requirement = 100 OHM * $10 * 12,500 / 10,000 = 1,250e18.
+        // Backing = $10e18 per OHM, so backing debt value = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // $12e18 is above the $10.625e18 crossover, so the market requirement dominates.
         assertEq(
             burnerLoans.requiredCollateralUsd(
                 BurnerLoansHarness.RequiredCollateralUsdInputs({
@@ -224,14 +231,18 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_requiredCollateralUsd_whenBackingBranchDominates_usesBackingMultiplier()
+    function test_requiredCollateralUsd_givenLaunchParameters_whenMarketPriceBelowCrossover_usesBackingMultiplier()
         public
         view
     {
-        // debt market value = 100 OHM * $10 = 1,000e18 (18 decimals).
-        // market requirement = ceil(1,000e18 * 10,000 / 8,500)
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); market price = $10e18 per OHM (18 decimals).
+        // Debt market value = 100e9 * $10e18 / 1e9 = $1,000e18.
+        // Market requirement = ceil($1,000e18 * 10,000 / 8,500)
         //                    = 1,176.470588235294117648e18.
-        // backing requirement = 100 OHM * $10 * 12,500 / 10,000 = 1,250e18.
+        // Backing = $10e18 per OHM, so backing debt value = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // $10e18 is below the $10.625e18 crossover, so the backing requirement dominates.
         assertEq(
             burnerLoans.requiredCollateralUsd(
                 BurnerLoansHarness.RequiredCollateralUsdInputs({
@@ -247,13 +258,17 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 
-    function test_requiredCollateralUsd_whenBranchesMeetAtCrossover_returnsSameRequirement()
+    function test_requiredCollateralUsd_givenLaunchParameters_whenMarketPriceAtCrossover_returnsSameRequirement()
         public
         view
     {
-        // debt market value = 1,062.5e18 (106.25% of $1,000 backing value).
-        // market requirement = 1,062.5e18 / 85% = 1,250e18.
-        // backing requirement = 1,000e18 * 125% = 1,250e18.
+        // Launch parameters: maxLtvBps = 8,500 and backingMultiplierBps = 12,500.
+        // Debt = 100e9 OHM (9 decimals); crossover market price = $10.625e18 per OHM.
+        // Debt market value = 100e9 * $10.625e18 / 1e9 = $1,062.5e18.
+        // Market requirement = ceil($1,062.5e18 * 10,000 / 8,500) = $1,250e18.
+        // Backing = $10e18 per OHM, so backing debt value = $1,000e18.
+        // Backing requirement = $1,000e18 * 12,500 / 10,000 = $1,250e18.
+        // Both branches therefore meet exactly at a $1,250e18 collateral requirement.
         assertEq(
             burnerLoans.requiredCollateralUsd(
                 BurnerLoansHarness.RequiredCollateralUsdInputs({
@@ -869,7 +884,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
 
         assertEq(reward, 13e6, "one percent keeper reward");
-        assertEq(1_300e6 - reward, 1_287e6, "treasury collateral after reward");
+        assertEq(1_300e6 - reward, 1_287e6, "collateral remaining after reward");
     }
 
     function test_launchStress_givenRewardAboveBackingSurplus_preservesBackingFloor() public view {
@@ -892,7 +907,7 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
 
         assertEq(reward, 5e6, "surplus-limited keeper reward");
-        assertEq(1_255e6 - reward, 1_250e6, "backing floor retained");
+        assertEq(1_255e6 - reward, 1_250e6, "collateral remaining equals backing floor");
     }
 
     function test_utilizationBps_roundsUp(uint256 debt_, uint256 cap_) public view {

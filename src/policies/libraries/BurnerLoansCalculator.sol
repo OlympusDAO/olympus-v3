@@ -67,6 +67,9 @@ library BurnerLoansCalculator {
     }
 
     /// @notice Returns the larger of market-LTV and backing collateral requirements.
+    /// @dev `debtValueUsd_` is PRICE-decimal USD, while `BPS` and `maxLtvBps_` use the
+    ///      basis-point scale. Therefore, `debtValueUsd_ * BPS / maxLtvBps_` remains
+    ///      PRICE-decimal USD. `FullMath.mulDivUp` rounds this maximum-LTV requirement upward.
     /// @param debtValueUsd_ Market value of the debt in USD.
     /// @param debt_ Debt amount in debt-token decimals.
     /// @param backingPerDebtUsd_ Backing value per whole debt token in USD.
