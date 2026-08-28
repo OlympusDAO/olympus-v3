@@ -865,10 +865,11 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         public
         view
     {
-        // seized collateral = 1,300e6 (6 decimals) at $1e18 = $1,300.
-        // backing floor = 100e9 OHM * $10e18 * 12,500 / 10,000 = $1,250.
-        // configured reward = floor(1,300e6 * 100 / 10,000) = 13e6.
-        // surplus = 50e6, so reward = min(13e6, 50e6, 100e6) = 13e6.
+        // Seized collateral = 1,300e6 collateral units (6 decimals) at $1e18 = $1,300e18.
+        // Backing floor = (100e9 raw OHM / 1e9) * $10e18 * 12,500 bps / 10,000 bps
+        //               = $1,250e18 (PRICE scale).
+        // Configured reward = floor(1,300e6 collateral units * 100 bps / 10,000 bps) = 13e6.
+        // Surplus = 50e6 collateral units, so reward = min(13e6, 50e6, 100e6) = 13e6.
         uint256 reward = burnerLoans.keeperRewardAsset(
             BurnerLoansHarness.KeeperRewardInputs({
                 isProtocolSeizureCaller: false,
@@ -888,10 +889,11 @@ contract BurnerLoansMathTest is BurnerLoansTest {
     }
 
     function test_launchStress_givenRewardAboveBackingSurplus_preservesBackingFloor() public view {
-        // seized collateral = 1,255e6 (6 decimals) at $1e18 = $1,255.
-        // backing floor = 100e9 OHM * $10e18 * 12,500 / 10,000 = $1,250.
-        // configured reward = floor(1,255e6 * 100 / 10,000) = 12.55e6.
-        // surplus = 5e6, so reward = min(12.55e6, 5e6, 100e6) = 5e6.
+        // Seized collateral = 1,255e6 collateral units (6 decimals) at $1e18 = $1,255e18.
+        // Backing floor = (100e9 raw OHM / 1e9) * $10e18 * 12,500 bps / 10,000 bps
+        //               = $1,250e18 (PRICE scale).
+        // Configured reward = floor(1,255e6 collateral units * 100 bps / 10,000 bps) = 12.55e6.
+        // Surplus = 5e6 collateral units, so reward = min(12.55e6, 5e6, 100e6) = 5e6.
         uint256 reward = burnerLoans.keeperRewardAsset(
             BurnerLoansHarness.KeeperRewardInputs({
                 isProtocolSeizureCaller: false,
