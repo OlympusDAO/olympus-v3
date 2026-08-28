@@ -1,0 +1,44 @@
+# CCIP Bridge Configuration Audit Scope
+
+# The Solidity metrics extension accepts whole files only. See README.md "Partial-File Scope" for
+# the exact functions and lines in scope within previously existing files.
+
+# Core Policies and Interfaces
+
+src/policies/bridge/CCIPBridgeConfig.sol
+src/policies/bridge/CCIPBridgeConfigTimelock.sol
+src/policies/interfaces/bridge/ICCIPBridgeConfig.sol
+src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol
+
+# Configuration Timelock Infrastructure
+
+src/policies/utils/ConfigOperatorSingleStep.sol
+src/policies/utils/ConfigTimelockBatchQueue.sol
+src/policies/utils/TimelockBatchQueue.sol
+src/policies/interfaces/utils/IConfigOperator.sol
+src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol
+
+# Chainlink Pool Interfaces
+
+src/external/bridge/ICCIPLiquidityContainer.sol
+src/external/bridge/ICCIPLockReleaseTokenPool.sol
+src/external/bridge/ICCIPRateLimiter.sol
+src/external/bridge/ICCIPTokenAdminRegistry.sol
+src/external/bridge/ICCIPTokenPoolAdmin.sol
+src/external/bridge/ICCIPTokenPoolGetters.sol
+
+# Deployment and OCG Proposal
+
+src/scripts/deploy/DeployV3.s.sol
+src/proposals/CCIPBridgeConfigProposal.sol
+
+# Multisig and Operational Configuration
+
+src/scripts/ops/batches/CCIPBridge.sol
+src/scripts/ops/batches/CCIPBridgeConfigBatch.sol
+src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol
+src/scripts/ops/batches/CCIPRouteReconcileBatch.sol
+src/scripts/ops/batches/CCIPTokenPool.sol
+src/scripts/ops/lib/BatchScriptV2.sol
+src/scripts/ops/lib/CCIPConfigLib.sol
+src/scripts/ops/lib/CCIPFeeBudgetLib.sol
