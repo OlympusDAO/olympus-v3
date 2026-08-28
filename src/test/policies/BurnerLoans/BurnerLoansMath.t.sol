@@ -20,10 +20,17 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         uint256 debtValueUsd = burnerLoans.debtValueUsd(debtOhm_, 10e18, ohmDecimals_);
         assertEq(debtValueUsd, 1_000e18, "manual debt USD value");
 
-        // maxLtvBps = 8,500 (basis points).
-        // required collateral = ceil($1,000 * 10,000 / 8,500)
-        //                     = 1,176.470588235294117648e18 (18 decimals).
-        // Use exactly 85%, 100%, and 115% of that requirement for the health checks.
+        // debtValueUsd = $1,000e18 (18 decimals) and maxLtvBps = 8,500 (basis points).
+        // requiredCollateralUsd = ceil(1,000e18 * 10,000 / 8,500)
+        //                       = 1,176.470588235294117648e18 (18 decimals).
+        // The lower input is 1,000 whole collateral tokens at $1e18 per token:
+        // floor(1,000e18 * 1e18 / 1,176.470588235294117648e18)
+        //     = 0.849999999999999999e18 health (WAD), approximately 85%.
+        // The upper input is 1,353 whole collateral tokens at $1e18 per token:
+        // floor(1,353e18 * 1e18 / 1,176.470588235294117648e18)
+        //     = 1.150049999999999999e18 health (WAD), approximately 115%.
+        // The boundary input is the closest exactly represented collateral amount for the configured
+        // token decimals; each decimal scenario supplies its manually derived value and health.
         uint256 requiredCollateralUsd = burnerLoans.requiredCollateralUsd(
             BurnerLoansHarness.RequiredCollateralUsdInputs({
                 debtValueUsd: debtValueUsd,
