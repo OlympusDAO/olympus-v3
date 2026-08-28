@@ -363,25 +363,7 @@ library BurnerLoansQuote {
             pricing_.collateralUsdPrice,
             config_.collateralDecimals
         );
-        uint256 utilization = BurnerLoansCalculator.assetUtilizationWad(
-            assetDebt_,
-            config_.debtCap
-        );
-        if (utilization == type(uint256).max || utilization > _WAD) {
-            revert IBurnerLoans.BurnerLoans_InvalidCap();
-        }
-        IBurnerLoans.AssetFeeConfig memory feeConfig = BurnerLoansMarketConfig.feeConfig(
-            marketId_,
-            floan_.getMarket(marketId_),
-            floan_.getMarketConfigData(marketId_)
-        );
-        uint256 feeRate = BurnerLoansCalculator.feeRateWad(
-            utilization,
-            feeConfig.baseFeeBps,
-            feeConfig.kinkBps,
-            feeConfig.preKinkSlopeBps,
-            feeConfig.postKinkSlopeBps
-        );
+        uint256 feeRate = _feeRate(floan_, marketId_, assetDebt_, config_.debtCap);
         return BurnerLoansCalculator.borrowFee(requiredAsset, feeRate);
     }
 

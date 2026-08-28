@@ -7,6 +7,9 @@ pragma solidity >=0.8.24;
 ///      view, and configuration contracts to implement each other's selectors.
 interface IBurnerLoans {
     error BurnerLoans_ZeroAddress();
+    /// @notice The supplied collateral asset cannot be used by Burner Loans.
+    /// @param asset Invalid collateral asset.
+    error BurnerLoans_InvalidCollateralAsset(address asset);
     error BurnerLoans_InvalidDecimals(uint8 decimals);
     error BurnerLoans_InvalidPrice();
     error BurnerLoans_InvalidParam();

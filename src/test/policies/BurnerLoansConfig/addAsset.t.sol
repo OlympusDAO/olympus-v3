@@ -97,6 +97,28 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
+    // given the collateral asset is OHM
+    //  when addAsset is called by admin
+    //   then it reverts
+    function test_givenAssetIsOhm_reverts() public {
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidCollateralAsset.selector,
+                address(ohm)
+            )
+        );
+        burnerLoansConfig.addAsset(
+            address(ohm),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+    }
+
+    // addAsset
     // given asset debt cap is zero
     //  when addAsset is called by admin
     //   then the asset is configured with zero borrow capacity

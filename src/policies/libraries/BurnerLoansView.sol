@@ -181,11 +181,13 @@ library BurnerLoansView {
         uint32 marketId_ = _marketId(dependencies_, asset_);
         _assetConfig(dependencies_, marketId_);
         if (repayOhm_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
-        return
-            previewRepay(
-                repayOhm_,
-                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
-            );
+        (bool exists, uint64 positionId) = BurnerLoansPositions.find(
+            dependencies_.floan,
+            marketId_,
+            borrower_
+        );
+        if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
+        return previewRepay(repayOhm_, dependencies_.floan.getPosition(positionId));
     }
 
     /// @notice Quotes collateral withdrawal against a supplied position.

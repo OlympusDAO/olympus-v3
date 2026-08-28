@@ -421,6 +421,18 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     }
 
     // repay
+    // given the borrower has no position
+    //  when repayment is previewed or executed
+    //   then both report missing collateral
+    function test_givenPositionDoesNotExist_previewAndRepayRevert() public {
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoCollateral.selector);
+        burnerLoans.previewRepay(address(usds), 1, alice);
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_NoCollateral.selector);
+        burnerLoans.repay(address(usds), 1, alice);
+    }
+
+    // repay
     // given global policy disabled
     //  when repay is called
     //   then it reverts

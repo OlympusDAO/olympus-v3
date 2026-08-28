@@ -69,7 +69,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(0),
+                address(burnerLoansConfig),
                 IBurnerLoansConfig.setAssetRiskConfig.selector
             )
         );
@@ -91,7 +91,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(0),
+                address(burnerLoansConfig),
                 IBurnerLoansConfig.setAssetFeeConfig.selector
             )
         );
@@ -174,7 +174,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         vm.expectRevert(
             abi.encodeWithSelector(
                 ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(0),
+                address(burnerLoansConfig),
                 selector_
             )
         );

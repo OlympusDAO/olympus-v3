@@ -416,7 +416,12 @@ contract BurnerLoansConfigTimelock is
 
         bytes4 selector = action_.selector;
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
-            _requirePayloadLength(action_.payload, _LEN_ADDRESS_FEE_CONFIG_SELECTION, selector);
+            _requirePayloadLength(
+                action_.target,
+                action_.payload,
+                _LEN_ADDRESS_FEE_CONFIG_SELECTION,
+                selector
+            );
             (
                 address feeAsset,
                 IBurnerLoans.AssetFeeConfig memory feeConfig,
@@ -439,6 +444,7 @@ contract BurnerLoansConfigTimelock is
 
         if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             _requirePayloadLength(
+                action_.target,
                 action_.payload,
                 _LEN_ADDRESS_ASSET_RISK_CONFIG_SELECTION,
                 selector
@@ -464,14 +470,14 @@ contract BurnerLoansConfigTimelock is
         }
 
         if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
-            _requirePayloadLength(action_.payload, _LEN_ADDRESS_UINT256, selector);
+            _requirePayloadLength(action_.target, action_.payload, _LEN_ADDRESS_UINT256, selector);
             (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
             _BURNER_LOANS_CONFIG.validateAssetDebtCap(asset, debtCapOhm);
             return;
         }
 
         if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
-            _requirePayloadLength(action_.payload, _LEN_ADDRESS_UINT256, selector);
+            _requirePayloadLength(action_.target, action_.payload, _LEN_ADDRESS_UINT256, selector);
             (address asset, ) = abi.decode(action_.payload, (address, bool));
             _requireAssetConfigured(asset);
             return;
@@ -493,12 +499,13 @@ contract BurnerLoansConfigTimelock is
     }
 
     function _requirePayloadLength(
+        address target_,
         bytes memory payload_,
         uint256 expectedLength_,
         bytes4 selector_
     ) internal pure {
         if (payload_.length != expectedLength_) {
-            revert ITimelockBatchQueue_ActionInvalid(address(0), selector_);
+            revert ITimelockBatchQueue_ActionInvalid(target_, selector_);
         }
     }
 

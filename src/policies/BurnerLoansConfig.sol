@@ -167,6 +167,7 @@ contract BurnerLoansConfig is
     ///      - The contract is disabled.
     ///      - The caller does not have the admin role.
     ///      - `asset_` is zero.
+    ///      - `asset_` is OHM.
     ///      - `asset_` is already configured.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - Risk, bps, maturity, or fee parameters violate configured bounds.
@@ -522,6 +523,7 @@ contract BurnerLoansConfig is
     ///      risk config, PRICE support, and DepositManager support.
     /// @dev Reverts if:
     ///      - `asset_` is zero.
+    ///      - `asset_` is OHM.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - `riskConfig_` violates risk, maturity, or keeper reward bounds.
     ///      - PRICE does not approve the asset or returns a zero price.
@@ -536,6 +538,7 @@ contract BurnerLoansConfig is
         AssetRiskConfigInput memory riskConfig_
     ) internal view returns (AssetConfig memory assetConfig) {
         if (asset_ == address(0)) revert BurnerLoans_ZeroAddress();
+        if (asset_ == address(_OHM)) revert BurnerLoans_InvalidCollateralAsset(asset_);
 
         uint8 actualDecimals = IERC20(asset_).decimals();
         _validateTokenDecimals(actualDecimals);
