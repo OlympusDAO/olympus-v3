@@ -10,12 +10,12 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
-    uint16 internal constant MAX_BPS = 10_000;
-    uint16 internal constant MAX_LTV_BPS = 10_000;
-    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint48 internal constant EXPECTED_MAX_TERM_LENGTH = 365 days;
-    uint48 internal constant EXPECTED_MAX_MATURITY_HORIZON = 366 days;
-    uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
+    uint16 internal constant _MAX_BPS = 10_000;
+    uint16 internal constant _MAX_LTV_BPS = 10_000;
+    uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
+    uint48 internal constant _EXPECTED_MAX_TERM_LENGTH = 365 days;
+    uint48 internal constant _EXPECTED_MAX_MATURITY_HORIZON = 366 days;
+    uint256 internal constant _MAX_KEEPER_REWARD = type(uint128).max;
 
     event AssetRiskConfigSet(address indexed asset, IBurnerLoans.AssetRiskConfigInput config);
 
@@ -113,7 +113,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //  when setAssetRiskConfig is called by admin
     //   then it reverts
     function test_givenMaximumLtvIsAboveMax_reverts(uint16 maxLtvBps_) public {
-        maxLtvBps_ = uint16(bound(maxLtvBps_, MAX_LTV_BPS + 1, type(uint16).max));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, _MAX_LTV_BPS + 1, type(uint16).max));
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.maxLtvBps = maxLtvBps_;
 
@@ -144,7 +144,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it reverts
     function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
+            bound(backingMultiplierBps_, _MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
         );
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.backingMultiplierBps = backingMultiplierBps_;
@@ -175,7 +175,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //  when setAssetRiskConfig is called by admin
     //   then it reverts
     function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
-        maxKeeperReward_ = bound(maxKeeperReward_, MAX_KEEPER_REWARD + 1, type(uint256).max);
+        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.maxKeeperReward = maxKeeperReward_;
 
@@ -203,15 +203,15 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it updates the config
     function test_givenTermLengthAtMaximum_updatesConfig() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = EXPECTED_MAX_TERM_LENGTH;
-        config.maxMaturityHorizon = EXPECTED_MAX_MATURITY_HORIZON;
+        config.termLength = _EXPECTED_MAX_TERM_LENGTH;
+        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
 
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), config);
 
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.termLength, EXPECTED_MAX_TERM_LENGTH, "term length");
-        assertEq(stored.maxMaturityHorizon, EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
+        assertEq(stored.termLength, _EXPECTED_MAX_TERM_LENGTH, "term length");
+        assertEq(stored.maxMaturityHorizon, _EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
     }
 
     // setAssetRiskConfig
@@ -220,8 +220,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it reverts
     function test_givenTermLengthOneAboveMaximum_reverts() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.termLength = EXPECTED_MAX_TERM_LENGTH + 1;
-        config.maxMaturityHorizon = EXPECTED_MAX_MATURITY_HORIZON;
+        config.termLength = _EXPECTED_MAX_TERM_LENGTH + 1;
+        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
@@ -233,10 +233,10 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //  when setAssetRiskConfig is called by admin
     //   then it reverts
     function test_givenTermLengthAboveMax_reverts(uint48 termLength_) public {
-        termLength_ = uint48(bound(termLength_, EXPECTED_MAX_TERM_LENGTH + 1, type(uint48).max));
+        termLength_ = uint48(bound(termLength_, _EXPECTED_MAX_TERM_LENGTH + 1, type(uint48).max));
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.termLength = termLength_;
-        config.maxMaturityHorizon = EXPECTED_MAX_MATURITY_HORIZON;
+        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
@@ -278,13 +278,13 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it updates the config
     function test_givenMaxMaturityHorizonAtMaximum_updatesConfig() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = EXPECTED_MAX_MATURITY_HORIZON;
+        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON;
 
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), config);
 
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
-        assertEq(stored.maxMaturityHorizon, EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
+        assertEq(stored.maxMaturityHorizon, _EXPECTED_MAX_MATURITY_HORIZON, "max maturity horizon");
     }
 
     // setAssetRiskConfig
@@ -293,7 +293,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it reverts
     function test_givenMaxMaturityHorizonOneAboveMaximum_reverts() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxMaturityHorizon = EXPECTED_MAX_MATURITY_HORIZON + 1;
+        config.maxMaturityHorizon = _EXPECTED_MAX_MATURITY_HORIZON + 1;
 
         vm.prank(admin);
         vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
@@ -306,7 +306,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     //   then it reverts
     function test_givenMaxMaturityHorizonAboveMax_reverts(uint48 maxMaturityHorizon_) public {
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, EXPECTED_MAX_MATURITY_HORIZON + 1, type(uint48).max)
+            bound(maxMaturityHorizon_, _EXPECTED_MAX_MATURITY_HORIZON + 1, type(uint48).max)
         );
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
         config.maxMaturityHorizon = maxMaturityHorizon_;
@@ -328,16 +328,16 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
         uint48 maxMaturityHorizon_,
         uint256 maxKeeperReward_
     ) public {
-        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, MAX_LTV_BPS));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
+            bound(backingMultiplierBps_, _MAX_BPS, _MAX_BACKING_MULTIPLIER_BPS)
         );
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
-        termLength_ = uint48(bound(termLength_, 1, EXPECTED_MAX_TERM_LENGTH));
+        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, _MAX_BPS));
+        termLength_ = uint48(bound(termLength_, 1, _EXPECTED_MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
-            bound(maxMaturityHorizon_, termLength_ + 1, EXPECTED_MAX_MATURITY_HORIZON)
+            bound(maxMaturityHorizon_, termLength_ + 1, _EXPECTED_MAX_MATURITY_HORIZON)
         );
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
+        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
 
         IBurnerLoans.AssetRiskConfigInput memory config = IBurnerLoans.AssetRiskConfigInput({
             maxLtvBps: maxLtvBps_,

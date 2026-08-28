@@ -12,10 +12,10 @@ import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConfigTimelockTest {
-    uint16 internal constant MAX_BPS = 10_000;
-    uint16 internal constant MAX_LTV_BPS = 10_000;
-    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
+    uint16 internal constant _MAX_BPS = 10_000;
+    uint16 internal constant _MAX_LTV_BPS = 10_000;
+    uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
+    uint256 internal constant _MAX_KEEPER_REWARD = type(uint128).max;
 
     // queueSetAssetRiskConfig
     // given caller has neither admin nor burner_loans_admin
@@ -311,7 +311,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //   then it reverts
     function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
+            bound(backingMultiplierBps_, _MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
         );
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.backingMultiplierBps = backingMultiplierBps_;
@@ -346,7 +346,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //  when queueing the action
     //   then it reverts
     function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
-        maxKeeperReward_ = bound(maxKeeperReward_, MAX_KEEPER_REWARD + 1, type(uint256).max);
+        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.maxKeeperReward = maxKeeperReward_;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
@@ -454,16 +454,16 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint48 maxMaturityHorizon_,
         uint256 maxKeeperReward_
     ) public {
-        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, MAX_LTV_BPS));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
+            bound(backingMultiplierBps_, _MAX_BPS, _MAX_BACKING_MULTIPLIER_BPS)
         );
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
+        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, _MAX_BPS));
         termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
             bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
+        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update = IBurnerLoansConfigTimelock
             .AssetRiskConfigUpdate({

@@ -16,11 +16,11 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
-    uint16 internal constant MAX_BPS = BurnerLoansConstants.MAX_BPS;
-    uint16 internal constant MAX_LTV_BPS = BurnerLoansConstants.MAX_LTV_BPS;
-    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS =
+    uint16 internal constant _MAX_BPS = BurnerLoansConstants.MAX_BPS;
+    uint16 internal constant _MAX_LTV_BPS = BurnerLoansConstants.MAX_LTV_BPS;
+    uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS =
         BurnerLoansConstants.MAX_BACKING_MULTIPLIER_BPS;
-    uint256 internal constant MAX_KEEPER_REWARD = BurnerLoansConstants.MAX_KEEPER_REWARD;
+    uint256 internal constant _MAX_KEEPER_REWARD = BurnerLoansConstants.MAX_KEEPER_REWARD;
 
     event AssetAdded(address indexed asset, IBurnerLoans.AssetConfig config);
     event AssetFeeConfigSet(address indexed asset, IBurnerLoans.AssetFeeConfig config);
@@ -242,7 +242,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     //   then it reverts
     function test_givenMaximumLtvBpsIsInvalid_reverts(uint16 maxLtvBps_, bool useZero_) public {
         _setDefaultGlobalDebtCap();
-        maxLtvBps_ = useZero_ ? 0 : uint16(bound(maxLtvBps_, MAX_LTV_BPS + 1, type(uint16).max));
+        maxLtvBps_ = useZero_ ? 0 : uint16(bound(maxLtvBps_, _MAX_LTV_BPS + 1, type(uint16).max));
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.maxLtvBps = maxLtvBps_;
 
@@ -285,7 +285,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
         _setDefaultGlobalDebtCap();
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
+            bound(backingMultiplierBps_, _MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
         );
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.backingMultiplierBps = backingMultiplierBps_;
@@ -328,7 +328,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     //   then it reverts
     function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
         _setDefaultGlobalDebtCap();
-        maxKeeperReward_ = bound(maxKeeperReward_, MAX_KEEPER_REWARD + 1, type(uint256).max);
+        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
         config.maxKeeperReward = maxKeeperReward_;
 
@@ -621,8 +621,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     ) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
-        baseFeeBps_ = uint16(bound(baseFeeBps_, 1, MAX_BPS));
-        preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, MAX_BPS + 1 - baseFeeBps_, MAX_BPS));
+        baseFeeBps_ = uint16(bound(baseFeeBps_, 1, _MAX_BPS));
+        preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, _MAX_BPS + 1 - baseFeeBps_, _MAX_BPS));
         IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: baseFeeBps_,
             kinkBps: 0,
@@ -848,17 +848,17 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
 
-        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, MAX_LTV_BPS));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
+            bound(backingMultiplierBps_, _MAX_BPS, _MAX_BACKING_MULTIPLIER_BPS)
         );
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
+        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, _MAX_BPS));
         termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
             bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
         debtCap_ = uint128(bound(debtCap_, 0, type(uint128).max));
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
+        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
 
         IBurnerLoans.AssetRiskConfigInput memory input = IBurnerLoans.AssetRiskConfigInput({
             maxLtvBps: maxLtvBps_,
@@ -912,14 +912,14 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     ) public {
         _configureUsdsDependencies();
         _setDefaultGlobalDebtCap();
-        baseFeeBps_ = uint16(bound(baseFeeBps_, 0, MAX_BPS));
-        preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, 0, MAX_BPS - baseFeeBps_));
+        baseFeeBps_ = uint16(bound(baseFeeBps_, 0, _MAX_BPS));
+        preKinkSlopeBps_ = uint16(bound(preKinkSlopeBps_, 0, _MAX_BPS - baseFeeBps_));
         postKinkSlopeBps_ = uint16(
-            bound(postKinkSlopeBps_, 0, MAX_BPS - baseFeeBps_ - preKinkSlopeBps_)
+            bound(postKinkSlopeBps_, 0, _MAX_BPS - baseFeeBps_ - preKinkSlopeBps_)
         );
         kinkBps_ = preKinkSlopeBps_ == 0 && postKinkSlopeBps_ == 0
-            ? uint16(bound(kinkBps_, 0, MAX_BPS - 1))
-            : uint16(bound(kinkBps_, 1, MAX_BPS - 1));
+            ? uint16(bound(kinkBps_, 0, _MAX_BPS - 1))
+            : uint16(bound(kinkBps_, 1, _MAX_BPS - 1));
         IBurnerLoans.AssetFeeConfig memory feeConfig = IBurnerLoans.AssetFeeConfig({
             baseFeeBps: baseFeeBps_,
             kinkBps: kinkBps_,

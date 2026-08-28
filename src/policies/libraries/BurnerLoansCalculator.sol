@@ -115,6 +115,8 @@ library BurnerLoansCalculator {
 
     /// @notice Calculates the WAD-scaled collateral health factor.
     /// @dev Returns `type(uint256).max` when no collateral requirement exists.
+    /// @dev Both USD inputs use `PRICE.decimals()`. Multiplying a PRICE-scaled USD value by WAD
+    ///      and dividing by a PRICE-scaled USD requirement produces a WAD-scaled result.
     /// @param collateralValueUsd_ Gross collateral value in USD.
     /// @param requiredCollateralUsd_ Required collateral value in USD.
     /// @return Health factor scaled by 1e18 and rounded down.

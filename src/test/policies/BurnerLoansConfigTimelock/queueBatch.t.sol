@@ -167,13 +167,13 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _riskAction(9_500);
 
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory secondLtvUpdate;
-        secondLtvUpdate.maxLtvBps = 9_000;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory secondLtvSelection;
-        secondLtvSelection.maxLtvBps = true;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory secondBackingUpdate;
+        secondBackingUpdate.backingMultiplierBps = 13_000;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory secondBackingSelection;
+        secondBackingSelection.backingMultiplierBps = true;
         actions[1] = _singleAction(
             IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), secondLtvUpdate, secondLtvSelection)
+            abi.encode(address(usds), secondBackingUpdate, secondBackingSelection)
         );
 
         vm.prank(burnerLoansAdmin);
