@@ -189,6 +189,17 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
 
     // invariant
     // given any sequence of Burner Loans handler calls
+    //  when an action's preview reports that it is eligible
+    //   then the corresponding state-changing action succeeds
+    function invariant_EligibleActionsSucceed() public view {
+        assertEq(handler.unexpectedDepositFailures(), 0, "eligible deposit failed");
+        assertEq(handler.unexpectedBorrowFailures(), 0, "eligible borrow failed");
+        assertEq(handler.unexpectedWithdrawFailures(), 0, "eligible withdrawal failed");
+        assertEq(handler.unexpectedExtendFailures(), 0, "eligible extension failed");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
     //  when fully repaid positions are checked
     //   then no debt dust or active-borrower entry remains
     function invariant_FullRepaymentNoDebtDust() public view {

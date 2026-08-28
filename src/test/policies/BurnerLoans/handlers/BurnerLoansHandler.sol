@@ -48,7 +48,11 @@ contract BurnerLoansHandler is Test {
     uint256 public fundingDebtViolations;
     uint256 public repaymentDebtViolations;
     uint256 public repaymentCollateralViolations;
+    uint256 public unexpectedDepositFailures;
+    uint256 public unexpectedBorrowFailures;
     uint256 public unexpectedRepayFailures;
+    uint256 public unexpectedWithdrawFailures;
+    uint256 public unexpectedExtendFailures;
     uint256 public sameBlockRepayViolations;
     uint256 public harvestBoundViolations;
     uint256 public backingViolations;
@@ -116,17 +120,30 @@ contract BurnerLoansHandler is Test {
         uint128 amount = uint128(bound(amountSeed_, 1e15, 100_000e18));
         collateral.mint(actor, amount);
 
+        try burnerLoans.previewDepositCollateral(address(collateral), amount, actor) returns (
+            uint256,
+            uint256
+        ) {} catch {
+            return;
+        }
+
         vm.prank(actor);
         (bool success, ) = address(burnerLoans).call(
             abi.encodeCall(burnerLoans.depositCollateral, (address(collateral), amount, actor))
         );
-        if (!success) return;
+        if (!success) ++unexpectedDepositFailures;
     }
 
     function borrow(uint256 actorSeed_, uint128 amountSeed_) external {
         address actor = _actor(actorSeed_);
         uint128 amount = uint128(bound(amountSeed_, 1, 1_000e9));
         collateral.mint(actor, 10_000e18);
+
+        try burnerLoans.previewBorrow(address(collateral), amount, actor) returns (
+            IBurnerLoans.BorrowPreview memory
+        ) {} catch {
+            return;
+        }
 
         uint256 supplyBefore = ohm.totalSupply();
         uint256 idleBefore = _inventory().suppliedIdleOhm();
@@ -138,7 +155,10 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), amount, actor, actor, type(uint256).max)
             )
         );
-        if (!success) return;
+        if (!success) {
+            ++unexpectedBorrowFailures;
+            return;
+        }
 
         uint256 debtAfter = burnerLoans.getPosition(address(collateral), actor).debtOhm;
         uint256 idleAfter = _inventory().suppliedIdleOhm();
@@ -298,6 +318,16 @@ contract BurnerLoansHandler is Test {
         if (deposited == 0) return;
         uint128 amount = uint128(bound(amountSeed_, 1, deposited));
 
+        IBurnerLoans.WithdrawPreview memory preview;
+        try burnerLoans.previewWithdrawCollateral(address(collateral), amount, actor) returns (
+            IBurnerLoans.WithdrawPreview memory preview_
+        ) {
+            preview = preview_;
+        } catch {
+            return;
+        }
+        if (!preview.executable) return;
+
         vm.prank(actor);
         (bool success, ) = address(burnerLoans).call(
             abi.encodeCall(
@@ -305,7 +335,7 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), amount, actor, actor)
             )
         );
-        if (!success) return;
+        if (!success) ++unexpectedWithdrawFailures;
     }
 
     function supplyInventory(uint128 amountSeed_) external {
@@ -333,6 +363,12 @@ contract BurnerLoansHandler is Test {
         uint16 termCount = uint16(bound(termSeed_, 1, 2));
         collateral.mint(actor, 10_000e18);
 
+        try burnerLoans.previewExtend(address(collateral), actor, termCount) returns (
+            IBurnerLoans.ExtendPreview memory
+        ) {} catch {
+            return;
+        }
+
         vm.prank(actor);
         (bool success, ) = address(burnerLoans).call(
             abi.encodeCall(
@@ -340,7 +376,7 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), actor, termCount, type(uint256).max)
             )
         );
-        if (!success) return;
+        if (!success) ++unexpectedExtendFailures;
     }
 
     function moveOhmPrice(uint256 priceSeed_) external {
