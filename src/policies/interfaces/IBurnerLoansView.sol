@@ -98,7 +98,8 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (uint256 depositedCollateral, uint256 totalCollateral);
 
     /// @notice Quotes a collateral withdrawal for a borrower.
-    /// @dev Reverts for unavailable custody or pricing, an invalid amount, or an unhealthy result.
+    /// @dev Reverts for unavailable custody or pricing, or an invalid amount. An unhealthy result
+    ///      is returned with `preview.executable` set to false.
     /// @param asset_ Collateral asset to withdraw.
     /// @param amount_ Credited collateral to remove, in collateral-token decimals.
     /// @param onBehalfOf_ Borrower whose position is quoted.

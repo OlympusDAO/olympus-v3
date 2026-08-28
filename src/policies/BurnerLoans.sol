@@ -299,7 +299,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuardTransient {
     }
 
     /// @notice Returns active principal for one collateral asset.
-    /// @dev Reverts when the asset has no compatible Burner Loans market.
+    /// @dev Returns zero when the asset has no compatible Burner Loans market.
     /// @param asset_ Collateral asset whose debt is queried.
     /// @return activeDebtOhm Active principal in OHM token decimals.
     function assetActiveDebtOhm(address asset_) external view returns (uint256 activeDebtOhm) {

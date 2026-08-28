@@ -38,9 +38,11 @@ flowchart LR
 | `FLOAN`                                               | Generic fixed-term market, position, active-index, and aggregate state        |
 | `DepositManager`                                      | Collateral custody and optional ERC-4626 routing                              |
 
-Burner Loans requires exactly one FLOAN market for its facility, collateral token, and OHM pair.
-FLOAN itself permits more than one matching market. A missing or ambiguous Burner Loans lookup
-fails closed.
+Burner Loans Config requires exactly one FLOAN market for its facility, collateral token, and OHM
+pair when reading or updating configuration. FLOAN itself permits another contract to create an
+additional matching market. Lifecycle, quote, view, and seizure paths deliberately continue using
+the earliest matching market so that such an external market creation cannot block servicing of
+existing Burner Loans positions. Config lookups fail closed when the pair is missing or ambiguous.
 
 Burner Loans is deployed before Burner Loans Inventory. `BurnerLoansInventory` permanently binds
 that Burner Loans address as its facility, while Burner Loans stores a replaceable
@@ -117,17 +119,19 @@ healthFactor = floor(riskAdjustedCollateralUsd * 1e18 / requiredCollateralUsd)
 
 `debtBackingValueUsd` is the backing value of the outstanding OHM debt.
 
-| State                      | Borrow or withdraw                | Seizure                       |
-| -------------------------- | --------------------------------- | ----------------------------- |
-| No debt                    | Debt-free health is max `uint256` | Not seizable                  |
-| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable           |
-| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable           |
-| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices  |
-| Maturity reached with debt | New risk is blocked               | Seizable without a price read |
+| State                      | Borrow or withdraw                | Seizure                      |
+| -------------------------- | --------------------------------- | ---------------------------- |
+| No debt                    | Debt-free health is max `uint256` | Not seizable                 |
+| `healthFactor > 1e18`      | Allowed if other checks pass      | Not health-seizable          |
+| `healthFactor == 1e18`     | Exact boundary is allowed         | Not health-seizable          |
+| `healthFactor < 1e18`      | New risk is blocked               | Seizable with current prices |
+| Maturity reached with debt | New risk is blocked               | Seizable with current prices |
 
 PRICE values use `PRICE.decimals()`. OHM and collateral amounts use their token scales. The
-backing oracle returns 18-decimal USD per OHM. Requirements and transferred fees round up; health
-and intermediate rate components round down.
+backing oracle returns 18-decimal USD per OHM. Rounding is conservative for the protocol: debt USD,
+backing conversion, collateral requirements, required collateral-token amounts, utilization, and
+final transferred fees round up. Gross and risk-adjusted collateral values, health factors, and
+fee-curve slope contributions round down.
 
 Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
 credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee

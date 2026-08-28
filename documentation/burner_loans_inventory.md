@@ -40,14 +40,14 @@ erasing its claim; restoring the role restores access to whatever idle liquidity
 
 ## State
 
-| Value                        | Meaning                                                        |
-| ---------------------------- | -------------------------------------------------------------- |
-| `globalDebtCapOhm`           | Maximum aggregate active principal                             |
-| `activePrincipalOhm`         | Principal reported by the fixed facility                       |
-| `suppliedOhm`                | All providers' aggregate outstanding claim                     |
-| `providerClaimOhm(provider)` | One provider's outstanding claim                               |
-| `suppliedIdleOhm`            | Claim-backed OHM currently held and available                  |
-| actual MINTR approval        | Amount MINTR may still mint for Burner Loans Inventory         |
+| Value                        | Meaning                                                |
+| ---------------------------- | ------------------------------------------------------ |
+| `globalDebtCapOhm`           | Maximum aggregate active principal                     |
+| `activePrincipalOhm`         | Principal reported by the fixed facility               |
+| `suppliedOhm`                | All providers' aggregate outstanding claim             |
+| `providerClaimOhm(provider)` | One provider's outstanding claim                       |
+| `suppliedIdleOhm`            | Claim-backed OHM currently held and available          |
+| actual MINTR approval        | Amount MINTR may still mint for Burner Loans Inventory |
 
 The claim can exceed idle OHM while supplied funds are lent. A default reduces active principal
 but does not reduce the provider claim or create idle OHM. Repayments later restore the claim's
@@ -67,12 +67,12 @@ availableCapacity = min(
 )
 ```
 
-| Invariant                                                                          | Purpose                                            |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------- |
-| `activePrincipalOhm <= globalDebtCapOhm`                                           | Global cap cannot be bypassed                      |
-| `actualApproval <= desiredApproval` after sync or a normal transition              | Idle OHM and mint authority are not double-counted |
-| `suppliedIdleOhm <= suppliedOhm`                                                   | Idle provider funds do not exceed the claim        |
-| `suppliedIdleOhm <= OHM.balanceOf(BurnerLoansInventory)`                           | Accounted idle funds are physically held           |
+| Invariant                                                                           | Purpose                                            |
+| ----------------------------------------------------------------------------------- | -------------------------------------------------- |
+| `activePrincipalOhm <= globalDebtCapOhm`                                            | Global cap cannot be bypassed                      |
+| `actualApproval <= desiredApproval` after sync or a normal transition               | Idle OHM and mint authority are not double-counted |
+| `suppliedIdleOhm <= suppliedOhm`                                                    | Idle provider funds do not exceed the claim        |
+| `suppliedIdleOhm <= OHM.balanceOf(BurnerLoansInventory)`                            | Accounted idle funds are physically held           |
 | Burner Loans Inventory and FLOAN active principal remain equal after facility calls | Funding and loan ledgers change atomically         |
 
 `suppliedIdleOhm` may exceed the global cap because the cap limits active debt, not custody. The
@@ -80,13 +80,13 @@ second capacity bound makes the excess unavailable for draws.
 
 ## State Transitions
 
-| Action       | Active principal | Supplied idle              | Claim | Token and approval effect                                                |
-| ------------ | ---------------- | -------------------------- | ----- | ------------------------------------------------------------------------ |
-| Supply `x`   | —                | `+x`                       | `+x`  | Safe transfer; increase caller claim; reduce unsafe approval             |
-| Withdraw `x` | —                | `-x`                       | `-x`  | Best-effort approval restoration; transfer OHM                           |
-| Draw `x`     | `+x`             | Consume idle first         | —     | Mint shortfall to Burner Loans Inventory; transfer full `x` once        |
-| Repay `x`    | `-x`             | Refill claim deficit first | —     | Burn only the remainder; a failed burn remains ordinary surplus         |
-| Default `x`  | `-x`             | —                          | —     | Best-effort approval restoration                                        |
+| Action       | Active principal | Supplied idle              | Claim | Token and approval effect                                                 |
+| ------------ | ---------------- | -------------------------- | ----- | ------------------------------------------------------------------------- |
+| Supply `x`   | —                | `+x`                       | `+x`  | Safe transfer; increase caller claim; reduce unsafe approval              |
+| Withdraw `x` | —                | `-x`                       | `-x`  | Best-effort approval restoration; transfer OHM                            |
+| Draw `x`     | `+x`             | Consume idle first         | —     | Mint shortfall to Burner Loans Inventory; transfer full `x` once          |
+| Repay `x`    | `-x`             | Refill claim deficit first | —     | Burn only the remainder; a failed burn remains ordinary surplus           |
+| Default `x`  | `-x`             | —                          | —     | Best-effort approval restoration                                          |
 | Cap change   | —                | —                          | —     | Exactly reconcile approval; revert the cap change if reconciliation fails |
 
 The immutable OHM token is assumed to be a standard, non-fee-on-transfer token. Supply and draw use
@@ -132,14 +132,17 @@ Dependency configuration accepts only MINTR v1 bound to Burner Loans Inventory's
 token. An initial configuration or MINTR upgrade with a different token reverts before changing the
 prior burn allowance or mint-approval accounting.
 
-| Recovery action    | Caller role          | Behavior                                                     |
-| ------------------ | -------------------- | ------------------------------------------------------------ |
-| `syncMintApproval` | `burner_loans_admin` | Reconcile approval exactly; may restore unrecorded drift      |
-| `burnSurplus`      | `admin`              | Burn all ordinary surplus through MINTR                       |
-| `rescueSurplus`    | `admin`              | Transfer all ordinary surplus to `TRSRY`                      |
+| Recovery action    | Caller role          | Behavior                                                 |
+| ------------------ | -------------------- | -------------------------------------------------------- |
+| `syncMintApproval` | `burner_loans_admin` | Reconcile approval exactly; may restore unrecorded drift |
+| `burnSurplus`      | `admin`              | Burn all ordinary surplus through MINTR                  |
+| `rescueSurplus`    | `admin`              | Transfer all ordinary surplus to `TRSRY`                 |
 
-Synchronization cannot raise approval above the current desired amount. Ordinary lifecycle calls
-and the Seizer do not silently restore an emergency manual approval reduction.
+Synchronization cannot raise approval above the current desired amount. A manual approval change
+is not persistent configuration: ordinary withdrawals, repayments, defaults, and seizures may
+adjust approval back toward the current desired amount as principal and supplied-idle balances
+change. Emergency operators must use the global pause or a debt-cap change when the reduction must
+remain enforced.
 
 ## Deployment
 
