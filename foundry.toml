@@ -20,6 +20,9 @@ fs_permissions = [
     { access = "read-write", path = "./src/scripts/lz-bridge-testnet/deployments/" },
 ]
 gas_limit = "18446744073709551615"
+# Run each top-level test call as a separate transaction so account and storage access costs match
+# production execution. Keeping this explicit also gives Forge 1.7 and 1.8 the same test semantics.
+isolate = true
 
 # Everyday builds favor compile speed. Use the deploy profile whenever producing bytecode for
 # deployment or checking contract sizes.
@@ -40,9 +43,10 @@ compilation_restrictions = [
     { paths = "src/policies/BoostedLiquidity/BLVaultManagerLido.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultManagerLusd.sol", optimizer_runs = 400 },
     { paths = "src/proposals/*.sol", optimizer_runs = 400 },
-    # Upstream LayerZero test mocks fail legacy code generation unoptimized. Keeping this at the
-    # dependency root avoids optimizer exceptions for individual repository test files.
-    { paths = "dependencies/@layerzerolabs-test-devtools-evm-foundry-8.0.1/contracts/TestHelperOz5.sol", optimizer_runs = 400 },
+    # Upstream LayerZero test graphs fail legacy code generation unoptimized. Keeping this at the
+    # dependency roots avoids optimizer exceptions for individual repository test files.
+    { paths = "dependencies/@layerzerolabs-*/**", optimizer_runs = 400 },
+    { paths = "dependencies/forge-proposal-simulator-1.0.1/**", optimizer_runs = 400 },
 ]
 libs = ["dependencies"]
 # Tests live here, not in the default `test` directory. While this pointed at a directory that does
