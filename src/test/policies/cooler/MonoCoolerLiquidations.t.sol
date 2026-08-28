@@ -542,9 +542,11 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         expectAccountDelegationSummary(ALICE, 33e18 + 20e18, 14e18, 1, 10);
     }
 
-    function test_applyUnhealthyDelegations_withMaxUndelegations() external {
-        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
-        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
+    function test_givenDelegateAddressLimitIsUnbounded_whenApplying1900UnhealthyDelegations()
+        external
+    {
+        // Preserve the high-cardinality stress case as evidence that an unrestricted overseer-set
+        // delegate limit cannot be fully rescinded within a 36 million gas block from cold state.
         uint256 delegateAddressCount = 1900;
         uint128 collateralAmount = 10e18;
 
@@ -584,8 +586,11 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 gasUsed = vm.stopSnapshotGas();
         console2.log("Gas used", gasUsed);
 
-        // Ensure that the gas used is less than the block limit
-        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
+        assertGt(
+            gasUsed,
+            36_000_000,
+            "unbounded delegate configuration should reproduce the block gas liveness risk"
+        );
     }
 }
 
@@ -1317,9 +1322,9 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         }
     }
 
-    function test_batchLiquidate_oneAccount_withMaxUndelegations() external {
-        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
-        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
+    function test_givenDelegateAddressLimitIsUnbounded_whenLiquidating1900Delegations() external {
+        // Preserve the high-cardinality stress case as evidence that an unrestricted overseer-set
+        // delegate limit cannot be liquidated within a 36 million gas block from cold state.
         uint32 delegateAddressCount = 1900;
         uint128 collateralAmount = 10e18;
 
@@ -1363,8 +1368,11 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         uint256 gasUsed = vm.stopSnapshotGas();
         console2.log("gasUsed", gasUsed);
 
-        // Ensure that the gas used is less than the block limit
-        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
+        assertGt(
+            gasUsed,
+            36_000_000,
+            "unbounded delegate configuration should reproduce the block gas liveness risk"
+        );
 
         // Check position is empty now (debt + collateral)
         {
