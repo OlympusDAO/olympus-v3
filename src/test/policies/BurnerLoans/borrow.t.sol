@@ -1233,7 +1233,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
-    // - OHM market price: fuzzed below the point where its 115% requirement reaches $10 backing
+    // - OHM market price: fuzzed through $8, below the $10.625 crossover where the 85%
+    //   maximum-LTV requirement equals the $12.50 multiplied-backing requirement
     // - Backing multiplier: 125%
     // - Expected branch: exact backing requirement is sufficient for every sampled lower market price
     function test_givenFuzzedMarketPriceBelowBacking_borrowUsesBackingRequirement(
@@ -1363,7 +1364,9 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _depositCollateral(alice, 2);
 
         // debtValueUsd = ceil(1 OHM unit * 1 price unit / 1e9 OHM scale) = 1 USD unit.
-        // requiredUsd = ceil(1 * 11,500 / 10,000) = 2 USD units.
+        // marketRequiredUsd = ceil(1 * 10,000 / 8,500) = 2 USD units.
+        // backingRequiredUsd = ceil(1 * 12,500 / 10,000) = 2 USD units.
+        // requiredUsd = max(marketRequiredUsd, backingRequiredUsd) = 2 USD units.
         // requiredCollateral = 2 USD units * 1e18 USDS scale / $1e18 = 2 USDS units.
         // fee = ceil(2 * 25 / 10,000) = 1 USDS unit.
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
