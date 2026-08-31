@@ -22,7 +22,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 // Contracts
 import {Kernel, Actions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title CCIPBridgeConfigBatch
 /// @notice Multisig batches around the CCIPBridgeConfig and CCIPBridgeConfigTimelock policies.
@@ -36,11 +36,16 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///           Neither transfer is accepted here: the OCG proposal accepts both.
 ///         - `reEnable` (DAO MS as `bridge_admin`): re-enable the config policy and the config
 ///           timelock after a disable, while their grace windows are open.
-///         - `disableChain` and `disableAllChains` (Emergency MS): containment, which writes the
-///           disabled rate limiter configuration to one or every route of the pool. Available
-///           whether or not the config policy is enabled.
-///         - `disablePolicies` (Emergency MS): disable the config timelock and the config policy,
-///           which stops queueing and execution but not transfers; containment stays available.
+///         - `disableChain` and `disableAllChains` (DAO MS as `bridge_admin`) and their
+///           `EmergencyMS` variants (Emergency MS): containment, which writes the disabled rate
+///           limiter configuration to one or every route of the pool. Available to the
+///           emergency, admin, bridge admin and bridge rate limiter roles, whether or not the
+///           config policy is enabled.
+///         - `disablePolicies` (DAO MS as the local `admin` on a burn/mint chain) and its
+///           `EmergencyMS` variant (Emergency MS): disable the config timelock and the config
+///           policy, which stops queueing and execution but not transfers; containment stays
+///           available. Both owners need `emergency` or `admin`, the gate of `disable()`, which
+///           on mainnet the DAO MS does not hold.
 ///
 ///         Route configuration runs through `CCIPRouteReconcileBatch` and the config timelock.
 contract CCIPBridgeConfigBatch is BatchScriptV2 {
@@ -189,8 +194,9 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
     }
 
     /// @notice Contains one route: writes the disabled rate limiter configuration to both of its
-    ///         buckets (Emergency MS, or any `emergency` or `admin` holder as owner).
-    /// @dev    Not gated on the config policy being enabled. Skipped when the route is already
+    ///         buckets (DAO MS as `bridge_admin`, or any holder of a containment role as owner).
+    /// @dev    `disableChainEmergencyMS` is the same batch with the Emergency MS as owner.
+    ///         Not gated on the config policy being enabled. Skipped when the route is already
     ///         contained. Restoring the approved limits afterwards is a declarative change:
     ///         `CCIPRouteReconcileBatch.reconcileRoutes` queues `setChainRateLimits` from
     ///         `env.json`. Messages that trip the contained inbound bucket fail on this chain and
@@ -200,11 +206,12 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
     ///
     ///         Reverts if:
     ///         - The route is not configured on the pool.
-    ///         - The batch owner holds neither `emergency` nor `admin`.
+    ///         - The batch owner holds none of the emergency, admin, bridge admin and bridge
+    ///           rate limiter roles.
     ///         - The config policy is neither the owner nor the rate limit admin of the pool
     ///           (before the handover, containment belongs to the pool owner through
     ///           `CCIPTokenPool.emergencyShutdown`).
-    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "disableChain.remoteChain").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
@@ -215,13 +222,39 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _planContainChain("disableChain");
+        proposeBatch();
+    }
+
+    /// @notice Contains one route with the Emergency MS as owner.
+    /// @dev    Same behaviour and args file as `disableChain`, under the function name
+    ///         `disableChainEmergencyMS`.
+    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (must contain "disableChainEmergencyMS.remoteChain").
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function disableChainEmergencyMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
     )
         external
         setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
     {
+        _planContainChain("disableChainEmergencyMS");
+        proposeBatch();
+    }
+
+    /// @notice Plans the containment of one route, reading `remoteChain` from the args entry of
+    ///         `functionName_`.
+    function _planContainChain(string memory functionName_) internal {
         _skipHeartbeatValidation = true;
 
-        string memory remoteChain = _readBatchArgString("disableChain", "remoteChain");
+        string memory remoteChain = _readBatchArgString(functionName_, "remoteChain");
         uint64 chainSelector = CCIPConfigLib.chainSelector(env, remoteChain);
         (address config, address pool) = _containmentAddresses();
 
@@ -245,22 +278,22 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         _expectedDisabledSelectors.push(chainSelector);
 
         _setPostBatchValidateSelector(this._validateDisabled.selector);
-
-        proposeBatch();
     }
 
-    /// @notice Contains every configured route of the pool (Emergency MS, or any `emergency` or
-    ///         `admin` holder as owner).
-    /// @dev    Not gated on the config policy being enabled. Skipped when every route is already
+    /// @notice Contains every configured route of the pool (DAO MS as `bridge_admin`, or any
+    ///         holder of a containment role as owner).
+    /// @dev    `disableAllChainsEmergencyMS` is the same batch with the Emergency MS as owner.
+    ///         Not gated on the config policy being enabled. Skipped when every route is already
     ///         contained or when no route is configured. See `disableChain` for the recovery.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
-    ///         - The batch owner holds neither `emergency` nor `admin`.
+    ///         - The batch owner holds none of the emergency, admin, bridge admin and bridge
+    ///           rate limiter roles.
     ///         - The config policy is neither the owner nor the rate limit admin of the pool
     ///           (before the handover, containment belongs to the pool owner through
     ///           `CCIPTokenPool.emergencyShutdownAll`).
-    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
@@ -271,11 +304,36 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _planContainAllChains();
+        proposeBatch();
+    }
+
+    /// @notice Contains every configured route with the Emergency MS as owner.
+    /// @dev    Same behaviour as `disableAllChains`.
+    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function disableAllChainsEmergencyMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
     )
         external
         setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
     {
         _validateArgsFileEmpty(argsFile_);
+        _planContainAllChains();
+        proposeBatch();
+    }
+
+    /// @notice Plans the containment of every configured route.
+    function _planContainAllChains() internal {
         _skipHeartbeatValidation = true;
 
         (address config, address pool) = _containmentAddresses();
@@ -302,13 +360,16 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         }
 
         _setPostBatchValidateSelector(this._validateDisabled.selector);
-
-        proposeBatch();
     }
 
-    /// @notice Disables the config timelock and the config policy (Emergency MS, or any
-    ///         `emergency` or `admin` holder as owner).
-    /// @dev    Freezes the control plane: queueing and execution stop, queued actions are kept
+    /// @notice Disables the config timelock and the config policy (DAO MS, or any `emergency` or
+    ///         `admin` holder as owner).
+    /// @dev    `disablePoliciesEmergencyMS` is the same batch with the Emergency MS as owner.
+    ///         The DAO MS owner serves the burn/mint chains, where it holds the local `admin`
+    ///         role; on mainnet it holds neither `emergency` nor `admin`, so the freeze there is
+    ///         the Emergency MS variant or an OCG proposal.
+    ///
+    ///         Freezes the control plane: queueing and execution stop, queued actions are kept
     ///         and may expire, and containment stays available. Transfers are not stopped; use
     ///         `disableChain` or `disableAllChains` for that. A policy that is already disabled
     ///         is skipped. Recovery is `reEnable` within the grace window, or the admin `enable`
@@ -317,7 +378,7 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
     ///         Reverts if:
     ///         - The args file is not empty.
     ///         - The batch owner holds neither `emergency` nor `admin`.
-    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
@@ -328,11 +389,36 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         string calldata argsFile_,
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _planDisablePolicies();
+        proposeBatch();
+    }
+
+    /// @notice Disables the config timelock and the config policy with the Emergency MS as owner.
+    /// @dev    Same behaviour as `disablePolicies`.
+    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function disablePoliciesEmergencyMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
     )
         external
         setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
     {
         _validateArgsFileEmpty(argsFile_);
+        _planDisablePolicies();
+        proposeBatch();
+    }
+
+    /// @notice Plans the disable of the config timelock and the config policy.
+    function _planDisablePolicies() internal {
         _skipHeartbeatValidation = true;
 
         address kernel = _envAddressNotZero("olympus.Kernel");
@@ -341,7 +427,7 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         ROLESv1 roles = _roles(kernel);
         require(
             roles.hasRole(_owner, EMERGENCY_ROLE) || roles.hasRole(_owner, ADMIN_ROLE),
-            "CCIPBridgeConfigBatch: the batch owner holds neither emergency nor admin"
+            "CCIPBridgeConfigBatch: the batch owner holds neither emergency nor admin; the DAO MS holds admin on the burn/mint chains only, so on mainnet use disablePoliciesEmergencyMS or an OCG proposal"
         );
 
         console2.log("\n=== Disable the CCIP config timelock and config policy ===");
@@ -349,8 +435,6 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         _planDisable(config, "CCIPBridgeConfig");
 
         _setPostBatchValidateSelector(this._validateDisabledPolicies.selector);
-
-        proposeBatch();
     }
 
     // =========== VALIDATION =========== //
@@ -629,8 +713,11 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         );
         ROLESv1 roles = _roles(kernel);
         require(
-            roles.hasRole(_owner, EMERGENCY_ROLE) || roles.hasRole(_owner, ADMIN_ROLE),
-            "CCIPBridgeConfigBatch: the batch owner holds neither emergency nor admin"
+            roles.hasRole(_owner, EMERGENCY_ROLE) ||
+                roles.hasRole(_owner, ADMIN_ROLE) ||
+                roles.hasRole(_owner, BRIDGE_ADMIN_ROLE) ||
+                roles.hasRole(_owner, BRIDGE_RATE_LIMITER_ROLE),
+            "CCIPBridgeConfigBatch: the batch owner holds none of the emergency, admin, bridge admin and bridge rate limiter roles"
         );
     }
 

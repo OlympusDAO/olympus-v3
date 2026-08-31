@@ -39,9 +39,9 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///           supported chains, remote pools, allowlist;
 ///         - the rate limit function (callable by the bridge rate limiter role, the config
 ///           operator or the admin role, enabled only);
-///         - containment functions (callable by the emergency or admin role, whether or not the
-///           policy is enabled): they only write the disabled rate limiter configuration and
-///           cannot restore capacity.
+///         - containment functions (callable by the emergency, admin, bridge admin or bridge
+///           rate limiter role, whether or not the policy is enabled): they only write the
+///           disabled rate limiter configuration and cannot restore capacity.
 ///
 ///         `enable` is restricted to the admin role, `disable` to the emergency or admin role,
 ///         `reEnable` to the bridge admin role within the grace window, and `setGracePeriod` to
@@ -163,6 +163,18 @@ contract CCIPBridgeConfig is
             !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE) &&
                 !_isConfigOperator(msg.sender) &&
                 !_isAdmin(msg.sender)
+        );
+        _;
+    }
+
+    /// @notice Reverts with `NotAuthorised` unless the caller holds the emergency, admin,
+    ///         bridge admin or bridge rate limiter role.
+    modifier onlyContainmentRole() {
+        _requireAuthorized(
+            !_isEmergency(msg.sender) &&
+                !_isAdmin(msg.sender) &&
+                !_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
+                !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE)
         );
         _;
     }
@@ -511,11 +523,12 @@ contract CCIPBridgeConfig is
     ///      each fill level to two units. The policy's enabled state is not checked.
     ///
     ///      Reverts if:
-    ///      - The caller holds neither the emergency role nor the admin role.
+    ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
+    ///        limiter roles.
     ///      - This policy does not own the pool and is not its rate limit admin
     ///        (`Unauthorized`).
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
-    function disableChain(uint64 chainSelector_) external override onlyEmergencyOrAdminRole {
+    function disableChain(uint64 chainSelector_) external override onlyContainmentRole {
         ICCIPRateLimiter.Config memory disabledConfig = _disabledRateLimiterConfig();
         _POOL.setChainRateLimiterConfig(chainSelector_, disabledConfig, disabledConfig);
 
@@ -534,10 +547,11 @@ contract CCIPBridgeConfig is
     ///      call.
     ///
     ///      Reverts if:
-    ///      - The caller holds neither the emergency role nor the admin role.
+    ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
+    ///        limiter roles.
     ///      - At least one route is configured and this policy does not own the pool and is not
     ///        its rate limit admin (`Unauthorized`).
-    function disableAllChains() external override onlyEmergencyOrAdminRole {
+    function disableAllChains() external override onlyContainmentRole {
         uint64[] memory chainSelectors = _POOL.getSupportedChains();
         uint256 length = chainSelectors.length;
         if (length == 0) return;

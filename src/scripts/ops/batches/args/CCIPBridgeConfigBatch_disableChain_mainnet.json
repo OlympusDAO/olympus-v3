@@ -2,13 +2,13 @@
     "functions": [
         {
             "args": {
-                "remoteChain": "solana"
+                "remoteChain": "mainnet"
             },
             "name": "disableChain"
         },
         {
             "args": {
-                "remoteChain": "solana"
+                "remoteChain": "mainnet"
             },
             "name": "disableChainEmergencyMS"
         }

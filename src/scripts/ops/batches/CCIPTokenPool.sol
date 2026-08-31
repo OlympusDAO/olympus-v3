@@ -106,7 +106,7 @@ contract CCIPTokenPool is BatchScriptV2 {
     string internal constant _ROUTE_ALTERNATIVE =
         "Route configuration of a pool owned by CCIPBridgeConfig runs through CCIPRouteReconcileBatch.reconcileRoutes (config timelock) or an OCG proposal.";
     string internal constant _CONTAINMENT_ALTERNATIVE =
-        "Containment of a pool owned by CCIPBridgeConfig runs through CCIPBridgeConfigBatch.disableChain or disableAllChains (Emergency MS).";
+        "Containment of a pool owned by CCIPBridgeConfig runs through CCIPBridgeConfigBatch.disableChain or disableAllChains (the DAO MS as bridge_admin) or their EmergencyMS variants (the Emergency MS).";
     string internal constant _REGISTRY_ALTERNATIVE =
         "On mainnet the OHM administrator is the OCG timelock after the handover: registry changes are OCG proposals.";
     string internal constant _OWNERSHIP_ALTERNATIVE =
@@ -805,7 +805,8 @@ contract CCIPTokenPool is BatchScriptV2 {
 
     /// @notice Performs an emergency shutdown of the TokenPool for a specific remote chain by enabling the rate limiter with a very low capacity
     /// @dev    Direct pool owner path only: once the pool is owned by CCIPBridgeConfig, use
-    ///         `CCIPBridgeConfigBatch.disableChain` (Emergency MS).
+    ///         `CCIPBridgeConfigBatch.disableChain` (the DAO MS as `bridge_admin`) or
+    ///         `disableChainEmergencyMS` (the Emergency MS).
     ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
     function emergencyShutdown(
         bool useDaoMS_,
@@ -823,7 +824,8 @@ contract CCIPTokenPool is BatchScriptV2 {
 
     /// @notice Performs an emergency shutdown of the TokenPool for all remote chains by enabling the rate limiter with a very low capacity
     /// @dev    Direct pool owner path only: once the pool is owned by CCIPBridgeConfig, use
-    ///         `CCIPBridgeConfigBatch.disableAllChains` (Emergency MS).
+    ///         `CCIPBridgeConfigBatch.disableAllChains` (the DAO MS as `bridge_admin`) or
+    ///         `disableAllChainsEmergencyMS` (the Emergency MS).
     ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
     function emergencyShutdownAll(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Determine the remote chains that are configured

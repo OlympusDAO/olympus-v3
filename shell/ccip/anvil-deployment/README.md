@@ -26,7 +26,7 @@ Steps:
 5. Negative checks: the mainnet readiness report is RED and the proposal build fails naming a lane while the OHM fee budgets read the 90k default; then the four mainnet lanes are mocked to 175k and the readiness report turns GREEN.
 6. Phase C (OCG): `executeOnAnvilFork.sh` replays `CCIPBridgeConfigProposal` (12 actions: the handover plus four `addChain`) from the timelock. The replay first runs the proposal through the governance simulation and its own `_validate` inside a snapshot, then sends the actions from the impersonated timelock. The four routes must exist on the pool afterwards.
 7. Post-OCG (DAO MS as `bridge_admin`): `CCIPRouteReconcileBatch.reconcileRoutes` on the converged routes must propose nothing. `CCIPBridge.reconcileTrustedRemotes` adds the four EVM trusted remotes and gas limits (and must propose nothing for solana), with an empty re-run. The timelock path is then exercised end to end: the desired outbound rate in `env.json` is changed, `reconcileRoutes` queues `setChainRateLimits`, a second run proposes nothing (the change is already queued), `executeReadyActions` proposes nothing before the delay, the clock is warped past the delay, `executeReadyActions` executes, and `reconcileRoutes` proposes nothing again. The original rate is then restored through the same cycle.
-8. Containment (Emergency MS): `CCIPBridgeConfigBatch.disableChain` contains the Solana route, a second run proposes nothing, and the declarative recovery (`reconcileRoutes` -> warp -> `executeReadyActions` -> `reconcileRoutes`) restores the approved limits.
+8. Containment: `CCIPBridgeConfigBatch.disableChain` from the DAO MS as `bridge_admin` contains the Solana route, a re-run through the Emergency MS variant (`disableChainEmergencyMS`) proposes nothing, and the declarative recovery (`reconcileRoutes` -> warp -> `executeReadyActions` -> `reconcileRoutes`) restores the approved limits.
 9. Print the final authority state: pool owner and pending owner, rebalancer, rate limit admin, config operator, enabled flags, registry entry, DAO MS roles, routes and buckets.
 
 Every batch log is asserted: steps that must change state must report `Batch executed successfully on Anvil fork`, and re-runs on a converged state must report `No batch targets to execute`.
@@ -47,7 +47,9 @@ Steps:
 6. `CCIPNonEthereumSetupBatch.setup` (legacy LZ deactivation, activations, roles, config/timelock enablement, pool acceptance, `addChain` per route), with an empty re-run; the pool must still be disabled and unregistered afterwards.
 7. `CCIPNonEthereumSetupBatch.finalize` (`pool.enable`, `setPool`), with an empty re-run.
 8. Periphery: `CCIPBridge.reconcileTrustedRemotes` and `CCIPBridge.enable`, each with an empty re-run.
-9. Print the final authority state.
+9. Containment and recovery on the local pool: `CCIPBridgeConfigBatch.disableChain` from the DAO MS as `bridge_admin` contains the mainnet route (args file `CCIPBridgeConfigBatch_disableChain_mainnet.json`), a re-run through `disableChainEmergencyMS` from the Emergency MS proposes nothing, and the declarative recovery (`reconcileRoutes` -> warp -> `executeReadyActions` -> `reconcileRoutes`) restores the approved limits through the local config timelock.
+10. Control plane: `CCIPBridgeConfigBatch.disablePolicies` from the DAO MS as the local `admin` freezes the config policy and the timelock, and `CCIPBridgeConfigBatch.reEnable` from the DAO MS as `bridge_admin` restores them inside the grace window, each with an empty re-run.
+11. Print the final authority state.
 
 ## Rehearse against the already-deployed contracts
 

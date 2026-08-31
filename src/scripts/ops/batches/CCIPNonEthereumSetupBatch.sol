@@ -55,8 +55,10 @@ interface ILegacyCrossChainBridge {
 ///
 ///         The steady state afterwards is served by the shared tooling: routes through
 ///         `CCIPRouteReconcileBatch`, containment and re-enable through `CCIPBridgeConfigBatch`.
-///         The pool itself has no `reEnable`: after a `disable` it is restored only by the local
-///         admin role through `enable`.
+///         Containment is available to the local DAO MS, which holds both `admin` and
+///         `bridge_admin`, through `disableChain` and `disableAllChains`, and to the Emergency MS
+///         through their `EmergencyMS` variants. The pool itself has no `reEnable`: after a
+///         `disable` it is restored only by the local admin role through `enable`.
 contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     // =========== STATE =========== //
 

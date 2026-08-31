@@ -22,9 +22,9 @@
 #      warping past the delay, executing, and reconciling again (empty). The
 #      periphery reconciler adds the four EVM trusted remotes (nothing for
 #      solana) and proposes nothing on a re-run.
-#   6. Containment (Emergency MS): CCIPBridgeConfigBatch.disableChain, then the
-#      declarative recovery through the timelock, then a second disableChain
-#      that must propose nothing.
+#   6. Containment: CCIPBridgeConfigBatch.disableChain from the DAO MS as
+#      bridge_admin, an empty re-run through the Emergency MS variant, then the
+#      declarative recovery through the timelock.
 #   7. Print the final authority state.
 #
 # Usage:
@@ -223,12 +223,12 @@ expect_non_empty_batch "$LAST_BATCH_LOG" "executeReadyActions (restore)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-restored"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after restore"
 
-step "Containment (Emergency MS) and declarative recovery"
-run_batch CCIPBridgeConfigBatch disableChain emergency "$DISABLE_ARGS"
-expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain"
+step "Containment (DAO MS) and declarative recovery"
+run_batch CCIPBridgeConfigBatch disableChain dao "$DISABLE_ARGS"
+expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain (DAO MS)"
 echo "config.isChainDisabled(solana) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")"
-run_batch CCIPBridgeConfigBatch disableChain emergency "$DISABLE_ARGS" "-rerun"
-expect_empty_batch "$LAST_BATCH_LOG" "disableChain re-run"
+run_batch CCIPBridgeConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
+expect_empty_batch "$LAST_BATCH_LOG" "disableChainEmergencyMS re-run"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovery-queue"
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore)"
 warp "$((delay + 1))"

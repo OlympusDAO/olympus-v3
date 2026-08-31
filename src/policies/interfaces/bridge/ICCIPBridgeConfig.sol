@@ -12,8 +12,9 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 ///         admin functions that change root authority and pool infrastructure; route functions
 ///         that change the supported chains, remote pools and allowlist, callable by the config
 ///         operator or the admin; the rate limit function, additionally callable by the bridge
-///         rate limiter role; and containment functions, callable by the emergency or admin
-///         role, that only reduce capacity and remain callable while the policy is disabled.
+///         rate limiter role; and containment functions, callable by the emergency, admin,
+///         bridge admin or bridge rate limiter role, that only reduce capacity and remain
+///         callable while the policy is disabled.
 ///         Every other state-changing function requires the policy to be enabled.
 ///
 ///         The config operator is the delegated operator of `IConfigOperator`: `configOperator`
@@ -283,13 +284,15 @@ interface ICCIPBridgeConfig is IConfigOperator {
 
     /// @notice Sets both buckets of a route to the disabled rate limiter configuration. Safe to
     ///         call on a route that is already contained. Intended to be callable only by the
-    ///         emergency or admin role, whether or not the policy is enabled.
+    ///         emergency, admin, bridge admin or bridge rate limiter role, whether or not the
+    ///         policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     function disableChain(uint64 chainSelector_) external;
 
     /// @notice Sets both buckets of every configured route to the disabled rate limiter
     ///         configuration. Does nothing when no route is configured. Intended to be callable
-    ///         only by the emergency or admin role, whether or not the policy is enabled.
+    ///         only by the emergency, admin, bridge admin or bridge rate limiter role, whether
+    ///         or not the policy is enabled.
     function disableAllChains() external;
 
     // ========== VALIDATION FUNCTIONS ========== //
