@@ -5,7 +5,7 @@ applied with `git apply`.
 
 ## chainlink-local-029-sender-abi-encode.patch
 
-**Target:** `dependencies/chainlink-local-029-0.2.9/src/ccip/CCIPLocalSimulatorFork.sol`
+**Target:** `dependencies/chainlink-local-0.2.9/src/ccip/CCIPLocalSimulatorFork.sol`
 (chainlink-local v0.2.9, rev `f8c0efe8685660dac07e08f4558f1b578ae991aa`)
 
 **What it fixes:** in `_executePostV1dot6`, the simulator reconstructs the inbound
