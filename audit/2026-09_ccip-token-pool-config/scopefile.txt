@@ -1,4 +1,4 @@
-# CCIP Bridge Configuration Audit Scope
+# CCIP Token Pool Configuration Audit Scope
 
 # Core Policies and Interfaces
 
