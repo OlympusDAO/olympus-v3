@@ -5,15 +5,15 @@ pragma solidity ^0.8.24;
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 
 // Contracts
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 
 import {Kernel} from "src/Kernel.sol";
-import {CCIPBridgeConfig} from "src/policies/bridge/CCIPBridgeConfig.sol";
-import {CCIPBridgeConfigTimelock} from "src/policies/bridge/CCIPBridgeConfigTimelock.sol";
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 
 /// @notice Shared base of the CCIP migration fork tests. The suites replay the migration
 ///         procedures (the bootstrap of a chain, the config-pair replacement and the
@@ -39,13 +39,13 @@ abstract contract CCIPMigrationForkTestBase is Test {
 
     /// @notice The pair the running procedure deploys: the config policy and the config
     ///         timelock. The replacement suites additionally track the outgoing pair below.
-    CCIPBridgeConfig internal config;
-    CCIPBridgeConfigTimelock internal timelock;
+    CCIPTokenPoolConfig internal config;
+    CCIPTokenPoolConfigTimelock internal timelock;
 
     /// @notice The outgoing pair of a replacement procedure, captured from `config`/`timelock`
     ///         by `_promoteToOldPair` before the new pair is deployed over them.
-    CCIPBridgeConfig internal oldConfig;
-    CCIPBridgeConfigTimelock internal oldTimelock;
+    CCIPTokenPoolConfig internal oldConfig;
+    CCIPTokenPoolConfigTimelock internal oldTimelock;
 
     /// @notice The action a replacement suite seeds in the outgoing timelock, so the
     ///         migration's cancellation step has something meaningful to cancel.
@@ -107,9 +107,9 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         every procedure's deployment step does, and binds them to the `config` and
     ///         `timelock` variables.
     function _deployPair(Kernel kernel_, address pool_) internal {
-        config = new CCIPBridgeConfig(kernel_, pool_, STANDARD_GRACE_PERIOD);
+        config = new CCIPTokenPoolConfig(kernel_, pool_, STANDARD_GRACE_PERIOD);
         vm.label(address(config), "newConfig");
-        timelock = new CCIPBridgeConfigTimelock(
+        timelock = new CCIPTokenPoolConfigTimelock(
             kernel_,
             address(config),
             STANDARD_TIMELOCK_DELAY,
@@ -131,8 +131,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         `seededActionId`, asserting the reservation landed. This is what the
     ///         cancellation step of every replacement procedure exists for.
     function _seedQueuedRateLimitAction(
-        CCIPBridgeConfigTimelock timelock_,
-        CCIPBridgeConfig config_,
+        CCIPTokenPoolConfigTimelock timelock_,
+        CCIPTokenPoolConfig config_,
         address proposer_,
         uint64 chainSelector_
     ) internal {
@@ -258,8 +258,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         seat, and both active in the kernel.
     function _assertStackWired(
         Kernel kernel_,
-        CCIPBridgeConfig config_,
-        CCIPBridgeConfigTimelock timelock_,
+        CCIPTokenPoolConfig config_,
+        CCIPTokenPoolConfigTimelock timelock_,
         address pool_,
         string memory label_
     ) internal view {
@@ -299,8 +299,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         validated paths refuse to write back) is instead moved onto standard enabled
     ///         limits, which is exactly the write the real rollout performs next.
     function _assertTimelockPathServes(
-        CCIPBridgeConfig config_,
-        CCIPBridgeConfigTimelock timelock_,
+        CCIPTokenPoolConfig config_,
+        CCIPTokenPoolConfigTimelock timelock_,
         address bridgeAdmin_,
         uint64 chainSelector_
     ) internal {
@@ -342,7 +342,7 @@ abstract contract CCIPMigrationForkTestBase is Test {
     function _expectRevertConfigNotActive(address config_) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICCIPBridgeConfigTimelock.CCIPBridgeConfigTimelock_ConfigNotActive.selector,
+                ICCIPTokenPoolConfigTimelock.CCIPTokenPoolConfigTimelock_ConfigNotActive.selector,
                 config_
             )
         );

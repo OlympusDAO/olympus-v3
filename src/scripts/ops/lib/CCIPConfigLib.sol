@@ -20,7 +20,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///         parameters and the desired routes from `env.json`, reading the live route state from a
 ///         token pool, and comparing the two field by field.
 /// @dev The desired state of a chain lives under `current.<chain>.olympus.config`:
-///      - `CCIPBridgeConfig.{gracePeriod,timelockDelay,rebalancer,rateLimitAdmin}` are the
+///      - `CCIPTokenPoolConfig.{gracePeriod,timelockDelay,rebalancer,rateLimitAdmin}` are the
 ///        deployment and validation parameters of the config policy and its timelock;
 ///      - `CCIP.routes.<remoteChain>` declares one route per remote chain with `enabled`
 ///        (whose `false` value marks the route for removal), `outboundRateLimit` and
@@ -44,7 +44,7 @@ library CCIPConfigLib {
 
     VmSafe internal constant _VM = VmSafe(address(uint160(uint256(keccak256("hevm cheat code")))));
 
-    string internal constant CONFIG_KEY = "olympus.config.CCIPBridgeConfig";
+    string internal constant CONFIG_KEY = "olympus.config.CCIPTokenPoolConfig";
     string internal constant ROUTES_KEY = "olympus.config.CCIP.routes";
     string internal constant MIN_POOL_BACKING_KEY = "olympus.config.CCIP.minimumPoolBacking";
     string internal constant LOCK_RELEASE_POOL_KEY = "olympus.periphery.CCIPLockReleaseTokenPool";

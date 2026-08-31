@@ -10,7 +10,7 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 // Contracts
 import {Actions, Kernel} from "src/Kernel.sol";
 import {LockReleaseTokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/LockReleaseTokenPool.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 
 import {CCIPEthereumMigrationForkTest} from "./CCIPEthereumMigrationForkTest.sol";
 
@@ -248,7 +248,7 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
 
     // given the replacement has completed
     //   when its steps are repeated
-    //     [X] a second liquidity pull reverts with CCIPBridgeConfig_ZeroAmount (the source
+    //     [X] a second liquidity pull reverts with CCIPTokenPoolConfig_ZeroAmount (the source
     //         is empty)
     //     [X] the outgoing disables revert with NotEnabled
     //     [X] the kernel deactivations revert with Kernel_PolicyNotActivated
@@ -261,7 +261,7 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
         uint64 firstSelector = burnMintRoutes[0].chainSelector;
 
         vm.expectRevert(
-            abi.encodeWithSelector(ICCIPBridgeConfig.CCIPBridgeConfig_ZeroAmount.selector)
+            abi.encodeWithSelector(ICCIPTokenPoolConfig.CCIPTokenPoolConfig_ZeroAmount.selector)
         );
         vm.prank(ocgTimelock);
         config.transferLiquidity(oldPoolAddress, 0);

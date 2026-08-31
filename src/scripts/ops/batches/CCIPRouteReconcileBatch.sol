@@ -9,8 +9,8 @@ import {console2} from "@forge-std-1.16.2/console2.sol";
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -24,7 +24,7 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 
 /// @title CCIPRouteReconcileBatch
 /// @notice Declarative route reconciliation for the CCIP token pool through the
-///         CCIPBridgeConfigTimelock. `env.json` is the desired state; the pool is the live
+///         CCIPTokenPoolConfigTimelock. `env.json` is the desired state; the pool is the live
 ///         state; the batch contains only the typed timelock actions that converge the two.
 ///
 ///         Entry points:
@@ -101,14 +101,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         _skipHeartbeatValidation = true;
 
         (
-            ICCIPBridgeConfig config,
-            ICCIPBridgeConfigTimelock timelock,
+            ICCIPTokenPoolConfig config,
+            ICCIPTokenPoolConfigTimelock timelock,
             ICCIPTokenPoolAdmin pool
         ) = _contracts();
 
         console2.log("\n=== Reconcile CCIP routes through the config timelock ===");
-        console2.log("CCIPBridgeConfig:", address(config));
-        console2.log("CCIPBridgeConfigTimelock:", address(timelock));
+        console2.log("CCIPTokenPoolConfig:", address(config));
+        console2.log("CCIPTokenPoolConfigTimelock:", address(timelock));
         console2.log("Token pool:", address(pool));
 
         _requireQueueable(config, timelock, pool);
@@ -161,13 +161,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
-        ICCIPBridgeConfigTimelock timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         uint64 nextActionId = timelock.nextActionId();
 
         console2.log("\n=== Execute ready CCIP config timelock actions ===");
-        console2.log("CCIPBridgeConfigTimelock:", address(timelock));
+        console2.log("CCIPTokenPoolConfigTimelock:", address(timelock));
         console2.log("Block timestamp:", block.timestamp);
         console2.log("Queued actions so far:", nextActionId - 1);
 
@@ -273,10 +273,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Validates the state after `reconcileRoutes`: every queued change holds its keys
     ///         and every cancelled action is cancelled.
     function _validateReconcileRoutes() external view {
-        ICCIPBridgeConfigTimelock timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
-        address config = _envAddressNotZero("olympus.policies.CCIPBridgeConfig");
+        address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
 
         console2.log("\nValidating reconcileRoutes post-batch state");
         for (uint256 i; i < _cancelledIds.length; ++i) {
@@ -307,8 +307,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     /// @notice Validates the state after `executeReadyActions`.
     function _validateExecuted() external view {
-        ICCIPBridgeConfigTimelock timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
 
         console2.log("\nValidating executeReadyActions post-batch state");
@@ -324,8 +324,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     /// @notice Validates the state after a cancellation.
     function _validateCancelled() external view {
-        ICCIPBridgeConfigTimelock timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
 
         console2.log("\nValidating cancellation post-batch state");
@@ -339,8 +339,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     // =========== PLANNING =========== //
 
     function _planRoute(
-        ICCIPBridgeConfig config_,
-        ICCIPBridgeConfigTimelock timelock_,
+        ICCIPTokenPoolConfig config_,
+        ICCIPTokenPoolConfigTimelock timelock_,
         ICCIPTokenPoolAdmin pool_,
         CCIPConfigLib.DesiredRoute memory desired_
     ) internal {
@@ -360,9 +360,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateRemoveChain(selector);
             _addPlanned(
                 string.concat("removeChain(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.removeChain.selector,
+                ICCIPTokenPoolConfig.removeChain.selector,
                 abi.encode(selector),
-                abi.encodeCall(ICCIPBridgeConfigTimelock.queueRemoveChain, (selector)),
+                abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueRemoveChain, (selector)),
                 _routeKeys(timelock_, selector)
             );
             return;
@@ -380,9 +380,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateAddChain(update);
             _addPlanned(
                 string.concat("addChain(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.addChain.selector,
+                ICCIPTokenPoolConfig.addChain.selector,
                 abi.encode(update),
-                abi.encodeCall(ICCIPBridgeConfigTimelock.queueAddChain, (update)),
+                abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueAddChain, (update)),
                 _routeKeys(timelock_, selector)
             );
             return;
@@ -404,10 +404,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateSetRemoteToken(selector, desired_.remoteToken);
             _addPlanned(
                 string.concat("setRemoteToken(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.setRemoteToken.selector,
+                ICCIPTokenPoolConfig.setRemoteToken.selector,
                 abi.encode(selector, desired_.remoteToken),
                 abi.encodeCall(
-                    ICCIPBridgeConfigTimelock.queueSetRemoteToken,
+                    ICCIPTokenPoolConfigTimelock.queueSetRemoteToken,
                     (selector, desired_.remoteToken)
                 ),
                 _routeKeys(timelock_, selector)
@@ -420,10 +420,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateAddRemotePool(selector, diff.poolsToAdd[0]);
             _addPlanned(
                 string.concat("addRemotePool(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.addRemotePool.selector,
+                ICCIPTokenPoolConfig.addRemotePool.selector,
                 abi.encode(selector, diff.poolsToAdd[0]),
                 abi.encodeCall(
-                    ICCIPBridgeConfigTimelock.queueAddRemotePool,
+                    ICCIPTokenPoolConfigTimelock.queueAddRemotePool,
                     (selector, diff.poolsToAdd[0])
                 ),
                 _singleKey(timelock_.getRemotePoolsKey(selector))
@@ -437,10 +437,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateRemoveRemotePool(selector, diff.poolsToRemove[0]);
             _addPlanned(
                 string.concat("removeRemotePool(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.removeRemotePool.selector,
+                ICCIPTokenPoolConfig.removeRemotePool.selector,
                 abi.encode(selector, diff.poolsToRemove[0]),
                 abi.encodeCall(
-                    ICCIPBridgeConfigTimelock.queueRemoveRemotePool,
+                    ICCIPTokenPoolConfigTimelock.queueRemoveRemotePool,
                     (selector, diff.poolsToRemove[0])
                 ),
                 _singleKey(timelock_.getRemotePoolsKey(selector))
@@ -457,10 +457,10 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateSetChainRateLimits(selector, desired_.outbound, desired_.inbound);
             _addPlanned(
                 string.concat("setChainRateLimits(", desired_.remoteChain, ")"),
-                ICCIPBridgeConfig.setChainRateLimits.selector,
+                ICCIPTokenPoolConfig.setChainRateLimits.selector,
                 abi.encode(selector, desired_.outbound, desired_.inbound),
                 abi.encodeCall(
-                    ICCIPBridgeConfigTimelock.queueSetChainRateLimits,
+                    ICCIPTokenPoolConfigTimelock.queueSetChainRateLimits,
                     (selector, desired_.outbound, desired_.inbound)
                 ),
                 _singleKey(timelock_.getRateLimitsKey(selector))
@@ -473,8 +473,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         pending action that serves one planned change but blocks another is cancelled and
     ///         both changes are queued afresh.
     function _planCancellations(
-        ICCIPBridgeConfig config_,
-        ICCIPBridgeConfigTimelock timelock_
+        ICCIPTokenPoolConfig config_,
+        ICCIPTokenPoolConfigTimelock timelock_
     ) internal {
         ROLESv1 roles = _roles();
         for (uint256 i; i < _plan.length; ++i) {
@@ -528,7 +528,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Queues a planned change unless an unexpired, uncancelled pending action already
     ///         carries it. After `_planCancellations` every remaining holder of a needed key is
     ///         such an action.
-    function _queuePlanned(ICCIPBridgeConfigTimelock timelock_, uint256 index_) internal {
+    function _queuePlanned(ICCIPTokenPoolConfigTimelock timelock_, uint256 index_) internal {
         Planned storage planned = _plan[index_];
         console2.log("\n", planned.description);
 
@@ -553,8 +553,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     function _planCancel(string memory functionName_) internal {
         _skipHeartbeatValidation = true;
 
-        ICCIPBridgeConfigTimelock timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         uint64 actionId = uint64(_readBatchArgUint256(functionName_, "actionId"));
         ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(actionId);
@@ -590,14 +590,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         internal
         view
         returns (
-            ICCIPBridgeConfig config,
-            ICCIPBridgeConfigTimelock timelock,
+            ICCIPTokenPoolConfig config,
+            ICCIPTokenPoolConfigTimelock timelock,
             ICCIPTokenPoolAdmin pool
         )
     {
-        config = ICCIPBridgeConfig(_envAddressNotZero("olympus.policies.CCIPBridgeConfig"));
-        timelock = ICCIPBridgeConfigTimelock(
-            _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock")
+        config = ICCIPTokenPoolConfig(_envAddressNotZero("olympus.policies.CCIPTokenPoolConfig"));
+        timelock = ICCIPTokenPoolConfigTimelock(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         pool = ICCIPTokenPoolAdmin(_envAddressNotZero(CCIPConfigLib.poolKey(chain)));
         require(
@@ -612,8 +612,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     /// @notice Reverts unless a `queue*` call from the batch owner would be accepted.
     function _requireQueueable(
-        ICCIPBridgeConfig config_,
-        ICCIPBridgeConfigTimelock timelock_,
+        ICCIPTokenPoolConfig config_,
+        ICCIPTokenPoolConfigTimelock timelock_,
         ICCIPTokenPoolAdmin pool_
     ) internal view {
         address poolOwner = pool_.owner();
@@ -669,7 +669,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     }
 
     function _routeKeys(
-        ICCIPBridgeConfigTimelock timelock_,
+        ICCIPTokenPoolConfigTimelock timelock_,
         uint64 selector_
     ) internal view returns (bytes32[] memory keys) {
         keys = new bytes32[](3);
@@ -712,7 +712,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Executes an action inside a state snapshot that is reverted afterwards, to learn
     ///         whether the execution would succeed.
     function _dryRunExecute(
-        ICCIPBridgeConfigTimelock timelock_,
+        ICCIPTokenPoolConfigTimelock timelock_,
         uint64 actionId_
     ) internal returns (bool success, bytes memory revertData) {
         uint256 snapshotId = vm.snapshotState();
@@ -733,7 +733,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         ) return "ConfigStateChanged (the route moved since queueing; cancel and reconcile again)";
         if (
             selector ==
-            ICCIPBridgeConfigTimelock.CCIPBridgeConfigTimelock_NotConfigOperator.selector
+            ICCIPTokenPoolConfigTimelock.CCIPTokenPoolConfigTimelock_NotConfigOperator.selector
         ) return "NotConfigOperator (the config policy names another config operator)";
         if (selector == IEnabler.NotEnabled.selector)
             return "NotEnabled (the timelock or the config policy is disabled)";

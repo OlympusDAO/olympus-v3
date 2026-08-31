@@ -1,11 +1,11 @@
 {
     "sequence": [
         {
-            "name": "CCIPBridgeConfig",
+            "name": "CCIPTokenPoolConfig",
             "args": {}
         },
         {
-            "name": "CCIPBridgeConfigTimelock",
+            "name": "CCIPTokenPoolConfigTimelock",
             "args": {}
         }
     ]

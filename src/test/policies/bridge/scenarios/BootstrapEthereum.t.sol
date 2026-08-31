@@ -150,7 +150,7 @@ contract CCIPMigrationForkTests_BootstrapEthereum is CCIPEthereumMigrationForkTe
 
     // given only the timelock has been activated in the kernel
     //   when the timelock is enabled
-    //     [X] it reverts with CCIPBridgeConfigTimelock_ConfigNotActive
+    //     [X] it reverts with CCIPTokenPoolConfigTimelock_ConfigNotActive
     // Enabling the timelock requires the config policy to be an active kernel policy, so the
     // activation order of the DAO batch is load-bearing
     function test_whenTimelockEnablePrecedesConfigActivation_reverts() public {

@@ -32,7 +32,7 @@ source "$HERE/lib/common.sh"
 CHAIN="arbitrum"
 # A burn/mint chain contains its mainnet route; the unsuffixed args file names
 # the mainnet Solana route and serves run-ethereum.sh.
-DISABLE_ARGS="src/scripts/ops/batches/args/CCIPBridgeConfigBatch_disableChain_mainnet.json"
+DISABLE_ARGS="src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain_mainnet.json"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -90,10 +90,10 @@ deploy_sequence "src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json"
 
 pool="$(env_addr "$CHAIN" olympus.policies.CCIPBurnMintTokenPool)"
 require_addr "$pool" "deployed CCIPBurnMintTokenPool"
-cfg="$(env_addr "$CHAIN" olympus.policies.CCIPBridgeConfig)"
-require_addr "$cfg" "deployed CCIPBridgeConfig"
-tl="$(env_addr "$CHAIN" olympus.policies.CCIPBridgeConfigTimelock)"
-require_addr "$tl" "deployed CCIPBridgeConfigTimelock"
+cfg="$(env_addr "$CHAIN" olympus.policies.CCIPTokenPoolConfig)"
+require_addr "$cfg" "deployed CCIPTokenPoolConfig"
+tl="$(env_addr "$CHAIN" olympus.policies.CCIPTokenPoolConfigTimelock)"
+require_addr "$tl" "deployed CCIPTokenPoolConfigTimelock"
 per="$(env_addr "$CHAIN" olympus.periphery.CCIPCrossChainBridge)"
 require_addr "$per" "deployed CCIPCrossChainBridge"
 log "pool=$pool config=$cfg timelock=$tl periphery=$per"
@@ -163,10 +163,10 @@ run_batch CCIPBridge enable dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "periphery enable re-run"
 
 step "Containment (DAO MS as bridge_admin) and declarative recovery"
-run_batch CCIPBridgeConfigBatch disableChain dao "$DISABLE_ARGS"
+run_batch CCIPTokenPoolConfigBatch disableChain dao "$DISABLE_ARGS"
 expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain (DAO MS)"
 echo "config.isChainDisabled(mainnet) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")"
-run_batch CCIPBridgeConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
+run_batch CCIPTokenPoolConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "disableChainEmergencyMS re-run"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovery-queue"
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore)"
@@ -180,15 +180,15 @@ expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after recovery"
 echo "config.isChainDisabled(mainnet) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")"
 
 step "Control-plane freeze (DAO MS as the local admin) and grace-window reEnable"
-run_batch CCIPBridgeConfigBatch disablePolicies dao
+run_batch CCIPTokenPoolConfigBatch disablePolicies dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "disablePolicies (DAO MS)"
 echo "config.isEnabled()   = $(cast call "$cfg" 'isEnabled()(bool)' --rpc-url "$RPC")"
 echo "timelock.isEnabled() = $(cast call "$tl" 'isEnabled()(bool)' --rpc-url "$RPC")"
-run_batch CCIPBridgeConfigBatch disablePolicies dao "" "-rerun"
+run_batch CCIPTokenPoolConfigBatch disablePolicies dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "disablePolicies re-run"
-run_batch CCIPBridgeConfigBatch reEnable dao
+run_batch CCIPTokenPoolConfigBatch reEnable dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "reEnable (DAO MS as bridge_admin)"
-run_batch CCIPBridgeConfigBatch reEnable dao "" "-rerun"
+run_batch CCIPTokenPoolConfigBatch reEnable dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reEnable re-run"
 
 step "Post-run state"

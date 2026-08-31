@@ -23,8 +23,8 @@ import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
-import {CCIPBridgeConfig} from "src/policies/bridge/CCIPBridgeConfig.sol";
-import {CCIPBridgeConfigTimelock} from "src/policies/bridge/CCIPBridgeConfigTimelock.sol";
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -523,13 +523,13 @@ contract DeployV3 is WithEnvironment {
         return (address(ccipCrossChainBridge), "olympus.periphery");
     }
 
-    /// @notice Deploys the CCIPBridgeConfig policy for the local token pool.
+    /// @notice Deploys the CCIPTokenPoolConfig policy for the local token pool.
     /// @dev    The pool is the lock/release pool on a canonical chain and the burn/mint pool
     ///         otherwise, resolved from the same sequence first so that the pool and the config
     ///         policy can be deployed together. `gracePeriod` defaults to
-    ///         `olympus.config.CCIPBridgeConfig.gracePeriod` and can be overridden by the
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod` and can be overridden by the
     ///         sequence argument of the same name.
-    function deployCCIPBridgeConfig() public returns (address, string memory) {
+    function deployCCIPTokenPoolConfig() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
@@ -538,54 +538,55 @@ contract DeployV3 is WithEnvironment {
             : _getAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
         uint32 gracePeriod = SafeCast.encodeUInt32(
             _readDeploymentArgUint256OrEnv(
-                "CCIPBridgeConfig",
+                "CCIPTokenPoolConfig",
                 "gracePeriod",
-                "olympus.config.CCIPBridgeConfig.gracePeriod"
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
             )
         );
 
         // Log parameters
-        console2.log("CCIPBridgeConfig parameters:");
+        console2.log("CCIPTokenPoolConfig parameters:");
         console2.log("  kernel", kernel);
         console2.log("  pool", pool);
         console2.log("  gracePeriod", gracePeriod);
 
         // Deploy
         vm.broadcast();
-        CCIPBridgeConfig config = new CCIPBridgeConfig(Kernel(kernel), pool, gracePeriod);
+        CCIPTokenPoolConfig config = new CCIPTokenPoolConfig(Kernel(kernel), pool, gracePeriod);
 
         return (address(config), "olympus.policies");
     }
 
-    /// @notice Deploys the CCIPBridgeConfigTimelock policy for the CCIPBridgeConfig policy.
+    /// @notice Deploys the CCIPTokenPoolConfigTimelock policy for the CCIPTokenPoolConfig policy.
     /// @dev    The config policy must already be deployed (in this sequence or in `env.json`); the
-    ///         timelock constructor requires it to advertise `ICCIPBridgeConfig`,
+    ///         timelock constructor requires it to advertise `ICCIPTokenPoolConfig`,
     ///         `IConfigOperator` and `IEnabler` and to report the same Kernel.
-    ///         `initialTimelockDelay` defaults to `olympus.config.CCIPBridgeConfig.timelockDelay`
-    ///         and `gracePeriod` to `olympus.config.CCIPBridgeConfig.gracePeriod`; both can be
-    ///         overridden by the sequence arguments of the same name.
-    function deployCCIPBridgeConfigTimelock() public returns (address, string memory) {
+    ///         `initialTimelockDelay` defaults to
+    ///         `olympus.config.CCIPTokenPoolConfig.timelockDelay` and `gracePeriod` to
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod`; both can be overridden by the
+    ///         sequence arguments of the same name.
+    function deployCCIPTokenPoolConfigTimelock() public returns (address, string memory) {
         // Dependencies
         console2.log("Checking dependencies");
         address kernel = _getAddressNotZero("olympus.Kernel");
-        address config = _getAddressNotZero("olympus.policies.CCIPBridgeConfig");
+        address config = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
         uint48 initialTimelockDelay = SafeCast.encodeUInt48(
             _readDeploymentArgUint256OrEnv(
-                "CCIPBridgeConfigTimelock",
+                "CCIPTokenPoolConfigTimelock",
                 "initialTimelockDelay",
-                "olympus.config.CCIPBridgeConfig.timelockDelay"
+                "olympus.config.CCIPTokenPoolConfig.timelockDelay"
             )
         );
         uint32 gracePeriod = SafeCast.encodeUInt32(
             _readDeploymentArgUint256OrEnv(
-                "CCIPBridgeConfigTimelock",
+                "CCIPTokenPoolConfigTimelock",
                 "gracePeriod",
-                "olympus.config.CCIPBridgeConfig.gracePeriod"
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
             )
         );
 
         // Log parameters
-        console2.log("CCIPBridgeConfigTimelock parameters:");
+        console2.log("CCIPTokenPoolConfigTimelock parameters:");
         console2.log("  kernel", kernel);
         console2.log("  config", config);
         console2.log("  initialTimelockDelay", initialTimelockDelay);
@@ -593,7 +594,7 @@ contract DeployV3 is WithEnvironment {
 
         // Deploy
         vm.broadcast();
-        CCIPBridgeConfigTimelock timelock = new CCIPBridgeConfigTimelock(
+        CCIPTokenPoolConfigTimelock timelock = new CCIPTokenPoolConfigTimelock(
             Kernel(kernel),
             config,
             initialTimelockDelay,
