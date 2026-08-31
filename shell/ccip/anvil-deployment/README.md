@@ -20,7 +20,7 @@ Each run backs up and, on exit, restores `src/scripts/env.json` and `src/proposa
 Steps:
 
 1. Inject placeholder pools and peripheries for the four burn/mint chains into `env.json` (the proposal encodes them into its route actions; the mainnet fork cannot see the real ones). Start an Anvil fork of mainnet; fund the deployer and the timelock.
-2. Deploy `ccip_config_mainnet.json` (`CCIPBridgeConfig`, then `CCIPBridgeConfigTimelock` from its artifact) and print the binding (`config.pool()`, `timelock.config()`, delay, grace periods).
+2. Deploy `ccip_config_mainnet.json` (`CCIPBridgeConfig`, then `CCIPBridgeConfigTimelock`) and print the binding (`config.pool()`, `timelock.config()`, delay, grace periods).
 3. Sync the deployed addresses into `addresses.json`.
 4. Phase B (DAO MS as Kernel executor, pool owner and OHM administrator): `CCIPBridgeConfigBatch.prepareHandover`, then a second run that must propose nothing. Then `CCIPTokenPool.fundPool` tops the pool up to `olympus.config.CCIP.minimumPoolBacking` (minting to the DAO MS from the impersonated MINTR module first if its balance were ever short), with an empty re-run.
 5. Negative checks: the mainnet readiness report is RED and the proposal build fails naming a lane while the OHM fee budgets read the 90k default; then the four mainnet lanes are mocked to 175k and the readiness report turns GREEN.

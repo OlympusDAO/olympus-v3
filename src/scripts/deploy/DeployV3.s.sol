@@ -18,13 +18,13 @@ import {IDistributor} from "src/policies/interfaces/IDistributor.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IgOHM} from "src/interfaces/IgOHM.sol";
 import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
 
 // Contracts
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
 import {CCIPBridgeConfig} from "src/policies/bridge/CCIPBridgeConfig.sol";
+import {CCIPBridgeConfigTimelock} from "src/policies/bridge/CCIPBridgeConfigTimelock.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -99,10 +99,16 @@ import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 ///         - helper functions for reading deployment arguments from the sequence file
 ///         - remove the use of state variables for all of the contracts, since they can be loaded easily with `_envAddressNotZero()`
 ///         - deployment functions can reference deployments from the same sequence file (using `_getAddressNotZero()`)
-/// @dev    Do not import contracts with non-default optimizer settings into this script. Restrictions
-///         apply to the entire import graph, including every contract created with `new`, even if the
-///         restricted contract is not deployed. For example, importing Operator would apply its 10-run
-///         setting to the graph. Use interfaces for interactions and dedicated deployment scripts.
+///
+///         Run this script under the `deploy` profile, which `shell/deployV3.sh` sets. That profile
+///         is the source of deployment bytecode: it compiles the whole graph with the optimizer at
+///         400 runs and clears the per-path `compilation_restrictions` that the everyday profile
+///         applies. Under the everyday profile the settings follow the import graph, since a
+///         restriction covers the whole connected graph: this script lands in the same 400-runs
+///         job through its `src/proposals` imports, and its bytecode carries the 400-runs
+///         creation code of every contract it deploys. That is incidental rather than guaranteed,
+///         and the runtime code of a large contract compiled without the optimizer exceeds the
+///         24,576 B limit and cannot be deployed.
 contract DeployV3 is WithEnvironment {
     using stdJson for string;
 
@@ -552,12 +558,8 @@ contract DeployV3 is WithEnvironment {
     }
 
     /// @notice Deploys the CCIPBridgeConfigTimelock policy for the CCIPBridgeConfig policy.
-    /// @dev    `CCIPBridgeConfigTimelock.sol` carries a compilation restriction (400 optimizer
-    ///         runs) that applies to the whole import graph of any file importing it, so the
-    ///         contract is not imported here: it is deployed from its compiled artifact with
-    ///         `deployCode`, which issues the same `CREATE` as `new` and is recorded by the
-    ///         broadcast. The config policy must already be deployed (in this sequence or in
-    ///         `env.json`); the timelock constructor requires it to advertise `ICCIPBridgeConfig`,
+    /// @dev    The config policy must already be deployed (in this sequence or in `env.json`); the
+    ///         timelock constructor requires it to advertise `ICCIPBridgeConfig`,
     ///         `IConfigOperator` and `IEnabler` and to report the same Kernel.
     ///         `initialTimelockDelay` defaults to `olympus.config.CCIPBridgeConfig.timelockDelay`
     ///         and `gracePeriod` to `olympus.config.CCIPBridgeConfig.gracePeriod`; both can be
@@ -589,21 +591,16 @@ contract DeployV3 is WithEnvironment {
         console2.log("  initialTimelockDelay", initialTimelockDelay);
         console2.log("  gracePeriod", gracePeriod);
 
-        // Deploy from the artifact (see the function NatSpec)
-        vm.startBroadcast();
-        address timelock = deployCode(
-            "CCIPBridgeConfigTimelock.sol:CCIPBridgeConfigTimelock",
-            abi.encode(kernel, config, initialTimelockDelay, gracePeriod)
-        );
-        vm.stopBroadcast();
-
-        // Sanity check the binding
-        require(
-            ICCIPBridgeConfigTimelock(timelock).config() == config,
-            "CCIPBridgeConfigTimelock: config mismatch"
+        // Deploy
+        vm.broadcast();
+        CCIPBridgeConfigTimelock timelock = new CCIPBridgeConfigTimelock(
+            Kernel(kernel),
+            config,
+            initialTimelockDelay,
+            gracePeriod
         );
 
-        return (timelock, "olympus.policies");
+        return (address(timelock), "olympus.policies");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {

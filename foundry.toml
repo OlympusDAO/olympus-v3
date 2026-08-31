@@ -77,9 +77,11 @@ verbosity = 0
 gas_snapshot_emit = false
 # Coverage output is long enough without solc warnings.
 ignored_warnings_from = ["dependencies", "src"]
-# Emptied so that coverage compiles in a single job. The Operator restriction otherwise adds a
+# Emptied so that coverage compiles in a single job. The restrictions above otherwise add a
 # second job carrying the same compiler version, and coverage items of two such jobs are
-# misattributed between files.
+# misattributed between files. The graphs those restrictions cover still compile here because
+# `shell/test_coverage.sh` runs `forge coverage --ir-minimum`, which routes them through the IR
+# pipeline instead of the optimizer.
 compilation_restrictions = []
 
 # Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
