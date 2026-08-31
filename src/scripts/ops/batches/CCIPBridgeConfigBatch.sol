@@ -362,8 +362,8 @@ contract CCIPBridgeConfigBatch is BatchScriptV2 {
         _setPostBatchValidateSelector(this._validateDisabled.selector);
     }
 
-    /// @notice Disables the config timelock and the config policy (DAO MS, or any `emergency` or
-    ///         `admin` holder as owner).
+    /// @notice Disables the config timelock and the config policy (DAO MS as the local `admin`
+    ///         on a burn/mint chain, or any `emergency` or `admin` holder as owner).
     /// @dev    `disablePoliciesEmergencyMS` is the same batch with the Emergency MS as owner.
     ///         The DAO MS owner serves the burn/mint chains, where it holds the local `admin`
     ///         role; on mainnet it holds neither `emergency` nor `admin`, so the freeze there is
