@@ -1,25 +1,25 @@
 # CCIP Access Control Matrix
 
-This document describes the intended state after the complete rollout. At the audit commit, the new
-policies and non-Ethereum production pools have not been deployed, and their `env.json` addresses
-remain zero.
+This document describes the intended state after the complete rollout at audit target
+`f654427b54f01af65987d08dbd7e151e856f0bb9`. At that commit, the new policies and non-Ethereum
+production pools have not been deployed, and their `env.json` addresses remain zero.
 
 ## Authority Holders
 
-| Authority                                 | Ethereum                   | Non-Ethereum EVM chains                                     |
-| ----------------------------------------- | -------------------------- | ----------------------------------------------------------- |
-| Kernel executor                           | DAO Multisig               | Local DAO Multisig                                          |
-| `RolesAdmin.admin`                        | OCG timelock               | Local DAO Multisig                                          |
-| `admin` role                              | OCG timelock               | Local DAO Multisig                                          |
-| `bridge_admin` role                       | DAO Multisig               | Local DAO Multisig                                          |
-| `emergency` role                          | Emergency Multisig         | Emergency Multisig                                          |
-| `bridge_rate_limiter` role                | Unassigned                 | Unassigned                                                  |
-| OHM administrator in `TokenAdminRegistry` | OCG timelock               | Local DAO Multisig                                          |
-| Token pool owner                          | `CCIPBridgeConfig`         | Local `CCIPBridgeConfig`                                    |
-| Config policy operator                    | `CCIPBridgeConfigTimelock` | Local `CCIPBridgeConfigTimelock`                            |
-| Native pool `rateLimitAdmin`              | Zero address               | Zero address                                                |
-| Lock/release pool rebalancer              | OCG timelock               | Not applicable; burn/mint pools have no liquidity container |
-| `CCIPCrossChainBridge` owner              | DAO Multisig               | Local DAO Multisig                                          |
+| Authority                                 | Ethereum                      | Non-Ethereum EVM chains                                     |
+| ----------------------------------------- | ----------------------------- | ----------------------------------------------------------- |
+| Kernel executor                           | DAO Multisig                  | Local DAO Multisig                                          |
+| `RolesAdmin.admin`                        | OCG timelock                  | Local DAO Multisig                                          |
+| `admin` role                              | OCG timelock                  | Local DAO Multisig                                          |
+| `bridge_admin` role                       | DAO Multisig                  | Local DAO Multisig                                          |
+| `emergency` role                          | Emergency Multisig            | Emergency Multisig                                          |
+| `bridge_rate_limiter` role                | Unassigned                    | Unassigned                                                  |
+| OHM administrator in `TokenAdminRegistry` | OCG timelock                  | Local DAO Multisig                                          |
+| Token pool owner                          | `CCIPTokenPoolConfig`         | Local `CCIPTokenPoolConfig`                                 |
+| Config policy operator                    | `CCIPTokenPoolConfigTimelock` | Local `CCIPTokenPoolConfigTimelock`                         |
+| Native pool `rateLimitAdmin`              | Zero address                  | Zero address                                                |
+| Lock/release pool rebalancer              | OCG timelock                  | Not applicable; burn/mint pools have no liquidity container |
+| `CCIPCrossChainBridge` owner              | DAO Multisig                  | Local DAO Multisig                                          |
 
 | Holder                                    | Address                                      |
 | ----------------------------------------- | -------------------------------------------- |
@@ -34,6 +34,9 @@ remain zero.
 
 The `admin` role is chain-wide. On a non-Ethereum Kernel, granting it to the local DAO Multisig
 authorizes that Multisig on every policy using the same role, not only the CCIP policies.
+The DAO Multisig's `bridge_admin` role can queue route changes, recover the config policies during
+their grace period, and immediately contain routes. The unassigned `bridge_rate_limiter` role can
+change limits directly and contain routes if governance appoints a holder.
 
 ## Timelock and Recovery Parameters
 
@@ -59,38 +62,38 @@ it can use the ordinary `enable` path without a grace deadline.
 | `RolesAdmin.pushNewAdmin`            | Current `RolesAdmin.admin`  | Same as above                                          | Nominates a replacement roles administrator                                                         |
 | `RolesAdmin.pullNewAdmin`            | Pending roles administrator | Nominated address                                      | Completes the two-step roles-administrator transfer                                                 |
 
-## `CCIPBridgeConfig`
+## `CCIPTokenPoolConfig`
 
 The policy owns one fixed local token pool. Unless stated otherwise, every state-changing function
 requires the policy to be enabled.
 
-| Function                                                                   | Direct access                                      | Production holder / path                                           | Additional constraint or effect                                                                  |
-| -------------------------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `acceptPoolOwnership`                                                      | `admin`                                            | OCG timelock; local DAO Multisig                                   | Config policy must be the pool's pending owner                                                   |
-| `transferPoolOwnership`                                                    | `admin`                                            | OCG timelock; local DAO Multisig                                   | Proposes another pool owner; queued actions stop executing after ownership is accepted elsewhere |
-| `setConfigOperator`                                                        | `admin`                                            | OCG timelock; local DAO Multisig                                   | Immediate single-step replacement or revocation; zero revokes delegated configuration            |
-| `setRouter`                                                                | `admin`                                            | OCG timelock; local DAO Multisig                                   | Changes the pool router                                                                          |
-| `setRebalancer`                                                            | `admin`                                            | OCG timelock                                                       | Reverts unless the fixed pool supports the liquidity-container interface                         |
-| `setRateLimitAdmin`                                                        | `admin`                                            | OCG timelock; local DAO Multisig                                   | Launch value is zero so native pool rate-limit authority cannot bypass this policy               |
-| `transferLiquidity`                                                        | `admin`                                            | OCG timelock                                                       | Reverts unless the fixed pool is a liquidity container                                           |
-| `setGracePeriod`                                                           | `admin`                                            | OCG timelock; local DAO Multisig                                   | Policy must be enabled; period must be non-zero                                                  |
-| `addChain`                                                                 | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | Adds the route, remote token, remote pools and both rate limits atomically                       |
-| `removeChain`                                                              | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | Deletes the route and its pool configuration                                                     |
-| `setRemoteToken`                                                           | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | Replaces the route through `applyChainUpdates` while preserving pools and limiter state          |
-| `addRemotePool`                                                            | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | Route must already exist                                                                         |
-| `removeRemotePool`                                                         | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | In-flight messages from that pool may subsequently fail                                          |
-| `applyAllowListUpdates`                                                    | Config operator or `admin`                         | Config timelock; direct governance/local DAO path                  | Reverts on the launch pools because their allowlist is disabled                                  |
-| `setChainRateLimits`                                                       | `bridge_rate_limiter`, config operator, or `admin` | Unassigned role; config timelock; direct governance/local DAO path | Route must exist and both limiters must be enabled with `0 < rate < capacity`                    |
-| `disableChain`                                                             | `emergency` or `admin`                             | Emergency Multisig; OCG timelock/local DAO Multisig                | Works while policy is disabled; can only write the contained `capacity = 2`, `rate = 1` limits   |
-| `disableAllChains`                                                         | `emergency` or `admin`                             | Emergency Multisig; OCG timelock/local DAO Multisig                | Same containment for every configured route; works while disabled                                |
-| `enable`                                                                   | `admin`                                            | OCG timelock; local DAO Multisig                                   | Requires disabled state; first enable and unrestricted-time administrative recovery path         |
-| `disable`                                                                  | `emergency` or `admin`                             | Emergency Multisig; OCG timelock/local DAO Multisig                | Requires enabled state; freezes policy configuration but does not stop pool transfers            |
-| `reEnable`                                                                 | `bridge_admin`                                     | DAO Multisig                                                       | Requires disabled state, a previous enable and an unexpired grace period                         |
-| `changeKernel`                                                             | Current Kernel                                     | Kernel, indirectly controlled by its executor                      | Used during Kernel migration                                                                     |
-| `configureDependencies`                                                    | Unrestricted                                       | Any caller; normally Kernel                                        | Refreshes the ROLES module from the current Kernel and enforces major version 1                  |
-| `requestPermissions`, `validate*`, getters, `VERSION`, `supportsInterface` | Unrestricted, read-only                            | Any caller                                                         | No state-changing authority; validators mirror the config checks without calling the pool        |
+| Function                                                                   | Direct access                                                  | Production holder / path                                                                        | Additional constraint or effect                                                                  |
+| -------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `acceptPoolOwnership`                                                      | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Config policy must be the pool's pending owner                                                   |
+| `transferPoolOwnership`                                                    | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Proposes another pool owner; queued actions stop executing after ownership is accepted elsewhere |
+| `setConfigOperator`                                                        | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Immediate single-step replacement or revocation; zero revokes delegated configuration            |
+| `setRouter`                                                                | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Changes the pool router                                                                          |
+| `setRebalancer`                                                            | `admin`                                                        | OCG timelock                                                                                    | Reverts unless the fixed pool supports the liquidity-container interface                         |
+| `setRateLimitAdmin`                                                        | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Launch value is zero so native pool rate-limit authority cannot bypass this policy               |
+| `transferLiquidity`                                                        | `admin`                                                        | OCG timelock                                                                                    | Reverts unless the fixed pool is a liquidity container                                           |
+| `setGracePeriod`                                                           | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Policy must be enabled; period must be non-zero                                                  |
+| `addChain`                                                                 | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | Adds the route, remote token, remote pools and both rate limits atomically                       |
+| `removeChain`                                                              | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | Deletes the route and its pool configuration                                                     |
+| `setRemoteToken`                                                           | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | Replaces the route through `applyChainUpdates` while preserving pools and limiter state          |
+| `addRemotePool`                                                            | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | Route must already exist                                                                         |
+| `removeRemotePool`                                                         | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | In-flight messages from that pool may subsequently fail                                          |
+| `applyAllowListUpdates`                                                    | Config operator or `admin`                                     | Config timelock; direct governance/local DAO path                                               | Reverts on the launch pools because their allowlist is disabled                                  |
+| `setChainRateLimits`                                                       | `bridge_rate_limiter`, config operator, or `admin`             | Unassigned role; config timelock; direct governance/local DAO path                              | Route must exist and both limiters must be enabled with `0 < rate < capacity`                    |
+| `disableChain`                                                             | `emergency`, `admin`, `bridge_admin`, or `bridge_rate_limiter` | Emergency Multisig; DAO Multisig; OCG timelock/local DAO Multisig; optional rate-limiter holder | Works while policy is disabled; can only write the contained `capacity = 2`, `rate = 1` limits   |
+| `disableAllChains`                                                         | `emergency`, `admin`, `bridge_admin`, or `bridge_rate_limiter` | Emergency Multisig; DAO Multisig; OCG timelock/local DAO Multisig; optional rate-limiter holder | Same containment for every configured route; works while disabled                                |
+| `enable`                                                                   | `admin`                                                        | OCG timelock; local DAO Multisig                                                                | Requires disabled state; first enable and unrestricted-time administrative recovery path         |
+| `disable`                                                                  | `emergency` or `admin`                                         | Emergency Multisig; OCG timelock/local DAO Multisig                                             | Requires enabled state; freezes policy configuration but does not stop pool transfers            |
+| `reEnable`                                                                 | `bridge_admin`                                                 | DAO Multisig                                                                                    | Requires disabled state, a previous enable and an unexpired grace period                         |
+| `changeKernel`                                                             | Current Kernel                                                 | Kernel, indirectly controlled by its executor                                                   | Used during Kernel migration                                                                     |
+| `configureDependencies`                                                    | Unrestricted                                                   | Any caller; normally Kernel                                                                     | Refreshes the ROLES module from the current Kernel and enforces major version 1                  |
+| `requestPermissions`, `validate*`, getters, `VERSION`, `supportsInterface` | Unrestricted, read-only                                        | Any caller                                                                                      | No state-changing authority; validators mirror the config checks without calling the pool        |
 
-## `CCIPBridgeConfigTimelock`
+## `CCIPTokenPoolConfigTimelock`
 
 | Function                                                                             | Direct access                              | Production holder / path                                                   | Additional constraint or effect                                                                                                       |
 | ------------------------------------------------------------------------------------ | ------------------------------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
@@ -115,30 +118,30 @@ requires the policy to be enabled.
 
 Queueing additionally requires both policies to be enabled and this timelock to be the config
 operator. The `admin` role is not a queue proposer because it can call the same route operations
-directly on `CCIPBridgeConfig`.
+directly on `CCIPTokenPoolConfig`.
 
 ## `CCIPBurnMintTokenPool`
 
 This existing policy is the intended pool on Arbitrum, Optimism, Base and Berachain. It is deployed
 with an empty allowlist and uses the legacy `PolicyEnabler` lifecycle.
 
-| Function                                                                        | Direct access                    | Production holder / path                            | Additional constraint or effect                                                                              |
-| ------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `acceptOwnership`                                                               | Pending owner                    | Local `CCIPBridgeConfig`                            | Completes the two-step pool ownership transfer                                                               |
-| `transferOwnership`                                                             | Owner                            | Local `CCIPBridgeConfig`                            | Proposes a replacement owner                                                                                 |
-| `applyChainUpdates`                                                             | Owner                            | Local `CCIPBridgeConfig`                            | Used by config-policy route addition, removal and remote-token replacement                                   |
-| `addRemotePool`, `removeRemotePool`                                             | Owner                            | Local `CCIPBridgeConfig`                            | Direct pool primitives called through typed config functions                                                 |
-| `applyAllowListUpdates`                                                         | Owner                            | Local `CCIPBridgeConfig`                            | Reverts because the deployed pool's allowlist is disabled                                                    |
-| `setRouter`                                                                     | Owner                            | Local `CCIPBridgeConfig`                            | Changes ramp resolution to another router                                                                    |
-| `setRateLimitAdmin`                                                             | Owner                            | Local `CCIPBridgeConfig`                            | Intended value is zero                                                                                       |
-| `setChainRateLimiterConfig`, `setChainRateLimiterConfigs`                       | Owner or native `rateLimitAdmin` | Local `CCIPBridgeConfig`; no native admin at launch | Config policy uses the single-route setter                                                                   |
-| `enable`                                                                        | Local `admin`                    | Local DAO Multisig                                  | Requires disabled state                                                                                      |
-| `disable`                                                                       | `emergency` or local `admin`     | Emergency Multisig; local DAO Multisig              | Requires enabled state; blocks mint and burn callbacks                                                       |
-| `lockOrBurn`                                                                    | Configured router's on-ramp      | Chainlink infrastructure                            | Route must exist, RMN must not curse it, outbound limiter must allow it and the policy must be enabled       |
-| `releaseOrMint`                                                                 | Configured router's off-ramp     | Chainlink infrastructure                            | Source pool and route must be accepted, RMN and inbound limiter checks must pass, and policy must be enabled |
-| `changeKernel`                                                                  | Current Kernel                   | Kernel, indirectly controlled by its executor       | Used during Kernel migration                                                                                 |
-| `configureDependencies`                                                         | Unrestricted                     | Any caller; normally Kernel                         | Refreshes MINTR and ROLES dependencies and validates OHM                                                     |
-| `requestPermissions`, getters, `VERSION`, `typeAndVersion`, `supportsInterface` | Unrestricted, read-only          | Any caller                                          | No state-changing authority                                                                                  |
+| Function                                                                        | Direct access                    | Production holder / path                               | Additional constraint or effect                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `acceptOwnership`                                                               | Pending owner                    | Local `CCIPTokenPoolConfig`                            | Completes the two-step pool ownership transfer                                                               |
+| `transferOwnership`                                                             | Owner                            | Local `CCIPTokenPoolConfig`                            | Proposes a replacement owner                                                                                 |
+| `applyChainUpdates`                                                             | Owner                            | Local `CCIPTokenPoolConfig`                            | Used by config-policy route addition, removal and remote-token replacement                                   |
+| `addRemotePool`, `removeRemotePool`                                             | Owner                            | Local `CCIPTokenPoolConfig`                            | Direct pool primitives called through typed config functions                                                 |
+| `applyAllowListUpdates`                                                         | Owner                            | Local `CCIPTokenPoolConfig`                            | Reverts because the deployed pool's allowlist is disabled                                                    |
+| `setRouter`                                                                     | Owner                            | Local `CCIPTokenPoolConfig`                            | Changes ramp resolution to another router                                                                    |
+| `setRateLimitAdmin`                                                             | Owner                            | Local `CCIPTokenPoolConfig`                            | Intended value is zero                                                                                       |
+| `setChainRateLimiterConfig`, `setChainRateLimiterConfigs`                       | Owner or native `rateLimitAdmin` | Local `CCIPTokenPoolConfig`; no native admin at launch | Config policy uses the single-route setter                                                                   |
+| `enable`                                                                        | Local `admin`                    | Local DAO Multisig                                     | Requires disabled state                                                                                      |
+| `disable`                                                                       | `emergency` or local `admin`     | Emergency Multisig; local DAO Multisig                 | Requires enabled state; blocks mint and burn callbacks                                                       |
+| `lockOrBurn`                                                                    | Configured router's on-ramp      | Chainlink infrastructure                               | Route must exist, RMN must not curse it, outbound limiter must allow it and the policy must be enabled       |
+| `releaseOrMint`                                                                 | Configured router's off-ramp     | Chainlink infrastructure                               | Source pool and route must be accepted, RMN and inbound limiter checks must pass, and policy must be enabled |
+| `changeKernel`                                                                  | Current Kernel                   | Kernel, indirectly controlled by its executor          | Used during Kernel migration                                                                                 |
+| `configureDependencies`                                                         | Unrestricted                     | Any caller; normally Kernel                            | Refreshes MINTR and ROLES dependencies and validates OHM                                                     |
+| `requestPermissions`, getters, `VERSION`, `typeAndVersion`, `supportsInterface` | Unrestricted, read-only          | Any caller                                             | No state-changing authority                                                                                  |
 
 The deployed burn/mint implementation has no `reEnable` or `setGracePeriod`. After a disable, only
 local `admin` can restore it through `enable`.
@@ -148,24 +151,24 @@ local `admin` can restore it through `enable`.
 This is the existing Chainlink pool at `0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD`.
 It has no policy lifecycle flag.
 
-| Function                                                  | Direct access                    | Production holder / path                      | Additional constraint or effect                                                |
-| --------------------------------------------------------- | -------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------ |
-| `acceptOwnership`                                         | Pending owner                    | `CCIPBridgeConfig`                            | Completes the two-step pool ownership transfer                                 |
-| `transferOwnership`                                       | Owner                            | `CCIPBridgeConfig`                            | Proposes a replacement owner                                                   |
-| `applyChainUpdates`                                       | Owner                            | `CCIPBridgeConfig`                            | Used by config-policy route addition, removal and remote-token replacement     |
-| `addRemotePool`, `removeRemotePool`                       | Owner                            | `CCIPBridgeConfig`                            | Direct pool primitives called through typed config functions                   |
-| `applyAllowListUpdates`                                   | Owner                            | `CCIPBridgeConfig`                            | Reverts because the deployed pool's allowlist is disabled                      |
-| `setRouter`                                               | Owner                            | `CCIPBridgeConfig`                            | Changes ramp resolution to another router                                      |
-| `setRateLimitAdmin`                                       | Owner                            | `CCIPBridgeConfig`                            | Intended value is zero                                                         |
-| `setChainRateLimiterConfig`, `setChainRateLimiterConfigs` | Owner or native `rateLimitAdmin` | `CCIPBridgeConfig`; no native admin at launch | Config policy uses the single-route setter                                     |
-| `setRebalancer`                                           | Owner                            | `CCIPBridgeConfig`                            | Intended rebalancer is the OCG timelock                                        |
-| `transferLiquidity`                                       | Owner                            | `CCIPBridgeConfig`                            | Pulls liquidity from an older pool that recognizes this pool as its rebalancer |
-| `provideLiquidity`                                        | Rebalancer                       | OCG timelock                                  | Requires approval and the pool to accept liquidity                             |
-| `withdrawLiquidity`                                       | Rebalancer                       | OCG timelock                                  | Sends withdrawn OHM to the rebalancer caller                                   |
-| Direct OHM transfer to the pool                           | Permissionless token transfer    | Any address                                   | Funds the pool without emitting `LiquidityAdded`                               |
-| `lockOrBurn`                                              | Configured router's on-ramp      | Chainlink infrastructure                      | Locks OHM after route, RMN, allowlist and outbound-limiter checks              |
-| `releaseOrMint`                                           | Configured router's off-ramp     | Chainlink infrastructure                      | Releases OHM after route, source-pool, RMN and inbound-limiter checks          |
-| Getters and `supportsInterface`                           | Unrestricted, read-only          | Any caller                                    | No state-changing authority                                                    |
+| Function                                                  | Direct access                    | Production holder / path                         | Additional constraint or effect                                                |
+| --------------------------------------------------------- | -------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `acceptOwnership`                                         | Pending owner                    | `CCIPTokenPoolConfig`                            | Completes the two-step pool ownership transfer                                 |
+| `transferOwnership`                                       | Owner                            | `CCIPTokenPoolConfig`                            | Proposes a replacement owner                                                   |
+| `applyChainUpdates`                                       | Owner                            | `CCIPTokenPoolConfig`                            | Used by config-policy route addition, removal and remote-token replacement     |
+| `addRemotePool`, `removeRemotePool`                       | Owner                            | `CCIPTokenPoolConfig`                            | Direct pool primitives called through typed config functions                   |
+| `applyAllowListUpdates`                                   | Owner                            | `CCIPTokenPoolConfig`                            | Reverts because the deployed pool's allowlist is disabled                      |
+| `setRouter`                                               | Owner                            | `CCIPTokenPoolConfig`                            | Changes ramp resolution to another router                                      |
+| `setRateLimitAdmin`                                       | Owner                            | `CCIPTokenPoolConfig`                            | Intended value is zero                                                         |
+| `setChainRateLimiterConfig`, `setChainRateLimiterConfigs` | Owner or native `rateLimitAdmin` | `CCIPTokenPoolConfig`; no native admin at launch | Config policy uses the single-route setter                                     |
+| `setRebalancer`                                           | Owner                            | `CCIPTokenPoolConfig`                            | Intended rebalancer is the OCG timelock                                        |
+| `transferLiquidity`                                       | Owner                            | `CCIPTokenPoolConfig`                            | Pulls liquidity from an older pool that recognizes this pool as its rebalancer |
+| `provideLiquidity`                                        | Rebalancer                       | OCG timelock                                     | Requires approval and the pool to accept liquidity                             |
+| `withdrawLiquidity`                                       | Rebalancer                       | OCG timelock                                     | Sends withdrawn OHM to the rebalancer caller                                   |
+| Direct OHM transfer to the pool                           | Permissionless token transfer    | Any address                                      | Funds the pool without emitting `LiquidityAdded`                               |
+| `lockOrBurn`                                              | Configured router's on-ramp      | Chainlink infrastructure                         | Locks OHM after route, RMN, allowlist and outbound-limiter checks              |
+| `releaseOrMint`                                           | Configured router's off-ramp     | Chainlink infrastructure                         | Releases OHM after route, source-pool, RMN and inbound-limiter checks          |
+| Getters and `supportsInterface`                           | Unrestricted, read-only          | Any caller                                       | No state-changing authority                                                    |
 
 ## `CCIPCrossChainBridge`
 
@@ -199,6 +202,6 @@ it does not stop token-pool transfers.
 | Registry `acceptOwnership`                  | Pending registry owner              | Nominated address                | Completes the registry ownership transfer                                           |
 | Registry getters                            | Unrestricted, read-only             | Any caller                       | No state-changing authority                                                         |
 
-Disabling `CCIPBridgeConfig`, `CCIPBridgeConfigTimelock` or `CCIPCrossChainBridge` does not stop the
-Ethereum pool. Transfer containment requires `disableChain` or `disableAllChains`. On a burn/mint
-chain, disabling the pool itself also stops its mint and burn callbacks.
+Disabling `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock` or `CCIPCrossChainBridge` does not
+stop the Ethereum pool. Transfer containment requires `disableChain` or `disableAllChains`. On a
+burn/mint chain, disabling the pool itself also stops its mint and burn callbacks.

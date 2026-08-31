@@ -1,14 +1,11 @@
 # CCIP Bridge Configuration Audit Scope
 
-# The Solidity metrics extension accepts whole files only. See README.md "Partial-File Scope" for
-# the exact functions and lines in scope within previously existing files.
-
 # Core Policies and Interfaces
 
-src/policies/bridge/CCIPBridgeConfig.sol
-src/policies/bridge/CCIPBridgeConfigTimelock.sol
-src/policies/interfaces/bridge/ICCIPBridgeConfig.sol
-src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol
+src/policies/bridge/CCIPTokenPoolConfig.sol
+src/policies/bridge/CCIPTokenPoolConfigTimelock.sol
+src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol
+src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol
 
 # Configuration Timelock Infrastructure
 
@@ -30,12 +27,12 @@ src/external/bridge/ICCIPTokenPoolGetters.sol
 # Deployment and OCG Proposal
 
 src/scripts/deploy/DeployV3.s.sol
-src/proposals/CCIPBridgeConfigProposal.sol
+src/proposals/CCIPTokenPoolConfigProposal.sol
 
 # Multisig and Operational Configuration
 
 src/scripts/ops/batches/CCIPBridge.sol
-src/scripts/ops/batches/CCIPBridgeConfigBatch.sol
+src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol
 src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol
 src/scripts/ops/batches/CCIPRouteReconcileBatch.sol
 src/scripts/ops/batches/CCIPTokenPool.sol
