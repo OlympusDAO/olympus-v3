@@ -69,6 +69,10 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///         - The live Solana route of the pool matches `olympus.config.CCIP.routes` in
 ///           `src/scripts/env.json`; the exact four routes to Arbitrum, Optimism, Base and
 ///           Berachain are declared there and missing from the pool.
+///         - The burn/mint pools of those four chains are deployed and recorded in
+///           `src/scripts/env.json` (`olympus.policies.CCIPBurnMintTokenPool`), since each route
+///           resolves its accepted remote pool from there unless it declares an explicit
+///           `remotePools` override.
 ///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
 ///           outstanding on the burn/mint chains; `CCIPTokenPool.fundPool`).
 ///         - Every mainnet lane toward the four chains carries an enabled OHM fee entry with a
@@ -153,6 +157,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "- The DAO MS has activated both policies in the Kernel, proposed CCIPBridgeConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
                 "- The OCG timelock holds the `admin` role.\n",
                 "- The live Solana route of the pool matches the desired configuration and the four new routes are not configured yet.\n",
+                "- The CCIP contracts of Arbitrum, Optimism, Base and Berachain (the burn/mint pool, its config policy, its config timelock and the periphery) have been deployed, the OHM administrator role in each local TokenAdminRegistry has been handed to the local DAO MS, and each local pool has been proposed to its config policy as the new owner.\n",
                 "- The pool has been funded with at least the OHM supply outstanding on Arbitrum, Optimism, Base and Berachain, so it can release against tokens burned there.\n",
                 "- Chainlink has raised the OHM delivery gas budget to at least 175,000 on every mainnet lane toward the four chains; without it every inbound transfer on those chains would fail on arrival.\n"
             );
@@ -186,9 +191,16 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "- Outbound (mainnet to the chain): capacity 100,000 OHM (100000000000000), refill rate 1157407407 per second.\n",
                 "- Inbound (the chain to mainnet): capacity 55,000 OHM (55000000000000), refill rate 636574074 per second.\n",
                 "\n",
-                "The remote token of each route is the chain's OHM token and the accepted remote pool is the chain's CCIPBurnMintTokenPool policy, both read from the desired-state configuration at build time. The pool's Optimism-Berachain pair is not opened anywhere: Chainlink serves no lane between those chains.\n",
+                "The remote token of each route is the chain's OHM token and the accepted remote pool is the chain's CCIPBurnMintTokenPool policy, both read from the desired-state configuration at build time.\n",
                 "\n",
-                "At the completion of this proposal, route configuration is proposed by the DAO MS through the CCIPBridgeConfigTimelock and executed after its delay, containment is available to the Emergency MS through CCIPBridgeConfig, and the remaining root settings of the pool require an OCG proposal. The four chains stay dormant until their local DAO MS enables and registers the local pool, which is expected immediately after this proposal executes.\n"
+                "This proposal leaves the mainnet pool fully configured. Later route changes are queued by the DAO MS on the CCIPBridgeConfigTimelock and executed permissionlessly after its one-day delay, or applied directly by OCG; containment stays available to the Emergency MS through CCIPBridgeConfig; and the remaining root settings of the pool require an OCG proposal.\n",
+                "\n",
+                "## Next Steps\n",
+                "\n",
+                "The following are performed by the DAO MS of each chain and are not part of this proposal:\n",
+                "\n",
+                "- On Arbitrum, Optimism, Base and Berachain: the local CCIP contracts, including the local pool's routes to mainnet and to the other burn/mint chains (less the Optimism-Berachain pair, for which Chainlink serves no lane), are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. The same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain.\n",
+                "- On mainnet and on those four chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the four new peripheries.\n"
             );
     }
 
