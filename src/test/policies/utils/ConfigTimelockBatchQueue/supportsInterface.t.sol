@@ -13,7 +13,7 @@ import {ERC165Helper} from "src/test/lib/ERC165.sol";
 import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelockBatchQueue/ConfigTimelockBatchQueueTest.sol";
 
 contract ConfigTimelockBatchQueueSupportsInterfaceTest is ConfigTimelockBatchQueueTest {
-    function test_supportsInterface_reportsQueueCapabilities() public view {
+    function test_givenQueueIsDeployed_reportsExpectedInterfaces() public view {
         ERC165Helper.validateSupportsInterface(address(_queue));
         assertTrue(_queue.supportsInterface(type(IERC165).interfaceId), "ERC-165 supported");
         assertTrue(
