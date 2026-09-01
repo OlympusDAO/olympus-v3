@@ -1,0 +1,53 @@
+# CCIP Token Pool Configuration Audit Scope
+
+# Core Policies and Interfaces
+
+src/policies/bridge/CCIPTokenPoolConfig.sol
+src/policies/bridge/CCIPTokenPoolConfigTimelock.sol
+src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol
+src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol
+
+# Configuration Timelock Infrastructure
+
+src/policies/utils/ConfigOperatorSingleStep.sol
+src/policies/utils/ConfigTimelockBatchQueue.sol
+src/policies/utils/TimelockBatchQueue.sol
+src/policies/interfaces/utils/IConfigOperator.sol
+src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol
+
+# Lifecycle and Authorization Mix-Ins and Interfaces
+
+src/policies/utils/PolicyEnablerV2.sol
+src/policies/utils/PolicyAdminOptimized.sol
+src/bases/EnablerV2.sol
+src/bases/ReEnabler.sol
+src/bases/ReEnablerGracePeriod.sol
+src/bases/interfaces/IEnablerV2.sol
+src/bases/interfaces/IGracePeriod.sol
+src/bases/interfaces/IReEnabler.sol
+src/periphery/interfaces/IEnabler.sol
+
+# Chainlink Pool Interfaces
+
+src/external/bridge/ICCIPLiquidityContainer.sol
+src/external/bridge/ICCIPLockReleaseTokenPool.sol
+src/external/bridge/ICCIPRateLimiter.sol
+src/external/bridge/ICCIPTokenAdminRegistry.sol
+src/external/bridge/ICCIPTokenPoolAdmin.sol
+src/external/bridge/ICCIPTokenPoolGetters.sol
+
+# Deployment and OCG Proposal
+
+src/scripts/deploy/DeployV3.s.sol
+src/proposals/CCIPTokenPoolConfigProposal.sol
+
+# Multisig and Operational Configuration
+
+src/scripts/ops/batches/CCIPBridge.sol
+src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol
+src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol
+src/scripts/ops/batches/CCIPRouteReconcileBatch.sol
+src/scripts/ops/batches/CCIPTokenPool.sol
+src/scripts/ops/lib/BatchScriptV2.sol
+src/scripts/ops/lib/CCIPConfigLib.sol
+src/scripts/ops/lib/CCIPFeeBudgetLib.sol
