@@ -48,10 +48,13 @@ import {OlympusBoostedLiquidityRegistry} from "modules/BLREG/OlympusBoostedLiqui
 import {OlympusClearinghouseRegistry} from "modules/CHREG/OlympusClearinghouseRegistry.sol";
 
 // Bophades Policies
-// IMPORTANT: Optimizer restrictions apply to an entire import graph. Importing a contract with a
-// non-default setting, such as Operator at 400 runs, compiles every contract created with `new` by
-// this script with that setting, even when the restricted contract is not deployed. Use separate
-// scripts to isolate contracts that require different optimizer settings.
+// IMPORTANT: Run this script under the `deploy` profile, which compiles the whole graph with the
+// optimizer at 400 runs and is the source of deployment bytecode. Under the everyday profile the
+// settings follow the import graph, since a `compilation_restrictions` entry covers the whole
+// connected graph: this script lands in the same 400-runs job through its restricted imports
+// (BondCallback, the BLVault contracts, GovernorBravoDelegate). That is incidental rather than
+// guaranteed, and a large contract compiled without the optimizer exceeds the 24,576 B runtime
+// limit.
 import {Operator} from "policies/Operator.sol";
 import {OlympusHeart} from "policies/Heart.sol";
 import {BondCallback} from "policies/BondCallback.sol";
@@ -623,8 +626,7 @@ contract OlympusDeploy is Script {
         console2.log("   regenWait", regenWait);
         console2.log("   reserveFactor", reserveFactor);
 
-        // Deploy Operator policy. Contracts with non-default optimizer settings, such as Operator
-        // at 400 runs, should use dedicated scripts so their settings do not affect unrelated graphs.
+        // Deploy Operator policy
         vm.broadcast();
         operator = new Operator(
             kernel,

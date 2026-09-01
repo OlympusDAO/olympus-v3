@@ -12,8 +12,8 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
@@ -54,9 +54,11 @@ interface ILegacyCrossChainBridge {
 ///           rollout readiness report that gates the proposal submission.
 ///
 ///         The steady state afterwards is served by the shared tooling: routes through
-///         `CCIPRouteReconcileBatch`, containment and re-enable through `CCIPBridgeConfigBatch`.
-///         The pool itself has no `reEnable`: after a `disable` it is restored only by the local
-///         admin role through `enable`.
+///         `CCIPRouteReconcileBatch`, containment and re-enable through `CCIPTokenPoolConfigBatch`.
+///         Containment is available to the local DAO MS, which holds both `admin` and
+///         `bridge_admin`, through `disableChain` and `disableAllChains`, and to the Emergency MS
+///         through their `EmergencyMS` variants. The pool itself has no `reEnable`: after a
+///         `disable` it is restored only by the local admin role through `enable`.
 contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     // =========== STATE =========== //
 
@@ -78,7 +80,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         Reverts if:
     ///         - The args file is not empty.
     ///         - The chain is canonical (the mainnet rollout runs through
-    ///           `CCIPBridgeConfigBatch.prepareHandover` and the OCG proposal).
+    ///           `CCIPTokenPoolConfigBatch.prepareHandover` and the OCG proposal).
     ///         - The batch owner is not the Kernel executor or not the RolesAdmin admin.
     ///         - The deployed config policy, timelock and pool are not bound to each other, or
     ///           the pool reports itself as a liquidity container.
@@ -120,8 +122,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         console2.log("\n=== Non-Ethereum CCIP setup on", chain, "===");
         console2.log("Kernel:", kernel);
         console2.log("CCIPBurnMintTokenPool:", pool);
-        console2.log("CCIPBridgeConfig:", config);
-        console2.log("CCIPBridgeConfigTimelock:", timelock);
+        console2.log("CCIPTokenPoolConfig:", config);
+        console2.log("CCIPTokenPoolConfigTimelock:", timelock);
         console2.log("TokenAdminRegistry:", registry);
 
         // Preconditions
@@ -150,8 +152,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
         // 2. Activate the policies in the Kernel
         _planActivatePolicy(kernelContract, pool, "CCIPBurnMintTokenPool");
-        _planActivatePolicy(kernelContract, config, "CCIPBridgeConfig");
-        _planActivatePolicy(kernelContract, timelock, "CCIPBridgeConfigTimelock");
+        _planActivatePolicy(kernelContract, config, "CCIPTokenPoolConfig");
+        _planActivatePolicy(kernelContract, timelock, "CCIPTokenPoolConfigTimelock");
 
         // 3. Grant the local roles
         ROLESv1 roles = _roles(kernel);
@@ -166,41 +168,41 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(env, chain);
         if (!IEnabler(config).isEnabled()) {
             addToBatch(config, abi.encodeWithSelector(IEnabler.enable.selector, ""));
-            console2.log("Added: CCIPBridgeConfig.enable");
+            console2.log("Added: CCIPTokenPoolConfig.enable");
         }
         if (ICCIPTokenPoolAdmin(pool).owner() != config) {
             addToBatch(
                 config,
-                abi.encodeWithSelector(ICCIPBridgeConfig.acceptPoolOwnership.selector)
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.acceptPoolOwnership.selector)
             );
-            console2.log("Added: CCIPBridgeConfig.acceptPoolOwnership");
+            console2.log("Added: CCIPTokenPoolConfig.acceptPoolOwnership");
         }
-        if (ICCIPBridgeConfig(config).configOperator() != timelock) {
+        if (ICCIPTokenPoolConfig(config).configOperator() != timelock) {
             addToBatch(
                 config,
                 abi.encodeWithSelector(IConfigOperator.setConfigOperator.selector, timelock)
             );
-            console2.log("Added: CCIPBridgeConfig.setConfigOperator(timelock)");
+            console2.log("Added: CCIPTokenPoolConfig.setConfigOperator(timelock)");
         }
         if (ICCIPTokenPoolAdmin(pool).getRateLimitAdmin() != desired.rateLimitAdmin) {
             addToBatch(
                 config,
                 abi.encodeWithSelector(
-                    ICCIPBridgeConfig.setRateLimitAdmin.selector,
+                    ICCIPTokenPoolConfig.setRateLimitAdmin.selector,
                     desired.rateLimitAdmin
                 )
             );
-            console2.log("Added: CCIPBridgeConfig.setRateLimitAdmin");
+            console2.log("Added: CCIPTokenPoolConfig.setRateLimitAdmin");
         }
         if (!IEnabler(timelock).isEnabled()) {
             addToBatch(timelock, abi.encodeWithSelector(IEnabler.enable.selector, ""));
-            console2.log("Added: CCIPBridgeConfigTimelock.enable");
+            console2.log("Added: CCIPTokenPoolConfigTimelock.enable");
         }
 
         // 5. Add the missing routes directly under the admin role (the bootstrap needs no
-        //    timelock: the routes are voted on as part of the mainnet CCIP Bridge Config
+        //    timelock: the routes are voted on as part of the mainnet CCIP Token Pool Config
         //    Activation proposal).
-        _planRoutes(ICCIPBridgeConfig(config), ICCIPTokenPoolAdmin(pool));
+        _planRoutes(ICCIPTokenPoolConfig(config), ICCIPTokenPoolAdmin(pool));
 
         _setPostBatchValidateSelector(this._validateSetup.selector);
 
@@ -265,11 +267,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         require(
             IEnabler(config).isEnabled(),
-            "CCIPNonEthereumSetupBatch: CCIPBridgeConfig is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
+            "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfig is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
         require(
             IEnabler(timelock).isEnabled(),
-            "CCIPNonEthereumSetupBatch: CCIPBridgeConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
+            "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
         _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
 
@@ -364,27 +366,27 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         require(
             Kernel(kernel).isPolicyActive(Policy(config)),
-            "CCIPBridgeConfig is not active in the Kernel"
+            "CCIPTokenPoolConfig is not active in the Kernel"
         );
         require(
             Kernel(kernel).isPolicyActive(Policy(timelock)),
-            "CCIPBridgeConfigTimelock is not active in the Kernel"
+            "CCIPTokenPoolConfigTimelock is not active in the Kernel"
         );
         address legacyBridge = _envAddress("olympus.policies.CrossChainBridge");
         require(
             legacyBridge == address(0) || !Kernel(kernel).isPolicyActive(Policy(legacyBridge)),
             "The legacy CrossChainBridge policy is still active in the Kernel"
         );
-        require(IEnabler(config).isEnabled(), "CCIPBridgeConfig is not enabled");
-        require(IEnabler(timelock).isEnabled(), "CCIPBridgeConfigTimelock is not enabled");
+        require(IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is not enabled");
+        require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(
             ICCIPTokenPoolAdmin(pool).owner() == config,
-            "CCIPBridgeConfig does not own the pool"
+            "CCIPTokenPoolConfig does not own the pool"
         );
         require(CCIPConfigLib.pendingOwner(pool) == address(0), "The pool has a pending owner");
         require(
-            ICCIPBridgeConfig(config).configOperator() == timelock,
-            "CCIPBridgeConfigTimelock is not the config operator"
+            ICCIPTokenPoolConfig(config).configOperator() == timelock,
+            "CCIPTokenPoolConfigTimelock is not the config operator"
         );
         require(
             ICCIPTokenPoolAdmin(pool).getRateLimitAdmin() == desired.rateLimitAdmin,
@@ -398,15 +400,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         require(
             IGracePeriod(config).gracePeriod() == desired.gracePeriod,
-            "CCIPBridgeConfig grace period mismatch"
+            "CCIPTokenPoolConfig grace period mismatch"
         );
         require(
             IGracePeriod(timelock).gracePeriod() == desired.gracePeriod,
-            "CCIPBridgeConfigTimelock grace period mismatch"
+            "CCIPTokenPoolConfigTimelock grace period mismatch"
         );
         require(
-            ICCIPBridgeConfigTimelock(timelock).timelockDelay() == desired.timelockDelay,
-            "CCIPBridgeConfigTimelock delay mismatch"
+            ICCIPTokenPoolConfigTimelock(timelock).timelockDelay() == desired.timelockDelay,
+            "CCIPTokenPoolConfigTimelock delay mismatch"
         );
         _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
         console2.log("setup post-batch validation passed");
@@ -432,10 +434,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         require(
             ICCIPTokenPoolAdmin(pool).owner() == config,
-            "CCIPBridgeConfig does not own the pool"
+            "CCIPTokenPoolConfig does not own the pool"
         );
-        require(IEnabler(config).isEnabled(), "CCIPBridgeConfig is not enabled");
-        require(IEnabler(timelock).isEnabled(), "CCIPBridgeConfigTimelock is not enabled");
+        require(IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is not enabled");
+        require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(roles.hasRole(_owner, ADMIN_ROLE), "The DAO MS does not hold admin");
         require(roles.hasRole(_owner, BRIDGE_ADMIN_ROLE), "The DAO MS does not hold bridge_admin");
         _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
@@ -446,8 +448,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     function _checkNonCanonicalReadiness() internal {
         address pool = _envAddress(CCIPConfigLib.poolKey(chain));
-        address config = _envAddress("olympus.policies.CCIPBridgeConfig");
-        address timelock = _envAddress("olympus.policies.CCIPBridgeConfigTimelock");
+        address config = _envAddress("olympus.policies.CCIPTokenPoolConfig");
+        address timelock = _envAddress("olympus.policies.CCIPTokenPoolConfigTimelock");
         address periphery = _envAddress(CCIPConfigLib.EVM_BRIDGE_KEY);
         address kernel = _envAddressNotZero("olympus.Kernel");
         address registry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
@@ -466,13 +468,13 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         if (deployed) {
             _check(
-                ICCIPBridgeConfig(config).pool() == pool &&
-                    ICCIPBridgeConfigTimelock(timelock).config() == config &&
+                ICCIPTokenPoolConfig(config).pool() == pool &&
+                    ICCIPTokenPoolConfigTimelock(timelock).config() == config &&
                     address(Policy(config).kernel()) == kernel,
                 "the config policy, the timelock and the pool are bound to each other"
             );
             _check(
-                !ICCIPBridgeConfig(config).isLiquidityContainer(),
+                !ICCIPTokenPoolConfig(config).isLiquidityContainer(),
                 "the pool is a burn/mint pool (not a liquidity container)"
             );
             address poolOwner = ICCIPTokenPoolAdmin(pool).owner();
@@ -552,8 +554,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     function _checkCanonicalReadiness() internal {
         address pool = _envAddressNotZero(CCIPConfigLib.poolKey(chain));
-        address config = _envAddress("olympus.policies.CCIPBridgeConfig");
-        address timelock = _envAddress("olympus.policies.CCIPBridgeConfigTimelock");
+        address config = _envAddress("olympus.policies.CCIPTokenPoolConfig");
+        address timelock = _envAddress("olympus.policies.CCIPTokenPoolConfigTimelock");
         address kernel = _envAddressNotZero("olympus.Kernel");
         address registry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
@@ -563,8 +565,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         _check(deployed, "the config policy and the timelock are recorded in env.json");
         if (deployed) {
             _check(
-                ICCIPBridgeConfig(config).pool() == pool &&
-                    ICCIPBridgeConfigTimelock(timelock).config() == config,
+                ICCIPTokenPoolConfig(config).pool() == pool &&
+                    ICCIPTokenPoolConfigTimelock(timelock).config() == config,
                 "the config policy, the timelock and the pool are bound to each other"
             );
             _check(
@@ -578,7 +580,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 "the config policy owns or is the pending owner of the pool (Phase B)"
             );
             (uint8 major, uint8 minor) = IVersioned(config).VERSION();
-            _check(major == 1 && minor == 0, "CCIPBridgeConfig reports version 1.0");
+            _check(major == 1 && minor == 0, "CCIPTokenPoolConfig reports version 1.0");
         }
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(registry)
@@ -712,7 +714,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         console2.log(string.concat("Added: RolesAdmin.grantRole(", name_, ")"), holder_);
     }
 
-    function _planRoutes(ICCIPBridgeConfig config_, ICCIPTokenPoolAdmin pool_) internal {
+    function _planRoutes(ICCIPTokenPoolConfig config_, ICCIPTokenPoolAdmin pool_) internal {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
             desired.length > 0,
@@ -761,9 +763,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             config_.validateAddChain(update);
             addToBatch(
                 address(config_),
-                abi.encodeWithSelector(ICCIPBridgeConfig.addChain.selector, update)
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.addChain.selector, update)
             );
-            console2.log("  Added: CCIPBridgeConfig.addChain");
+            console2.log("  Added: CCIPTokenPoolConfig.addChain");
         }
 
         uint64[] memory liveSelectors = pool_.getSupportedChains();
@@ -790,7 +792,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     function _requireNonCanonical() internal view {
         require(
             !ChainUtils._isCanonicalChain(chain),
-            "CCIPNonEthereumSetupBatch: the chain is canonical; use CCIPBridgeConfigBatch.prepareHandover and the OCG proposal"
+            "CCIPNonEthereumSetupBatch: the chain is canonical; use CCIPTokenPoolConfigBatch.prepareHandover and the OCG proposal"
         );
     }
 
@@ -807,8 +809,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         )
     {
         kernel = _envAddressNotZero("olympus.Kernel");
-        config = _envAddressNotZero("olympus.policies.CCIPBridgeConfig");
-        timelock = _envAddressNotZero("olympus.policies.CCIPBridgeConfigTimelock");
+        config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
         pool = _envAddressNotZero(CCIPConfigLib.poolKey(chain));
         registry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         ohm = _envAddressNotZero("olympus.legacy.OHM");
@@ -823,11 +825,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         address pool_
     ) internal view {
         require(
-            ICCIPBridgeConfig(config_).pool() == pool_,
+            ICCIPTokenPoolConfig(config_).pool() == pool_,
             "CCIPNonEthereumSetupBatch: the config policy is bound to another pool"
         );
         require(
-            ICCIPBridgeConfigTimelock(timelock_).config() == config_,
+            ICCIPTokenPoolConfigTimelock(timelock_).config() == config_,
             "CCIPNonEthereumSetupBatch: the timelock is bound to another config policy"
         );
         require(
@@ -835,7 +837,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             "CCIPNonEthereumSetupBatch: the config policy reports another Kernel"
         );
         require(
-            !ICCIPBridgeConfig(config_).isLiquidityContainer(),
+            !ICCIPTokenPoolConfig(config_).isLiquidityContainer(),
             "CCIPNonEthereumSetupBatch: the pool reports itself as a liquidity container; a burn/mint pool is expected on a non-canonical chain"
         );
     }

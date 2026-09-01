@@ -431,15 +431,14 @@ section and the remaining `TimelockBatchQueue` lifecycle hooks.
 Burner Loans selects its immutable `BurnerLoansConfig` policy as `_configDestination`. In this
 section, `config` means `address(_BURNER_LOANS_CONFIG)`.
 
-The facility is not the selected destination. It is a mutable dependency returned by
-`_BURNER_LOANS_CONFIG.facility()`. Burner Loans includes the facility in each canonical state hash.
+The facility is not the selected destination. It is a one-time dependency returned by
+`_BURNER_LOANS_CONFIG.facility()`: after Config stores a non-zero facility, `setFacility` rejects
+every later binding. Burner Loans includes that immutable facility in each canonical state hash so
+the action is bound to the Config instance's deployment wiring.
 
-As a result, a facility rotation makes an old action stale. The old action keeps its
-`BurnerLoansConfig`-scoped key until emergency cancellation. A new action cannot bypass that lock by
-using the new facility.
-
-If facility rotation must create an independent key namespace, a different implementation can
-return the facility from `_configDestination`. That choice changes the conflict semantics.
+The facility component therefore cannot independently make a queued action stale. Replacing the
+Burner Loans stack requires a fresh Config and facility pair; the new Config address creates a new
+destination namespace without rotating the old Config's facility.
 
 | Action                        | Local key                                                 | Scoped ownership key                      | Canonical state hash                                          |
 | ----------------------------- | --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |

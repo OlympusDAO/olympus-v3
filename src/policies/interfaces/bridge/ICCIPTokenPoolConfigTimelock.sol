@@ -6,9 +6,9 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
-/// @title  ICCIPBridgeConfigTimelock
+/// @title  ICCIPTokenPoolConfigTimelock
 /// @notice The interface of the timelock policy through which the bridge admin role queues
-///         typed route, remote pool, allowlist and rate limit changes of a `CCIPBridgeConfig`
+///         typed route, remote pool, allowlist and rate limit changes of a `CCIPTokenPoolConfig`
 ///         policy, for permissionless execution after a delay.
 /// @dev    Every queued sub-action targets one function of the config policy and is validated at
 ///         queue time with the config policy's validation mirror of that function. Each
@@ -46,41 +46,41 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         policy to be enabled; an action whose config policy is disabled after queueing holds
 ///         its domains until it executes or is cancelled. Enabling and re-enabling the timelock
 ///         require the config policy to be an active policy of the timelock's kernel.
-interface ICCIPBridgeConfigTimelock is IConfigTimelockBatchQueue {
+interface ICCIPTokenPoolConfigTimelock is IConfigTimelockBatchQueue {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a constructor argument is the zero address.
     /// @param parameter The name of the invalid parameter.
-    error CCIPBridgeConfigTimelock_InvalidAddress(string parameter);
+    error CCIPTokenPoolConfigTimelock_InvalidAddress(string parameter);
 
     /// @notice Thrown when the config policy supplied at construction does not advertise the
-    ///         `ICCIPBridgeConfig`, `IConfigOperator` and `IEnabler` interfaces through ERC165.
+    ///         `ICCIPTokenPoolConfig`, `IConfigOperator` and `IEnabler` interfaces through ERC165.
     /// @param config The rejected config policy address.
-    error CCIPBridgeConfigTimelock_InvalidConfig(address config);
+    error CCIPTokenPoolConfigTimelock_InvalidConfig(address config);
 
     /// @notice Thrown when the config policy supplied at construction reports a kernel other
     ///         than the kernel of this policy.
     /// @param configKernel The kernel reported by the config policy.
-    error CCIPBridgeConfigTimelock_KernelMismatch(address configKernel);
+    error CCIPTokenPoolConfigTimelock_KernelMismatch(address configKernel);
 
     /// @notice Thrown when this policy is enabled or re-enabled while the config policy is not
     ///         an active policy of this policy's kernel.
     /// @param config The config policy address.
-    error CCIPBridgeConfigTimelock_ConfigNotActive(address config);
+    error CCIPTokenPoolConfigTimelock_ConfigNotActive(address config);
 
     /// @notice Thrown when a configured module has an unsupported major version.
-    error CCIPBridgeConfigTimelock_InvalidModuleVersion();
+    error CCIPTokenPoolConfigTimelock_InvalidModuleVersion();
 
     /// @notice Thrown when the config policy does not name this timelock as its config
     ///         operator.
     /// @param configOperator The config operator currently named by the config policy, or the
     ///        zero address when none is set.
-    error CCIPBridgeConfigTimelock_NotConfigOperator(address configOperator);
+    error CCIPTokenPoolConfigTimelock_NotConfigOperator(address configOperator);
 
     /// @notice Thrown when a state hash is requested for a configuration key that no supported
     ///         action reserves.
     /// @param localKey The unsupported destination-local key.
-    error CCIPBridgeConfigTimelock_UnsupportedConfigKey(bytes32 localKey);
+    error CCIPTokenPoolConfigTimelock_UnsupportedConfigKey(bytes32 localKey);
 
     // ========== VIEW FUNCTIONS ========== //
 

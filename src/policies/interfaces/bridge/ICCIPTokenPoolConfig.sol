@@ -5,15 +5,16 @@ import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
-/// @title  ICCIPBridgeConfig
+/// @title  ICCIPTokenPoolConfig
 /// @notice The interface of the policy that owns the local Chainlink CCIP token pool of OHM and
 ///         exposes a typed, role-separated subset of the pool owner's authority.
 /// @dev    The policy is bound to one pool for its lifetime. Its functions form four groups:
 ///         admin functions that change root authority and pool infrastructure; route functions
 ///         that change the supported chains, remote pools and allowlist, callable by the config
 ///         operator or the admin; the rate limit function, additionally callable by the bridge
-///         rate limiter role; and containment functions, callable by the emergency or admin
-///         role, that only reduce capacity and remain callable while the policy is disabled.
+///         rate limiter role; and containment functions, callable by the emergency, admin,
+///         bridge admin or bridge rate limiter role, that only reduce capacity and remain
+///         callable while the policy is disabled.
 ///         Every other state-changing function requires the policy to be enabled.
 ///
 ///         The config operator is the delegated operator of `IConfigOperator`: `configOperator`
@@ -26,54 +27,54 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 ///         Remote addresses are ABI-encoded for EVM chains and encoded per the remote chain
 ///         family otherwise. Every operation on the pool is emitted by this contract in addition
 ///         to the events that the pool emits itself.
-interface ICCIPBridgeConfig is IConfigOperator {
+interface ICCIPTokenPoolConfig is IConfigOperator {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a required address argument is the zero address.
     /// @param parameter The name of the invalid parameter.
-    error CCIPBridgeConfig_InvalidAddress(string parameter);
+    error CCIPTokenPoolConfig_InvalidAddress(string parameter);
 
     /// @notice Thrown when the pool supplied at construction does not advertise the CCIP v1
     ///         pool identifier `Pool.CCIP_POOL_V1` (`0xaff2afbf`) through ERC165, the identifier
     ///         that the CCIP on-ramp and off-ramp check before calling a pool.
     /// @param pool The rejected pool address.
-    error CCIPBridgeConfig_InvalidPool(address pool);
+    error CCIPTokenPoolConfig_InvalidPool(address pool);
 
     /// @notice Thrown when a configured module has an unsupported major version.
-    error CCIPBridgeConfig_InvalidModuleVersion();
+    error CCIPTokenPoolConfig_InvalidModuleVersion();
 
     /// @notice Thrown when a router candidate holds no code or does not answer
     ///         `typeAndVersion()`.
     /// @param router The rejected router address.
-    error CCIPBridgeConfig_InvalidRouter(address router);
+    error CCIPTokenPoolConfig_InvalidRouter(address router);
 
     /// @notice Thrown when a liquidity function is called and the pool does not advertise the
     ///         liquidity container interface.
-    error CCIPBridgeConfig_NotLiquidityContainer();
+    error CCIPTokenPoolConfig_NotLiquidityContainer();
 
     /// @notice Thrown when a liquidity transfer amount is zero.
-    error CCIPBridgeConfig_ZeroAmount();
+    error CCIPTokenPoolConfig_ZeroAmount();
 
     /// @notice Thrown when a chain is added without any remote pool.
-    error CCIPBridgeConfig_RemotePoolsEmpty();
+    error CCIPTokenPoolConfig_RemotePoolsEmpty();
 
     /// @notice Thrown when the remote token to set for a route is empty.
-    error CCIPBridgeConfig_RemoteTokenEmpty();
+    error CCIPTokenPoolConfig_RemoteTokenEmpty();
 
     /// @notice Thrown when the remote token to set for a route equals its current remote token.
-    error CCIPBridgeConfig_RemoteTokenUnchanged();
+    error CCIPTokenPoolConfig_RemoteTokenUnchanged();
 
     /// @notice Thrown when a supplied or current rate limiter configuration is disabled.
     ///         Every route served by the pool carries enabled limiters in both directions.
-    error CCIPBridgeConfig_RateLimiterDisabled();
+    error CCIPTokenPoolConfig_RateLimiterDisabled();
 
     /// @notice Thrown when the removal of a remote pool would leave the route without any
     ///         accepted remote pool.
     /// @param chainSelector The chain selector of the route.
-    error CCIPBridgeConfig_LastRemotePool(uint64 chainSelector);
+    error CCIPTokenPoolConfig_LastRemotePool(uint64 chainSelector);
 
     /// @notice Thrown when an allowlist update contains neither removals nor additions.
-    error CCIPBridgeConfig_AllowListUpdatesEmpty();
+    error CCIPTokenPoolConfig_AllowListUpdatesEmpty();
 
     // ========== EVENTS ========== //
 
@@ -283,13 +284,15 @@ interface ICCIPBridgeConfig is IConfigOperator {
 
     /// @notice Sets both buckets of a route to the disabled rate limiter configuration. Safe to
     ///         call on a route that is already contained. Intended to be callable only by the
-    ///         emergency or admin role, whether or not the policy is enabled.
+    ///         emergency, admin, bridge admin or bridge rate limiter role, whether or not the
+    ///         policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     function disableChain(uint64 chainSelector_) external;
 
     /// @notice Sets both buckets of every configured route to the disabled rate limiter
     ///         configuration. Does nothing when no route is configured. Intended to be callable
-    ///         only by the emergency or admin role, whether or not the policy is enabled.
+    ///         only by the emergency, admin, bridge admin or bridge rate limiter role, whether
+    ///         or not the policy is enabled.
     function disableAllChains() external;
 
     // ========== VALIDATION FUNCTIONS ========== //

@@ -7,7 +7,7 @@ import {ConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTim
 import {MockConfigTarget} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/MockConfigTarget.sol";
 
 contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest {
-    function test_queueConfig_reservesEveryKeyAndStoresStateHashes() public {
+    function test_givenMultipleKeys_reservesEveryKeyAndStoresStateHashes() public {
         uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
 
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionId, "first key owner");
@@ -22,7 +22,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(hashB, keccak256(abi.encode(_KEY_B, uint256(20))), "second state hash");
     }
 
-    function test_queueConfig_emitsOneEventPerKey() public {
+    function test_givenMultipleKeys_emitsOneEventPerKey() public {
         vm.expectEmit(true, true, true, true);
         emit IConfigTimelockBatchQueue.ConfigStateQueued(
             1,
@@ -44,7 +44,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
     }
 
-    function test_queueConfig_givenNoKeys_revertsWithoutQueueState() public {
+    function test_givenNoKeys_revertsWithoutQueueState() public {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeysEmpty.selector,
@@ -56,7 +56,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenZeroKey_revertsWithoutQueueState() public {
+    function test_givenZeroKey_revertsWithoutQueueState() public {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyZero.selector,
@@ -69,7 +69,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenZeroDestination_revertsWithoutQueueState() public {
+    function test_givenZeroDestination_revertsWithoutQueueState() public {
         _queue.setConfigDestination(MockConfigTarget(address(0)));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -82,9 +82,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenDuplicateKeysInOneSubAction_revertsWithoutLeakingGuards()
-        public
-    {
+    function test_givenDuplicateKeysInOneSubAction_revertsWithoutLeakingGuards() public {
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
@@ -99,7 +97,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenPendingKey_revertsWithOwningAction() public {
+    function test_givenPendingKey_revertsWithOwningAction() public {
         uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -111,7 +109,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         _queue.queueConfig(_keys(_KEY_A), _values(12), 2);
     }
 
-    function test_givenExpiredOwner_whenKeyIsQueued_reverts() public {
+    function test_givenExpiredOwner_reverts() public {
         uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         vm.warp(uint256(_queue.getQueuedAction(owner).expiresAt) + 1);
 
@@ -128,7 +126,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), owner + 1, "failed queue does not consume action id");
     }
 
-    function test_queueConfig_givenLaterKeyIsPending_rollsBackEarlierAcquisition() public {
+    function test_givenLaterKeyIsPending_rollsBackEarlierAcquisition() public {
         uint64 owner = _queue.queueConfig(_keys(_KEY_B), _values(22), 1);
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -153,14 +151,14 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), owner + 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenDifferentPendingKey_succeeds() public {
+    function test_givenDifferentPendingKey_succeeds() public {
         uint64 actionA = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         uint64 actionB = _queue.queueConfig(_keys(_KEY_B), _values(22), 2);
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionA, "first key owner");
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), actionB, "second key owner");
     }
 
-    function test_queueConfig_givenSameLocalKeyForDifferentDestination_succeeds() public {
+    function test_givenSameLocalKeyForDifferentDestination_succeeds() public {
         uint64 first = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
         MockConfigTarget newDestination = new MockConfigTarget();
         newDestination.setConfigState(_KEY_A, 20);
@@ -180,7 +178,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         );
     }
 
-    function test_queueConfig_givenQueueValidationRejects_revertsBeforeAcquiringKeys() public {
+    function test_givenQueueValidationRejects_revertsBeforeAcquiringKeys() public {
         _queue.setQueueCaller(address(0xBEEF));
         vm.expectRevert(
             ConfigTimelockBatchQueueHarness.ConfigTimelockBatchQueueHarness_ActionInvalid.selector
@@ -194,7 +192,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
-    function test_queueConfig_givenSubActionValidationRejects_revertsBeforeAcquiringKeys() public {
+    function test_givenSubActionValidationRejects_revertsBeforeAcquiringKeys() public {
         _queue.setRejectSubAction(true);
         vm.expectRevert(
             ConfigTimelockBatchQueueHarness.ConfigTimelockBatchQueueHarness_ActionInvalid.selector

@@ -4,16 +4,16 @@
 #
 # Flow:
 #   1. Inject placeholder pools/peripheries for the four burn/mint chains, then
-#      deploy CCIPBridgeConfig and CCIPBridgeConfigTimelock
+#      deploy CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock
 #      (ccip_config_mainnet.json) and sync their addresses into the OCG
 #      proposal registry.
-#   2. Phase B (DAO MS): CCIPBridgeConfigBatch.prepareHandover, then a second
+#   2. Phase B (DAO MS): CCIPTokenPoolConfigBatch.prepareHandover, then a second
 #      run that must propose nothing; then CCIPTokenPool.fundPool up to the
 #      env.json minimum backing (with an empty re-run).
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
 #      the four mainnet lanes are mocked to 175k and readiness turns GREEN.
-#   4. Phase C (OCG): executeOnAnvilFork.sh replays CCIPBridgeConfigProposal
+#   4. Phase C (OCG): executeOnAnvilFork.sh replays CCIPTokenPoolConfigProposal
 #      (12 actions: the handover plus the four addChain route actions) from
 #      the timelock; the four routes must exist on the pool afterwards.
 #   5. Post-OCG (DAO MS): CCIPRouteReconcileBatch.reconcileRoutes must propose
@@ -22,9 +22,9 @@
 #      warping past the delay, executing, and reconciling again (empty). The
 #      periphery reconciler adds the four EVM trusted remotes (nothing for
 #      solana) and proposes nothing on a re-run.
-#   6. Containment (Emergency MS): CCIPBridgeConfigBatch.disableChain, then the
-#      declarative recovery through the timelock, then a second disableChain
-#      that must propose nothing.
+#   6. Containment: CCIPTokenPoolConfigBatch.disableChain from the DAO MS as
+#      bridge_admin, an empty re-run through the Emergency MS variant, then the
+#      declarative recovery through the timelock.
 #   7. Print the final authority state.
 #
 # Usage:
@@ -40,7 +40,7 @@ source "$HERE/lib/common.sh"
 
 CHAIN="mainnet"
 SOLANA_SELECTOR="124615329519749607"
-DISABLE_ARGS="src/scripts/ops/batches/args/CCIPBridgeConfigBatch_disableChain.json"
+DISABLE_ARGS="src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain.json"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -84,10 +84,10 @@ else
     deploy_sequence "src/scripts/deploy/savedDeployments/ccip_config_mainnet.json"
 fi
 
-cfg="$(env_addr mainnet olympus.policies.CCIPBridgeConfig)"
-require_addr "$cfg" "CCIPBridgeConfig"
-tl="$(env_addr mainnet olympus.policies.CCIPBridgeConfigTimelock)"
-require_addr "$tl" "CCIPBridgeConfigTimelock"
+cfg="$(env_addr mainnet olympus.policies.CCIPTokenPoolConfig)"
+require_addr "$cfg" "CCIPTokenPoolConfig"
+tl="$(env_addr mainnet olympus.policies.CCIPTokenPoolConfigTimelock)"
+require_addr "$tl" "CCIPTokenPoolConfigTimelock"
 pool="$(env_addr mainnet olympus.periphery.CCIPLockReleaseTokenPool)"
 require_addr "$pool" "CCIPLockReleaseTokenPool"
 registry="$(env_addr mainnet external.ccip.TokenAdminRegistry)"
@@ -104,13 +104,13 @@ echo "timelock.gracePeriod()        = $(cast call "$tl" 'gracePeriod()(uint32)' 
 echo "config.isLiquidityContainer() = $(cast call "$cfg" 'isLiquidityContainer()(bool)' --rpc-url "$RPC")"
 
 step "Sync addresses.json (proposal registry)"
-set_registry_addr olympus-policy-ccip-bridge-config "$cfg"
-set_registry_addr olympus-policy-ccip-bridge-config-timelock "$tl"
+set_registry_addr olympus-policy-ccip-token-pool-config "$cfg"
+set_registry_addr olympus-policy-ccip-token-pool-config-timelock "$tl"
 
 step "Phase B: prepareHandover (DAO MS)"
-run_batch CCIPBridgeConfigBatch prepareHandover dao
+run_batch CCIPTokenPoolConfigBatch prepareHandover dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "prepareHandover"
-run_batch CCIPBridgeConfigBatch prepareHandover dao "" "-rerun"
+run_batch CCIPTokenPoolConfigBatch prepareHandover dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "prepareHandover re-run"
 
 step "Fund the pool to the minimum backing (DAO MS)"
@@ -145,8 +145,8 @@ log "OK: readiness is RED before the fee budget mock"
 
 step "Negative: the proposal build must fail before the fee budgets are raised"
 if RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \
-    --file src/proposals/CCIPBridgeConfigProposal.sol \
-    --contract CCIPBridgeConfigProposalScript \
+    --file src/proposals/CCIPTokenPoolConfigProposal.sol \
+    --contract CCIPTokenPoolConfigProposalScript \
     > "$LOG_DIR/proposal-no-budget.log" 2>&1; then
     die "the proposal build was expected to fail; see $LOG_DIR/proposal-no-budget.log"
 fi
@@ -165,10 +165,10 @@ READINESS_RPC_MAINNET="$RPC" ./shell/ccip/check_rollout_readiness.sh --chains ma
 grep -q "READINESS RESULT mainnet: GREEN" "$LOG_DIR/readiness-mainnet-green.log" \
     || die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-mainnet-green.log"
 
-step "Phase C: execute CCIPBridgeConfigProposal from the timelock"
+step "Phase C: execute CCIPTokenPoolConfigProposal from the timelock"
 RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \
-    --file src/proposals/CCIPBridgeConfigProposal.sol \
-    --contract CCIPBridgeConfigProposalScript \
+    --file src/proposals/CCIPTokenPoolConfigProposal.sol \
+    --contract CCIPTokenPoolConfigProposalScript \
     2>&1 | tee "$LOG_DIR/proposal.log"
 grep -q "Proposal executed successfully" "$LOG_DIR/proposal.log" || die "proposal replay failed; see $LOG_DIR/proposal.log"
 
@@ -223,12 +223,12 @@ expect_non_empty_batch "$LAST_BATCH_LOG" "executeReadyActions (restore)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-restored"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after restore"
 
-step "Containment (Emergency MS) and declarative recovery"
-run_batch CCIPBridgeConfigBatch disableChain emergency "$DISABLE_ARGS"
-expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain"
+step "Containment (DAO MS) and declarative recovery"
+run_batch CCIPTokenPoolConfigBatch disableChain dao "$DISABLE_ARGS"
+expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain (DAO MS)"
 echo "config.isChainDisabled(solana) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")"
-run_batch CCIPBridgeConfigBatch disableChain emergency "$DISABLE_ARGS" "-rerun"
-expect_empty_batch "$LAST_BATCH_LOG" "disableChain re-run"
+run_batch CCIPTokenPoolConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
+expect_empty_batch "$LAST_BATCH_LOG" "disableChainEmergencyMS re-run"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovery-queue"
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore)"
 warp "$((delay + 1))"

@@ -23,8 +23,8 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Constants
@@ -36,8 +36,8 @@ import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
-/// @notice OCG proposal that moves the mainnet CCIP OHM token pool under the CCIPBridgeConfig
-///         policy and its CCIPBridgeConfigTimelock, moves the OHM administrator position in the
+/// @notice OCG proposal that moves the mainnet CCIP OHM token pool under the CCIPTokenPoolConfig
+///         policy and its CCIPTokenPoolConfigTimelock, moves the OHM administrator position in the
 ///         Chainlink TokenAdminRegistry under the OCG timelock, and opens the mainnet routes to
 ///         Arbitrum, Optimism, Base and Berachain on the pool.
 ///
@@ -46,7 +46,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///         accept the OHM administrator role, grant `bridge_admin` to the DAO MS, enable the
 ///         config policy, accept the pool ownership, set the config timelock as config operator,
 ///         set the OCG timelock as rebalancer, clear the native rate limit admin, enable the
-///         config timelock, and add the four routes through `CCIPBridgeConfig.addChain`. At most
+///         config timelock, and add the four routes through `CCIPTokenPoolConfig.addChain`. At most
 ///         twelve actions, so no activator contract is needed.
 ///
 ///         The route actions come after the handover actions because `addChain` requires the
@@ -60,20 +60,24 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///         closed: investigate, rebuild and resubmit.
 ///
 ///         Assumes:
-///         - CCIPBridgeConfig and CCIPBridgeConfigTimelock have been deployed on Ethereum mainnet
-///           and recorded in `src/proposals/addresses.json` and `src/scripts/env.json`.
-///         - The DAO MS has run `CCIPBridgeConfigBatch.prepareHandover`: both policies are active
-///           in the Kernel, CCIPBridgeConfig is the pending owner of the pool and the OCG timelock
-///           is the pending OHM administrator in the TokenAdminRegistry.
+///         - CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum
+///           mainnet and recorded in `src/proposals/addresses.json` and `src/scripts/env.json`.
+///         - The DAO MS has run `CCIPTokenPoolConfigBatch.prepareHandover`: both policies are
+///           active in the Kernel, CCIPTokenPoolConfig is the pending owner of the pool and the OCG
+///           timelock is the pending OHM administrator in the TokenAdminRegistry.
 ///         - The OCG timelock holds the `admin` role.
 ///         - The live Solana route of the pool matches `olympus.config.CCIP.routes` in
 ///           `src/scripts/env.json`; the exact four routes to Arbitrum, Optimism, Base and
 ///           Berachain are declared there and missing from the pool.
+///         - The burn/mint pools of those four chains are deployed and recorded in
+///           `src/scripts/env.json` (`olympus.policies.CCIPBurnMintTokenPool`), since each route
+///           resolves its accepted remote pool from there unless it declares an explicit
+///           `remotePools` override.
 ///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
 ///           outstanding on the burn/mint chains; `CCIPTokenPool.fundPool`).
 ///         - Every mainnet lane toward the four chains carries an enabled OHM fee entry with a
 ///           delivery gas budget of at least 175000, obtained from Chainlink.
-contract CCIPBridgeConfigProposal is GovernorBravoProposal {
+contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     // ========== CONSTANTS ========== //
 
     string internal constant _ENV_PATH = "./src/scripts/env.json";
@@ -89,8 +93,8 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
 
     /// @dev The contracts and accounts the proposal acts on, resolved from the address registry.
     struct Contracts {
-        ICCIPBridgeConfig config;
-        ICCIPBridgeConfigTimelock configTimelock;
+        ICCIPTokenPoolConfig config;
+        ICCIPTokenPoolConfigTimelock configTimelock;
         ICCIPTokenPoolAdmin pool;
         ICCIPTokenAdminRegistry registry;
         ROLESv1 roles;
@@ -117,7 +121,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     }
 
     function name() public pure override returns (string memory) {
-        return "CCIP Bridge Config Activation";
+        return "CCIP Token Pool Config Activation";
     }
 
     // solhint-disable quotes
@@ -128,31 +132,32 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     function _descriptionPreamble() private pure returns (string memory) {
         return
             string.concat(
-                "# CCIP Bridge Config Activation\n",
+                "# CCIP Token Pool Config Activation\n",
                 "\n",
-                "This proposal places the Chainlink CCIP OHM token pool on Ethereum mainnet under on-chain governance through the CCIPBridgeConfig policy and the CCIPBridgeConfigTimelock policy, and opens the mainnet CCIP routes to Arbitrum, Optimism, Base and Berachain.\n",
+                "This proposal places the Chainlink CCIP OHM token pool on Ethereum mainnet under on-chain governance through the CCIPTokenPoolConfig policy and the CCIPTokenPoolConfigTimelock policy, and opens the mainnet CCIP routes to Arbitrum, Optimism, Base and Berachain.\n",
                 "\n",
                 "## Justification\n",
                 "\n",
                 "The mainnet CCIP OHM pool (LockReleaseTokenPool) and the OHM administrator position in the Chainlink TokenAdminRegistry are held by the DAO MS. This proposal separates that authority into three layers:\n",
                 "\n",
-                "- The OCG timelock becomes the OHM administrator in the TokenAdminRegistry (the authority that selects or delists the OHM pool), the `admin` of the CCIPBridgeConfig policy (root settings, pool ownership, router, rebalancer, rate limit admin) and the rebalancer of the lock/release pool (the only authority that can withdraw its liquidity).\n",
-                "- The CCIPBridgeConfig policy becomes the owner of the token pool and exposes a typed, role-separated subset of the pool owner surface: route, remote pool, allowlist and rate limit changes are callable by the config timelock (after its delay) or directly by `admin`; containment (`disableChain`, `disableAllChains`) is callable by the `emergency` role at any time and can only reduce capacity; there is no arbitrary call forwarding.\n",
-                "- The DAO MS keeps `bridge_admin`: it queues typed route changes on the CCIPBridgeConfigTimelock, which executes them permissionlessly after a one-day delay and rejects them if the route moved in the meantime, and it can re-enable either policy within a three-day grace window after a disable. The DAO MS keeps ownership of the user-facing CCIPCrossChainBridge periphery, which is not part of this proposal.\n",
+                "- The OCG timelock becomes the OHM administrator in the TokenAdminRegistry (the authority that selects or delists the OHM pool), the `admin` of the CCIPTokenPoolConfig policy (root settings, pool ownership, router, rebalancer, rate limit admin) and the rebalancer of the lock/release pool (the only authority that can withdraw its liquidity).\n",
+                "- The CCIPTokenPoolConfig policy becomes the owner of the token pool and exposes a typed, role-separated subset of the pool owner surface: route, remote pool, allowlist and rate limit changes are callable by the config timelock (after its delay) or directly by `admin`; containment (`disableChain`, `disableAllChains`) is callable at any time by the `emergency`, `admin`, `bridge_admin` and `bridge_rate_limiter` roles and can only reduce capacity; there is no arbitrary call forwarding.\n",
+                "- The DAO MS keeps `bridge_admin`: it queues typed route changes on the CCIPTokenPoolConfigTimelock, which executes them permissionlessly after a one-day delay and rejects them if the route moved in the meantime, it can contain a route or every route at any time (`disableChain`, `disableAllChains`), and it can re-enable either policy within a three-day grace window after a disable. The DAO MS keeps ownership of the user-facing CCIPCrossChainBridge periphery, which is not part of this proposal.\n",
                 "\n",
-                "The `bridge_rate_limiter` role, a direct rate-limit path for a future monitoring operator, stays unassigned. The native pool rate limit admin stays unset so that every rate limit change passes through the policy.\n",
+                "The `bridge_rate_limiter` role, a direct rate-limit and containment path for a future monitoring operator, stays unassigned. The native pool rate limit admin stays unset so that every rate limit change passes through the policy.\n",
                 "\n",
                 "## Resources\n",
                 "\n",
                 "- Operator documentation: `documentation/bridge/ccip/README.md` in the olympus-v3 repository.\n",
-                "- Contracts: `src/policies/bridge/CCIPBridgeConfig.sol`, `src/policies/bridge/CCIPBridgeConfigTimelock.sol`.\n",
+                "- Contracts: `src/policies/bridge/CCIPTokenPoolConfig.sol`, `src/policies/bridge/CCIPTokenPoolConfigTimelock.sol`.\n",
                 "\n",
                 "## Assumptions\n",
                 "\n",
-                "- CCIPBridgeConfig and CCIPBridgeConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay.\n",
-                "- The DAO MS has activated both policies in the Kernel, proposed CCIPBridgeConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
+                "- CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay.\n",
+                "- The DAO MS has activated both policies in the Kernel, proposed CCIPTokenPoolConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
                 "- The OCG timelock holds the `admin` role.\n",
                 "- The live Solana route of the pool matches the desired configuration and the four new routes are not configured yet.\n",
+                "- The CCIP contracts of Arbitrum, Optimism, Base and Berachain (the burn/mint pool, its config policy, its config timelock and the periphery) have been deployed, the OHM administrator role in each local TokenAdminRegistry has been handed to the local DAO MS, and each local pool has been proposed to its config policy as the new owner.\n",
                 "- The pool has been funded with at least the OHM supply outstanding on Arbitrum, Optimism, Base and Berachain, so it can release against tokens burned there.\n",
                 "- Chainlink has raised the OHM delivery gas budget to at least 175,000 on every mainnet lane toward the four chains; without it every inbound transfer on those chains would fail on arrival.\n"
             );
@@ -168,12 +173,12 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "\n",
                 "1. Accept the OHM administrator role in the Chainlink TokenAdminRegistry. The registered OHM pool is not changed.\n",
                 "2. Grant the `bridge_admin` role to the DAO MS.\n",
-                "3. Enable the CCIPBridgeConfig policy.\n",
-                "4. Accept the ownership of the token pool through CCIPBridgeConfig.\n",
-                "5. Set the CCIPBridgeConfigTimelock as the config operator of CCIPBridgeConfig.\n",
+                "3. Enable the CCIPTokenPoolConfig policy.\n",
+                "4. Accept the ownership of the token pool through CCIPTokenPoolConfig.\n",
+                "5. Set the CCIPTokenPoolConfigTimelock as the config operator of CCIPTokenPoolConfig.\n",
                 "6. Set the OCG timelock as the rebalancer of the token pool.\n",
                 "7. Clear the native rate limit admin of the token pool.\n",
-                "8. Enable the CCIPBridgeConfigTimelock policy.\n",
+                "8. Enable the CCIPTokenPoolConfigTimelock policy.\n",
                 "9. Add the Arbitrum route to the token pool.\n",
                 "10. Add the Base route to the token pool.\n",
                 "11. Add the Berachain route to the token pool.\n",
@@ -186,9 +191,16 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                 "- Outbound (mainnet to the chain): capacity 100,000 OHM (100000000000000), refill rate 1157407407 per second.\n",
                 "- Inbound (the chain to mainnet): capacity 55,000 OHM (55000000000000), refill rate 636574074 per second.\n",
                 "\n",
-                "The remote token of each route is the chain's OHM token and the accepted remote pool is the chain's CCIPBurnMintTokenPool policy, both read from the desired-state configuration at build time. The pool's Optimism-Berachain pair is not opened anywhere: Chainlink serves no lane between those chains.\n",
+                "The remote token of each route is the chain's OHM token and the accepted remote pool is the chain's CCIPBurnMintTokenPool policy, both read from the desired-state configuration at build time.\n",
                 "\n",
-                "At the completion of this proposal, route configuration is proposed by the DAO MS through the CCIPBridgeConfigTimelock and executed after its delay, containment is available to the Emergency MS through CCIPBridgeConfig, and the remaining root settings of the pool require an OCG proposal. The four chains stay dormant until their local DAO MS enables and registers the local pool, which is expected immediately after this proposal executes.\n"
+                "This proposal leaves the mainnet pool fully configured. Later route changes are queued by the DAO MS on the CCIPTokenPoolConfigTimelock and executed permissionlessly after its one-day delay, or applied directly by OCG; containment stays available to the Emergency MS and to the DAO MS as `bridge_admin` through CCIPTokenPoolConfig; and the remaining root settings of the pool require an OCG proposal.\n",
+                "\n",
+                "## Next Steps\n",
+                "\n",
+                "The following are performed by the DAO MS of each chain and are not part of this proposal:\n",
+                "\n",
+                "- On Arbitrum, Optimism, Base and Berachain: the local CCIP contracts, including the local pool's routes to mainnet and to the other burn/mint chains (less the Optimism-Berachain pair, for which Chainlink serves no lane), are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. The same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain.\n",
+                "- On mainnet and on those four chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the four new peripheries.\n"
             );
     }
 
@@ -210,7 +222,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         _requireDeployment(c);
         require(
             desired.rebalancer == c.ocgTimelock,
-            "env.json olympus.config.CCIPBridgeConfig.rebalancer is not the OCG timelock"
+            "env.json olympus.config.CCIPTokenPoolConfig.rebalancer is not the OCG timelock"
         );
         require(
             c.roles.hasRole(c.ocgTimelock, ADMIN_ROLE),
@@ -230,7 +242,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         if (tokenConfig.administrator != c.ocgTimelock) {
             require(
                 tokenConfig.pendingAdministrator == c.ocgTimelock,
-                "The OCG timelock is not the pending OHM administrator: run CCIPBridgeConfigBatch.prepareHandover first"
+                "The OCG timelock is not the pending OHM administrator: run CCIPTokenPoolConfigBatch.prepareHandover first"
             );
             _pushAction(
                 address(c.registry),
@@ -257,7 +269,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(IEnabler.enable.selector, ""),
-                "Enable CCIPBridgeConfig"
+                "Enable CCIPTokenPoolConfig"
             );
         }
 
@@ -265,12 +277,12 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         if (c.pool.owner() != address(c.config)) {
             require(
                 _pendingOwner(address(c.pool)) == address(c.config),
-                "CCIPBridgeConfig is not the pending owner of the pool: run CCIPBridgeConfigBatch.prepareHandover first"
+                "CCIPTokenPoolConfig is not the pending owner of the pool: run CCIPTokenPoolConfigBatch.prepareHandover first"
             );
             _pushAction(
                 address(c.config),
-                abi.encodeWithSelector(ICCIPBridgeConfig.acceptPoolOwnership.selector),
-                "Accept the token pool ownership through CCIPBridgeConfig"
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.acceptPoolOwnership.selector),
+                "Accept the token pool ownership through CCIPTokenPoolConfig"
             );
         }
 
@@ -282,7 +294,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
                     IConfigOperator.setConfigOperator.selector,
                     address(c.configTimelock)
                 ),
-                "Set CCIPBridgeConfigTimelock as the config operator of CCIPBridgeConfig"
+                "Set CCIPTokenPoolConfigTimelock as the config operator of CCIPTokenPoolConfig"
             );
         }
 
@@ -291,7 +303,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(
-                    ICCIPBridgeConfig.setRebalancer.selector,
+                    ICCIPTokenPoolConfig.setRebalancer.selector,
                     desired.rebalancer
                 ),
                 "Set the OCG timelock as the rebalancer of the token pool"
@@ -303,7 +315,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(
-                    ICCIPBridgeConfig.setRateLimitAdmin.selector,
+                    ICCIPTokenPoolConfig.setRateLimitAdmin.selector,
                     desired.rateLimitAdmin
                 ),
                 "Set the native rate limit admin of the token pool"
@@ -315,7 +327,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             _pushAction(
                 address(c.configTimelock),
                 abi.encodeWithSelector(IEnabler.enable.selector, ""),
-                "Enable CCIPBridgeConfigTimelock"
+                "Enable CCIPTokenPoolConfigTimelock"
             );
         }
 
@@ -376,7 +388,7 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
             c.config.validateAddChain(update);
             _pushAction(
                 address(c.config),
-                abi.encodeWithSelector(ICCIPBridgeConfig.addChain.selector, update),
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.addChain.selector, update),
                 string.concat("Add the ", route.remoteChain, " route to the token pool")
             );
         }
@@ -443,16 +455,16 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     function _validateLifecycle(Contracts memory c) internal view {
         require(
             _kernel.isPolicyActive(Policy(address(c.config))),
-            "CCIPBridgeConfig is not active"
+            "CCIPTokenPoolConfig is not active"
         );
         require(
             _kernel.isPolicyActive(Policy(address(c.configTimelock))),
-            "CCIPBridgeConfigTimelock is not active"
+            "CCIPTokenPoolConfigTimelock is not active"
         );
-        require(IEnabler(address(c.config)).isEnabled(), "CCIPBridgeConfig is not enabled");
+        require(IEnabler(address(c.config)).isEnabled(), "CCIPTokenPoolConfig is not enabled");
         require(
             IEnabler(address(c.configTimelock)).isEnabled(),
-            "CCIPBridgeConfigTimelock is not enabled"
+            "CCIPTokenPoolConfigTimelock is not enabled"
         );
     }
 
@@ -460,11 +472,11 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
         Contracts memory c,
         CCIPConfigLib.DesiredConfig memory desired
     ) internal view {
-        require(c.pool.owner() == address(c.config), "CCIPBridgeConfig does not own the pool");
+        require(c.pool.owner() == address(c.config), "CCIPTokenPoolConfig does not own the pool");
         require(_pendingOwner(address(c.pool)) == address(0), "The pool has a pending owner");
         require(
             c.config.configOperator() == address(c.configTimelock),
-            "CCIPBridgeConfigTimelock is not the config operator"
+            "CCIPTokenPoolConfigTimelock is not the config operator"
         );
         require(
             ICCIPLockReleaseTokenPool(address(c.pool)).getRebalancer() == c.ocgTimelock,
@@ -524,46 +536,46 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     ) internal view {
         require(
             IGracePeriod(address(c.config)).gracePeriod() == desired.gracePeriod,
-            "CCIPBridgeConfig grace period mismatch"
+            "CCIPTokenPoolConfig grace period mismatch"
         );
         require(
             IGracePeriod(address(c.configTimelock)).gracePeriod() == desired.gracePeriod,
-            "CCIPBridgeConfigTimelock grace period mismatch"
+            "CCIPTokenPoolConfigTimelock grace period mismatch"
         );
         require(
             c.configTimelock.timelockDelay() == desired.timelockDelay,
-            "CCIPBridgeConfigTimelock delay mismatch"
+            "CCIPTokenPoolConfigTimelock delay mismatch"
         );
     }
 
     /// @notice Reverts unless the config policy, the timelock and the pool are bound together
     ///         and the pool serves OHM.
     function _requireDeployment(Contracts memory c) internal view {
-        require(c.config.pool() == address(c.pool), "CCIPBridgeConfig is bound to another pool");
+        require(c.config.pool() == address(c.pool), "CCIPTokenPoolConfig is bound to another pool");
         require(
             c.configTimelock.config() == address(c.config),
-            "CCIPBridgeConfigTimelock is bound to another config policy"
+            "CCIPTokenPoolConfigTimelock is bound to another config policy"
         );
         require(
             address(Policy(address(c.config)).kernel()) == address(_kernel),
-            "CCIPBridgeConfig reports another Kernel"
+            "CCIPTokenPoolConfig reports another Kernel"
         );
         require(
             address(Policy(address(c.configTimelock)).kernel()) == address(_kernel),
-            "CCIPBridgeConfigTimelock reports another Kernel"
+            "CCIPTokenPoolConfigTimelock reports another Kernel"
         );
         require(c.config.isLiquidityContainer(), "The pool is not a liquidity container");
         require(c.pool.getToken() == c.ohm, "The pool does not serve OHM");
         require(
             _kernel.isPolicyActive(Policy(address(c.config))),
-            "CCIPBridgeConfig is not active in the Kernel: run CCIPBridgeConfigBatch.prepareHandover first"
+            "CCIPTokenPoolConfig is not active in the Kernel: run CCIPTokenPoolConfigBatch.prepareHandover first"
         );
         require(
             _kernel.isPolicyActive(Policy(address(c.configTimelock))),
-            "CCIPBridgeConfigTimelock is not active in the Kernel: run CCIPBridgeConfigBatch.prepareHandover first"
+            "CCIPTokenPoolConfigTimelock is not active in the Kernel: run CCIPTokenPoolConfigBatch.prepareHandover first"
         );
-        _requireVersion(address(c.config), "CCIPBridgeConfig");
-        _requireVersion(address(c.configTimelock), "CCIPBridgeConfigTimelock");
+        _requireVersion(address(c.config), "CCIPTokenPoolConfig");
+        _requireVersion(address(c.configTimelock), "CCIPTokenPoolConfigTimelock");
     }
 
     /// @notice Reverts unless the policy reports version 1.0.
@@ -659,9 +671,11 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     // ========== INTERNAL HELPERS ========== //
 
     function _contracts(Addresses addresses) internal view returns (Contracts memory c) {
-        c.config = ICCIPBridgeConfig(addresses.getAddress("olympus-policy-ccip-bridge-config"));
-        c.configTimelock = ICCIPBridgeConfigTimelock(
-            addresses.getAddress("olympus-policy-ccip-bridge-config-timelock")
+        c.config = ICCIPTokenPoolConfig(
+            addresses.getAddress("olympus-policy-ccip-token-pool-config")
+        );
+        c.configTimelock = ICCIPTokenPoolConfigTimelock(
+            addresses.getAddress("olympus-policy-ccip-token-pool-config-timelock")
         );
         c.pool = ICCIPTokenPoolAdmin(
             addresses.getAddress("olympus-periphery-ccip-lock-release-token-pool")
@@ -687,6 +701,6 @@ contract CCIPBridgeConfigProposal is GovernorBravoProposal {
     }
 }
 
-contract CCIPBridgeConfigProposalScript is ProposalScript {
-    constructor() ProposalScript(new CCIPBridgeConfigProposal()) {}
+contract CCIPTokenPoolConfigProposalScript is ProposalScript {
+    constructor() ProposalScript(new CCIPTokenPoolConfigProposal()) {}
 }

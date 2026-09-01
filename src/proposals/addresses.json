@@ -307,12 +307,12 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-ccip-bridge-config"
+        "name": "olympus-policy-ccip-token-pool-config"
     },
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
-        "name": "olympus-policy-ccip-bridge-config-timelock"
+        "name": "olympus-policy-ccip-token-pool-config-timelock"
     },
     {
         "addr": "0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD",

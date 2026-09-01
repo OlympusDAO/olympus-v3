@@ -8,7 +8,7 @@ import {ICCIPLockReleaseTokenPool} from "src/external/bridge/ICCIPLockReleaseTok
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
@@ -24,7 +24,7 @@ import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleS
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-/// @title  CCIPBridgeConfig
+/// @title  CCIPTokenPoolConfig
 /// @notice Policy that owns the local Chainlink CCIP token pool of OHM and exposes a typed,
 ///         role-separated subset of the pool owner's authority.
 /// @dev    The pool address is fixed at construction. The constructor requires the pool to
@@ -39,9 +39,9 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///           supported chains, remote pools, allowlist;
 ///         - the rate limit function (callable by the bridge rate limiter role, the config
 ///           operator or the admin role, enabled only);
-///         - containment functions (callable by the emergency or admin role, whether or not the
-///           policy is enabled): they only write the disabled rate limiter configuration and
-///           cannot restore capacity.
+///         - containment functions (callable by the emergency, admin, bridge admin or bridge
+///           rate limiter role, whether or not the policy is enabled): they only write the
+///           disabled rate limiter configuration and cannot restore capacity.
 ///
 ///         `enable` is restricted to the admin role, `disable` to the emergency or admin role,
 ///         `reEnable` to the bridge admin role within the grace window, and `setGracePeriod` to
@@ -55,16 +55,16 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
 ///         checks that the pool performs itself, so that a caller can learn the exact revert of a
 ///         call before making it. In the "Reverts if" lists below, an error without the
-///         `CCIPBridgeConfig_` prefix is raised by the pool and declared in `ICCIPTokenPoolAdmin`,
-///         `ICCIPRateLimiter` or `ICCIPLockReleaseTokenPool`; the validation mirrors raise the
-///         same errors for the checks they repeat. Disabling this policy does not stop the pool
-///         from processing transfers; only the containment functions do.
-contract CCIPBridgeConfig is
+///         `CCIPTokenPoolConfig_` prefix is raised by the pool and declared in
+///         `ICCIPTokenPoolAdmin`, `ICCIPRateLimiter` or `ICCIPLockReleaseTokenPool`; the validation
+///         mirrors raise the same errors for the checks they repeat. Disabling this policy does not
+///         stop the pool from processing transfers; only the containment functions do.
+contract CCIPTokenPoolConfig is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     ConfigOperatorSingleStep,
-    ICCIPBridgeConfig,
+    ICCIPTokenPoolConfig,
     IVersioned
 {
     // ========== CONSTANTS ========== //
@@ -116,9 +116,9 @@ contract CCIPBridgeConfig is
         address pool_,
         uint32 gracePeriod_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
-        if (pool_ == address(0)) revert CCIPBridgeConfig_InvalidAddress("pool");
+        if (pool_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("pool");
         if (!ERC165Checker.supportsInterface(pool_, Pool.CCIP_POOL_V1)) {
-            revert CCIPBridgeConfig_InvalidPool(pool_);
+            revert CCIPTokenPoolConfig_InvalidPool(pool_);
         }
 
         _POOL = ICCIPTokenPoolAdmin(pool_);
@@ -138,7 +138,7 @@ contract CCIPBridgeConfig is
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         (uint8 rolesMajor, ) = ROLES.VERSION();
-        if (rolesMajor != 1) revert CCIPBridgeConfig_InvalidModuleVersion();
+        if (rolesMajor != 1) revert CCIPTokenPoolConfig_InvalidModuleVersion();
     }
 
     /// @inheritdoc Policy
@@ -167,19 +167,31 @@ contract CCIPBridgeConfig is
         _;
     }
 
+    /// @notice Reverts with `NotAuthorised` unless the caller holds the emergency, admin,
+    ///         bridge admin or bridge rate limiter role.
+    modifier onlyContainmentRole() {
+        _requireAuthorized(
+            !_isEmergency(msg.sender) &&
+                !_isAdmin(msg.sender) &&
+                !_hasRole(msg.sender, BRIDGE_ADMIN_ROLE) &&
+                !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE)
+        );
+        _;
+    }
+
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     function pool() external view override returns (address pool_) {
         return address(_POOL);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     function isLiquidityContainer() external view override returns (bool isContainer) {
         return _IS_LIQUIDITY_CONTAINER;
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     function getDisabledRateLimiterConfig()
         external
         pure
@@ -189,7 +201,7 @@ contract CCIPBridgeConfig is
         return _disabledRateLimiterConfig();
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     function isChainDisabled(uint64 chainSelector_) external view override returns (bool disabled) {
@@ -202,7 +214,7 @@ contract CCIPBridgeConfig is
 
     // ========== ADMIN FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the admin role.
@@ -214,7 +226,7 @@ contract CCIPBridgeConfig is
         emit PoolOwnershipAccepted(address(_POOL));
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev A pending proposal is overwritten by a later one. After the recipient accepts, this
     ///      policy no longer owns the pool: every function that calls the pool reverts
     ///      (`OnlyCallableByOwner`, or `Unauthorized` for the rate limiter setters), and every
@@ -228,14 +240,14 @@ contract CCIPBridgeConfig is
     ///      - `newOwner_` is this policy (`CannotTransferToSelf`).
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function transferPoolOwnership(address newOwner_) external override givenEnabled onlyAdminRole {
-        if (newOwner_ == address(0)) revert CCIPBridgeConfig_InvalidAddress("newOwner");
+        if (newOwner_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("newOwner");
 
         _POOL.transferOwnership(newOwner_);
 
         emit PoolOwnershipTransferRequested(newOwner_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The candidate is probed with a static call to `typeAndVersion()`, which must succeed
     ///      and return at least the ABI encoding of an empty string. Setting the current value
     ///      writes and emits. Whether the candidate serves the configured routes is not checked.
@@ -248,14 +260,14 @@ contract CCIPBridgeConfig is
     ///      - The `typeAndVersion()` probe of `router_` fails.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRouter(address router_) external override givenEnabled onlyAdminRole {
-        if (router_ == address(0)) revert CCIPBridgeConfig_InvalidAddress("router");
-        if (router_.code.length == 0) revert CCIPBridgeConfig_InvalidRouter(router_);
+        if (router_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("router");
+        if (router_.code.length == 0) revert CCIPTokenPoolConfig_InvalidRouter(router_);
 
         (bool success, bytes memory returnData) = router_.staticcall(
             abi.encodeWithSelector(ITypeAndVersion.typeAndVersion.selector)
         );
         if (!success || returnData.length < _MIN_TYPE_AND_VERSION_RETURN_LENGTH) {
-            revert CCIPBridgeConfig_InvalidRouter(router_);
+            revert CCIPTokenPoolConfig_InvalidRouter(router_);
         }
 
         _POOL.setRouter(router_);
@@ -263,7 +275,7 @@ contract CCIPBridgeConfig is
         emit PoolRouterSet(router_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The pool emits no event for this change; `PoolRebalancerSet` is the only log of it.
     ///      Setting the current value writes and emits.
     ///
@@ -280,7 +292,7 @@ contract CCIPBridgeConfig is
         emit PoolRebalancerSet(rebalancer_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Setting the current value writes and emits.
     ///
     ///      Reverts if:
@@ -295,7 +307,7 @@ contract CCIPBridgeConfig is
         emit PoolRateLimitAdminSet(rateLimitAdmin_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The tokens move directly from `from_` to the pool.
     ///
     ///      Reverts if:
@@ -312,8 +324,8 @@ contract CCIPBridgeConfig is
         uint256 amount_
     ) external override givenEnabled onlyAdminRole {
         _requireLiquidityContainer();
-        if (from_ == address(0)) revert CCIPBridgeConfig_InvalidAddress("from");
-        if (amount_ == 0) revert CCIPBridgeConfig_ZeroAmount();
+        if (from_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("from");
+        if (amount_ == 0) revert CCIPTokenPoolConfig_ZeroAmount();
 
         ICCIPLockReleaseTokenPool(address(_POOL)).transferLiquidity(from_, amount_);
 
@@ -322,7 +334,7 @@ contract CCIPBridgeConfig is
 
     // ========== ROUTE FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller is neither the config operator nor an admin.
@@ -341,7 +353,7 @@ contract CCIPBridgeConfig is
         emit RouteAdded(update_.remoteChainSelector, update_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller is neither the config operator nor an admin.
@@ -359,7 +371,7 @@ contract CCIPBridgeConfig is
         emit RouteRemoved(chainSelector_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The route state is read from the pool before the replacement: the remote pools, both
     ///      rate limiter configurations and both fill levels projected to the current block. The
     ///      replacement is one `applyChainUpdates` call with `chainSelector_` in both the removals
@@ -413,7 +425,7 @@ contract CCIPBridgeConfig is
         emit RemoteTokenSet(chainSelector_, previousRemoteToken, remoteToken_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller is neither the config operator nor an admin.
@@ -430,7 +442,7 @@ contract CCIPBridgeConfig is
         emit RouteRemotePoolAdded(chainSelector_, remotePool_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The policy is disabled.
     ///      - The caller is neither the config operator nor an admin.
@@ -447,7 +459,7 @@ contract CCIPBridgeConfig is
         emit RouteRemotePoolRemoved(chainSelector_, remotePool_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Absent removals, duplicate additions and zero addresses are skipped by the pool
     ///      without an event.
     ///
@@ -469,7 +481,7 @@ contract CCIPBridgeConfig is
 
     // ========== RATE LIMIT FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Setting the current values writes and emits.
     ///
     ///      Reverts if:
@@ -506,23 +518,24 @@ contract CCIPBridgeConfig is
 
     // ========== CONTAINMENT FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Both buckets are written to `{isEnabled: true, capacity: 2, rate: 1}`, which clamps
     ///      each fill level to two units. The policy's enabled state is not checked.
     ///
     ///      Reverts if:
-    ///      - The caller holds neither the emergency role nor the admin role.
+    ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
+    ///        limiter roles.
     ///      - This policy does not own the pool and is not its rate limit admin
     ///        (`Unauthorized`).
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
-    function disableChain(uint64 chainSelector_) external override onlyEmergencyOrAdminRole {
+    function disableChain(uint64 chainSelector_) external override onlyContainmentRole {
         ICCIPRateLimiter.Config memory disabledConfig = _disabledRateLimiterConfig();
         _POOL.setChainRateLimiterConfig(chainSelector_, disabledConfig, disabledConfig);
 
         emit RouteDisabled(chainSelector_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Every configured route is written in one `setChainRateLimiterConfigs` call and one
     ///      `RouteDisabled` event is emitted per route. The policy's enabled state is not
     ///      checked. The order of the routes follows the pool's enumerable set.
@@ -534,10 +547,11 @@ contract CCIPBridgeConfig is
     ///      call.
     ///
     ///      Reverts if:
-    ///      - The caller holds neither the emergency role nor the admin role.
+    ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
+    ///        limiter roles.
     ///      - At least one route is configured and this policy does not own the pool and is not
     ///        its rate limit admin (`Unauthorized`).
-    function disableAllChains() external override onlyEmergencyOrAdminRole {
+    function disableAllChains() external override onlyContainmentRole {
         uint64[] memory chainSelectors = _POOL.getSupportedChains();
         uint256 length = chainSelectors.length;
         if (length == 0) return;
@@ -559,7 +573,7 @@ contract CCIPBridgeConfig is
 
     // ========== VALIDATION FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The checks run in the order in which the pool would perform its own.
     ///
     ///      Reverts if:
@@ -577,14 +591,14 @@ contract CCIPBridgeConfig is
         _validateAddChain(update_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     function validateRemoveChain(uint64 chainSelector_) external view override {
         _validateRemoveChain(chainSelector_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - `remoteToken_` is empty.
@@ -597,7 +611,7 @@ contract CCIPBridgeConfig is
         _validateSetRemoteToken(chainSelector_, remoteToken_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - `remotePool_` is empty (`ZeroAddressNotAllowed`).
@@ -609,7 +623,7 @@ contract CCIPBridgeConfig is
         _validateAddRemotePool(chainSelector_, remotePool_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - `remotePool_` is not accepted for the route (`InvalidRemotePoolForChain`).
@@ -621,7 +635,7 @@ contract CCIPBridgeConfig is
         _validateRemoveRemotePool(chainSelector_, remotePool_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - The pool was deployed without an allowlist (`AllowListNotEnabled`).
     ///      - Both `removes_` and `adds_` are empty.
@@ -632,7 +646,7 @@ contract CCIPBridgeConfig is
         _validateApplyAllowListUpdates(removes_, adds_);
     }
 
-    /// @inheritdoc ICCIPBridgeConfig
+    /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - Either configuration is disabled.
@@ -698,7 +712,7 @@ contract CCIPBridgeConfig is
         }
 
         uint256 length = update_.remotePoolAddresses.length;
-        if (length == 0) revert CCIPBridgeConfig_RemotePoolsEmpty();
+        if (length == 0) revert CCIPTokenPoolConfig_RemotePoolsEmpty();
         for (uint256 i; i < length; ++i) {
             bytes calldata remotePool = update_.remotePoolAddresses[i];
             if (remotePool.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
@@ -729,14 +743,14 @@ contract CCIPBridgeConfig is
         bytes calldata remoteToken_
     ) internal view {
         _requireSupportedChain(chainSelector_);
-        if (remoteToken_.length == 0) revert CCIPBridgeConfig_RemoteTokenEmpty();
+        if (remoteToken_.length == 0) revert CCIPTokenPoolConfig_RemoteTokenEmpty();
         if (keccak256(remoteToken_) == keccak256(_POOL.getRemoteToken(chainSelector_))) {
-            revert CCIPBridgeConfig_RemoteTokenUnchanged();
+            revert CCIPTokenPoolConfig_RemoteTokenUnchanged();
         }
         if (
             !_POOL.getCurrentOutboundRateLimiterState(chainSelector_).isEnabled ||
             !_POOL.getCurrentInboundRateLimiterState(chainSelector_).isEnabled
-        ) revert CCIPBridgeConfig_RateLimiterDisabled();
+        ) revert CCIPTokenPoolConfig_RateLimiterDisabled();
     }
 
     /// @notice Validates the arguments of `addRemotePool`. See `validateAddRemotePool`.
@@ -765,7 +779,7 @@ contract CCIPBridgeConfig is
             revert ICCIPTokenPoolAdmin.InvalidRemotePoolForChain(chainSelector_, remotePool_);
         }
         if (_POOL.getRemotePools(chainSelector_).length == 1) {
-            revert CCIPBridgeConfig_LastRemotePool(chainSelector_);
+            revert CCIPTokenPoolConfig_LastRemotePool(chainSelector_);
         }
     }
 
@@ -779,7 +793,7 @@ contract CCIPBridgeConfig is
     ) internal view {
         if (!_POOL.getAllowListEnabled()) revert ICCIPTokenPoolAdmin.AllowListNotEnabled();
         if (removes_.length == 0 && adds_.length == 0) {
-            revert CCIPBridgeConfig_AllowListUpdatesEmpty();
+            revert CCIPTokenPoolConfig_AllowListUpdatesEmpty();
         }
     }
 
@@ -804,7 +818,7 @@ contract CCIPBridgeConfig is
     ///         - `config_` has a zero rate or a rate that is not below its capacity
     ///           (`InvalidRateLimitRate`).
     function _validateRateLimiterConfig(ICCIPRateLimiter.Config memory config_) internal pure {
-        if (!config_.isEnabled) revert CCIPBridgeConfig_RateLimiterDisabled();
+        if (!config_.isEnabled) revert CCIPTokenPoolConfig_RateLimiterDisabled();
         if (config_.rate == 0 || config_.rate >= config_.capacity) {
             revert ICCIPRateLimiter.InvalidRateLimitRate(config_);
         }
@@ -817,10 +831,10 @@ contract CCIPBridgeConfig is
         }
     }
 
-    /// @notice Reverts with `CCIPBridgeConfig_NotLiquidityContainer` unless the pool advertises
+    /// @notice Reverts with `CCIPTokenPoolConfig_NotLiquidityContainer` unless the pool advertises
     ///         the liquidity container interface.
     function _requireLiquidityContainer() internal view {
-        if (!_IS_LIQUIDITY_CONTAINER) revert CCIPBridgeConfig_NotLiquidityContainer();
+        if (!_IS_LIQUIDITY_CONTAINER) revert CCIPTokenPoolConfig_NotLiquidityContainer();
     }
 
     // ========== INTERNAL HELPERS ========== //
@@ -923,13 +937,13 @@ contract CCIPBridgeConfig is
     // ========== ERC165 ========== //
 
     /// @inheritdoc EnablerV2
-    /// @dev Adds `ICCIPBridgeConfig`, `IConfigOperator` and `IVersioned` to the interfaces
+    /// @dev Adds `ICCIPTokenPoolConfig`, `IConfigOperator` and `IVersioned` to the interfaces
     ///      advertised by the bases.
     function supportsInterface(
         bytes4 interfaceId_
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
-            interfaceId_ == type(ICCIPBridgeConfig).interfaceId ||
+            interfaceId_ == type(ICCIPTokenPoolConfig).interfaceId ||
             interfaceId_ == type(IConfigOperator).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);

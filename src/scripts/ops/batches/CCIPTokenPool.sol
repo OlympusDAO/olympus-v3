@@ -28,11 +28,11 @@ import {Kernel, Actions} from "src/Kernel.sol";
 ///         Chainlink TokenAdminRegistry, from the pool owner or the OHM administrator.
 /// @dev    These entry points act from the direct pool owner, the OHM administrator or the
 ///         rebalancer, which serves the bootstrap of a chain before its config policy takes the
-///         pool over, and testnets. Once the pool is owned by the CCIPBridgeConfig policy and the
-///         OHM administrator is the OCG timelock (the mainnet state after the CCIP Bridge Config
-///         Activation proposal), none of them is available to a multisig batch: each reverts with
-///         the path to use instead. Route configuration runs through `CCIPRouteReconcileBatch`
-///         (config timelock), containment and re-enable through `CCIPBridgeConfigBatch`, and the
+///         pool over, and testnets. Once the pool is owned by the CCIPTokenPoolConfig policy and
+///         the OHM administrator is the OCG timelock (the mainnet state after the CCIP Token Pool
+///         Config Activation proposal), none of them is available to a multisig batch: each reverts
+///         with the path to use instead. Route configuration runs through `CCIPRouteReconcileBatch`
+///         (config timelock), containment and re-enable through `CCIPTokenPoolConfigBatch`, and the
 ///         registry, the rebalancer and liquidity withdrawals through an OCG proposal.
 contract CCIPTokenPool is BatchScriptV2 {
     using SafeCast for uint256;
@@ -58,13 +58,13 @@ contract CCIPTokenPool is BatchScriptV2 {
         return ICCIPTokenAdminRegistry(tokenRegistry).getTokenConfig(token);
     }
 
-    /// @notice Returns the CCIPBridgeConfig policy of the local chain, or the zero address when
+    /// @notice Returns the CCIPTokenPoolConfig policy of the local chain, or the zero address when
     ///         it is not deployed.
     function _configAddress() internal view returns (address) {
-        return _envAddress("olympus.policies.CCIPBridgeConfig");
+        return _envAddress("olympus.policies.CCIPTokenPoolConfig");
     }
 
-    /// @notice Returns whether the pool is owned by the CCIPBridgeConfig policy.
+    /// @notice Returns whether the pool is owned by the CCIPTokenPoolConfig policy.
     function _isPoolOwnedByConfig(address tokenPool_) internal view returns (bool) {
         address config = _configAddress();
         return config != address(0) && ICCIPTokenPoolAdmin(tokenPool_).owner() == config;
@@ -79,7 +79,7 @@ contract CCIPTokenPool is BatchScriptV2 {
             string.concat(
                 "CCIPTokenPool: the batch owner is not the pool owner (",
                 vm.toString(owner),
-                _isPoolOwnedByConfig(tokenPool_) ? ", the CCIPBridgeConfig policy). " : "). ",
+                _isPoolOwnedByConfig(tokenPool_) ? ", the CCIPTokenPoolConfig policy). " : "). ",
                 alternative_
             )
         );
@@ -104,13 +104,13 @@ contract CCIPTokenPool is BatchScriptV2 {
     }
 
     string internal constant _ROUTE_ALTERNATIVE =
-        "Route configuration of a pool owned by CCIPBridgeConfig runs through CCIPRouteReconcileBatch.reconcileRoutes (config timelock) or an OCG proposal.";
+        "Route configuration of a pool owned by CCIPTokenPoolConfig runs through CCIPRouteReconcileBatch.reconcileRoutes (config timelock) or an OCG proposal.";
     string internal constant _CONTAINMENT_ALTERNATIVE =
-        "Containment of a pool owned by CCIPBridgeConfig runs through CCIPBridgeConfigBatch.disableChain or disableAllChains (Emergency MS).";
+        "Containment of a pool owned by CCIPTokenPoolConfig runs through CCIPTokenPoolConfigBatch.disableChain or disableAllChains (the DAO MS as bridge_admin) or their EmergencyMS variants (the Emergency MS).";
     string internal constant _REGISTRY_ALTERNATIVE =
         "On mainnet the OHM administrator is the OCG timelock after the handover: registry changes are OCG proposals.";
     string internal constant _OWNERSHIP_ALTERNATIVE =
-        "After the handover the pool ownership is managed through CCIPBridgeConfig.transferPoolOwnership by the admin role (an OCG proposal on mainnet).";
+        "After the handover the pool ownership is managed through CCIPTokenPoolConfig.transferPoolOwnership by the admin role (an OCG proposal on mainnet).";
 
     /// @notice Default rate limiter config for a TokenPool
     /// @dev    The rate limiter is disabled by default, hence there is no rate limit
@@ -134,8 +134,8 @@ contract CCIPTokenPool is BatchScriptV2 {
     /// @dev    On a non-canonical chain: the TokenPool is activated in the Kernel and enabled.
     ///         On a canonical chain: the TokenPool is a periphery contract and does not need
     ///         activation. While the batch owner owns the pool, the batch owner is set as the
-    ///         rebalancer. Once the pool is owned by the CCIPBridgeConfig policy, the rebalancer
-    ///         is managed through `CCIPBridgeConfig.setRebalancer` by the admin role and the
+    ///         rebalancer. Once the pool is owned by the CCIPTokenPoolConfig policy, the rebalancer
+    ///         is managed through `CCIPTokenPoolConfig.setRebalancer` by the admin role and the
     ///         function adds nothing.
     function install(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Assumptions
@@ -171,7 +171,7 @@ contract CCIPTokenPool is BatchScriptV2 {
 
             if (_isPoolOwnedByConfig(tokenPool)) {
                 console2.log(
-                    "Canonical chain: the pool is owned by CCIPBridgeConfig; the rebalancer is managed through CCIPBridgeConfig.setRebalancer by the admin role (an OCG proposal on mainnet). Nothing to install."
+                    "Canonical chain: the pool is owned by CCIPTokenPoolConfig; the rebalancer is managed through CCIPTokenPoolConfig.setRebalancer by the admin role (an OCG proposal on mainnet). Nothing to install."
                 );
             } else {
                 _requireDirectPoolOwner(tokenPool, _OWNERSHIP_ALTERNATIVE);
@@ -316,7 +316,7 @@ contract CCIPTokenPool is BatchScriptV2 {
 
     /// @notice Transfers the ownership of the TokenPool to the DAO multisig
     /// @dev    The batch owner must be the pool owner. After the handover the pool is owned by
-    ///         CCIPBridgeConfig and ownership transfers go through `transferPoolOwnership`.
+    ///         CCIPTokenPoolConfig and ownership transfers go through `transferPoolOwnership`.
     function transferTokenPoolOwnershipToDaoMS() external setUpWithChainId(false) {
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
@@ -347,7 +347,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         // - DAO MS must accept the ownership
     }
 
-    /// @notice Proposes the local CCIPBridgeConfig policy as the new owner of the TokenPool
+    /// @notice Proposes the local CCIPTokenPoolConfig policy as the new owner of the TokenPool
     /// @dev    The batch owner must be the pool owner (the deployer, right after the deploy
     ///         sequence). The transfer is only proposed here; the config policy accepts it with
     ///         `acceptPoolOwnership` in the setup batch (non-canonical chains) or in the OCG
@@ -362,15 +362,15 @@ contract CCIPTokenPool is BatchScriptV2 {
         address config = _configAddress();
         require(
             config != address(0),
-            "CCIPTokenPool: no CCIPBridgeConfig is recorded for this chain; deploy it first"
+            "CCIPTokenPool: no CCIPTokenPoolConfig is recorded for this chain; deploy it first"
         );
 
         if (ICCIPTokenPoolAdmin(tokenPool).owner() == config) {
-            console2.log("CCIPBridgeConfig already owns the pool. Skipping.");
+            console2.log("CCIPTokenPoolConfig already owns the pool. Skipping.");
             return;
         }
         if (_pendingOwner(tokenPool) == config) {
-            console2.log("Ownership transfer to CCIPBridgeConfig is already pending. Skipping.");
+            console2.log("Ownership transfer to CCIPTokenPoolConfig is already pending. Skipping.");
             return;
         }
         _requireDirectPoolOwner(
@@ -378,7 +378,7 @@ contract CCIPTokenPool is BatchScriptV2 {
             "Run this entry point again with the printed pool owner as the sender (the deployer after the deploy sequence)."
         );
 
-        console2.log("Transferring ownership of", tokenPool, "to CCIPBridgeConfig", config);
+        console2.log("Transferring ownership of", tokenPool, "to CCIPTokenPoolConfig", config);
         addToBatch(
             tokenPool,
             abi.encodeWithSelector(ICCIPTokenPoolAdmin.transferOwnership.selector, config)
@@ -707,7 +707,7 @@ contract CCIPTokenPool is BatchScriptV2 {
     }
 
     /// @notice Sets the outbound and inbound TokenPool rate limits for a remote chain
-    /// @dev    Direct pool owner path only: once the pool is owned by CCIPBridgeConfig the
+    /// @dev    Direct pool owner path only: once the pool is owned by CCIPTokenPoolConfig the
     ///         desired limits live in `env.json` and `CCIPRouteReconcileBatch.reconcileRoutes`
     ///         queues them on the config timelock.
     ///         The local chain is determined from block.chainid. `capacity` is the max bucket size and `rate` is the
@@ -804,8 +804,9 @@ contract CCIPTokenPool is BatchScriptV2 {
     }
 
     /// @notice Performs an emergency shutdown of the TokenPool for a specific remote chain by enabling the rate limiter with a very low capacity
-    /// @dev    Direct pool owner path only: once the pool is owned by CCIPBridgeConfig, use
-    ///         `CCIPBridgeConfigBatch.disableChain` (Emergency MS).
+    /// @dev    Direct pool owner path only: once the pool is owned by CCIPTokenPoolConfig, use
+    ///         `CCIPTokenPoolConfigBatch.disableChain` (the DAO MS as `bridge_admin`) or
+    ///         `disableChainEmergencyMS` (the Emergency MS).
     ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
     function emergencyShutdown(
         bool useDaoMS_,
@@ -822,8 +823,9 @@ contract CCIPTokenPool is BatchScriptV2 {
     }
 
     /// @notice Performs an emergency shutdown of the TokenPool for all remote chains by enabling the rate limiter with a very low capacity
-    /// @dev    Direct pool owner path only: once the pool is owned by CCIPBridgeConfig, use
-    ///         `CCIPBridgeConfigBatch.disableAllChains` (Emergency MS).
+    /// @dev    Direct pool owner path only: once the pool is owned by CCIPTokenPoolConfig, use
+    ///         `CCIPTokenPoolConfigBatch.disableAllChains` (the DAO MS as `bridge_admin`) or
+    ///         `disableAllChainsEmergencyMS` (the Emergency MS).
     ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
     function emergencyShutdownAll(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Determine the remote chains that are configured

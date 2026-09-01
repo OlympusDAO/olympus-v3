@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Aggregated CCIP rollout readiness report: the submission gate for the CCIP
-# Bridge Config Activation proposal.
+# Token Pool Config Activation proposal.
 #
 # Runs CCIPNonEthereumSetupBatch.checkReadiness (read-only) on mainnet and the four
 # burn/mint chains, and aggregates a green/red verdict per chain and per outgoing

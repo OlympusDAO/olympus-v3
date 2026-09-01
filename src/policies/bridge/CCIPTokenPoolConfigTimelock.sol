@@ -6,8 +6,8 @@ import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ICCIPBridgeConfig} from "src/policies/interfaces/bridge/ICCIPBridgeConfig.sol";
-import {ICCIPBridgeConfigTimelock} from "src/policies/interfaces/bridge/ICCIPBridgeConfigTimelock.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -24,15 +24,14 @@ import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
-/// @title  CCIPBridgeConfigTimelock
+/// @title  CCIPTokenPoolConfigTimelock
 /// @notice Timelock policy through which the bridge admin role queues typed route, remote pool,
-///         allowlist and rate limit changes of a `CCIPBridgeConfig` policy.
+///         allowlist and rate limit changes of a `CCIPTokenPoolConfig` policy.
 /// @dev    The config policy address is fixed at construction and must advertise
-///         `ICCIPBridgeConfig`, `IConfigOperator` and `IEnabler` through ERC165 and belong to the
-///         same kernel as this policy. The token pool whose state is hashed is read from the
-///         config policy at construction and is fixed for the lifetime of that policy. Enabling
-///         and re-enabling this policy require the config policy to be an active policy of that
-///         kernel.
+///         `ICCIPTokenPoolConfig`, `IConfigOperator` and `IEnabler` through ERC165 and belong to
+///         the same kernel as this policy. The token pool whose state is hashed is read from the
+///         config policy at construction and is fixed for the lifetime of that policy. Enabling and
+///         re-enabling this policy require the config policy to be an active policy of that kernel.
 ///
 ///         Queueing requires this policy and the config policy to be enabled, the caller to hold
 ///         the bridge admin role and the config policy to name this timelock as its config
@@ -52,39 +51,40 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///         emergency or admin role, `reEnable` to the bridge admin role within the grace window,
 ///         and `setGracePeriod` to the admin role while enabled.
-contract CCIPBridgeConfigTimelock is
+contract CCIPTokenPoolConfigTimelock is
     Policy,
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     ConfigTimelockBatchQueue,
-    ICCIPBridgeConfigTimelock,
+    ICCIPTokenPoolConfigTimelock,
     IVersioned
 {
     // ========== CONSTANTS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     uint48 public constant override MAX_TIMELOCK_DELAY = 30 days;
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     uint48 public constant override EXECUTION_WINDOW = 3 days;
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     bytes32 public constant override RATE_LIMITS_DOMAIN =
-        keccak256("CCIP_BRIDGE_CONFIG_RATE_LIMITS");
+        keccak256("CCIP_TOKEN_POOL_CONFIG_RATE_LIMITS");
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     bytes32 public constant override REMOTE_POOLS_DOMAIN =
-        keccak256("CCIP_BRIDGE_CONFIG_REMOTE_POOLS");
+        keccak256("CCIP_TOKEN_POOL_CONFIG_REMOTE_POOLS");
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     bytes32 public constant override ROUTE_IDENTITY_DOMAIN =
-        keccak256("CCIP_BRIDGE_CONFIG_ROUTE_IDENTITY");
+        keccak256("CCIP_TOKEN_POOL_CONFIG_ROUTE_IDENTITY");
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
-    bytes32 public constant override ALLOWLIST_DOMAIN = keccak256("CCIP_BRIDGE_CONFIG_ALLOWLIST");
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
+    bytes32 public constant override ALLOWLIST_DOMAIN =
+        keccak256("CCIP_TOKEN_POOL_CONFIG_ALLOWLIST");
 
     /// @notice The maximum number of configuration keys that one batch may reserve.
     /// @dev    A route contributes three keys and the allowlist one.
@@ -93,7 +93,7 @@ contract CCIPBridgeConfigTimelock is
     // ========== IMMUTABLES ========== //
 
     /// @notice The config policy that receives the queued actions.
-    ICCIPBridgeConfig internal immutable _CONFIG;
+    ICCIPTokenPoolConfig internal immutable _CONFIG;
 
     /// @notice The token pool owned by the config policy, whose state is hashed.
     ICCIPTokenPoolAdmin internal immutable _POOL;
@@ -106,7 +106,7 @@ contract CCIPBridgeConfigTimelock is
     ///
     ///         Reverts if:
     ///         - `config_` is the zero address.
-    ///         - `config_` does not advertise `ICCIPBridgeConfig`, `IConfigOperator` and
+    ///         - `config_` does not advertise `ICCIPTokenPoolConfig`, `IConfigOperator` and
     ///           `IEnabler` through ERC165.
     ///         - `config_` reports a kernel other than `kernel_`.
     ///         - `initialTimelockDelay_` is outside `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`.
@@ -125,20 +125,20 @@ contract CCIPBridgeConfigTimelock is
         ReEnablerGracePeriod(gracePeriod_)
         ConfigTimelockBatchQueue(initialTimelockDelay_)
     {
-        if (config_ == address(0)) revert CCIPBridgeConfigTimelock_InvalidAddress("config");
+        if (config_ == address(0)) revert CCIPTokenPoolConfigTimelock_InvalidAddress("config");
         bytes4[] memory configInterfaceIds = new bytes4[](3);
-        configInterfaceIds[0] = type(ICCIPBridgeConfig).interfaceId;
+        configInterfaceIds[0] = type(ICCIPTokenPoolConfig).interfaceId;
         configInterfaceIds[1] = type(IConfigOperator).interfaceId;
         configInterfaceIds[2] = type(IEnabler).interfaceId;
         if (!ERC165Checker.supportsAllInterfaces(config_, configInterfaceIds)) {
-            revert CCIPBridgeConfigTimelock_InvalidConfig(config_);
+            revert CCIPTokenPoolConfigTimelock_InvalidConfig(config_);
         }
         address configKernel = address(Policy(config_).kernel());
         if (configKernel != address(kernel_)) {
-            revert CCIPBridgeConfigTimelock_KernelMismatch(configKernel);
+            revert CCIPTokenPoolConfigTimelock_KernelMismatch(configKernel);
         }
 
-        _CONFIG = ICCIPBridgeConfig(config_);
+        _CONFIG = ICCIPTokenPoolConfig(config_);
         _POOL = ICCIPTokenPoolAdmin(_CONFIG.pool());
     }
 
@@ -152,7 +152,7 @@ contract CCIPBridgeConfigTimelock is
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
         (uint8 rolesMajor, ) = ROLES.VERSION();
-        if (rolesMajor != 1) revert CCIPBridgeConfigTimelock_InvalidModuleVersion();
+        if (rolesMajor != 1) revert CCIPTokenPoolConfigTimelock_InvalidModuleVersion();
     }
 
     /// @inheritdoc Policy
@@ -163,36 +163,36 @@ contract CCIPBridgeConfigTimelock is
 
     // ========== VIEW FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function config() external view override returns (address config_) {
         return address(_CONFIG);
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRateLimitsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
         return _scopedKey(_routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector_));
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRemotePoolsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
         return _scopedKey(_routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector_));
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRouteIdentityKey(
         uint64 chainSelector_
     ) external view override returns (bytes32 key) {
         return _scopedKey(_routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector_));
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getAllowListKey() external view override returns (bytes32 key) {
         return _scopedKey(ALLOWLIST_DOMAIN);
     }
 
     // ========== QUEUE FUNCTIONS ========== //
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -207,12 +207,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.addChain.selector,
+                ICCIPTokenPoolConfig.addChain.selector,
                 abi.encode(update_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -225,12 +225,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.removeChain.selector,
+                ICCIPTokenPoolConfig.removeChain.selector,
                 abi.encode(chainSelector_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -246,12 +246,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.setRemoteToken.selector,
+                ICCIPTokenPoolConfig.setRemoteToken.selector,
                 abi.encode(chainSelector_, remoteToken_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -267,12 +267,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.addRemotePool.selector,
+                ICCIPTokenPoolConfig.addRemotePool.selector,
                 abi.encode(chainSelector_, remotePool_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -288,12 +288,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.removeRemotePool.selector,
+                ICCIPTokenPoolConfig.removeRemotePool.selector,
                 abi.encode(chainSelector_, remotePool_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -309,12 +309,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.applyAllowListUpdates.selector,
+                ICCIPTokenPoolConfig.applyAllowListUpdates.selector,
                 abi.encode(removes_, adds_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -331,12 +331,12 @@ contract CCIPBridgeConfigTimelock is
         return
             _queueAction(
                 address(_CONFIG),
-                ICCIPBridgeConfig.setChainRateLimits.selector,
+                ICCIPTokenPoolConfig.setChainRateLimits.selector,
                 abi.encode(chainSelector_, outbound_, inbound_)
             );
     }
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Reverts if:
     ///      - This policy is disabled.
     ///      - The config policy is disabled.
@@ -362,7 +362,7 @@ contract CCIPBridgeConfigTimelock is
 
     // ========== CONFIGURATION ========== //
 
-    /// @inheritdoc ICCIPBridgeConfigTimelock
+    /// @inheritdoc ICCIPTokenPoolConfigTimelock
     /// @dev Setting the current value writes and emits.
     ///
     ///      Reverts if:
@@ -415,37 +415,37 @@ contract CCIPBridgeConfigTimelock is
         }
         bytes memory payload = action_.payload;
 
-        if (selector == ICCIPBridgeConfig.addChain.selector) {
+        if (selector == ICCIPTokenPoolConfig.addChain.selector) {
             ICCIPTokenPoolAdmin.ChainUpdate memory update = abi.decode(
                 payload,
                 (ICCIPTokenPoolAdmin.ChainUpdate)
             );
             _requireCanonicalPayload(payload, abi.encode(update), selector);
             _CONFIG.validateAddChain(update);
-        } else if (selector == ICCIPBridgeConfig.removeChain.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.removeChain.selector) {
             uint64 chainSelector = abi.decode(payload, (uint64));
             _requireCanonicalPayload(payload, abi.encode(chainSelector), selector);
             _CONFIG.validateRemoveChain(chainSelector);
-        } else if (selector == ICCIPBridgeConfig.setRemoteToken.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.setRemoteToken.selector) {
             (uint64 chainSelector, bytes memory remoteToken) = abi.decode(payload, (uint64, bytes));
             _requireCanonicalPayload(payload, abi.encode(chainSelector, remoteToken), selector);
             _CONFIG.validateSetRemoteToken(chainSelector, remoteToken);
-        } else if (selector == ICCIPBridgeConfig.addRemotePool.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.addRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _requireCanonicalPayload(payload, abi.encode(chainSelector, remotePool), selector);
             _CONFIG.validateAddRemotePool(chainSelector, remotePool);
-        } else if (selector == ICCIPBridgeConfig.removeRemotePool.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.removeRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _requireCanonicalPayload(payload, abi.encode(chainSelector, remotePool), selector);
             _CONFIG.validateRemoveRemotePool(chainSelector, remotePool);
-        } else if (selector == ICCIPBridgeConfig.applyAllowListUpdates.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.applyAllowListUpdates.selector) {
             (address[] memory removes, address[] memory adds) = abi.decode(
                 payload,
                 (address[], address[])
             );
             _requireCanonicalPayload(payload, abi.encode(removes, adds), selector);
             _CONFIG.validateApplyAllowListUpdates(removes, adds);
-        } else if (selector == ICCIPBridgeConfig.setChainRateLimits.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.setChainRateLimits.selector) {
             (
                 uint64 chainSelector,
                 ICCIPRateLimiter.Config memory outbound,
@@ -482,7 +482,7 @@ contract CCIPBridgeConfigTimelock is
     ) internal pure override returns (bytes32[] memory keys) {
         bytes4 selector = action_.selector;
 
-        if (selector == ICCIPBridgeConfig.applyAllowListUpdates.selector) {
+        if (selector == ICCIPTokenPoolConfig.applyAllowListUpdates.selector) {
             keys = new bytes32[](1);
             keys[0] = ALLOWLIST_DOMAIN;
             return keys;
@@ -490,17 +490,17 @@ contract CCIPBridgeConfigTimelock is
 
         uint64 chainSelector = _routeChainSelector(action_);
         if (
-            selector == ICCIPBridgeConfig.addChain.selector ||
-            selector == ICCIPBridgeConfig.removeChain.selector ||
-            selector == ICCIPBridgeConfig.setRemoteToken.selector
+            selector == ICCIPTokenPoolConfig.addChain.selector ||
+            selector == ICCIPTokenPoolConfig.removeChain.selector ||
+            selector == ICCIPTokenPoolConfig.setRemoteToken.selector
         ) {
             keys = new bytes32[](3);
             keys[0] = _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector);
             keys[1] = _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector);
             keys[2] = _routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector);
         } else if (
-            selector == ICCIPBridgeConfig.addRemotePool.selector ||
-            selector == ICCIPBridgeConfig.removeRemotePool.selector
+            selector == ICCIPTokenPoolConfig.addRemotePool.selector ||
+            selector == ICCIPTokenPoolConfig.removeRemotePool.selector
         ) {
             keys = new bytes32[](1);
             keys[0] = _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector);
@@ -538,7 +538,7 @@ contract CCIPBridgeConfigTimelock is
     ///
     ///      Reverts if:
     ///      - `key_` is not one of the keys that `_configKeys` returns for `action_`
-    ///        (`CCIPBridgeConfigTimelock_UnsupportedConfigKey`).
+    ///        (`CCIPTokenPoolConfigTimelock_UnsupportedConfigKey`).
     function _currentConfigStateHash(
         uint64,
         uint256,
@@ -558,7 +558,7 @@ contract CCIPBridgeConfigTimelock is
             return _routeIdentityStateHash(chainSelector);
         }
 
-        revert CCIPBridgeConfigTimelock_UnsupportedConfigKey(key_);
+        revert CCIPTokenPoolConfigTimelock_UnsupportedConfigKey(key_);
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
@@ -578,26 +578,26 @@ contract CCIPBridgeConfigTimelock is
         bytes4 selector = action_.selector;
         bytes memory payload = action_.payload;
 
-        if (selector == ICCIPBridgeConfig.addChain.selector) {
+        if (selector == ICCIPTokenPoolConfig.addChain.selector) {
             _CONFIG.addChain(abi.decode(payload, (ICCIPTokenPoolAdmin.ChainUpdate)));
-        } else if (selector == ICCIPBridgeConfig.removeChain.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.removeChain.selector) {
             _CONFIG.removeChain(abi.decode(payload, (uint64)));
-        } else if (selector == ICCIPBridgeConfig.setRemoteToken.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.setRemoteToken.selector) {
             (uint64 chainSelector, bytes memory remoteToken) = abi.decode(payload, (uint64, bytes));
             _CONFIG.setRemoteToken(chainSelector, remoteToken);
-        } else if (selector == ICCIPBridgeConfig.addRemotePool.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.addRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _CONFIG.addRemotePool(chainSelector, remotePool);
-        } else if (selector == ICCIPBridgeConfig.removeRemotePool.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.removeRemotePool.selector) {
             (uint64 chainSelector, bytes memory remotePool) = abi.decode(payload, (uint64, bytes));
             _CONFIG.removeRemotePool(chainSelector, remotePool);
-        } else if (selector == ICCIPBridgeConfig.applyAllowListUpdates.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.applyAllowListUpdates.selector) {
             (address[] memory removes, address[] memory adds) = abi.decode(
                 payload,
                 (address[], address[])
             );
             _CONFIG.applyAllowListUpdates(removes, adds);
-        } else if (selector == ICCIPBridgeConfig.setChainRateLimits.selector) {
+        } else if (selector == ICCIPTokenPoolConfig.setChainRateLimits.selector) {
             (
                 uint64 chainSelector,
                 ICCIPRateLimiter.Config memory outbound,
@@ -622,7 +622,7 @@ contract CCIPBridgeConfigTimelock is
     ///      re-enabled. Queued actions are not cleared by a disable, by a rotation or revocation
     ///      of the config operator or by a transfer of the pool ownership: after
     ///      `setConfigOperator` names another contract or the zero address this hook reverts
-    ///      with `CCIPBridgeConfigTimelock_NotConfigOperator`, and after the config policy loses
+    ///      with `CCIPTokenPoolConfigTimelock_NotConfigOperator`, and after the config policy loses
     ///      the ownership of the pool every dispatch reverts inside the pool
     ///      (`OnlyCallableByOwner`, or `Unauthorized` for `setChainRateLimits`); in both cases
     ///      the action keeps its configuration keys until it is cancelled.
@@ -714,21 +714,21 @@ contract CCIPBridgeConfigTimelock is
         if (!IEnabler(address(_CONFIG)).isEnabled()) revert NotEnabled();
     }
 
-    /// @notice Reverts with `CCIPBridgeConfigTimelock_ConfigNotActive` unless the config policy
+    /// @notice Reverts with `CCIPTokenPoolConfigTimelock_ConfigNotActive` unless the config policy
     ///         is an active policy of this policy's kernel.
     function _requireConfigActive() internal view {
         address configAddress = address(_CONFIG);
         if (!kernel.isPolicyActive(Policy(configAddress))) {
-            revert CCIPBridgeConfigTimelock_ConfigNotActive(configAddress);
+            revert CCIPTokenPoolConfigTimelock_ConfigNotActive(configAddress);
         }
     }
 
-    /// @notice Reverts with `CCIPBridgeConfigTimelock_NotConfigOperator` unless the config
+    /// @notice Reverts with `CCIPTokenPoolConfigTimelock_NotConfigOperator` unless the config
     ///         policy names this timelock as its config operator.
     function _requireOperatorOfConfig() internal view {
         address currentConfigOperator = _CONFIG.configOperator();
         if (currentConfigOperator != address(this)) {
-            revert CCIPBridgeConfigTimelock_NotConfigOperator(currentConfigOperator);
+            revert CCIPTokenPoolConfigTimelock_NotConfigOperator(currentConfigOperator);
         }
     }
 
@@ -758,21 +758,21 @@ contract CCIPBridgeConfigTimelock is
         bytes4 selector = action_.selector;
         bytes memory payload = action_.payload;
 
-        if (selector == ICCIPBridgeConfig.addChain.selector) {
+        if (selector == ICCIPTokenPoolConfig.addChain.selector) {
             return abi.decode(payload, (ICCIPTokenPoolAdmin.ChainUpdate)).remoteChainSelector;
         }
-        if (selector == ICCIPBridgeConfig.removeChain.selector) {
+        if (selector == ICCIPTokenPoolConfig.removeChain.selector) {
             return abi.decode(payload, (uint64));
         }
         if (
-            selector == ICCIPBridgeConfig.setRemoteToken.selector ||
-            selector == ICCIPBridgeConfig.addRemotePool.selector ||
-            selector == ICCIPBridgeConfig.removeRemotePool.selector
+            selector == ICCIPTokenPoolConfig.setRemoteToken.selector ||
+            selector == ICCIPTokenPoolConfig.addRemotePool.selector ||
+            selector == ICCIPTokenPoolConfig.removeRemotePool.selector
         ) {
             (chainSelector, ) = abi.decode(payload, (uint64, bytes));
             return chainSelector;
         }
-        if (selector == ICCIPBridgeConfig.setChainRateLimits.selector) {
+        if (selector == ICCIPTokenPoolConfig.setChainRateLimits.selector) {
             (chainSelector, , ) = abi.decode(
                 payload,
                 (uint64, ICCIPRateLimiter.Config, ICCIPRateLimiter.Config)
@@ -888,7 +888,7 @@ contract CCIPBridgeConfigTimelock is
     // ========== ERC165 ========== //
 
     /// @inheritdoc EnablerV2
-    /// @dev Adds `ICCIPBridgeConfigTimelock` and `IVersioned` to the interfaces advertised by
+    /// @dev Adds `ICCIPTokenPoolConfigTimelock` and `IVersioned` to the interfaces advertised by
     ///      the bases, which include `ITimelockBatchQueue` and `IConfigTimelockBatchQueue`.
     function supportsInterface(
         bytes4 interfaceId_
@@ -900,7 +900,7 @@ contract CCIPBridgeConfigTimelock is
         returns (bool)
     {
         return
-            interfaceId_ == type(ICCIPBridgeConfigTimelock).interfaceId ||
+            interfaceId_ == type(ICCIPTokenPoolConfigTimelock).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }

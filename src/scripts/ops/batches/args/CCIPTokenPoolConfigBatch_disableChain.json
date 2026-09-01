@@ -5,6 +5,12 @@
                 "remoteChain": "solana"
             },
             "name": "disableChain"
+        },
+        {
+            "args": {
+                "remoteChain": "solana"
+            },
+            "name": "disableChainEmergencyMS"
         }
     ]
 }
