@@ -12,30 +12,30 @@ roles can immediately contain one or all routes.
 
 ## Design
 
--   `CCIPTokenPoolConfig` owns one local pool and exposes only supported pool-owner operations. It does
+- `CCIPTokenPoolConfig` owns one local pool and exposes only supported pool-owner operations. It does
     not forward arbitrary calls.
--   The `admin` role holds root authority and may also call every route function directly;
+- The `admin` role holds root authority and may also call every route function directly;
     `bridge_admin` queues route changes through the timelock, may contain routes and re-enables
     either policy inside its grace window; `bridge_rate_limiter` may change rate limits directly and
     contain routes if assigned; and `emergency` may contain routes or disable the control-plane
     policies.
--   `CCIPTokenPoolConfigTimelock` accepts typed route, remote-pool, allowlist and rate-limit changes,
+- `CCIPTokenPoolConfigTimelock` accepts typed route, remote-pool, allowlist and rate-limit changes,
     validated at queue time against the config policy's `validate*` mirrors. Execution is
     permissionless once the delay has elapsed and before a three-day window closes; the delay is one
     day at deployment and `admin` may set it between one and thirty days. The constructor binds the
     timelock to one config policy: that policy must advertise `ICCIPTokenPoolConfig`,
     `IConfigOperator` and `IEnabler` and report the same Kernel.
--   `ConfigTimelockBatchQueue` reserves the configuration domains touched by an action and records
+- `ConfigTimelockBatchQueue` reserves the configuration domains touched by an action and records
     their state hashes. Execution fails if the destination or guarded state changed after queueing.
     This shared abstraction and `ConfigOperatorSingleStep` originated in Burner Loans PR
     [`#330`](https://github.com/OlympusDAO/olympus-v3/pull/330) and were copied into this branch.
--   Ethereum uses the deployed Chainlink lock/release pool. The four other production EVM chains
+- Ethereum uses the deployed Chainlink lock/release pool. The four other production EVM chains
     receive the Olympus `CCIPBurnMintTokenPool` policy, which this work does not modify. The same
     config and timelock policies manage both pool types.
--   The OHM administrator position in Chainlink's `TokenAdminRegistry`, which selects or delists the
+- The OHM administrator position in Chainlink's `TokenAdminRegistry`, which selects or delists the
     pool that serves OHM, stays outside the config policy. The rollout moves it to the OCG timelock
     on Ethereum and to the local DAO Multisig elsewhere.
--   Deployment, proposal and multisig scripts reconcile the on-chain state with `src/scripts/env.json`
+- Deployment, proposal and multisig scripts reconcile the on-chain state with `src/scripts/env.json`
     and perform the ownership, registry, role, route, funding and periphery handovers.
 
 ## Scope
@@ -47,15 +47,15 @@ Code commit: `<to-be-added>`. See
 
 ### Core Contracts
 
--   [CCIPTokenPoolConfig](../../src/policies/bridge/CCIPTokenPoolConfig.sol) and its
+- [CCIPTokenPoolConfig](../../src/policies/bridge/CCIPTokenPoolConfig.sol) and its
     [interface](../../src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol)
--   [CCIPTokenPoolConfigTimelock](../../src/policies/bridge/CCIPTokenPoolConfigTimelock.sol) and its
+- [CCIPTokenPoolConfigTimelock](../../src/policies/bridge/CCIPTokenPoolConfigTimelock.sol) and its
     [interface](../../src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol)
--   [ConfigOperatorSingleStep](../../src/policies/utils/ConfigOperatorSingleStep.sol) and its
+- [ConfigOperatorSingleStep](../../src/policies/utils/ConfigOperatorSingleStep.sol) and its
     [interface](../../src/policies/interfaces/utils/IConfigOperator.sol)
--   [ConfigTimelockBatchQueue](../../src/policies/utils/ConfigTimelockBatchQueue.sol) and its
+- [ConfigTimelockBatchQueue](../../src/policies/utils/ConfigTimelockBatchQueue.sol) and its
     [interface](../../src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol)
--   The execution-completion hook added to
+- The execution-completion hook added to
     [TimelockBatchQueue](../../src/policies/utils/TimelockBatchQueue.sol)
 
 The four shared abstraction files are in scope. The CCIP copies match PR `#330` except
@@ -67,15 +67,15 @@ its invocation are in scope.
 Both policies inherit the shared enable, disable, re-enable and grace-period mix-ins, and the
 role-gate mix-in beneath them. All of these files are in scope here.
 
--   [PolicyEnablerV2](../../src/policies/utils/PolicyEnablerV2.sol)
--   [EnablerV2](../../src/bases/EnablerV2.sol) and its
+- [PolicyEnablerV2](../../src/policies/utils/PolicyEnablerV2.sol)
+- [EnablerV2](../../src/bases/EnablerV2.sol) and its
     [interface](../../src/bases/interfaces/IEnablerV2.sol), which extends
     [IEnabler](../../src/periphery/interfaces/IEnabler.sol)
--   [ReEnabler](../../src/bases/ReEnabler.sol) and its
+- [ReEnabler](../../src/bases/ReEnabler.sol) and its
     [interface](../../src/bases/interfaces/IReEnabler.sol)
--   [ReEnablerGracePeriod](../../src/bases/ReEnablerGracePeriod.sol) and its
+- [ReEnablerGracePeriod](../../src/bases/ReEnablerGracePeriod.sol) and its
     [interface](../../src/bases/interfaces/IGracePeriod.sol)
--   [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol)
+- [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol)
 
 The lifecycle mix-ins were added during the LayerZero bridge audit by remediation commit
 [`c374e6bb`](https://github.com/OlympusDAO/olympus-v3/commit/c374e6bb35c8c22447d09ffdf294a9afb7a9fb82)
@@ -115,14 +115,14 @@ are in scope.
 
 ### Deployment and Configuration
 
--   [CCIPTokenPoolConfigProposal](../../src/proposals/CCIPTokenPoolConfigProposal.sol)
--   [DeployV3](../../src/scripts/deploy/DeployV3.s.sol)
--   [CCIPTokenPoolConfigBatch](../../src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol)
--   [CCIPNonEthereumSetupBatch](../../src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol)
--   [CCIPRouteReconcileBatch](../../src/scripts/ops/batches/CCIPRouteReconcileBatch.sol)
--   The modified [CCIPBridge](../../src/scripts/ops/batches/CCIPBridge.sol) and
+- [CCIPTokenPoolConfigProposal](../../src/proposals/CCIPTokenPoolConfigProposal.sol)
+- [DeployV3](../../src/scripts/deploy/DeployV3.s.sol)
+- [CCIPTokenPoolConfigBatch](../../src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol)
+- [CCIPNonEthereumSetupBatch](../../src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol)
+- [CCIPRouteReconcileBatch](../../src/scripts/ops/batches/CCIPRouteReconcileBatch.sol)
+- The modified [CCIPBridge](../../src/scripts/ops/batches/CCIPBridge.sol) and
     [CCIPTokenPool](../../src/scripts/ops/batches/CCIPTokenPool.sol) batch scripts
--   [CCIPConfigLib](../../src/scripts/ops/lib/CCIPConfigLib.sol),
+- [CCIPConfigLib](../../src/scripts/ops/lib/CCIPConfigLib.sol),
     [CCIPFeeBudgetLib](../../src/scripts/ops/lib/CCIPFeeBudgetLib.sol) and the Emergency Multisig
     setup added to [BatchScriptV2](../../src/scripts/ops/lib/BatchScriptV2.sol)
 
@@ -132,14 +132,14 @@ code-size limit, so a deployment that bypasses that profile cannot succeed.
 
 ### Out of Scope
 
--   Chainlink CCIP contracts and infrastructure, including the router, on/off-ramps,
+- Chainlink CCIP contracts and infrastructure, including the router, on/off-ramps,
     `TokenAdminRegistry` and `LockReleaseTokenPool`, except for compatibility with the local
     interfaces and assumptions made by the in-scope code.
--   The transfer-plane implementations `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`. This work
+- The transfer-plane implementations `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`. This work
     does not modify them and both were reviewed in the 2025 CCIP audit.
--   [RoleDefinitions](../../src/policies/utils/RoleDefinitions.sol). CCIP reuses the existing
+- [RoleDefinitions](../../src/policies/utils/RoleDefinitions.sol). CCIP reuses the existing
     `bridge_admin` and `bridge_rate_limiter` constants and changes only their explanatory comments.
--   Tests, shell scripts, deployment JSON, `env.json` values and Anvil rehearsal tooling. The unit and
+- Tests, shell scripts, deployment JSON, `env.json` values and Anvil rehearsal tooling. The unit and
     invariant suites under `src/test/policies/bridge/CCIPTokenPoolConfig` and
     `CCIPTokenPoolConfigTimelock` and the fork-based migration suites under
     `src/test/policies/bridge/scenarios` are supporting evidence for the intended authorization and
@@ -147,13 +147,13 @@ code-size limit, so a deployment that bypasses that profile cannot succeed.
 
 ## Previous Audits
 
--   **Cooler V2 by Electisec (03/2025)** —
+- **Cooler V2 by Electisec (03/2025)** —
     [report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/Olympus_CoolerV2-Electisec_report.pdf).
     Covers `PolicyEnabler` and `PolicyAdmin`, the originals that `PolicyEnablerV2` and
     `PolicyAdminOptimized` derive from.
--   **CCIP Bridge (05/2025)** — [audit package](../2025-05_ccip/README.md). Covers
+- **CCIP Bridge (05/2025)** — [audit package](../2025-05_ccip/README.md). Covers
     `CCIPBurnMintTokenPool`, `CCIPCrossChainBridge` and their supporting base contracts.
--   **Olympus Bridge (06/2026)** —
+- **Olympus Bridge (06/2026)** —
     [report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-06-Bridge.pdf)
     and [audit package](../2026-03_lz-bridge-upgrade/README.md). Its scope list covers the
     LayerZero V2 bridge architecture and, among the shared bases this work reuses,
@@ -233,57 +233,57 @@ permissionless manual execution.
 
 ## Documentation
 
--   [CCIP Access Control Matrix](../../documentation/bridge/ccip/ACCESS_CONTROL.md) — the complete,
+- [CCIP Access Control Matrix](../../documentation/bridge/ccip/ACCESS_CONTROL.md) — the complete,
     source-verified authority matrix for both chain classes.
--   [CCIP bridging infrastructure](../../documentation/bridge/ccip/RUNBOOK.md) — the operator
+- [CCIP bridging infrastructure](../../documentation/bridge/ccip/RUNBOOK.md) — the operator
     documentation: desired state in `env.json`, the rollout sequences, the emergency levers and the
     recovery procedures.
 
 ## Known Risks and Assumptions
 
--   **Direct paths bypass the delay.** `admin` can call every route function without the timelock: it
+- **Direct paths bypass the delay.** `admin` can call every route function without the timelock: it
     can appoint any config operator anyway, and on Ethereum its own execution path is already
     timelocked. If assigned, `bridge_rate_limiter` can change rate limits the same way.
--   **The pool's native `rateLimitAdmin` is a bypass if set.** It is unset at launch and only `admin`
+- **The pool's native `rateLimitAdmin` is a bypass if set.** It is unset at launch and only `admin`
     can set it, through the config policy. A non-zero holder could write rate limits straight to the
     pool, outside the policy's validation, enabled-state check and events.
--   **Containment is one way and widely held.** Four roles can contain instantly, but lifting
+- **Containment is one way and widely held.** Four roles can contain instantly, but lifting
     containment takes a delayed action or direct `admin`/`bridge_rate_limiter` authority. If a
     restore action was already queued when a route is contained again, its recorded state hash may
     still match, so the restore can later lift the new containment; incident response has to cancel
     such actions.
--   **Queued actions keep their domains until cancelled.** Expiry, a direct change to the same state,
+- **Queued actions keep their domains until cancelled.** Expiry, a direct change to the same state,
     loss of pool ownership and a config-operator rotation each leave an action unexecutable while it
     still reserves its keys, and disabling or re-enabling the policies does not clear the queue. A
     replacement action can only be queued after the holder is cancelled.
--   **A disabled policy can be re-enabled without governance.** `bridge_admin` may call `reEnable()`
+- **A disabled policy can be re-enabled without governance.** `bridge_admin` may call `reEnable()`
     on the config policy or the timelock within the grace window that starts at any disable,
     including one made by the Emergency Multisig; the window is three days at deployment and
     `admin` can change it while the policy is enabled. Afterwards only `admin` can enable them.
--   **Policy shutdown is not transfer shutdown.** Disabling the config policy, timelock or periphery
+- **Policy shutdown is not transfer shutdown.** Disabling the config policy, timelock or periphery
     does not stop direct CCIP sends; only pool rate-limit containment does.
--   **Removals reject in-flight messages.** Removing a route or a remote pool makes messages already
+- **Removals reject in-flight messages.** Removing a route or a remote pool makes messages already
     in flight from that remote fail on arrival. The reconciler therefore removes only what
     `env.json` marks with `enabled: false`, and warns when it does.
--   **Two domains are guarded by an order-independent digest.** The remote-pool set and the allowlist
+- **Two domains are guarded by an order-independent digest.** The remote-pool set and the allowlist
     are hashed as a XOR aggregate of their hashed members plus the member count, because the pool
     stores them in enumerable sets whose order changes on removal. The aggregate detects drift
     between queueing and execution; it is not collision resistant against chosen members, and only
     the pool owner writes those sets.
--   **Chainlink pool compatibility is assumed.** The local interfaces mirror the pools in use: the
+- **Chainlink pool compatibility is assumed.** The local interfaces mirror the pools in use: the
     deployed Ethereum pool reports `LockReleaseTokenPool 1.5.1`, and the pool this rollout deploys
     on the other chains reports `BurnMintTokenPool 1.5.1`. Every owner call and every state-hash
     guard depends on those getters, structs and semantics.
--   **Non-Ethereum** `admin` **is chain-wide.** Granting it to a local DAO Multisig applies to every policy
+- **Non-Ethereum** `admin` **is chain-wide.** Granting it to a local DAO Multisig applies to every policy
     attached to that Kernel, not only the CCIP policies.
--   **The burn/mint pool uses the legacy lifecycle.** After it is disabled on a non-canonical chain,
+- **The burn/mint pool uses the legacy lifecycle.** After it is disabled on a non-canonical chain,
     only local `admin` can enable it; the grace-window recovery covers the config policy and the
     timelock only.
--   **Rollout has a short destination gap.** After Ethereum opens a route and before a destination
+- **Rollout has a short destination gap.** After Ethereum opens a route and before a destination
     pool is finalized, messages may enter CCIP failure state and require manual execution.
--   **Ethereum solvency depends on pool backing.** The lock/release pool bounds releases by its OHM
+- **Ethereum solvency depends on pool backing.** The lock/release pool bounds releases by its OHM
     balance. The rollout scripts assume the configured backing target covers supply previously minted
     on the non-canonical chains.
--   **Burn/mint delivery needs a raised Chainlink fee budget.** Each lane into a burn/mint pool needs
+- **Burn/mint delivery needs a raised Chainlink fee budget.** Each lane into a burn/mint pool needs
     an enabled OHM fee entry with `destGasOverhead >= 175000`; the rollout scripts refuse to proceed
     without it.
