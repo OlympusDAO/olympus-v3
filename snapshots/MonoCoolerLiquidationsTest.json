@@ -1,3 +1,6 @@
 {
-    "liquidate": "26390397"
+    "liquidate": "12636219",
+    "liquidateAfterPagedRescind": "229845",
+    "liquidateWholeDelegationSet": "42751858",
+    "rescindDelegationPage": "10702718"
 }
