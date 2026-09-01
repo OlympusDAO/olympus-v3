@@ -107,7 +107,7 @@ runs = 256
 [invariant]
 # Forge 1.7 ran one campaign per invariant function and spread those across the test thread pool.
 # 1.8 runs one campaign per invariant suite with the `auto` default, so
-# set 4 workers to speed up the suile.
+# set 4 workers to speed up the suite.
 # Override with `--invariant-workers` locally.
 workers = 4
 
