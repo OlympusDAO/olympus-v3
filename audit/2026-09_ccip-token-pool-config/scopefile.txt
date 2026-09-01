@@ -19,7 +19,6 @@ src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol
 
 src/policies/utils/PolicyEnablerV2.sol
 src/policies/utils/PolicyAdminOptimized.sol
-src/policies/interfaces/utils/IPolicyAdmin.sol
 src/bases/EnablerV2.sol
 src/bases/ReEnabler.sol
 src/bases/ReEnablerGracePeriod.sol
