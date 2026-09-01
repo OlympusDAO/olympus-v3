@@ -7,7 +7,7 @@ ast = false
 # developer and CI diverge silently. Forge cannot auto-resolve a release newer than the list built
 # into its binary, but an explicitly pinned version is fetched from the live release list on demand.
 solc_version = "0.8.36"
-# Forge 1.7.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
+# Forge 1.8.1 defaults to the osaka EVM version. Pin the target that the deployment chains run.
 evm_version = "prague"
 legacy_assertions = true
 assertions_revert = false
@@ -20,6 +20,12 @@ fs_permissions = [
     { access = "read-write", path = "./src/scripts/lz-bridge-testnet/deployments/" },
 ]
 gas_limit = "18446744073709551615"
+# Run each top-level test call as a separate transaction so account and storage access costs match
+# production execution. Keeping this explicit also gives Forge 1.7 and 1.8 the same test semantics.
+# `forge script` honors the same key, so a simulated call is charged the way the broadcast
+# transaction is.
+# The `deploy` profile also produces the gas snapshots, so needs isolation (inherited).
+isolate = true
 
 # Everyday builds favor compile speed. Use the deploy profile whenever producing bytecode for
 # deployment or checking contract sizes.
@@ -40,9 +46,10 @@ compilation_restrictions = [
     { paths = "src/policies/BoostedLiquidity/BLVaultManagerLido.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultManagerLusd.sol", optimizer_runs = 400 },
     { paths = "src/proposals/*.sol", optimizer_runs = 400 },
-    # Upstream LayerZero test mocks fail legacy code generation unoptimized. Keeping this at the
-    # dependency root avoids optimizer exceptions for individual repository test files.
-    { paths = "dependencies/@layerzerolabs-test-devtools-evm-foundry-8.0.1/contracts/TestHelperOz5.sol", optimizer_runs = 400 },
+    # Upstream LayerZero test graphs fail legacy code generation unoptimized. Keeping this at the
+    # dependency roots avoids optimizer exceptions for individual repository test files.
+    { paths = "dependencies/@layerzerolabs-*/**", optimizer_runs = 400 },
+    { paths = "dependencies/forge-proposal-simulator-1.0.1/**", optimizer_runs = 400 },
 ]
 libs = ["dependencies"]
 # Tests live here, not in the default `test` directory. While this pointed at a directory that does
@@ -98,6 +105,13 @@ show_metrics = false
 
 [fuzz]
 runs = 256
+
+[invariant]
+# Forge 1.7 ran one campaign per invariant function and spread those across the test thread pool.
+# 1.8 runs one campaign per invariant suite with the `auto` default, so
+# set 4 workers to speed up the suite.
+# Override with `--invariant-workers` locally.
+workers = 4
 
 [lint]
 exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
