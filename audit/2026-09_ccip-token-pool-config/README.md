@@ -218,7 +218,7 @@ permissionless manual execution.
 
 - [CCIP Access Control Matrix](../../documentation/bridge/ccip/ACCESS_CONTROL.md) — the complete,
     source-verified authority matrix for both chain classes.
-- [CCIP bridging infrastructure](../../documentation/bridge/ccip/README.md) — the operator
+- [CCIP bridging infrastructure](../../documentation/bridge/ccip/RUNBOOK.md) — the operator
     documentation: desired state in `env.json`, the rollout sequences, the emergency levers and the
     recovery procedures.
 
