@@ -62,6 +62,21 @@ The four shared abstraction files are in scope. The CCIP copies match PR `#330` 
 for Solidity pragma normalization. For `TimelockBatchQueue`, only the `_onActionExecuted` hook and
 its invocation are in scope.
 
+### Lifecycle Mix-Ins
+
+Both policies inherit the shared enable, disable, re-enable and grace-period mix-ins. These files
+were added by the LayerZero bridge remediation commit and were reviewed by Guardian, but they were
+never listed in an official audit scope. They are in scope here.
+
+- [PolicyEnablerV2](../../src/policies/utils/PolicyEnablerV2.sol)
+- [EnablerV2](../../src/bases/EnablerV2.sol) and its
+    [interface](../../src/bases/interfaces/IEnablerV2.sol), which extends
+    [IEnabler](../../src/periphery/interfaces/IEnabler.sol)
+- [ReEnabler](../../src/bases/ReEnabler.sol) and its
+    [interface](../../src/bases/interfaces/IReEnabler.sol)
+- [ReEnablerGracePeriod](../../src/bases/ReEnablerGracePeriod.sol) and its
+    [interface](../../src/bases/interfaces/IGracePeriod.sol)
+
 ### Partial-File Scope
 
 The Solidity metrics extension accepts file paths, not line ranges. It will therefore count each
@@ -112,15 +127,10 @@ code-size limit, so a deployment that bypasses that profile cannot succeed.
     does not modify them and both were reviewed in the 2025 CCIP audit.
 - [RoleDefinitions](../../src/policies/utils/RoleDefinitions.sol). CCIP reuses the existing
     `bridge_admin` and `bridge_rate_limiter` constants and changes only their explanatory comments.
-- The shared lifecycle and role mix-ins the two policies inherit:
-    [PolicyEnablerV2](../../src/policies/utils/PolicyEnablerV2.sol) with
-    [EnablerV2](../../src/bases/EnablerV2.sol),
-    [ReEnablerGracePeriod](../../src/bases/ReEnablerGracePeriod.sol) with
-    [ReEnabler](../../src/bases/ReEnabler.sol), and
-    [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol). The hooks the two
-    policies override (`_authorizeReEnable`, `_authorizeSetGracePeriod`,
-    `_authorizeSetConfigOperator`, `_beforeEnable`, `_beforeReEnable`) and the resulting
-    authorization are in scope; the mix-in bodies are not.
+- [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol). It was audited as
+    part of the 2026 LayerZero bridge upgrade. The hooks the two policies override
+    (`_authorizeReEnable`, `_authorizeSetGracePeriod`, `_authorizeSetConfigOperator`,
+    `_beforeEnable`, `_beforeReEnable`) and the resulting authorization remain in scope.
 - [DeployV2](../../src/scripts/deploy/DeployV2.sol). Its executable code is unchanged; only the
     general deploy-profile guidance in comments was updated.
 - Tests, shell scripts, deployment JSON, `env.json` values and Anvil rehearsal tooling. The unit and
