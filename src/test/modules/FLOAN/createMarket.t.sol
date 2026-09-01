@@ -155,11 +155,10 @@ contract FLOANCreateMarketTest is FLOANTest {
     }
 
     // createMarket
-    // given collateral factor above 100 percent
+    // given maximum LTV is zero
     //  when createMarket is called
     //   then it reverts
-    function test_givenInvalidCollateralFactor_reverts(uint16 collateralFactorBps_) public {
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 10_001, type(uint16).max));
+    function test_givenMaximumLtvIsZero_reverts() public {
         IFLOANv1.Market memory market = _market(
             manager,
             facility,
@@ -167,7 +166,25 @@ contract FLOANCreateMarketTest is FLOANTest {
             debtToken,
             1_000e9
         );
-        market.collateralFactorBps = collateralFactorBps_;
+        market.maxLtvBps = 0;
+
+        _expectInvalidConfig(market);
+    }
+
+    // createMarket
+    // given maximum LTV is above 100 percent
+    //  when createMarket is called
+    //   then it reverts
+    function test_givenMaximumLtvIsAboveMax_reverts(uint16 maxLtvBps_) public {
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 10_001, type(uint16).max));
+        IFLOANv1.Market memory market = _market(
+            manager,
+            facility,
+            collateralToken,
+            debtToken,
+            1_000e9
+        );
+        market.maxLtvBps = maxLtvBps_;
 
         _expectInvalidConfig(market);
     }
@@ -270,14 +287,13 @@ contract FLOANCreateMarketTest is FLOANTest {
     function test_givenValidConfiguration_storesEveryField(
         uint128 principalCap_,
         uint48 termLength_,
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_,
+        uint16 maxLtvBps_,
         uint16 baseFeeBps_,
         bytes16 configId_,
         bytes calldata configData_
     ) public {
         termLength_ = uint48(bound(termLength_, 1, type(uint48).max - 1));
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 0, 10_000));
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, 10_000));
         baseFeeBps_ = uint16(bound(baseFeeBps_, 0, 10_000));
 
         IFLOANv1.Market memory expected = _market(
@@ -289,8 +305,7 @@ contract FLOANCreateMarketTest is FLOANTest {
         );
         expected.termLength = termLength_;
         expected.maxMaturityHorizon = type(uint48).max;
-        expected.collateralFactorBps = collateralFactorBps_;
-        expected.minCollateralRatioBps = minCollateralRatioBps_;
+        expected.maxLtvBps = maxLtvBps_;
         expected.baseFeeBps = baseFeeBps_;
         expected.configId = configId_;
         expected.originationsEnabled = true;

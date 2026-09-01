@@ -41,7 +41,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when called at any timestamp before the timelock delay has elapsed
     //   then it reverts and does not apply the setter
     function test_givenBeforeDelay_reverts(uint48 elapsed_) public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         uint256 queuedAt = action.queuedAt;
         uint48 timelockDelay = configTimelock.timelockDelay();
@@ -58,9 +58,9 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            10_000,
-            "collateral factor unchanged"
+            burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps,
+            8_500,
+            "maximum LTV unchanged"
         );
     }
 
@@ -69,7 +69,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when called at any timestamp after the execution window expires
     //   then it reverts and does not apply the setter
     function test_givenExpired_reverts(uint48 elapsed_) public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         uint256 queuedAt = action.queuedAt;
         uint48 firstExpiredElapsed = configTimelock.timelockDelay() +
@@ -88,9 +88,9 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            10_000,
-            "collateral factor unchanged"
+            burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps,
+            8_500,
+            "maximum LTV unchanged"
         );
     }
 
@@ -99,7 +99,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when BurnerLoansConfig has been disabled
     //   then execution reverts
     function test_givenBurnerLoansConfigDisabled_reverts() public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
         vm.prank(emergency);
         burnerLoansConfig.disable("");
         vm.warp(block.timestamp + configTimelock.timelockDelay());
@@ -113,7 +113,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when the config timelock has been disabled
     //   then execution reverts
     function test_givenConfigTimelockDisabled_reverts() public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
         vm.prank(emergency);
         configTimelock.disable("");
         vm.warp(block.timestamp + configTimelock.timelockDelay());
@@ -127,7 +127,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when the configured config operator has been rotated
     //   then execution reverts and the queued action is stale
     function test_givenConfigOperatorRotated_reverts() public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
 
         vm.prank(admin);
         burnerLoansConfig.setConfigOperator(address(burnerLoans));
@@ -147,7 +147,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when called at any timestamp within the execution window
     //   then any caller can execute and the BurnerLoans setter is applied
     function test_givenDelayElapsed_executesAction(address executor_, uint48 elapsed_) public {
-        uint64 actionId = _queueCollateralFactorUpdate();
+        uint64 actionId = _queueMaximumLtvUpdate();
         uint256 queuedAt = block.timestamp;
         uint48 timelockDelay = configTimelock.timelockDelay();
         elapsed_ = uint48(
@@ -155,7 +155,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         );
         vm.warp(queuedAt + elapsed_);
         IBurnerLoans.AssetConfig memory resultingConfig = _defaultAssetConfig(USDS_DECIMALS);
-        resultingConfig.collateralFactorBps = 9_500;
+        resultingConfig.maxLtvBps = 9_500;
 
         vm.expectEmit(true, false, false, true, address(burnerLoansConfig));
         emit AssetRiskConfigSet(address(usds), _assetRiskConfigInputFromConfig(resultingConfig));
@@ -171,11 +171,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         ITimelockBatchQueue.QueuedAction memory action = configTimelock.getQueuedAction(actionId);
         assertTrue(action.executed, "executed");
         assertEq(action.actions.length, 0, "sub-actions cleared");
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_500,
-            "collateral factor"
-        );
+        assertEq(burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps, 9_500, "maximum LTV");
     }
 
     // executeQueuedAction
@@ -199,8 +195,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         );
         uint64 riskActionId = _queueAssetRiskUpdate(
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 9_500,
-                minCollateralRatioBps: 0,
+                maxLtvBps: 9_500,
                 backingMultiplierBps: 0,
                 keeperRewardBps: 0,
                 termLength: 0,
@@ -208,8 +203,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
                 maxKeeperReward: 0
             }),
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-                collateralFactorBps: true,
-                minCollateralRatioBps: false,
+                maxLtvBps: true,
                 backingMultiplierBps: false,
                 keeperRewardBps: false,
                 termLength: false,
@@ -233,7 +227,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
             "fee config unchanged"
         );
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
+            burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps,
             9_500,
             "risk action applied"
         );
@@ -255,11 +249,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         configTimelock.executeQueuedAction(actionId);
 
         assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee update");
-        assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).collateralFactorBps,
-            9_500,
-            "risk update"
-        );
+        assertEq(burnerLoansConfig.getAssetConfig(address(usds)).maxLtvBps, 9_500, "risk update");
     }
 
     function test_givenDisjointRiskChange_queuedFeeActionExecutes() public {
@@ -272,7 +262,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
 
         IBurnerLoans.AssetConfig memory current = burnerLoansConfig.getAssetConfig(address(usds));
         IBurnerLoans.AssetRiskConfigInput memory risk = _assetRiskConfigInputFromConfig(current);
-        risk.collateralFactorBps = 9_500;
+        risk.maxLtvBps = 9_500;
         vm.prank(address(configTimelock));
         burnerLoansConfig.setAssetRiskConfig(address(usds), risk);
 
@@ -323,7 +313,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         IBurnerLoans.AssetRiskConfigInput memory changedConfig = _assetRiskConfigInputFromConfig(
             current
         );
-        changedConfig.minCollateralRatioBps = 12_000;
+        changedConfig.backingMultiplierBps = 13_000;
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), changedConfig);
         bytes32 currentHash = keccak256(
@@ -346,8 +336,8 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         assertEq(configTimelock.pendingActionId(key), actionId, "risk key remains held");
         assertFalse(configTimelock.getQueuedAction(actionId).executed, "action remains pending");
         assertEq(
-            burnerLoansConfig.getAssetConfig(address(usds)).minCollateralRatioBps,
-            12_000,
+            burnerLoansConfig.getAssetConfig(address(usds)).backingMultiplierBps,
+            13_000,
             "direct change retained"
         );
     }

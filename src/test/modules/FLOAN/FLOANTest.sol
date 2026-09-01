@@ -73,8 +73,7 @@ abstract contract FLOANTest is Test {
                 principalCap: principalCap_,
                 termLength: 30 days,
                 maxMaturityHorizon: 365 days,
-                collateralFactorBps: 9_000,
-                minCollateralRatioBps: 12_000,
+                maxLtvBps: 8_500,
                 baseFeeBps: 100,
                 collateralDecimals: collateralToken_ == otherCollateralToken ? 6 : 18,
                 debtDecimals: debtToken_ == otherDebtToken ? 18 : 9,
@@ -109,8 +108,7 @@ abstract contract FLOANTest is Test {
                 principalCap: market_.principalCap,
                 termLength: market_.termLength,
                 maxMaturityHorizon: market_.maxMaturityHorizon,
-                collateralFactorBps: market_.collateralFactorBps,
-                minCollateralRatioBps: market_.minCollateralRatioBps,
+                maxLtvBps: market_.maxLtvBps,
                 baseFeeBps: market_.baseFeeBps
             });
     }
@@ -157,16 +155,7 @@ abstract contract FLOANTest is Test {
             expected_.maxMaturityHorizon,
             "market maturity horizon"
         );
-        assertEq(
-            actual.collateralFactorBps,
-            expected_.collateralFactorBps,
-            "market collateral factor"
-        );
-        assertEq(
-            actual.minCollateralRatioBps,
-            expected_.minCollateralRatioBps,
-            "market minimum collateral ratio"
-        );
+        assertEq(actual.maxLtvBps, expected_.maxLtvBps, "market maximum LTV");
         assertEq(actual.baseFeeBps, expected_.baseFeeBps, "market base fee");
         assertEq(
             actual.collateralDecimals,

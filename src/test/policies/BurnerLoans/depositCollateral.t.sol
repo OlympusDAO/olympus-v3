@@ -959,6 +959,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         uint256 expectedCredit = _expectedVaultCredit(vault, amount_);
         vm.assume(expectedCredit > 0);
+        // The view quote is the exact assets redeemable from the shares previewed before deposit.
+        uint256 expectedPreviewCredit = vault.previewRedeem(vault.previewDeposit(amount_));
         (uint256 previewCredit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
             address(vaultAsset),
             amount_,
@@ -982,7 +984,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         assertEq(deposited, expectedCredit, "deposited");
         assertEq(total, expectedCredit, "total");
-        assertGt(previewCredit, 0, "preview credit");
+        assertEq(previewCredit, expectedPreviewCredit, "preview credit");
         assertEq(previewTotal, previewCredit, "preview total");
         assertEq(
             burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral,

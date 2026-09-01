@@ -24,8 +24,11 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
     address internal _priceWriter;
 
     uint128 internal constant _BORROW_AMOUNT = 100e9;
-    uint128 internal constant _EXACT_BOUNDARY_COLLATERAL = 1_150e6;
     uint48 internal constant _FEED_UPDATE_THRESHOLD = 24 hours;
+
+    function _feeReserve() internal pure virtual returns (uint256) {
+        return 100e6;
+    }
 
     function setUp() public virtual override {
         super.setUp();
@@ -92,7 +95,7 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
     }
 
     function _depositCollateral(uint128 amount_) internal {
-        usds.mint(alice, uint256(amount_) + 100e6);
+        usds.mint(alice, uint256(amount_) + _feeReserve());
         vm.startPrank(alice);
         usds.approve(address(burnerLoans), type(uint256).max);
         burnerLoans.depositCollateral(address(usds), amount_, alice);

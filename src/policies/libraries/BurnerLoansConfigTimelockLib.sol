@@ -88,8 +88,7 @@ library BurnerLoansConfigTimelockLib {
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
     ) public pure returns (IBurnerLoans.AssetConfig memory) {
         if (
-            !selection_.collateralFactorBps &&
-            !selection_.minCollateralRatioBps &&
+            !selection_.maxLtvBps &&
             !selection_.backingMultiplierBps &&
             !selection_.keeperRewardBps &&
             !selection_.termLength &&
@@ -97,14 +96,9 @@ library BurnerLoansConfigTimelockLib {
             !selection_.maxKeeperReward
         ) revert IBurnerLoans.BurnerLoans_InvalidParam();
 
-        if (selection_.collateralFactorBps) {
-            config.collateralFactorBps = update_.collateralFactorBps;
-        } else if (update_.collateralFactorBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.minCollateralRatioBps) {
-            config.minCollateralRatioBps = update_.minCollateralRatioBps;
-        } else if (update_.minCollateralRatioBps != 0) {
+        if (selection_.maxLtvBps) {
+            config.maxLtvBps = update_.maxLtvBps;
+        } else if (update_.maxLtvBps != 0) {
             revert IBurnerLoans.BurnerLoans_InvalidParam();
         }
         if (selection_.backingMultiplierBps) {
@@ -142,8 +136,7 @@ library BurnerLoansConfigTimelockLib {
     ) public pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
         return
             IBurnerLoans.AssetRiskConfigInput({
-                collateralFactorBps: config_.collateralFactorBps,
-                minCollateralRatioBps: config_.minCollateralRatioBps,
+                maxLtvBps: config_.maxLtvBps,
                 backingMultiplierBps: config_.backingMultiplierBps,
                 keeperRewardBps: config_.keeperRewardBps,
                 termLength: config_.termLength,

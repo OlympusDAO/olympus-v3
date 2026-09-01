@@ -135,7 +135,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
         vm.prank(burnerLoansAdmin);
         uint64 riskActionId = configTimelock.queueSetAssetRiskConfig(
             address(usds),

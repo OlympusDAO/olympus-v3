@@ -174,16 +174,14 @@ contract OlympusFixedTermLoan is FLOANv1 {
         uint32 marketId_,
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_
+        uint16 maxLtvBps_
     ) external override permissioned {
         _requireManager(marketId_);
-        _validateRiskConfig(termLength_, maxMaturityHorizon_, collateralFactorBps_);
+        _validateRiskConfig(termLength_, maxMaturityHorizon_, maxLtvBps_);
         Market storage market = _markets[marketId_];
         market.termLength = termLength_;
         market.maxMaturityHorizon = maxMaturityHorizon_;
-        market.collateralFactorBps = collateralFactorBps_;
-        market.minCollateralRatioBps = minCollateralRatioBps_;
+        market.maxLtvBps = maxLtvBps_;
         emit MarketConfigUpdated(marketId_);
     }
 
@@ -485,8 +483,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
             principalCap: market_.principalCap,
             termLength: market_.termLength,
             maxMaturityHorizon: market_.maxMaturityHorizon,
-            collateralFactorBps: market_.collateralFactorBps,
-            minCollateralRatioBps: market_.minCollateralRatioBps,
+            maxLtvBps: market_.maxLtvBps,
             baseFeeBps: market_.baseFeeBps,
             collateralDecimals: collateralDecimals,
             debtDecimals: debtDecimals,
@@ -548,11 +545,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
     }
 
     function _validateMarketConfig(MarketInput calldata market_) internal pure {
-        _validateRiskConfig(
-            market_.termLength,
-            market_.maxMaturityHorizon,
-            market_.collateralFactorBps
-        );
+        _validateRiskConfig(market_.termLength, market_.maxMaturityHorizon, market_.maxLtvBps);
         if (market_.baseFeeBps > _BPS) revert FLOAN_InvalidConfig();
     }
 
@@ -564,12 +557,13 @@ contract OlympusFixedTermLoan is FLOANv1 {
     function _validateRiskConfig(
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
-        uint16 collateralFactorBps_
+        uint16 maxLtvBps_
     ) internal pure {
         if (
             termLength_ == 0 ||
             (maxMaturityHorizon_ != type(uint48).max && maxMaturityHorizon_ <= termLength_) ||
-            collateralFactorBps_ > _BPS
+            maxLtvBps_ == 0 ||
+            maxLtvBps_ > _BPS
         ) revert FLOAN_InvalidConfig();
     }
 

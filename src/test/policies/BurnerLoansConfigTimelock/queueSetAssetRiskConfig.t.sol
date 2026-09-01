@@ -12,15 +12,14 @@ import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConfigTimelockTest {
-    uint16 internal constant MAX_BPS = 10_000;
-    uint16 internal constant MAX_COLLATERAL_FACTOR_BPS = 10_000;
-    uint16 internal constant MAX_COLLATERAL_RATIO_BPS = 50_000;
-    uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
+    uint16 internal constant _MAX_BPS = 10_000;
+    uint16 internal constant _MAX_LTV_BPS = 10_000;
+    uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
+    uint256 internal constant _MAX_KEEPER_REWARD = type(uint128).max;
 
     // queueSetAssetRiskConfig
     // given caller has neither admin nor burner_loans_admin
-    //  when queueing a collateralFactorBps update
+    //  when queueing a maxLtvBps update
     //   then it reverts before validating the update
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
@@ -28,8 +27,8 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
-        update.collateralFactorBps = 0;
+        ) = _maxLtvUpdate();
+        update.maxLtvBps = 0;
 
         vm.prank(caller_);
         vm.expectRevert(
@@ -40,13 +39,13 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
     // queueSetAssetRiskConfig
     // given caller has admin role
-    //  when collateralFactorBps is selected and valid
+    //  when maxLtvBps is selected and valid
     //   then the action is queued
-    function test_givenAdminCaller_whenCollateralFactorBpsSelected_queuesAction() public {
+    function test_givenAdminCaller_whenMaximumLtvSelected_queuesAction() public {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
 
         vm.prank(admin);
         uint64 actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
@@ -56,15 +55,13 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
     // queueSetAssetRiskConfig
     // given caller has burner_loans_admin role
-    //  when collateralFactorBps is selected and valid
+    //  when maxLtvBps is selected and valid
     //   then the action is queued and stores the expected full BurnerLoans setter payload
-    function test_givenBurnerLoansAdminCaller_whenCollateralFactorBpsSelected_queuesAction()
-        public
-    {
+    function test_givenBurnerLoansAdminCaller_whenMaximumLtvSelected_queuesAction() public {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
         uint64 nextActionId = configTimelock.nextActionId();
         bytes memory payload = abi.encode(address(usds), update, selection);
         _expectSingleActionQueued(
@@ -97,7 +94,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory collateralUpdate,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory collateralSelection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
         vm.prank(burnerLoansAdmin);
         uint64 owner = configTimelock.queueSetAssetRiskConfig(
             address(usds),
@@ -106,10 +103,10 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         );
         (bytes32 key, ) = configTimelock.getQueuedConfigState(owner, 0, 0);
 
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory ratioUpdate;
-        ratioUpdate.minCollateralRatioBps = 12_000;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory ratioSelection;
-        ratioSelection.minCollateralRatioBps = true;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory backingUpdate;
+        backingUpdate.backingMultiplierBps = 13_000;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory backingSelection;
+        backingSelection.backingMultiplierBps = true;
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
@@ -119,7 +116,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
                 owner
             )
         );
-        configTimelock.queueSetAssetRiskConfig(address(usds), ratioUpdate, ratioSelection);
+        configTimelock.queueSetAssetRiskConfig(address(usds), backingUpdate, backingSelection);
 
         assertEq(configTimelock.pendingActionId(key), owner, "first risk action retains key");
         assertEq(configTimelock.nextActionId(), owner + 1, "failed queue does not consume id");
@@ -135,7 +132,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
         vm.prank(burnerLoansAdmin);
         uint64 riskActionId = configTimelock.queueSetAssetRiskConfig(
             address(usds),
@@ -165,14 +162,14 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
     // queueSetAssetRiskConfig
     // given asset is not configured
-    //  when queueing a collateralFactorBps update
+    //  when queueing a maxLtvBps update
     //   then it reverts
     function test_givenUnconfiguredAsset_reverts() public {
         address unknownAsset = makeAddr("unknownAsset");
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
@@ -194,7 +191,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
 
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
@@ -203,7 +200,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
 
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
         assertFalse(stored.originationsEnabled, "originations disabled");
-        assertEq(stored.collateralFactorBps, 9_500, "risk update applied");
+        assertEq(stored.maxLtvBps, 9_500, "risk update applied");
     }
 
     // queueSetAssetRiskConfig
@@ -218,8 +215,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         configTimelock.queueSetAssetRiskConfig(
             address(usds),
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-                collateralFactorBps: 0,
-                minCollateralRatioBps: 0,
+                maxLtvBps: 0,
                 backingMultiplierBps: 0,
                 keeperRewardBps: 0,
                 termLength: 0,
@@ -240,11 +236,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint256 value_
     ) public {
         // Select one legitimate field so the update is otherwise valid.
-        selectedField_ = uint8(bound(selectedField_, 0, 6));
+        selectedField_ = uint8(bound(selectedField_, 0, 5));
 
         // Map the second fuzz input onto a different field to prove every unselected
         // field must be zeroed instead of silently ignored.
-        unselectedField_ = uint8(bound(unselectedField_, 0, 5));
+        unselectedField_ = uint8(bound(unselectedField_, 0, 4));
         if (unselectedField_ >= selectedField_) unselectedField_++;
         value_ = bound(value_, 1, type(uint48).max);
 
@@ -260,15 +256,15 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     }
 
     // queueSetAssetRiskConfig
-    // given collateralFactorBps is zero
+    // given maxLtvBps is zero
     //  when queueing the action
     //   then it reverts
-    function test_givenCollateralFactorBpsIsZero_reverts() public {
+    function test_givenMaximumLtvIsZero_reverts() public {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
-        update.collateralFactorBps = 0;
+        ) = _maxLtvUpdate();
+        update.maxLtvBps = 0;
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, 0));
@@ -276,57 +272,20 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     }
 
     // queueSetAssetRiskConfig
-    // given collateralFactorBps is greater than 100%
+    // given maxLtvBps is greater than 100%
     //  when queueing the action
     //   then it reverts
-    function test_givenCollateralFactorBpsAboveMax_reverts(uint16 collateralFactorBps_) public {
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 10_001, type(uint16).max));
+    function test_givenMaximumLtvIsAboveMax_reverts(uint16 maxLtvBps_) public {
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 10_001, type(uint16).max));
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
-        update.collateralFactorBps = collateralFactorBps_;
+        update.maxLtvBps = maxLtvBps_;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
-        selection.collateralFactorBps = true;
+        selection.maxLtvBps = true;
 
         vm.prank(burnerLoansAdmin);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InvalidBps.selector,
-                collateralFactorBps_
-            )
+            abi.encodeWithSelector(IBurnerLoans.BurnerLoans_InvalidBps.selector, maxLtvBps_)
         );
-        configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
-    }
-
-    // queueSetAssetRiskConfig
-    // given minCollateralRatioBps is below 100%
-    //  when queueing the action
-    //   then it reverts
-    function test_givenMinCollateralRatioBpsBelowMin_reverts(uint16 minCollateralRatioBps_) public {
-        minCollateralRatioBps_ = uint16(bound(minCollateralRatioBps_, 0, 9_999));
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
-        update.minCollateralRatioBps = minCollateralRatioBps_;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
-        selection.minCollateralRatioBps = true;
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
-    }
-
-    // queueSetAssetRiskConfig
-    // given minCollateralRatioBps is above the protocol maximum
-    //  when queueing the action
-    //   then it reverts
-    function test_givenMinCollateralRatioBpsAboveMax_reverts(uint16 minCollateralRatioBps_) public {
-        minCollateralRatioBps_ = uint16(
-            bound(minCollateralRatioBps_, MAX_COLLATERAL_RATIO_BPS + 1, type(uint16).max)
-        );
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
-        update.minCollateralRatioBps = minCollateralRatioBps_;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
-        selection.minCollateralRatioBps = true;
-
-        vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
         configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
     }
 
@@ -352,7 +311,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //   then it reverts
     function test_givenBackingMultiplierBpsAboveMax_reverts(uint16 backingMultiplierBps_) public {
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
+            bound(backingMultiplierBps_, _MAX_BACKING_MULTIPLIER_BPS + 1, type(uint16).max)
         );
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.backingMultiplierBps = backingMultiplierBps_;
@@ -387,7 +346,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //  when queueing the action
     //   then it reverts
     function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
-        maxKeeperReward_ = bound(maxKeeperReward_, MAX_KEEPER_REWARD + 1, type(uint256).max);
+        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
         update.maxKeeperReward = maxKeeperReward_;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
@@ -488,32 +447,27 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     //  when all fields are selected
     //   then the action is queued for every valid value
     function test_givenRiskConfigInValidRange_queuesAction(
-        uint16 collateralFactorBps_,
-        uint16 minCollateralRatioBps_,
+        uint16 maxLtvBps_,
         uint16 backingMultiplierBps_,
         uint16 keeperRewardBps_,
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
         uint256 maxKeeperReward_
     ) public {
-        collateralFactorBps_ = uint16(bound(collateralFactorBps_, 1, MAX_COLLATERAL_FACTOR_BPS));
-        minCollateralRatioBps_ = uint16(
-            bound(minCollateralRatioBps_, MAX_BPS, MAX_COLLATERAL_RATIO_BPS)
-        );
+        maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
-            bound(backingMultiplierBps_, MAX_BPS, MAX_BACKING_MULTIPLIER_BPS)
+            bound(backingMultiplierBps_, _MAX_BPS, _MAX_BACKING_MULTIPLIER_BPS)
         );
-        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, MAX_BPS));
+        keeperRewardBps_ = uint16(bound(keeperRewardBps_, 0, _MAX_BPS));
         termLength_ = uint48(bound(termLength_, 1, BurnerLoansConstants.MAX_TERM_LENGTH));
         maxMaturityHorizon_ = uint48(
             bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, MAX_KEEPER_REWARD);
+        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update = IBurnerLoansConfigTimelock
             .AssetRiskConfigUpdate({
-                collateralFactorBps: collateralFactorBps_,
-                minCollateralRatioBps: minCollateralRatioBps_,
+                maxLtvBps: maxLtvBps_,
                 backingMultiplierBps: backingMultiplierBps_,
                 keeperRewardBps: keeperRewardBps_,
                 termLength: termLength_,
@@ -536,16 +490,14 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint8 field_
     ) internal pure {
         if (field_ == 0) {
-            selection_.collateralFactorBps = true;
+            selection_.maxLtvBps = true;
         } else if (field_ == 1) {
-            selection_.minCollateralRatioBps = true;
-        } else if (field_ == 2) {
             selection_.backingMultiplierBps = true;
-        } else if (field_ == 3) {
+        } else if (field_ == 2) {
             selection_.keeperRewardBps = true;
-        } else if (field_ == 4) {
+        } else if (field_ == 3) {
             selection_.termLength = true;
-        } else if (field_ == 5) {
+        } else if (field_ == 4) {
             selection_.maxMaturityHorizon = true;
         } else {
             selection_.maxKeeperReward = true;
@@ -557,16 +509,14 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint8 field_
     ) internal pure {
         if (field_ == 0) {
-            update_.collateralFactorBps = 9_500;
+            update_.maxLtvBps = 9_500;
         } else if (field_ == 1) {
-            update_.minCollateralRatioBps = 12_000;
-        } else if (field_ == 2) {
             update_.backingMultiplierBps = 11_000;
-        } else if (field_ == 3) {
+        } else if (field_ == 2) {
             update_.keeperRewardBps = 500;
-        } else if (field_ == 4) {
+        } else if (field_ == 3) {
             update_.termLength = 14 days;
-        } else if (field_ == 5) {
+        } else if (field_ == 4) {
             update_.maxMaturityHorizon = 120 days;
         } else {
             update_.maxKeeperReward = 500e6;
@@ -579,16 +529,14 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint256 value_
     ) internal pure {
         if (field_ == 0) {
-            update_.collateralFactorBps = uint16(bound(value_, 1, type(uint16).max));
+            update_.maxLtvBps = uint16(bound(value_, 1, type(uint16).max));
         } else if (field_ == 1) {
-            update_.minCollateralRatioBps = uint16(bound(value_, 1, type(uint16).max));
-        } else if (field_ == 2) {
             update_.backingMultiplierBps = uint16(bound(value_, 1, type(uint16).max));
-        } else if (field_ == 3) {
+        } else if (field_ == 2) {
             update_.keeperRewardBps = uint16(bound(value_, 1, type(uint16).max));
-        } else if (field_ == 4) {
+        } else if (field_ == 3) {
             update_.termLength = uint48(value_);
-        } else if (field_ == 5) {
+        } else if (field_ == 4) {
             update_.maxMaturityHorizon = uint48(value_);
         } else {
             update_.maxKeeperReward = value_;

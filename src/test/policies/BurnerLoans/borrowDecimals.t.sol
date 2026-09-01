@@ -6,64 +6,195 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 
 abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
+    struct LaunchBoundaryScenario {
+        uint128 decimalScaleCollateral;
+        uint256 decimalScaleFee;
+        uint256 decimalScaleHealth;
+        uint128 fuzzCollateral;
+        uint256 rawUnitFee;
+        uint128 exactHundredPercentLtvCollateral;
+        uint128 belowCollateral;
+        uint256 belowHealth;
+        uint128 minimumHealthyCollateral;
+        uint256 minimumHealthyHealth;
+        uint128 aboveCollateral;
+        uint256 aboveHealth;
+    }
+
     function _priceDecimals() internal pure virtual returns (uint8) {
         return 18;
     }
 
-    function _boundaryHealthExpectations()
+    function _launchBoundaryScenario()
         internal
         pure
         virtual
-        returns (uint256 belowBoundary_, uint256 aboveBoundary_)
+        returns (LaunchBoundaryScenario memory)
     {
-        return (999_999_999_130_434_782, 1_000_000_000_869_565_217);
+        // PRICE: 18 decimals; collateral: 6 decimals.
+        // For the fixed decimal-scale case, debtValueUsd = 100e9 OHM * $10.25e18 / 1e9
+        // = $1_025e18 and requiredUsd = ceil($1_025e18 * 10_000 / 8_500)
+        // = $1_205_882_352_941_176_470_589.
+        // decimalScaleCollateral = ceil(requiredUsd * 1e6 / $0.75e18) = 1_607_843_138.
+        // Its USD value is $1_205_882_353_500_000_000_000, so decimalScaleHealth
+        // = floor($1_205_882_353_500_000_000_000 * 1e18 / requiredUsd)
+        // = 1_000_000_000_463_414_634.
+        // decimalScaleFee = ceil(1_607_843_138 * 25 / 10_000) = 4_019_608.
+        // The one-raw-unit fee is 1 for both OHM decimal variants after rounding up.
+        // debtValueUsd = 100e9 OHM * $10e18 / 1e9 = $1_000e18.
+        // launchRequiredUsd = ceil($1_000e18 * 10_000 / 8_500)
+        //                   = $1_176_470_588_235_294_117_648.
+        // minimumHealthyCollateral = ceil(launchRequiredUsd * 1e6 / $1e18)
+        //                          = 1_176_470_589.
+        // At 100% LTV, requiredUsd = $1_000e18, so collateral = $1_000e18 * 1e6 / $1e18
+        // = 1_000e6, and health = floor($1_000e18 * 1e18 / $1_000e18) = 1e18.
+        // belowCollateral = minimumHealthyCollateral - 1 = 1_176_470_588.
+        // Its USD value is 1_176_470_588 * $1e18 / 1e6 = $1_176_470_588e12, so
+        // belowHealth = floor($1_176_470_588e12 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_799_999_999.
+        // minimumHealthyCollateral = 1_176_470_589, with USD value $1_176_470_589e12, so
+        // minimumHealthyHealth = floor($1_176_470_589e12 * 1e18 / launchRequiredUsd)
+        //                      = 1_000_000_000_649_999_999.
+        // aboveCollateral = minimumHealthyCollateral + 1 = 1_176_470_590, with USD value
+        // $1_176_470_590e12, so aboveHealth = floor($1_176_470_590e12 * 1e18 /
+        // launchRequiredUsd) = 1_000_000_001_499_999_999.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_138,
+                decimalScaleFee: 4_019_608,
+                decimalScaleHealth: 1_000_000_000_463_414_634,
+                fuzzCollateral: 20_000_000e6,
+                rawUnitFee: 1,
+                exactHundredPercentLtvCollateral: 1_000e6,
+                belowCollateral: 1_176_470_588,
+                belowHealth: 999_999_999_799_999_999,
+                minimumHealthyCollateral: 1_176_470_589,
+                minimumHealthyHealth: 1_000_000_000_649_999_999,
+                aboveCollateral: 1_176_470_590,
+                aboveHealth: 1_000_000_001_499_999_999
+            });
+    }
+
+    // Condition tree:
+    // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
+    // - Borrow amount: fixed at 100 whole OHM
+    // - Prices: fractional values exercise scale conversion without whole-number shortcuts
+    // - Expected values: fixed literals for the concrete decimal configuration
+    function test_givenFixedBorrowAmount_borrowUsesConfiguredDecimalScales() public {
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _assertBorrowUsesConfiguredDecimalScales(
+            uint128(100 * 10 ** _ohmDecimals()),
+            scenario.decimalScaleCollateral,
+            scenario.decimalScaleFee,
+            scenario.decimalScaleHealth
+        );
     }
 
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
     // - Borrow amount: fuzzed from one raw OHM unit through 100 whole OHM
-    // - Prices: fractional values exercise scale conversion without whole-number shortcuts
-    // - Expected branch: no intermediate value truncates to zero and all outputs use native scales
-    function test_givenFuzzedBorrowAmount_borrowUsesConfiguredDecimalScales(
-        uint128 borrowAmount_
+    // - Maximum LTV: fuzzed across the complete valid interval of 1 through 10,000 bps
+    // - Prices: fixed at $10.25 per OHM and $0.75 per collateral token
+    // - Collateral: fixed at 20,000,000 whole tokens, sufficient even when maximum LTV is 1 bp
+    // - Expected branch: preview and write agree without deriving an expected value from formulas
+    function test_whenBorrowAmountAndMaximumLtvAreValid_borrowMatchesPreviewAcrossConfiguredDecimalScales(
+        uint128 borrowAmount_,
+        uint16 maxLtvBps_
     ) public {
-        uint8 ohmDecimals = _ohmDecimals();
-        uint256 ohmScale = 10 ** ohmDecimals;
-        uint128 borrowAmount = uint128(bound(uint256(borrowAmount_), 1, 100 * ohmScale));
+        uint128 borrowAmount = uint128(
+            bound(uint256(borrowAmount_), 1, 100 * 10 ** _ohmDecimals())
+        );
+        uint16 maxLtvBps = uint16(bound(uint256(maxLtvBps_), 1, 10_000));
 
-        _assertBorrowUsesConfiguredDecimalScales(borrowAmount);
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.maxLtvBps = maxLtvBps;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _assertBorrowMatchesPreview(borrowAmount, scenario.fuzzCollateral);
     }
 
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
     // - Borrow amount: one smallest native OHM unit
-    // - Expected branch: debt value, collateral requirement, and fee remain nonzero
+    // - Expected branch: debt and fee retain their fixed nonzero native-unit values
     function test_givenOneRawOhmUnit_borrowDoesNotTruncateValuesToZero() public {
-        _assertBorrowUsesConfiguredDecimalScales(1);
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _configureFractionalPrices();
+        _depositFractionalPriceCollateral(scenario.fuzzCollateral);
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            1,
+            alice
+        );
+
+        assertTrue(preview.executable, "raw-unit preview executable");
+        assertEq(preview.fee, scenario.rawUnitFee, "raw-unit preview fee");
+        assertEq(preview.resultingDebtOhm, 1, "raw-unit preview debt");
+
+        vm.prank(alice);
+        (
+            uint256 borrowedOhm,
+            uint256 fee,
+            uint256 totalDebtOhm,
+            uint48 maturity,
+            uint256 healthFactor
+        ) = burnerLoans.borrow(address(usds), 1, alice, alice, scenario.rawUnitFee);
+
+        assertEq(borrowedOhm, 1, "raw-unit borrowed OHM");
+        assertEq(fee, scenario.rawUnitFee, "raw-unit fee");
+        assertEq(totalDebtOhm, 1, "raw-unit debt");
+        assertEq(totalDebtOhm, preview.resultingDebtOhm, "raw-unit preview debt");
+        assertEq(maturity, preview.maturity, "raw-unit preview maturity");
+        assertEq(healthFactor, preview.resultingHealthFactor, "raw-unit preview health");
     }
 
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
-    // - Collateral: exactly 1,150 units against a 1,150 USD requirement
+    // - Maximum LTV: 100%, making the market requirement equal to debt market value
+    // - Market requirement: 100 OHM * $10 / 100% = $1,000
+    // - Backing requirement: 100 OHM * $1 backing * 125% = $125, so the market branch governs
+    // - Collateral: exactly $1,000 at $1 per collateral token
     // - Expected branch: preview and borrow return exactly 1e18 health
-    function test_givenExactHealthBoundary_borrowReturnsOneWad() public {
-        _assertSuccessfulHealthBoundaryBorrow(uint128(1_150 * 10 ** _collateralDecimals()), 1e18);
+    function test_givenHundredPercentMaximumLtv_whenAtExactBoundary_borrowReturnsOneWad() public {
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.maxLtvBps = 10_000;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+
+        _assertSuccessfulHealthBoundaryBorrow(scenario.exactHundredPercentLtvCollateral, 1e18);
     }
 
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
-    // - Collateral: one smallest native unit below the exact 1,150-unit boundary
-    // - Expected branch: preview and borrow revert with the exact rounded health factor
-    function test_givenOneCollateralUnitBelowHealthBoundary_borrowReverts() public {
-        _configureBoundaryPrices();
-        uint8 collateralDecimals = _collateralDecimals();
-        uint128 collateralAmount = uint128(1_150 * 10 ** collateralDecimals - 1);
-        _depositBoundaryCollateral(collateralAmount);
+    // - Maximum LTV: launch value of 85%
+    // - Collateral: fixed minimum healthy amount for the concrete decimal configuration
+    // - Expected branch: preview and borrow return the fixed rounded health factor
+    function test_givenLaunchMaximumLtv_whenAtMinimumHealthyCollateral_borrowReturnsExpectedHealth()
+        public
+    {
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _assertSuccessfulHealthBoundaryBorrow(
+            scenario.minimumHealthyCollateral,
+            scenario.minimumHealthyHealth
+        );
+    }
 
-        (uint256 expectedHealth, ) = _boundaryHealthExpectations();
+    // Condition tree:
+    // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
+    // - Collateral: one smallest native unit below the minimum healthy amount
+    // - Expected branch: preview and borrow revert with the exact rounded health factor
+    function test_givenLaunchMaximumLtv_whenOneCollateralUnitBelowHealthBoundary_reverts() public {
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _configureBoundaryPrices();
+        _depositBoundaryCollateral(scenario.belowCollateral);
+
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
-            expectedHealth
+            scenario.belowHealth
         );
         uint128 borrowAmount = uint128(100 * 10 ** _ohmDecimals());
 
@@ -77,27 +208,23 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
 
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
-    // - Collateral: one smallest native unit above the exact 1,150-unit boundary
+    // - Collateral: one smallest native unit above the minimum healthy amount
     // - Expected branch: preview and borrow return the exact rounded health factor
-    function test_givenOneCollateralUnitAboveHealthBoundary_borrowReturnsExpectedHealth() public {
-        uint8 collateralDecimals = _collateralDecimals();
-        (, uint256 expectedHealth) = _boundaryHealthExpectations();
-        _assertSuccessfulHealthBoundaryBorrow(
-            uint128(1_150 * 10 ** collateralDecimals + 1),
-            expectedHealth
-        );
+    function test_givenLaunchMaximumLtv_whenOneCollateralUnitAboveHealthBoundary_borrowReturnsExpectedHealth()
+        public
+    {
+        LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
+        _assertSuccessfulHealthBoundaryBorrow(scenario.aboveCollateral, scenario.aboveHealth);
     }
 
-    function _assertBorrowUsesConfiguredDecimalScales(uint128 borrowAmount_) internal {
-        uint8 collateralDecimals = _collateralDecimals();
-        uint256 collateralScale = 10 ** collateralDecimals;
-        uint128 collateralAmount = _configurePricesAndRequiredCollateral(borrowAmount_);
-
-        usds.mint(alice, collateralAmount + 100 * collateralScale);
-        vm.startPrank(alice);
-        usds.approve(address(burnerLoans), type(uint256).max);
-        burnerLoans.depositCollateral(address(usds), collateralAmount, alice);
-        vm.stopPrank();
+    function _assertBorrowUsesConfiguredDecimalScales(
+        uint128 borrowAmount_,
+        uint128 collateralAmount_,
+        uint256 expectedFee_,
+        uint256 expectedHealth_
+    ) internal {
+        _configureFractionalPrices();
+        _depositFractionalPriceCollateral(collateralAmount_);
 
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
             address(usds),
@@ -105,11 +232,8 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
             alice
         );
 
-        // fee = ceil(collateralAmount * 25 bps / 10,000), token-native units.
-        uint256 expectedFee = (collateralAmount * 25 + 9_999) / 10_000;
-        assertGt(expectedFee, 0, "nonzero debt retains nonzero fee");
-        assertGe(preview.resultingHealthFactor, 1e18, "decimal-matrix health boundary");
-        assertEq(preview.fee, expectedFee, "preview fee in collateral-native units");
+        assertEq(preview.resultingHealthFactor, expectedHealth_, "decimal-matrix health boundary");
+        assertEq(preview.fee, expectedFee_, "preview fee in collateral-native units");
 
         uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
 
@@ -125,10 +249,10 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         assertTrue(preview.executable, "decimal-matrix preview executable");
         assertEq(borrowedOhm, borrowAmount_, "decimal-matrix borrowed OHM");
         assertEq(fee, preview.fee, "borrow fee matches preview collateral units");
-        assertEq(fee, expectedFee, "borrow fee in collateral-native units");
+        assertEq(fee, expectedFee_, "borrow fee in collateral-native units");
         assertEq(
             usds.balanceOf(address(trsry)),
-            treasuryBalanceBefore + expectedFee,
+            treasuryBalanceBefore + expectedFee_,
             "treasury receives collateral-native fee"
         );
         assertEq(totalDebtOhm, borrowAmount_, "decimal-matrix debt");
@@ -138,11 +262,45 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         assertEq(healthFactor, preview.resultingHealthFactor, "decimal-matrix resulting health");
     }
 
-    function _configurePricesAndRequiredCollateral(
-        uint128 borrowAmount_
-    ) internal returns (uint128 collateralAmount) {
-        uint8 ohmDecimals = _ohmDecimals();
-        uint8 collateralDecimals = _collateralDecimals();
+    function _assertBorrowMatchesPreview(
+        uint128 borrowAmount_,
+        uint128 collateralAmount_
+    ) internal {
+        _configureFractionalPrices();
+        _depositFractionalPriceCollateral(collateralAmount_);
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            borrowAmount_,
+            alice
+        );
+        assertTrue(preview.executable, "fuzzed preview executable");
+
+        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+
+        vm.prank(alice);
+        (
+            uint256 borrowedOhm,
+            uint256 fee,
+            uint256 totalDebtOhm,
+            uint48 maturity,
+            uint256 healthFactor
+        ) = burnerLoans.borrow(address(usds), borrowAmount_, alice, alice, preview.fee);
+
+        assertEq(borrowedOhm, borrowAmount_, "fuzzed borrowed OHM");
+        assertEq(fee, preview.fee, "fuzzed preview fee");
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBalanceBefore + preview.fee,
+            "fuzzed treasury fee"
+        );
+        assertEq(totalDebtOhm, borrowAmount_, "fuzzed debt");
+        assertEq(totalDebtOhm, preview.resultingDebtOhm, "fuzzed preview debt");
+        assertEq(maturity, preview.maturity, "fuzzed preview maturity");
+        assertEq(healthFactor, preview.resultingHealthFactor, "fuzzed preview health");
+    }
+
+    function _configureFractionalPrices() internal {
         uint8 priceDecimals = _priceDecimals();
         uint256 priceScale = 10 ** priceDecimals;
 
@@ -152,19 +310,16 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         price.setPriceDecimals(priceDecimals);
         _configurePrice(address(ohm), ohmUsdPrice);
         _configurePrice(address(usds), collateralUsdPrice);
+    }
 
-        // debtValueUsd = ceil(borrowAmount * $10.25 / ohmScale), in PRICE-native USD units.
-        uint256 debtValueUsd = burnerLoans.debtValueUsd(borrowAmount_, ohmUsdPrice, ohmDecimals);
-        // requiredUsd = ceil(debtValueUsd * 115% / 100%), in PRICE-native USD units.
-        uint256 requiredUsd = (debtValueUsd * 11_500 + 9_999) / 10_000;
-        // collateralAmount = ceil(requiredUsd * collateral scale / $0.75), in native units.
-        collateralAmount = uint128(
-            burnerLoans.requiredCollateralAsset(requiredUsd, collateralUsdPrice, collateralDecimals)
-        );
-
-        assertGt(debtValueUsd, 0, "nonzero debt retains PRICE-native value");
-        assertGt(requiredUsd, 0, "nonzero debt retains required USD value");
-        assertGt(collateralAmount, 0, "nonzero debt retains collateral requirement");
+    function _depositFractionalPriceCollateral(uint128 collateralAmount_) internal {
+        // At the 1 bp LTV fuzz boundary, 100 OHM at $10.25 requires about 13.67 million
+        // $0.75 collateral tokens, and its 25 bps fee is about 34,167 tokens.
+        usds.mint(alice, collateralAmount_ + 100_000 * 10 ** _collateralDecimals());
+        vm.startPrank(alice);
+        usds.approve(address(burnerLoans), type(uint256).max);
+        burnerLoans.depositCollateral(address(usds), collateralAmount_, alice);
+        vm.stopPrank();
     }
 
     function _assertSuccessfulHealthBoundaryBorrow(
@@ -237,13 +392,50 @@ contract BurnerLoansBorrowOhm6Collateral18Price18DecimalsTest is BurnerLoansBorr
         return 18;
     }
 
-    function _boundaryHealthExpectations()
+    function _launchBoundaryScenario()
         internal
         pure
         override
-        returns (uint256 belowBoundary_, uint256 aboveBoundary_)
+        returns (LaunchBoundaryScenario memory)
     {
-        return (999_999_999_999_999_999, 1e18);
+        // PRICE: 18 decimals; collateral: 18 decimals.
+        // For the fixed decimal-scale case, requiredUsd for 100 OHM at $10.25 and 85% LTV is
+        // $1_205_882_352_941_176_470_589, so decimalScaleCollateral
+        // = ceil(requiredUsd * 1e18 / $0.75e18) = 1_607_843_137_254_901_960_786.
+        // Its USD value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(decimalScaleCollateral * 25 / 10_000)
+        //                 = 4_019_607_843_137_254_902.
+        // For one raw 6-decimal OHM unit, required collateral is 16_078_431_372_550, so its
+        // rounded-up 25 bps fee is 40_196_078_432.
+        // debtValueUsd = 100 OHM * $10e18 = $1_000e18.
+        // launchRequiredUsd = ceil($1_000e18 * 10_000 / 8_500)
+        //                   = $1_176_470_588_235_294_117_648.
+        // At 100% LTV, requiredUsd = $1_000e18, so collateral = $1_000e18 * 1e18 / $1e18
+        // = 1_000e18, and health = floor($1_000e18 * 1e18 / $1_000e18) = 1e18.
+        // At $1e18 per collateral token, each collateral amount below is also its USD value.
+        // belowCollateral = launchRequiredUsd - 1 = 1_176_470_588_235_294_117_647, so
+        // belowHealth = floor(1_176_470_588_235_294_117_647 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_999_999_999.
+        // minimumHealthyCollateral = launchRequiredUsd = 1_176_470_588_235_294_117_648, so
+        // minimumHealthyHealth = floor(launchRequiredUsd * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = launchRequiredUsd + 1 = 1_176_470_588_235_294_117_649, so
+        // aboveHealth = floor(1_176_470_588_235_294_117_649 * 1e18 / launchRequiredUsd)
+        //             = 1e18 because the one-wei surplus is below WAD health precision.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_137_254_901_960_786,
+                decimalScaleFee: 4_019_607_843_137_254_902,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e18,
+                rawUnitFee: 40_196_078_432,
+                exactHundredPercentLtvCollateral: 1_000e18,
+                belowCollateral: 1_176_470_588_235_294_117_647,
+                belowHealth: 999_999_999_999_999_999,
+                minimumHealthyCollateral: 1_176_470_588_235_294_117_648,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_588_235_294_117_649,
+                aboveHealth: 1e18
+            });
     }
 }
 
@@ -256,13 +448,49 @@ contract BurnerLoansBorrowOhm18Collateral18Price18DecimalsTest is BurnerLoansBor
         return 18;
     }
 
-    function _boundaryHealthExpectations()
+    function _launchBoundaryScenario()
         internal
         pure
         override
-        returns (uint256 belowBoundary_, uint256 aboveBoundary_)
+        returns (LaunchBoundaryScenario memory)
     {
-        return (999_999_999_999_999_999, 1e18);
+        // PRICE: 18 decimals; collateral: 18 decimals.
+        // For the fixed decimal-scale case, requiredUsd for 100 OHM at $10.25 and 85% LTV is
+        // $1_205_882_352_941_176_470_589, so decimalScaleCollateral
+        // = ceil(requiredUsd * 1e18 / $0.75e18) = 1_607_843_137_254_901_960_786.
+        // Its USD value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(decimalScaleCollateral * 25 / 10_000)
+        //                 = 4_019_607_843_137_254_902.
+        // For one raw 18-decimal OHM unit, required collateral is 18, so the rounded-up fee is 1.
+        // debtValueUsd = 100 OHM * $10e18 = $1_000e18.
+        // launchRequiredUsd = ceil($1_000e18 * 10_000 / 8_500)
+        //                   = $1_176_470_588_235_294_117_648.
+        // At 100% LTV, requiredUsd = $1_000e18, so collateral = $1_000e18 * 1e18 / $1e18
+        // = 1_000e18, and health = floor($1_000e18 * 1e18 / $1_000e18) = 1e18.
+        // At $1e18 per collateral token, each collateral amount below is also its USD value.
+        // belowCollateral = launchRequiredUsd - 1 = 1_176_470_588_235_294_117_647, so
+        // belowHealth = floor(1_176_470_588_235_294_117_647 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_999_999_999.
+        // minimumHealthyCollateral = launchRequiredUsd = 1_176_470_588_235_294_117_648, so
+        // minimumHealthyHealth = floor(launchRequiredUsd * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = launchRequiredUsd + 1 = 1_176_470_588_235_294_117_649, so
+        // aboveHealth = floor(1_176_470_588_235_294_117_649 * 1e18 / launchRequiredUsd)
+        //             = 1e18 because the one-wei surplus is below WAD health precision.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_137_254_901_960_786,
+                decimalScaleFee: 4_019_607_843_137_254_902,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e18,
+                rawUnitFee: 1,
+                exactHundredPercentLtvCollateral: 1_000e18,
+                belowCollateral: 1_176_470_588_235_294_117_647,
+                belowHealth: 999_999_999_999_999_999,
+                minimumHealthyCollateral: 1_176_470_588_235_294_117_648,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_588_235_294_117_649,
+                aboveHealth: 1e18
+            });
     }
 }
 
@@ -274,6 +502,49 @@ contract BurnerLoansBorrowOhm6Collateral6Price6DecimalsTest is BurnerLoansBorrow
     function _priceDecimals() internal pure override returns (uint8) {
         return 6;
     }
+
+    function _launchBoundaryScenario()
+        internal
+        pure
+        override
+        returns (LaunchBoundaryScenario memory)
+    {
+        // PRICE: 6 decimals; collateral: 6 decimals.
+        // For the fixed decimal-scale case, debtValueUsd = 100 OHM * $10.25e6 = $1_025e6 and
+        // requiredUsd = ceil($1_025e6 * 10_000 / 8_500) = $1_205_882_353.
+        // decimalScaleCollateral = ceil(requiredUsd * 1e6 / $0.75e6) = 1_607_843_138.
+        // Its USD value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(1_607_843_138 * 25 / 10_000) = 4_019_608.
+        // For one raw 6-decimal OHM unit, required collateral is 18, so the rounded-up fee is 1.
+        // debtValueUsd = 100 OHM * $10e6 = $1_000e6.
+        // launchRequiredUsd = ceil($1_000e6 * 10_000 / 8_500) = $1_176_470_589.
+        // At 100% LTV, requiredUsd = $1_000e6, so collateral = $1_000e6 * 1e6 / $1e6
+        // = 1_000e6, and health = floor($1_000e6 * 1e18 / $1_000e6) = 1e18.
+        // At $1e6 per collateral token, each collateral amount below is also its USD value.
+        // belowCollateral = launchRequiredUsd - 1 = 1_176_470_588, so
+        // belowHealth = floor(1_176_470_588 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_150_000_000.
+        // minimumHealthyCollateral = launchRequiredUsd = 1_176_470_589, so
+        // minimumHealthyHealth = floor(launchRequiredUsd * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = launchRequiredUsd + 1 = 1_176_470_590, so
+        // aboveHealth = floor(1_176_470_590 * 1e18 / launchRequiredUsd)
+        //             = 1_000_000_000_849_999_999.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_138,
+                decimalScaleFee: 4_019_608,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e6,
+                rawUnitFee: 1,
+                exactHundredPercentLtvCollateral: 1_000e6,
+                belowCollateral: 1_176_470_588,
+                belowHealth: 999_999_999_150_000_000,
+                minimumHealthyCollateral: 1_176_470_589,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_590,
+                aboveHealth: 1_000_000_000_849_999_999
+            });
+    }
 }
 
 contract BurnerLoansBorrowOhm18Collateral6Price6DecimalsTest is BurnerLoansBorrowDecimalsTest {
@@ -283,6 +554,49 @@ contract BurnerLoansBorrowOhm18Collateral6Price6DecimalsTest is BurnerLoansBorro
 
     function _priceDecimals() internal pure override returns (uint8) {
         return 6;
+    }
+
+    function _launchBoundaryScenario()
+        internal
+        pure
+        override
+        returns (LaunchBoundaryScenario memory)
+    {
+        // PRICE: 6 decimals; collateral: 6 decimals.
+        // For the fixed decimal-scale case, debtValueUsd = 100 OHM * $10.25e6 = $1_025e6 and
+        // requiredUsd = ceil($1_025e6 * 10_000 / 8_500) = $1_205_882_353.
+        // decimalScaleCollateral = ceil(requiredUsd * 1e6 / $0.75e6) = 1_607_843_138.
+        // Its USD value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(1_607_843_138 * 25 / 10_000) = 4_019_608.
+        // For one raw 18-decimal OHM unit, required collateral is 3, so the rounded-up fee is 1.
+        // debtValueUsd = 100 OHM * $10e6 = $1_000e6.
+        // launchRequiredUsd = ceil($1_000e6 * 10_000 / 8_500) = $1_176_470_589.
+        // At 100% LTV, requiredUsd = $1_000e6, so collateral = $1_000e6 * 1e6 / $1e6
+        // = 1_000e6, and health = floor($1_000e6 * 1e18 / $1_000e6) = 1e18.
+        // At $1e6 per collateral token, each collateral amount below is also its USD value.
+        // belowCollateral = launchRequiredUsd - 1 = 1_176_470_588, so
+        // belowHealth = floor(1_176_470_588 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_150_000_000.
+        // minimumHealthyCollateral = launchRequiredUsd = 1_176_470_589, so
+        // minimumHealthyHealth = floor(launchRequiredUsd * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = launchRequiredUsd + 1 = 1_176_470_590, so
+        // aboveHealth = floor(1_176_470_590 * 1e18 / launchRequiredUsd)
+        //             = 1_000_000_000_849_999_999.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_138,
+                decimalScaleFee: 4_019_608,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e6,
+                rawUnitFee: 1,
+                exactHundredPercentLtvCollateral: 1_000e6,
+                belowCollateral: 1_176_470_588,
+                belowHealth: 999_999_999_150_000_000,
+                minimumHealthyCollateral: 1_176_470_589,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_590,
+                aboveHealth: 1_000_000_000_849_999_999
+            });
     }
 }
 
@@ -299,13 +613,51 @@ contract BurnerLoansBorrowOhm6Collateral18Price6DecimalsTest is BurnerLoansBorro
         return 6;
     }
 
-    function _boundaryHealthExpectations()
+    function _launchBoundaryScenario()
         internal
         pure
         override
-        returns (uint256 belowBoundary_, uint256 aboveBoundary_)
+        returns (LaunchBoundaryScenario memory)
     {
-        return (999_999_999_130_434_782, 1e18);
+        // PRICE: 6 decimals; collateral: 18 decimals.
+        // For the fixed decimal-scale case, requiredUsd for 100 OHM at $10.25 and 85% LTV is
+        // $1_205_882_353, so decimalScaleCollateral
+        // = ceil(requiredUsd * 1e18 / $0.75e6) = 1_607_843_137_333_333_333_334.
+        // Its PRICE value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(decimalScaleCollateral * 25 / 10_000)
+        //                 = 4_019_607_843_333_333_334.
+        // For one raw 6-decimal OHM unit, required collateral is 17_333_333_333_334, so its
+        // rounded-up fee is 43_333_333_334.
+        // debtValueUsd = 100 OHM * $10e6 = $1_000e6.
+        // launchRequiredUsd = ceil($1_000e6 * 10_000 / 8_500) = $1_176_470_589.
+        // At 100% LTV, requiredUsd = $1_000e6, so collateral = $1_000e6 * 1e18 / $1e6
+        // = 1_000e18. Its PRICE value is $1_000e6, giving health = 1e18.
+        // minimumHealthyCollateral = launchRequiredUsd * 1e12 = 1_176_470_589e12.
+        // belowCollateral = minimumHealthyCollateral - 1
+        //                 = 1_176_470_588_999_999_999_999.
+        // Its PRICE value is floor(belowCollateral * $1e6 / 1e18) = $1_176_470_588, so
+        // belowHealth = floor($1_176_470_588 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_150_000_000.
+        // The minimum converts to $1_176_470_589, so minimumHealthyHealth
+        // = floor($1_176_470_589 * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = minimumHealthyCollateral + 1
+        //                 = 1_176_470_589_000_000_000_001.
+        // It still floors to $1_176_470_589 at PRICE precision, so aboveHealth remains 1e18.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_137_333_333_333_334,
+                decimalScaleFee: 4_019_607_843_333_333_334,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e18,
+                rawUnitFee: 43_333_333_334,
+                exactHundredPercentLtvCollateral: 1_000e18,
+                belowCollateral: 1_176_470_588_999_999_999_999,
+                belowHealth: 999_999_999_150_000_000,
+                minimumHealthyCollateral: 1_176_470_589e12,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_589_000_000_000_001,
+                aboveHealth: 1e18
+            });
     }
 
     // Condition tree:
@@ -321,8 +673,9 @@ contract BurnerLoansBorrowOhm6Collateral18Price6DecimalsTest is BurnerLoansBorro
         backingOracle.setBacking(10e18 + 1);
 
         // Backing rounds up to $10.000001 at 6 PRICE decimals.
-        // 100 OHM therefore requires 1,000.0001 USDS = 1_000_000_100e12 native units.
-        uint128 collateralAmount = 1_000_000_100e12;
+        // 100 OHM requires $1,000.0001 of backing; the 125% multiplier raises the collateral
+        // requirement to 1,250.000125 USDS = 1_250_000_125e12 native units.
+        uint128 collateralAmount = 1_250_000_125e12;
         usds.mint(alice, collateralAmount + 100e18);
         vm.startPrank(alice);
         usds.approve(address(burnerLoans), type(uint256).max);
@@ -345,8 +698,8 @@ contract BurnerLoansBorrowOhm6Collateral18Price6DecimalsTest is BurnerLoansBorro
             uint256 healthFactor
         ) = burnerLoans.borrow(address(usds), 100e6, alice, alice, preview.fee);
 
-        // 1,000.0001 USDS * 25 bps = 2.50000025 USDS in 18-decimal collateral units.
-        uint256 expectedFee = 2_500_000_250_000_000_000;
+        // 1,250.000125 USDS * 25 bps = 3.1250003125 USDS in 18-decimal collateral units.
+        uint256 expectedFee = 3_125_000_312_500_000_000;
         assertTrue(preview.executable, "scaled backing preview executable");
         assertEq(preview.resultingHealthFactor, 1e18, "scaled backing preview boundary");
         assertEq(borrowedOhm, 100e6, "scaled backing borrowed OHM");
@@ -377,12 +730,50 @@ contract BurnerLoansBorrowOhm18Collateral18Price6DecimalsTest is BurnerLoansBorr
         return 6;
     }
 
-    function _boundaryHealthExpectations()
+    function _launchBoundaryScenario()
         internal
         pure
         override
-        returns (uint256 belowBoundary_, uint256 aboveBoundary_)
+        returns (LaunchBoundaryScenario memory)
     {
-        return (999_999_999_130_434_782, 1e18);
+        // PRICE: 6 decimals; collateral: 18 decimals.
+        // For the fixed decimal-scale case, requiredUsd for 100 OHM at $10.25 and 85% LTV is
+        // $1_205_882_353, so decimalScaleCollateral
+        // = ceil(requiredUsd * 1e18 / $0.75e6) = 1_607_843_137_333_333_333_334.
+        // Its PRICE value equals requiredUsd, so decimalScaleHealth = 1e18.
+        // decimalScaleFee = ceil(decimalScaleCollateral * 25 / 10_000)
+        //                 = 4_019_607_843_333_333_334.
+        // For one raw 18-decimal OHM unit, required collateral is 2_666_666_666_667, so its
+        // rounded-up fee is 6_666_666_667.
+        // debtValueUsd = 100 OHM * $10e6 = $1_000e6.
+        // launchRequiredUsd = ceil($1_000e6 * 10_000 / 8_500) = $1_176_470_589.
+        // At 100% LTV, requiredUsd = $1_000e6, so collateral = $1_000e6 * 1e18 / $1e6
+        // = 1_000e18. Its PRICE value is $1_000e6, giving health = 1e18.
+        // minimumHealthyCollateral = launchRequiredUsd * 1e12 = 1_176_470_589e12.
+        // belowCollateral = minimumHealthyCollateral - 1
+        //                 = 1_176_470_588_999_999_999_999.
+        // Its PRICE value is floor(belowCollateral * $1e6 / 1e18) = $1_176_470_588, so
+        // belowHealth = floor($1_176_470_588 * 1e18 / launchRequiredUsd)
+        //             = 999_999_999_150_000_000.
+        // The minimum converts to $1_176_470_589, so minimumHealthyHealth
+        // = floor($1_176_470_589 * 1e18 / launchRequiredUsd) = 1e18.
+        // aboveCollateral = minimumHealthyCollateral + 1
+        //                 = 1_176_470_589_000_000_000_001.
+        // It still floors to $1_176_470_589 at PRICE precision, so aboveHealth remains 1e18.
+        return
+            LaunchBoundaryScenario({
+                decimalScaleCollateral: 1_607_843_137_333_333_333_334,
+                decimalScaleFee: 4_019_607_843_333_333_334,
+                decimalScaleHealth: 1e18,
+                fuzzCollateral: 20_000_000e18,
+                rawUnitFee: 6_666_666_667,
+                exactHundredPercentLtvCollateral: 1_000e18,
+                belowCollateral: 1_176_470_588_999_999_999_999,
+                belowHealth: 999_999_999_150_000_000,
+                minimumHealthyCollateral: 1_176_470_589e12,
+                minimumHealthyHealth: 1e18,
+                aboveCollateral: 1_176_470_589_000_000_000_001,
+                aboveHealth: 1e18
+            });
     }
 }

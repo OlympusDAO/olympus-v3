@@ -167,13 +167,13 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
         actions[0] = _riskAction(9_500);
 
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory ratioUpdate;
-        ratioUpdate.minCollateralRatioBps = 12_000;
-        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory ratioSelection;
-        ratioSelection.minCollateralRatioBps = true;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory secondBackingUpdate;
+        secondBackingUpdate.backingMultiplierBps = 13_000;
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory secondBackingSelection;
+        secondBackingSelection.backingMultiplierBps = true;
         actions[1] = _singleAction(
             IBurnerLoansConfig.setAssetRiskConfig.selector,
-            abi.encode(address(usds), ratioUpdate, ratioSelection)
+            abi.encode(address(usds), secondBackingUpdate, secondBackingSelection)
         );
 
         vm.prank(burnerLoansAdmin);
@@ -386,9 +386,9 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         actions = new ITimelockBatchQueue.BatchAction[](2);
 
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory riskUpdate;
-        riskUpdate.collateralFactorBps = 9_500;
+        riskUpdate.maxLtvBps = 9_500;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory riskSelection;
-        riskSelection.collateralFactorBps = true;
+        riskSelection.maxLtvBps = true;
         actions[0] = ITimelockBatchQueue.BatchAction({
             target: address(burnerLoansConfig),
             selector: IBurnerLoansConfig.setAssetRiskConfig.selector,

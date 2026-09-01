@@ -111,15 +111,14 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         emit TimelockActionExecuted(actionId_, executor_);
     }
 
-    function _collateralFactorConfig()
+    function _maximumLtvConfig()
         internal
         pure
         returns (IBurnerLoans.AssetRiskConfigInput memory config)
     {
         config = IBurnerLoans.AssetRiskConfigInput({
-            collateralFactorBps: 9_500,
-            minCollateralRatioBps: 11_500,
-            backingMultiplierBps: 10_000,
+            maxLtvBps: 8_500,
+            backingMultiplierBps: 12_500,
             keeperRewardBps: 100,
             termLength: 30 days,
             maxMaturityHorizon: 90 days,
@@ -127,7 +126,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         });
     }
 
-    function _collateralFactorUpdate()
+    function _maxLtvUpdate()
         internal
         pure
         returns (
@@ -136,8 +135,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         )
     {
         update = IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-            collateralFactorBps: 9_500,
-            minCollateralRatioBps: 0,
+            maxLtvBps: 9_500,
             backingMultiplierBps: 0,
             keeperRewardBps: 0,
             termLength: 0,
@@ -145,8 +143,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
             maxKeeperReward: 0
         });
         selection = IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-            collateralFactorBps: true,
-            minCollateralRatioBps: false,
+            maxLtvBps: true,
             backingMultiplierBps: false,
             keeperRewardBps: false,
             termLength: false,
@@ -174,8 +171,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         returns (IBurnerLoans.AssetRiskConfigInput memory config)
     {
         config = IBurnerLoans.AssetRiskConfigInput({
-            collateralFactorBps: 9_500,
-            minCollateralRatioBps: 12_000,
+            maxLtvBps: 9_500,
             backingMultiplierBps: 11_000,
             keeperRewardBps: 500,
             termLength: 14 days,
@@ -190,8 +186,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         returns (IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection)
     {
         selection = IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection({
-            collateralFactorBps: true,
-            minCollateralRatioBps: true,
+            maxLtvBps: true,
             backingMultiplierBps: true,
             keeperRewardBps: true,
             termLength: true,
@@ -206,8 +201,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         returns (IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update)
     {
         update = IBurnerLoansConfigTimelock.AssetRiskConfigUpdate({
-            collateralFactorBps: 9_500,
-            minCollateralRatioBps: 12_000,
+            maxLtvBps: 9_500,
             backingMultiplierBps: 11_000,
             keeperRewardBps: 500,
             termLength: 14 days,
@@ -216,11 +210,11 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         });
     }
 
-    function _queueCollateralFactorUpdate() internal returns (uint64 actionId) {
+    function _queueMaximumLtvUpdate() internal returns (uint64 actionId) {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);

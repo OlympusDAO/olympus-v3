@@ -13,11 +13,8 @@ library BurnerLoansConstants {
     /// @dev Maximum aggregate fee rate in basis points.
     uint16 internal constant FEE_CAP_BPS = 10_000;
 
-    /// @dev Maximum collateral factor in basis points.
-    uint16 internal constant MAX_COLLATERAL_FACTOR_BPS = 10_000;
-
-    /// @dev Maximum minimum-collateral ratio in basis points.
-    uint16 internal constant MAX_COLLATERAL_RATIO_BPS = 50_000;
+    /// @dev Maximum loan-to-value ratio in basis points.
+    uint16 internal constant _MAX_LTV_BPS = 10_000;
 
     /// @dev Maximum backing multiplier in basis points.
     uint16 internal constant MAX_BACKING_MULTIPLIER_BPS = 50_000;

@@ -57,7 +57,9 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansHarvestTestBase {
 
         _addYield(10e6);
         uint256 harvested = burnerLoans.harvestYield(address(vaultAsset));
-        assertGt(harvested, 0, "harvested yield");
+        // A 100e6 deposit plus 10e6 yield loses two native units across the vault share
+        // conversion and withdrawal round-downs, so the exact executable claim is 9_999_998.
+        assertEq(harvested, 9_999_998, "harvested yield");
         assertEq(vaultAsset.balanceOf(address(trsry)), harvested, "treasury yield");
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "harvest asset residual");
         assertEq(vault.balanceOf(address(burnerLoans)), 0, "harvest vault residual");

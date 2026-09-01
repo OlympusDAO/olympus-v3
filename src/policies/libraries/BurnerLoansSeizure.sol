@@ -502,10 +502,6 @@ library BurnerLoansSeizure {
             pricing_.collateralUsdPrice,
             config_.collateralDecimals
         );
-        uint256 riskAdjustedCollateralUsd = BurnerLoansCalculator.riskAdjustedCollateralUsd(
-            collateralUsd,
-            config_.collateralFactorBps
-        );
         uint256 debtValueUsd = BurnerLoansCalculator.debtValueUsd(
             position_.principalDue,
             pricing_.ohmUsdPrice,
@@ -516,12 +512,10 @@ library BurnerLoansSeizure {
             position_.principalDue,
             pricing_.backingPerOhmUsd,
             ohmDecimals_,
-            config_.minCollateralRatioBps,
+            config_.maxLtvBps,
             config_.backingMultiplierBps
         );
-        return
-            BurnerLoansCalculator.healthFactor(riskAdjustedCollateralUsd, requiredCollateralUsd) <
-            _WAD;
+        return BurnerLoansCalculator.healthFactor(collateralUsd, requiredCollateralUsd) < _WAD;
     }
 
     function _pricing(

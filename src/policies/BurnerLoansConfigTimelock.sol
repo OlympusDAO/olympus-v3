@@ -49,7 +49,7 @@ contract BurnerLoansConfigTimelock is
     uint256 internal constant _LEN_ADDRESS_FEE_CONFIG_SELECTION = 288;
 
     /// @dev ABI-encoded byte length of an asset, risk update, and risk-field selection payload.
-    uint256 internal constant _LEN_ADDRESS_ASSET_RISK_CONFIG_SELECTION = 480;
+    uint256 internal constant _LEN_ADDRESS_ASSET_RISK_CONFIG_SELECTION = 416;
 
     /// @dev ABI-encoded byte length of an address followed by one static value.
     uint256 internal constant _LEN_ADDRESS_UINT256 = 64;

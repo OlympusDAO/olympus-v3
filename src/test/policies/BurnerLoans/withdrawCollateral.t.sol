@@ -19,6 +19,301 @@ import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
+abstract contract BurnerLoansWithdrawCollateralBoundaryTestBase is BurnerLoansTest {
+    struct BoundaryScenario {
+        uint128 disabledInitialCollateral;
+        uint128 disabledWithdrawal;
+        uint128 disabledRemainingCollateral;
+        uint256 disabledHealth;
+        uint128 aboveInitialCollateral;
+        uint128 aboveWithdrawal;
+        uint128 aboveRemainingCollateral;
+        uint256 aboveHealth;
+        uint128 boundaryInitialCollateral;
+        uint128 boundaryWithdrawal;
+        uint128 boundaryRemainingCollateral;
+        uint256 boundaryHealth;
+        uint128 belowInitialCollateral;
+        uint128 belowWithdrawal;
+        uint128 belowRemainingCollateral;
+        uint256 belowHealth;
+    }
+
+    function setUp() public virtual override {
+        super.setUp();
+        _addDefaultUsdsAsset();
+    }
+
+    function _boundaryScenario() internal pure virtual returns (BoundaryScenario memory);
+
+    // Condition tree:
+    // - Caller: owner
+    // - Collateral decimals and fixed values: supplied by the concrete boundary scenario
+    // - Position state: active debt with fresh PRICE and healthy remaining collateral
+    // - Asset state: disabled after configuration
+    // - Expected branch: withdrawal succeeds because asset disable only blocks new exposure
+    function test_withdrawCollateral_givenAssetOriginationsDisabledAndActiveDebt_succeeds() public {
+        BoundaryScenario memory scenario = _boundaryScenario();
+        _depositBoundaryCollateral(scenario.disabledInitialCollateral);
+        _setBoundaryPosition(scenario.disabledInitialCollateral);
+        _setBoundaryPrices();
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(usds),
+            scenario.disabledWithdrawal,
+            alice
+        );
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
+            .withdrawCollateral(address(usds), scenario.disabledWithdrawal, alice, alice);
+
+        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
+        assertEq(amountOut, scenario.disabledWithdrawal, "amount out");
+        assertEq(remaining, scenario.disabledRemainingCollateral, "remaining");
+        assertEq(health, scenario.disabledHealth, "health");
+    }
+
+    // Condition tree:
+    // - Caller: owner
+    // - Collateral decimals and fixed values: supplied by the concrete boundary scenario
+    // - Position state: 1 OHM debt with OHM at $100 and collateral at $1
+    // - Withdrawal amount: leaves one whole collateral token above the minimum healthy amount
+    // - Expected branch: preview and write succeed with the fixed rounded health factor
+    function test_withdrawCollateral_givenActiveDebtAboveHealthBoundary_succeeds() public {
+        BoundaryScenario memory scenario = _boundaryScenario();
+        _depositBoundaryCollateral(scenario.aboveInitialCollateral);
+        _setBoundaryPosition(scenario.aboveInitialCollateral);
+        _setBoundaryPrices();
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(usds),
+            scenario.aboveWithdrawal,
+            alice
+        );
+
+        assertTrue(preview.executable, "preview executable");
+        assertEq(preview.resultingHealthFactor, scenario.aboveHealth, "preview health");
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
+            .withdrawCollateral(address(usds), scenario.aboveWithdrawal, alice, alice);
+
+        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
+        assertEq(remaining, scenario.aboveRemainingCollateral, "remaining");
+        assertEq(health, scenario.aboveHealth, "health");
+    }
+
+    // Condition tree:
+    // - Caller: owner
+    // - Collateral decimals and fixed values: supplied by the concrete boundary scenario
+    // - Position state: 1 OHM debt with OHM at $100 and collateral at $1
+    // - Withdrawal amount: leaves the minimum healthy collateral amount
+    // - Expected branch: preview and write succeed with the fixed rounded health factor
+    function test_withdrawCollateral_givenActiveDebtAtMinimumHealthyCollateral_succeeds() public {
+        BoundaryScenario memory scenario = _boundaryScenario();
+        _depositBoundaryCollateral(scenario.boundaryInitialCollateral);
+        _setBoundaryPosition(scenario.boundaryInitialCollateral);
+        _setBoundaryPrices();
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(usds),
+            scenario.boundaryWithdrawal,
+            alice
+        );
+
+        assertTrue(preview.executable, "preview executable");
+        assertEq(preview.resultingHealthFactor, scenario.boundaryHealth, "preview health");
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
+            .withdrawCollateral(address(usds), scenario.boundaryWithdrawal, alice, alice);
+
+        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
+        assertEq(remaining, scenario.boundaryRemainingCollateral, "remaining");
+        assertEq(health, scenario.boundaryHealth, "health");
+    }
+
+    // Condition tree:
+    // - Caller: owner
+    // - Collateral decimals and fixed values: supplied by the concrete boundary scenario
+    // - Position state: 1 OHM debt with OHM at $100 and collateral at $1
+    // - Withdrawal amount: leaves one native collateral unit below the healthy amount
+    // - Expected branch: preview is non-executable and write reverts with the fixed health factor
+    function test_withdrawCollateral_givenActiveDebtBelowHealthBoundary_reverts() public {
+        BoundaryScenario memory scenario = _boundaryScenario();
+        _depositBoundaryCollateral(scenario.belowInitialCollateral);
+        _setBoundaryPosition(scenario.belowInitialCollateral);
+        _setBoundaryPrices();
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(usds),
+            scenario.belowWithdrawal,
+            alice
+        );
+
+        assertFalse(preview.executable, "preview executable");
+        assertEq(preview.resultingHealthFactor, scenario.belowHealth, "preview health");
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_UnhealthyWithdrawal.selector,
+                scenario.belowHealth
+            )
+        );
+        burnerLoans.withdrawCollateral(address(usds), scenario.belowWithdrawal, alice, alice);
+
+        assertEq(usds.balanceOf(alice), 0, "alice balance");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
+            scenario.belowInitialCollateral,
+            "position"
+        );
+    }
+
+    function _depositBoundaryCollateral(uint128 amount_) internal {
+        usds.mint(alice, amount_);
+        vm.startPrank(alice);
+        usds.approve(address(burnerLoans), amount_);
+        burnerLoans.depositCollateral(address(usds), amount_, alice);
+        vm.stopPrank();
+    }
+
+    function _setBoundaryPosition(uint128 collateral_) internal {
+        burnerLoans.setPositionForTest(
+            address(usds),
+            alice,
+            IBurnerLoans.Position({
+                depositedCollateral: collateral_,
+                debtOhm: 1e9,
+                maturity: uint48(block.timestamp + 30 days),
+                lastBorrowBlock: uint48(block.number)
+            })
+        );
+        burnerLoans.setActiveDebtForTest(address(usds), 1e9);
+    }
+
+    function _setBoundaryPrices() internal {
+        price.setTimestamp(uint48(block.timestamp));
+        _configurePrice(address(ohm), 100e18);
+        _configurePrice(address(usds), 1e18);
+    }
+}
+
+contract BurnerLoansWithdrawCollateralBoundaryTest is
+    BurnerLoansWithdrawCollateralBoundaryTestBase
+{
+    function _collateralDecimals() internal pure override returns (uint8) {
+        return 18;
+    }
+
+    function _boundaryScenario() internal pure override returns (BoundaryScenario memory) {
+        // debtValueUsd = 1e9 OHM * $100e18 / 1e9 = $100e18.
+        // requiredUsd = ceil($100e18 * 10_000 / 8_500) = $117_647_058_823_529_411_765.
+        // At $1e18 per collateral token, minimumCollateral = requiredUsd * 1e18 / $1e18
+        // = 117_647_058_823_529_411_765.
+        // boundaryRemainingCollateral = minimumCollateral = 117_647_058_823_529_411_765.
+        // boundaryInitialCollateral = boundaryRemainingCollateral + 1e18
+        //                           = 118_647_058_823_529_411_765.
+        // aboveRemainingCollateral = minimumCollateral + 1e18
+        //                          = 118_647_058_823_529_411_765.
+        // aboveInitialCollateral = aboveRemainingCollateral + 1e18
+        //                        = 119_647_058_823_529_411_765.
+        // disabledInitialCollateral = minimumCollateral + 5e18
+        //                           = 122_647_058_823_529_411_765.
+        // disabledWithdrawal = 5e18, so disabledRemainingCollateral
+        //                    = disabledInitialCollateral - disabledWithdrawal
+        //                    = 117_647_058_823_529_411_765.
+        // belowRemainingCollateral = minimumCollateral - 1
+        //                          = 117_647_058_823_529_411_764.
+        // belowInitialCollateral = minimumCollateral + 1e18
+        //                        = 118_647_058_823_529_411_765, so withdrawing 1e18 + 1
+        // leaves belowRemainingCollateral.
+        // boundaryHealth = floor(requiredUsd * 1e18 / requiredUsd) = 1e18.
+        // disabledHealth = floor($117_647_058_823_529_411_765 * 1e18 / requiredUsd)
+        //                = 1e18.
+        // aboveHealth = floor($118_647_058_823_529_411_765 * 1e18 / requiredUsd)
+        //             = 1_008_499_999_999_999_999.
+        // belowHealth = floor($117_647_058_823_529_411_764 * 1e18 / requiredUsd)
+        //             = 999_999_999_999_999_999.
+        return
+            BoundaryScenario({
+                disabledInitialCollateral: 122_647_058_823_529_411_765,
+                disabledWithdrawal: 5e18,
+                disabledRemainingCollateral: 117_647_058_823_529_411_765,
+                disabledHealth: 1e18,
+                aboveInitialCollateral: 119_647_058_823_529_411_765,
+                aboveWithdrawal: 1e18,
+                aboveRemainingCollateral: 118_647_058_823_529_411_765,
+                aboveHealth: 1_008_499_999_999_999_999,
+                boundaryInitialCollateral: 118_647_058_823_529_411_765,
+                boundaryWithdrawal: 1e18,
+                boundaryRemainingCollateral: 117_647_058_823_529_411_765,
+                boundaryHealth: 1e18,
+                belowInitialCollateral: 118_647_058_823_529_411_765,
+                belowWithdrawal: 1e18 + 1,
+                belowRemainingCollateral: 117_647_058_823_529_411_764,
+                belowHealth: 999_999_999_999_999_999
+            });
+    }
+}
+
+contract BurnerLoansWithdrawCollateralSixDecimalCollateralBoundaryTest is
+    BurnerLoansWithdrawCollateralBoundaryTestBase
+{
+    function _collateralDecimals() internal pure override returns (uint8) {
+        return 6;
+    }
+
+    function _boundaryScenario() internal pure override returns (BoundaryScenario memory) {
+        // debtValueUsd = 1e9 OHM * $100e18 / 1e9 = $100e18.
+        // requiredUsd = ceil($100e18 * 10_000 / 8_500) = $117_647_058_823_529_411_765.
+        // minimumCollateral = ceil(requiredUsd * 1e6 / $1e18) = 117_647_059.
+        // boundaryRemainingCollateral = minimumCollateral = 117_647_059.
+        // boundaryInitialCollateral = boundaryRemainingCollateral + 1e6 = 118_647_059.
+        // aboveRemainingCollateral = minimumCollateral + 1e6 = 118_647_059.
+        // aboveInitialCollateral = aboveRemainingCollateral + 1e6 = 119_647_059.
+        // disabledInitialCollateral = minimumCollateral + 5e6 = 122_647_059.
+        // disabledWithdrawal = 5e6, so disabledRemainingCollateral
+        //                    = disabledInitialCollateral - disabledWithdrawal
+        //                    = 117_647_059.
+        // belowRemainingCollateral = minimumCollateral - 1 = 117_647_058.
+        // belowInitialCollateral = minimumCollateral + 1e6 = 118_647_059, so withdrawing 1e6 + 1
+        // leaves belowRemainingCollateral.
+        // The 6-decimal collateral USD value is collateral * $1e18 / 1e6 = collateral * $1e12.
+        // boundaryHealth = floor($117_647_059e12 * 1e18 / requiredUsd)
+        //                = 1_000_000_001_499_999_999.
+        // disabledHealth = floor($117_647_059e12 * 1e18 / requiredUsd)
+        //                = 1_000_000_001_499_999_999.
+        // aboveHealth = floor($118_647_059e12 * 1e18 / requiredUsd)
+        //             = 1_008_500_001_499_999_999.
+        // belowHealth = floor($117_647_058e12 * 1e18 / requiredUsd)
+        //             = 999_999_992_999_999_999.
+        return
+            BoundaryScenario({
+                disabledInitialCollateral: 122_647_059,
+                disabledWithdrawal: 5e6,
+                disabledRemainingCollateral: 117_647_059,
+                disabledHealth: 1_000_000_001_499_999_999,
+                aboveInitialCollateral: 119_647_059,
+                aboveWithdrawal: 1e6,
+                aboveRemainingCollateral: 118_647_059,
+                aboveHealth: 1_008_500_001_499_999_999,
+                boundaryInitialCollateral: 118_647_059,
+                boundaryWithdrawal: 1e6,
+                boundaryRemainingCollateral: 117_647_059,
+                boundaryHealth: 1_000_000_001_499_999_999,
+                belowInitialCollateral: 118_647_059,
+                belowWithdrawal: 1e6 + 1,
+                belowRemainingCollateral: 117_647_058,
+                belowHealth: 999_999_992_999_999_999
+            });
+    }
+}
+
 contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     address internal operator;
     address internal recipient;
@@ -360,34 +655,6 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
         assertEq(amountOut, 1e6, "amount out");
         assertEq(remaining, 0, "remaining");
-    }
-
-    // Condition tree:
-    // - Caller: owner
-    // - Position state: active debt with fresh PRICE and healthy remaining collateral
-    // - Asset state: disabled after configuration
-    // - Expected branch: withdrawal succeeds because asset disable only blocks new exposure
-    function test_withdrawCollateral_givenAssetOriginationsDisabledAndActiveDebt_succeeds() public {
-        _depositForAlice(120e6);
-        _setActiveDebtPosition(120e6, 1e9);
-        _setFreshPrices(100e18, 1e18);
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
-
-        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
-            address(usds),
-            5e6,
-            alice
-        );
-
-        vm.prank(alice);
-        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
-            .withdrawCollateral(address(usds), 5e6, alice, alice);
-
-        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
-        assertEq(amountOut, 5e6, "amount out");
-        assertEq(remaining, 115e6, "remaining");
-        assertEq(health, 1e18, "health");
     }
 
     // Condition tree:
@@ -833,108 +1100,6 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             "receipt balance"
         );
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "burner loans residual");
-    }
-
-    // Condition tree:
-    // - Caller: owner
-    // - Position state: active debt with fresh PRICE
-    // - Withdrawal amount: fuzzed to leave collateral one USDS above the exact health boundary
-    // - Expected branch: preview and write succeed with health strictly above 1e18
-    function test_withdrawCollateral_givenActiveDebtAboveHealthBoundary_succeeds(
-        uint256 debtWholeOhm_
-    ) public {
-        debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
-        uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
-        _depositForAlice(requiredCollateral + 2e6);
-        _setActiveDebtPosition(requiredCollateral + 2e6, debtOhm);
-        _setFreshPrices(100e18, 1e18);
-
-        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
-            address(usds),
-            1e6,
-            alice
-        );
-
-        assertTrue(preview.executable, "preview executable");
-        assertGt(preview.resultingHealthFactor, 1e18, "preview health");
-
-        vm.prank(alice);
-        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
-            .withdrawCollateral(address(usds), 1e6, alice, alice);
-
-        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
-        assertEq(remaining, requiredCollateral + 1e6, "remaining");
-        assertGt(health, 1e18, "health");
-    }
-
-    // Condition tree:
-    // - Caller: owner
-    // - Position state: active debt with fresh PRICE
-    // - Withdrawal amount: fuzzed to leave collateral exactly at the health boundary
-    // - Expected branch: preview and write succeed with health equal to 1e18
-    function test_withdrawCollateral_givenActiveDebtAtHealthBoundary_succeeds(
-        uint256 debtWholeOhm_
-    ) public {
-        debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
-        uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
-        _depositForAlice(requiredCollateral + 1e6);
-        _setActiveDebtPosition(requiredCollateral + 1e6, debtOhm);
-        _setFreshPrices(100e18, 1e18);
-
-        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
-            address(usds),
-            1e6,
-            alice
-        );
-
-        assertTrue(preview.executable, "preview executable");
-        assertEq(preview.resultingHealthFactor, 1e18, "preview health");
-
-        vm.prank(alice);
-        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
-            .withdrawCollateral(address(usds), 1e6, alice, alice);
-
-        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
-        assertEq(remaining, requiredCollateral, "remaining");
-        assertEq(health, 1e18, "health");
-    }
-
-    // Condition tree:
-    // - Caller: owner
-    // - Position state: active debt with fresh PRICE
-    // - Withdrawal amount: fuzzed to leave collateral one unit below the health boundary
-    // - Expected branch: preview marks the result non-executable and write reverts before custody withdrawal
-    function test_withdrawCollateral_givenActiveDebtBelowHealthBoundary_reverts(
-        uint256 debtWholeOhm_
-    ) public {
-        debtWholeOhm_ = bound(debtWholeOhm_, 1, 100);
-        uint256 debtOhm = debtWholeOhm_ * 1e9;
-        uint128 requiredCollateral = uint128(debtWholeOhm_ * 115e6);
-        _depositForAlice(requiredCollateral + 1e6);
-        _setActiveDebtPosition(requiredCollateral + 1e6, debtOhm);
-        _setFreshPrices(100e18, 1e18);
-
-        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
-            address(usds),
-            1e6 + 1,
-            alice
-        );
-
-        assertFalse(preview.executable, "preview executable");
-        assertLt(preview.resultingHealthFactor, 1e18, "preview health");
-
-        vm.prank(alice);
-        vm.expectPartialRevert(IBurnerLoans.BurnerLoans_UnhealthyWithdrawal.selector);
-        burnerLoans.withdrawCollateral(address(usds), 1e6 + 1, alice, alice);
-
-        assertEq(usds.balanceOf(alice), 0, "alice balance");
-        assertEq(
-            burnerLoans.getPosition(address(usds), alice).depositedCollateral,
-            requiredCollateral + 1e6,
-            "position"
-        );
     }
 
     // Condition tree:

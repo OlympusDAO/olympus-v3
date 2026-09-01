@@ -17,7 +17,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
-        ) = _collateralFactorUpdate();
+        ) = _maxLtvUpdate();
         _authorizeHarness();
 
         vm.prank(burnerLoansAdmin);

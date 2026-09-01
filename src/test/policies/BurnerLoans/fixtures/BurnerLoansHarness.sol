@@ -24,7 +24,7 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 debtValueUsd;
         uint256 debtOhm;
         uint256 backingPerOhmUsd;
-        uint256 minCollateralRatioBps;
+        uint256 maxLtvBps;
         uint256 backingMultiplierBps;
     }
 
@@ -79,17 +79,6 @@ contract BurnerLoansHarness is BurnerLoans {
             );
     }
 
-    function riskAdjustedCollateralUsd(
-        uint256 collateralValueUsd_,
-        uint256 collateralFactorBps_
-    ) external pure returns (uint256) {
-        return
-            BurnerLoansCalculator.riskAdjustedCollateralUsd(
-                collateralValueUsd_,
-                collateralFactorBps_
-            );
-    }
-
     function requiredBackingUsd(
         uint256 debtOhm_,
         uint256 backingPerOhmUsd_,
@@ -115,7 +104,7 @@ contract BurnerLoansHarness is BurnerLoans {
                 inputs_.debtOhm,
                 inputs_.backingPerOhmUsd,
                 _OHM_DECIMALS,
-                inputs_.minCollateralRatioBps,
+                inputs_.maxLtvBps,
                 inputs_.backingMultiplierBps
             );
     }
@@ -135,11 +124,10 @@ contract BurnerLoansHarness is BurnerLoans {
     }
 
     function healthFactor(
-        uint256 riskAdjustedCollateralUsd_,
+        uint256 collateralValueUsd_,
         uint256 requiredCollateralUsd_
     ) external pure returns (uint256) {
-        return
-            BurnerLoansCalculator.healthFactor(riskAdjustedCollateralUsd_, requiredCollateralUsd_);
+        return BurnerLoansCalculator.healthFactor(collateralValueUsd_, requiredCollateralUsd_);
     }
 
     function utilizationBps(uint256 debt_, uint256 cap_) external pure returns (uint256) {

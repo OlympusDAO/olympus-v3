@@ -151,8 +151,7 @@ library BurnerLoansMarketConfig {
             IBurnerLoans.AssetConfig({
                 originationsEnabled: market_.originationsEnabled,
                 collateralDecimals: market_.collateralDecimals,
-                collateralFactorBps: market_.collateralFactorBps,
-                minCollateralRatioBps: market_.minCollateralRatioBps,
+                maxLtvBps: market_.maxLtvBps,
                 backingMultiplierBps: data.backingMultiplierBps,
                 keeperRewardBps: data.keeperRewardBps,
                 termLength: market_.termLength,
