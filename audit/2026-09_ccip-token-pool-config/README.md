@@ -62,11 +62,10 @@ The four shared abstraction files are in scope. The CCIP copies match PR `#330` 
 for Solidity pragma normalization. For `TimelockBatchQueue`, only the `_onActionExecuted` hook and
 its invocation are in scope.
 
-### Lifecycle Mix-Ins
+### Lifecycle and Authorization Mix-Ins
 
-Both policies inherit the shared enable, disable, re-enable and grace-period mix-ins. These files
-were added by the LayerZero bridge remediation commit and were reviewed by Guardian, but they were
-never listed in an official audit scope. They are in scope here.
+Both policies inherit the shared enable, disable, re-enable and grace-period mix-ins, and the
+role-gate mix-in beneath them. All of these files are in scope here.
 
 - [PolicyEnablerV2](../../src/policies/utils/PolicyEnablerV2.sol)
 - [EnablerV2](../../src/bases/EnablerV2.sol) and its
@@ -76,6 +75,21 @@ never listed in an official audit scope. They are in scope here.
     [interface](../../src/bases/interfaces/IReEnabler.sol)
 - [ReEnablerGracePeriod](../../src/bases/ReEnablerGracePeriod.sol) and its
     [interface](../../src/bases/interfaces/IGracePeriod.sol)
+- [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol) and its
+    [interface](../../src/policies/interfaces/utils/IPolicyAdmin.sol)
+
+The lifecycle mix-ins were added during the LayerZero bridge audit by remediation commit
+[`c374e6bb`](https://github.com/OlympusDAO/olympus-v3/commit/c374e6bb35c8c22447d09ffdf294a9afb7a9fb82)
+(PR [`#258`](https://github.com/OlympusDAO/olympus-v3/pull/258)), so that audit covered them. They
+are re-listed here because the CCIP policies are the first to use the grace-window re-enable path
+in production, and because both policies override the mix-in hooks. `IEnabler` predates them and
+comes from Cooler V2.
+
+`PolicyAdminOptimized` was in the LayerZero bridge audit scope, but its interface `IPolicyAdmin`
+was not listed there. Both are in scope here so that the errors, events and role semantics the CCIP
+policies inherit are covered as one unit. The hooks the two policies override
+(`_authorizeReEnable`, `_authorizeSetGracePeriod`, `_authorizeSetConfigOperator`, `_beforeEnable`,
+`_beforeReEnable`) and the resulting authorization are in scope.
 
 ### Partial-File Scope
 
@@ -127,10 +141,10 @@ code-size limit, so a deployment that bypasses that profile cannot succeed.
     does not modify them and both were reviewed in the 2025 CCIP audit.
 - [RoleDefinitions](../../src/policies/utils/RoleDefinitions.sol). CCIP reuses the existing
     `bridge_admin` and `bridge_rate_limiter` constants and changes only their explanatory comments.
-- [PolicyAdminOptimized](../../src/policies/utils/PolicyAdminOptimized.sol). It was audited as
-    part of the 2026 LayerZero bridge upgrade. The hooks the two policies override
-    (`_authorizeReEnable`, `_authorizeSetGracePeriod`, `_authorizeSetConfigOperator`,
-    `_beforeEnable`, `_beforeReEnable`) and the resulting authorization remain in scope.
+- The deployed Default Framework floor that the policies build on and that this work does not
+    change: [Kernel](../../src/Kernel.sol), [ROLES.v1](../../src/modules/ROLES/ROLES.v1.sol),
+    [OlympusRoles](../../src/modules/ROLES/OlympusRoles.sol) and
+    [IVersioned](../../src/interfaces/IVersioned.sol).
 - [DeployV2](../../src/scripts/deploy/DeployV2.sol). Its executable code is unchanged; only the
     general deploy-profile guidance in comments was updated.
 - Tests, shell scripts, deployment JSON, `env.json` values and Anvil rehearsal tooling. The unit and
@@ -152,7 +166,9 @@ code-size limit, so a deployment that bypasses that profile cannot succeed.
     [report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-06-Bridge.pdf)
     and [audit package](../2026-03_lz-bridge-upgrade/README.md). Its scope list covers the
     LayerZero V2 bridge architecture and, among the shared bases this work reuses,
-    `TimelockBatchQueue`, `ITimelockBatchQueue` and `PolicyAdminOptimized`. Only the new
+    `TimelockBatchQueue`, `ITimelockBatchQueue` and `PolicyAdminOptimized`. Its remediation commit
+    [`c374e6bb`](https://github.com/OlympusDAO/olympus-v3/commit/c374e6bb35c8c22447d09ffdf294a9afb7a9fb82)
+    added the lifecycle mix-ins listed above, which that audit also covered. Only the new
     `TimelockBatchQueue` execution hook is part of this audit's scope.
 
 ## Architecture
