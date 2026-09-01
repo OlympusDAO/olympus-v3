@@ -1151,6 +1151,7 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
         verifyDelegationsZero(ALICE);
     }
 
+    /// forge-config: default.isolate = true
     function test_rescindDelegations_gas() public {
         uint256 totalCollateral = 100_000e18;
         // This previously used 100 delegates. 75 still measures a large batch while keeping the
@@ -1180,14 +1181,14 @@ contract DLGTETestRescindDelegations is DLGTETestBase {
             totalCollateral,
             type(uint256).max
         );
-        // Isolated execution starts with cold delegate escrows and storage. Forge previously
-        // measured this at approximately 2.96 million gas. Forge commit 6170b24d separated regular
-        // gas from state gas, which raised the gasleft() delta to approximately 3.70 million without
-        // changing the DLGTE implementation. Retain a small regression margin above the new
-        // tool-specific baseline.
+        // Isolated execution starts with cold delegate escrows and storage, which is what a real
+        // transaction pays. That more than doubles the measurement: this rescind costs 1,359,884
+        // gas without isolation and 2,961,509 gas with it. Both figures are identical on Forge
+        // 1.7.1 and 1.8.1, so the limit below tracks the isolation setting rather than the
+        // toolchain version.
         assertLt(
             gasBefore - gasleft(),
-            3_900_000,
+            3_100_000,
             "cold rescindDelegations gas should remain below the regression limit"
         );
     }
