@@ -97,13 +97,13 @@ The scripts treat `env.json` as the desired state and the chain as the live stat
                 }
             }
         },
-        "CCIPCrossChainBridge": {"chains": ["arbitrum", "base", "berachain", "optimism", "solana"]},
         "CCIPTokenPoolConfig": {
             "gracePeriod": 259200,
             "rateLimitAdmin": "0x0000000000000000000000000000000000000000",
             "rebalancer": "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39",
             "timelockDelay": 86400
-        }
+        },
+        "CCIPCrossChainBridge": {"chains": ["arbitrum", "base", "berachain", "optimism", "solana"]}
     },
     "policies": {
         "CCIPTokenPoolConfig": "0x...",
@@ -130,13 +130,13 @@ Removing a route or a remote pool rejects in-flight messages from that remote; t
 For canonical chains (mainnet and sepolia):
 
 ```bash
-./shell/deployV3.sh --account account src/scripts/deploy/savedDeployments/ccip_bridge_mainnet.json --chain false --verify false < cast > --sequence < CHAIN > --broadcast
+./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_bridge_mainnet.json --chain <CHAIN> --broadcast false --verify false
 ```
 
 For non-canonical chains, the full triad plus the periphery deploys as one sequence (`_getAddressNotZero` resolves the pool for the config policy from the same run):
 
 ```bash
-./shell/deployV3.sh --account account src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json --chain false --verify false < cast > --sequence < CHAIN > --broadcast
+./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json --chain <CHAIN> --broadcast false --verify false
 ```
 
 `<CHAIN>` is `arbitrum`, `optimism`, `base` or `berachain`. (`ccip_bridge_not_mainnet.json` deploys only the pool and the periphery, for a chain that already has its config policies.)
@@ -146,7 +146,7 @@ For non-canonical chains, the full triad plus the periphery deploys as one seque
 The config policy is bound to the local pool at construction, and the timelock to the config policy, so the sequence deploys `CCIPTokenPoolConfig` first and `CCIPTokenPoolConfigTimelock` second:
 
 ```bash
-./shell/deployV3.sh --account account src/scripts/deploy/savedDeployments/ccip_config_mainnet.json --chain mainnet --broadcast false --verify false < cast > --sequence
+./shell/deployV3.sh --account < cast account > --sequence src/scripts/deploy/savedDeployments/ccip_config_mainnet.json --chain mainnet --broadcast false --verify false
 ```
 
 (`ccip_config_not_mainnet.json` is the equivalent for non-canonical chains.) `gracePeriod` and `initialTimelockDelay` default to `olympus.config.CCIPTokenPoolConfig.gracePeriod` and `.timelockDelay` of the chain and can be overridden per entry in the sequence `args`. The timelock constructor requires the config policy to report the same Kernel and to advertise `ICCIPTokenPoolConfig`, `IConfigOperator` and `IEnabler`, so a wrong config address fails at deployment.
@@ -157,11 +157,9 @@ The config policy is bound to the local pool at construction, and the timelock t
 
 ```bash
 FOUNDRY_PROFILE=deploy forge verify-contract <address> src/policies/bridge/CCIPTokenPoolConfigTimelock.sol:CCIPTokenPoolConfigTimelock \
-    --chain <CHAIN> --constructor-args $(cast abi-encode "constructor(address,address,uint48,uint32)" <kernel> <config> <initialTimelockDelay> <gracePeriod>) \
+    --chain mainnet --constructor-args $(cast abi-encode "constructor(address,address,uint48,uint32)" <kernel> <config> 86400 259200) \
     --etherscan-api-key $ETHERSCAN_KEY
 ```
-
-`<initialTimelockDelay>` and `<gracePeriod>` must equal the deployed values: the sequence `args` override if the entry sets one, otherwise `olympus.config.CCIPTokenPoolConfig.timelockDelay` and `.gracePeriod` of that chain. Read them back from the contract (`timelockDelay()`, `gracePeriod()`) if in doubt.
 
 The settings are the same for all four CCIP contracts (the pool, the config policy, the config timelock and the periphery), so the only per-contract inputs are the path, the name and the constructor arguments.
 
@@ -180,7 +178,7 @@ Deploy the config policy and the timelock as above and check `config.pool()`, `t
 The DAO MS is the Kernel executor, the pool owner and the OHM administrator, so only it can activate the policies, propose the new pool owner and nominate the new OHM administrator:
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPTokenPoolConfigBatch --function prepareHandover --multisig true --account account mainnet --broadcast false < cast > --chain
+./shell/safeBatchV2.sh --contract CCIPTokenPoolConfigBatch --function prepareHandover --multisig true --account < cast account > --chain mainnet --broadcast false
 ```
 
 The batch adds `Kernel.executeAction(ActivatePolicy, ...)` for each policy that is not active, `pool.transferOwnership(config)` unless the config policy already owns or is pending owner of the pool, and `TokenAdminRegistry.transferAdminRole(OHM, OCG timelock)` unless the OCG timelock is already the administrator or the pending administrator. Neither transfer is accepted here. A second run on a converged state proposes nothing (`No batch targets to execute`).
@@ -193,7 +191,7 @@ The build fails closed unless: the live routes (Solana) match `env.json` exactly
 
 ```bash
 ./src/scripts/proposals/printInputs.sh --file src/proposals/CCIPTokenPoolConfigProposal.sol --contract CCIPTokenPoolConfigProposalScript --chain mainnet
-./src/scripts/proposals/submitProposal.sh --file src/proposals/CCIPTokenPoolConfigProposal.sol --contract CCIPTokenPoolConfigProposalScript --account account mainnet --broadcast true --env .env < cast > --chain
+./src/scripts/proposals/submitProposal.sh --file src/proposals/CCIPTokenPoolConfigProposal.sol --contract CCIPTokenPoolConfigProposalScript --account < cast account > --chain mainnet --broadcast true --env .env
 ```
 
 ### After the proposal
@@ -213,9 +211,9 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 
     ```bash
     FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPool.sol:CCIPTokenPool \
-        --sig "transferTokenPoolAdminRoleToDaoMS()" --rpc-url account EOA --broadcast < CHAIN > --account < cast > --sender < deployer > --slow
+        --sig "transferTokenPoolAdminRoleToDaoMS()" --rpc-url <CHAIN> --account < cast account > --sender <deployer EOA> --slow --broadcast
     FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPool.sol:CCIPTokenPool \
-        --sig "acceptAdminRole(bool)" true --rpc-url account --broadcast < CHAIN > --account < cast > --sender < signer > --slow
+        --sig "acceptAdminRole(bool)" true --rpc-url <CHAIN> --account < cast account > --sender <signer> --slow --broadcast
     ```
 
     Confirm custody of the EOA key before starting; after the acceptance the key is no longer needed for CCIP.
@@ -225,8 +223,8 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 
     ```bash
     FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPool.sol:CCIPTokenPool \
-        --sig "transferTokenPoolOwnershipToConfig()" --rpc-url account --broadcast < CHAIN > --account < cast > --sender < deployer > --slow
-    ./shell/safeBatchV2.sh --contract CCIPBridge --function transferOwnership --account account true < cast > --chain < CHAIN > --broadcast
+        --sig "transferTokenPoolOwnershipToConfig()" --rpc-url <CHAIN> --account < cast account > --sender <deployer> --slow --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPBridge --function transferOwnership --account < cast account > --chain <CHAIN> --broadcast true
     ```
 
 4. **Funding (mainnet, DAO MS).** Re-read `shell/calc_bridged_supply.sh`, update `olympus.config.CCIP.minimumPoolBacking`, then `CCIPTokenPool.fundPool` transfers the shortfall from the DAO MS to the pool. This backs the OHM already minted on the L2s by the legacy LayerZero bridge (about 130,721 OHM; Optimism is zero).
@@ -234,7 +232,7 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 6. **Setup (per chain, DAO MS, during the voting window).**
 
     ```bash
-    ./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function setup --multisig true --account account false < cast > --chain < CHAIN > --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function setup --multisig true --account < cast account > --chain <CHAIN> --broadcast false
     ```
 
     Deactivates the legacy LayerZero `CrossChainBridge` in the Kernel (asserting `bridgeActive` false and zero mint approval first), activates the three policies, grants `admin` (chain wide!) and any missing `bridge_admin`/`emergency`, enables the config policy and the timelock, accepts the pool ownership, sets the config operator and adds the routes from `env.json` directly under `admin`. It does **not** enable the pool and does not register it, so the chain stays inert: no outbound send and no inbound delivery can touch the pool yet.
@@ -243,7 +241,7 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 8. **Finalize (per chain, DAO MS, immediately after execution).**
 
     ```bash
-    ./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function finalize --multisig true --account account false < cast > --chain < CHAIN > --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function finalize --multisig true --account < cast account > --chain <CHAIN> --broadcast false
     ```
 
     `pool.enable` and `TokenAdminRegistry.setPool(OHM, pool)`, in that order. The order between the chains does not matter.
@@ -262,7 +260,7 @@ The batches below run against any chain that carries the triad: `--chain mainnet
 ### Routes and rate limits (DAO MS, through the timelock)
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function reconcileRoutes --multisig true --account account mainnet --broadcast false < cast > --chain
+./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function reconcileRoutes --multisig true --account < cast account > --chain mainnet --broadcast false
 ```
 
 The reconciler compares every route of `olympus.config.CCIP.routes` with the pool field by field (existence, remote token, the set of accepted remote pools, both rate limits) and queues the minimal set of typed actions: `queueAddChain` for a missing route, `queueSetRemoteToken`, `queueAddRemotePool` / `queueRemoveRemotePool`, `queueSetChainRateLimits`, and `queueRemoveChain` only for a route declared with `enabled: false`. It prints the live state, the desired state and the plan. Before queueing it reads `pendingActionId` for every domain it touches: an action that already carries the same change is left alone, an action that holds the domain with another intent or has expired is cancelled and replaced. Each change is its own action, so a queued action that turned stale does not block the execution of the others; the reconcile run itself fails closed as a whole on the first invalid desired route. The timelock admits one unresolved action per domain, so a route that needs several remote-pool changes, or a remote token change together with other changes, converges over several runs; the reconciler says what it deferred.
@@ -270,13 +268,13 @@ The reconciler compares every route of `olympus.config.CCIP.routes` with the poo
 Once the delay has elapsed, anyone can execute:
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function executeReadyActions --account account mainnet --broadcast false < cast > --chain
+./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function executeReadyActions --account < cast account > --chain mainnet --broadcast false
 ```
 
 This runs from the cast account (the EOA path, no multisig); flip `--broadcast` to `true` to send. Readiness and expiry are evaluated when the script runs, so run it once the delay has elapsed rather than ahead of time. It dry-runs every ready action and reports the ones that would revert (stale after a direct `admin` change or a containment, disabled policy, lost pool ownership) instead of including them. A stale or expired action keeps its keys until it is cancelled:
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function cancelQueuedAction --multisig true --account account mainnet --broadcast false --args src/scripts/ops/batches/args/CCIPRouteReconcileBatch_cancelQueuedAction.json < cast > --chain
+./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function cancelQueuedAction --multisig true --account < cast account > --chain mainnet --broadcast false --args src/scripts/ops/batches/args/CCIPRouteReconcileBatch_cancelQueuedAction.json
 ```
 
 (`cancelQueuedActionEmergency` is the same with the Emergency MS as owner.) Running `reconcileRoutes` again after a cancellation re-queues whatever is still missing.
@@ -290,7 +288,7 @@ The `admin` role (OCG) can call the route functions of the config policy directl
 `src/scripts/ops/batches/CCIPBridge.sol` is a declarative reconciler:
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPBridge --function reconcileTrustedRemotes --multisig true --account account false < cast > --chain < CHAIN > --broadcast
+./shell/safeBatchV2.sh --contract CCIPBridge --function reconcileTrustedRemotes --multisig true --account < cast account > --chain <CHAIN> --broadcast false
 ```
 
 It compares the trusted remote and the gas limit of every declared `periphery` block independently (a matching remote does not mask a stale gas limit), adds only the differing fields, unsets a remote only for a route or `periphery` block declared with `enabled: false`, reports live remotes without a block, and proposes nothing on a converged state. `enable`, `disable` and `transferOwnership` (to the DAO MS) are the remaining entry points, each conditional and gated on the periphery owner. Disabling the periphery does not stop pool transfers.
@@ -306,7 +304,7 @@ Disabling the config policy, the timelock or the periphery does not stop transfe
 - Contain one route (writes `{isEnabled: true, capacity: 2, rate: 1}` to both buckets, so every real transfer fails immediately; not gated on the config policy being enabled). The `emergency`, `admin`, `bridge_admin` and `bridge_rate_limiter` roles can all call it, so either multisig acts on its own. Emergency MS:
 
     ```bash
-    ./shell/safeBatchV2.sh --contract CCIPTokenPoolConfigBatch --function disableChainEmergencyMS --multisig true --account account false --args src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain.json < cast > --chain < CHAIN > --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPTokenPoolConfigBatch --function disableChainEmergencyMS --multisig true --account < cast account > --chain <CHAIN> --broadcast false --args src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain.json
     ```
 
     DAO MS as `bridge_admin`: the same batch without the `EmergencyMS` suffix (`--function disableChain`), which reads the args entry of that name. The `remoteChain` argument names the route to contain, so the args file is chain specific: the unsuffixed file names the Solana route, which is what mainnet contains, and `CCIPTokenPoolConfigBatch_disableChain_mainnet.json` names the mainnet route, which is what a burn/mint chain contains.
