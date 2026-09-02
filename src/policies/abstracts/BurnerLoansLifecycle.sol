@@ -144,7 +144,8 @@ abstract contract BurnerLoansLifecycle is
     }
 
     /// @notice Returns the decoded Burner Loans market for an asset.
-    /// @dev Reverts when the market is absent, ambiguous, uses another schema, or has malformed data.
+    /// @dev Reverts when no matching market exists, or when the earliest matching market uses
+    ///      another schema or has malformed data.
     /// @param asset_ Collateral asset whose market is required.
     /// @return marketId_ Resolved FLOAN market identifier.
     /// @return config Decoded Burner Loans asset configuration.
