@@ -1,38 +1,98 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-
 /// @title Burner Loans Inventory Interface
 /// @notice Custodies supplied OHM and provides cap-bounded funding for one loan facility.
-interface IBurnerLoansInventory is IERC165 {
+interface IBurnerLoansInventory {
+    /// @notice A required address is zero.
     error BurnerLoansInventory_ZeroAddress();
+
+    /// @notice An operation was requested with a zero amount.
     error BurnerLoansInventory_ZeroAmount();
+
+    /// @notice A linked Burner Loans policy is incompatible.
+    /// @param policy Invalid policy address.
     error BurnerLoansInventory_InvalidPolicy(address policy);
+
+    /// @notice A caller is not authorized for the requested Inventory operation.
+    /// @param caller Unauthorized caller.
     error BurnerLoansInventory_Unauthorized(address caller);
+
+    /// @notice A proposed debt cap is below active principal.
+    /// @param cap Proposed global debt cap.
+    /// @param activePrincipal Current active principal.
     error BurnerLoansInventory_InvalidCap(uint256 cap, uint256 activePrincipal);
+
+    /// @notice A draw exceeds the remaining global principal capacity.
+    /// @param requested Requested OHM amount.
+    /// @param available Available OHM capacity.
     error BurnerLoansInventory_InsufficientCapacity(uint256 requested, uint256 available);
+
+    /// @notice A withdrawal exceeds the provider's outstanding claim.
+    /// @param requested Requested OHM amount.
+    /// @param available Available provider claim.
     error BurnerLoansInventory_InsufficientClaim(uint256 requested, uint256 available);
+
+    /// @notice A withdrawal exceeds supplied OHM currently held idle.
+    /// @param requested Requested OHM amount.
+    /// @param available Available supplied idle OHM.
     error BurnerLoansInventory_InsufficientIdle(uint256 requested, uint256 available);
+
+    /// @notice A repayment or default exceeds active principal.
+    /// @param requested Requested principal reduction.
+    /// @param activePrincipal Current active principal.
     error BurnerLoansInventory_ExcessivePrincipal(uint256 requested, uint256 activePrincipal);
+
+    /// @notice The Inventory balance cannot support its recorded liabilities or settlement.
+    /// @param required Required OHM balance.
+    /// @param actual Actual OHM balance.
     error BurnerLoansInventory_InsufficientBalance(uint256 required, uint256 actual);
+
+    /// @notice A required Kernel module uses an unsupported major version.
     error BurnerLoansInventory_InvalidModuleVersion();
+
+    /// @notice A linked policy or module reports a different OHM token.
+    /// @param expected Expected OHM token.
+    /// @param actual Reported OHM token.
     error BurnerLoansInventory_InvalidOhm(address expected, address actual);
 
+    /// @notice Emitted when the maximum active principal changes.
+    /// @param capOhm New global debt cap in OHM decimals.
     event GlobalDebtCapSet(uint256 capOhm);
+
+    /// @notice Emitted when the authorized Config policy changes.
+    /// @param configurator New Config policy.
     event ConfiguratorSet(address indexed configurator);
+
+    /// @notice Emitted when a provider supplies protocol-owned OHM.
+    /// @param provider Provider whose claim increases.
+    /// @param amount OHM supplied.
+    /// @param providerClaimOhm Provider claim after supply.
+    /// @param suppliedOhm Aggregate provider claims after supply.
     event OhmSupplied(
         address indexed provider,
         uint256 amount,
         uint256 providerClaimOhm,
         uint256 suppliedOhm
     );
+
+    /// @notice Emitted when a provider withdraws idle supplied OHM.
+    /// @param provider Provider whose claim decreases.
+    /// @param amount OHM withdrawn.
+    /// @param providerClaimOhm Provider claim after withdrawal.
+    /// @param suppliedOhm Aggregate provider claims after withdrawal.
     event OhmWithdrawn(
         address indexed provider,
         uint256 amount,
         uint256 providerClaimOhm,
         uint256 suppliedOhm
     );
+
+    /// @notice Emitted when Inventory funds a loan draw.
+    /// @param recipient Account receiving OHM.
+    /// @param amount Total OHM drawn.
+    /// @param suppliedAmount Portion funded from supplied idle OHM.
+    /// @param mintedAmount Portion funded by newly minted OHM.
     event OhmDrawn(
         address indexed recipient,
         uint256 amount,
@@ -41,8 +101,15 @@ interface IBurnerLoansInventory is IERC165 {
     );
     /// @notice Reports the repayment accounted and the portions actually retained and burned.
     /// @dev A failed burn reports zero `burnedAmount`; `OhmBurnFailed` reports the surplus amount.
+    /// @param amount Principal repayment settled.
+    /// @param retainedAmount Repayment retained to replenish supplied idle OHM.
+    /// @param burnedAmount Repayment burned through MINTR.
     event RepaymentSettled(uint256 amount, uint256 retainedAmount, uint256 burnedAmount);
+
+    /// @notice Emitted when defaulted principal is removed from active accounting.
+    /// @param amount Principal defaulted.
     event PrincipalDefaulted(uint256 amount);
+
     /// @notice Reports a failed MINTR approval restoration that requires an admin sync.
     /// @param amount Approval increase that was not applied.
     /// @param failureData Revert data returned by MINTR.
@@ -51,8 +118,17 @@ interface IBurnerLoansInventory is IERC165 {
     /// @param amount Repayment OHM left as surplus.
     /// @param failureData Revert data returned by MINTR.
     event OhmBurnFailed(uint256 amount, bytes failureData);
+
+    /// @notice Emitted after MINTR approval is reconciled to its cap-derived target.
+    /// @param approval Resulting mint approval.
     event MintApprovalSynchronized(uint256 approval);
+
+    /// @notice Emitted when all unaccounted OHM surplus is burned.
+    /// @param amount Surplus OHM burned.
     event SurplusBurned(uint256 amount);
+
+    /// @notice Emitted when all unaccounted OHM surplus is transferred to Treasury.
+    /// @param amount Surplus OHM rescued.
     event SurplusRescued(uint256 amount);
 
     /// @notice Sets the Burner Loans Config policy authorized to set the global debt cap.
@@ -68,8 +144,12 @@ interface IBurnerLoansInventory is IERC165 {
     function setGlobalDebtCap(uint128 capOhm_) external;
 
     /// @notice Supplies protocol-owned OHM and creates an equal provider claim.
-    /// @dev OHM is assumed not to charge transfer fees. Reverts when Burner Loans Inventory is
-    ///      disabled, the caller lacks `burner_loans_inventory_provider`, or the amount is zero.
+    /// @dev Reverts if:
+    ///      - Burner Loans Inventory is disabled.
+    ///      - The caller lacks `burner_loans_inventory_provider`.
+    ///      - `amount_` is zero.
+    ///      - The OHM transfer fails or Burner Loans Inventory receives an amount different from
+    ///        `amount_`.
     /// @param amount_ OHM supplied and credited, in OHM token decimals.
     function supply(uint128 amount_) external;
 

@@ -86,6 +86,35 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     }
 
     // repayAndWithdraw
+    // given the caller has active debt
+    //  when repaying partially without withdrawing collateral
+    //   then the repayment health sentinel is preserved
+    function test_givenActiveDebt_whenRepayingPartially_whenCollateralAmountIsZero() public {
+        _openPosition();
+        uint128 repayAmount = 40e9;
+        vm.prank(alice);
+        ohm.approve(address(composites), repayAmount);
+
+        vm.prank(alice);
+        IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
+            _emptyAuthorization(),
+            _emptySignature(),
+            _repayParams(repayAmount, 0, alice)
+        );
+
+        assertEq(result.repaidOhm, repayAmount, "repaid OHM");
+        assertEq(result.refundedOhm, 0, "refunded OHM");
+        assertEq(result.remainingCollateral, _COLLATERAL, "remaining collateral");
+        assertEq(result.healthFactor, 0, "unknown health sentinel");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            _BORROW - repayAmount,
+            "remaining debt"
+        );
+        _assertCompositeBalances(address(usds));
+    }
+
+    // repayAndWithdraw
     // given the caller has a debt-free position
     //  when maximum repayment is non-zero and collateral withdrawal is zero
     //   then the input is refunded and the debt-free health factor is returned

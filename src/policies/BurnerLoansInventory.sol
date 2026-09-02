@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -12,6 +11,7 @@ import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInvento
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -169,7 +169,12 @@ contract BurnerLoansInventory is
         _providerClaimOhm[msg.sender] += amount_;
         _suppliedIdleOhm += amount_;
         _suppliedOhm += amount_;
-        ERC20(address(_OHM)).safeTransferFrom(msg.sender, address(this), amount_);
+        TransferHelper.safeTransferFromExact(
+            ERC20(address(_OHM)),
+            msg.sender,
+            address(this),
+            amount_
+        );
         _reduceUnsafeApproval();
         emit OhmSupplied(msg.sender, amount_, _providerClaimOhm[msg.sender], _suppliedOhm);
     }
@@ -343,10 +348,8 @@ contract BurnerLoansInventory is
         return (1, 0);
     }
 
-    /// @inheritdoc IERC165
-    function supportsInterface(
-        bytes4 interfaceId_
-    ) public view override(EnablerV2, IERC165) returns (bool) {
+    /// @inheritdoc EnablerV2
+    function supportsInterface(bytes4 interfaceId_) public view override(EnablerV2) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansInventory).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||

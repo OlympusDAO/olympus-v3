@@ -10,6 +10,7 @@ import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
+import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -35,6 +36,10 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         assertTrue(
             burnerLoans.supportsInterface(type(IBurnerLoansView).interfaceId),
             "IBurnerLoansView"
+        );
+        assertTrue(
+            burnerLoans.supportsInterface(type(IBurnerLoansYieldClaim).interfaceId),
+            "IBurnerLoansYieldClaim"
         );
         assertFalse(
             burnerLoans.supportsInterface(type(ITimelockBatchQueue).interfaceId),

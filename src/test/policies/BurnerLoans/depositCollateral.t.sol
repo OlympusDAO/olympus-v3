@@ -1,24 +1,28 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+
+// Libraries
+import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+
+// Contracts
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
-
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
@@ -752,10 +756,49 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
+    // - Burner Loans balance state: the contract holds an unsolicited balance equal to the deposit
+    // - Token behavior: transferFrom reports success without delivering the caller's tokens
+    // - Expected branch: the caller's exact-receipt check rejects the deposit without consuming dust
+    function test_givenPreexistingBalance_givenUnderDeliveredTransfer_revertsWithoutCredit()
+        public
+    {
+        uint128 amount = 1_000e6;
+        usds.mint(address(burnerLoans), amount);
+        _mintAndApprove(address(usds), alice, amount);
+        vm.mockCall(
+            address(usds),
+            abi.encodeWithSelector(
+                ERC20.transferFrom.selector,
+                alice,
+                address(burnerLoans),
+                amount
+            ),
+            abi.encode(true)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                address(usds),
+                address(burnerLoans),
+                amount,
+                0
+            )
+        );
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(usds), amount, alice);
+
+        assertEq(usds.balanceOf(alice), amount, "alice balance rollback");
+        assertEq(usds.balanceOf(address(burnerLoans)), amount, "preexisting balance preserved");
+        assertEq(usds.balanceOf(address(depositManager)), 0, "custody balance");
+        assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
+    }
+
+    // Condition tree:
     // - Token behavior: both transferFrom legs charge a fee
     // - Onboarding state: asset is configured in DepositManager and BurnerLoansConfig
-    // - Expected branch: DepositManager's exact-receipt check rejects the first custody deposit
-    function test_givenFeeOnTransferAsset_revertsAtCustodyEntry() public {
+    // - Expected branch: Burner Loans' exact-receipt check rejects the caller transfer
+    function test_givenFeeOnTransferAsset_revertsAtBurnerLoansEntry() public {
         address feeRecipient = makeAddr("feeRecipient");
         MockERC20FeeOnTransfer feeToken = new MockERC20FeeOnTransfer(
             "Fee On Transfer",
@@ -780,7 +823,15 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         feeToken.approve(address(burnerLoans), amount);
 
         vm.prank(alice);
-        vm.expectRevert(IAssetManager.AssetManager_InvalidAsset.selector);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                address(feeToken),
+                address(burnerLoans),
+                amount,
+                amount - transferFee
+            )
+        );
         burnerLoans.depositCollateral(address(feeToken), amount, alice);
 
         assertEq(feeToken.balanceOf(alice), amount, "alice balance rollback");

@@ -8,6 +8,7 @@ import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
+import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
@@ -23,7 +24,11 @@ import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src
 /// @dev Scan and seizure failures are isolated so this non-essential task cannot
 ///      revert the Heart transaction or block later periodic tasks.
 contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
+    using ExcessivelySafeCall for address;
     using EnumerableSet for EnumerableSet.AddressSet;
+
+    /// @dev Maximum revert data copied from the gas-bounded self-call.
+    uint16 internal constant _MAX_RETURN_DATA_BYTES = 4;
 
     /// @notice Maximum borrowers that one execution may scan.
     uint16 public constant MAX_BORROWERS_TO_CHECK = 500;
@@ -146,10 +151,14 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
     /// @inheritdoc IPeriodicTask
     function execute() external override onlyRole(HEART_ROLE) {
         if (!isEnabled) return;
-        (bool success, bytes memory reason) = address(this).call{gas: executionGasLimit}(
+
+        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
+            executionGasLimit,
+            0,
+            _MAX_RETURN_DATA_BYTES,
             abi.encodeCall(this.selfExecuteTask, ())
         );
-        if (!success) emit ExecutionFailed(_reasonSelector(reason));
+        if (!success) emit ExecutionFailed(bytes4(reason));
     }
 
     /// @inheritdoc IBurnerLoansSeizer
@@ -163,6 +172,8 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
         uint256 assetCount = _assets.length();
         if (assetCount == 0) return;
 
+        // Advance the asset cursor before external work so every successful Heart tick rotates
+        // fairly even when scanning or seizure later fails for this asset.
         uint256 assetIndex = nextAssetIndex % assetCount;
         address asset = _assets.at(assetIndex);
         nextAssetIndex = assetIndex + 1 == assetCount ? 0 : assetIndex + 1;
@@ -183,18 +194,19 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
         returns (address[] memory borrowers, uint256 scannedNextIndex, uint256) {
             if (borrowers.length == 0) {
                 assetCursor[asset] = scannedNextIndex;
-                emit Executed(asset, startIndex, scannedNextIndex, 0);
+                emit SeizureExecuted(asset, startIndex, scannedNextIndex, 0);
                 return;
             }
 
             try IBurnerLoansLifecycle(_BURNER_LOANS).seize(asset, borrowers) {
+                // Commit the borrower cursor only after Burner Loans atomically settles the batch.
                 assetCursor[asset] = scannedNextIndex;
-                emit Executed(asset, startIndex, scannedNextIndex, borrowers.length);
+                emit SeizureExecuted(asset, startIndex, scannedNextIndex, borrowers.length);
             } catch (bytes memory reason) {
-                emit SeizureFailed(asset, _reasonSelector(reason));
+                emit SeizureFailed(asset, bytes4(reason));
             }
         } catch (bytes memory reason) {
-            emit ScanFailed(asset, _reasonSelector(reason));
+            emit ScanFailed(asset, bytes4(reason));
         }
     }
 
@@ -230,6 +242,9 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
             super.supportsInterface(interfaceId_);
     }
 
+    /// @notice Stores validated nonzero scan and seizure limits.
+    /// @dev Reverts when either limit exceeds its maximum or the seizure limit exceeds the scan
+    ///      limit.
     function _setScanLimits(uint16 maxBorrowersToCheck_, uint8 maxBorrowersToSeize_) private {
         if (
             maxBorrowersToCheck_ == 0 ||
@@ -245,16 +260,11 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
         emit ScanLimitsSet(maxBorrowersToCheck_, maxBorrowersToSeize_);
     }
 
+    /// @notice Stores the gas forwarded to the fail-soft self-call.
+    /// @dev Reverts when `executionGasLimit_` is zero.
     function _setExecutionGasLimit(uint32 executionGasLimit_) private {
         if (executionGasLimit_ == 0) revert BurnerLoansSeizer_InvalidExecutionGasLimit();
         executionGasLimit = executionGasLimit_;
         emit ExecutionGasLimitSet(executionGasLimit_);
-    }
-
-    function _reasonSelector(bytes memory reason_) private pure returns (bytes4 selector) {
-        if (reason_.length < 4) return bytes4(0);
-        assembly ("memory-safe") {
-            selector := mload(add(reason_, 0x20))
-        }
     }
 }

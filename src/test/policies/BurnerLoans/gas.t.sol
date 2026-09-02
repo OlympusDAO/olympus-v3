@@ -18,6 +18,7 @@ import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
@@ -376,11 +377,11 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         _assertGasRecorded(gasUsed);
     }
 
-    // harvestYield
+    // claimYield
     // given a vault-backed market has earned yield above borrower liabilities
-    //  when a keeper harvests the surplus
+    //  when a keeper claims the surplus
     //   then it records the end-to-end custody withdrawal gas cost
-    function test_gasSnapshot_harvestYield() public {
+    function test_gasSnapshot_claimYield_treasuryOnly() public {
         (MockERC20 asset, MockERC4626 vault) = _configureVaultMarket();
         uint128 collateral = 100e18;
         asset.mint(alice, collateral);
@@ -389,12 +390,42 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         burnerLoans.depositCollateral(address(asset), collateral, alice);
         vm.stopPrank();
         asset.mint(address(vault), 10e18);
+        uint256 treasuryBefore = asset.balanceOf(address(trsry));
 
-        vm.startSnapshotGas("BurnerLoans.harvestYield");
-        uint256 claimed = burnerLoans.harvestYield(address(asset));
+        vm.startSnapshotGas("BurnerLoans.claimYield.treasuryOnly");
+        burnerLoans.claimYield();
         uint256 gasUsed = vm.stopSnapshotGas();
+        uint256 claimed = asset.balanceOf(address(trsry)) - treasuryBefore;
 
         assertGt(claimed, 0, "claimed yield");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // claimYield
+    // given a vault-backed market has earned yield and a compatible recipient has a nonzero share
+    //  when a keeper claims the surplus
+    //   then it records the bounded validation and split-distribution gas cost
+    function test_gasSnapshot_claimYield_split() public {
+        (MockERC20 asset, MockERC4626 vault) = _configureVaultMarket();
+        MockYieldRecipient recipient = _configureYieldRecipient(asset, vault, 7_000);
+        uint128 collateral = 100e18;
+        asset.mint(alice, collateral);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), collateral);
+        burnerLoans.depositCollateral(address(asset), collateral, alice);
+        vm.stopPrank();
+        asset.mint(address(vault), 10e18);
+        uint256 treasuryBefore = asset.balanceOf(address(trsry));
+        uint256 recipientBefore = asset.balanceOf(address(recipient));
+
+        vm.startSnapshotGas("BurnerLoans.claimYield.split");
+        burnerLoans.claimYield();
+        uint256 gasUsed = vm.stopSnapshotGas();
+        uint256 recipientAmount = asset.balanceOf(address(recipient)) - recipientBefore;
+        uint256 claimed = recipientAmount + asset.balanceOf(address(trsry)) - treasuryBefore;
+
+        assertGt(claimed, 0, "claimed yield");
+        assertEq(recipientAmount, (claimed * 7_000) / 10_000, "recipient");
         _assertGasRecorded(gasUsed);
     }
 
@@ -774,6 +805,20 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
     }
 
+    function _configureYieldRecipient(
+        MockERC20 asset_,
+        MockERC4626 vault_,
+        uint16 bps_
+    ) internal returns (MockYieldRecipient recipient) {
+        vm.startPrank(admin);
+        recipient = new MockYieldRecipient(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        recipient.setVaultConfig(address(vault_), address(asset_), true);
+        burnerLoansConfig.setYieldRecipient(address(recipient));
+        burnerLoansConfig.setYieldRecipientAssetBps(address(asset_), bps_);
+        vm.stopPrank();
+    }
+
     function _supplyOhm(uint128 amount_) internal {
         ohm.mint(protocolProvider, amount_);
         vm.startPrank(protocolProvider);
@@ -866,7 +911,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         _assertEventEmitted(
             logs_,
             address(_seizer),
-            keccak256("Executed(address,uint256,uint256,uint256)")
+            keccak256("SeizureExecuted(address,uint256,uint256,uint256)")
         );
     }
 

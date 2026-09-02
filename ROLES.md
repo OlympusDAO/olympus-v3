@@ -32,6 +32,9 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_configurator | LZEndpointDelegate | Set send / receive libraries and the receive-library timeout, and set ULN / Executor endpoint config on the LayerZero endpoint. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | bridge_rate_limiter | LZBridgeAndDelegateConfig | Queue rate-limit and in-flight-clear sub-actions on the config policy |
+| burner_loans_admin | BurnerLoans, BurnerLoansConfig, BurnerLoansConfigTimelock, BurnerLoansInventory, BurnerLoansSeizer, BurnerLoansYieldClaimer | Re-enable Burner Loans policies and update bounded Seizer or YieldClaimer execution settings |
+| burner_loans_inventory_provider | BurnerLoansInventory | Supply protocol-owned OHM and withdraw the provider's idle supplied-OHM claim |
+| burner_loans_seizer | BurnerLoans | Allows the BurnerLoansSeizer Heart task to execute protocol-operated seizures without receiving keeper rewards |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |

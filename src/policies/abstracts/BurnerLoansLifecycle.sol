@@ -11,6 +11,7 @@ import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecyc
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
+import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -36,6 +37,7 @@ abstract contract BurnerLoansLifecycle is
     PolicyEnablerV2,
     OperatorAuth,
     IBurnerLoansLifecycle,
+    IBurnerLoansYieldClaim,
     IBurnerLoansView,
     IVersioned
 {
@@ -141,12 +143,12 @@ abstract contract BurnerLoansLifecycle is
         return BurnerLoansMarketConfig.firstMarketId(_FLOAN, address(this), asset_, address(_OHM));
     }
 
-    /// @notice Resolves and decodes the unique Burner Loans market for an asset.
+    /// @notice Returns the decoded Burner Loans market for an asset.
     /// @dev Reverts when the market is absent, ambiguous, uses another schema, or has malformed data.
     /// @param asset_ Collateral asset whose market is required.
     /// @return marketId_ Resolved FLOAN market identifier.
     /// @return config Decoded Burner Loans asset configuration.
-    function _requireAssetConfigured(
+    function _getAssetMarket(
         address asset_
     ) internal view returns (uint32 marketId_, AssetConfig memory config) {
         marketId_ = _marketId(asset_);
@@ -165,7 +167,7 @@ abstract contract BurnerLoansLifecycle is
     function _requireAssetOriginationsEnabled(
         address asset_
     ) internal view returns (uint32 marketId_, AssetConfig memory config) {
-        (marketId_, config) = _requireAssetConfigured(asset_);
+        (marketId_, config) = _getAssetMarket(asset_);
         if (!config.originationsEnabled) revert BurnerLoans_AssetOriginationsDisabled(asset_);
     }
 
@@ -223,6 +225,7 @@ abstract contract BurnerLoansLifecycle is
         return
             interfaceId_ == type(IBurnerLoansLifecycle).interfaceId ||
             interfaceId_ == type(IBurnerLoansView).interfaceId ||
+            interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId ||
             interfaceId_ == type(IOperatorAuth).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);

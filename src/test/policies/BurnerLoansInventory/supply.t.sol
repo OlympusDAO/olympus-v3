@@ -5,6 +5,11 @@ import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInvento
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BURNER_LOANS_INVENTORY_PROVIDER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Libraries
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+
+// Contracts
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 
 contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
@@ -66,7 +71,7 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
     }
 
     // supply
-    // [X] given the provider has not approved Burner Loans Inventory, SafeTransferLib reverts
+    // [X] given the provider has not approved Burner Loans Inventory, the token transfer reverts
     function test_givenMissingAllowance_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         ohm.mint(provider, amount_);
@@ -76,7 +81,7 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
     }
 
     // supply
-    // [X] given the provider has insufficient OHM, SafeTransferLib reverts
+    // [X] given the provider has insufficient OHM, the token transfer reverts
     function test_givenMissingBalance_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         vm.prank(provider);
@@ -84,6 +89,41 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
         vm.prank(provider);
         inventory.supply(amount_);
+    }
+
+    // supply
+    // [X] given an existing balance and an under-delivered transfer, it reverts without accounting it
+    function test_givenExistingBalance_givenUnderDeliveredTransfer_reverts() public {
+        uint128 amount = 10e9;
+        uint128 existingBalance = 25e9;
+        ohm.mint(address(inventory), existingBalance);
+        ohm.mint(provider, amount);
+        vm.prank(provider);
+        ohm.approve(address(inventory), amount);
+        vm.mockCall(
+            address(ohm),
+            abi.encodeCall(ohm.transferFrom, (provider, address(inventory), amount)),
+            abi.encode(true)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                address(ohm),
+                address(inventory),
+                amount,
+                0
+            )
+        );
+        vm.prank(provider);
+        inventory.supply(amount);
+
+        assertEq(ohm.balanceOf(provider), amount, "provider balance rollback");
+        assertEq(ohm.balanceOf(address(inventory)), existingBalance, "existing balance preserved");
+        assertEq(inventory.providerClaimOhm(provider), 0, "provider claim rollback");
+        assertEq(inventory.suppliedOhm(), 0, "aggregate claim rollback");
+        assertEq(inventory.suppliedIdleOhm(), 0, "idle accounting rollback");
+        _assertInventoryInvariant();
     }
 
     // supply

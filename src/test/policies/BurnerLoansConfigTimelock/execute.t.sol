@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -8,9 +11,314 @@ import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansCo
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+
 import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 
 contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfigGuardsTest {
+    function test_givenYieldRecipientActionMatured_permissionlessExecutionAppliesRecipient(
+        address executor_
+    ) public {
+        address recipient = address(_deployUsdsYieldRecipient());
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(recipient)
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.prank(executor_);
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(burnerLoans.getYieldRecipient(), recipient, "yield recipient");
+    }
+
+    function test_givenYieldRecipientAssetBpsActionMatured_executes() public {
+        address recipient = address(_deployUsdsYieldRecipient());
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(recipient);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(burnerLoans.getYieldRecipientAssetBps(address(usds)), 5_000, "asset bps");
+    }
+
+    function test_givenYieldBpsForDifferentAssetsMatured_executesBoth() public {
+        MockYieldRecipient recipient = _deployUsdsYieldRecipient();
+        (MockERC20 secondAsset, MockERC4626 secondVault) = _addVaultAssetForTest();
+        recipient.setVaultConfig(address(secondVault), address(secondAsset), true);
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(address(recipient));
+
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(2_500))
+        );
+        actions[1] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(secondAsset), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(burnerLoans.getYieldRecipientAssetBps(address(usds)), 2_500, "first asset bps");
+        assertEq(
+            burnerLoans.getYieldRecipientAssetBps(address(secondAsset)),
+            5_000,
+            "second asset bps"
+        );
+    }
+
+    function test_givenLaterYieldSubActionFails_reverts() public {
+        MockYieldRecipient recipient = _deployUsdsYieldRecipient();
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(address(recipient));
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _feeAction(30);
+        actions[1] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        recipient.setVaultConfig(address(0), address(usds), false);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectPartialRevert(IBurnerLoans.BurnerLoans_YieldRecipientAssetNotEnabled.selector);
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(
+            burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps,
+            _defaultAssetFeeConfig().baseFeeBps,
+            "earlier fee setter rolled back"
+        );
+        assertEq(burnerLoans.getYieldRecipientAssetBps(address(usds)), 0, "asset bps unchanged");
+    }
+
+    function test_givenYieldRecipientChangesAfterQueue_reverts() public {
+        address firstRecipient = address(_deployUsdsYieldRecipient());
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(firstRecipient);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        address secondRecipient = address(_deployUsdsYieldRecipient());
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(secondRecipient);
+        bytes32 currentHash = _yieldRecipientAssetStateHash(address(usds));
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "yield asset key remains held");
+        assertEq(burnerLoans.getYieldRecipient(), secondRecipient, "direct change retained");
+        assertEq(burnerLoans.getYieldRecipientAssetBps(address(usds)), 0, "asset bps unchanged");
+    }
+
+    function test_givenYieldAssetBpsChangesAfterRecipientQueue_reverts() public {
+        address currentRecipient = address(_deployUsdsYieldRecipient());
+        address replacementRecipient = address(_deployUsdsYieldRecipient());
+        vm.startPrank(admin);
+        burnerLoansConfig.setYieldRecipient(currentRecipient);
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 2_500);
+        vm.stopPrank();
+
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(replacementRecipient)
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 5_000);
+        bytes32 currentHash = _yieldRoutingStateHash();
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "yield recipient key remains held");
+        assertEq(burnerLoans.getYieldRecipient(), currentRecipient, "current recipient retained");
+        assertEq(
+            burnerLoans.getYieldRecipientAssetBps(address(usds)),
+            5_000,
+            "direct bps retained"
+        );
+    }
+
+    function test_givenAssetRegisteredAfterRecipientQueue_reverts() public {
+        address recipient = address(_deployUsdsYieldRecipient());
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(recipient)
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        _addVaultAssetForTest();
+        bytes32 currentHash = _yieldRoutingStateHash();
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "yield recipient key remains held");
+        assertEq(burnerLoans.getYieldRecipient(), address(0), "yield recipient unchanged");
+    }
+
+    function test_givenTargetAssetBpsChangesAfterQueue_reverts() public {
+        address recipient = address(_deployUsdsYieldRecipient());
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(recipient);
+
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
+
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 2_500);
+        bytes32 currentHash = _yieldRecipientAssetStateHash(address(usds));
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
+                actionId,
+                uint256(0),
+                key,
+                expectedHash,
+                currentHash
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(configTimelock.pendingActionId(key), actionId, "yield asset key remains held");
+        assertEq(
+            burnerLoans.getYieldRecipientAssetBps(address(usds)),
+            2_500,
+            "direct bps retained"
+        );
+    }
+
+    function test_givenDifferentAssetBpsChangesAfterQueue_appliesTargetBps() public {
+        MockYieldRecipient recipient = _deployUsdsYieldRecipient();
+        (MockERC20 secondAsset, MockERC4626 secondVault) = _addVaultAssetForTest();
+        recipient.setVaultConfig(address(secondVault), address(secondAsset), true);
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipient(address(recipient));
+
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+
+        vm.prank(admin);
+        burnerLoansConfig.setYieldRecipientAssetBps(address(secondAsset), 2_500);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(burnerLoans.getYieldRecipientAssetBps(address(usds)), 5_000, "target asset bps");
+        assertEq(
+            burnerLoans.getYieldRecipientAssetBps(address(secondAsset)),
+            2_500,
+            "different asset bps"
+        );
+    }
+
+    function test_givenReplacementRecipientRouteDisabledAfterQueue_reverts() public {
+        address currentRecipient = address(_deployUsdsYieldRecipient());
+        MockYieldRecipient replacementRecipient = _deployUsdsYieldRecipient();
+        vm.startPrank(admin);
+        burnerLoansConfig.setYieldRecipient(currentRecipient);
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 5_000);
+        vm.stopPrank();
+
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _yieldAction(
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(address(replacementRecipient))
+        );
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelock.queueBatch(actions);
+
+        replacementRecipient.setVaultConfig(address(0), address(usds), false);
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_YieldRecipientAssetNotEnabled.selector,
+                address(replacementRecipient),
+                address(usds),
+                address(0)
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+
+        assertEq(burnerLoans.getYieldRecipient(), currentRecipient, "current recipient retained");
+    }
+
     // executeQueuedAction
     // given a supported target setter reverts without error data
     //  when the queued action is executed
@@ -271,7 +579,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "fee update");
     }
 
-    function test_givenFeeConfigChangesAfterQueue_executionRevertsAndKeepsKey() public {
+    function test_givenFeeConfigChangesAfterQueue_reverts() public {
         uint64 actionId = _queueFeeUpdate(_feeUpdate(30), _feeSelection());
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
@@ -305,7 +613,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         );
     }
 
-    function test_givenRiskConfigChangesAfterQueue_executionRevertsAndKeepsKey() public {
+    function test_givenRiskConfigChangesAfterQueue_reverts() public {
         uint64 actionId = _queueAssetRiskUpdate(_riskUpdate(9_500), _riskSelection());
         (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(actionId, 0, 0);
 
@@ -378,7 +686,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         assertEq(configTimelock.pendingActionId(debtCapKey), actionId, "cap key remains held");
     }
 
-    function test_givenFacilityRotation_executionRevertsAndKeepsLogicalKey() public {
+    function test_givenFacilityRotation_reverts() public {
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelock.queueSetAssetFeeConfig(
             address(usds),
@@ -401,7 +709,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         assertEq(configTimelock.pendingActionId(key), actionId, "logical key remains held");
     }
 
-    function test_givenDebtCapChangesAfterQueue_executionRevertsAndKeepsKey() public {
+    function test_givenDebtCapChangesAfterQueue_reverts() public {
         // Both values are OHM amounts in the token's 9-decimal scale.
         uint128 queuedDebtCapOhm = 90_000e9;
         uint128 changedDebtCapOhm = 95_000e9;
@@ -420,7 +728,7 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         assertEq(configTimelock.pendingActionId(key), actionId, "debt-cap key remains held");
     }
 
-    function test_givenOriginationsChangeAfterQueue_executionRevertsAndKeepsKey() public {
+    function test_givenOriginationsChangeAfterQueue_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(
             IBurnerLoansConfig.setAssetOriginationsEnabled.selector,

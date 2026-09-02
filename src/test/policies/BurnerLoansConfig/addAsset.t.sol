@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -77,6 +76,29 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
+    // given Burner Loans is disabled while Config remains enabled
+    //  when addAsset is called by admin
+    //   then the downstream facility registration reverts atomically
+    function test_givenBurnerLoansDisabled_reverts() public {
+        _configureUsdsDependencies();
+        _setDefaultGlobalDebtCap();
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.prank(admin);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+
+        assertFalse(burnerLoansConfig.isAssetConfigured(address(usds)), "asset not configured");
+        assertEq(burnerLoans.getAssetCount(), 0, "facility asset count");
+    }
+
+    // addAsset
     // given asset address is zero
     //  when addAsset is called by admin
     //   then it reverts
@@ -133,6 +155,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(usds)), "configured");
         assertEq(burnerLoansConfig.getAssetConfig(address(usds)).debtCap, 0, "debt cap");
+        assertEq(burnerLoans.getAssetCount(), 1, "registered asset count");
+        assertEq(burnerLoans.getAssetAt(0), address(usds), "registered asset");
     }
 
     // addAsset
@@ -529,22 +553,23 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
-    // given PRICE approves the asset but returns zero
+    // given PRICE approves the asset but currently returns zero
     //  when addAsset is called by admin
-    //   then PRICE rejects the dependency check
-    function test_givenPriceIsZero_reverts() public {
+    //   then admission succeeds without an unnecessary live price read
+    function test_givenApprovedPriceIsZero_addsAsset() public {
         _configurePrice(address(usds), 0);
         _configureDepositManagerAsset(address(usds));
         _setDefaultGlobalDebtCap();
 
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
         burnerLoansConfig.addAsset(
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
             _defaultAssetFeeConfig()
         );
+
+        assertTrue(burnerLoansConfig.isAssetConfigured(address(usds)), "asset configured");
     }
 
     // addAsset
@@ -984,5 +1009,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             18,
             "decimals"
         );
+        assertEq(burnerLoans.getAssetCount(), 2, "registered asset count");
+        assertEq(burnerLoans.getAssetAt(0), address(usds), "first registered asset");
+        assertEq(burnerLoans.getAssetAt(1), address(weth), "second registered asset");
     }
 }

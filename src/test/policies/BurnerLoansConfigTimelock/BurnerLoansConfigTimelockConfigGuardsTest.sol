@@ -15,6 +15,9 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
     bytes32 internal constant _RISK_DOMAIN = keccak256("BURNER_LOANS_RISK_CONFIG");
     bytes32 internal constant _DEBT_CAP_DOMAIN = keccak256("BURNER_LOANS_DEBT_CAP");
     bytes32 internal constant _ORIGINATIONS_DOMAIN = keccak256("BURNER_LOANS_ASSET_ORIGINATIONS");
+    bytes32 internal constant _YIELD_RECIPIENT_DOMAIN = keccak256("BURNER_LOANS_YIELD_RECIPIENT");
+    bytes32 internal constant _YIELD_RECIPIENT_ASSET_DOMAIN =
+        keccak256("BURNER_LOANS_YIELD_RECIPIENT_ASSET");
 
     function _feeAction(
         uint16 baseFeeBps_
@@ -61,6 +64,45 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
     function _scopedConfigKey(bytes32 domain_) internal view returns (bytes32 key) {
         bytes32 localKey = keccak256(abi.encode(domain_, address(usds)));
         return keccak256(abi.encode(address(burnerLoansConfig), localKey));
+    }
+
+    function _scopedYieldRecipientKey() internal view returns (bytes32 key) {
+        bytes32 localKey = keccak256(abi.encode(_YIELD_RECIPIENT_DOMAIN));
+        return keccak256(abi.encode(address(burnerLoansConfig), localKey));
+    }
+
+    function _scopedYieldRecipientAssetKey(address asset_) internal view returns (bytes32 key) {
+        bytes32 localKey = keccak256(abi.encode(_YIELD_RECIPIENT_ASSET_DOMAIN, asset_));
+        return keccak256(abi.encode(address(burnerLoansConfig), localKey));
+    }
+
+    function _yieldRoutingStateHash() internal view returns (bytes32 stateHash) {
+        bytes32 allocationsHash;
+        uint256 assetCount = burnerLoans.getAssetCount();
+        for (uint256 i; i < assetCount; ++i) {
+            address asset = burnerLoans.getAssetAt(i);
+            allocationsHash = keccak256(
+                abi.encode(allocationsHash, asset, burnerLoans.getYieldRecipientAssetBps(asset))
+            );
+        }
+        return
+            keccak256(
+                abi.encode(address(burnerLoans), burnerLoans.getYieldRecipient(), allocationsHash)
+            );
+    }
+
+    function _yieldRecipientAssetStateHash(
+        address asset_
+    ) internal view returns (bytes32 stateHash) {
+        return
+            keccak256(
+                abi.encode(
+                    address(burnerLoans),
+                    burnerLoans.getYieldRecipient(),
+                    asset_,
+                    burnerLoans.getYieldRecipientAssetBps(asset_)
+                )
+            );
     }
 
     function _feeUpdate(

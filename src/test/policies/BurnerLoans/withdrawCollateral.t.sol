@@ -768,7 +768,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Caller: owner
     // - Custody path: vault-backed DepositManager custody
     // - Withdrawal amount: fuzzed positive amount worth less than one vault share after yield
-    // - Expected branch: preview marks withdrawal non-executable and write reverts before debiting accounting
+    // - Expected branch: preview is not executable and execution reverts without debiting credit
     function test_givenAmountBelowOneVaultShare_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, 1_000e6));
         uint128 depositedAmount = 1_000_000e6;
@@ -785,6 +785,11 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         );
 
         assertEq(preview.returnAmount, 0, "preview amount");
+        assertEq(
+            preview.remainingDepositedCollateral,
+            depositedAmount - amount_,
+            "preview remaining collateral"
+        );
         assertFalse(preview.executable, "preview executable");
 
         vm.prank(alice);

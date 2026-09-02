@@ -13,7 +13,8 @@ library BurnerLoansCustodyAccounting {
     /// @param depositManager_ DepositManager policy to query.
     /// @param asset_ Custodied asset.
     /// @param operator_ DepositManager operator.
-    /// @return result Shares, assets, borrowing, liabilities, yield, and solvency status.
+    /// @return result DepositManager custody shares, asset value, borrowed assets, liabilities,
+    ///        maximum claimable yield, and solvency status.
     function status(
         IDepositManager depositManager_,
         address asset_,

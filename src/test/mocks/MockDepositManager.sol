@@ -25,6 +25,8 @@ contract MockDepositManager is IDepositManager {
     bool public withdrawReverts;
     bool public depositActualAmountOverrideEnabled;
     uint256 public depositActualAmountOverride;
+    bool public claimActualAmountOverrideEnabled;
+    uint256 public claimActualAmountOverride;
     uint256 public claimableYield;
     uint256 public claimYieldCalls;
     address public claimYieldCallbackTarget;
@@ -142,10 +144,18 @@ contract MockDepositManager is IDepositManager {
         }
 
         actualAmount = amount_ > claimableYield ? claimableYield : amount_;
+        if (claimActualAmountOverrideEnabled && actualAmount > claimActualAmountOverride) {
+            actualAmount = claimActualAmountOverride;
+        }
         claimableYield -= actualAmount;
         if (!asset_.transfer(recipient_, actualAmount)) {
             revert MockDepositManager_TransferFailed();
         }
+    }
+
+    function setClaimActualAmountOverride(bool enabled_, uint256 amount_) external {
+        claimActualAmountOverrideEnabled = enabled_;
+        claimActualAmountOverride = amount_;
     }
 
     function getOperatorLiabilities(

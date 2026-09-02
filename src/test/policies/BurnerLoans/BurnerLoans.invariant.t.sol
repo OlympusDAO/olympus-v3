@@ -11,6 +11,7 @@ import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
 import {BurnerLoansSeizureTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
@@ -20,6 +21,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     BurnerLoansComposites internal composites;
     BurnerLoansSeizer internal seizer;
     address[] internal invariantActors;
+    MockYieldRecipient internal yieldRecipient;
 
     function setUp() public override {
         super.setUp();
@@ -30,6 +32,11 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
 
         vm.startPrank(admin);
+        yieldRecipient = new MockYieldRecipient(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        yieldRecipient.setVaultConfig(address(0), address(usds), true);
+        burnerLoansConfig.setYieldRecipient(address(yieldRecipient));
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 5_000);
         seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
@@ -50,6 +57,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
                 admin: admin,
                 treasury: address(trsry),
                 inventoryProvider: protocolProvider,
+                yieldRecipient: yieldRecipient,
                 actors: invariantActors
             })
         );
@@ -64,7 +72,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.borrow(0, 100e9);
         vm.roll(block.number + 1);
 
-        bytes4[] memory selectors = new bytes4[](18);
+        bytes4[] memory selectors = new bytes4[](20);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -76,13 +84,15 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[8] = handler.seize.selector;
         selectors[9] = handler.executePeriodicSeizer.selector;
         selectors[10] = handler.addYield.selector;
-        selectors[11] = handler.harvestYield.selector;
+        selectors[11] = handler.claimYield.selector;
         selectors[12] = handler.toggleAsset.selector;
         selectors[13] = handler.compositeDepositAndBorrow.selector;
         selectors[14] = handler.compositeRepayAndWithdraw.selector;
         selectors[15] = handler.reuseDebtFreePosition.selector;
         selectors[16] = handler.supplyInventory.selector;
         selectors[17] = handler.withdrawInventory.selector;
+        selectors[18] = handler.setYieldBps.selector;
+        selectors[19] = handler.toggleYieldRecipient.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -270,10 +280,12 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
 
     // invariant
     // given any sequence of Burner Loans handler calls
-    //  when harvest accounting is checked
-    //   then harvested yield never exceeds the claimable amount
-    function invariant_HarvestBound() public view {
-        assertEq(handler.harvestBoundViolations(), 0, "harvest exceeded claimable yield");
+    //  when claim accounting is checked
+    //   then claimed yield never exceeds the claimable amount
+    function invariant_ClaimYieldBound() public view {
+        assertEq(handler.claimYieldBoundViolations(), 0, "claim exceeded claimable yield");
+        assertEq(handler.claimYieldConservationViolations(), 0, "claim distribution mismatch");
+        assertEq(handler.claimYieldResidualViolations(), 0, "claim changed facility balance");
     }
 
     // invariant

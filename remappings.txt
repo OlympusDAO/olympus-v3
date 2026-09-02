@@ -16,6 +16,8 @@ test/lib=src/test/lib
 @chainlink/contracts-ccip/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/
 @chainlink/contracts/=dependencies/chainlink-ccip-1.6.0/contracts/
 
+@excessively-safe-call-0.0.1/=dependencies/excessively-safe-call-0.0.1/src/
+
 @forge-std-1.16.2/=dependencies/forge-std-1.16.2/src/
 forge-std/=dependencies/forge-std-1.16.2/src/
 

@@ -21,6 +21,7 @@ import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
@@ -40,6 +41,7 @@ contract BurnerLoansHandler is Test {
     address public immutable admin;
     address public immutable treasury;
     address public immutable inventoryProvider;
+    MockYieldRecipient public immutable yieldRecipient;
 
     address[] internal _actors;
     uint256 public collateralPrice = _WAD;
@@ -54,7 +56,9 @@ contract BurnerLoansHandler is Test {
     uint256 public unexpectedWithdrawFailures;
     uint256 public unexpectedExtendFailures;
     uint256 public sameBlockRepayViolations;
-    uint256 public harvestBoundViolations;
+    uint256 public claimYieldBoundViolations;
+    uint256 public claimYieldConservationViolations;
+    uint256 public claimYieldResidualViolations;
     uint256 public backingViolations;
     uint256 public seizureEligibilityViolations;
     uint256 public seizureClosureViolations;
@@ -73,6 +77,7 @@ contract BurnerLoansHandler is Test {
         address admin;
         address treasury;
         address inventoryProvider;
+        MockYieldRecipient yieldRecipient;
         address[] actors;
     }
 
@@ -89,6 +94,7 @@ contract BurnerLoansHandler is Test {
         admin = dependencies_.admin;
         treasury = dependencies_.treasury;
         inventoryProvider = dependencies_.inventoryProvider;
+        yieldRecipient = dependencies_.yieldRecipient;
         _actors = dependencies_.actors;
 
         address inventory_ = dependencies_.burnerLoans.inventory();
@@ -485,14 +491,36 @@ contract BurnerLoansHandler is Test {
         collateral.mint(address(depositManager), bound(amountSeed_, 1, 10_000e18));
     }
 
-    function harvestYield() external {
+    function claimYield() external {
         IBurnerLoans.AssetCollateralStatus memory beforeStatus = burnerLoans
             .getAssetCollateralStatus(address(collateral));
         uint256 treasuryBefore = collateral.balanceOf(treasury);
-        try burnerLoans.harvestYield(address(collateral)) {
-            uint256 harvested = collateral.balanceOf(treasury) - treasuryBefore;
-            if (harvested > beforeStatus.claimableYield) ++harvestBoundViolations;
+        uint256 recipientBefore = collateral.balanceOf(address(yieldRecipient));
+        uint256 facilityBefore = collateral.balanceOf(address(burnerLoans));
+        try burnerLoans.claimYield() {
+            uint256 distributed = collateral.balanceOf(treasury) -
+                treasuryBefore +
+                collateral.balanceOf(address(yieldRecipient)) -
+                recipientBefore;
+            IBurnerLoans.AssetCollateralStatus memory afterStatus = burnerLoans
+                .getAssetCollateralStatus(address(collateral));
+            uint256 claimed = beforeStatus.assets - afterStatus.assets;
+            if (claimed > beforeStatus.claimableYield) ++claimYieldBoundViolations;
+            if (distributed != claimed) ++claimYieldConservationViolations;
+            if (collateral.balanceOf(address(burnerLoans)) != facilityBefore) {
+                ++claimYieldResidualViolations;
+            }
         } catch {}
+    }
+
+    function setYieldBps(uint16 bpsSeed_) external {
+        uint16 bps = uint16(bound(bpsSeed_, 0, 10_000));
+        vm.prank(admin);
+        try burnerLoansConfig.setYieldRecipientAssetBps(address(collateral), bps) {} catch {}
+    }
+
+    function toggleYieldRecipient(bool enable_) external {
+        yieldRecipient.setEnabled(enable_);
     }
 
     function toggleAsset(bool enable_) external {

@@ -124,7 +124,7 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
         }
         if (result.repaidOhm != 0) {
             ohmToken.forceApprove(burnerLoans, result.repaidOhm);
-            result.healthFactor = IBurnerLoansLifecycle(burnerLoans).repay(
+            (, result.healthFactor) = IBurnerLoansLifecycle(burnerLoans).repay(
                 params_.asset,
                 uint128(result.repaidOhm),
                 msg.sender

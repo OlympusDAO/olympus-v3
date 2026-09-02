@@ -82,20 +82,19 @@ second capacity bound makes the excess unavailable for draws.
 
 | Action       | Active principal | Supplied idle              | Claim | Token and approval effect                                                 |
 | ------------ | ---------------- | -------------------------- | ----- | ------------------------------------------------------------------------- |
-| Supply `x`   | —                | `+x`                       | `+x`  | Safe transfer; increase caller claim; reduce unsafe approval              |
+| Supply `x`   | —                | `+x`                       | `+x`  | Exact receipt; increase caller claim; reduce unsafe approval               |
 | Withdraw `x` | —                | `-x`                       | `-x`  | Best-effort approval restoration; transfer OHM                            |
 | Draw `x`     | `+x`             | Consume idle first         | —     | Mint shortfall to Burner Loans Inventory; transfer full `x` once          |
 | Repay `x`    | `-x`             | Refill claim deficit first | —     | Burn only the remainder; a failed burn remains ordinary surplus           |
 | Default `x`  | `-x`             | —                          | —     | Best-effort approval restoration                                          |
 | Cap change   | —                | —                          | —     | Exactly reconcile approval; revert the cap change if reconciliation fails |
 
-The immutable OHM token is assumed to be a standard, non-fee-on-transfer token. Supply and draw use
-`SafeTransferLib` and therefore revert on a failed ERC20 transfer, but do not measure an exact
-balance delta. Before settlement, Burner Loans snapshots Burner Loans Inventory's raw balance
-around its safe transfer from the payer and rejects any inexact delta. Burner Loans Inventory then
-performs an aggregate balance-sufficiency check before applying the authenticated settlement
-amount. Direct donations are not accounted as supplied OHM, do not create capacity, and may be
-burned through MINTR or transferred to `TRSRY` as surplus.
+The immutable OHM token is assumed to be a standard, non-fee-on-transfer token. Supply and repayment
+both measure Burner Loans Inventory's balance increase and reject an inexact receipt. Outgoing draws
+use `SafeTransferLib` without an additional recipient balance check. Burner Loans Inventory also
+performs an aggregate balance-sufficiency check before applying the authenticated settlement amount.
+Direct donations are not accounted as supplied OHM, do not create capacity, and may be burned
+through MINTR or transferred to `TRSRY` as surplus.
 
 ## Operating States
 

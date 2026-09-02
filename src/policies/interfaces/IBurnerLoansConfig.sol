@@ -6,18 +6,24 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 /// @title Burner Loans Config Interface
 /// @notice Opinionated administration surface for Burner Loans markets stored in FLOAN.
-interface IBurnerLoansConfig is IBurnerLoans {
+interface IBurnerLoansConfig {
     /// @notice Thrown when attempting to bind a facility after the initial facility was set.
     error BurnerLoansConfig_FacilityAlreadySet();
+
     /// @notice Thrown when the configured Burner Loans facility or its linkage is incompatible.
     /// @param facility_ The invalid facility address.
     error BurnerLoansConfig_InvalidFacility(address facility_);
+
     /// @notice Thrown when the linked Burner Loans Inventory contract is incompatible.
+    /// @param inventory_ Invalid Burner Loans Inventory address.
     error BurnerLoansConfig_InvalidInventory(address inventory_);
+
     /// @notice Thrown when a caller is neither the configured config operator nor an admin.
     /// @param caller_ Unauthorized caller address.
     error BurnerLoansConfig_UnauthorizedConfigOperator(address caller_);
 
+    /// @notice Emitted when this Config is permanently bound to its Burner Loans facility.
+    /// @param facility Bound Burner Loans facility.
     event FacilitySet(address indexed facility);
 
     /// @notice Returns the OHM debt token configured for new markets.
@@ -42,6 +48,7 @@ interface IBurnerLoansConfig is IBurnerLoans {
     function setFacility(address facility_) external;
 
     /// @notice Returns Burner Loans' current Burner Loans Inventory contract.
+    /// @dev Reverts when no facility is bound or the bound facility call fails.
     /// @return inventory_ Current Burner Loans Inventory resolved through the bound facility.
     function inventory() external view returns (address inventory_);
 
@@ -54,34 +61,48 @@ interface IBurnerLoansConfig is IBurnerLoans {
     /// @dev Reverts when no unique bound market exists or its configuration schema is not Burner Loans.
     /// @param asset_ Collateral asset to query.
     /// @return config Decoded asset configuration.
-    function getAssetConfig(address asset_) external view returns (AssetConfig memory config);
+    function getAssetConfig(
+        address asset_
+    ) external view returns (IBurnerLoans.AssetConfig memory config);
 
     /// @notice Returns the fee configuration for a Burner Loans collateral asset.
     /// @dev Reverts when no unique bound market exists or its configuration schema is not Burner Loans.
     /// @param asset_ Collateral asset to query.
     /// @return config Decoded utilization fee configuration.
-    function getAssetFeeConfig(address asset_) external view returns (AssetFeeConfig memory config);
+    function getAssetFeeConfig(
+        address asset_
+    ) external view returns (IBurnerLoans.AssetFeeConfig memory config);
 
     /// @notice Returns the unique bound FLOAN market identifier for a collateral asset.
+    /// @dev Reverts if no market exists or more than one market matches the facility and asset.
     /// @param asset_ Collateral asset to query.
     /// @return marketId_ Unique FLOAN market identifier.
     function marketId(address asset_) external view returns (uint32 marketId_);
 
     /// @notice Validates a complete asset risk configuration against Burner Loans bounds.
+    /// @dev Reverts when any basis-point, term, horizon, or keeper-reward field is out of bounds.
     /// @param config_ Risk configuration to validate.
-    function validateAssetRiskConfig(AssetRiskConfigInput calldata config_) external pure;
+    function validateAssetRiskConfig(
+        IBurnerLoans.AssetRiskConfigInput calldata config_
+    ) external pure;
 
     /// @notice Validates a complete fee curve.
-    /// @dev A zero kink is valid only when both slope fields are zero.
+    /// @dev Reverts when any basis-point field exceeds its bound, a zero kink has nonzero slopes,
+    ///      or the full-utilization fee exceeds 100%.
     /// @param config_ Fee configuration to validate.
-    function validateFeeConfig(AssetFeeConfig calldata config_) external pure;
+    function validateFeeConfig(IBurnerLoans.AssetFeeConfig calldata config_) external pure;
 
     /// @notice Validates an asset debt cap against its current market principal.
+    /// @dev Reverts if the asset is not uniquely configured or the proposed cap is below active
+    ///      principal.
     /// @param asset_ Collateral asset whose cap is being validated.
     /// @param debtCapOhm_ Proposed debt cap, in OHM decimals.
     function validateAssetDebtCap(address asset_, uint128 debtCapOhm_) external view;
 
     /// @notice Creates a Burner Loans FLOAN market for a collateral asset.
+    /// @dev Callable only by OCG admin while Config is enabled. Reverts for a zero or duplicate
+    ///      asset, unsupported token decimals or dependencies, invalid risk or fee configuration,
+    ///      or failed FLOAN/facility registration.
     /// @param asset_ Collateral asset to configure.
     /// @param debtCapOhm_ Initial market debt cap, in OHM decimals.
     /// @param riskConfig_ Initial risk configuration.
@@ -89,31 +110,63 @@ interface IBurnerLoansConfig is IBurnerLoans {
     function addAsset(
         address asset_,
         uint128 debtCapOhm_,
-        AssetRiskConfigInput calldata riskConfig_,
-        AssetFeeConfig calldata feeConfig_
+        IBurnerLoans.AssetRiskConfigInput calldata riskConfig_,
+        IBurnerLoans.AssetFeeConfig calldata feeConfig_
     ) external;
 
     /// @notice Updates a configured asset's debt cap.
+    /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if
+    ///      the asset is not uniquely configured or the cap is below active principal.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New market debt cap, in OHM decimals.
     function setAssetDebtCap(address asset_, uint128 debtCapOhm_) external;
 
     /// @notice Updates the maximum active principal across the bound Burner Loans facility.
-    /// @dev Restricted to OCG admin and forwarded to Burner Loans' current Burner Loans Inventory.
+    /// @dev Restricted to OCG admin while Config is enabled and forwarded to Burner Loans' current
+    ///      Inventory. Reverts when Inventory is unset or rejects the cap.
+    /// @param debtCapOhm_ New facility-wide principal cap, in OHM decimals.
     function setGlobalDebtCap(uint128 debtCapOhm_) external;
 
+    /// @notice Sets the facility-wide yield recipient.
+    /// @dev Callable only by OCG admin or the configured config operator while this policy is
+    ///      enabled. The bound Burner Loans facility must also be enabled. Validation, storage, and
+    ///      events are owned by Burner Loans, including every active asset route on rotation.
+    /// @param recipient_ New yield recipient, or zero after all asset allocations are cleared.
+    function setYieldRecipient(address recipient_) external;
+
+    /// @notice Sets an asset's share of claimed yield sent to the facility-wide recipient.
+    /// @dev Callable only by OCG admin or the configured config operator while this policy is
+    ///      enabled. The bound Burner Loans facility must also be enabled. Validation, storage, and
+    ///      events are owned by Burner Loans.
+    /// @param asset_ Collateral asset whose allocation is updated.
+    /// @param bps_ Recipient share in basis points.
+    function setYieldRecipientAssetBps(address asset_, uint16 bps_) external;
+
     /// @notice Enables or disables new originations for a configured asset.
+    /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if
+    ///      the asset is not uniquely configured. Enabling also revalidates PRICE and custody
+    ///      dependencies; disabling leaves servicing and yield claims available.
     /// @param asset_ Collateral asset to update.
     /// @param enabled_ Whether originations should be enabled.
     function setAssetOriginationsEnabled(address asset_, bool enabled_) external;
 
     /// @notice Updates a configured asset's risk and term fields.
+    /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if
+    ///      the asset is not uniquely configured or any risk or term field violates its bound.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete risk configuration.
-    function setAssetRiskConfig(address asset_, AssetRiskConfigInput calldata config_) external;
+    function setAssetRiskConfig(
+        address asset_,
+        IBurnerLoans.AssetRiskConfigInput calldata config_
+    ) external;
 
     /// @notice Updates a configured asset's utilization fee curve.
+    /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if
+    ///      the asset is not uniquely configured or the fee curve is invalid.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete fee configuration.
-    function setAssetFeeConfig(address asset_, AssetFeeConfig calldata config_) external;
+    function setAssetFeeConfig(
+        address asset_,
+        IBurnerLoans.AssetFeeConfig calldata config_
+    ) external;
 }

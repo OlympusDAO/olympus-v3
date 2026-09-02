@@ -3,7 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -11,6 +11,12 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
+import {IYieldRecipient} from "src/policies/interfaces/IYieldRecipient.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+
+// Libraries
+import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy} from "src/Kernel.sol";
@@ -20,6 +26,18 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 /// @title Burner Loans Dependency Validation
 /// @notice Validates module interfaces and versions when the policy is activated.
 library BurnerLoansDependencies {
+    using EnumerableSet for EnumerableSet.AddressSet;
+
+    /// @notice Burner Loans-owned yield-routing storage passed to linked-library operations.
+    /// @param recipient Facility-wide recipient of configured collateral-yield shares.
+    /// @param assetBps Per-collateral-asset recipient share in basis points.
+    /// @param activeAssetCount Number of assets with a nonzero recipient share.
+    struct YieldRoutingState {
+        address recipient;
+        mapping(address asset => uint16 bps) assetBps;
+        uint256 activeAssetCount;
+    }
+
     /// @dev FLOAN module keycode.
     // Each literal is exactly five bytes, so wrapping cannot truncate data.
     // forge-lint: disable-next-line(unsafe-typecast)
@@ -44,6 +62,131 @@ library BurnerLoansDependencies {
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidBackingOracle(backingOracle_);
         }
+    }
+
+    /// @notice Validates a yield recipient against the facility Kernel and enablement state.
+    /// @dev Recipient identity is anchored exclusively to the supplied Kernel's active-policy
+    ///      registry. Kernel-executor activation is authoritative even if the recipient reports a
+    ///      different Kernel; a recipient-reported getter is not part of this trust decision.
+    function validateYieldRecipient(Kernel kernel_, address recipient_) public view {
+        if (
+            recipient_ == address(0) ||
+            !ERC165Checker.supportsInterface(recipient_, type(IYieldRecipient).interfaceId) ||
+            !ERC165Checker.supportsInterface(recipient_, type(IEnabler).interfaceId)
+        ) revert IBurnerLoans.BurnerLoans_InvalidYieldRecipient(recipient_);
+        if (!kernel_.isPolicyActive(Policy(recipient_))) {
+            revert IBurnerLoans.BurnerLoans_YieldRecipientNotActivePolicy(recipient_);
+        }
+        if (!IEnabler(recipient_).isEnabled()) {
+            revert IBurnerLoans.BurnerLoans_YieldRecipientNotEnabled(recipient_);
+        }
+    }
+
+    /// @notice Validates one exact DepositManager asset-vault pair for a yield recipient.
+    /// @dev Revalidates the global policy/interface/enablement checks before reading the asset route
+    ///      so a recipient that became invalid after configuration cannot receive yield. The
+    ///      recipient's `getVaultConfig` revert data bubbles unchanged.
+    function validateYieldRecipientAsset(
+        Kernel kernel_,
+        IDepositManager depositManager_,
+        address recipient_,
+        address asset_
+    ) public view {
+        validateYieldRecipient(kernel_, recipient_);
+        _validateYieldRecipientAsset(depositManager_, recipient_, asset_);
+    }
+
+    /// @notice Validates one recipient route against DepositManager's exact asset-vault pair.
+    function _validateYieldRecipientAsset(
+        IDepositManager depositManager_,
+        address recipient_,
+        address asset_
+    ) private view {
+        address vault = depositManager_.getAssetConfiguration(IERC20(asset_)).vault;
+        IYieldRecipient.VaultConfig memory config = IYieldRecipient(recipient_).getVaultConfig(
+            vault
+        );
+
+        if (config.vault != vault) {
+            revert IBurnerLoans.BurnerLoans_YieldRecipientAssetVaultMismatch(vault, config.vault);
+        }
+        if (config.asset != asset_) {
+            revert IBurnerLoans.BurnerLoans_YieldRecipientAssetMismatch(asset_, config.asset);
+        }
+        if (!config.enabled) {
+            revert IBurnerLoans.BurnerLoans_YieldRecipientAssetNotEnabled(
+                recipient_,
+                asset_,
+                vault
+            );
+        }
+    }
+
+    /// @notice Applies a validated facility-wide yield-recipient transition.
+    function setYieldRecipient(
+        YieldRoutingState storage state_,
+        EnumerableSet.AddressSet storage assets_,
+        Kernel kernel_,
+        IDepositManager depositManager_,
+        address recipient_
+    ) public {
+        if (recipient_ == address(0)) {
+            // Clearing the recipient first would strand nonzero per-asset allocations.
+            if (state_.activeAssetCount != 0) {
+                revert IBurnerLoans.BurnerLoans_YieldAllocationsActive(state_.activeAssetCount);
+            }
+            if (state_.recipient == address(0)) return;
+        } else {
+            validateYieldRecipient(kernel_, recipient_);
+            // Recipient rotation preserves allocations, so every live route must be compatible
+            // with the replacement before the single facility-wide pointer changes.
+            uint256 assetCount = assets_.length();
+            for (uint256 i; i < assetCount; ++i) {
+                address asset = assets_.at(i);
+                if (state_.assetBps[asset] != 0) {
+                    _validateYieldRecipientAsset(depositManager_, recipient_, asset);
+                }
+            }
+            if (state_.recipient == recipient_) return;
+        }
+
+        state_.recipient = recipient_;
+        emit IBurnerLoans.YieldRecipientSet(recipient_);
+    }
+
+    /// @notice Applies a validated per-asset yield-recipient allocation transition.
+    /// @dev Reverts if bps exceeds 10_000, the asset is unregistered, or no recipient is configured.
+    ///      Nonzero bps also requires a currently valid recipient and live asset-vault route. Zero
+    ///      bps deliberately permits cleanup after recipient drift.
+    function setYieldRecipientAssetBps(
+        YieldRoutingState storage state_,
+        EnumerableSet.AddressSet storage assets_,
+        Kernel kernel_,
+        IDepositManager depositManager_,
+        address asset_,
+        uint16 bps_
+    ) public {
+        if (bps_ > 10_000) revert IBurnerLoans.BurnerLoans_InvalidBps(bps_);
+        if (!assets_.contains(asset_)) {
+            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
+        }
+        // Even a zero/no-op call must target the configured routing domain. Rejecting calls while
+        // the recipient is unset keeps setter semantics uniform for every bps value.
+        if (state_.recipient == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
+        uint16 currentBps = state_.assetBps[asset_];
+
+        if (bps_ == 0) {
+            if (currentBps == 0) return;
+            delete state_.assetBps[asset_];
+            --state_.activeAssetCount;
+        } else {
+            validateYieldRecipientAsset(kernel_, depositManager_, state_.recipient, asset_);
+            if (currentBps == bps_) return;
+            state_.assetBps[asset_] = bps_;
+            if (currentBps == 0) ++state_.activeAssetCount;
+        }
+
+        emit IBurnerLoans.YieldRecipientAssetBpsSet(asset_, bps_);
     }
 
     /// @notice Validates an active Burner Loans Inventory link before it is stored.
@@ -165,13 +308,15 @@ library BurnerLoansDependencies {
         return IPRICEv2(priceAddress_);
     }
 
+    /// @notice Validates the Inventory interface and immutable OHM/facility bindings.
     function _validateInventoryCompatibility(
         address facility_,
         address ohm_,
         address inventory_
     ) private view {
-        if (!ERC165Checker.supportsInterface(inventory_, type(IBurnerLoansInventory).interfaceId))
+        if (!ERC165Checker.supportsInterface(inventory_, type(IBurnerLoansInventory).interfaceId)) {
             revert IBurnerLoans.BurnerLoans_InvalidInventory(inventory_);
+        }
 
         IBurnerLoansInventory inventory = IBurnerLoansInventory(inventory_);
         address inventoryOhm = inventory.ohm();
@@ -185,6 +330,7 @@ library BurnerLoansDependencies {
         }
     }
 
+    /// @notice Validates the Config interface and immutable OHM/facility bindings.
     function _validateConfigurator(
         address facility_,
         address ohm_,
@@ -198,6 +344,7 @@ library BurnerLoansDependencies {
         ) revert IBurnerLoansConfig.BurnerLoansConfig_InvalidFacility(configurator_);
     }
 
+    /// @notice Requires Inventory to be an active, same-Kernel policy.
     function _requireInventoryActive(Kernel kernel_, address inventory_) private view {
         if (!kernel_.isPolicyActive(Policy(inventory_))) {
             revert IBurnerLoans.BurnerLoans_InventoryNotActive(inventory_);
@@ -207,6 +354,7 @@ library BurnerLoansDependencies {
         }
     }
 
+    /// @notice Requires Config to be an active, same-Kernel policy.
     function _requireConfiguratorActive(Kernel kernel_, address configurator_) private view {
         if (
             !kernel_.isPolicyActive(Policy(configurator_)) ||
@@ -216,6 +364,8 @@ library BurnerLoansDependencies {
         }
     }
 
+    /// @notice Returns whether a policy reports the expected Kernel.
+    /// @dev Returns false if the policy getter reverts.
     function _reportsKernel(address policy_, Kernel kernel_) private view returns (bool) {
         try Policy(policy_).kernel() returns (Kernel reportedKernel) {
             return address(reportedKernel) == address(kernel_);

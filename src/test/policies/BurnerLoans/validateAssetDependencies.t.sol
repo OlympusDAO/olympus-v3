@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 // Libraries
@@ -28,11 +27,10 @@ contract BurnerLoansValidateAssetDependenciesTest is BurnerLoansTest {
         burnerLoans.validateAssetDependencies(address(usds));
     }
 
-    function test_givenPriceIsZero_reverts() public {
+    function test_givenApprovedPriceIsZero_succeedsWithoutReadingLivePrice() public {
         _configureDepositManagerAsset(address(usds));
         _configurePrice(address(usds), 0);
 
-        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
         burnerLoans.validateAssetDependencies(address(usds));
     }
 

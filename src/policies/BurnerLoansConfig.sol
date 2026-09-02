@@ -6,6 +6,7 @@ import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Check
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
@@ -32,6 +33,7 @@ contract BurnerLoansConfig is
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     ConfigOperatorSingleStep,
+    IBurnerLoans,
     IBurnerLoansConfig,
     IVersioned
 {
@@ -171,12 +173,13 @@ contract BurnerLoansConfig is
     ///      - `asset_` is already configured.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - Risk, bps, maturity, or fee parameters violate configured bounds.
-    ///      - PRICE does not approve the asset or returns a zero price.
+    ///      - PRICE does not approve the asset.
     ///      - DepositManager does not configure the asset or BurnerLoans deposit period.
     ///      - DepositManager has not enabled the deposit period.
     /// @dev This function does not attempt a token transfer and therefore cannot detect conditional
     ///      or fee-on-transfer behavior. Governance must admit only exact-transfer collateral;
-    ///      DepositManager enforces exact receipt when the asset first enters custody.
+    ///      Burner Loans and DepositManager each enforce exact receipt at their respective custody
+    ///      boundary.
     /// @param asset_ Collateral asset to add.
     /// @param debtCapOhm_ Initial active debt cap, in OHM decimals.
     /// @param riskConfig_ Initial risk and term configuration.
@@ -212,6 +215,7 @@ contract BurnerLoansConfig is
             }),
             BurnerLoansMarketConfig.encode(assetConfig, feeConfig_)
         );
+        _FACILITY.addAsset(asset_);
 
         emit AssetAdded(asset_, assetConfig);
         emit AssetFeeConfigSet(asset_, feeConfig_);
@@ -243,6 +247,23 @@ contract BurnerLoansConfig is
         _inventory().setGlobalDebtCap(debtCapOhm_);
     }
 
+    /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
+    ///      Burner Loans rejects the recipient transition.
+    function setYieldRecipient(address recipient_) external givenEnabled onlyConfigOperatorOrAdmin {
+        _FACILITY.setYieldRecipient(recipient_);
+    }
+
+    /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
+    ///      Burner Loans rejects the asset allocation transition.
+    function setYieldRecipientAssetBps(
+        address asset_,
+        uint16 bps_
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
+        _FACILITY.setYieldRecipientAssetBps(asset_, bps_);
+    }
+
     /// @dev Returns the Burner Loans Inventory contract currently bound by Burner Loans.
     function _inventory() internal view returns (IBurnerLoansInventory) {
         address inventory_ = IBurnerLoansView(address(_FACILITY)).inventory();
@@ -256,13 +277,13 @@ contract BurnerLoansConfig is
     ///      config operator is ConfigTimelock, through which burner_loans_admin callers queue the
     ///      transition.
     ///      Enabling revalidates PRICE and DepositManager dependencies. Disabling does not block
-    ///      repayment, withdrawal, seizure, harvest, or safe cleanup while Burner Loans remains
+    ///      repayment, withdrawal, seizure, yield claim, or safe cleanup while Burner Loans remains
     ///      globally enabled. Setting the current value performs no writes and emits no events.
     /// @dev Reverts if:
     ///      - The contract is disabled.
     ///      - The caller is neither admin nor the configured config operator.
     ///      - `asset_` is not configured.
-    ///      - When enabling, PRICE does not approve the asset or returns a zero price.
+    ///      - When enabling, PRICE does not approve the asset.
     ///      - When enabling, DepositManager does not configure and enable the asset period.
     /// @param asset_ Collateral asset to update.
     /// @param enabled_ Whether deposits, borrowing, and maturity extensions are enabled.
@@ -522,7 +543,7 @@ contract BurnerLoansConfig is
     ///      - `asset_` is OHM.
     ///      - The asset's ERC20 decimals exceed the supported maximum.
     ///      - `riskConfig_` violates risk, maturity, or keeper reward bounds.
-    ///      - PRICE does not approve the asset or returns a zero price.
+    ///      - PRICE does not approve the asset.
     ///      - DepositManager has not configured and enabled the Burner Loans deposit period.
     /// @param asset_ Collateral asset to add.
     /// @param debtCapOhm_ Initial asset active debt cap, in OHM decimals.
@@ -730,9 +751,10 @@ contract BurnerLoansConfig is
         }
     }
 
-    /// @notice Asks Burner Loans to validate its PRICE and custody dependencies for an asset.
+    /// @notice Asks Burner Loans to validate its PRICE registration and custody dependencies.
     /// @dev Keeping dependency validation on Burner Loans prevents this configuration policy from
-    ///      carrying a second, independently configured PRICE or Deposit Manager reference.
+    ///      carrying a second, independently configured PRICE or Deposit Manager reference. Live
+    ///      price availability is checked by borrower and seizure operations that consume it.
     /// @param asset_ Collateral asset to validate.
     function _validateAssetDependencies(address asset_) internal view {
         IBurnerLoansView(address(_FACILITY)).validateAssetDependencies(asset_);

@@ -164,10 +164,10 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
     }
 
     // setAssetOriginationsEnabled
-    // given PRICE returns zero for the disabled asset
+    // given PRICE approves the disabled asset but currently returns zero
     //  when setAssetOriginationsEnabled is called by admin
-    //   then it revalidates dependencies and reverts
-    function test_givenPriceIsZero_reverts() public {
+    //   then it enables without an unnecessary live price read
+    function test_givenApprovedPriceIsZero_enablesOriginations() public {
         _addDefaultUsdsAsset();
 
         vm.prank(admin);
@@ -175,8 +175,12 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
         _configurePrice(address(usds), 0);
 
         vm.prank(admin);
-        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
         burnerLoansConfig.setAssetOriginationsEnabled(address(usds), true);
+
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(usds)).originationsEnabled,
+            "originations enabled"
+        );
     }
 
     // setAssetOriginationsEnabled

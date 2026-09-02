@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -106,7 +107,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueSetAssetFeeConfig(
         address asset_,
-        IBurnerLoansConfig.AssetFeeConfig calldata config_,
+        IBurnerLoans.AssetFeeConfig calldata config_,
         FeeConfigUpdateSelection calldata selection_
     ) external returns (uint64 actionId);
 

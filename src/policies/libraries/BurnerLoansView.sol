@@ -15,11 +15,39 @@ import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
+// Contracts
+import {Kernel, Policy, toKeycode} from "src/Kernel.sol";
+
 /// @title Burner Loans View Library
 /// @notice Separately linked position and custody previews exposed by the lifecycle policy.
 library BurnerLoansView {
     /// @dev Fixed-point health-factor scale.
     uint256 internal constant _WAD = 1e18;
+
+    /// @notice Validates the PRICE registration and custody dependencies required to add an asset.
+    /// @dev This admission check deliberately avoids a live price read. Borrow and seizure consume
+    ///      and validate the current price when they execute. Reverts if the configured PRICE
+    ///      module is not current, the asset is not approved, or DepositManager does not support the
+    ///      required enabled unwrapped custody period.
+    function validateAssetDependencies(address asset_) public view {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        Kernel kernel = Policy(address(this)).kernel();
+        if (
+            address(dependencies_.price) == address(0) ||
+            address(kernel.getModuleForKeycode(toKeycode("PRICE"))) !=
+            address(dependencies_.price) ||
+            !dependencies_.price.isAssetApproved(asset_)
+        ) {
+            revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        }
+        BurnerLoansCustody.validateCustodySupportFor(
+            dependencies_.depositManager,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            true,
+            address(this)
+        );
+    }
 
     /// @notice Converts a FLOAN position into the Burner Loans public position shape.
     function getPosition(
@@ -67,7 +95,7 @@ library BurnerLoansView {
         address asset_,
         IFLOANv1.Position memory position
     ) public view returns (bool) {
-        _requireAssetConfigured(dependencies_, asset_);
+        _getAssetConfig(dependencies_, asset_);
         if (position.principalDue == 0) return false;
         if (block.timestamp >= position.maturity) return true;
         return
@@ -101,23 +129,26 @@ library BurnerLoansView {
         uint128 amount_,
         IFLOANv1.Position memory position
     ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
-        IBurnerLoans.AssetConfig memory config = _requireAssetConfigured(dependencies_, asset_);
-        if (!config.originationsEnabled)
+        IBurnerLoans.AssetConfig memory config = _getAssetConfig(dependencies_, asset_);
+        if (!config.originationsEnabled) {
             revert IBurnerLoans.BurnerLoans_AssetOriginationsDisabled(asset_);
+        }
         if (amount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
         IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody
-            .validateCustodySupport(
+            .validateCustodySupportFor(
                 dependencies_.depositManager,
                 asset_,
                 BurnerLoansConstants.DEPOSIT_PERIOD,
-                true
+                true,
+                address(this)
             );
-        BurnerLoansCustody.validateDepositAmount(
+        BurnerLoansCustody.validateDepositAmountFor(
             dependencies_.depositManager,
             asset_,
             assetConfiguration,
-            amount_
+            amount_,
+            address(this)
         );
         depositedCollateral = BurnerLoansCustody.previewDepositAmount(
             assetConfiguration.vault,
@@ -191,22 +222,26 @@ library BurnerLoansView {
     }
 
     /// @notice Quotes collateral withdrawal against a supplied position.
-    /// @dev Reverts for invalid configuration, zero/excessive amounts, or unsupported custody.
+    /// @dev The projected return may be lower than the requested collateral debit or zero because
+    ///      ERC-4626 conversion rounds down. Zero output is never executable because the borrower
+    ///      would surrender collateral credit without receiving an asset. Reverts for invalid
+    ///      configuration, zero/excessive amounts, or unsupported custody.
     function previewWithdrawCollateral(
         BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 amount_,
         IFLOANv1.Position memory position
     ) public view returns (IBurnerLoans.WithdrawPreview memory) {
-        _requireAssetConfigured(dependencies_, asset_);
+        _getAssetConfig(dependencies_, asset_);
         if (amount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
         IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody
-            .validateCustodySupport(
+            .validateCustodySupportFor(
                 dependencies_.depositManager,
                 asset_,
                 BurnerLoansConstants.DEPOSIT_PERIOD,
-                false
+                false,
+                address(this)
             );
         if (amount_ > position.collateral) {
             revert IBurnerLoans.BurnerLoans_InsufficientCollateral(amount_, position.collateral);
@@ -251,13 +286,17 @@ library BurnerLoansView {
             );
     }
 
-    function _requireAssetConfigured(
+    /// @notice Returns the decoded configuration for the first matching asset market.
+    /// @dev Reverts when the market is unavailable or its configuration is incompatible.
+    function _getAssetConfig(
         BurnerLoansContext memory dependencies_,
         address asset_
     ) private view returns (IBurnerLoans.AssetConfig memory config) {
         return _assetConfig(dependencies_, _marketId(dependencies_, asset_));
     }
 
+    /// @notice Returns the first FLOAN market for the facility, asset, and OHM tuple.
+    /// @dev Reverts when no matching market exists.
     function _marketId(
         BurnerLoansContext memory dependencies_,
         address asset_
@@ -271,6 +310,8 @@ library BurnerLoansView {
             );
     }
 
+    /// @notice Decodes a market's Burner Loans configuration.
+    /// @dev Reverts when the market schema or encoded data is incompatible.
     function _assetConfig(
         BurnerLoansContext memory dependencies_,
         uint32 marketId_
@@ -284,6 +325,7 @@ library BurnerLoansView {
             );
     }
 
+    /// @notice Loads the calling facility's dependency context.
     function _dependencies() private view returns (BurnerLoansContext memory) {
         return IBurnerLoansSeizureContext(address(this)).context();
     }

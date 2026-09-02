@@ -7,7 +7,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
@@ -23,6 +25,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
+import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
 /// @title Burner Loans Config Timelock
 /// @notice Timelock implementation for bounded Burner Loans Config updates.
@@ -54,11 +57,17 @@ contract BurnerLoansConfigTimelock is
     /// @dev ABI-encoded byte length of an address followed by one static value.
     uint256 internal constant _LEN_ADDRESS_UINT256 = 64;
 
+    /// @dev ABI-encoded byte length of one address.
+    uint256 internal constant _LEN_ADDRESS = 32;
+
     bytes32 internal constant _FEE_CONFIG_DOMAIN = keccak256("BURNER_LOANS_FEE_CONFIG");
     bytes32 internal constant _RISK_CONFIG_DOMAIN = keccak256("BURNER_LOANS_RISK_CONFIG");
     bytes32 internal constant _DEBT_CAP_DOMAIN = keccak256("BURNER_LOANS_DEBT_CAP");
     bytes32 internal constant _ASSET_ORIGINATIONS_DOMAIN =
         keccak256("BURNER_LOANS_ASSET_ORIGINATIONS");
+    bytes32 internal constant _YIELD_RECIPIENT_DOMAIN = keccak256("BURNER_LOANS_YIELD_RECIPIENT");
+    bytes32 internal constant _YIELD_RECIPIENT_ASSET_DOMAIN =
+        keccak256("BURNER_LOANS_YIELD_RECIPIENT_ASSET");
 
     /// @inheritdoc IBurnerLoansConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
@@ -270,23 +279,37 @@ contract BurnerLoansConfigTimelock is
     /// @inheritdoc ConfigTimelockBatchQueue
     function _configKeys(
         ITimelockBatchQueue.BatchAction memory action_
-    ) internal pure override returns (bytes32[] memory keys) {
-        address asset = abi.decode(action_.payload, (address));
-        bytes32 domain;
-        if (action_.selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
-            domain = _FEE_CONFIG_DOMAIN;
-        } else if (action_.selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
-            domain = _RISK_CONFIG_DOMAIN;
-        } else if (action_.selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
-            domain = _DEBT_CAP_DOMAIN;
-        } else if (action_.selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
-            domain = _ASSET_ORIGINATIONS_DOMAIN;
+    ) internal view override returns (bytes32[] memory keys) {
+        bytes4 selector = action_.selector;
+        bytes32 key;
+        if (selector == IBurnerLoansConfig.setYieldRecipient.selector) {
+            // A recipient rotation affects every live allocation, so it conflicts with every
+            // pending per-asset bps change.
+            _requireNoPendingYieldRecipientAssetKeys();
+            key = _yieldRecipientKey();
+        } else if (selector == IBurnerLoansConfig.setYieldRecipientAssetBps.selector) {
+            // Every bps change depends on the recipient, but different assets remain independent.
+            _requireConfigKeyAvailable(_yieldRecipientKey());
+            key = _yieldRecipientAssetKey(abi.decode(action_.payload, (address)));
         } else {
-            revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+            address asset = abi.decode(action_.payload, (address));
+            bytes32 domain;
+            if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+                domain = _FEE_CONFIG_DOMAIN;
+            } else if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
+                domain = _RISK_CONFIG_DOMAIN;
+            } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
+                domain = _DEBT_CAP_DOMAIN;
+            } else if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
+                domain = _ASSET_ORIGINATIONS_DOMAIN;
+            } else {
+                revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+            }
+            key = keccak256(abi.encode(domain, asset));
         }
 
         keys = new bytes32[](1);
-        keys[0] = keccak256(abi.encode(domain, asset));
+        keys[0] = key;
     }
 
     /// @notice Selects the configuration contract that owns the guarded domains.
@@ -303,9 +326,22 @@ contract BurnerLoansConfigTimelock is
         bytes32,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
+        bytes4 selector = action_.selector;
+        if (selector == IBurnerLoansConfig.setYieldRecipient.selector) {
+            return BurnerLoansConfigTimelockLib.yieldRoutingStateHash(_yieldFacility());
+        }
+        if (selector == IBurnerLoansConfig.setYieldRecipientAssetBps.selector) {
+            address yieldAsset = abi.decode(action_.payload, (address));
+            return
+                BurnerLoansConfigTimelockLib.yieldRecipientAssetStateHash(
+                    _yieldFacility(),
+                    yieldAsset
+                );
+        }
+
         address asset = abi.decode(action_.payload, (address));
         address facility = _BURNER_LOANS_CONFIG.facility();
-        if (action_.selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             return
                 keccak256(
                     abi.encode(facility, asset, _BURNER_LOANS_CONFIG.getAssetFeeConfig(asset))
@@ -313,21 +349,22 @@ contract BurnerLoansConfigTimelock is
         }
 
         IBurnerLoans.AssetConfig memory config = _BURNER_LOANS_CONFIG.getAssetConfig(asset);
-        if (action_.selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
+        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             return
                 keccak256(
                     abi.encode(facility, asset, BurnerLoansConfigTimelockLib.toRiskConfig(config))
                 );
         }
-        if (action_.selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
+        if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
             return keccak256(abi.encode(facility, asset, config.debtCap));
         }
-        if (action_.selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
+        if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
             return keccak256(abi.encode(facility, asset, config.originationsEnabled));
         }
-        revert ITimelockBatchQueue_ActionInvalid(action_.target, action_.selector);
+        revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
+    /// @inheritdoc TimelockBatchQueue
     function _validateExecution(
         address,
         uint64,
@@ -338,6 +375,7 @@ contract BurnerLoansConfigTimelock is
         _requireAuthorizedConfigOperator();
     }
 
+    /// @inheritdoc TimelockBatchQueue
     function _validateCancellation(
         address caller_,
         uint64,
@@ -387,6 +425,7 @@ contract BurnerLoansConfigTimelock is
         BurnerLoansConfigTimelockLib.executeSubAction(_BURNER_LOANS_CONFIG, action_);
     }
 
+    /// @inheritdoc TimelockBatchQueue
     function _validateTimelockDelay(uint48 delay_) internal pure override {
         if (delay_ < MIN_TIMELOCK_DELAY || delay_ > MAX_TIMELOCK_DELAY) {
             revert ITimelockBatchQueue_TimelockDelayInvalid(
@@ -397,6 +436,7 @@ contract BurnerLoansConfigTimelock is
         }
     }
 
+    /// @inheritdoc TimelockBatchQueue
     function _executionWindow() internal pure override returns (uint48) {
         return EXECUTION_WINDOW;
     }
@@ -415,6 +455,35 @@ contract BurnerLoansConfigTimelock is
         }
 
         bytes4 selector = action_.selector;
+        if (selector == IBurnerLoansConfig.setYieldRecipient.selector) {
+            _requirePayloadLength(action_.target, action_.payload, _LEN_ADDRESS, selector);
+            IBurnerLoansView facility = _yieldFacility();
+            _requireYieldFacilityEnabled(facility);
+            BurnerLoansConfigTimelockLib.validateYieldRecipientChange(
+                facility,
+                abi.decode(action_.payload, (address))
+            );
+            return;
+        }
+
+        if (selector == IBurnerLoansConfig.setYieldRecipientAssetBps.selector) {
+            _requirePayloadLength(action_.target, action_.payload, _LEN_ADDRESS_UINT256, selector);
+            (address asset, uint16 bps) = abi.decode(action_.payload, (address, uint16));
+            if (bps > BurnerLoansConstants.MAX_BPS) {
+                revert IBurnerLoans.BurnerLoans_InvalidBps(bps);
+            }
+
+            IBurnerLoansView facility = _yieldFacility();
+            _requireYieldFacilityEnabled(facility);
+            _requireAssetConfigured(asset);
+            address recipient = facility.getYieldRecipient();
+            if (recipient == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
+            if (bps != 0) {
+                facility.validateYieldRecipientAsset(recipient, asset);
+            }
+            return;
+        }
+
         if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             _requirePayloadLength(
                 action_.target,
@@ -486,6 +555,7 @@ contract BurnerLoansConfigTimelock is
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
+    /// @notice Requires this timelock to remain the Config policy's authorized operator.
     function _requireAuthorizedConfigOperator() internal view {
         if (IConfigOperator(address(_BURNER_LOANS_CONFIG)).configOperator() != address(this)) {
             revert IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator(address(this));
@@ -498,6 +568,7 @@ contract BurnerLoansConfigTimelock is
         if (!IEnabler(address(_BURNER_LOANS_CONFIG)).isEnabled()) revert IEnabler.NotEnabled();
     }
 
+    /// @notice Requires an action payload to match the ABI length for its selector.
     function _requirePayloadLength(
         address target_,
         bytes memory payload_,
@@ -515,6 +586,49 @@ contract BurnerLoansConfigTimelock is
     function _requireAssetConfigured(address asset_) internal view {
         if (!_BURNER_LOANS_CONFIG.isAssetConfigured(asset_)) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
+        }
+    }
+
+    /// @notice Returns the facility view used for yield-routing validation and hashing.
+    /// @dev The Config facility is immutable after initial binding.
+    function _yieldFacility() internal view returns (IBurnerLoansView facility) {
+        return IBurnerLoansView(_BURNER_LOANS_CONFIG.facility());
+    }
+
+    /// @notice Requires the Burner Loans facility to be globally enabled for routing changes.
+    /// @dev Reverts with `IEnabler.NotEnabled` while the facility is disabled.
+    function _requireYieldFacilityEnabled(IBurnerLoansView facility_) internal view {
+        if (!IEnabler(address(facility_)).isEnabled()) revert IEnabler.NotEnabled();
+    }
+
+    /// @notice Returns the local guard key for facility-wide recipient changes.
+    function _yieldRecipientKey() internal pure returns (bytes32 key) {
+        return keccak256(abi.encode(_YIELD_RECIPIENT_DOMAIN));
+    }
+
+    /// @notice Returns the local guard key for one asset's recipient allocation.
+    function _yieldRecipientAssetKey(address asset_) internal pure returns (bytes32 key) {
+        return keccak256(abi.encode(_YIELD_RECIPIENT_ASSET_DOMAIN, asset_));
+    }
+
+    /// @notice Requires a destination-local configuration key to have no pending owner.
+    /// @dev Reverts with the same pending-key error used by `ConfigTimelockBatchQueue`.
+    function _requireConfigKeyAvailable(bytes32 localKey_) internal view {
+        bytes32 key = keccak256(abi.encode(address(_BURNER_LOANS_CONFIG), localKey_));
+        uint64 owner = this.pendingActionId(key);
+        if (owner != 0) {
+            revert IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending(key, owner);
+        }
+    }
+
+    /// @notice Requires every registered asset allocation key to have no pending owner.
+    /// @dev This makes a recipient change conflict with any pending per-asset allocation without
+    ///      making allocation changes for different assets conflict with each other.
+    function _requireNoPendingYieldRecipientAssetKeys() internal view {
+        IBurnerLoansView facility = _yieldFacility();
+        uint256 assetCount = facility.getAssetCount();
+        for (uint256 i; i < assetCount; ++i) {
+            _requireConfigKeyAvailable(_yieldRecipientAssetKey(facility.getAssetAt(i)));
         }
     }
 

@@ -4,11 +4,11 @@ pragma solidity >=0.8.24;
 
 import {Actions} from "src/Kernel.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
 import {BurnerLoansConfigTimelockHarness} from "src/test/policies/BurnerLoansConfigTimelock/fixtures/BurnerLoansConfigTimelockHarness.sol";
 
 abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
@@ -218,6 +218,21 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
 
         vm.prank(burnerLoansAdmin);
         actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
+    }
+
+    function _deployUsdsYieldRecipient() internal returns (MockYieldRecipient recipient) {
+        vm.startPrank(admin);
+        recipient = new MockYieldRecipient(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
+        vm.stopPrank();
+        recipient.setVaultConfig(address(0), address(usds), true);
+    }
+
+    function _yieldAction(
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal view returns (ITimelockBatchQueue.BatchAction memory) {
+        return _singleAction(selector_, payload_);
     }
 }
 /// forge-lint: disable-end(unwrapped-modifier-logic)

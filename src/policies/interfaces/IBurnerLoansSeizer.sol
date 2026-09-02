@@ -7,31 +7,85 @@ import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 /// @title Burner Loans Seizer Interface
 /// @notice Bounded periodic scanning and seizure.
 interface IBurnerLoansSeizer is IPeriodicTask {
+    /// @notice A required constructor or asset address is zero.
     error BurnerLoansSeizer_ZeroAddress();
+
+    /// @notice The configured target does not advertise the required Burner Loans interfaces.
+    /// @param burnerLoans Invalid Burner Loans target.
     error BurnerLoansSeizer_InvalidBurnerLoans(address burnerLoans);
+
+    /// @notice The configured Burner Loans target belongs to a different Kernel.
+    /// @param expectedKernel Kernel that manages the Seizer.
+    /// @param actualKernel Kernel reported by the Burner Loans target.
     error BurnerLoansSeizer_KernelMismatch(address expectedKernel, address actualKernel);
+
+    /// @notice The gas forwarded to one complete task execution is zero.
     error BurnerLoansSeizer_InvalidExecutionGasLimit();
+
+    /// @notice The gas-bounded task body was called by an account other than this contract.
     error BurnerLoansSeizer_OnlySelf();
+
+    /// @notice A scan or seizure bound is zero, exceeds its maximum, or is internally inconsistent.
+    /// @param maxBorrowersToCheck Proposed borrower scan limit.
+    /// @param maxBorrowersToSeize Proposed borrower seizure limit.
     error BurnerLoansSeizer_InvalidScanLimits(
         uint16 maxBorrowersToCheck,
         uint8 maxBorrowersToSeize
     );
+
+    /// @notice An asset is already included in the round-robin scan.
+    /// @param asset Duplicate managed asset.
     error BurnerLoansSeizer_AssetAlreadyManaged(address asset);
+
+    /// @notice An asset is not included in the round-robin scan.
+    /// @param asset Unmanaged asset.
     error BurnerLoansSeizer_AssetNotManaged(address asset);
 
+    /// @notice Emitted when an asset is added to the round-robin scan.
+    /// @param asset Added collateral asset.
     event AssetAdded(address indexed asset);
+
+    /// @notice Emitted when an asset is removed from the round-robin scan.
+    /// @param asset Removed collateral asset.
     event AssetRemoved(address indexed asset);
+
+    /// @notice Emitted when the scan and seizure bounds change.
+    /// @param maxBorrowersToCheck New borrower scan limit.
+    /// @param maxBorrowersToSeize New borrower seizure limit.
     event ScanLimitsSet(uint16 maxBorrowersToCheck, uint8 maxBorrowersToSeize);
+
+    /// @notice Emitted when the gas forwarded to one task execution changes.
+    /// @param gasLimit New task gas limit.
     event ExecutionGasLimitSet(uint32 gasLimit);
+
+    /// @notice Emitted when the gas-bounded task body fails.
+    /// @param reason First four bytes of the task's bounded revert data.
     event ExecutionFailed(bytes4 reason);
-    event Executed(
+
+    /// @notice Emitted after an asset scan completes and any returned borrowers are seized.
+    /// @param asset Scanned collateral asset.
+    /// @param startIndex Borrower cursor used at the start of the scan.
+    /// @param nextIndex Borrower cursor stored after successful processing.
+    /// @param seizedBorrowers Number of borrowers submitted for seizure.
+    event SeizureExecuted(
         address indexed asset,
         uint256 startIndex,
         uint256 nextIndex,
         uint256 seizedBorrowers
     );
+
+    /// @notice Emitted when borrower scanning fails without reverting the Heart task.
+    /// @param asset Collateral asset whose scan failed.
+    /// @param reason Selector of the underlying error, or zero when unavailable.
     event ScanFailed(address indexed asset, bytes4 reason);
+
+    /// @notice Emitted when a seizure fails without reverting the Heart task.
+    /// @param asset Collateral asset whose seizure failed.
+    /// @param reason Selector of the underlying error, or zero when unavailable.
     event SeizureFailed(address indexed asset, bytes4 reason);
+
+    /// @notice Emitted when this task lacks the protocol seizer role for an asset.
+    /// @param asset Collateral asset skipped because authority was missing.
     event SeizerRoleMissing(address indexed asset);
 
     /// @notice Scans one managed asset and seizes eligible positions.

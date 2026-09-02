@@ -11,6 +11,74 @@ import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
+    function test_givenQueuedYieldAction_cancellationReleasesRoutingGuard() public {
+        address recipient = address(_deployUsdsYieldRecipient());
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(recipient)
+        );
+
+        (bytes32 key, ) = configTimelockHarness.getQueuedConfigState(actionId, 0, 0);
+        assertEq(configTimelockHarness.pendingActionId(key), actionId, "yield routing key owner");
+        assertEq(configTimelockHarness.getQueuedConfigStateCount(actionId, 0), 1, "guard stored");
+
+        vm.prank(emergency);
+        configTimelockHarness.cancelQueuedAction(actionId);
+
+        assertEq(configTimelockHarness.pendingActionId(key), 0, "yield routing key released");
+        assertEq(configTimelockHarness.getQueuedConfigStateCount(actionId, 0), 0, "guard cleared");
+        assertEq(
+            configTimelockHarness.getQueuedConfigDestination(actionId, 0),
+            address(0),
+            "destination cleared"
+        );
+    }
+
+    function test_givenQueuedYieldRecipientAssetBps_cancellationReleasesAssetAndRecipientGuards()
+        public
+    {
+        address recipient = address(_deployUsdsYieldRecipient());
+        vm.startPrank(admin);
+        burnerLoansConfig.setYieldRecipient(recipient);
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
+        vm.stopPrank();
+
+        vm.prank(burnerLoansAdmin);
+        uint64 firstActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(2_500))
+        );
+        vm.prank(emergency);
+        configTimelockHarness.cancelQueuedAction(firstActionId);
+
+        // The cancelled action no longer owns the asset key, so the same asset can be queued again.
+        vm.prank(burnerLoansAdmin);
+        uint64 secondActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
+            abi.encode(address(usds), uint16(5_000))
+        );
+        vm.prank(emergency);
+        configTimelockHarness.cancelQueuedAction(secondActionId);
+
+        // Once the replacement bps action is also cancelled, no per-asset key blocks a recipient
+        // rotation.
+        address replacement = address(_deployUsdsYieldRecipient());
+        vm.prank(burnerLoansAdmin);
+        uint64 recipientActionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldRecipient.selector,
+            abi.encode(replacement)
+        );
+
+        assertEq(recipientActionId, 3, "recipient action id");
+    }
+
     // cancelQueuedAction
     // given caller does not have emergency role
     //  when cancelling a queued action

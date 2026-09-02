@@ -108,46 +108,58 @@ library BurnerLoansSeizure {
     /// @notice Defaults a homogeneous borrower batch and routes withdrawn collateral.
     /// @dev Applies the same validation as preview, then atomically defaults FLOAN positions,
     ///      withdraws collateral, pays any keeper reward, and transfers the remainder to treasury.
+    /// @return keeperReward Actual collateral paid to the keeper.
+    /// @return collateralToTreasury Actual collateral routed to Treasury.
     function seize(
         address asset_,
         address[] memory borrowers_
-    ) public returns (IBurnerLoans.SeizePreview memory preview) {
+    ) public returns (uint256 keeperReward, uint256 collateralToTreasury) {
         BurnerLoansContext memory dependencies_ = _dependencies();
         bool isProtocolCaller = _isProtocolCaller(dependencies_);
         Batch memory batch = _quoteBatch(dependencies_, asset_, borrowers_, isProtocolCaller);
 
+        uint256 actualDebtOhm;
+        uint256 actualCollateral;
         for (uint256 i; i < batch.positionIds.length; ++i) {
-            dependencies_.floan.defaultPosition(batch.positionIds[i]);
+            // FLOAN owns position accounting. Capture each mutation result so settlement, events,
+            // and action return values are based on stored outcomes rather than the earlier quote.
+            (uint128 debtDefaulted, , uint128 collateralSeized) = dependencies_
+                .floan
+                .defaultPosition(batch.positionIds[i]);
+            batch.debts[i] = debtDefaulted;
+            batch.collaterals[i] = collateralSeized;
+            actualDebtOhm += debtDefaulted;
+            actualCollateral += collateralSeized;
         }
-        dependencies_.inventory.recordDefault(batch.preview.seizedDebtOhm.toUint128());
+        dependencies_.inventory.recordDefault(actualDebtOhm.toUint128());
 
         uint256 startingBalance = IERC20(asset_).balanceOf(address(this));
         uint256 amountOut;
-        if (batch.creditedCollateral != 0) {
+        if (actualCollateral != 0) {
             amountOut = BurnerLoansCustody.withdraw(
                 dependencies_.depositManager,
                 asset_,
                 BurnerLoansConstants.DEPOSIT_PERIOD,
-                batch.creditedCollateral,
+                actualCollateral,
                 address(this)
             );
             if (amountOut == 0) revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
         }
 
-        preview = _previewAmounts(
+        IBurnerLoans.SeizePreview memory result = _previewAmounts(
             dependencies_.ohmDecimals,
             batch.config,
             batch.pricing,
-            batch.preview.seizedDebtOhm,
+            actualDebtOhm,
             amountOut,
             isProtocolCaller
         );
 
-        if (preview.keeperReward != 0) {
-            ERC20(asset_).safeTransfer(msg.sender, preview.keeperReward);
+        if (result.keeperReward != 0) {
+            ERC20(asset_).safeTransfer(msg.sender, result.keeperReward);
         }
-        if (preview.collateralToTreasury != 0) {
-            ERC20(asset_).safeTransfer(dependencies_.treasury, preview.collateralToTreasury);
+        if (result.collateralToTreasury != 0) {
+            ERC20(asset_).safeTransfer(dependencies_.treasury, result.collateralToTreasury);
         }
 
         uint256 finalBalance = IERC20(asset_).balanceOf(address(this));
@@ -173,11 +185,13 @@ library BurnerLoansSeizure {
             msg.sender,
             asset_,
             borrowers_.length,
-            preview.seizedDebtOhm,
-            preview.seizedCollateral,
-            preview.keeperReward,
-            preview.collateralToTreasury
+            result.seizedDebtOhm,
+            result.seizedCollateral,
+            result.keeperReward,
+            result.collateralToTreasury
         );
+
+        return (result.keeperReward, result.collateralToTreasury);
     }
 
     /// @notice Scans active borrowers and returns a bounded set of seizable addresses.
@@ -195,6 +209,8 @@ library BurnerLoansSeizure {
             _scanResponse(dependencies_, request_.asset, result, _isProtocolCaller(dependencies_));
     }
 
+    /// @notice Resolves market state and performs the bounded borrower scan requested by a caller.
+    /// @dev Returns early without PRICE reads when the market is empty or either scan limit is zero.
     function _scanRequest(
         BurnerLoansContext memory dependencies_,
         ScanRequest memory request_
@@ -241,6 +257,8 @@ library BurnerLoansSeizure {
         return scanned;
     }
 
+    /// @notice Converts accumulated scan accounting into the external response shape.
+    /// @dev Custody is only previewed when at least one borrower is returned.
     function _scanResponse(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -277,6 +295,8 @@ library BurnerLoansSeizure {
         );
     }
 
+    /// @notice Scans active borrowers from a circular cursor until either bound is reached.
+    /// @dev The cursor advances for every inspected borrower, including non-seizable positions.
     function _scan(
         BurnerLoansContext memory dependencies_,
         IBurnerLoans.AssetConfig memory config_,
@@ -314,6 +334,8 @@ library BurnerLoansSeizure {
         result.nextIndex = params_.cursor;
     }
 
+    /// @notice Validates a seizure batch and calculates its expected custody output and routing.
+    /// @dev Reverts for disabled Inventory, invalid batch input, unsupported custody, or zero output.
     function _quoteBatch(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -363,6 +385,8 @@ library BurnerLoansSeizure {
         );
     }
 
+    /// @notice Validates every borrower and accumulates quoted debt and collateral.
+    /// @dev Duplicate borrowers are rejected before their position contributes to the totals.
     function _validateBatch(
         BurnerLoansContext memory dependencies_,
         address[] memory borrowers_,
@@ -392,6 +416,7 @@ library BurnerLoansSeizure {
         }
     }
 
+    /// @notice Resolves one borrower's live position and requires it to be seizable.
     function _validatedPosition(
         BurnerLoansContext memory dependencies_,
         BatchContext memory context_,
@@ -412,6 +437,7 @@ library BurnerLoansSeizure {
         }
     }
 
+    /// @notice Rejects a borrower already present earlier in the batch.
     function _requireUniqueBorrower(
         address[] memory borrowers_,
         uint256 index_,
@@ -424,6 +450,7 @@ library BurnerLoansSeizure {
         }
     }
 
+    /// @notice Splits seized collateral between the keeper and Treasury.
     function _previewAmounts(
         uint8 ohmDecimals_,
         IBurnerLoans.AssetConfig memory config_,
@@ -450,6 +477,8 @@ library BurnerLoansSeizure {
             });
     }
 
+    /// @notice Calculates the keeper reward capped by configuration and excess backing.
+    /// @dev Protocol callers receive no reward. All values use their native token decimal scales.
     function _keeperReward(
         uint8 ohmDecimals_,
         IBurnerLoans.AssetConfig memory config_,
@@ -488,6 +517,8 @@ library BurnerLoansSeizure {
         return configuredReward < surplus ? configuredReward : surplus;
     }
 
+    /// @notice Returns whether a live position is matured or below the minimum health factor.
+    /// @dev Mature positions avoid PRICE-dependent arithmetic after the supplied snapshot is built.
     function _isSeizable(
         uint8 ohmDecimals_,
         IFLOANv1.Position memory position_,
@@ -518,6 +549,7 @@ library BurnerLoansSeizure {
         return BurnerLoansCalculator.healthFactor(collateralUsd, requiredCollateralUsd) < _WAD;
     }
 
+    /// @notice Loads fresh OHM and collateral prices plus canonical backing for a seizure.
     function _pricing(
         BurnerLoansContext memory dependencies_,
         address asset_
@@ -542,6 +574,7 @@ library BurnerLoansSeizure {
         );
     }
 
+    /// @notice Loads a nonzero current price that is no older than one observation frequency.
     function _freshPrice(
         IPRICEv2 price_,
         address asset_,
@@ -558,6 +591,7 @@ library BurnerLoansSeizure {
         }
     }
 
+    /// @notice Decodes the Burner Loans configuration stored on a FLOAN market.
     function _assetConfigForMarket(
         IFLOANv1 floan_,
         uint32 marketId_
@@ -571,10 +605,12 @@ library BurnerLoansSeizure {
             );
     }
 
+    /// @notice Loads the Burner Loans dependency context from the calling policy.
     function _dependencies() private view returns (BurnerLoansContext memory) {
         return IBurnerLoansSeizureContext(address(this)).context();
     }
 
+    /// @notice Returns whether the caller is a protocol-operated seizure task.
     function _isProtocolCaller(
         BurnerLoansContext memory dependencies_
     ) private view returns (bool) {

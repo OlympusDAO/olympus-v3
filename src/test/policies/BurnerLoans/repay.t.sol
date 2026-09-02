@@ -7,6 +7,9 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
+// Libraries
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+
 // Contracts
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
@@ -90,7 +93,11 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.Repaid(alice, address(usds), alice, 40e9, 60e9);
         vm.prank(alice);
-        uint256 health = burnerLoans.repay(address(usds), 40e9, alice);
+        (uint256 remainingDebtOhm, uint256 healthFactor) = burnerLoans.repay(
+            address(usds),
+            40e9,
+            alice
+        );
 
         IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
         assertEq(ohm.totalSupply(), supplyBefore - 40e9, "OHM supply");
@@ -103,7 +110,8 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
             inventory.globalDebtCapOhm() - 60e9,
             "recycled mint approval"
         );
-        assertEq(health, 0, "unknown partial health sentinel");
+        assertEq(remainingDebtOhm, 60e9, "returned remaining debt");
+        assertEq(healthFactor, 0, "returned unknown health sentinel");
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -166,7 +174,9 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InexactRepaymentTransfer.selector,
+                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                address(ohm),
+                address(inventory),
                 repayment,
                 0
             )
@@ -264,7 +274,11 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
-        uint256 health = burnerLoans.repay(address(usds), 100e9, alice);
+        (uint256 remainingDebtOhm, uint256 healthFactor) = burnerLoans.repay(
+            address(usds),
+            100e9,
+            alice
+        );
 
         IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
         assertEq(position.debtOhm, 0, "position debt");
@@ -272,7 +286,8 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         assertEq(position.maturity, 0, "maturity");
         assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "active borrowers");
         assertEq(burnerLoans.totalActiveDebtOhm(), 0, "facility debt");
-        assertEq(health, type(uint256).max, "debt-free health");
+        assertEq(remainingDebtOhm, 0, "returned remaining debt");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -546,7 +561,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "TRANSFER_FROM_FAILED"));
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
@@ -561,7 +576,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _approveOhm(bob, 1e9);
 
         vm.prank(bob);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(abi.encodeWithSignature("Error(string)", "TRANSFER_FROM_FAILED"));
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }

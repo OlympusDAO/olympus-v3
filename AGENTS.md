@@ -78,6 +78,7 @@ Use the repo's existing commands and tooling for commit, push, and PR work. Do n
 Batch approval into two explicit gates. If the user approves a gate, do not ask separately for lint, `git add`, `git commit`, `git push`, or PR creation steps covered by that gate.
 
 1. Commit approval:
+
     - Show the current branch.
     - Show the exact files that will be staged.
     - Show the validation command that will run before commit.
@@ -163,6 +164,11 @@ Never stage unrelated files. If the worktree has unrelated modifications, leave 
 - Mark completed after finishing - not in batches
 - One task in_progress at a time
 
+### ERC-20 Safety
+
+- Before writing or modifying Solidity code that transfers, approves, custodies, or accounts for
+    ERC-20 tokens, use the `/erc20-safety` skill.
+
 ### Testing Discipline
 
 - Before writing or modifying Solidity tests, use the `/test-write` skill.
@@ -218,11 +224,12 @@ Never stage unrelated files. If the worktree has unrelated modifications, leave 
 
 Claude skills are located in `.claude/skills/` and can be invoked by name:
 
-| Skill         | Purpose                                                                              |
-| ------------- | ------------------------------------------------------------------------------------ |
-| `/test-write` | Test writing guidance (file structure, modifiers, naming, error handling)            |
-| `/test-debug` | Test debugging guidance (verbosity levels, setUp() issues, trace output)             |
-| `/lint-fix`   | Linter note resolution (deployed vs in-development contracts, suppression templates) |
+| Skill           | Purpose                                                                              |
+| --------------- | ------------------------------------------------------------------------------------ |
+| `/erc20-safety` | ERC-20 transfer, accounting, governance review, and callback guidance                |
+| `/test-write`   | Test writing guidance (file structure, modifiers, naming, error handling)            |
+| `/test-debug`   | Test debugging guidance (verbosity levels, setUp() issues, trace output)             |
+| `/lint-fix`     | Linter note resolution (deployed vs in-development contracts, suppression templates) |
 
 Invoke a skill by name, e.g., `/test-write` for test writing guidance.
 
@@ -250,11 +257,13 @@ Configuration is in `.mcp.json`. API keys are set via environment variables:
 The protocol follows the Default Framework pattern with a three major components:
 
 1. **Kernel** (`src/Kernel.sol`) - Central governance and access control system
+
     - Manages installation/upgrading of modules and activation/deactivation of policies
     - Implements role-based access control with 5-byte keycodes
     - Executes governance actions: InstallModule, UpgradeModule, ActivatePolicy, DeactivatePolicy, ChangeExecutor, MigrateKernel
 
 2. **Modules** (`src/modules/`) - Shared state storage with minimal dependencies
+
     - Each module has a 5-byte keycode identifier (e.g., TRSRY, MINTR, PRICE)
     - Define roles for policies to access module functions
     - Can be upgraded by installing new versions with same keycode
@@ -404,11 +413,13 @@ When working with Solidity code involving mathematical operations, follow these 
 1. **No Floating-Point**: Solidity has no floating-point numbers - all numbers are integers.
 
 2. **Decimal Representation**:
+
     - Decimal numbers are represented as integers with an associated decimal scale
     - Example: 1.0 with 18 decimals = 1000000000000000000 (1e18)
     - Always track and document the decimal scale of each variable
 
 3. **Multiplication & Division Order**:
+
     - When multiplying/dividing numbers with different scales, order matters
     - General pattern: multiply first, then divide to maintain precision
     - Example: `result = a * scaleB / scaleC` where result has scaleB decimals
@@ -416,6 +427,7 @@ When working with Solidity code involving mathematical operations, follow these 
     - Phantom overflows can occur, where `a * scaleB` (from the example above) overflows the maximum value of `uint256`. For that reason, it is advisable to use the FullMath library in `src/libraries/FullMath.sol`.
 
 4. **Rounding Behavior**:
+
     - Solidity rounds DOWN by default (floor division)
     - Use `mulDiv()` for standard rounding down
     - Use `mulDivUp()` when rounding up is needed
