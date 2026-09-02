@@ -5,17 +5,28 @@ import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
+import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
     error ClaimReverted();
+    error AssetViewReverted();
+    error InvalidAssetIndex(uint256 index);
 
     bool public claimReverts;
     bool public claimRevertsWithShortData;
     bool public claimRevertsWithLargeData;
-    bool public claimConsumesAllGas;
+    address public claimConsumesAllGasAsset;
+    bool public assetViewReverts;
+    bool public supportsAssetView = true;
     uint256 public claimCalls;
+    address public lastClaimedAsset;
 
-    constructor(Kernel kernel_) Policy(kernel_) {}
+    address internal constant _ASSET = address(0xA11CE);
+    address[] internal _assets;
+
+    constructor(Kernel kernel_) Policy(kernel_) {
+        _assets.push(_ASSET);
+    }
 
     function configureDependencies()
         external
@@ -47,12 +58,40 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
         claimRevertsWithLargeData = reverts_;
     }
 
-    function setClaimConsumesAllGas(bool consumesAllGas_) external {
-        claimConsumesAllGas = consumesAllGas_;
+    function setClaimConsumesAllGasAsset(address asset_) external {
+        claimConsumesAllGasAsset = asset_;
     }
 
-    function claimYield() external {
-        if (claimConsumesAllGas) {
+    function setSupportsAssetView(bool supportsAssetView_) external {
+        supportsAssetView = supportsAssetView_;
+    }
+
+    function setAssetViewReverts(bool reverts_) external {
+        assetViewReverts = reverts_;
+    }
+
+    function setAssets(address[] calldata assets_) external {
+        _assets = assets_;
+    }
+
+    function claimYield(address asset_) external returns (uint256 claimed) {
+        _claimYield(asset_);
+        return 1;
+    }
+
+    function getAssetCount() external view returns (uint256 count) {
+        if (assetViewReverts) revert AssetViewReverted();
+        return _assets.length;
+    }
+
+    function getAssetAt(uint256 index_) external view returns (address asset) {
+        if (assetViewReverts) revert AssetViewReverted();
+        if (index_ >= _assets.length) revert InvalidAssetIndex(index_);
+        return _assets[index_];
+    }
+
+    function _claimYield(address asset_) private {
+        if (asset_ == claimConsumesAllGasAsset) {
             assembly ("memory-safe") {
                 invalid()
             }
@@ -69,12 +108,14 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
             }
         }
         if (claimReverts) revert ClaimReverted();
+        lastClaimedAsset = asset_;
         ++claimCalls;
     }
 
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) external view returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId;
+            interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId ||
+            (supportsAssetView && interfaceId_ == type(IBurnerLoansView).interfaceId);
     }
 }

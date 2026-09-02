@@ -75,16 +75,16 @@ The single-step mix-in has these semantics:
 
 - `configOperator` starts at `address(0)`, so delegated configuration is denied by default.
 - `setConfigOperator(newOperator)` replaces the operator immediately after authorization. The new
-  operator does not perform a separate acceptance transaction.
+    operator does not perform a separate acceptance transaction.
 - Setting `address(0)` revokes delegated access.
 - A successful change emits `ConfigOperatorSet`.
 - `_authorizeSetConfigOperator()` controls who may rotate or revoke the operator. Its base
-  implementation returns false, so the setter denies every caller. A Config contract must
-  explicitly override the hook to grant authority and may apply product roles, enabled-state
-  requirements, or other lifecycle checks. The hook authorizes the caller rather than validating
-  the new operator address.
+    implementation returns false, so the setter denies every caller. A Config contract must
+    explicitly override the hook to grant authority and may apply product roles, enabled-state
+    requirements, or other lifecycle checks. The hook authorizes the caller rather than validating
+    the new operator address.
 - Product setters decide whether the configured operator is their only delegated caller or is
-  accepted alongside another authority such as `admin`.
+    accepted alongside another authority such as `admin`.
 - Products that implement ERC-165 should advertise `IConfigOperator` explicitly.
 
 This separation keeps target ownership independent from queue mechanics. A product can use
@@ -440,12 +440,14 @@ The facility component therefore cannot independently make a queued action stale
 Burner Loans stack requires a fresh Config and facility pair; the new Config address creates a new
 destination namespace without rotating the old Config's facility.
 
-| Action                        | Local key                                                 | Scoped ownership key                      | Canonical state hash                                          |
-| ----------------------------- | --------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
-| `setAssetFeeConfig`           | `keccak256(abi.encode(_FEE_CONFIG_DOMAIN, asset))`         | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, completeFeeConfig))`   |
-| `setAssetRiskConfig`          | `keccak256(abi.encode(_RISK_CONFIG_DOMAIN, asset))`        | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, riskAndTermFields))`   |
-| `setAssetDebtCap`             | `keccak256(abi.encode(_DEBT_CAP_DOMAIN, asset))`           | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, configuredDebtCap))`   |
-| `setAssetOriginationsEnabled` | `keccak256(abi.encode(_ASSET_ORIGINATIONS_DOMAIN, asset))` | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, originationsEnabled))` |
+| Action                        | Local key                                                   | Scoped ownership key                      | Canonical state hash                                          |
+| ----------------------------- | ----------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------- |
+| `setAssetFeeConfig`           | `keccak256(abi.encode(_FEE_CONFIG_DOMAIN, asset))`          | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, completeFeeConfig))`   |
+| `setAssetRiskConfig`          | `keccak256(abi.encode(_RISK_CONFIG_DOMAIN, asset))`         | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, riskAndTermFields))`   |
+| `setAssetDebtCap`             | `keccak256(abi.encode(_DEBT_CAP_DOMAIN, asset))`            | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, configuredDebtCap))`   |
+| `setAssetOriginationsEnabled` | `keccak256(abi.encode(_ASSET_ORIGINATIONS_DOMAIN, asset))`  | `keccak256(abi.encode(config, localKey))` | `keccak256(abi.encode(facility, asset, originationsEnabled))` |
+| `setYieldRepurchaseRecipient` | `keccak256(abi.encode(_YIELD_REPURCHASE_RECIPIENT_DOMAIN))` | `keccak256(abi.encode(config, localKey))` | Facility, global recipient, asset order, and every full route |
+| `setYieldAssetRouting`        | `keccak256(abi.encode(_ASSET_YIELD_ROUTING_DOMAIN, asset))` | `keccak256(abi.encode(config, localKey))` | Facility, global recipient, asset, and its complete route     |
 
 The risk hash excludes collateral decimals, debt cap, and origination state. The risk setter does
 not change or depend on those fields.
@@ -458,6 +460,31 @@ one batch because their canonical domains do not overlap.
 
 Two partial fee updates for one asset use the same fee key. Two partial risk updates use the same
 risk key. Cancel and replace the existing action when another same-domain update is required.
+
+Yield routing uses two related domains. The facility-wide `setYieldRepurchaseRecipient` action
+conflicts with every pending `setYieldAssetRouting` action because every route may depend on the
+global recipient. Two route replacements for the same asset conflict, while route replacements for
+different assets remain independent. The global action scans every registered asset route before
+acquiring its key; an asset action verifies that the global-recipient key is available.
+
+Queue-time recipient validation is structural: clearing checks for active repurchase allocations,
+and a proposed nonzero recipient is checked for collisions with stored direct recipients. Interface,
+Kernel-policy, enabled-state, and vault-route checks depend on live external state and are enforced
+authoritatively by Burner Loans when the matured action executes.
+
+The per-asset action payload must be the canonical ABI encoding of
+`(address asset, AssetYieldRouting routing)`, where the route contains one `uint16` repurchase BPS
+field and a dynamic `DirectYieldAllocation[]`. The timelock decodes it at queue time and compares
+the payload with the decoded values re-encoded, rejecting decoder failures and non-canonical
+encodings. No separate recipient-count limit is imposed. Execution prefixes the validated payload
+with the setter selector and forwards it to Config atomically.
+
+The global routing state hash includes the facility address, global repurchase recipient, append-only
+asset order, and every complete ordered asset route. Adding an asset, reordering direct allocations,
+or changing any route field makes a queued global action stale. A per-asset hash includes the
+facility, global recipient, asset address, and that asset's complete ordered route; unrelated asset
+route changes do not stale it. Live interface support, policy enablement, Treasury identity, and
+repurchase asset/vault configuration are execution prerequisites rather than stable conflict keys.
 
 ## Observability
 

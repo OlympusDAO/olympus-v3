@@ -19,9 +19,9 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @return configurator_ Burner Loans Config address, or zero before it is bound.
     function configurator() external view returns (address configurator_);
 
-    /// @notice Returns the facility-wide yield recipient.
-    /// @return recipient Current recipient, or zero when none is configured.
-    function getYieldRecipient() external view returns (address recipient);
+    /// @notice Returns the facility-wide yield repurchase recipient.
+    /// @return recipient Current repurchase recipient, or zero when none is configured.
+    function getYieldRepurchaseRecipient() external view returns (address recipient);
 
     /// @notice Returns the number of collateral assets registered by Config.
     /// @return count Number of registered assets.
@@ -33,25 +33,23 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @return asset Registered collateral asset.
     function getAssetAt(uint256 index_) external view returns (address asset);
 
-    /// @notice Returns an asset's raw yield-recipient share without requiring live market state.
+    /// @notice Returns an asset's complete stored yield route without requiring live market state.
+    /// @dev The returned direct-allocation array preserves its configured order.
     /// @param asset_ Collateral asset queried.
-    /// @return bps Recipient share in basis points.
-    function getYieldRecipientAssetBps(address asset_) external view returns (uint16 bps);
+    /// @return routing Complete declarative yield route.
+    function getYieldAssetRouting(
+        address asset_
+    ) external view returns (AssetYieldRouting memory routing);
 
-    /// @notice Validates a proposed facility-wide recipient.
-    /// @dev Reverts if:
-    ///      - The recipient is zero or lacks `IYieldRecipient` or `IEnabler` support.
-    ///      - The recipient is not an active policy in the facility Kernel.
-    ///      - The recipient is disabled.
-    /// @param recipient_ Proposed recipient.
-    function validateYieldRecipient(address recipient_) external view;
-
-    /// @notice Validates a recipient's exact DepositManager route for one collateral asset.
-    /// @dev Reverts if global recipient validation fails or the recipient pair is mismatched or
-    ///      disabled.
-    /// @param recipient_ Proposed recipient.
-    /// @param asset_ Collateral asset whose route is validated.
-    function validateYieldRecipientAsset(address recipient_, address asset_) external view;
+    /// @notice Validates a proposed complete yield route against current facility dependencies.
+    /// @dev Reverts under the same route conditions as `setYieldAssetRouting`, without changing
+    ///      state. This supports validation before a timelocked action is queued.
+    /// @param asset_ Registered collateral asset whose route is validated.
+    /// @param routing_ Complete proposed route for the asset.
+    function validateYieldAssetRouting(
+        address asset_,
+        AssetYieldRouting calldata routing_
+    ) external view;
 
     /// @notice Validates that a collateral asset is supported by this facility's dependencies.
     /// @dev Checks PRICE approval without reading a live price. Reverts when PRICE does not support

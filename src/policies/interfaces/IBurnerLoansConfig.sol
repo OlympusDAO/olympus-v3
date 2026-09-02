@@ -127,20 +127,23 @@ interface IBurnerLoansConfig {
     /// @param debtCapOhm_ New facility-wide principal cap, in OHM decimals.
     function setGlobalDebtCap(uint128 debtCapOhm_) external;
 
-    /// @notice Sets the facility-wide yield recipient.
+    /// @notice Sets the facility-wide yield repurchase recipient.
     /// @dev Callable only by OCG admin or the configured config operator while this policy is
     ///      enabled. The bound Burner Loans facility must also be enabled. Validation, storage, and
     ///      events are owned by Burner Loans, including every active asset route on rotation.
-    /// @param recipient_ New yield recipient, or zero after all asset allocations are cleared.
-    function setYieldRecipient(address recipient_) external;
+    /// @param recipient_ New repurchase recipient, or zero when no active route uses it.
+    function setYieldRepurchaseRecipient(address recipient_) external;
 
-    /// @notice Sets an asset's share of claimed yield sent to the facility-wide recipient.
+    /// @notice Atomically replaces an asset's complete declarative yield route.
     /// @dev Callable only by OCG admin or the configured config operator while this policy is
     ///      enabled. The bound Burner Loans facility must also be enabled. Validation, storage, and
     ///      events are owned by Burner Loans.
-    /// @param asset_ Collateral asset whose allocation is updated.
-    /// @param bps_ Recipient share in basis points.
-    function setYieldRecipientAssetBps(address asset_, uint16 bps_) external;
+    /// @param asset_ Collateral asset whose route is replaced.
+    /// @param routing_ Complete replacement route.
+    function setYieldAssetRouting(
+        address asset_,
+        IBurnerLoans.AssetYieldRouting calldata routing_
+    ) external;
 
     /// @notice Enables or disables new originations for a configured asset.
     /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if

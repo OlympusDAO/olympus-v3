@@ -209,41 +209,94 @@ interface IBurnerLoans {
     /// @param caller Unauthorized caller.
     error BurnerLoans_OnlyConfigurator(address caller);
 
-    /// @notice The proposed yield recipient does not implement the required recipient interfaces.
+    /// @notice The proposed yield repurchase recipient is invalid.
     /// @param recipient Rejected recipient.
-    error BurnerLoans_InvalidYieldRecipient(address recipient);
+    error BurnerLoans_InvalidYieldRepurchaseRecipient(address recipient);
 
-    /// @notice The proposed yield recipient is not active in the facility Kernel.
+    /// @notice The proposed yield repurchase recipient is not active in the facility Kernel.
     /// @param recipient Inactive recipient.
-    error BurnerLoans_YieldRecipientNotActivePolicy(address recipient);
+    error BurnerLoans_YieldRepurchaseRecipientNotActivePolicy(address recipient);
 
-    /// @notice The proposed yield recipient is globally disabled.
+    /// @notice The proposed yield repurchase recipient is globally disabled.
     /// @param recipient Disabled recipient.
-    error BurnerLoans_YieldRecipientNotEnabled(address recipient);
+    error BurnerLoans_YieldRepurchaseRecipientNotEnabled(address recipient);
 
-    /// @notice The recipient entry reports a vault different from DepositManager's vault.
+    /// @notice A direct-custody asset cannot route yield to the repurchase recipient.
+    /// @param asset Asset whose DepositManager configuration has no ERC4626 vault.
+    error BurnerLoans_YieldRepurchaseRecipientVaultRequired(address asset);
+
+    /// @notice The repurchase-recipient entry reports a vault different from DepositManager's vault.
     /// @param expectedVault DepositManager vault used as the lookup key.
     /// @param actualVault Vault returned by the recipient.
-    error BurnerLoans_YieldRecipientAssetVaultMismatch(address expectedVault, address actualVault);
+    error BurnerLoans_YieldRepurchaseRecipientAssetVaultMismatch(
+        address expectedVault,
+        address actualVault
+    );
 
-    /// @notice The recipient entry reports an underlying asset different from the collateral asset.
+    /// @notice The repurchase-recipient entry reports a different underlying collateral asset.
     /// @param expectedAsset Collateral asset being configured.
     /// @param actualAsset Underlying asset returned by the recipient.
-    error BurnerLoans_YieldRecipientAssetMismatch(address expectedAsset, address actualAsset);
+    error BurnerLoans_YieldRepurchaseRecipientAssetMismatch(
+        address expectedAsset,
+        address actualAsset
+    );
 
-    /// @notice The recipient entry for an exact DepositManager asset-vault pair is disabled.
-    /// @param recipient Yield recipient queried.
+    /// @notice The repurchase-recipient entry for an exact asset-vault pair is disabled.
+    /// @param recipient Yield repurchase recipient queried.
     /// @param asset Collateral asset being configured.
     /// @param vault DepositManager vault used as the lookup key.
-    error BurnerLoans_YieldRecipientAssetNotEnabled(
+    error BurnerLoans_YieldRepurchaseRecipientAssetNotEnabled(
         address recipient,
         address asset,
         address vault
     );
 
-    /// @notice The global recipient cannot be cleared while nonzero asset allocations remain.
-    /// @param count Number of assets with nonzero allocations.
-    error BurnerLoans_YieldAllocationsActive(uint256 count);
+    /// @notice The global repurchase recipient cannot be cleared while active routes remain.
+    /// @param count Number of assets with nonzero repurchase-recipient BPS.
+    error BurnerLoans_YieldRepurchaseAllocationsActive(uint256 count);
+
+    /// @notice A route assigns yield to the repurchase recipient before one is configured.
+    error BurnerLoans_YieldRepurchaseRecipientNotConfigured();
+
+    /// @notice A direct allocation contains an invalid recipient address.
+    /// @param recipient Rejected direct recipient.
+    error BurnerLoans_InvalidDirectYieldRecipient(address recipient);
+
+    /// @notice A direct allocation contains zero BPS.
+    /// @param recipient Direct recipient whose BPS are invalid.
+    error BurnerLoans_InvalidDirectYieldAllocationBps(address recipient);
+
+    /// @notice A direct recipient appears more than once in an asset route.
+    /// @param recipient Duplicated direct recipient.
+    error BurnerLoans_DuplicateDirectYieldRecipient(address recipient);
+
+    /// @notice An asset route allocates more than 10,000 BPS outside Treasury.
+    /// @param totalBps Sum of repurchase-recipient and direct-allocation BPS.
+    error BurnerLoans_InvalidAssetYieldRoutingTotal(uint256 totalBps);
+
+    /// @notice One ordinary recipient and its share of an asset's claimed yield.
+    /// @param recipient Account that receives the configured direct share.
+    /// @param bps Direct share in basis points.
+    struct DirectYieldAllocation {
+        address recipient;
+        uint16 bps;
+    }
+
+    /// @notice Complete declarative routing for one collateral asset.
+    /// @param repurchaseRecipientBps Share routed to the global yield repurchase recipient.
+    /// @param directAllocations Ordered direct-recipient shares.
+    struct AssetYieldRouting {
+        uint16 repurchaseRecipientBps;
+        DirectYieldAllocation[] directAllocations;
+    }
+
+    /// @notice One realized destination and amount from a yield claim.
+    /// @param recipient Account that received the distributed yield.
+    /// @param amount Actual amount transferred, in collateral token decimals.
+    struct YieldDistribution {
+        address recipient;
+        uint256 amount;
+    }
 
     /// @notice A borrower's collateral and debt position for one collateral asset.
     /// @param depositedCollateral Withdrawable collateral credit, in collateral token decimals.
@@ -451,14 +504,14 @@ interface IBurnerLoans {
     /// @param configurator New Burner Loans Config policy.
     event ConfiguratorSet(address indexed configurator);
 
-    /// @notice Emitted when the facility-wide yield recipient changes.
-    /// @param recipient New recipient, or zero after every allocation is cleared.
-    event YieldRecipientSet(address indexed recipient);
+    /// @notice Emitted when the facility-wide yield repurchase recipient changes.
+    /// @param recipient New recipient, or zero after every repurchase allocation is cleared.
+    event YieldRepurchaseRecipientSet(address indexed recipient);
 
-    /// @notice Emitted when an asset's share of claimed yield routed to the recipient changes.
-    /// @param asset Collateral asset whose share changed.
-    /// @param bps New share in basis points.
-    event YieldRecipientAssetBpsSet(address indexed asset, uint16 bps);
+    /// @notice Emitted when an asset's complete declarative yield route is replaced.
+    /// @param asset Collateral asset whose route changed.
+    /// @param routing Complete replacement route in stored order.
+    event YieldAssetRoutingSet(address indexed asset, AssetYieldRouting routing);
 
     /// @notice Emitted when Config registers a newly created collateral market.
     /// @param asset Collateral asset added to the append-only registry.
@@ -526,17 +579,10 @@ interface IBurnerLoans {
 
     /// @notice Emitted after custody yield is claimed and distributed atomically.
     /// @param asset Collateral asset whose yield was claimed.
-    /// @param recipient Configured recipient, or zero when all yield goes to Treasury.
-    /// @param claimed Total collateral yield claimed.
-    /// @param recipientAmount Amount sent to the configured recipient.
-    /// @param treasuryAmount Amount sent to Treasury.
-    event YieldClaimed(
-        address indexed asset,
-        address indexed recipient,
-        uint256 claimed,
-        uint256 recipientAmount,
-        uint256 treasuryAmount
-    );
+    /// @param claimed Actual collateral yield claimed.
+    /// @param distributions Ordered realized distributions: repurchase first when active, followed
+    ///        by direct recipients in configured order, with the Treasury fallback last.
+    event YieldClaimed(address indexed asset, uint256 claimed, YieldDistribution[] distributions);
 
     /// @notice Emitted when the canonical backing oracle changes.
     /// @param backingOracle New backing oracle address.

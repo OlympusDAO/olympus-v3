@@ -10,7 +10,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
-import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 
 contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
     // integration
@@ -277,7 +277,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
     //  when yield is claimed and all credited collateral is withdrawn
     //   then accounting reconciles and BurnerLoans retains no underlying or vault shares
     function test_depositClaimWithdraw_reconcilesCustodyWithoutPolicyResiduals() public {
-        MockYieldRecipient recipient = _configureYieldRouting(
+        MockYieldRepurchaseRecipient recipient = _configureYieldRouting(
             address(vaultAsset),
             address(vault),
             7_000
@@ -297,7 +297,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         uint256 capacityBefore = inventory.availableCapacity();
         uint256 inventoryOhmBefore = ohm.balanceOf(address(inventory));
         uint256 mintApprovalBefore = mintr.mintApproval(address(inventory));
-        burnerLoans.claimYield();
+        burnerLoans.claimYield(address(vaultAsset));
         uint256 recipientIncrease = vaultAsset.balanceOf(address(recipient)) - recipientBefore;
         uint256 treasuryIncrease = vaultAsset.balanceOf(address(trsry)) - treasuryBefore;
         uint256 claimed = recipientIncrease + treasuryIncrease;
@@ -342,7 +342,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
 
     function test_timelockedRoutingConfiguration_thenClaimsEndToEnd() public {
         vm.startPrank(admin);
-        MockYieldRecipient recipient = new MockYieldRecipient(kernel);
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(recipient));
         recipient.setVaultConfig(address(vault), address(vaultAsset), true);
         vm.stopPrank();
@@ -352,7 +352,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = ITimelockBatchQueue.BatchAction({
             target: address(burnerLoansConfig),
-            selector: IBurnerLoansConfig.setYieldRecipient.selector,
+            selector: IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
             payload: abi.encode(address(recipient))
         });
         vm.prank(burnerLoansAdmin);
@@ -360,10 +360,11 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         vm.warp(block.timestamp + configTimelock.timelockDelay());
         configTimelock.executeQueuedAction(recipientActionId);
 
+        IBurnerLoans.AssetYieldRouting memory routing = _repurchaseRouting(6_000);
         actions[0] = ITimelockBatchQueue.BatchAction({
             target: address(burnerLoansConfig),
-            selector: IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
-            payload: abi.encode(address(vaultAsset), uint16(6_000))
+            selector: IBurnerLoansConfig.setYieldAssetRouting.selector,
+            payload: abi.encode(address(vaultAsset), routing)
         });
         vm.prank(burnerLoansAdmin);
         uint64 bpsActionId = configTimelock.queueBatch(actions);
@@ -374,7 +375,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         _addYield(10e6);
         uint256 recipientBefore = vaultAsset.balanceOf(address(recipient));
         uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
-        burnerLoans.claimYield();
+        burnerLoans.claimYield(address(vaultAsset));
         uint256 recipientAmount = vaultAsset.balanceOf(address(recipient)) - recipientBefore;
         uint256 treasuryAmount = vaultAsset.balanceOf(address(trsry)) - treasuryBefore;
         uint256 claimed = recipientAmount + treasuryAmount;

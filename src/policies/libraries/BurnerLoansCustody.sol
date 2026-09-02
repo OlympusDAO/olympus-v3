@@ -473,28 +473,23 @@ library BurnerLoansCustody {
         return BurnerLoansCustodyAccounting.status(depositManager_, asset_, operator_);
     }
 
-    /// @notice Claims and distributes solvent custody yield for every registered asset atomically.
-    /// @dev Reverts on invalid custody, insolvency, invalid recipient routing, or transfer failure
-    ///      for any registered asset.
-    function claimYield(
+    /// @notice Returns custody accounting for a registered Burner Loans collateral asset.
+    function getRegisteredAssetCollateralStatus(
         EnumerableSet.AddressSet storage assets_,
-        BurnerLoansDependencies.YieldRoutingState storage routing_
-    ) public {
-        uint256 assetCount = assets_.length();
-        address recipient = routing_.recipient;
-        for (uint256 i; i < assetCount; ++i) {
-            address asset = assets_.at(i);
-            _claimYield(asset, recipient, routing_.assetBps[asset]);
-        }
+        IDepositManager depositManager_,
+        address asset_
+    ) public view returns (IBurnerLoans.AssetCollateralStatus memory) {
+        _requireAssetRegistered(assets_, asset_);
+        return getAssetCollateralStatus(depositManager_, asset_, address(this));
     }
 
-    /// @notice Claims and distributes solvent custody yield for one registered asset.
-    /// @dev Reverts on invalid custody, insolvency, invalid recipient routing, or transfer failure.
-    function _claimYield(
-        address asset_,
-        address recipient_,
-        uint16 bps_
-    ) private returns (uint256 claimed) {
+    /// @notice Claims and distributes solvent custody yield for one registered asset atomically.
+    function claimYield(
+        EnumerableSet.AddressSet storage assets_,
+        BurnerLoansDependencies.YieldRoutingState storage routing_,
+        address asset_
+    ) public returns (uint256 claimed) {
+        _requireAssetRegistered(assets_, asset_);
         BurnerLoansContext memory dependencies_ = _dependencies();
         IBurnerLoans.AssetCollateralStatus memory collateralStatus = getAssetCollateralStatus(
             dependencies_.depositManager,
@@ -509,17 +504,20 @@ library BurnerLoansCustody {
                 collateralStatus.borrowed
             );
         }
-        if (bps_ != 0) {
-            BurnerLoansDependencies.validateYieldRecipientAsset(
-                Policy(address(this)).kernel(),
-                dependencies_.depositManager,
-                recipient_,
-                asset_
-            );
-        }
+        BurnerLoansDependencies.validateStoredAssetYieldRouting(
+            routing_,
+            dependencies_.depositManager,
+            dependencies_.treasury,
+            asset_
+        );
 
         uint256 requestedAmount = collateralStatus.claimableYield;
         if (requestedAmount == 0) return 0;
+
+        // Snapshot the validated route before the external claim. Distribution must use one
+        // coherent configuration even if a callback changes routing during claim execution.
+        address repurchaseRecipient = routing_.repurchaseRecipient;
+        IBurnerLoans.AssetYieldRouting memory assetRouting = routing_.assetRouting[asset_];
 
         claimed = dependencies_.depositManager.claimYield(
             IERC20(asset_),
@@ -527,31 +525,93 @@ library BurnerLoansCustody {
             requestedAmount
         );
 
-        // claimed (asset decimals) * bps (4 decimals) / 10_000 (4 decimals)
-        // = recipientAmount (asset decimals), rounded down in favor of TRSRY.
-        uint256 recipientAmount = FullMath.mulDiv(claimed, bps_, BurnerLoansConstants.MAX_BPS);
-        uint256 treasuryAmount = claimed - recipientAmount;
-        if (recipientAmount != 0) ERC20(asset_).safeTransfer(recipient_, recipientAmount);
-        if (treasuryAmount != 0) {
-            ERC20(asset_).safeTransfer(dependencies_.treasury, treasuryAmount);
-        }
-
-        emit IBurnerLoans.YieldClaimed(
+        _distributeClaimedYield(
             asset_,
-            recipient_,
-            claimed,
-            recipientAmount,
-            treasuryAmount
+            dependencies_.treasury,
+            repurchaseRecipient,
+            assetRouting,
+            claimed
         );
     }
 
-    /// @notice Quotes claimable yield and validates current custody and routing state.
-    /// @dev Reverts when custody or a nonzero recipient route is invalid.
-    function previewClaimYield(
+    /// @notice Distributes one authoritative claim according to its validated stored route.
+    /// @dev Every non-Treasury allocation rounds down independently. Treasury receives the exact
+    ///      residual, including all rounding dust. Zero-value token calls are skipped, while the
+    ///      event retains every configured leg in deterministic route order, with Treasury last.
+    function _distributeClaimedYield(
         address asset_,
-        address recipient_,
-        uint16 bps_
+        address treasury_,
+        address repurchaseRecipient_,
+        IBurnerLoans.AssetYieldRouting memory routing_,
+        uint256 claimed_
+    ) private {
+        uint256 repurchaseCount = routing_.repurchaseRecipientBps == 0 ? 0 : 1;
+        uint256 directCount = routing_.directAllocations.length;
+        uint256 nonTreasuryCount = directCount + repurchaseCount;
+        IBurnerLoans.YieldDistribution[]
+            memory distributions = new IBurnerLoans.YieldDistribution[](nonTreasuryCount + 1);
+        uint256 allocatedAmount;
+
+        if (repurchaseCount != 0) {
+            // claimed_ (asset decimals) * repurchase BPS (4 decimals) / 10_000 (4 decimals)
+            // = amount (asset decimals), rounded down in favor of Treasury.
+            uint256 repurchaseAmount = FullMath.mulDiv(
+                claimed_,
+                routing_.repurchaseRecipientBps,
+                BurnerLoansConstants.MAX_BPS
+            );
+            distributions[0] = IBurnerLoans.YieldDistribution({
+                recipient: repurchaseRecipient_,
+                amount: repurchaseAmount
+            });
+            allocatedAmount += repurchaseAmount;
+            if (repurchaseAmount != 0) {
+                ERC20(asset_).safeTransfer(repurchaseRecipient_, repurchaseAmount);
+            }
+        }
+
+        for (uint256 i; i < directCount; ++i) {
+            IBurnerLoans.DirectYieldAllocation memory allocation = routing_.directAllocations[i];
+            // claimed_ (asset decimals) * direct BPS (4 decimals) / 10_000 (4 decimals)
+            // = amount (asset decimals), rounded down in favor of Treasury.
+            uint256 amount = FullMath.mulDiv(
+                claimed_,
+                allocation.bps,
+                BurnerLoansConstants.MAX_BPS
+            );
+            distributions[repurchaseCount + i] = IBurnerLoans.YieldDistribution({
+                recipient: allocation.recipient,
+                amount: amount
+            });
+            allocatedAmount += amount;
+            if (amount != 0) {
+                ERC20(asset_).safeTransfer(allocation.recipient, amount);
+            }
+        }
+
+        // Every allocation is floor(claimed * bps / MAX_BPS), and validated non-Treasury BPS cannot
+        // exceed MAX_BPS. The sum of those floors therefore cannot exceed claimed, so this
+        // subtraction cannot underflow. Treasury receives all unallocated yield and rounding dust.
+        uint256 treasuryAmount = claimed_ - allocatedAmount;
+        distributions[nonTreasuryCount] = IBurnerLoans.YieldDistribution({
+            recipient: treasury_,
+            amount: treasuryAmount
+        });
+        if (treasuryAmount != 0) {
+            ERC20(asset_).safeTransfer(treasury_, treasuryAmount);
+        }
+
+        emit IBurnerLoans.YieldClaimed(asset_, claimed_, distributions);
+    }
+
+    /// @notice Quotes claimable yield and validates current custody and routing state.
+    /// @dev Reverts when custody or an executable claim's stored route is invalid.
+    function previewClaimYield(
+        EnumerableSet.AddressSet storage assets_,
+        address asset_,
+        BurnerLoansDependencies.YieldRoutingState storage routing_
     ) public view returns (IBurnerLoans.ClaimYieldPreview memory preview) {
+        _requireAssetRegistered(assets_, asset_);
         BurnerLoansContext memory dependencies_ = _dependencies();
         IBurnerLoans.AssetCollateralStatus memory collateralStatus = getAssetCollateralStatus(
             dependencies_.depositManager,
@@ -560,13 +620,23 @@ library BurnerLoansCustody {
         );
         preview.amount = collateralStatus.claimableYield;
         preview.executable = collateralStatus.solvent;
-        if (preview.executable && bps_ != 0) {
-            BurnerLoansDependencies.validateYieldRecipientAsset(
-                Policy(address(this)).kernel(),
+        if (preview.executable) {
+            BurnerLoansDependencies.validateStoredAssetYieldRouting(
+                routing_,
                 dependencies_.depositManager,
-                recipient_,
+                dependencies_.treasury,
                 asset_
             );
+        }
+    }
+
+    /// @dev Reverts unless the asset is present in Config's append-only facility registry.
+    function _requireAssetRegistered(
+        EnumerableSet.AddressSet storage assets_,
+        address asset_
+    ) private view {
+        if (!assets_.contains(asset_)) {
+            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
         }
     }
 

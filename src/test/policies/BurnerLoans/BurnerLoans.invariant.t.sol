@@ -9,9 +9,10 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
-import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 import {BurnerLoansSeizureTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
@@ -21,7 +22,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     BurnerLoansComposites internal composites;
     BurnerLoansSeizer internal seizer;
     address[] internal invariantActors;
-    MockYieldRecipient internal yieldRecipient;
+    MockYieldRepurchaseRecipient internal yieldRecipient;
 
     function setUp() public override {
         super.setUp();
@@ -32,11 +33,9 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
 
         vm.startPrank(admin);
-        yieldRecipient = new MockYieldRecipient(kernel);
+        yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
-        yieldRecipient.setVaultConfig(address(0), address(usds), true);
-        burnerLoansConfig.setYieldRecipient(address(yieldRecipient));
-        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 5_000);
+        burnerLoansConfig.setYieldRepurchaseRecipient(address(yieldRecipient));
         seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
@@ -72,7 +71,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.borrow(0, 100e9);
         vm.roll(block.number + 1);
 
-        bytes4[] memory selectors = new bytes4[](20);
+        bytes4[] memory selectors = new bytes4[](21);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -84,15 +83,16 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[8] = handler.seize.selector;
         selectors[9] = handler.executePeriodicSeizer.selector;
         selectors[10] = handler.addYield.selector;
-        selectors[11] = handler.claimYield.selector;
+        selectors[11] = handler.claimAssetYield.selector;
         selectors[12] = handler.toggleAsset.selector;
         selectors[13] = handler.compositeDepositAndBorrow.selector;
         selectors[14] = handler.compositeRepayAndWithdraw.selector;
         selectors[15] = handler.reuseDebtFreePosition.selector;
         selectors[16] = handler.supplyInventory.selector;
         selectors[17] = handler.withdrawInventory.selector;
-        selectors[18] = handler.setYieldBps.selector;
+        selectors[18] = handler.setYieldAssetRouting.selector;
         selectors[19] = handler.toggleYieldRecipient.selector;
+        selectors[20] = handler.setYieldRepurchaseRecipient.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -286,6 +286,104 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         assertEq(handler.claimYieldBoundViolations(), 0, "claim exceeded claimable yield");
         assertEq(handler.claimYieldConservationViolations(), 0, "claim distribution mismatch");
         assertEq(handler.claimYieldResidualViolations(), 0, "claim changed facility balance");
+        assertEq(
+            handler.claimYieldFailureMutationViolations(),
+            0,
+            "failed claim mutated authoritative state"
+        );
+        assertEq(
+            handler.claimYieldPreviewConsistencyViolations(),
+            0,
+            "claim and preview executability diverged"
+        );
+        assertEq(
+            handler.cumulativeDistributedYield(),
+            handler.cumulativeClaimedYield(),
+            "cumulative claim distributions do not conserve yield"
+        );
+    }
+
+    // invariant
+    // given any sequence of complete route and global-recipient transitions
+    //  when every registered asset route is inspected
+    //   then each route is exact, unique, and excludes every reserved destination
+    function invariant_AssetYieldRoutingIsStructurallyValid() public view {
+        address repurchaseRecipient = burnerLoans.getYieldRepurchaseRecipient();
+        uint256 activeRepurchaseRouteCount;
+        uint256 assetCount = burnerLoans.getAssetCount();
+        for (uint256 i; i < assetCount; ++i) {
+            address asset = burnerLoans.getAssetAt(i);
+            IBurnerLoans.AssetYieldRouting memory routing = burnerLoans.getYieldAssetRouting(asset);
+            uint256 directCount = routing.directAllocations.length;
+            uint256 totalBps = routing.repurchaseRecipientBps;
+            if (routing.repurchaseRecipientBps != 0) {
+                ++activeRepurchaseRouteCount;
+                assertNotEq(
+                    repurchaseRecipient,
+                    address(0),
+                    "active repurchase route has no global recipient"
+                );
+            }
+
+            for (uint256 j; j < directCount; ++j) {
+                IBurnerLoans.DirectYieldAllocation memory allocation = routing.directAllocations[j];
+                assertNotEq(allocation.recipient, address(0), "direct recipient is zero");
+                assertNotEq(
+                    allocation.recipient,
+                    address(burnerLoans),
+                    "direct recipient is facility"
+                );
+                assertNotEq(allocation.recipient, address(trsry), "direct recipient is Treasury");
+                assertNotEq(
+                    allocation.recipient,
+                    repurchaseRecipient,
+                    "direct recipient is global repurchase recipient"
+                );
+                assertGt(allocation.bps, 0, "direct allocation bps is zero");
+                totalBps += allocation.bps;
+                for (uint256 k; k < j; ++k) {
+                    assertNotEq(
+                        allocation.recipient,
+                        routing.directAllocations[k].recipient,
+                        "direct recipient is duplicated"
+                    );
+                }
+            }
+
+            assertLe(totalBps, BurnerLoansConstants.MAX_BPS, "non-Treasury BPS exceed maximum");
+            uint256 implicitTreasuryBps = BurnerLoansConstants.MAX_BPS - totalBps;
+            assertEq(
+                totalBps + implicitTreasuryBps,
+                BurnerLoansConstants.MAX_BPS,
+                "effective asset yield routing total is not exact"
+            );
+        }
+
+        assertEq(
+            activeRepurchaseRouteCount,
+            handler.modelActiveRepurchaseRouteCount(),
+            "active repurchase route count differs from model"
+        );
+        assertEq(
+            burnerLoans.getYieldRepurchaseRecipient(),
+            handler.modelYieldRepurchaseRecipient(),
+            "global repurchase recipient differs from model"
+        );
+        assertEq(
+            keccak256(abi.encode(burnerLoans.getYieldAssetRouting(address(usds)))),
+            handler.modelAssetYieldRoutingHash(),
+            "asset route differs from successful-transition model"
+        );
+        assertEq(
+            handler.routingFailureMutationViolations(),
+            0,
+            "failed routing action mutated state"
+        );
+        assertEq(
+            handler.repurchaseRecipientClearViolations(),
+            0,
+            "global recipient clear behavior violated active-route rule"
+        );
     }
 
     // invariant

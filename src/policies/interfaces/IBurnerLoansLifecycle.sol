@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.24;
 
+// Interfaces
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+
 /// @title Burner Loans Lifecycle Interface
 /// @notice State-changing borrower lifecycle operations.
 interface IBurnerLoansLifecycle {
@@ -28,27 +31,31 @@ interface IBurnerLoansLifecycle {
     /// @param asset_ Collateral asset to append to the facility registry.
     function addAsset(address asset_) external;
 
-    /// @notice Sets the facility-wide recipient of configured collateral-yield shares.
-    /// @dev Callable only while Burner Loans is enabled and by its currently bound Config policy. A
-    ///      nonzero recipient must be an active, globally enabled same-Kernel policy implementing
-    ///      `IYieldRecipient` and `IEnabler`. Setting zero requires all per-asset allocations to be
-    ///      cleared first. Nonzero rotation preserves every allocation and validates every nonzero
-    ///      asset route before changing state; each pair is validated again when yield is claimed.
-    /// @param recipient_ New yield recipient, or zero after all allocations are cleared.
-    function setYieldRecipient(address recipient_) external;
+    /// @notice Sets the facility-wide recipient of repurchase-directed collateral yield.
+    /// @dev Callable only while Burner Loans is enabled and by its currently bound Config policy.
+    ///      A nonzero recipient must be an active, globally enabled same-Kernel policy implementing
+    ///      `IYieldRepurchaseRecipient` and `IEnabler`. Setting zero requires every registered asset
+    ///      to assign zero BPS to the repurchase recipient. Nonzero rotation preserves all asset
+    ///      routes and validates active vault routes and direct-recipient collisions first.
+    /// @param recipient_ New yield repurchase recipient, or zero when no active route uses it.
+    function setYieldRepurchaseRecipient(address recipient_) external;
 
-    /// @notice Sets the share of an asset's claimed yield routed to the facility recipient.
+    /// @notice Atomically replaces an asset's complete declarative yield route.
     /// @dev Reverts if:
     ///      - Burner Loans is disabled.
     ///      - The caller is not the bound Config policy.
-    ///      - The asset is not registered or `bps_` exceeds 10_000.
-    ///      - The yield recipient is zero.
-    ///      - For nonzero `bps_`, the recipient lacks a required interface, is not an active Kernel
-    ///        policy, is disabled, or its vault route does not match DepositManager.
-    ///      A zero value remains available to clear an allocation after recipient drift.
-    /// @param asset_ Collateral asset whose allocation is changed.
-    /// @param bps_ Recipient share in basis points.
-    function setYieldRecipientAssetBps(address asset_, uint16 bps_) external;
+    ///      - The asset is unregistered or the non-Treasury BPS total exceeds 10,000.
+    ///      - Any direct allocation has a zero address, zero BPS, duplicate recipient, or a
+    ///        reserved destination.
+    ///      - Repurchase-recipient BPS are nonzero while the global recipient is unset or its live
+    ///        interface, Kernel-policy, enabled-state, or vault route is invalid.
+    ///      The complete old direct-allocation array is discarded on successful replacement.
+    /// @param asset_ Collateral asset whose route is replaced.
+    /// @param routing_ Complete replacement route.
+    function setYieldAssetRouting(
+        address asset_,
+        IBurnerLoans.AssetYieldRouting calldata routing_
+    ) external;
 
     /// @notice Deposits exact-transfer collateral into a borrower's position.
     /// @dev Callable by the borrower or an authorized operator. Reverts if Burner Loans, the

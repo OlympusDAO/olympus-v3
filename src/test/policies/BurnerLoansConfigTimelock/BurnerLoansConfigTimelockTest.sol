@@ -7,8 +7,9 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 import {BurnerLoansConfigTimelockHarness} from "src/test/policies/BurnerLoansConfigTimelock/fixtures/BurnerLoansConfigTimelockHarness.sol";
 
 abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
@@ -44,10 +45,11 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
     event TimelockActionCancelled(uint64 indexed actionId, address indexed canceller);
 
     BurnerLoansConfigTimelockHarness internal configTimelockHarness;
+    MockERC4626 internal usdsVault;
 
     function setUp() public virtual override {
         super.setUp();
-        _addDefaultUsdsAsset();
+        usdsVault = _addDefaultUsdsVaultAsset();
         vm.prank(admin);
         burnerLoansConfig.setAssetFeeConfig(address(usds), _defaultAssetFeeConfig());
         _setDefaultConfigOperator();
@@ -220,12 +222,44 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
     }
 
-    function _deployUsdsYieldRecipient() internal returns (MockYieldRecipient recipient) {
+    function _deployUsdsYieldRecipient() internal returns (MockYieldRepurchaseRecipient recipient) {
         vm.startPrank(admin);
-        recipient = new MockYieldRecipient(kernel);
+        recipient = new MockYieldRepurchaseRecipient(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(recipient));
         vm.stopPrank();
-        recipient.setVaultConfig(address(0), address(usds), true);
+        recipient.setVaultConfig(address(usdsVault), address(usds), true);
+    }
+
+    function _treasuryOnlyRouting()
+        internal
+        pure
+        returns (IBurnerLoans.AssetYieldRouting memory routing)
+    {}
+
+    function _repurchaseRouting(
+        uint16 repurchaseRecipientBps_
+    ) internal pure returns (IBurnerLoans.AssetYieldRouting memory routing) {
+        routing.repurchaseRecipientBps = repurchaseRecipientBps_;
+    }
+
+    function _directRouting(
+        uint256 directAllocationCount_
+    ) internal pure returns (IBurnerLoans.AssetYieldRouting memory routing) {
+        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](
+            directAllocationCount_
+        );
+        for (uint256 i; i < directAllocationCount_; ++i) {
+            routing.directAllocations[i] = IBurnerLoans.DirectYieldAllocation({
+                recipient: address(uint160(10_000 + i)),
+                bps: 1_000
+            });
+        }
+    }
+
+    function _assertRepurchaseRouting(address asset_, uint16 expectedBps_) internal view {
+        IBurnerLoans.AssetYieldRouting memory routing = burnerLoans.getYieldAssetRouting(asset_);
+        assertEq(routing.repurchaseRecipientBps, expectedBps_, "repurchase recipient bps");
+        assertEq(routing.directAllocations.length, 0, "direct allocation count");
     }
 
     function _yieldAction(

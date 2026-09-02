@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
 import {Kernel} from "src/Kernel.sol";
@@ -25,6 +26,18 @@ contract BurnerLoansYieldClaimerConstructorTest is BurnerLoansYieldClaimerTest {
             )
         );
         new BurnerLoansYieldClaimer(kernel, address(this), _EXECUTION_GAS_LIMIT);
+    }
+
+    function test_givenBurnerLoansDoesNotSupportAssetView_reverts() public {
+        target.setSupportsAssetView(false);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansYieldClaimer.BurnerLoansYieldClaimer_InvalidBurnerLoans.selector,
+                address(target)
+            )
+        );
+        new BurnerLoansYieldClaimer(kernel, address(target), _EXECUTION_GAS_LIMIT);
     }
 
     function test_givenBurnerLoansUsesDifferentKernel_reverts() public {
@@ -59,5 +72,11 @@ contract BurnerLoansYieldClaimerConstructorTest is BurnerLoansYieldClaimerTest {
 
         assertEq(deployed.burnerLoans(), address(target), "Burner Loans target");
         assertEq(deployed.executionGasLimit(), _EXECUTION_GAS_LIMIT, "execution gas limit");
+        assertEq(
+            deployed.gracePeriod(),
+            BurnerLoansConstants.REENABLE_GRACE_PERIOD,
+            "grace period"
+        );
+        assertFalse(deployed.isEnabled(), "starts disabled");
     }
 }

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -8,6 +9,67 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTest {
+    function test_whenYieldAssetRoutingHasZeroDirectAllocations_queues() public {
+        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(0)));
+    }
+
+    function test_whenYieldAssetRoutingHasOneDirectAllocation_queues() public {
+        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(1)));
+    }
+
+    function test_whenYieldAssetRoutingHasMoreThanFiveDirectAllocations_queues() public {
+        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(6)));
+    }
+
+    function test_whenYieldAssetRoutingDeclaresUnrepresentableAllocationCount_reverts() public {
+        bytes memory payload = abi.encode(address(usds), _treasuryOnlyRouting());
+        for (uint256 i = 128; i < 160; ++i) {
+            payload[i] = 0xff;
+        }
+
+        _expectInvalidYieldAssetRoutingPayload(payload);
+    }
+
+    function test_whenYieldAssetRoutingPayloadIsShort_reverts() public {
+        _expectInvalidYieldAssetRoutingPayload(new bytes(31));
+    }
+
+    function test_whenYieldAssetRoutingPayloadIsTruncated_reverts() public {
+        bytes memory canonicalPayload = abi.encode(address(usds), _directRouting(1));
+        bytes memory truncatedPayload = new bytes(canonicalPayload.length - 32);
+        for (uint256 i; i < truncatedPayload.length; ++i) {
+            truncatedPayload[i] = canonicalPayload[i];
+        }
+
+        _expectInvalidYieldAssetRoutingPayload(truncatedPayload);
+    }
+
+    function test_whenYieldAssetRoutingRepurchaseBpsEncodingIsNonCanonical_reverts() public {
+        bytes memory payload = abi.encode(address(usds), _treasuryOnlyRouting());
+        payload[64] = 0x01;
+
+        _expectInvalidYieldAssetRoutingPayload(payload);
+    }
+
+    function test_whenYieldAssetRoutingPayloadHasTrailingData_reverts() public {
+        bytes memory canonicalPayload = abi.encode(address(usds), _treasuryOnlyRouting());
+
+        _expectInvalidYieldAssetRoutingPayload(bytes.concat(canonicalPayload, bytes32(0)));
+    }
+
+    function test_whenYieldAssetRoutingPayloadUsesNonCanonicalOffset_reverts() public {
+        bytes memory payload = bytes.concat(
+            bytes32(uint256(uint160(address(usds)))),
+            bytes32(uint256(96)),
+            bytes32(0),
+            bytes32(0),
+            bytes32(uint256(64)),
+            bytes32(0)
+        );
+
+        _expectInvalidYieldAssetRoutingPayload(payload);
+    }
+
     // queueAction
     // given target is not BurnerLoans
     //  when queueing through the raw harness
@@ -183,6 +245,34 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             address(burnerLoansConfig),
             selector_,
             new bytes(payloadLength_)
+        );
+    }
+
+    function _queueYieldAssetRoutingPayload(bytes memory payload_) internal {
+        _authorizeHarness();
+        vm.prank(burnerLoansAdmin);
+        uint64 actionId = configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldAssetRouting.selector,
+            payload_
+        );
+        assertEq(actionId, 1, "action id");
+    }
+
+    function _expectInvalidYieldAssetRoutingPayload(bytes memory payload_) internal {
+        _authorizeHarness();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.setYieldAssetRouting.selector
+            )
+        );
+        vm.prank(burnerLoansAdmin);
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setYieldAssetRouting.selector,
+            payload_
         );
     }
 

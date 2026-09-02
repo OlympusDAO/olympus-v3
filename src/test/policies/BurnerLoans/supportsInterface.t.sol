@@ -11,10 +11,12 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
+import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+import {MockYieldRepurchaseRecipient} from "./fixtures/MockYieldRepurchaseRecipient.sol";
 
 contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
     // supportsInterface
@@ -44,6 +46,35 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         assertFalse(
             burnerLoans.supportsInterface(type(ITimelockBatchQueue).interfaceId),
             "BurnerLoans ITimelockBatchQueue"
+        );
+    }
+
+    function test_whenYieldRepurchaseRecipientInterfaceIsQueried_preservesSelectorSet()
+        public
+        pure
+    {
+        bytes4 expectedInterfaceId = IYieldRepurchaseRecipient.getVaults.selector ^
+            IYieldRepurchaseRecipient.getVaultConfig.selector;
+
+        assertEq(
+            type(IYieldRepurchaseRecipient).interfaceId,
+            expectedInterfaceId,
+            "IYieldRepurchaseRecipient selector set"
+        );
+    }
+
+    function test_givenYieldRepurchaseRecipientMock_whenInterfaceIsQueried_advertisesInterface()
+        public
+    {
+        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
+
+        assertTrue(
+            recipient.supportsInterface(type(IYieldRepurchaseRecipient).interfaceId),
+            "mock IYieldRepurchaseRecipient"
+        );
+        assertFalse(
+            recipient.supportsInterface(type(IBurnerLoansLifecycle).interfaceId),
+            "mock unrelated interface"
         );
     }
 }

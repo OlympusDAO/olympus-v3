@@ -11,9 +11,22 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @title Burner Loans Config Timelock Library
 /// @notice Transformations and dispatch used by Burner Loans timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
-    /// @notice Validates a proposed recipient against every current nonzero asset allocation.
-    /// @dev Clearing the recipient requires every per-asset allocation to be zero.
-    function validateYieldRecipientChange(
+    error BurnerLoansConfigTimelockLib_NonCanonicalYieldAssetRoutingPayload();
+
+    /// @notice Decodes an asset-yield-routing action payload.
+    /// @dev The external boundary lets the caller normalize decoding and canonicality failures.
+    function decodeYieldAssetRoutingPayload(
+        bytes calldata payload_
+    ) external pure returns (address asset, IBurnerLoans.AssetYieldRouting memory routing) {
+        (asset, routing) = abi.decode(payload_, (address, IBurnerLoans.AssetYieldRouting));
+        if (keccak256(payload_) != keccak256(abi.encode(asset, routing))) {
+            revert BurnerLoansConfigTimelockLib_NonCanonicalYieldAssetRoutingPayload();
+        }
+    }
+
+    /// @notice Validates a proposed repurchase recipient against every current asset route.
+    /// @dev Clearing the recipient requires every route's repurchase allocation to be zero.
+    function validateYieldRepurchaseRecipientChange(
         IBurnerLoansView facility_,
         address recipient_
     ) external view {
@@ -23,49 +36,56 @@ library BurnerLoansConfigTimelockLib {
             // state as the facility setter rather than stopping with an arbitrary count of one.
             uint256 activeAssetCount;
             for (uint256 i; i < assetCount; ++i) {
-                if (facility_.getYieldRecipientAssetBps(facility_.getAssetAt(i)) != 0) {
+                if (
+                    facility_
+                        .getYieldAssetRouting(facility_.getAssetAt(i))
+                        .repurchaseRecipientBps != 0
+                ) {
                     ++activeAssetCount;
                 }
             }
             if (activeAssetCount != 0) {
-                revert IBurnerLoans.BurnerLoans_YieldAllocationsActive(activeAssetCount);
+                revert IBurnerLoans.BurnerLoans_YieldRepurchaseAllocationsActive(activeAssetCount);
             }
             return;
         }
 
-        facility_.validateYieldRecipient(recipient_);
         for (uint256 i; i < assetCount; ++i) {
             address asset = facility_.getAssetAt(i);
-            if (facility_.getYieldRecipientAssetBps(asset) != 0) {
-                facility_.validateYieldRecipientAsset(recipient_, asset);
+            IBurnerLoans.AssetYieldRouting memory routing = facility_.getYieldAssetRouting(asset);
+            uint256 directAllocationCount = routing.directAllocations.length;
+            for (uint256 j; j < directAllocationCount; ++j) {
+                if (routing.directAllocations[j].recipient == recipient_) {
+                    revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(recipient_);
+                }
             }
         }
     }
 
     /// @notice Hashes the complete yield-routing configuration guarded by the timelock.
-    /// @dev The append-only asset order makes the rolling allocation hash deterministic. Any
-    ///      recipient, asset-registration, or per-asset allocation change alters the result.
+    /// @dev The append-only asset order makes the rolling route hash deterministic. Any recipient,
+    ///      asset-registration, route value, or direct-allocation order change alters the result.
     function yieldRoutingStateHash(
         IBurnerLoansView facility_
     ) external view returns (bytes32 stateHash) {
         uint256 assetCount = facility_.getAssetCount();
-        bytes32 allocationsHash;
+        bytes32 routesHash;
         for (uint256 i; i < assetCount; ++i) {
             address asset = facility_.getAssetAt(i);
-            allocationsHash = keccak256(
-                abi.encode(allocationsHash, asset, facility_.getYieldRecipientAssetBps(asset))
+            routesHash = keccak256(
+                abi.encode(routesHash, asset, facility_.getYieldAssetRouting(asset))
             );
         }
         return
             keccak256(
-                abi.encode(address(facility_), facility_.getYieldRecipient(), allocationsHash)
+                abi.encode(address(facility_), facility_.getYieldRepurchaseRecipient(), routesHash)
             );
     }
 
-    /// @notice Hashes the routing state relevant to one asset allocation.
-    /// @dev Recipient changes invalidate every queued allocation, while allocation changes for a
-    ///      different asset leave this hash unchanged.
-    function yieldRecipientAssetStateHash(
+    /// @notice Hashes the routing state relevant to one asset route.
+    /// @dev Recipient changes invalidate every queued route, while changes for a different asset
+    ///      leave this hash unchanged.
+    function yieldAssetRoutingStateHash(
         IBurnerLoansView facility_,
         address asset_
     ) external view returns (bytes32 stateHash) {
@@ -73,9 +93,9 @@ library BurnerLoansConfigTimelockLib {
             keccak256(
                 abi.encode(
                     address(facility_),
-                    facility_.getYieldRecipient(),
+                    facility_.getYieldRepurchaseRecipient(),
                     asset_,
-                    facility_.getYieldRecipientAssetBps(asset_)
+                    facility_.getYieldAssetRouting(asset_)
                 )
             );
     }
@@ -126,17 +146,13 @@ library BurnerLoansConfigTimelockLib {
                 selection
             );
             callData = abi.encodeWithSelector(selector, asset, config);
-        } else if (selector == IBurnerLoansConfig.setAssetDebtCap.selector) {
-            (address asset, uint128 debtCapOhm) = abi.decode(action_.payload, (address, uint128));
-            callData = abi.encodeWithSelector(selector, asset, debtCapOhm);
-        } else if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
-            (address asset, bool enabled) = abi.decode(action_.payload, (address, bool));
-            callData = abi.encodeWithSelector(selector, asset, enabled);
-        } else if (selector == IBurnerLoansConfig.setYieldRecipient.selector) {
-            callData = abi.encodeWithSelector(selector, abi.decode(action_.payload, (address)));
-        } else if (selector == IBurnerLoansConfig.setYieldRecipientAssetBps.selector) {
-            (address asset, uint16 bps) = abi.decode(action_.payload, (address, uint16));
-            callData = abi.encodeWithSelector(selector, asset, bps);
+        } else if (
+            selector == IBurnerLoansConfig.setAssetDebtCap.selector ||
+            selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
+            selector == IBurnerLoansConfig.setYieldRepurchaseRecipient.selector ||
+            selector == IBurnerLoansConfig.setYieldAssetRouting.selector
+        ) {
+            callData = abi.encodePacked(selector, action_.payload);
         } else {
             revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         }

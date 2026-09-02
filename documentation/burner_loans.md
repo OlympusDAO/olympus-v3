@@ -16,7 +16,7 @@ adds collateral custody, pricing, fees, health rules, funding inventory, and aut
 flowchart LR
     USER["Borrower or operator"] -->|"collateral and debt actions"| BL["BurnerLoans"]
     CONFIG["BurnerLoansConfig"] -->|"market configuration"| FLOAN["FLOAN"]
-    CONFIG -->|"recipient and per-asset bps"| BL
+    CONFIG -->|"global repurchase recipient and per-asset routes"| BL
     CONFIG -->|"global debt cap"| INV["BurnerLoansInventory"]
     TIMELOCK["BurnerLoansConfigTimelock"] -->|"delayed delegated changes"| CONFIG
     BL -->|"positions and principal"| FLOAN
@@ -25,7 +25,8 @@ flowchart LR
     INV -->|"surplus rescue"| TRSRY["TRSRY"]
     BL --> PRICE["PRICE and backing oracle"]
     BL --> DM["DepositManager / ERC-4626"]
-    BL -->|"floor share"| RECIPIENT["Yield recipient (for example YRF)"]
+    BL -->|"floor shares"| YRF["Yield repurchase recipient"]
+    BL -->|"floor shares"| DIRECT["0+ direct recipients"]
     BL -->|"exact remainder"| TRSRY
     HEART["Heart"] --> SEIZER["BurnerLoansSeizer"]
     SEIZER -->|"bounded scan and seize"| BL
@@ -78,7 +79,7 @@ stateDiagram-v2
 | Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                   |
 | Extend              | Advances the prior maturity by whole terms                    | Position stays healthy and maturity remains within its horizon |
 | Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary               |
-| Claim yield         | Splits custody surplus between its recipient and `TRSRY`      | Custody remains solvent                                        |
+| Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                        |
 
 Full repayment and seizure clear the episode's financial fields and active indexes. The position
 ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
@@ -253,8 +254,8 @@ MINTR approval.
 | Stage                       | Enforcement or assumption                                                   |
 | --------------------------- | --------------------------------------------------------------------------- |
 | Asset admission             | Governance verifies exact-transfer collateral and any configured vault path |
-| Collateral deposit          | Exact receipt into Burner Loans and then DepositManager custody              |
-| Provider supply / draw      | Exact receipt on supply; trusted-OHM assumption for outgoing draws           |
+| Collateral deposit          | Exact receipt into Burner Loans and then DepositManager custody             |
+| Provider supply / draw      | Exact receipt on supply; trusted-OHM assumption for outgoing draws          |
 | Repayment settlement        | Exact Burner Loans Inventory balance increase before settlement             |
 | Fees and outgoing transfers | Safe transfer; exact behavior follows the admitted-token assumption         |
 | Token callbacks             | Token-touching lifecycle functions use storage-backed reentrancy guards     |
@@ -268,82 +269,152 @@ actual withdrawable amount returned by DepositManager, which may be lower becaus
 
 ## Yield Routing
 
-Burner Loans owns one yield recipient, one share per collateral asset, an active-allocation count,
-and an append-only registry of all collateral assets created through Config. Config calls the
-facility's matching `addAsset` function immediately after creating each FLOAN market and forwards
-routing writes; both operations are atomic. Claims never call Config. Disabling, deactivating, or
-replacing Config therefore does not change stored runtime routing.
+Burner Loans owns one optional, facility-wide yield repurchase recipient and one complete,
+declarative route per collateral asset. It also tracks how many asset routes allocate a nonzero
+share to that global recipient and keeps an append-only registry of all collateral assets created
+through Config. Config calls the facility's matching `addAsset` function immediately after creating
+each FLOAN market. A newly registered asset's all-zero route means Treasury-only: it has
+`repurchaseRecipientBps = 0` and no direct allocations. Claims never call Config. Disabling,
+deactivating, or replacing Config therefore does not change stored runtime routing.
+
+`AssetYieldRouting` contains the complete intended split:
+
+```solidity
+struct DirectYieldAllocation {
+    address recipient;
+    uint16 bps;
+}
+
+struct AssetYieldRouting {
+    uint16 repurchaseRecipientBps;
+    DirectYieldAllocation[] directAllocations;
+}
+```
+
+`setYieldAssetRouting(asset, routing)` replaces the whole route atomically; there is no additive
+per-recipient mutation. The route states every non-Treasury allocation. Treasury is the implicit
+remainder, which keeps configuration compact and prevents a redundant Treasury entry from
+disagreeing with the fallback behavior.
 
 ```mermaid
 sequenceDiagram
     participant K as Keeper
     participant BL as BurnerLoans
     participant DM as DepositManager
-    participant R as Yield recipient
+    participant R as Yield repurchase recipient
+    participant D as Direct recipients
     participant T as TRSRY
 
-    K->>BL: claimYield()
-    loop Every registered asset
-        BL->>DM: validate custody and current vault
-        opt asset bps is nonzero
-            BL->>R: interface, enabled, and exact asset/vault checks
-        end
-        BL->>DM: claimYield(actual amount)
-        BL->>R: transfer floor(actual * bps / 10_000)
-        BL->>T: transfer exact remainder
+    K->>BL: claimYield(asset)
+    BL->>DM: validate custody and current vault
+    BL->>BL: validate complete stored route against live dependencies
+    opt repurchase bps is nonzero
+        BL->>R: interface, policy, enabled, and exact asset/vault checks
     end
+    BL->>DM: claimYield(actual amount)
+    opt repurchase bps is nonzero
+        BL->>R: transfer floor(actual * repurchase bps / 10_000)
+    end
+    loop Stored direct allocations
+        BL->>D: transfer floor(actual * direct bps / 10_000)
+    end
+    BL->>T: transfer actual amount minus all non-Treasury transfers
 ```
 
-| Asset share | Compatible runtime recipient | Distribution                                                 |
-| ----------: | ---------------------------- | ------------------------------------------------------------ |
-|         `0` | Not consulted                | All actual claimed yield to `TRSRY`                          |
-|  `1..9_999` | Required                     | Floor-rounded share to recipient; exact remainder to `TRSRY` |
-|    `10_000` | Required                     | All actual claimed yield to recipient; no treasury transfer  |
+The repurchase BPS plus every direct BPS must not exceed `10_000`. The difference from `10_000` is
+Treasury's implicit share, so a route may allocate `0` BPS or the complete `10_000` BPS away from
+Treasury. Direct allocations have no separate count limit. Because every direct allocation must
+have nonzero integer BPS, the BPS bound provides a mathematical maximum of 10,000 direct
+allocations. Each direct allocation
+must also have a unique, nonzero recipient. A direct recipient can be an EOA or contract and does
+not need to implement a special interface, but it cannot be Burner Loans, the current `TRSRY`
+module, or the global repurchase recipient. Treasury cannot appear in the direct array because it is
+always the implicit remainder.
 
-Configuration is strict. A nonzero recipient must be active in Burner Loans' own Kernel registry,
-support the generic `IYieldRecipient` interface, and be globally enabled. That registry is
-authoritative;
-Burner Loans does not trust or compare a recipient-reported Kernel. Every nonzero asset share must
-match the exact asset/vault pair currently reported by DepositManager, including a zero vault.
-Recipient rotation preserves existing shares and validates every nonzero asset share against the
-replacement before changing state. Each exact asset/vault pair is also validated when its nonzero
-share is configured and again when yield is claimed. The recipient cannot be cleared until all
-shares are cleared. Yield-routing setters require Burner Loans to be enabled; a zero-bps cleanup
-remains available after market or recipient drift only while the facility is enabled.
+The global repurchase recipient is the only specialized destination. A nonzero address must support
+`IYieldRepurchaseRecipient` and `IEnabler`, be an active policy in Burner Loans' Kernel, and be
+enabled. Burner Loans' Kernel registry is authoritative; Burner Loans does not trust or compare a
+recipient-reported Kernel. For every route with nonzero `repurchaseRecipientBps`, the recipient's
+configuration must match the exact asset/vault pair currently reported by DepositManager,
+including a zero vault, and that pair must be enabled.
 
-ConfigTimelock guards recipient changes against the complete yield-routing configuration and guards
-each per-asset allocation independently. A recipient change conflicts with every pending allocation
-change, while allocation changes for different assets may be queued and executed together. The
-state hashes replace a separate revision counter: direct recipient or relevant allocation changes
-during the delay invalidate the queued action, and asset-registry changes invalidate recipient
-actions.
+Rotating the global recipient preserves every per-asset route. A nonzero replacement is checked
+against all registered assets: it cannot collide with any stored direct recipient, and every active
+repurchase allocation must have a valid replacement asset/vault route. The global address cannot
+be cleared while any asset has nonzero repurchase BPS. To remove it, first replace every active
+asset route with `repurchaseRecipientBps = 0`, then set the global recipient to zero.
+
+Configuration and execution revalidate live dependencies. A `TRSRY` module upgrade can make a
+stored direct recipient invalid, and a repurchase policy can later be disabled or have its vault
+configuration changed. `previewClaimYield` and `claimYield` fail under the same route conditions;
+governance can repair a stale route by replacing it, including by setting its repurchase share to
+zero without consulting a broken repurchase recipient. Yield-routing setters require Burner Loans
+to be enabled.
+
+ConfigTimelock guards global-recipient changes against the complete yield-routing configuration and
+guards each per-asset route independently. A global-recipient change conflicts with every pending
+asset-route change, while route changes for different assets may be queued and executed together.
+The global state hash covers the facility address, global recipient, append-only asset order, and
+every complete ordered route. An asset-route hash covers the facility, global recipient, target
+asset, and that asset's complete ordered route. Relevant direct changes during the delay therefore
+invalidate the queued action without a separate revision counter.
 
 Those hashes cover Burner Loans-owned routing configuration only. Config and facility enablement,
 config-operator authority, recipient interface support, recipient Kernel activity and enablement,
-and the exact DepositManager asset-vault route remain live execution prerequisites. The timelock or
-the forwarded Burner Loans setter revalidates them when the action executes. Asset originations,
-market risk and fee configuration, debt, deposits, and custody balances do not change the meaning
-of a recipient or per-asset allocation update and therefore are not part of its conflict domain.
+and the exact DepositManager asset-vault route remain live prerequisites. The timelock validates a
+complete proposed asset route before queueing, and the forwarded Burner Loans setter revalidates it
+when the action executes. Asset originations, market risk and fee configuration, debt, deposits, and
+custody balances do not change the meaning of a recipient or per-asset allocation update and
+therefore are not part of its conflict domain.
 
-The intended YRF implementation registers reserve assets by their ERC-4626 vault. A YRF allocation
-therefore assumes DepositManager reports a nonzero vault that YRF has already registered for the
-same underlying asset. Direct-custody assets report the zero vault and must keep their YRF share at
-zero, which routes all of their claimed yield to `TRSRY`. More generally, the vault-keyed recipient
-interface cannot distinguish multiple assets that share the same vault key.
+The intended YRF v2 implementation will implement `IYieldRepurchaseRecipient` and register reserve
+assets by their ERC-4626 vault. A nonzero YRF allocation therefore requires DepositManager to report
+a nonzero vault that YRF v2 has registered for the same underlying asset. Direct-custody assets can
+still claim yield to direct recipients and Treasury, but configuring nonzero repurchase BPS for one
+reverts before Burner Loans queries YRF with the zero address.
 
-Direct `claimYield` calls are permissionless and fail-closed. One call iterates every registered
-asset. An invalid recipient, mismatched pair, DepositManager failure, or outbound-transfer failure
-reverts every claim and transfer atomically. Unsupported custody, insolvency, or a globally disabled
-Burner Loans facility also reverts. Disabling market originations does not disable custody exits or
-yield claims. A configured market with no deposits is solvent and contributes zero without calling
-DepositManager's claim function.
+Direct `claimYield(asset)` calls are permissionless and fail-closed for the specified registered
+asset. An invalid route, mismatched repurchase pair, DepositManager failure, or outbound-transfer
+failure reverts the asset's claim and every transfer within that call.
+Unsupported custody, insolvency, or a globally disabled Burner Loans facility also reverts.
+Disabling market originations does not disable custody exits or yield claims. A configured market
+with no deposits is solvent and contributes zero without calling DepositManager's claim function.
 
-`BurnerLoansYieldClaimer` provides the fail-soft Heart integration. It forwards one gas-bounded
-all-asset claim and catches failure so later Heart tasks still run. Failure events contain the first
-four bytes of underlying revert data, or zero when the call runs out of gas or returns no reason.
-Complete failure details remain available from the transaction trace. The OCG admin or
-`burner_loans_admin` may set the nonzero gas forwarded to the claim; the task has no separate asset
-list or other routing configuration.
+Each non-Treasury share is calculated independently as
+`floor(actualClaimed * bps / 10_000)`. Zero-value token transfers are skipped. Treasury receives
+`actualClaimed - sum(nonTreasuryAmounts)`, so it receives its intended share plus all rounding dust
+and Burner Loans retains no newly claimed residual. `YieldClaimed` records the asset, authoritative
+claimed amount, and one ordered `(recipient, amount)[]`. When configured, the repurchase result is
+first, followed by direct results in stored order, with Treasury last; zero-value configured legs
+remain present in the event.
+
+Focused gas snapshots measured Treasury-only, repurchase-only, and mixed YRF-plus-two-direct claims
+at 132,383, 140,281, and 225,365 gas. Routes containing YRF plus five, ten, and twenty-five direct
+recipients measured 311,495, 455,067, and 885,912 gas. These measurements use successful nonzero
+transfers to previously empty recipient balances.
+
+Because direct-recipient count is not separately capped, configure
+`BurnerLoansYieldClaimer.executionGasLimit` as the gas forwarded to one complete periodic task body.
+Remeasure with the deployed routes, recipients, tokens, and DepositManager behavior. The claimer
+runs the registry loop through an external self-call, so exhausting the limit reverts every claim
+performed by that task body. The outer Heart entry point catches the failure and emits one
+`ExecutionFailed` event. Assets remain recoverable through permissionless direct
+`claimYield(asset)` calls.
+
+`BurnerLoansYieldClaimer` provides the fail-soft Heart integration. A failed attempted asset emits
+an event and does not prevent later assets or later Heart tasks from running. Failure events contain
+the first four bytes of underlying revert data, or zero when the call runs out of gas or returns no
+reason. If the complete task body fails, its individual asset events are also rolled back and the
+outer `ExecutionFailed` event provides the bounded reason instead. Complete failure details remain
+available from the transaction trace. The OCG admin or `burner_loans_admin` may set the nonzero
+complete-task gas limit; the task reads the facility's asset registry and has no separate asset list
+or routing configuration.
+
+The claimer starts disabled. OCG admin may enable it after the immutable Burner Loans target is an
+active Kernel policy; OCG admin or emergency may disable it. OCG admin or `burner_loans_admin` may
+re-enable it during the standard Burner Loans grace period, with target activity revalidated. The
+OCG admin may update that grace period while the claimer is enabled. An authorized Heart call while
+the claimer is disabled is a no-op before any Burner Loans registry read.
 
 ## Seizure Automation
 
@@ -366,17 +437,17 @@ automatic restoration does not occur, `burner_loans_admin` must call `syncMintAp
 
 ## Configuration And Authority
 
-| Change                                               | Authority                         | Path                                |
-| ---------------------------------------------------- | --------------------------------- | ----------------------------------- |
-| Add a collateral market                              | `admin`                           | Direct Config call                  |
-| Set global cap                                       | `admin`                           | Config calls Burner Loans Inventory |
-| Set market cap, risk, fee, or asset originations     | `admin` or config operator        | Config / optional ConfigTimelock    |
-| Set yield recipient or per-asset share               | `admin` or config operator        | Config / optional ConfigTimelock    |
-| Set backing oracle                                   | `admin`                           | Direct Burner Loans call            |
-| Set Burner Loans Inventory while Burner Loans paused | `admin`                           | Direct Burner Loans call            |
-| Set policy links while destination policy is paused  | `admin`                           | Direct destination-policy setter    |
-| Sync MINTR approval                                  | `burner_loans_admin`              | Direct Burner Loans Inventory call  |
-| Supply / withdraw protocol OHM                       | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
+| Change                                                  | Authority                         | Path                                |
+| ------------------------------------------------------- | --------------------------------- | ----------------------------------- |
+| Add a collateral market                                 | `admin`                           | Direct Config call                  |
+| Set global cap                                          | `admin`                           | Config calls Burner Loans Inventory |
+| Set market cap, risk, fee, or asset originations        | `admin` or config operator        | Config / optional ConfigTimelock    |
+| Set global repurchase recipient or complete asset route | `admin` or config operator        | Config / optional ConfigTimelock    |
+| Set backing oracle                                      | `admin`                           | Direct Burner Loans call            |
+| Set Burner Loans Inventory while Burner Loans paused    | `admin`                           | Direct Burner Loans call            |
+| Set policy links while destination policy is paused     | `admin`                           | Direct destination-policy setter    |
+| Sync MINTR approval                                     | `burner_loans_admin`              | Direct Burner Loans Inventory call  |
+| Supply / withdraw protocol OHM                          | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
 
 Backing-oracle rotation is intentionally available only while Burner Loans is enabled. It changes
 health and seizure economics, so it cannot be performed while borrower actions are paused.
@@ -437,10 +508,11 @@ circular enablement dependency.
     before user operations begin.
 11. Add each collateral asset and configure its FLOAN market, custody path, PRICE support, cap,
     risk parameters, fee curve, and asset-level originations state.
-12. Activate and enable the intended yield-recipient policy, then use Config directly or through
-    ConfigTimelock to set the recipient and each per-asset share. For YRF, register the exact nonzero
-    vault currently returned by DepositManager before setting a nonzero share; leave direct-custody
-    assets at zero bps.
+12. If any route will use the repurchase leg, activate and enable the intended
+    `IYieldRepurchaseRecipient` policy, register each exact DepositManager asset/vault pair, and set
+    it as the global recipient. Then use Config directly or through ConfigTimelock to replace each
+    complete per-asset route. Assets that do not need custom routing may retain the Treasury-only
+    route installed by `addAsset`.
 13. Enable Burner Loans Inventory, then enable Burner Loans last. Burner Loans enablement requires
     active Config and DepositManager policies plus an active, enabled, compatible Burner Loans
     Inventory. Then configure and enable Seizer and other periphery contracts, including seizer
@@ -506,15 +578,15 @@ guaranteed. A fresh Seizer must reset or reconcile both `nextAssetIndex` and eac
 
 ## Preview Semantics
 
-| Preview     | Includes                                                  | Does not guarantee                                                      |
-| ----------- | --------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Deposit     | Expected custody credit and resulting collateral          | Future vault state                                                      |
-| Borrow      | Fee, debt, maturity, health, and local capacity           | Caller authorization, token approval, recipient, or `maxFee` acceptance |
-| Repay       | Applied repayment, remaining debt, and debt-free sentinel | Payer balance or approval                                               |
-| Withdraw    | Return token/amount, remaining collateral, and health     | Successful future vault redemption                                      |
-| Extend      | Fee, resulting maturity, and health                       | Caller token approval or `maxFee` acceptance                            |
-| Seize       | Debt, collateral, reward, and treasury amount             | Unchanged prices or custody at execution                                |
-| Claim yield | Current claimable surplus and recipient-route execution   | Exact output after vault rounding or later transfer success             |
+| Preview     | Includes                                                   | Does not guarantee                                                      |
+| ----------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Deposit     | Expected custody credit and resulting collateral           | Future vault state                                                      |
+| Borrow      | Fee, debt, maturity, health, and local capacity            | Caller authorization, token approval, recipient, or `maxFee` acceptance |
+| Repay       | Applied repayment, remaining debt, and debt-free sentinel  | Payer balance or approval                                               |
+| Withdraw    | Return token/amount, remaining collateral, and health      | Successful future vault redemption                                      |
+| Extend      | Fee, resulting maturity, and health                        | Caller token approval or `maxFee` acceptance                            |
+| Seize       | Debt, collateral, reward, and treasury amount              | Unchanged prices or custody at execution                                |
+| Claim yield | Current claimable surplus and complete live-route validity | Exact output after vault rounding or later transfer success             |
 
 Previews enforce deterministic local eligibility. Execution return values and events remain
 authoritative.

@@ -265,6 +265,20 @@ abstract contract BurnerLoansTest is Test {
         );
     }
 
+    function _addDirectAssetForTest() internal returns (MockERC20 asset) {
+        asset = new MockERC20("Direct Collateral", "dCOLL", _collateralDecimals());
+        _configurePrice(address(asset), 1e18);
+        _configureDepositManagerAsset(address(asset));
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+    }
+
     function _configureUsdsDependencies() internal {
         _configurePrice(address(usds), 1e18);
         _configureDepositManagerAsset(address(usds));
@@ -277,6 +291,31 @@ abstract contract BurnerLoansTest is Test {
 
     function _addDefaultUsdsAsset() internal {
         _configureUsdsDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig()
+        );
+    }
+
+    function _addDefaultUsdsVaultAsset() internal returns (MockERC4626 vault) {
+        vault = new MockERC4626(ERC20(address(usds)), "USDS Vault", "vUSDS");
+        _configurePrice(address(usds), 1e18);
+        depositManager.addAsset(
+            IERC20(address(usds)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
         _setDefaultGlobalDebtCap();
 
         vm.prank(admin);

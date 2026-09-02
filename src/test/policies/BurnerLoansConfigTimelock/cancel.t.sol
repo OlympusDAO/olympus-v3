@@ -18,7 +18,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         vm.prank(burnerLoansAdmin);
         uint64 actionId = configTimelockHarness.queueAction(
             address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRecipient.selector,
+            IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
             abi.encode(recipient)
         );
 
@@ -38,20 +38,20 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         );
     }
 
-    function test_givenQueuedYieldRecipientAssetBps_cancellationReleasesAssetAndRecipientGuards()
+    function test_givenQueuedYieldAssetRouting_cancellationReleasesAssetAndRecipientGuards()
         public
     {
         address recipient = address(_deployUsdsYieldRecipient());
         vm.startPrank(admin);
-        burnerLoansConfig.setYieldRecipient(recipient);
+        burnerLoansConfig.setYieldRepurchaseRecipient(recipient);
         burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
         vm.stopPrank();
 
         vm.prank(burnerLoansAdmin);
         uint64 firstActionId = configTimelockHarness.queueAction(
             address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
-            abi.encode(address(usds), uint16(2_500))
+            IBurnerLoansConfig.setYieldAssetRouting.selector,
+            abi.encode(address(usds), _repurchaseRouting(2_500))
         );
         vm.prank(emergency);
         configTimelockHarness.cancelQueuedAction(firstActionId);
@@ -60,8 +60,8 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         vm.prank(burnerLoansAdmin);
         uint64 secondActionId = configTimelockHarness.queueAction(
             address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRecipientAssetBps.selector,
-            abi.encode(address(usds), uint16(5_000))
+            IBurnerLoansConfig.setYieldAssetRouting.selector,
+            abi.encode(address(usds), _repurchaseRouting(5_000))
         );
         vm.prank(emergency);
         configTimelockHarness.cancelQueuedAction(secondActionId);
@@ -72,7 +72,7 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         vm.prank(burnerLoansAdmin);
         uint64 recipientActionId = configTimelockHarness.queueAction(
             address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRecipient.selector,
+            IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
             abi.encode(replacement)
         );
 

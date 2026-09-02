@@ -7,7 +7,7 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {BurnerLoansYieldClaimer} from "src/policies/BurnerLoansYieldClaimer.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, EMERGENCY_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {MockBurnerLoansYieldClaimerTarget} from "./MockBurnerLoansYieldClaimerTarget.sol";
 
@@ -16,6 +16,7 @@ abstract contract BurnerLoansYieldClaimerTest is Test {
 
     address internal admin;
     address internal burnerLoansAdmin;
+    address internal _emergency;
     address internal heart;
     address internal alice;
 
@@ -28,6 +29,7 @@ abstract contract BurnerLoansYieldClaimerTest is Test {
     function setUp() public virtual {
         admin = makeAddr("admin");
         burnerLoansAdmin = makeAddr("burnerLoansAdmin");
+        _emergency = makeAddr("emergency");
         heart = makeAddr("heart");
         alice = makeAddr("alice");
 
@@ -44,7 +46,9 @@ abstract contract BurnerLoansYieldClaimerTest is Test {
         kernel.executeAction(Actions.ActivatePolicy, address(claimer));
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, burnerLoansAdmin);
+        rolesAdmin.grantRole(EMERGENCY_ROLE, _emergency);
         rolesAdmin.grantRole(HEART_ROLE, heart);
+        claimer.enable("");
         vm.stopPrank();
     }
 }

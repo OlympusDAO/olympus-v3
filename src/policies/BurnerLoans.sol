@@ -48,16 +48,15 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
         _;
     }
 
-    /// @notice Requires the caller to be the currently bound Config policy.
-    /// @dev Reverts with `BurnerLoans_OnlyConfigurator` for every other caller.
+    /// @notice Requires the caller to be the currently bound Config policy outside a protected
+    ///         lifecycle call.
+    /// @dev Configurator operations make only static external validation calls, so they do not
+    ///      need to acquire the guard. Rejecting an already-entered guard prevents a claim or token
+    ///      callback from changing configuration while retaining one shared guard for lifecycle
+    ///      state transitions.
     function _onlyConfigurator() internal view {
         if (msg.sender != address(_CONFIGURATOR)) revert BurnerLoans_OnlyConfigurator(msg.sender);
-    }
-
-    /// @notice Requires an asset to be present in Config's append-only facility registry.
-    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` for unregistered assets.
-    function _requireAssetRegistered(address asset_) internal view {
-        if (!_ASSETS.contains(asset_)) revert BurnerLoans_AssetNotConfigured(asset_);
+        if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
     }
 
     // ========== CONSTRUCTOR ========== //
@@ -114,25 +113,25 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
         // Config creates the FLOAN market first. Resolve it before extending the append-only
         // registry so every registered asset is immediately serviceable by the facility.
         _getAssetMarket(asset_);
-        if (!_ASSETS.add(asset_)) revert BurnerLoans_AssetAlreadyConfigured(asset_);
-        emit AssetRegistered(asset_);
+        BurnerLoansDependencies.registerAsset(_ASSETS, asset_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
     /// @dev Reverts if:
     ///      - Burner Loans is disabled.
     ///      - The caller is not the bound Config policy.
-    ///      - A nonzero recipient lacks the required interfaces, is not an active Kernel policy, or
-    ///        is disabled.
-    ///      - A nonzero recipient does not support every asset with a nonzero allocation.
-    ///      - The recipient is zero while any asset allocation remains nonzero.
-    function setYieldRecipient(address recipient_) external override onlyConfigurator {
+    ///      - A nonzero recipient is Burner Loans or Treasury, lacks required interfaces, is not an
+    ///        active Kernel policy, or is disabled.
+    ///      - A nonzero recipient collides with a direct allocation or lacks a required live asset
+    ///        route.
+    ///      - The recipient is zero while any repurchase allocation remains nonzero.
+    function setYieldRepurchaseRecipient(address recipient_) external override onlyConfigurator {
         _requireEnabled();
-        BurnerLoansDependencies.setYieldRecipient(
+        BurnerLoansDependencies.setYieldRepurchaseRecipient(
             _YIELD_ROUTING,
             _ASSETS,
-            kernel,
             _DEPOSIT_MANAGER,
+            address(_TRSRY),
             recipient_
         );
     }
@@ -141,23 +140,39 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
     /// @dev Reverts if:
     ///      - Burner Loans is disabled.
     ///      - The caller is not the bound Config policy.
-    ///      - `asset_` is not registered or `bps_` exceeds 10_000.
-    ///      - The yield recipient is zero.
-    ///      - For nonzero `bps_`, the recipient lacks required interfaces, is not an active Kernel
-    ///        policy, is disabled, or its live vault route does not match DepositManager.
-    ///        Zero `bps_` remains available to clear an allocation after recipient drift.
-    function setYieldRecipientAssetBps(
+    ///      - `asset_` is not registered or non-Treasury allocations exceed 10,000 BPS.
+    ///      - A direct recipient is zero, duplicated, or reserved.
+    ///      - For nonzero repurchase BPS, the global recipient is unset or its live interface,
+    ///        policy, enabled-state, or vault route is invalid. Zero repurchase BPS remains
+    ///        available to repair a route after recipient drift.
+    function setYieldAssetRouting(
         address asset_,
-        uint16 bps_
+        AssetYieldRouting calldata routing_
     ) external override onlyConfigurator {
         _requireEnabled();
-        BurnerLoansDependencies.setYieldRecipientAssetBps(
+        BurnerLoansDependencies.setYieldAssetRouting(
             _YIELD_ROUTING,
             _ASSETS,
-            kernel,
             _DEPOSIT_MANAGER,
+            address(_TRSRY),
             asset_,
-            bps_
+            routing_
+        );
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function validateYieldAssetRouting(
+        address asset_,
+        AssetYieldRouting calldata routing_
+    ) external view override {
+        _requireEnabled();
+        BurnerLoansDependencies.validateAssetYieldRoutingInput(
+            _YIELD_ROUTING,
+            _ASSETS,
+            _DEPOSIT_MANAGER,
+            address(_TRSRY),
+            asset_,
+            routing_
         );
     }
 
@@ -308,15 +323,10 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
     }
 
     /// @inheritdoc IBurnerLoansYieldClaim
-    /// @dev Asset disable does not block safe surplus collection. Iterates the append-only asset
-    ///      registry atomically. Reverts if:
-    ///      - Burner Loans or DepositManager is disabled.
-    ///      - Any registered asset has no configured custody period or custody is insolvent.
-    ///      - Any nonzero recipient allocation has an invalid live policy or vault route.
-    ///      - DepositManager yield claiming or an asset transfer fails.
-    function claimYield() external override nonReentrant {
-        _requireEnabled();
-        BurnerLoansCustody.claimYield(_ASSETS, _YIELD_ROUTING);
+    function claimYield(
+        address asset_
+    ) external override nonReentrant givenEnabled returns (uint256 claimed) {
+        return BurnerLoansCustody.claimYield(_ASSETS, _YIELD_ROUTING, asset_);
     }
 
     // ========== VIEW FUNCTIONS ========== //
@@ -343,8 +353,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
 
     /// @inheritdoc IBurnerLoansView
     /// @dev Reads facility-owned routing storage and does not perform live recipient validation.
-    function getYieldRecipient() external view override returns (address recipient) {
-        return _YIELD_ROUTING.recipient;
+    function getYieldRepurchaseRecipient() external view override returns (address recipient) {
+        return _YIELD_ROUTING.repurchaseRecipient;
     }
 
     /// @inheritdoc IBurnerLoansView
@@ -360,33 +370,11 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
     }
 
     /// @inheritdoc IBurnerLoansView
-    /// @dev Returns zero for assets without a configured allocation.
-    function getYieldRecipientAssetBps(address asset_) external view override returns (uint16 bps) {
-        return _YIELD_ROUTING.assetBps[asset_];
-    }
-
-    /// @inheritdoc IBurnerLoansView
-    /// @dev Reverts if:
-    ///      - The recipient is zero or lacks `IYieldRecipient` or `IEnabler` support.
-    ///      - The recipient is not an active policy in the facility Kernel.
-    ///      - The recipient is disabled.
-    function validateYieldRecipient(address recipient_) external view override {
-        BurnerLoansDependencies.validateYieldRecipient(kernel, recipient_);
-    }
-
-    /// @inheritdoc IBurnerLoansView
-    /// @dev Reverts if global recipient validation fails or the exact DepositManager asset-vault
-    ///      pair is mismatched or disabled. Recipient lookup failures bubble unchanged.
-    function validateYieldRecipientAsset(
-        address recipient_,
+    /// @dev Returns an empty, all-zero route for an unregistered asset.
+    function getYieldAssetRouting(
         address asset_
-    ) external view override {
-        BurnerLoansDependencies.validateYieldRecipientAsset(
-            kernel,
-            _DEPOSIT_MANAGER,
-            recipient_,
-            asset_
-        );
+    ) external view override returns (AssetYieldRouting memory routing) {
+        return BurnerLoansDependencies.getYieldAssetRouting(_YIELD_ROUTING, asset_);
     }
 
     /// @inheritdoc IBurnerLoansView
@@ -533,21 +521,19 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
         address asset_
     ) external view override returns (ClaimYieldPreview memory) {
         _requireEnabled();
-        _requireAssetRegistered(asset_);
-        return
-            BurnerLoansCustody.previewClaimYield(
-                asset_,
-                _YIELD_ROUTING.recipient,
-                _YIELD_ROUTING.assetBps[asset_]
-            );
+        return BurnerLoansCustody.previewClaimYield(_ASSETS, asset_, _YIELD_ROUTING);
     }
 
     /// @inheritdoc IBurnerLoansView
     function getAssetCollateralStatus(
         address asset_
     ) external view override returns (AssetCollateralStatus memory) {
-        _requireAssetRegistered(asset_);
-        return BurnerLoansCustody.getAssetCollateralStatus(_DEPOSIT_MANAGER, asset_, address(this));
+        return
+            BurnerLoansCustody.getRegisteredAssetCollateralStatus(
+                _ASSETS,
+                _DEPOSIT_MANAGER,
+                asset_
+            );
     }
 
     /// @notice Returns the dependency snapshot consumed by linked Burner Loans libraries.

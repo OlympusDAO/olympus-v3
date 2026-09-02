@@ -250,18 +250,20 @@ contract BurnerLoansConfig is
     /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
     ///      Burner Loans rejects the recipient transition.
-    function setYieldRecipient(address recipient_) external givenEnabled onlyConfigOperatorOrAdmin {
-        _FACILITY.setYieldRecipient(recipient_);
+    function setYieldRepurchaseRecipient(
+        address recipient_
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
+        _FACILITY.setYieldRepurchaseRecipient(recipient_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
-    ///      Burner Loans rejects the asset allocation transition.
-    function setYieldRecipientAssetBps(
+    ///      Burner Loans rejects the complete asset-routing transition.
+    function setYieldAssetRouting(
         address asset_,
-        uint16 bps_
+        AssetYieldRouting calldata routing_
     ) external givenEnabled onlyConfigOperatorOrAdmin {
-        _FACILITY.setYieldRecipientAssetBps(asset_, bps_);
+        _FACILITY.setYieldAssetRouting(asset_, routing_);
     }
 
     /// @dev Returns the Burner Loans Inventory contract currently bound by Burner Loans.

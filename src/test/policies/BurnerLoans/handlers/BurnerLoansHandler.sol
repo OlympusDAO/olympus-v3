@@ -11,6 +11,7 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
 // Contracts
@@ -21,7 +22,7 @@ import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
@@ -41,7 +42,7 @@ contract BurnerLoansHandler is Test {
     address public immutable admin;
     address public immutable treasury;
     address public immutable inventoryProvider;
-    MockYieldRecipient public immutable yieldRecipient;
+    MockYieldRepurchaseRecipient public immutable yieldRecipient;
 
     address[] internal _actors;
     uint256 public collateralPrice = _WAD;
@@ -59,10 +60,21 @@ contract BurnerLoansHandler is Test {
     uint256 public claimYieldBoundViolations;
     uint256 public claimYieldConservationViolations;
     uint256 public claimYieldResidualViolations;
+    uint256 public claimYieldFailureMutationViolations;
+    uint256 public claimYieldPreviewConsistencyViolations;
+    uint256 public routingFailureMutationViolations;
+    uint256 public repurchaseRecipientClearViolations;
+    uint256 public cumulativeClaimedYield;
+    uint256 public cumulativeDistributedYield;
+    uint256 public modelActiveRepurchaseRouteCount;
+    address public modelYieldRepurchaseRecipient;
+    bytes32 public modelAssetYieldRoutingHash;
     uint256 public backingViolations;
     uint256 public seizureEligibilityViolations;
     uint256 public seizureClosureViolations;
     uint256 public positionReuseViolations;
+
+    address[5] internal _directYieldRecipients;
 
     struct Dependencies {
         BurnerLoansHarness burnerLoans;
@@ -77,7 +89,7 @@ contract BurnerLoansHandler is Test {
         address admin;
         address treasury;
         address inventoryProvider;
-        MockYieldRecipient yieldRecipient;
+        MockYieldRepurchaseRecipient yieldRecipient;
         address[] actors;
     }
 
@@ -96,6 +108,18 @@ contract BurnerLoansHandler is Test {
         inventoryProvider = dependencies_.inventoryProvider;
         yieldRecipient = dependencies_.yieldRecipient;
         _actors = dependencies_.actors;
+
+        for (uint256 i; i < _directYieldRecipients.length; ++i) {
+            _directYieldRecipients[i] = address(
+                uint160(uint256(keccak256(abi.encode("BurnerLoansDirectYieldRecipient", i))))
+            );
+        }
+        modelYieldRepurchaseRecipient = dependencies_.burnerLoans.getYieldRepurchaseRecipient();
+        IBurnerLoans.AssetYieldRouting memory initialRouting = dependencies_
+            .burnerLoans
+            .getYieldAssetRouting(address(dependencies_.collateral));
+        modelActiveRepurchaseRouteCount = initialRouting.repurchaseRecipientBps == 0 ? 0 : 1;
+        modelAssetYieldRoutingHash = keccak256(abi.encode(initialRouting));
 
         address inventory_ = dependencies_.burnerLoans.inventory();
         vm.prank(dependencies_.inventoryProvider);
@@ -491,32 +515,141 @@ contract BurnerLoansHandler is Test {
         collateral.mint(address(depositManager), bound(amountSeed_, 1, 10_000e18));
     }
 
-    function claimYield() external {
+    function claimAssetYield() external {
         IBurnerLoans.AssetCollateralStatus memory beforeStatus = burnerLoans
             .getAssetCollateralStatus(address(collateral));
         uint256 treasuryBefore = collateral.balanceOf(treasury);
         uint256 recipientBefore = collateral.balanceOf(address(yieldRecipient));
         uint256 facilityBefore = collateral.balanceOf(address(burnerLoans));
-        try burnerLoans.claimYield() {
+        uint256[5] memory directBalancesBefore = _directYieldRecipientBalances();
+        bytes32 routeHashBefore = keccak256(
+            abi.encode(burnerLoans.getYieldAssetRouting(address(collateral)))
+        );
+        address globalRecipientBefore = burnerLoans.getYieldRepurchaseRecipient();
+
+        bool previewReturned;
+        bool previewExecutable;
+        uint256 previewAmount;
+        try burnerLoans.previewClaimYield(address(collateral)) returns (
+            IBurnerLoans.ClaimYieldPreview memory preview
+        ) {
+            previewReturned = true;
+            previewExecutable = preview.executable;
+            previewAmount = preview.amount;
+        } catch {}
+
+        (bool success, ) = address(burnerLoans).call(
+            abi.encodeWithSelector(bytes4(keccak256("claimYield(address)")), address(collateral))
+        );
+        if (success) {
             uint256 distributed = collateral.balanceOf(treasury) -
                 treasuryBefore +
                 collateral.balanceOf(address(yieldRecipient)) -
                 recipientBefore;
+            for (uint256 i; i < _directYieldRecipients.length; ++i) {
+                distributed +=
+                    collateral.balanceOf(_directYieldRecipients[i]) -
+                    directBalancesBefore[i];
+            }
             IBurnerLoans.AssetCollateralStatus memory afterStatus = burnerLoans
                 .getAssetCollateralStatus(address(collateral));
             uint256 claimed = beforeStatus.assets - afterStatus.assets;
             if (claimed > beforeStatus.claimableYield) ++claimYieldBoundViolations;
             if (distributed != claimed) ++claimYieldConservationViolations;
+            cumulativeClaimedYield += claimed;
+            cumulativeDistributedYield += distributed;
             if (collateral.balanceOf(address(burnerLoans)) != facilityBefore) {
                 ++claimYieldResidualViolations;
             }
-        } catch {}
+            if (!previewReturned || !previewExecutable || previewAmount != claimed) {
+                ++claimYieldPreviewConsistencyViolations;
+            }
+        } else {
+            IBurnerLoans.AssetCollateralStatus memory afterStatus = burnerLoans
+                .getAssetCollateralStatus(address(collateral));
+            bool mutated = keccak256(abi.encode(beforeStatus)) !=
+                keccak256(abi.encode(afterStatus)) ||
+                collateral.balanceOf(treasury) != treasuryBefore ||
+                collateral.balanceOf(address(yieldRecipient)) != recipientBefore ||
+                collateral.balanceOf(address(burnerLoans)) != facilityBefore ||
+                routeHashBefore !=
+                keccak256(abi.encode(burnerLoans.getYieldAssetRouting(address(collateral)))) ||
+                globalRecipientBefore != burnerLoans.getYieldRepurchaseRecipient();
+            for (uint256 i; i < _directYieldRecipients.length; ++i) {
+                if (collateral.balanceOf(_directYieldRecipients[i]) != directBalancesBefore[i]) {
+                    mutated = true;
+                }
+            }
+            if (mutated) ++claimYieldFailureMutationViolations;
+            if (previewReturned && previewExecutable) {
+                ++claimYieldPreviewConsistencyViolations;
+            }
+        }
     }
 
-    function setYieldBps(uint16 bpsSeed_) external {
-        uint16 bps = uint16(bound(bpsSeed_, 0, 10_000));
+    function setYieldAssetRouting(
+        uint16 repurchaseBpsSeed_,
+        uint16 directBpsSeed_,
+        uint8 directCountSeed_
+    ) external {
+        IBurnerLoans.AssetYieldRouting memory routing;
+        uint256 directCount = bound(directCountSeed_, 0, _directYieldRecipients.length);
+        bool repurchaseRecipientConfigured = burnerLoans.getYieldRepurchaseRecipient() !=
+            address(0);
+        uint256 maximumRepurchaseBps = BurnerLoansConstants.MAX_BPS - directCount;
+        uint256 repurchaseBps = repurchaseRecipientConfigured
+            ? bound(repurchaseBpsSeed_, 0, maximumRepurchaseBps)
+            : 0;
+        uint256 remainingBps = BurnerLoansConstants.MAX_BPS - repurchaseBps;
+        uint256 directBps = directCount == 0 ? 0 : bound(directBpsSeed_, directCount, remainingBps);
+
+        routing.repurchaseRecipientBps = uint16(repurchaseBps);
+        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](directCount);
+        for (uint256 i; i < directCount; ++i) {
+            routing.directAllocations[i] = IBurnerLoans.DirectYieldAllocation({
+                recipient: _directYieldRecipients[i],
+                bps: uint16(i == 0 ? directBps - directCount + 1 : 1)
+            });
+        }
+
+        bytes32 priorHash = keccak256(
+            abi.encode(burnerLoans.getYieldAssetRouting(address(collateral)))
+        );
         vm.prank(admin);
-        try burnerLoansConfig.setYieldRecipientAssetBps(address(collateral), bps) {} catch {}
+        try burnerLoansConfig.setYieldAssetRouting(address(collateral), routing) {
+            modelActiveRepurchaseRouteCount = routing.repurchaseRecipientBps == 0 ? 0 : 1;
+            modelAssetYieldRoutingHash = keccak256(abi.encode(routing));
+        } catch {
+            if (
+                priorHash !=
+                keccak256(abi.encode(burnerLoans.getYieldAssetRouting(address(collateral))))
+            ) ++routingFailureMutationViolations;
+        }
+    }
+
+    function setYieldRepurchaseRecipient(bool configure_) external {
+        address requestedRecipient = configure_ ? address(yieldRecipient) : address(0);
+        address priorRecipient = burnerLoans.getYieldRepurchaseRecipient();
+        bytes32 priorRouteHash = keccak256(
+            abi.encode(burnerLoans.getYieldAssetRouting(address(collateral)))
+        );
+
+        vm.prank(admin);
+        try burnerLoansConfig.setYieldRepurchaseRecipient(requestedRecipient) {
+            if (!configure_ && modelActiveRepurchaseRouteCount != 0) {
+                ++repurchaseRecipientClearViolations;
+            }
+            modelYieldRepurchaseRecipient = requestedRecipient;
+        } catch {
+            if (
+                burnerLoans.getYieldRepurchaseRecipient() != priorRecipient ||
+                keccak256(abi.encode(burnerLoans.getYieldAssetRouting(address(collateral)))) !=
+                priorRouteHash
+            ) ++routingFailureMutationViolations;
+            if (!configure_ && modelActiveRepurchaseRouteCount == 0) {
+                ++repurchaseRecipientClearViolations;
+            }
+        }
     }
 
     function toggleYieldRecipient(bool enable_) external {
@@ -544,6 +677,12 @@ contract BurnerLoansHandler is Test {
 
     function _inventory() private view returns (IBurnerLoansInventory) {
         return IBurnerLoansInventory(burnerLoans.inventory());
+    }
+
+    function _directYieldRecipientBalances() private view returns (uint256[5] memory balances) {
+        for (uint256 i; i < _directYieldRecipients.length; ++i) {
+            balances[i] = collateral.balanceOf(_directYieldRecipients[i]);
+        }
     }
 
     function _probeSameBlockRepay(address actor_) private {

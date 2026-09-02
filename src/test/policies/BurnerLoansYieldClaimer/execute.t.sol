@@ -12,6 +12,23 @@ import {BurnerLoansYieldClaimerTest} from "./BurnerLoansYieldClaimerTest.sol";
 import {MockBurnerLoansYieldClaimerTarget} from "./MockBurnerLoansYieldClaimerTarget.sol";
 
 contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
+    modifier givenDisabled() {
+        vm.prank(_emergency);
+        claimer.disable("");
+        _;
+    }
+
+    modifier givenExecutionGasLimit(uint32 gasLimit_) {
+        vm.prank(admin);
+        claimer.setExecutionGasLimit(gasLimit_);
+        _;
+    }
+
+    modifier givenAssetViewReverts() {
+        target.setAssetViewReverts(true);
+        _;
+    }
+
     function test_givenCallerWithoutHeartRole_reverts(address caller_) public {
         vm.assume(caller_ != heart);
 
@@ -26,15 +43,55 @@ contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
         claimer.execute();
 
         assertEq(target.claimCalls(), 1, "claim calls");
+        assertEq(target.lastClaimedAsset(), target.getAssetAt(0), "claimed asset");
         assertEq(vm.getRecordedLogs().length, 0, "claimer event count");
+    }
+
+    function test_givenMultipleClaimsSucceed_claimsEveryAsset() public {
+        address[] memory assets = new address[](3);
+        assets[0] = makeAddr("firstSuccessfulAsset");
+        assets[1] = makeAddr("secondSuccessfulAsset");
+        assets[2] = makeAddr("thirdSuccessfulAsset");
+        target.setAssets(assets);
+
+        vm.recordLogs();
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), assets.length, "claim calls");
+        assertEq(target.lastClaimedAsset(), assets[assets.length - 1], "last claimed asset");
+        assertEq(vm.getRecordedLogs().length, 0, "claimer event count");
+    }
+
+    function test_givenDisabled_isNoOpBeforeRegistryRead()
+        public
+        givenDisabled
+        givenAssetViewReverts
+    {
+        vm.recordLogs();
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+        assertEq(vm.getRecordedLogs().length, 0, "claimer event count");
+    }
+
+    function test_givenDisabled_whenCallerWithoutHeartRole_reverts(
+        address caller_
+    ) public givenDisabled {
+        vm.assume(caller_ != heart);
+
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, HEART_ROLE));
+        vm.prank(caller_);
+        claimer.execute();
     }
 
     function test_givenClaimReverts_reportsFailure() public {
         target.setClaimReverts(true);
 
         vm.expectEmit(true, false, false, true, address(claimer));
-        emit IBurnerLoansYieldClaimer.YieldClaimFailed(
-            address(target),
+        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
+            target.getAssetAt(0),
             MockBurnerLoansYieldClaimerTarget.ClaimReverted.selector
         );
         vm.prank(heart);
@@ -47,7 +104,10 @@ contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
         target.setClaimRevertsWithShortData(true);
 
         vm.expectEmit(true, false, false, true, address(claimer));
-        emit IBurnerLoansYieldClaimer.YieldClaimFailed(address(target), bytes4(0xab000000));
+        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
+            target.getAssetAt(0),
+            bytes4(0xab000000)
+        );
         vm.prank(heart);
         claimer.execute();
 
@@ -58,20 +118,25 @@ contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
         target.setClaimRevertsWithLargeData(true);
 
         vm.expectEmit(true, false, false, true, address(claimer));
-        emit IBurnerLoansYieldClaimer.YieldClaimFailed(address(target), bytes4(0));
+        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(target.getAssetAt(0), bytes4(0));
         vm.prank(heart);
         claimer.execute();
 
         assertEq(target.claimCalls(), 0, "claim calls");
     }
 
-    function test_givenConfiguredGasExceedsAvailableGas_reportsFailure() public {
-        target.setClaimConsumesAllGas(true);
-        vm.prank(admin);
-        claimer.setExecutionGasLimit(type(uint32).max);
+    function test_givenConfiguredGasExceedsAvailableGas_reportsFailure()
+        public
+        givenExecutionGasLimit(type(uint32).max)
+    {
+        address[] memory assets = new address[](2);
+        assets[0] = makeAddr("firstAvailableGasAsset");
+        assets[1] = makeAddr("secondAvailableGasAsset");
+        target.setAssets(assets);
+        target.setClaimConsumesAllGasAsset(assets[0]);
 
         vm.expectEmit(true, false, false, true, address(claimer));
-        emit IBurnerLoansYieldClaimer.YieldClaimFailed(address(target), bytes4(0));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(bytes4(0));
         vm.prank(heart);
         claimer.execute{gas: 200_000}();
 
@@ -79,9 +144,13 @@ contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
     }
 
     function test_givenClaimExhaustsGas_laterHeartTaskStillExecutes() public {
-        target.setClaimConsumesAllGas(true);
         MockPeriodicTaskManager taskManager = new MockPeriodicTaskManager(kernel);
         MockPeriodicTask laterTask = new MockPeriodicTask();
+        address[] memory assets = new address[](2);
+        assets[0] = makeAddr("firstExhaustingAsset");
+        assets[1] = makeAddr("secondExhaustingAsset");
+        target.setAssets(assets);
+        target.setClaimConsumesAllGasAsset(assets[0]);
 
         vm.startPrank(admin);
         kernel.executeAction(Actions.ActivatePolicy, address(taskManager));
@@ -92,10 +161,98 @@ contract BurnerLoansYieldClaimerExecuteTest is BurnerLoansYieldClaimerTest {
         vm.stopPrank();
 
         vm.expectEmit(true, false, false, true, address(claimer));
-        emit IBurnerLoansYieldClaimer.YieldClaimFailed(address(target), bytes4(0));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(bytes4(0));
         taskManager.executeAllTasks{gas: 1_000_000}();
 
         assertEq(laterTask.count(), 1, "later task count");
         assertEq(target.claimCalls(), 0, "claim calls");
+    }
+
+    function test_givenLaterClaimExhaustsTaskGas_rollsBackEarlierClaim()
+        public
+        givenExecutionGasLimit(200_000)
+    {
+        address[] memory assets = new address[](3);
+        assets[0] = makeAddr("firstAsset");
+        assets[1] = makeAddr("secondAsset");
+        assets[2] = makeAddr("thirdAsset");
+        target.setAssets(assets);
+        target.setClaimConsumesAllGasAsset(assets[1]);
+
+        vm.expectEmit(true, false, false, true, address(claimer));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(bytes4(0));
+        vm.prank(heart);
+        claimer.execute{gas: 1_000_000}();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+        assertEq(target.lastClaimedAsset(), address(0), "last claimed asset");
+    }
+
+    function test_givenMinimumTaskGasLimit_reportsExecutionFailure()
+        public
+        givenExecutionGasLimit(1)
+    {
+        address[] memory assets = new address[](2);
+        assets[0] = makeAddr("firstMinimumBudgetAsset");
+        assets[1] = makeAddr("secondMinimumBudgetAsset");
+        target.setAssets(assets);
+
+        vm.expectEmit(true, false, false, true, address(claimer));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(bytes4(0));
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+    }
+
+    function test_givenNoRegisteredAssets_isNoOp() public {
+        target.setAssets(new address[](0));
+
+        vm.recordLogs();
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+        assertEq(vm.getRecordedLogs().length, 0, "claimer event count");
+    }
+
+    function test_givenRegistryExceedsTaskGasLimit_reportsSingleExecutionFailure()
+        public
+        givenExecutionGasLimit(200_000)
+    {
+        address[] memory assets = new address[](100);
+        for (uint256 i; i < assets.length; ++i) {
+            assets[i] = address(uint160(i + 1));
+        }
+        target.setAssets(assets);
+
+        vm.expectEmit(true, false, false, true, address(claimer));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(bytes4(0));
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+    }
+
+    function test_givenAssetRegistryReadReverts_reportsExecutionFailure()
+        public
+        givenAssetViewReverts
+    {
+        vm.expectEmit(true, false, false, true, address(claimer));
+        emit IBurnerLoansYieldClaimer.ExecutionFailed(
+            MockBurnerLoansYieldClaimerTarget.AssetViewReverted.selector
+        );
+        vm.prank(heart);
+        claimer.execute();
+
+        assertEq(target.claimCalls(), 0, "claim calls");
+    }
+
+    function test_givenCallerIsNotSelf_selfExecuteTaskReverts(address caller_) public {
+        vm.assume(caller_ != address(claimer));
+
+        vm.expectRevert(IBurnerLoansYieldClaimer.BurnerLoansYieldClaimer_OnlySelf.selector);
+        vm.prank(caller_);
+        claimer.selfExecuteTask();
     }
 }
