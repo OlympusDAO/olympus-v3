@@ -9,6 +9,7 @@ import {ICoolerLtvOracle} from "policies/interfaces/cooler/ICoolerLtvOracle.sol"
 import {MonoCooler} from "policies/cooler/MonoCooler.sol";
 import {Actions} from "policies/RolesAdmin.sol";
 import {MockStakingReal} from "test/mocks/MockStakingReal.sol";
+import {ETHEREUM_TX_GAS_LIMIT} from "test/lib/Constants.sol";
 
 import {console2} from "forge-std/console2.sol";
 
@@ -542,10 +543,15 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         expectAccountDelegationSummary(ALICE, 33e18 + 20e18, 14e18, 1, 10);
     }
 
+    /// forge-config: default.isolate = true
     function test_applyUnhealthyDelegations_withMaxUndelegations() external {
-        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
-        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
-        uint256 delegateAddressCount = 1900;
+        // Isolation is pinned above because only isolated execution charges the cold account and
+        // storage costs that a real rescind transaction pays. The cost is linear at approximately
+        // 38,800 gas per delegation, so 350 delegations spend about 13.7 million gas and leave about
+        // a sixth of the EIP-7825 transaction cap spare. An account above that ceiling still
+        // has a way out here, because this call takes the number of delegates to rescind and can be
+        // paginated across transactions; batchLiquidate cannot.
+        uint256 delegateAddressCount = 350;
         uint128 collateralAmount = 10e18;
 
         // Set the max delegate addresses to the max possible
@@ -584,8 +590,11 @@ contract MonoCoolerApplyUnhealthyDelegations is MonoCoolerComputeLiquidityBaseTe
         uint256 gasUsed = vm.stopSnapshotGas();
         console2.log("Gas used", gasUsed);
 
-        // Ensure that the gas used is less than the block limit
-        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
+        assertLt(
+            gasUsed,
+            ETHEREUM_TX_GAS_LIMIT,
+            "Gas used is greater than the mainnet transaction gas limit"
+        );
     }
 }
 
@@ -1317,10 +1326,13 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         }
     }
 
+    /// forge-config: default.isolate = true
     function test_batchLiquidate_oneAccount_withMaxUndelegations() external {
-        // This previously used 2,600 delegations. 1,900 retains the high-cardinality stress case
-        // while keeping its unoptimized execution within Foundry's 36 million block gas limit.
-        uint32 delegateAddressCount = 1900;
+        // Isolation is pinned above for the same reason as in the applyUnhealthyDelegations stress
+        // case: batchLiquidate rescinds every delegation in one call, so its cost has to be measured
+        // the way a real liquidation transaction pays it. 350 delegations spend about 13.8 million
+        // gas against the EIP-7825 cap. The test below covers what happens past that ceiling.
+        uint32 delegateAddressCount = 350;
         uint128 collateralAmount = 10e18;
 
         // Set the max delegate addresses to the max possible
@@ -1357,14 +1369,18 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
         uint128 expectedIncentives = 1;
 
         console2.log("starting liquidation");
-        vm.startSnapshotGas("liquidate");
         vm.startPrank(OTHERS);
+        vm.startSnapshotGas("liquidate");
         checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
         uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
         console2.log("gasUsed", gasUsed);
 
-        // Ensure that the gas used is less than the block limit
-        assertLt(gasUsed, 36000000, "Gas used is greater than the block limit");
+        assertLt(
+            gasUsed,
+            ETHEREUM_TX_GAS_LIMIT,
+            "Gas used is greater than the mainnet transaction gas limit"
+        );
 
         // Check position is empty now (debt + collateral)
         {
@@ -1407,5 +1423,107 @@ contract MonoCoolerLiquidationsTest is MonoCoolerComputeLiquidityBaseTest {
             );
             assertEq(TRSRY.withdrawApproval(address(treasuryBorrower), usds), 0);
         }
+    }
+
+    /// forge-config: default.isolate = true
+    function test_batchLiquidate_aboveTransactionGasCeiling_requiresPaginatedRescind() external {
+        // batchLiquidate passes type(uint256).max to withdrawUndelegatedGohm, so it rescinds every
+        // delegation of an account within that one call. At approximately 38,800 gas per delegation
+        // the ceiling that still fits the EIP-7825 transaction cap is around 400 delegations, while
+        // CoolerV2DelegatesForHohmProposal raises the overseer set limit for its account to
+        // 1,000,000 against a default of 10.
+        //
+        // Past that ceiling the account is not stuck, but a liquidator has to page through
+        // applyUnhealthyDelegations first, which takes the number of delegates to rescind and needs
+        // no authorisation beyond the account being past its liquidation LTV. This walks both
+        // halves over the same 1,200 delegations: one batchLiquidate spends about 46.8 million gas
+        // and could not be sent, while four pages of 300 at about 11.7 million each followed by a
+        // liquidation of about 250 thousand all fit.
+        //
+        // Neither Forge nor Anvil enforces the cap, so the first half is a measurement rather than
+        // a revert.
+        uint32 delegateAddressCount = 1200;
+        uint32 pageSize = 300;
+        uint128 collateralAmount = 10e18;
+
+        // Set the max delegate addresses to the max possible
+        vm.prank(OVERSEER);
+        cooler.setMaxDelegateAddresses(ALICE, type(uint32).max);
+
+        addCollateral(ALICE, collateralAmount);
+        uint128 borrowAmount = uint128(cooler.debtDeltaForMaxOriginationLtv(ALICE, 0));
+        borrow(ALICE, ALICE, borrowAmount, ALICE);
+
+        // Apply delegations individually, to mimic what would happen in a real scenario and to avoid the gas limit
+        for (uint32 i; i < delegateAddressCount; ++i) {
+            address delegateAddress = address(uint160(i + 1)); // i+1 to avoid 0 address
+            IDLGTEv1.DelegationRequest[]
+                memory delegationRequests = new IDLGTEv1.DelegationRequest[](1);
+            delegationRequests[0] = IDLGTEv1.DelegationRequest(delegateAddress, 1);
+
+            vm.prank(ALICE);
+            cooler.applyDelegations(delegationRequests, ALICE);
+        }
+
+        skip(2 * 363.19 days);
+
+        // Reduce the LLTV to be one less such that it JUST ticks over
+        // to be liquidatable
+        uint128 expectedCurrentLtv = DEFAULT_OLTV + 29.616639616805159427e18;
+        vm.mockCall(
+            address(ltvOracle),
+            abi.encodeWithSelector(ICoolerLtvOracle.currentLtvs.selector),
+            abi.encode(DEFAULT_OLTV, expectedCurrentLtv - 1)
+        );
+
+        uint128 expectedDebt = borrowAmount + 296.166396168051594267e18;
+        uint128 expectedIncentives = 1;
+
+        // Liquidating the whole delegation set in one call does not fit a transaction. Roll the
+        // state back afterwards so that the paginated route starts from the same position.
+        uint256 unliquidatedState = vm.snapshotState();
+        vm.startPrank(OTHERS);
+        vm.startSnapshotGas("liquidateWholeDelegationSet");
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
+        uint256 wholeSetGasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+        console2.log("whole set gasUsed", wholeSetGasUsed);
+
+        assertGt(
+            wholeSetGasUsed,
+            ETHEREUM_TX_GAS_LIMIT,
+            "An account above the delegation ceiling should not fit one mainnet transaction"
+        );
+
+        vm.revertToState(unliquidatedState);
+
+        // Rescind in pages. The snapshot keeps the last page, which is representative: the pages
+        // measure within a few thousand gas of each other.
+        for (uint32 rescinded; rescinded < delegateAddressCount; rescinded += pageSize) {
+            vm.prank(OTHERS);
+            vm.startSnapshotGas("rescindDelegationPage");
+            cooler.applyUnhealthyDelegations(ALICE, pageSize);
+            uint256 pageGasUsed = vm.stopSnapshotGas();
+            console2.log("rescind page gasUsed", pageGasUsed);
+
+            assertLt(
+                pageGasUsed,
+                ETHEREUM_TX_GAS_LIMIT,
+                "A rescind page is greater than the mainnet transaction gas limit"
+            );
+        }
+
+        vm.startPrank(OTHERS);
+        vm.startSnapshotGas("liquidateAfterPagedRescind");
+        checkBatchLiquidate(oneAddress(ALICE), collateralAmount, expectedDebt, expectedIncentives);
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+        console2.log("gasUsed", gasUsed);
+
+        assertLt(
+            gasUsed,
+            ETHEREUM_TX_GAS_LIMIT,
+            "Gas used is greater than the mainnet transaction gas limit"
+        );
     }
 }
