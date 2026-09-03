@@ -11,9 +11,11 @@ import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {Kernel, Keycode, Module, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
@@ -23,7 +25,7 @@ import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src
 /// @notice Heart task for bounded round-robin seizure.
 /// @dev Scan and seizure failures are isolated so this non-essential task cannot
 ///      revert the Heart transaction or block later periodic tasks.
-contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
+contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBurnerLoansSeizer {
     using ExcessivelySafeCall for address;
     using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -71,7 +73,7 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
         uint16 maxBorrowersToCheck_,
         uint8 maxBorrowersToSeize_,
         uint32 executionGasLimit_
-    ) Policy(kernel_) {
+    ) Policy(kernel_) ReEnablerGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD) {
         if (burnerLoans_ == address(0)) revert BurnerLoansSeizer_ZeroAddress();
         if (
             !ERC165Checker.supportsInterface(
@@ -225,8 +227,29 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
         return _assets.values();
     }
 
+    /// @notice Authorizes a re-enable transition during the grace period.
+    /// @dev Reverts unless the caller is an OCG admin or Burner Loans admin.
+    function _authorizeReEnable() internal view override {
+        _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
+    }
+
+    /// @notice Authorizes a grace-period update.
+    /// @dev Reverts unless the caller has the OCG admin role.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
     /// @dev Revalidates the constructor-bound Burner Loans policy before operational enablement.
     function _beforeEnable(bytes calldata) internal view override {
+        _requireBurnerLoansPolicyActive();
+    }
+
+    /// @dev Preserves the grace-period gate and revalidates Burner Loans before re-enabling.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _requireBurnerLoansPolicyActive();
+    }
+
+    /// @dev Reverts unless the constructor-bound Burner Loans policy remains active in this Kernel.
+    function _requireBurnerLoansPolicyActive() private view {
         if (!kernel.isPolicyActive(Policy(_BURNER_LOANS))) {
             revert BurnerLoansSeizer_InvalidBurnerLoans(_BURNER_LOANS);
         }
@@ -235,7 +258,7 @@ contract BurnerLoansSeizer is Policy, PolicyEnablerV2, IBurnerLoansSeizer {
     /// @inheritdoc IPeriodicTask
     function supportsInterface(
         bytes4 interfaceId_
-    ) public view override(EnablerV2, IPeriodicTask) returns (bool) {
+    ) public view override(EnablerV2, ReEnablerGracePeriod, IPeriodicTask) returns (bool) {
         return
             interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IBurnerLoansSeizer).interfaceId ||

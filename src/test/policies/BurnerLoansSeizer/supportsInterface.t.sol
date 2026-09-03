@@ -2,7 +2,9 @@
 pragma solidity >=0.8.24;
 
 import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
+import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
@@ -26,6 +28,11 @@ contract BurnerLoansSeizerSupportsInterfaceTest is BurnerLoansSeizerTest {
         );
         assertTrue(seizer.supportsInterface(type(IEnabler).interfaceId), "enabler interface");
         assertTrue(seizer.supportsInterface(type(IEnablerV2).interfaceId), "enabler v2 interface");
+        assertTrue(seizer.supportsInterface(type(IReEnabler).interfaceId), "re-enabler interface");
+        assertTrue(
+            seizer.supportsInterface(type(IGracePeriod).interfaceId),
+            "grace-period interface"
+        );
         assertFalse(seizer.supportsInterface(bytes4(0xffffffff)), "invalid interface");
     }
 }

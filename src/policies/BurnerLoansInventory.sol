@@ -12,9 +12,11 @@ import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuar
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
+import {ReEnablerGracePeriod} from "src/bases/ReEnablerGracePeriod.sol";
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -29,6 +31,7 @@ import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE} from "src
 ///      dependency is assumed to be a standard, non-fee-on-transfer token.
 contract BurnerLoansInventory is
     Policy,
+    ReEnablerGracePeriod,
     PolicyEnablerV2,
     ReentrancyGuardTransient,
     IBurnerLoansInventory,
@@ -72,7 +75,11 @@ contract BurnerLoansInventory is
     /// @param kernel_ Kernel shared by Burner Loans Inventory and the facility.
     /// @param ohm_ OHM token funded by Burner Loans Inventory and burned through MINTR.
     /// @param facility_ Burner Loans policy permanently authorized to change principal accounting.
-    constructor(Kernel kernel_, IERC20 ohm_, address facility_) Policy(kernel_) {
+    constructor(
+        Kernel kernel_,
+        IERC20 ohm_,
+        address facility_
+    ) Policy(kernel_) ReEnablerGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD) {
         if (address(ohm_) == address(0) || facility_ == address(0)) {
             revert BurnerLoansInventory_ZeroAddress();
         }
@@ -349,7 +356,9 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc EnablerV2
-    function supportsInterface(bytes4 interfaceId_) public view override(EnablerV2) returns (bool) {
+    function supportsInterface(
+        bytes4 interfaceId_
+    ) public view override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansInventory).interfaceId ||
             interfaceId_ == type(IVersioned).interfaceId ||
@@ -368,8 +377,29 @@ contract BurnerLoansInventory is
         if (msg.sender != _FACILITY) revert BurnerLoansInventory_Unauthorized(msg.sender);
     }
 
+    /// @notice Authorizes a re-enable transition during the grace period.
+    /// @dev Reverts unless the caller is an OCG admin or Burner Loans admin.
+    function _authorizeReEnable() internal view override {
+        _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
+    }
+
+    /// @notice Authorizes a grace-period update.
+    /// @dev Reverts unless the caller has the OCG admin role.
+    function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
+
     /// @dev Revalidates constructor and mutable policy links before operational enablement.
     function _beforeEnable(bytes calldata) internal view override {
+        _validatePolicyLinks();
+    }
+
+    /// @dev Preserves the grace-period gate and revalidates policy links before re-enabling.
+    function _beforeReEnable() internal override {
+        super._beforeReEnable();
+        _validatePolicyLinks();
+    }
+
+    /// @dev Reverts unless the facility and optional Config links remain active in this Kernel.
+    function _validatePolicyLinks() private view {
         _requireActivePolicy(_FACILITY);
         address configurator_ = _configurator;
         if (configurator_ != address(0)) _requireActivePolicy(configurator_);
