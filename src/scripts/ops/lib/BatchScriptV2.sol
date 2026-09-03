@@ -127,6 +127,25 @@ abstract contract BatchScriptV2 is WithEnvironment {
         _;
     }
 
+    /// @notice Set up with the Emergency multisig as owner
+    /// @dev    Reads from olympus.multisig.emergency in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithEmergencyMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_,
+        bytes memory signature_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+
+        address owner = _envAddressNotZero("olympus.multisig.emergency");
+        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
+        _;
+    }
+
     function _hasSignature() internal view returns (bool) {
         return bytes(_signature).length > 0;
     }

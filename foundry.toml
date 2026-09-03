@@ -84,9 +84,11 @@ verbosity = 0
 gas_snapshot_emit = false
 # Coverage output is long enough without solc warnings.
 ignored_warnings_from = ["dependencies", "src"]
-# Emptied so that coverage compiles in a single job. The Operator restriction otherwise adds a
+# Emptied so that coverage compiles in a single job. The restrictions above otherwise add a
 # second job carrying the same compiler version, and coverage items of two such jobs are
-# misattributed between files.
+# misattributed between files. The graphs those restrictions cover still compile here because
+# `shell/test_coverage.sh` runs `forge coverage --ir-minimum`, which routes them through the IR
+# pipeline instead of the optimizer.
 compilation_restrictions = []
 
 # Coverage needs each line reached once, not a wide search. A `forge-config` comment in a test file
@@ -138,7 +140,7 @@ remappings_generate = false
 surl = { version = "1.0.0", git = "https://github.com/memester-xyz/surl.git", rev = "034c912ae9b5e707a5afd21f145b452ad8e800df" }
 base64 = { version = "1.1.0", git = "https://github.com/Brechtpd/base64.git", rev = "4d85607b18d981acff392d2e99ba654305552a97" }
 chainlink-ccip = { version = "1.6.0", git = "https://github.com/smartcontractkit/chainlink.git", rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69" }
-chainlink-local = { version = "0.2.5", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "b429481536095867f9cd2c6480066c472b9594de" }
+chainlink-local = { version = "0.2.9", git = "https://github.com/smartcontractkit/chainlink-local.git", rev = "f8c0efe8685660dac07e08f4558f1b578ae991aa" }
 forge-std = "1.16.2"
 safe-utils = { version = "0.0.17", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "c057d167139dc4878f10ab7133a8c069fa6b1601" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }

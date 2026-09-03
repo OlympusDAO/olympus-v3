@@ -307,6 +307,31 @@
     {
         "addr": "0x0000000000000000000000000000000000000000",
         "chainId": 1,
+        "name": "olympus-policy-ccip-token-pool-config"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-policy-ccip-token-pool-config-timelock"
+    },
+    {
+        "addr": "0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-lock-release-token-pool"
+    },
+    {
+        "addr": "0xFbf6383dC3F6010d403Ecdf12DDC1311701D143D",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-cross-chain-bridge"
+    },
+    {
+        "addr": "0xb22764f98dD05c789929716D677382Df22C05Cb6",
+        "chainId": 1,
+        "name": "external-ccip-token-admin-registry"
+    },
+    {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
         "name": "olympus-module-price-1_2"
     },
     {
