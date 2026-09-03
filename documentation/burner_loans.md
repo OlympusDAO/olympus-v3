@@ -37,7 +37,7 @@ flowchart LR
 | `BurnerLoans`                                         | User lifecycle, health, custody, fees, seizure, and yield-routing state       |
 | [`BurnerLoansInventory`](./burner_loans_inventory.md) | OHM custody, provider claim, global cap, principal total, and MINTR authority |
 | `BurnerLoansConfig`                                   | Authorized market, debt-cap, and yield-routing forwarding                     |
-| `BurnerLoansConfigTimelock`                           | Optional timelocked implementation of Config's config-operator role           |
+| [`BurnerLoansConfigTimelock`](./burner_loans_access_control.md#config-timelock-matrix) | Timelocked delegate for bounded Config setters |
 | `BurnerLoansSeizer`                                   | Gas-bounded, fail-open periodic seizure                                       |
 | `FLOAN`                                               | Generic fixed-term market, position, active-index, and aggregate state        |
 | `DepositManager`                                      | Collateral custody and optional ERC-4626 routing                              |
@@ -378,7 +378,7 @@ asset, and that asset's complete ordered route. Relevant direct changes during t
 invalidate the queued action without a separate revision counter.
 
 Those hashes cover Burner Loans-owned routing configuration only. Config and facility enablement,
-config-operator authority, recipient interface support, recipient Kernel activity and enablement,
+ConfigTimelock authority, recipient interface support, recipient Kernel activity and enablement,
 and the exact DepositManager asset-vault route remain live prerequisites. The timelock validates a
 complete proposed asset route before queueing, and the forwarded Burner Loans setter revalidates it
 when the action executes. Asset originations, market risk and fee configuration, debt, deposits, and
@@ -434,38 +434,27 @@ re-enable it during the standard Burner Loans grace period, with target activity
 OCG admin may update that grace period while the claimer is enabled. An authorized Heart call while
 the claimer is disabled is a no-op before any Burner Loans registry read.
 
+See [Burner Loans Access Control](./burner_loans_access_control.md) for the exact caller, role,
+policy-state, and timelock requirements.
+
 ## Seizure Automation
 
 Seizure clears the full debt episode, routes the capped ordinary-keeper reward, sends remaining
 collateral to `TRSRY`, and records the default in FLOAN and Burner Loans Inventory atomically.
 
-| Caller                       | Required role                                | Product reward |
-| ---------------------------- | -------------------------------------------- | -------------- |
-| Ordinary direct keeper       | None                                         | Configured cap |
-| Heart caller acting directly | `heart`                                      | None           |
-| `BurnerLoansSeizer`          | `burner_loans_seizer` on the seizer contract | None           |
-
-Heart needs `heart` to call `BurnerLoansSeizer.execute`. The seizer contract separately needs
-`burner_loans_seizer` when it calls Burner Loans. Either protocol role suppresses the product
-keeper reward on a direct seizure call.
+Direct seizure is permissionless. Protocol-operated seizure does not receive a product keeper
+reward. See the [user and automation access matrix](./burner_loans_access_control.md#user-and-automation-matrix)
+for the exact role paths.
 
 The seizer bounds both its scan and its complete self-execution gas. A scan or seizure failure does
 not advance its cursor and does not fail Heart. The seizer does not reconcile MINTR approval. If
 automatic restoration does not occur, `burner_loans_admin` must call `syncMintApproval`.
 
-## Configuration And Authority
+## Configuration Model
 
-| Change                                                  | Authority                         | Path                                |
-| ------------------------------------------------------- | --------------------------------- | ----------------------------------- |
-| Add a collateral market                                 | `admin`                           | Direct Config call                  |
-| Set global cap                                          | `admin`                           | Config calls Burner Loans Inventory |
-| Set market cap, risk, fee, or asset originations        | `admin` or config operator        | Config / optional ConfigTimelock    |
-| Set global repurchase recipient or complete asset route | `admin` or config operator        | Config / optional ConfigTimelock    |
-| Set backing oracle                                      | `admin`                           | Direct Burner Loans call            |
-| Set Burner Loans Inventory while Burner Loans paused    | `admin`                           | Direct Burner Loans call            |
-| Set policy links while destination policy is paused     | `admin`                           | Direct destination-policy setter    |
-| Sync MINTR approval                                     | `burner_loans_admin`              | Direct Burner Loans Inventory call  |
-| Supply / withdraw protocol OHM                          | `burner_loans_inventory_provider` | Direct Burner Loans Inventory call  |
+See [Burner Loans Access Control](./burner_loans_access_control.md) for the function-level role and
+timelock matrices. That document distinguishes the Burner Loans timelock from the external OCG
+governance delay.
 
 Backing-oracle rotation is intentionally available only while Burner Loans is enabled. It changes
 health and seizure economics, so it cannot be performed while borrower actions are paused.
@@ -486,10 +475,8 @@ typed in FLOAN. Config resolves Burner Loans Inventory through Burner Loans, so 
 approved Burner Loans Inventory pointer change without maintaining a second link. Burner Loans
 Inventory's facility is immutable in v1.
 
-`BurnerLoansConfig` uses the shared `ConfigOperatorSingleStep` mix-in. An enabled Config allows
-`admin` to replace the operator immediately or set it to zero to revoke delegated access. The
-mix-in returns a default-deny authorization decision; Config grants authority through its
-admin-and-enabled authorization hook. Config advertises the shared `IConfigOperator` interface.
+`BurnerLoansConfig` uses the shared `ConfigOperatorSingleStep` mix-in. Config advertises the shared
+`IConfigOperator` interface. The operator can be set to zero to revoke delegated access.
 
 ## Deployment And Activation
 
@@ -506,9 +493,8 @@ circular enablement dependency.
 5. Activate DepositManager, Burner Loans, Burner Loans Inventory, Config, any deployed
    ConfigTimelock, and the other required policies. Link setters require their policy arguments to
    be active in the same Kernel.
-6. Grant `admin`, `burner_loans_admin`, `burner_loans_inventory_provider`,
-   `burner_loans_seizer`, `heart`, and DepositManager operator permissions to the intended
-   addresses and policies.
+6. Grant the roles and exact-address permissions listed in
+   [Burner Loans Access Control](./burner_loans_access_control.md#authorities-and-expected-assignments).
 7. While the destination policies remain globally disabled, OCG admin calls, in order:
    `Config.setFacility(BurnerLoans)`, `BurnerLoansInventory.setConfigurator(Config)`,
    `BurnerLoans.setInventory(BurnerLoansInventory)`, and
@@ -517,10 +503,9 @@ circular enablement dependency.
 8. Enable DepositManager and Config. Config can enable while Burner Loans and Burner Loans
    Inventory are globally disabled, but both linked policies must remain active and all reverse
    links must agree.
-9. Optionally call `Config.setConfigOperator(ConfigTimelock)` and enable ConfigTimelock. The config
-   operator does not have to be a policy or implement a timelock, and may remain zero to disable
-   delegated execution. When ConfigTimelock is used as the operator, delayed execution additionally
-   requires Config to remain enabled and ConfigTimelock to remain the configured operator.
+9. Optionally call `Config.setConfigOperator(ConfigTimelock)` and enable ConfigTimelock. Setting the
+   operator to zero disables delegated execution. Delayed execution requires Config and
+   ConfigTimelock to remain enabled and ConfigTimelock to remain the configured operator.
 10. Through Config, set the Burner Loans Inventory global cap. Its cap setter remains available
     while Burner Loans Inventory is globally disabled so deployment can reconcile MINTR approval
     before user operations begin.
