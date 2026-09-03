@@ -6,6 +6,12 @@ This document describes the roles that are used in the Olympus protocol.
 
 | Role | Policy | Actions |
 |------|----------|-------------|
+| admin | BurnerLoans | Set policy links while disabled, rotate the backing oracle while enabled, and enable or disable the policy |
+| admin | BurnerLoansConfig | Set the facility while disabled, add markets, set the global debt cap, call Config setters directly, rotate ConfigTimelock, and manage policy lifecycle |
+| admin | BurnerLoansConfigTimelock | Queue configuration actions and manage policy lifecycle and its re-enable grace period |
+| admin | BurnerLoansInventory | Set the Config policy while disabled, burn or rescue surplus, and manage policy lifecycle and its re-enable grace period |
+| admin | BurnerLoansSeizer | Manage the asset list, scan settings, policy lifecycle, and its re-enable grace period |
+| admin | BurnerLoansYieldClaimer | Set the execution gas limit and manage policy lifecycle and its re-enable grace period |
 | admin | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods, enable/disable contract |
 | admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
@@ -32,9 +38,9 @@ This document describes the roles that are used in the Olympus protocol.
 | bridge_configurator | LZEndpointDelegate | Set send / receive libraries and the receive-library timeout, and set ULN / Executor endpoint config on the LayerZero endpoint. Expected to be granted exclusively to the LZBridgeAndDelegateConfig policy so these mutators are reached only through the policy's timelock queue |
 | bridge_facilitator | LZBridgeGateway | Burn OHM and send cross-chain via burnAndSend |
 | bridge_rate_limiter | LZBridgeAndDelegateConfig | Queue rate-limit and in-flight-clear sub-actions on the config policy |
-| burner_loans_admin | BurnerLoans, BurnerLoansConfig, BurnerLoansConfigTimelock, BurnerLoansInventory, BurnerLoansSeizer, BurnerLoansYieldClaimer | Re-enable Burner Loans policies, queue bounded configuration updates through BurnerLoansConfigTimelock, reconcile the Inventory MINTR approval, and update bounded Seizer or YieldClaimer execution settings |
+| burner_loans_admin | BurnerLoans, BurnerLoansConfig, BurnerLoansConfigTimelock, BurnerLoansInventory, BurnerLoansSeizer, BurnerLoansYieldClaimer | Re-enable supported policies during their grace periods, queue bounded Config updates, reconcile Inventory MINTR approval, and update bounded task settings |
 | burner_loans_inventory_provider | BurnerLoansInventory | Supply protocol-owned OHM and withdraw the provider's idle supplied-OHM claim |
-| burner_loans_seizer | BurnerLoans | Allows the BurnerLoansSeizer Heart task to execute protocol-operated seizures without receiving keeper rewards |
+| burner_loans_seizer | BurnerLoans | Let BurnerLoansSeizer execute protocol seizures without a keeper reward |
 | callback_admin | BondCallback | Administers the policy |
 | callback_whitelist | BondCallback | Whitelists/blacklists tellers for callback |
 | cd_auctioneer | ConvertibleDepositFacility | Calls the createPosition() function |
@@ -45,6 +51,8 @@ This document describes the roles that are used in the Olympus protocol.
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
+| emergency | BurnerLoans, BurnerLoansConfig, BurnerLoansInventory, BurnerLoansSeizer, BurnerLoansYieldClaimer | Disable the policy immediately |
+| emergency | BurnerLoansConfigTimelock | Disable the policy immediately and cancel queued actions |
 | emergency | ChainlinkOracleFactory | Allows disable of oracles, disable of new oracle creation, enable/disable the contract |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
@@ -62,6 +70,8 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
+| heart | BurnerLoansSeizer | Call `execute()` for the periodic seizure task |
+| heart | BurnerLoansYieldClaimer | Call `execute()` for the periodic yield-claim task |
 | heart | ConvertibleDepositFacility | Calls the execute() function |
 | heart | EmissionManager | Calls the execute() function |
 | heart | Operator | Call the operate() function |
@@ -87,7 +97,8 @@ This document describes the roles that are used in the Olympus protocol.
 
 ## Role Allocations
 
-The current role allocations can be determined by viewing the [Protocol Visualizer](https://olympus-protocol-visualizer.up.railway.app) tool.
+The [Protocol Visualizer](http://protocol-visualizer.olympusdao.finance/) shows current on-chain
+role allocations.
 
 ## PriceConfig v2 Timelock Notes
 
