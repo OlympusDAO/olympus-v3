@@ -2,6 +2,9 @@
 description: Guide for addressing linter notes in the Olympus V3 codebase. Run this after every coding task.
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Linter Note Resolution Guide
 
 This guide covers how to address forge-lint notes in the Olympus V3 codebase.

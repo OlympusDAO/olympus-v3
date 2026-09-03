@@ -1,0 +1,318 @@
+version = 1
+
+[[annotations]]
+path = ["src/*.sol", "src/**/*.sol", "src/**/*.sol.x"]
+precedence = "closest"
+SPDX-FileCopyrightText = "Contributors to OlympusDAO"
+
+[[annotations]]
+path = ["src/external/bridge/ICCIPClient.sol", "src/interfaces/AggregatorV2V3Interface.sol"]
+precedence = "override"
+SPDX-FileCopyrightText = "2023 SmartContract Chainlink Limited SEZC"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/external/clones/CloneERC20.sol"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Contributors to Axis Protocol",
+    "Contributors to Solmate",
+    "Contributors to Uniswap V2",
+]
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = "src/external/governance/**/*.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["2020 Compound Labs, Inc.", "Contributors to OlympusDAO"]
+SPDX-License-Identifier = "BSD-3-Clause"
+
+[[annotations]]
+path = [
+    "src/interfaces/IBond*.sol",
+    "src/test/lib/bonds/interfaces/*.sol",
+    "src/test/lib/bonds/lib/ERC1155.sol",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Bond Protocol"
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = [
+    "src/test/lib/bonds/BondAggregator.sol",
+    "src/test/lib/bonds/BondFixedTermSDA.sol",
+    "src/test/lib/bonds/BondFixedTermTeller.sol",
+    "src/test/lib/bonds/bases/*.sol",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Bond Protocol"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = "src/test/lib/bonds/lib/ERC1155.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to Bond Protocol", "Contributors to Solmate"]
+SPDX-License-Identifier = "AGPL-3.0-only"
+
+[[annotations]]
+path = "src/test/lib/bonds/bases/BondBaseTeller.sol"
+precedence = "override"
+SPDX-FileCopyrightText = [
+    "Contributors to Bond Protocol",
+    "2018-2019 BokkyPooBah / Bok Consulting Pty Ltd",
+    "2015-2016 Oraclize SRL",
+    "2016-2019 Oraclize LTD",
+    "2019-2020 Provable Things Limited",
+]
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = "src/interfaces/IPyth.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Pyth Data Association"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "src/interfaces/IEasyAuction.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to Gnosis EasyAuction", "Contributors to OlympusDAO"]
+SPDX-License-Identifier = "LGPL-3.0-only"
+
+[[annotations]]
+path = "src/interfaces/Uniswap/*.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Uniswap V2"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = "src/interfaces/maker-dao/*.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "2023 Dai Foundation"
+SPDX-License-Identifier = "AGPL-3.0-or-later"
+
+[[annotations]]
+path = "src/interfaces/morpho/IOracle.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Morpho Labs"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = [
+    "src/libraries/Balancer/contracts/BalancerErrors.sol",
+    "src/libraries/Balancer/contracts/VaultReentrancyLib.sol",
+    "src/libraries/Balancer/interfaces/*.sol",
+    "src/libraries/Balancer/math/FixedPoint.sol",
+    "src/libraries/Balancer/math/StableMath.sol",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Balancer V2"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = [
+    "src/libraries/Balancer/contracts/BalancerReentrancyGuard.sol",
+    "src/libraries/Balancer/math/LogExpMath.sol",
+    "src/libraries/Balancer/math/Math.sol",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Balancer V2"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/libraries/Balancer/contracts/BalancerReentrancyGuard.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to Balancer V2", "Contributors to OpenZeppelin Contracts"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/libraries/FullMath.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "2021 Remco Bloemen"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/libraries/QuickSort.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Amxx"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/libraries/Timestamp.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "2018-2019 BokkyPooBah / Bok Consulting Pty Ltd"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/scripts/ops/lib/BatchScript.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to forge-safe", "Contributors to OlympusDAO"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/policies/BoostedLiquidity/interfaces/IAura.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Aura Finance"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/policies/BoostedLiquidity/interfaces/IBalancer.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Contributors to Balancer V2"
+SPDX-License-Identifier = "GPL-3.0-or-later"
+
+[[annotations]]
+path = [
+    "src/policies/interfaces/price/IERC7726Oracle.sol",
+    "src/policies/interfaces/price/IPriceOracle.sol",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "Euler Labs"
+SPDX-License-Identifier = "GPL-2.0-or-later"
+
+[[annotations]]
+path = "src/test/lib/solady/DynamicBufferLib.sol"
+precedence = "override"
+SPDX-FileCopyrightText = ["Contributors to Solady", "Contributors to cozyco"]
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "src/test/lib/zuniswapv2/**/*.sol"
+precedence = "override"
+SPDX-FileCopyrightText = "Ivan Kuznetsov"
+SPDX-License-Identifier = "Unlicense"
+
+[[annotations]]
+path = [
+    ".coderabbit.yaml",
+    ".codex/environments/environment.toml",
+    ".env.L2.example",
+    ".env.deploy.example",
+    ".env.example",
+    ".github/actions/bootstrap/action.yml",
+    ".github/actions/foundry-cache/action.yml",
+    ".github/workflows/audit.yml",
+    ".github/workflows/build.yml",
+    ".github/workflows/gas.yml",
+    ".github/workflows/lint.yml",
+    ".github/workflows/size.yml",
+    ".github/workflows/validate-emergency-config.yml",
+    ".gitignore",
+    ".markdownlint.json",
+    ".markdownlintignore",
+    ".mcp.json",
+    ".node-version",
+    ".nvmrc",
+    ".prettierignore",
+    ".solhintignore",
+    ".vscode/extensions.json",
+    ".vscode/settings.json",
+    "CDPOS_NFT.svg",
+    "conductor.json",
+    "documentation/convertible_deposits/architecture.mmd",
+    "documentation/emergency/abis/bond_manager.json",
+    "documentation/emergency/abis/cooler_v2.json",
+    "documentation/emergency/abis/cross_chain_bridge.json",
+    "documentation/emergency/abis/emergency.json",
+    "documentation/emergency/abis/emission_manager.json",
+    "documentation/emergency/abis/heart.json",
+    "documentation/emergency/abis/periphery_enabler.json",
+    "documentation/emergency/abis/reserve_migrator.json",
+    "documentation/emergency/abis/yield_repurchase_facility.json",
+    "documentation/emergency/emergency-abis.json",
+    "documentation/emergency/emergency-config.json",
+    "documentation/emergency/emergency-config.schema.json",
+    "foundry.toml",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "remappings.txt",
+    "soldeer.lock",
+    "src/proposals/addresses.json",
+    "src/proposals/proposal-timeline-diagram.svg",
+    "src/scripts/deploy/savedDeployments/bondManager_deploy.json",
+    "src/scripts/deploy/savedDeployments/ccip_bridge_mainnet.json",
+    "src/scripts/deploy/savedDeployments/ccip_bridge_not_mainnet.json",
+    "src/scripts/deploy/savedDeployments/claimTransfer.json",
+    "src/scripts/deploy/savedDeployments/clearinghouse.json",
+    "src/scripts/deploy/savedDeployments/clearinghouse_registry.json",
+    "src/scripts/deploy/savedDeployments/contract_registry.json",
+    "src/scripts/deploy/savedDeployments/convertible_deposit.json",
+    "src/scripts/deploy/savedDeployments/convertible_deposit_limit_orders.json",
+    "src/scripts/deploy/savedDeployments/convertible_deposit_limit_orders_sepolia.json",
+    "src/scripts/deploy/savedDeployments/cooler_loan_consolidator.json",
+    "src/scripts/deploy/savedDeployments/cooler_v2.json",
+    "src/scripts/deploy/savedDeployments/cooler_v2_periphery.json",
+    "src/scripts/deploy/savedDeployments/deploy_BLV_LUSD.json",
+    "src/scripts/deploy/savedDeployments/deploy_BLV_Lido.json",
+    "src/scripts/deploy/savedDeployments/deploy_poly.json",
+    "src/scripts/deploy/savedDeployments/deploy_zero_distributor.json",
+    "src/scripts/deploy/savedDeployments/full_deploy.json",
+    "src/scripts/deploy/savedDeployments/goerli/deploy_BLV.json",
+    "src/scripts/deploy/savedDeployments/goerli/deploy_CHREG.json",
+    "src/scripts/deploy/savedDeployments/goerli/deploy_Clearinghouse.json",
+    "src/scripts/deploy/savedDeployments/governorBravoDelegateV2.json",
+    "src/scripts/deploy/savedDeployments/heart_auction.json",
+    "src/scripts/deploy/savedDeployments/l2_bridge_deploy.json",
+    "src/scripts/deploy/savedDeployments/l2_trsry_emergency.json",
+    "src/scripts/deploy/savedDeployments/legacyBurner_deploy.json",
+    "src/scripts/deploy/savedDeployments/lz_bridge_canonical.json",
+    "src/scripts/deploy/savedDeployments/lz_bridge_noncanonical.json",
+    "src/scripts/deploy/savedDeployments/mock_price_feeds.json",
+    "src/scripts/deploy/savedDeployments/oracle_factories_deploy.json",
+    "src/scripts/deploy/savedDeployments/price_deploy.json",
+    "src/scripts/deploy/savedDeployments/price_v1_2_deploy.json",
+    "src/scripts/deploy/savedDeployments/rbs_v1_3.json",
+    "src/scripts/deploy/savedDeployments/rbs_v1_4.json",
+    "src/scripts/deploy/savedDeployments/rbs_v1_4_goerli.json",
+    "src/scripts/deploy/savedDeployments/reserve_wrapper.json",
+    "src/scripts/deploy/savedDeployments/usds_migration.json",
+    "src/scripts/deploy/savedDeployments/v1_migrator.json",
+    "src/scripts/deploy/savedDeployments/yieldRepo.json",
+    "src/scripts/deploy/savedDeployments/yieldRepo_v1_2.json",
+    "src/scripts/env.json",
+    "src/scripts/lz-bridge-testnet/deployments/arbitrum-sepolia.json",
+    "src/scripts/lz-bridge-testnet/deployments/base-sepolia.json",
+    "src/scripts/lz-bridge-testnet/deployments/sepolia.json",
+    "src/scripts/ops/batches/args/CCIPTokenPoolRateLimits_mainnet_solana.json",
+    "src/scripts/ops/batches/args/ConfigureConvertibleDepositFacility.json",
+    "src/scripts/ops/batches/args/ConfigureDepositParameters_202512.json",
+    "src/scripts/ops/batches/args/ConfigureDepositRedemptionVaultAsset.json",
+    "src/scripts/ops/batches/args/ConfigurePriceV1_2.json",
+    "src/scripts/ops/batches/args/ConfigureUSDS.json",
+    "src/scripts/ops/batches/args/ConfigureUSDSDepositPeriod.json",
+    "src/scripts/ops/batches/args/ConvertibleDepositLimitOrders.json",
+    "src/scripts/ops/batches/args/DeployOracles_OHM_USDS.json",
+    "src/scripts/ops/batches/args/LZBridgeGatewayBatch_initBridgedSupply.json",
+    "src/scripts/ops/batches/args/MigrationProposalSetup_OHMv1ToMigrate.json",
+    "src/scripts/ops/batches/args/MockPriceFeedConfig_DAI_ETH.json",
+    "src/scripts/ops/batches/args/MockPriceFeedConfig_OHM_ETH.json",
+    "src/scripts/ops/batches/args/V1MigratorConfig_setMerkleRoot.json",
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "Contributors to OlympusDAO"
+SPDX-License-Identifier = "Unlicense"
+
+[[annotations]]
+path = [
+    "audit/**/*.png",
+    "audit/*/scopefile.txt",
+    "broadcast/**/*.json",
+    "deployments/*.json",
+    "snapshots/*.json",
+]
+precedence = "closest"
+SPDX-FileCopyrightText = "Contributors to OlympusDAO"
+SPDX-License-Identifier = "Unlicense"
+
+[[annotations]]
+path = "audit/*/solidity-metrics.html"
+precedence = "aggregate"
+SPDX-FileCopyrightText = [
+    "Contributors to OlympusDAO",
+    "2017 Chris Patuzzo",
+    "2014-2018 Michael Daines",
+    "1998-2000 Thai Open Source Software Center and Clark Cooper",
+    "2001-2006 Expat maintainers",
+    "1995-2013 Jean-loup Gailly and Mark Adler",
+]
+SPDX-License-Identifier = "Unlicense AND MIT AND EPL-1.0 AND Zlib"

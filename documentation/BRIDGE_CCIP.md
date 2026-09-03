@@ -1,6 +1,13 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # CCIP Bridging Infrastructure
 
 This document contains instructions on how to deploy and configure bridging infrastructure using CCIP for the Olympus protocol.
+
+The pinned Chainlink CCIP license, additional-use grant, and boundary between Chainlink-derived
+token-pool code and Olympus wrappers are documented in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md#chainlink-ccip-v16).
 
 ## Pre-requisites
 

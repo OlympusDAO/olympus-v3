@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 set -euo pipefail
 
 # Code coverage. Runs under the `coverage` profile, which collapses the build into a single compile

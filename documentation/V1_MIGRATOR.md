@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # V1Migrator Policy
 
 The V1Migrator is a policy that allows OHM v1 holders to migrate to OHM v2 via merkle proof verification. This replaces the old TokenMigrator contract.

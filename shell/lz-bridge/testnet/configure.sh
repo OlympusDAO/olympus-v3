@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Wires the LayerZero testnet bridge stack on a single chain (libraries, ULN/Executor, DVNs,
 # peers, enforced options, rate limits, enables). Run AFTER deploy.sh on all three chains.

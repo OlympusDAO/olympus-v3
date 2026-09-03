@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # change_price.sh - Script to force update the OlympusAuthority Vault address for testing Bophades Range System on Testnet
 # Load environment variables
 source .env

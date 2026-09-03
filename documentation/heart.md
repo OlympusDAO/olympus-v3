@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Olympus Heart Policy
 
 The Olympus Heart policy orchestrates the core protocol heartbeat. When a keeper calls the `beat` function, the policy updates market data, triggers the distributor rebase, and executes a configured pipeline of periodic tasks before minting any keeper reward. This document outlines the cadence, access control, reward logic, and periodic task management model for the Heart.

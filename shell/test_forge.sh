@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Do not enable `set -e`: Forge can rewrite gas snapshots before returning a
 # failure, so snapshot formatting must still run when a test fails or crashes.

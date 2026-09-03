@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.30;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";

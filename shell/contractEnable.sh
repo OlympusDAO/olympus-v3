@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Enables a contract that inherits from PolicyEnabler or IEnabler
 #

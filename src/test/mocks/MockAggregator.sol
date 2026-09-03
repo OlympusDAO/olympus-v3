@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {IBondAuctioneer} from "interfaces/IBondAuctioneer.sol";
