@@ -18,11 +18,11 @@ import {ERC165, IERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.so
 ///      `_beforeDisable` to perform implementation-specific state changes
 ///      alongside the transition.
 ///
-///     The legacy `IEnabler` surface is preserved: `enable` and `disable`
-///     retain their selectors and payload semantics, and the `Enabled` and
-///     `Disabled` events are emitted in addition to the new `Transition` event
-///     on every successful transition. Storage layout is intentionally compact:
-///     `isEnabled` and `lastTransitionAt` share a single slot.
+///      The legacy `IEnabler` surface is preserved: `enable` and `disable`
+///      retain their selectors and payload semantics, and the `Enabled` and
+///      `Disabled` events are emitted in addition to the new `Transition` event
+///      on every successful transition. Storage layout is intentionally compact:
+///      `isEnabled` and `lastTransitionAt` share a single slot.
 abstract contract EnablerV2 is IEnablerV2, ERC165 {
     // ========== STATE VARIABLES ========== //
 
@@ -38,13 +38,6 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      The field is packed into the same storage slot as `isEnabled`.
     uint48 public override lastTransitionAt;
 
-    // ========== INITIALIZATION ========== //
-
-    constructor() {
-        // The contract is disabled at construction time and `lastTransitionAt`
-        // stays at zero until the first successful `enable`.
-    }
-
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IEnabler
@@ -59,8 +52,10 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     function enable(bytes calldata data_) public virtual override givenDisabled {
         _authorizeEnable(data_);
         _beforeEnable(data_);
+
         isEnabled = true;
         lastTransitionAt = _getBlockTimestamp();
+
         emit Enabled();
         emit Transition(msg.sender, true, data_, _getBlockTimestamp());
     }
@@ -77,8 +72,10 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     function disable(bytes calldata data_) public virtual override givenEnabled {
         _authorizeDisable(data_);
         _beforeDisable(data_);
+
         isEnabled = false;
         lastTransitionAt = _getBlockTimestamp();
+
         emit Disabled();
         emit Transition(msg.sender, false, data_, _getBlockTimestamp());
     }

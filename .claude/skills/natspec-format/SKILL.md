@@ -23,10 +23,13 @@ NatSpec (Ethereum Natural Language Specification) is the format for documenting 
 1. **Blank line separator** - A `///` line between `@notice`/`@dev` and `@param`/`@return` tags
 2. **Tab after tag** - The tag name (`@notice`, `@dev`, `@param`, `@return`) is followed by a tab
 3. **Tab-aligned descriptions** - Align descriptions at the first tab stop after the longest parameter name in the list
-4. **Tab-aligned returns** - For `@return`: `@return<TAB>type<TAB>description`
-5. **All parameters documented** - Every parameter must have a `@param` entry
-6. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
-7. **Trailing underscore** - Parameters with trailing underscore (e.g., `params_`)
+4. **Tab-aligned returns** - For `@return`: `@return<TAB>name-or-type<TAB>description`
+   - If the Solidity return value is named, use that return name.
+   - If the Solidity return value is unnamed, use the return type.
+5. **Named interface returns** - Interface functions should name every return value. The interface NatSpec should document each return by name. Implementation contracts may omit return names when appropriate.
+6. **All parameters documented** - Every parameter must have a `@param` entry
+7. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
+8. **Trailing underscore** - Parameters with trailing underscore (e.g., `params_`)
 
 ### Target Format Example
 
@@ -71,7 +74,39 @@ function exampleFunction(uint256 paramOne_, address paramTwo_) external returns 
 - **`@dev`**: Implementation details, caveats, or technical notes. Use as many lines as needed.
 - **`@inheritdoc`**: Use when implementing functions from interfaces or parent contracts. Place as the first tag. This references the parent documentation and reduces duplication.
 - **`@param`**: Required for every parameter. Describe what the parameter represents.
-- **`@return`**: Required for non-void functions. Format: `@return<TAB>type<TAB>description`
+- **`@return`**: Required for non-void functions. Format: `@return<TAB>name-or-type<TAB>description`. Use the named return variable when present; otherwise use the return type.
+- **Interface returns**: Interface functions should name return values and NatSpec should use those names. Implementation contracts may omit return names; if an implementation function has its own NatSpec and an unnamed return, document the return by type.
+
+### Interface Return Values
+
+Interface return values are part of the integration surface and should be named. This makes generated docs and downstream integrations clearer.
+
+```solidity
+/// @notice Returns the Burner Loans policy.
+///
+/// @return burnerLoans_ The Burner Loans policy.
+function burnerLoans() external view returns (IBurnerLoans burnerLoans_);
+```
+
+Implementation contracts may omit return names when the interface already documents the return value via `@inheritdoc`:
+
+```solidity
+/// @inheritdoc IBurnerLoansConfigTimelock
+function burnerLoans() external view override returns (IBurnerLoans) {
+    return _burnerLoans;
+}
+```
+
+If an implementation does not use `@inheritdoc` and keeps an unnamed return, use the return type in NatSpec:
+
+```solidity
+/// @notice Returns the Burner Loans policy.
+///
+/// @return IBurnerLoans The Burner Loans policy.
+function burnerLoans() external view returns (IBurnerLoans) {
+    return _burnerLoans;
+}
+```
 
 ### Implementing Interface Functions
 

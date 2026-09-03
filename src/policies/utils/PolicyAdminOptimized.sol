@@ -5,8 +5,8 @@ pragma solidity ^0.8.24;
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
-import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {RolesConsumer} from "src/modules/ROLES/OlympusRoles.sol";
 import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title PolicyAdminOptimized
@@ -90,7 +90,7 @@ abstract contract PolicyAdminOptimized is IPolicyAdmin, RolesConsumer {
     /// @dev Reverts with `NotAuthorised` when `unauthorized_` is true.
     ///
     /// @param unauthorized_ True if the caller is not authorized, false otherwise.
-    function _requireAuthorized(bool unauthorized_) internal view {
+    function _requireAuthorized(bool unauthorized_) internal pure {
         if (unauthorized_) revert NotAuthorised();
     }
 }

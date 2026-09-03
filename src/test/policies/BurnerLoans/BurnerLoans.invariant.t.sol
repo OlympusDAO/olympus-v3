@@ -1,0 +1,374 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+import {StdInvariant} from "forge-std/StdInvariant.sol";
+
+import {Actions} from "src/Kernel.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
+import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
+import {MockYieldRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRecipient.sol";
+import {BurnerLoansSeizureTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansSeizureTestBase.sol";
+
+contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
+    uint256 internal constant _WAD = 1e18;
+
+    BurnerLoansHandler internal handler;
+    BurnerLoansComposites internal composites;
+    BurnerLoansSeizer internal seizer;
+    address[] internal invariantActors;
+    MockYieldRecipient internal yieldRecipient;
+
+    function setUp() public override {
+        super.setUp();
+        invariantActors.push(alice);
+        invariantActors.push(bob);
+        invariantActors.push(makeAddr("carol"));
+
+        composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
+
+        vm.startPrank(admin);
+        yieldRecipient = new MockYieldRecipient(kernel);
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        yieldRecipient.setVaultConfig(address(0), address(usds), true);
+        burnerLoansConfig.setYieldRecipient(address(yieldRecipient));
+        burnerLoansConfig.setYieldRecipientAssetBps(address(usds), 5_000);
+        seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
+        kernel.executeAction(Actions.ActivatePolicy, address(seizer));
+        rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
+        seizer.addAsset(address(usds));
+        vm.stopPrank();
+
+        handler = new BurnerLoansHandler(
+            BurnerLoansHandler.Dependencies({
+                burnerLoans: burnerLoans,
+                burnerLoansConfig: burnerLoansConfig,
+                composites: composites,
+                floan: floan,
+                seizer: seizer,
+                price: price,
+                ohm: ohm,
+                collateral: usds,
+                depositManager: depositManager,
+                admin: admin,
+                treasury: address(trsry),
+                inventoryProvider: protocolProvider,
+                yieldRecipient: yieldRecipient,
+                actors: invariantActors
+            })
+        );
+        vm.prank(admin);
+        rolesAdmin.grantRole(HEART_ROLE, address(handler));
+
+        // Seed every campaign with a live position so debt, health, repayment, maturity,
+        // seizure, custody, and mixed supplied/minted funding invariants are not dependent on a
+        // random setup sequence.
+        handler.supplyInventory(50e9);
+        handler.deposit(0, 2_000e18);
+        handler.borrow(0, 100e9);
+        vm.roll(block.number + 1);
+
+        bytes4[] memory selectors = new bytes4[](20);
+        selectors[0] = handler.deposit.selector;
+        selectors[1] = handler.borrow.selector;
+        selectors[2] = handler.repay.selector;
+        selectors[3] = handler.withdraw.selector;
+        selectors[4] = handler.extend.selector;
+        selectors[5] = handler.moveOhmPrice.selector;
+        selectors[6] = handler.moveCollateralPrice.selector;
+        selectors[7] = handler.moveTime.selector;
+        selectors[8] = handler.seize.selector;
+        selectors[9] = handler.executePeriodicSeizer.selector;
+        selectors[10] = handler.addYield.selector;
+        selectors[11] = handler.claimYield.selector;
+        selectors[12] = handler.toggleAsset.selector;
+        selectors[13] = handler.compositeDepositAndBorrow.selector;
+        selectors[14] = handler.compositeRepayAndWithdraw.selector;
+        selectors[15] = handler.reuseDebtFreePosition.selector;
+        selectors[16] = handler.supplyInventory.selector;
+        selectors[17] = handler.withdrawInventory.selector;
+        selectors[18] = handler.setYieldBps.selector;
+        selectors[19] = handler.toggleYieldRecipient.selector;
+        targetContract(address(handler));
+        targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when OHM supply accounting is checked
+    //   then OHM supply equals debt, supplied idle, and withdrawn provider inventory
+    function invariant_OhmSupplyAccounting() public view {
+        uint256 accountedDebt = burnerLoans.totalActiveDebtOhm() +
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds)));
+        uint256 accountedSupply = accountedDebt +
+            inventory.suppliedIdleOhm() +
+            ohm.balanceOf(protocolProvider);
+        assertEq(
+            ohm.totalSupply(),
+            accountedSupply,
+            "OHM supply does not reconcile to debt and supplied inventory"
+        );
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when repayment burn accounting is checked
+    //   then repayments burn surplus OHM or replenish supplied idle and leave no OHM in Burner Loans
+    function invariant_RepaymentBurn() public view {
+        assertEq(
+            handler.repaymentBurnViolations(),
+            0,
+            "repayment did not reconcile burn and idle retention"
+        );
+        assertEq(ohm.balanceOf(address(burnerLoans)), 0, "BurnerLoans retained OHM");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls with supplied or minted funding
+    //  when debt origination accounting is checked
+    //   then each debt increase equals minted OHM plus supplied-idle consumption
+    function invariant_FundingSourceAccounting() public view {
+        assertEq(handler.fundingDebtViolations(), 0, "funding source debt delta mismatch");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when debt capacity is checked
+    //   then global and market principal remain within their caps
+    function invariant_Capacity() public view {
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
+        uint256 activePrincipal = inventory.activePrincipalOhm();
+        uint256 globalCap = inventory.globalDebtCapOhm();
+        uint256 suppliedIdle = inventory.suppliedIdleOhm();
+        uint256 suppliedClaim = inventory.suppliedOhm();
+        uint256 approval = mintr.mintApproval(address(inventory));
+        uint256 desiredApproval = globalCap > activePrincipal + suppliedIdle
+            ? globalCap - activePrincipal - suppliedIdle
+            : 0;
+
+        assertEq(
+            activePrincipal,
+            burnerLoans.totalActiveDebtOhm(),
+            "Burner Loans Inventory and FLOAN principal differ"
+        );
+        assertLe(activePrincipal, globalCap, "global debt cap exceeded");
+        assertLe(approval, desiredApproval, "mint approval exceeds desired approval");
+        assertLe(
+            suppliedIdle,
+            ohm.balanceOf(address(inventory)),
+            "supplied idle exceeds Burner Loans Inventory balance"
+        );
+        assertLe(suppliedIdle, suppliedClaim, "supplied idle exceeds supplied claim");
+
+        uint256 capRoom = globalCap > activePrincipal ? globalCap - activePrincipal : 0;
+        uint256 expectedCapacity;
+        if (suppliedIdle >= capRoom) expectedCapacity = capRoom;
+        else {
+            uint256 requiredApproval = capRoom - suppliedIdle;
+            expectedCapacity = approval < requiredApproval ? suppliedIdle + approval : capRoom;
+        }
+        assertEq(
+            inventory.availableCapacity(),
+            expectedCapacity,
+            "Burner Loans Inventory capacity formula mismatch"
+        );
+        assertLe(
+            burnerLoans.assetActiveDebtOhm(address(usds)),
+            config.debtCap,
+            "asset debt cap exceeded"
+        );
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when repayment debt reduction is checked
+    //   then repayment reduces debt without changing credited collateral
+    function invariant_RepaymentDebtReduction() public view {
+        assertEq(handler.repaymentDebtViolations(), 0, "repayment debt delta mismatch");
+        assertEq(
+            handler.repaymentCollateralViolations(),
+            0,
+            "repayment changed credited collateral"
+        );
+        assertEq(handler.unexpectedRepayFailures(), 0, "eligible repayment failed");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when an action's preview reports that it is eligible
+    //   then the corresponding state-changing action succeeds
+    function invariant_EligibleActionsSucceed() public view {
+        assertEq(handler.unexpectedDepositFailures(), 0, "eligible deposit failed");
+        assertEq(handler.unexpectedBorrowFailures(), 0, "eligible borrow failed");
+        assertEq(handler.unexpectedWithdrawFailures(), 0, "eligible withdrawal failed");
+        assertEq(handler.unexpectedExtendFailures(), 0, "eligible extension failed");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when fully repaid positions are checked
+    //   then no debt dust or active-borrower entry remains
+    function invariant_FullRepaymentNoDebtDust() public view {
+        address[] memory activeBorrowers = burnerLoans.getActiveBorrowers(address(usds));
+        for (uint256 i; i < invariantActors.length; ++i) {
+            IBurnerLoans.Position memory position = burnerLoans.getPosition(
+                address(usds),
+                invariantActors[i]
+            );
+            bool listed = _contains(activeBorrowers, invariantActors[i]);
+            if (position.debtOhm == 0) assertFalse(listed, "zero-debt borrower remains active");
+            else assertTrue(listed, "active-debt borrower missing from index");
+        }
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when withdrawal health is checked
+    //   then active non-seizable positions remain healthy
+    function invariant_WithdrawalAndActivePositionHealth() public view {
+        for (uint256 i; i < invariantActors.length; ++i) {
+            address actor = invariantActors[i];
+            IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), actor);
+            if (position.debtOhm == 0 || burnerLoans.isSeizable(address(usds), actor)) continue;
+            assertGe(
+                burnerLoans.positionHealthFactor(
+                    address(usds),
+                    position.depositedCollateral,
+                    position.debtOhm
+                ),
+                _WAD,
+                "active non-seizable position is unhealthy"
+            );
+        }
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when same-block repayment behavior is checked
+    //   then same-block repayment remains blocked
+    function invariant_SameBlockRepaymentDelay() public view {
+        assertEq(handler.sameBlockRepayViolations(), 0, "same-block repayment succeeded");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when collateral custody is checked
+    //   then credited collateral reconciles with solvent DepositManager custody
+    function invariant_CollateralAndDepositManagerReconciliation() public view {
+        uint256 creditedCollateral;
+        for (uint256 i; i < invariantActors.length; ++i) {
+            creditedCollateral += burnerLoans
+                .getPosition(address(usds), invariantActors[i])
+                .depositedCollateral;
+        }
+        IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
+            address(usds)
+        );
+        assertEq(status.liabilities, creditedCollateral, "credited collateral mismatch");
+        assertEq(
+            depositManager.getOperatorLiabilities(IERC20(address(usds)), address(burnerLoans)),
+            creditedCollateral,
+            "DepositManager liabilities mismatch"
+        );
+        assertGe(status.assets + status.borrowed, status.liabilities, "custody is insolvent");
+        assertTrue(status.solvent, "collateral status reports insolvency");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when claim accounting is checked
+    //   then claimed yield never exceeds the claimable amount
+    function invariant_ClaimYieldBound() public view {
+        assertEq(handler.claimYieldBoundViolations(), 0, "claim exceeded claimable yield");
+        assertEq(handler.claimYieldConservationViolations(), 0, "claim distribution mismatch");
+        assertEq(handler.claimYieldResidualViolations(), 0, "claim changed facility balance");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when a debt-free position is reused
+    //   then the same position ID can begin a new debt episode
+    function invariant_DebtFreePositionIdsAreReusable() public view {
+        assertEq(handler.positionReuseViolations(), 0, "closed position could not be reused");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when borrowers are returned by the seizure scan
+    //   then every returned borrower is seizable
+    function invariant_SeizureScanReturnsOnlyEligibleBorrowers() public view {
+        assertEq(handler.seizureEligibilityViolations(), 0, "scan returned ineligible borrower");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when a position is seized
+    //   then its collateral, debt episode, and active membership are cleared
+    function invariant_SeizureClearsReusablePositionState() public view {
+        assertEq(handler.seizureClosureViolations(), 0, "seizure did not clear position state");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when periphery custody balances are checked
+    //   then Burner Loans periphery contracts retain no collateral or OHM
+    function invariant_NoResidualCustodyBalances() public view {
+        assertEq(usds.balanceOf(address(burnerLoans)), 0, "BurnerLoans retained collateral");
+        assertEq(ohm.balanceOf(address(burnerLoans)), 0, "BurnerLoans retained OHM");
+        assertEq(usds.balanceOf(address(seizer)), 0, "protocol seizer retained collateral");
+        assertEq(usds.balanceOf(address(composites)), 0, "composite retained collateral");
+        assertEq(ohm.balanceOf(address(composites)), 0, "composite retained OHM");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when backing is checked
+    //   then borrowing and seizure preserve the backing floor
+    function invariant_BackingPreservation() public view {
+        assertEq(handler.backingViolations(), 0, "borrow or seizure reduced backing below floor");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when credited collateral is checked
+    //   then credited collateral does not exceed withdrawable custody assets
+    function invariant_CreditedCollateralWithdrawable() public view {
+        IBurnerLoans.AssetCollateralStatus memory status = burnerLoans.getAssetCollateralStatus(
+            address(usds)
+        );
+        assertLe(
+            status.liabilities,
+            status.assets + status.borrowed,
+            "credit exceeds custody assets"
+        );
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when position maturities are checked
+    //   then active maturities remain within the configured horizon
+    function invariant_TermHorizon() public view {
+        IBurnerLoans.AssetConfig memory config = burnerLoansConfig.getAssetConfig(address(usds));
+        for (uint256 i; i < invariantActors.length; ++i) {
+            IBurnerLoans.Position memory position = burnerLoans.getPosition(
+                address(usds),
+                invariantActors[i]
+            );
+            if (position.debtOhm == 0) continue;
+            assertLe(
+                position.maturity,
+                block.timestamp + config.maxMaturityHorizon,
+                "maturity exceeds configured horizon"
+            );
+        }
+    }
+
+    function _contains(address[] memory values_, address value_) private pure returns (bool) {
+        for (uint256 i; i < values_.length; ++i) if (values_[i] == value_) return true;
+        return false;
+    }
+}
