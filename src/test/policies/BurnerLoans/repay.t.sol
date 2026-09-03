@@ -16,6 +16,9 @@ import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.so
 
 contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     address internal bob;
+    uint128 internal constant _HEALTH_INITIAL_DEBT_OHM = 100e9;
+    uint128 internal constant _HEALTH_REPAY_AMOUNT_OHM = 40e9;
+    uint128 internal constant _HEALTH_REMAINING_DEBT_OHM = 60e9;
 
     function _collateralDecimals() internal pure override returns (uint8) {
         return 18;
@@ -76,43 +79,107 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     //  when repay is called
     //   then it burns OHM and reduces only debt
     function test_givenPartialRepayment_repayBurnsOhmAndReducesOnlyDebt() public {
-        _borrowForAlice(100e9);
+        _borrowForAlice(_HEALTH_INITIAL_DEBT_OHM);
         vm.roll(block.number + 1);
-        _approveOhm(alice, 40e9);
+        _approveOhm(alice, _HEALTH_REPAY_AMOUNT_OHM);
         uint256 supplyBefore = ohm.totalSupply();
         IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
             address(usds),
-            40e9,
+            _HEALTH_REPAY_AMOUNT_OHM,
             alice
         );
-        assertEq(preview.repayAmount, 40e9, "preview repay amount");
-        assertEq(preview.remainingDebtOhm, 60e9, "preview remaining debt");
-        assertEq(preview.resultingHealthFactor, 0, "preview unknown health sentinel");
+        assertEq(preview.repayAmount, _HEALTH_REPAY_AMOUNT_OHM, "preview repay amount");
+        assertEq(preview.remainingDebtOhm, _HEALTH_REMAINING_DEBT_OHM, "preview remaining debt");
+
+        // collateral USD = 2_000e18 * 1e18 / 1e18 = 2_000e18 (18 decimals)
+        // remaining debt USD = 60e9 * 10e18 / 1e9 = 600e18 (18 decimals)
+        // market requirement = ceil(600e18 * 10_000 / 8_500)
+        //                    = 705_882_352_941_176_470_589 (18 decimals)
+        // backing requirement = ceil(60e18 * 12_500 / 10_000) = 75e18
+        // required collateral USD = max(market, backing) = market requirement
+        // health = floor(2_000e18 * 1e18 / 705_882_352_941_176_470_589)
+        //        = 2_833_333_333_333_333_333 (18 decimals)
+        uint256 expectedHealth = 2_833_333_333_333_333_333;
+        assertEq(preview.resultingHealthFactor, expectedHealth, "preview resulting health");
         assertTrue(preview.executable, "preview executable");
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.Repaid(alice, address(usds), alice, 40e9, 60e9);
+        emit IBurnerLoans.Repaid(
+            alice,
+            address(usds),
+            alice,
+            _HEALTH_REPAY_AMOUNT_OHM,
+            _HEALTH_REMAINING_DEBT_OHM
+        );
         vm.prank(alice);
         (uint256 remainingDebtOhm, uint256 healthFactor) = burnerLoans.repay(
             address(usds),
-            40e9,
+            _HEALTH_REPAY_AMOUNT_OHM,
             alice
         );
 
         IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
-        assertEq(ohm.totalSupply(), supplyBefore - 40e9, "OHM supply");
-        assertEq(position.debtOhm, 60e9, "position debt");
+        assertEq(ohm.totalSupply(), supplyBefore - _HEALTH_REPAY_AMOUNT_OHM, "OHM supply");
+        assertEq(position.debtOhm, _HEALTH_REMAINING_DEBT_OHM, "position debt");
         assertEq(position.depositedCollateral, 2_000e18, "position collateral");
-        assertEq(burnerLoans.assetActiveDebtOhm(address(usds)), 60e9, "asset debt");
-        assertEq(burnerLoans.totalActiveDebtOhm(), 60e9, "facility debt");
+        assertEq(
+            burnerLoans.assetActiveDebtOhm(address(usds)),
+            _HEALTH_REMAINING_DEBT_OHM,
+            "asset debt"
+        );
+        assertEq(burnerLoans.totalActiveDebtOhm(), _HEALTH_REMAINING_DEBT_OHM, "facility debt");
         assertEq(
             mintr.mintApproval(address(inventory)),
-            inventory.globalDebtCapOhm() - 60e9,
+            inventory.globalDebtCapOhm() - _HEALTH_REMAINING_DEBT_OHM,
             "recycled mint approval"
         );
-        assertEq(remainingDebtOhm, 60e9, "returned remaining debt");
-        assertEq(healthFactor, 0, "returned unknown health sentinel");
+        assertEq(remainingDebtOhm, _HEALTH_REMAINING_DEBT_OHM, "returned remaining debt");
+        assertEq(healthFactor, expectedHealth, "returned resulting health");
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
+    }
+
+    // repay
+    // given a position that remains unhealthy after partial repayment
+    //  when repayment is previewed and executed
+    //   then both return the sub-1e18 health factor and repayment remains executable
+    function test_givenResultingHealthBelowOneWad_whenRepaid_returnsHealthAndExecutes() public {
+        _borrowForAlice(_HEALTH_INITIAL_DEBT_OHM);
+        vm.roll(block.number + 1);
+        price.setPrice(address(usds), 0.1e18);
+        _approveOhm(alice, _HEALTH_REPAY_AMOUNT_OHM);
+
+        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
+            address(usds),
+            _HEALTH_REPAY_AMOUNT_OHM,
+            alice
+        );
+
+        // collateral USD = 2_000e18 * 0.1e18 / 1e18 = 200e18 (18 decimals)
+        // remaining debt USD = 60e9 * 10e18 / 1e9 = 600e18 (18 decimals)
+        // market requirement = ceil(600e18 * 10_000 / 8_500)
+        //                    = 705_882_352_941_176_470_589 (18 decimals)
+        // backing requirement = ceil(60e18 * 12_500 / 10_000) = 75e18
+        // required collateral USD = max(market, backing) = market requirement
+        // health = floor(200e18 * 1e18 / 705_882_352_941_176_470_589)
+        //        = 283_333_333_333_333_333 (18 decimals)
+        uint256 expectedHealth = 283_333_333_333_333_333;
+        assertEq(preview.resultingHealthFactor, expectedHealth, "preview resulting health");
+        assertTrue(preview.executable, "risk-reducing repayment is executable");
+
+        vm.prank(alice);
+        (uint256 remainingDebtOhm, uint256 healthFactor) = burnerLoans.repay(
+            address(usds),
+            _HEALTH_REPAY_AMOUNT_OHM,
+            alice
+        );
+
+        assertEq(remainingDebtOhm, _HEALTH_REMAINING_DEBT_OHM, "returned remaining debt");
+        assertEq(healthFactor, expectedHealth, "returned resulting health");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            _HEALTH_REMAINING_DEBT_OHM,
+            "position debt"
+        );
     }
 
     // repay
@@ -484,10 +551,12 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     }
 
     // repay
-    // given originations disabled and price stale
-    //  when repay is called
-    //   then it succeeds
-    function test_givenAssetOriginationsDisabledAndPriceStale_repaySucceeds() public {
+    // given originations disabled and PRICE stale
+    //  when a partial repayment is previewed or executed
+    //   then both revert and execution rolls back all accounting
+    function test_givenAssetOriginationsDisabledAndPriceStale_whenPartiallyRepaid_revertsAndRollsBack()
+        public
+    {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
         vm.prank(admin);
@@ -495,40 +564,52 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.warp(block.timestamp + 10 days);
         price.setTimestamp(uint48(block.timestamp - 9 hours));
         _approveOhm(alice, 1e9);
-        IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
-            address(usds),
-            1e9,
-            alice
-        );
-        assertEq(preview.remainingDebtOhm, 99e9, "preview remaining debt");
-        assertTrue(preview.executable, "preview executable");
+        uint256 aliceBalanceBefore = ohm.balanceOf(alice);
+        uint256 supplyBefore = ohm.totalSupply();
+
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
+        burnerLoans.previewRepay(address(usds), 1e9, alice);
 
         vm.prank(alice);
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
         burnerLoans.repay(address(usds), 1e9, alice);
-        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
+
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt rolled back");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "facility debt rolled back");
+        assertEq(ohm.balanceOf(alice), aliceBalanceBefore, "payer balance rolled back");
+        assertEq(ohm.totalSupply(), supplyBefore, "OHM supply rolled back");
     }
 
     // repay
-    // given matured unhealthy position
-    //  when repay is called
-    //   then it succeeds without price
-    function test_givenMaturedUnhealthyPosition_repaySucceedsWithoutPrice() public {
+    // given a matured unhealthy position and unavailable PRICE
+    //  when its full debt is repaid
+    //   then health is max and no PRICE read is required
+    function test_givenMaturedUnhealthyPositionAndZeroPrice_whenFullyRepaid_returnsMaxHealth()
+        public
+    {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
         vm.warp(block.timestamp + 31 days);
         price.setPrice(address(usds), 0);
-        _approveOhm(alice, 1e9);
+        _approveOhm(alice, 100e9);
         IBurnerLoans.RepayPreview memory preview = burnerLoans.previewRepay(
             address(usds),
-            1e9,
+            100e9,
             alice
         );
-        assertEq(preview.remainingDebtOhm, 99e9, "preview remaining debt");
+        assertEq(preview.remainingDebtOhm, 0, "preview remaining debt");
+        assertEq(preview.resultingHealthFactor, type(uint256).max, "preview debt-free health");
         assertTrue(preview.executable, "preview executable");
 
         vm.prank(alice);
-        burnerLoans.repay(address(usds), 1e9, alice);
-        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 99e9, "debt");
+        (uint256 remainingDebtOhm, uint256 healthFactor) = burnerLoans.repay(
+            address(usds),
+            100e9,
+            alice
+        );
+        assertEq(remainingDebtOhm, 0, "returned remaining debt");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "position debt");
     }
 
     // repay

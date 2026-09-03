@@ -440,9 +440,9 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
 
     // extend
     // given unhealthy position
-    //  when extend is called
-    //   then it reverts
-    function test_givenUnhealthyPosition_extendReverts() public {
+    //  when extension is previewed or executed
+    //   then preview returns the health and execution reverts
+    function test_givenUnhealthyPosition_whenExtensionIsPreviewedOrExecuted() public {
         backingOracle.setBacking(10e18);
         _borrowForAlice();
         price.setPrice(address(usds), 0.1e18);
@@ -453,13 +453,19 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         // OHM market price is $10e18, below the $10.625e18 crossover, so backing dominates.
         // Collateral value after the depeg = 2,000e18 * $0.1e18 / 1e18 = $200e18.
         // Health = floor($200e18 * 1e18 / $1,250e18) = 0.16e18 WAD.
+        uint256 expectedHealthFactor = 0.16e18;
         bytes memory error = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
-            0.16e18
+            expectedHealthFactor
         );
 
-        vm.expectRevert(error);
-        burnerLoans.previewExtend(address(usds), alice, 1);
+        IBurnerLoans.ExtendPreview memory preview = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            1
+        );
+        assertEq(preview.healthFactor, expectedHealthFactor, "preview health");
+        assertFalse(preview.executable, "preview executable");
 
         vm.prank(alice);
         vm.expectRevert(error);

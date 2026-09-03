@@ -152,6 +152,7 @@ contract BurnerLoansHandler is Test {
 
         try burnerLoans.previewDepositCollateral(address(collateral), amount, actor) returns (
             uint256,
+            uint256,
             uint256
         ) {} catch {
             return;

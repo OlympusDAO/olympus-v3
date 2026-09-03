@@ -61,17 +61,19 @@ interface IBurnerLoansLifecycle {
     /// @dev Callable by the borrower or an authorized operator. Reverts if Burner Loans, the
     ///      market, or custody route is disabled; the caller is unauthorized; the asset is
     ///      unconfigured; the amount is zero; the safe transfer fails or is inexact; no collateral
-    ///      is credited; or a callback enters another protected lifecycle action.
+    ///      is credited; required PRICE data is unavailable for an indebted position; or a
+    ///      callback enters another protected lifecycle action.
     /// @param asset_ Collateral asset to deposit.
     /// @param amount_ Collateral amount transferred from the caller.
     /// @param onBehalfOf_ Borrower whose position receives the collateral credit.
     /// @return depositedAmount Collateral credited in collateral token decimals.
     /// @return resultingCollateral Borrower's resulting collateral in collateral token decimals.
+    /// @return healthFactor Borrower's health factor after the deposit, scaled by 1e18.
     function depositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external returns (uint256 depositedAmount, uint256 resultingCollateral);
+    ) external returns (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor);
 
     /// @notice Withdraws credited collateral from a borrower's position.
     /// @dev Asset-origination and DepositManager-period disable do not block this exit. Reverts if:
@@ -145,12 +147,13 @@ interface IBurnerLoansLifecycle {
     ///      - The amount is zero, exceeds principal, or is submitted in the latest borrow block.
     ///      - The OHM transfer fails or Inventory receives an inexact amount.
     ///      - FLOAN debt reduction or Inventory settlement fails.
+    ///      - Required PRICE data is unavailable when debt remains after repayment.
     /// @param asset_ Collateral asset securing the position.
     /// @param repayOhm_ Principal to repay, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose debt is reduced.
     /// @return remainingDebtOhm Principal returned by FLOAN after repayment, in OHM decimals.
-    /// @return healthFactor Max uint after full repayment; zero when partial repayment deliberately
-    ///         avoids a live PRICE read.
+    /// @return healthFactor Borrower's health factor after repayment, scaled by 1e18. Returns max
+    ///         uint after full repayment.
     function repay(
         address asset_,
         uint128 repayOhm_,

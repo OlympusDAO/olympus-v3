@@ -128,7 +128,11 @@ library BurnerLoansView {
         address asset_,
         uint128 amount_,
         IFLOANv1.Position memory position
-    ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
+    )
+        public
+        view
+        returns (uint256 depositedCollateral, uint256 totalCollateral, uint256 healthFactor)
+    {
         IBurnerLoans.AssetConfig memory config = _getAssetConfig(dependencies_, asset_);
         if (!config.originationsEnabled) {
             revert IBurnerLoans.BurnerLoans_AssetOriginationsDisabled(asset_);
@@ -158,6 +162,12 @@ library BurnerLoansView {
             revert IBurnerLoans.BurnerLoans_ZeroCollateralCredit();
         }
         totalCollateral = position.collateral + depositedCollateral;
+        healthFactor = BurnerLoansQuote.positionHealthFactor(
+            dependencies_,
+            asset_,
+            totalCollateral,
+            position.principalDue
+        );
     }
 
     /// @notice Quotes a deposit against the borrower's first market position.
@@ -166,7 +176,11 @@ library BurnerLoansView {
         uint128 amount_,
         uint32 marketId_,
         address borrower_
-    ) public view returns (uint256 depositedCollateral, uint256 totalCollateral) {
+    )
+        public
+        view
+        returns (uint256 depositedCollateral, uint256 totalCollateral, uint256 healthFactor)
+    {
         BurnerLoansContext memory dependencies_ = _dependencies();
         return
             previewDepositCollateral(
@@ -180,6 +194,8 @@ library BurnerLoansView {
     /// @notice Quotes principal repayment against a supplied position.
     /// @dev Reverts for no debt, excessive repayment, or repayment in the borrow block.
     function previewRepay(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
         uint128 repayOhm_,
         IFLOANv1.Position memory position
     ) public view returns (IBurnerLoans.RepayPreview memory preview) {
@@ -193,10 +209,16 @@ library BurnerLoansView {
         }
 
         uint256 remainingDebtOhm = debtOhm - repayOhm_;
+        uint256 resultingHealthFactor = BurnerLoansQuote.positionHealthFactor(
+            dependencies_,
+            asset_,
+            position.collateral,
+            remainingDebtOhm
+        );
         preview = IBurnerLoans.RepayPreview({
             repayAmount: repayOhm_,
             remainingDebtOhm: remainingDebtOhm,
-            resultingHealthFactor: remainingDebtOhm == 0 ? type(uint256).max : 0,
+            resultingHealthFactor: resultingHealthFactor,
             executable: true
         });
     }
@@ -218,7 +240,13 @@ library BurnerLoansView {
             borrower_
         );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
-        return previewRepay(repayOhm_, dependencies_.floan.getPosition(positionId));
+        return
+            previewRepay(
+                dependencies_,
+                asset_,
+                repayOhm_,
+                dependencies_.floan.getPosition(positionId)
+            );
     }
 
     /// @notice Quotes collateral withdrawal against a supplied position.

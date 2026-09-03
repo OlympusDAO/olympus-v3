@@ -114,7 +114,8 @@ library BurnerLoansCustody {
             dependencies_,
             params_.asset,
             params_.ohmAmount,
-            position
+            position,
+            true
         );
         if (preview.fee > params_.maxFee) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, params_.maxFee);
@@ -173,11 +174,12 @@ library BurnerLoansCustody {
     ///      - FLOAN position creation or collateral mutation fails.
     /// @return depositedCollateral Actual collateral credited after vault rounding.
     /// @return totalCollateral Resulting position collateral.
+    /// @return healthFactor Resulting position health factor.
     function depositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) public returns (uint256 depositedCollateral, uint256 totalCollateral) {
+    ) public returns (uint256 depositedCollateral, uint256 totalCollateral, uint256 healthFactor) {
         BurnerLoansContext memory dependencies_ = _dependencies();
         uint32 marketId_ = _requireAssetOriginationsEnabled(dependencies_, asset_);
         if (amount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
@@ -213,6 +215,12 @@ library BurnerLoansCustody {
             positionId,
             depositedCollateral_
         );
+        uint256 healthFactor_ = BurnerLoansQuote.positionHealthFactor(
+            dependencies_,
+            asset_,
+            totalCollateral_,
+            dependencies_.floan.getPosition(positionId).principalDue
+        );
 
         emit IBurnerLoans.CollateralDeposited(
             msg.sender,
@@ -221,7 +229,7 @@ library BurnerLoansCustody {
             amount_,
             depositedCollateral_
         );
-        return (depositedCollateral_, totalCollateral_);
+        return (depositedCollateral_, totalCollateral_, healthFactor_);
     }
 
     /// @notice Validates and executes a collateral withdrawal.
@@ -643,10 +651,9 @@ library BurnerLoansCustody {
     /// @notice Repays principal and transfers exact OHM to Burner Loans Inventory for settlement.
     /// @dev Reverts for a missing/debt-free position, excessive or same-block repayment, token
     ///      transfer failure, inexact Burner Loans Inventory receipt, or an underlying
-    ///      FLOAN/Burner Loans Inventory failure.
+    ///      FLOAN/Burner Loans Inventory failure, or unavailable PRICE data when debt remains.
     /// @return remainingDebtOhm Principal stored by FLOAN after repayment.
-    /// @return healthFactor Max uint after full repayment; zero when debt remains because repayment
-    ///         deliberately avoids a live PRICE read.
+    /// @return healthFactor Resulting position health factor; max uint after full repayment.
     function repay(
         uint32 marketId_,
         address asset_,
@@ -686,6 +693,14 @@ library BurnerLoansCustody {
         );
         dependencies_.inventory.settleRepayment(repayOhm_);
 
+        remainingDebtOhm = resultingPosition.principalDue;
+        healthFactor = BurnerLoansQuote.positionHealthFactor(
+            dependencies_,
+            asset_,
+            resultingPosition.collateral,
+            remainingDebtOhm
+        );
+
         emit IBurnerLoans.Repaid(
             msg.sender,
             asset_,
@@ -693,8 +708,6 @@ library BurnerLoansCustody {
             repayOhm_,
             resultingPosition.principalDue
         );
-        remainingDebtOhm = resultingPosition.principalDue;
-        healthFactor = remainingDebtOhm == 0 ? type(uint256).max : 0;
         return (remainingDebtOhm, healthFactor);
     }
 
@@ -722,7 +735,8 @@ library BurnerLoansCustody {
             dependencies_,
             asset_,
             termCount_,
-            dependencies_.floan.getPosition(positionId)
+            dependencies_.floan.getPosition(positionId),
+            true
         );
         if (preview.fee > maxFee_) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, maxFee_);

@@ -45,6 +45,7 @@ library BurnerLoansQuote {
         uint48 currentMaturity;
         uint32 marketId;
         uint16 termCount;
+        bool executable;
     }
 
     /// @notice Quotes a borrow for the first borrower position in a known market.
@@ -62,18 +63,21 @@ library BurnerLoansQuote {
                 dependencies_,
                 asset_,
                 ohmAmount_,
-                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_),
+                false
             );
     }
 
     /// @notice Quotes a borrow against a supplied FLOAN position snapshot.
-    /// @dev Applies the same validation and rounding used by execution.
+    /// @dev Applies the same validation and rounding used by previews and execution. Set
+    ///      `enforceHealth_` for execution to revert on unhealthy current or resulting debt.
     function quoteBorrow(
         BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 ohmAmount_,
-        IFLOANv1.Position memory position
-    ) public view returns (IBurnerLoans.BorrowPreview memory) {
+        IFLOANv1.Position memory position,
+        bool enforceHealth_
+    ) public view returns (IBurnerLoans.BorrowPreview memory preview) {
         if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
         (
             uint32 marketId,
@@ -113,6 +117,16 @@ library BurnerLoansQuote {
             position.collateral,
             config
         );
+        preview.fee = _borrowFee(
+            dependencies_.ohmDecimals,
+            dependencies_.floan,
+            marketId,
+            ohmAmount_,
+            assetDebt,
+            pricing,
+            config
+        );
+        preview.executable = true;
         if (position.principalDue != 0) {
             uint256 currentHealth = _health(
                 dependencies_.ohmDecimals,
@@ -121,39 +135,29 @@ library BurnerLoansQuote {
                 config
             );
             if (currentHealth < _WAD) {
-                revert IBurnerLoans.BurnerLoans_UnhealthyPosition(currentHealth);
+                if (enforceHealth_) {
+                    revert IBurnerLoans.BurnerLoans_UnhealthyPosition(currentHealth);
+                }
+                preview.executable = false;
             }
         }
 
-        uint128 resultingDebt = position.principalDue + ohmAmount_;
-        uint256 resultingHealth = _health(
+        preview.resultingDebtOhm = position.principalDue + ohmAmount_;
+        preview.resultingHealthFactor = _health(
             dependencies_.ohmDecimals,
-            resultingDebt,
+            preview.resultingDebtOhm,
             pricing,
             config
         );
-        if (resultingHealth < _WAD) {
-            revert IBurnerLoans.BurnerLoans_UnhealthyBorrow(resultingHealth);
+        if (preview.resultingHealthFactor < _WAD) {
+            if (enforceHealth_) {
+                revert IBurnerLoans.BurnerLoans_UnhealthyBorrow(preview.resultingHealthFactor);
+            }
+            preview.executable = false;
         }
-
-        return
-            IBurnerLoans.BorrowPreview({
-                fee: _borrowFee(
-                    dependencies_.ohmDecimals,
-                    dependencies_.floan,
-                    marketId,
-                    ohmAmount_,
-                    assetDebt,
-                    pricing,
-                    config
-                ),
-                resultingDebtOhm: resultingDebt,
-                resultingHealthFactor: resultingHealth,
-                maturity: position.principalDue == 0
-                    ? uint48(block.timestamp + config.termLength)
-                    : position.maturity,
-                executable: true
-            });
+        preview.maturity = position.principalDue == 0
+            ? uint48(block.timestamp + config.termLength)
+            : position.maturity;
     }
 
     /// @notice Quotes an extension for the first borrower position in a known market.
@@ -171,7 +175,8 @@ library BurnerLoansQuote {
                 dependencies_,
                 asset_,
                 termCount_,
-                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_)
+                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_),
+                false
             );
     }
 
@@ -221,12 +226,13 @@ library BurnerLoansQuote {
     /// @notice Quotes an extension against a supplied FLOAN position snapshot.
     /// @dev Calculates the new maturity from the previous maturity rather than the current block
     ///      timestamp. The resulting maturity must be in the future and within the configured
-    ///      horizon.
+    ///      horizon. Set `enforceHealth_` for execution to revert on unhealthy debt.
     function quoteExtend(
         BurnerLoansContext memory dependencies_,
         address asset_,
         uint16 termCount_,
-        IFLOANv1.Position memory position_
+        IFLOANv1.Position memory position_,
+        bool enforceHealth_
     ) public view returns (IBurnerLoans.ExtendPreview memory) {
         (
             uint32 marketId,
@@ -260,7 +266,10 @@ library BurnerLoansQuote {
             pricing,
             config
         );
-        if (health < _WAD) revert IBurnerLoans.BurnerLoans_UnhealthyPosition(health);
+        bool executable = health >= _WAD;
+        if (enforceHealth_ && !executable) {
+            revert IBurnerLoans.BurnerLoans_UnhealthyPosition(health);
+        }
 
         ExtensionContext memory context;
         context.pricing = pricing;
@@ -270,6 +279,7 @@ library BurnerLoansQuote {
         context.currentMaturity = position_.maturity;
         context.marketId = marketId;
         context.termCount = termCount_;
+        context.executable = executable;
         return _quoteExtensionTerms(dependencies_, context);
     }
 
@@ -417,7 +427,7 @@ library BurnerLoansQuote {
                 // forge-lint: disable-next-line(unsafe-typecast)
                 maturity: uint48(requestedMaturity),
                 healthFactor: context_.health,
-                executable: true
+                executable: context_.executable
             });
     }
 

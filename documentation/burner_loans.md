@@ -71,15 +71,15 @@ stateDiagram-v2
     CollateralOnly --> [*]: full withdrawal
 ```
 
-| Action              | Effect                                                        | Main condition                                                 |
-| ------------------- | ------------------------------------------------------------- | -------------------------------------------------------------- |
-| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                |
-| Borrow              | Adds principal and draws OHM from Burner Loans Inventory      | Position is healthy, within both caps, and not matured         |
-| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; no price read required                |
-| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                   |
-| Extend              | Advances the prior maturity by whole terms                    | Position stays healthy and maturity remains within its horizon |
-| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary               |
-| Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                        |
+| Action              | Effect                                                        | Main condition                                                   |
+| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                  |
+| Borrow              | Adds principal and draws OHM from Burner Loans Inventory      | Position is healthy, within both caps, and not matured           |
+| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; live PRICE unless repayment clears debt |
+| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                     |
+| Extend              | Advances the prior maturity by whole terms                    | Position stays healthy and maturity remains within its horizon   |
+| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary                 |
+| Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                          |
 
 Full repayment and seizure clear the episode's financial fields and active indexes. The position
 ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
@@ -156,6 +156,24 @@ backing oracle returns 18-decimal USD per OHM. Rounding is conservative for the 
 backing conversion, collateral requirements, required collateral-token amounts, utilization, and
 final transferred fees round up. Gross collateral values, health factors, and fee-curve slope
 contributions round down.
+
+Every borrower lifecycle action and position-action preview reports the resulting health factor.
+`depositCollateral` and `previewDepositCollateral` return credited collateral, resulting collateral,
+and resulting health. `repay` and `previewRepay` report actual or projected health after the debt
+reduction rather than an unknown-health sentinel. A debt-free result is `type(uint256).max` and does
+not read PRICE.
+
+Previews expose unhealthy hypothetical outcomes instead of reverting solely because health is below
+`1e18`. Borrow, withdrawal, and extension previews set `executable` to `false`; their corresponding
+writes still revert. Deposits and repayments remain executable when they improve a position but
+leave health below `1e18`.
+
+When resulting debt is nonzero, these returns require the standard live collateral and OHM pricing
+inputs. The preview or action is expected to revert if PRICE is unavailable, unsupported, zero, or
+stale. A write that reaches the health calculation and then encounters a PRICE failure reverts the
+entire collateral or debt transition atomically. There is no no-oracle escape-hatch flag: seizure
+that depends on the same unavailable prices cannot proceed either. Full repayment and debt-free
+collateral operations remain available because their health is unambiguous without PRICE.
 
 Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
 credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee
@@ -580,9 +598,9 @@ guaranteed. A fresh Seizer must reset or reconcile both `nextAssetIndex` and eac
 
 | Preview     | Includes                                                   | Does not guarantee                                                      |
 | ----------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Deposit     | Expected custody credit and resulting collateral           | Future vault state                                                      |
+| Deposit     | Expected custody credit, resulting collateral, and health  | Future vault state                                                      |
 | Borrow      | Fee, debt, maturity, health, and local capacity            | Caller authorization, token approval, recipient, or `maxFee` acceptance |
-| Repay       | Applied repayment, remaining debt, and debt-free sentinel  | Payer balance or approval                                               |
+| Repay       | Applied repayment, remaining debt, and resulting health    | Payer balance or approval                                               |
 | Withdraw    | Return token/amount, remaining collateral, and health      | Successful future vault redemption                                      |
 | Extend      | Fee, resulting maturity, and health                        | Caller token approval or `maxFee` acceptance                            |
 | Seize       | Debt, collateral, reward, and treasury amount              | Unchanged prices or custody at execution                                |

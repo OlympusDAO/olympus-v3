@@ -13,7 +13,6 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
@@ -35,6 +34,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     address internal operator;
     uint128 internal constant DEFAULT_BORROW_AMOUNT = 100e9;
     uint128 internal constant DEFAULT_COLLATERAL_AMOUNT = 2_000e18;
+    uint256 internal constant HEALTH_FACTOR_SCALE = 1e18;
 
     function _collateralDecimals() internal pure override returns (uint8) {
         return 18;
@@ -227,9 +227,17 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.borrow(address(usds), ohmAmount_, alice, alice, type(uint256).max);
     }
 
-    function _expectBorrowAndPreviewPartialRevert(bytes4 selector_, uint128 ohmAmount_) internal {
-        vm.expectPartialRevert(selector_);
-        burnerLoans.previewBorrow(address(usds), ohmAmount_, alice);
+    function _expectUnexecutableBorrowPreviewAndWritePartialRevert(
+        bytes4 selector_,
+        uint128 ohmAmount_
+    ) internal returns (IBurnerLoans.BorrowPreview memory preview) {
+        preview = burnerLoans.previewBorrow(address(usds), ohmAmount_, alice);
+        assertFalse(preview.executable, "unhealthy preview is not executable");
+        assertLt(
+            preview.resultingHealthFactor,
+            HEALTH_FACTOR_SCALE,
+            "preview returns sub-1e18 health"
+        );
 
         vm.prank(alice);
         vm.expectPartialRevert(selector_);
@@ -955,7 +963,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Position: active and not matured
     // - Current health: below 1e18 before the requested increase
     // - Expected branch: health-seizable position cannot increase debt
-    function test_givenCurrentlyUnhealthyActivePosition_borrowAndPreviewRevert(
+    function test_givenCurrentlyUnhealthyActivePosition_previewIsUnexecutableAndBorrowReverts(
         uint96 ohmAmount_
     ) public {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
@@ -971,7 +979,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
         burnerLoans.setActiveDebtForTest(address(usds), 100e9);
 
-        _expectBorrowAndPreviewPartialRevert(
+        _expectUnexecutableBorrowPreviewAndWritePartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
             amount
         );
@@ -1074,17 +1082,39 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Collateral: one 18-decimal USDS unit below the 85% maximum-LTV boundary
     // - Math: floor((required - 1) * 1e18 / required) = 999999999999999999
-    // - Expected branch: preview and write return the manually calculated unhealthy factor
-    function test_givenResultingHealthOneUnitBelowOneWad_borrowAndPreviewRevert() public {
+    // - Expected branch: preview returns the unhealthy factor and execution reverts with it
+    function test_givenResultingHealthOneUnitBelowOneWad_whenBorrowIsPreviewedOrExecuted() public {
         _depositCollateral(alice, 1_176_470_588_235_294_117_648 - 1);
 
-        _expectBorrowAndPreviewRevert(
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+
+        // Collateral value = floor(1_176_470_588_235_294_117_647 * $1e18 / 1e18)
+        //                  = $1_176_470_588_235_294_117_647.
+        // Debt value = ceil(100e9 OHM * $10e18 / 1e9) = $1_000e18.
+        // Market requirement = ceil($1_000e18 * 10_000 / 8_500)
+        //                    = $1_176_470_588_235_294_117_648.
+        // Backing debt value = ceil(100e9 OHM * $1e18 / 1e9) = $100e18.
+        // Backing requirement = ceil($100e18 * 12_500 / 10_000) = $125e18.
+        // The market requirement dominates.
+        // Health = floor($1_176_470_588_235_294_117_647 * 1e18
+        //              / $1_176_470_588_235_294_117_648)
+        //        = 999_999_999_999_999_999.
+        uint256 expectedHealthFactor = 999_999_999_999_999_999;
+        assertEq(preview.resultingHealthFactor, expectedHealthFactor, "preview health");
+        assertFalse(preview.executable, "preview executable");
+
+        vm.prank(alice);
+        vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
-                999999999999999999
-            ),
-            DEFAULT_BORROW_AMOUNT
+                expectedHealthFactor
+            )
         );
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, type(uint256).max);
     }
 
     // Condition tree:
@@ -1092,7 +1122,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     //   1,176.470588235294117648 USDS
     // - Collateral: fuzzed positive shortfall below that fixed boundary
     // - Expected branch: every sampled shortfall is rejected as unhealthy
-    function test_givenFuzzedCollateralBelowBoundary_borrowAndPreviewRevert(
+    function test_givenFuzzedCollateralBelowBoundary_previewIsUnexecutableAndBorrowReverts(
         uint128 collateralShortfall_
     ) public {
         uint256 requiredCollateral = 1_176_470_588_235_294_117_648;
@@ -1103,7 +1133,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
         _depositCollateral(alice, uint128(requiredCollateral - collateralShortfall));
 
-        _expectBorrowAndPreviewPartialRevert(
+        _expectUnexecutableBorrowPreviewAndWritePartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
             DEFAULT_BORROW_AMOUNT
         );
@@ -1221,15 +1251,25 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - OHM market price: $5 while the backing oracle reports $10
     // - Collateral: one USDS unit below the $1,250 backing requirement
     // - Expected branch: market requirement is covered but backing requirement rejects the borrow
-    function test_givenBelowBackingOhmPriceAndInsufficientBacking_borrowAndPreviewRevert() public {
+    function test_givenBelowBackingOhmPriceAndInsufficientBacking_previewIsUnexecutableAndBorrowReverts()
+        public
+    {
         _configurePrice(address(ohm), 5e18);
         backingOracle.setBacking(10e18);
         _depositCollateral(alice, 1_250e18 - 1);
 
-        _expectBorrowAndPreviewPartialRevert(
-            IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
-            DEFAULT_BORROW_AMOUNT
-        );
+        IBurnerLoans.BorrowPreview
+            memory preview = _expectUnexecutableBorrowPreviewAndWritePartialRevert(
+                IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
+                DEFAULT_BORROW_AMOUNT
+            );
+
+        // collateral USD = 1_250e18 - 1 (18 decimals)
+        // backing debt USD = 100e9 * 10e18 / 1e9 = 1_000e18 (18 decimals)
+        // backing requirement = 1_000e18 * 12_500 / 10_000 = 1_250e18
+        // health = floor((1_250e18 - 1) * 1e18 / 1_250e18)
+        //        = 999_999_999_999_999_999 (18 decimals)
+        assertEq(preview.resultingHealthFactor, HEALTH_FACTOR_SCALE - 1, "preview backing health");
     }
 
     // Condition tree:
@@ -1300,7 +1340,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Borrow amount: fixed at 100 OHM, whose manual backing boundary is 1,000 USDS
     // - Collateral: fuzzed positive shortfall below that fixed backing requirement
     // - Expected branch: every undercollateralized sample is rejected
-    function test_givenFuzzedInsufficientBacking_borrowAndPreviewRevert(
+    function test_givenFuzzedInsufficientBacking_previewIsUnexecutableAndBorrowReverts(
         uint128 collateralShortfall_
     ) public {
         _configurePrice(address(ohm), 1e18);
@@ -1308,7 +1348,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 shortfall = bound(uint256(collateralShortfall_), 1, 1_000e18 - 1);
         _depositCollateral(alice, uint128(1_000e18 - shortfall));
 
-        _expectBorrowAndPreviewPartialRevert(
+        _expectUnexecutableBorrowPreviewAndWritePartialRevert(
             IBurnerLoans.BurnerLoans_UnhealthyBorrow.selector,
             DEFAULT_BORROW_AMOUNT
         );

@@ -76,8 +76,15 @@ contract BurnerLoansComposites is IBurnerLoansComposites, ERC165, ReentrancyGuar
         asset.safeTransferFrom(msg.sender, address(this), inputAmount);
         asset.forceApprove(burnerLoans, inputAmount);
 
-        (result.depositedCollateral, result.totalCollateral) = IBurnerLoansLifecycle(burnerLoans)
-            .depositCollateral(params_.asset, params_.collateralAmount, msg.sender);
+        (
+            result.depositedCollateral,
+            result.totalCollateral,
+            result.healthFactor
+        ) = IBurnerLoansLifecycle(burnerLoans).depositCollateral(
+            params_.asset,
+            params_.collateralAmount,
+            msg.sender
+        );
         (
             ,
             result.fee,

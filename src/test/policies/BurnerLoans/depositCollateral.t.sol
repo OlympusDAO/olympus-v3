@@ -7,6 +7,7 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -27,11 +28,25 @@ import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
 
 contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
-    address internal operator;
+    address internal _operator;
+    uint128 internal constant _VAULT_DEPOSIT_AMOUNT = 1_000e6;
+    uint128 internal constant _VAULT_DEBT_OHM = 1e9;
+    uint256 internal constant _VAULT_OHM_PRICE = 10e18;
+    uint256 internal constant _VAULT_ACTUAL_CREDIT = 999_999_999;
+    uint256 internal constant _VAULT_RESULTING_HEALTH = 84_999_999_914_999_999_996;
+    uint128 internal constant _ZERO_PRICE_INITIAL_COLLATERAL = 1_000e6;
+    uint128 internal constant _ZERO_PRICE_DEPOSIT_AMOUNT = 100e6;
+    uint128 internal constant _ZERO_PRICE_DEBT_OHM = 1e9;
+    uint256 internal constant _ZERO_PRICE_OHM_PRICE = 10e18;
+    uint128 internal constant _HEALTH_INITIAL_COLLATERAL = 1_000e6;
+    uint128 internal constant _HEALTH_DEPOSIT_AMOUNT = 100e6;
+    uint128 internal constant _HEALTH_SMALL_DEBT_OHM = 1e9;
+    uint128 internal constant _HEALTH_LARGE_DEBT_OHM = 100e9;
+    uint256 internal constant _HEALTH_OHM_PRICE = 10e18;
 
     function setUp() public override {
         super.setUp();
-        operator = makeAddr("operator");
+        _operator = makeAddr("operator");
         _addDefaultUsdsAsset();
     }
 
@@ -99,16 +114,13 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             BurnerLoansConstants.DEPOSIT_PERIOD,
             address(burnerLoans)
         );
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            1_000e6,
-            alice
-        );
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 1_000e6, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 1_000e6, 1_000e6);
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             1_000e6,
             alice
@@ -119,8 +131,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(deposited, 1_000e6, "deposited");
         assertEq(total, 1_000e6, "total");
@@ -147,16 +161,13 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenPreexistingDirectDust_creditsDirectCustody() public {
         usds.mint(address(burnerLoans), 1);
         _mintAndApprove(address(usds), alice, 1_000e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            1_000e6,
-            alice
-        );
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 1_000e6, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 1_000e6, 1_000e6);
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             1_000e6,
             alice
@@ -169,8 +180,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(usds.balanceOf(address(burnerLoans)), 1, "preexisting dust remains");
         assertEq(usds.balanceOf(address(depositManager)), 1_000e6, "deposit manager balance");
@@ -185,107 +198,241 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Position state: active debt with configured collateral and maturity
     // - PRICE state: stale after the initial collateral deposit
     // - Action: owner deposits additional direct-custody collateral
-    // - Expected branch: deposit succeeds without PRICE and changes only credited collateral
-    function test_depositCollateral_givenActiveDebtAndStalePrice_preservesDebtAndMaturity() public {
-        _mintAndApprove(address(usds), alice, 1_000e6);
-        vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 1_000e6, 1_000e6);
+    // - Expected branch: preview and write revert, and the write rolls back custody and FLOAN state
+    function test_givenActiveDebtAndStalePrice_whenCollateralIsDeposited_revertsAndRollsBack()
+        public
+    {
+        _mintAndApprove(address(usds), alice, _HEALTH_INITIAL_COLLATERAL);
         vm.prank(alice);
-        burnerLoans.depositCollateral(address(usds), 1_000e6, alice);
+        burnerLoans.depositCollateral(address(usds), _HEALTH_INITIAL_COLLATERAL, alice);
 
-        uint256 debtOhm = 1e9;
-        uint48 maturity = _setActiveDebtForAlice(1_000e6, debtOhm);
+        uint256 debtOhm = _HEALTH_SMALL_DEBT_OHM;
+        uint48 maturity = _setActiveDebtForAlice(_HEALTH_INITIAL_COLLATERAL, debtOhm);
+        _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
         vm.warp(block.timestamp + 10 days);
         price.setTimestamp(uint48(block.timestamp - 9 hours));
-        _mintAndApprove(address(usds), alice, 100e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            100e6,
-            alice
-        );
+        _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+        uint256 custodyBalanceBefore = usds.balanceOf(address(depositManager));
 
-        vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 100e6, 100e6);
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
+        /// Reason: The call must revert before it can return preview values.
+        /// forge-lint: disable-next-line(unused-return)
+        burnerLoans.previewDepositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
+
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
-            address(usds),
-            100e6,
-            alice
-        );
+        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidPrice.selector);
+        /// Reason: The call must revert before it can return action values.
+        /// forge-lint: disable-next-line(unused-return)
+        burnerLoans.depositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
 
-        assertEq(deposited, 100e6, "deposited");
-        assertEq(total, 1_100e6, "total collateral");
-        _assertDepositMatchesPreview(
+        assertEq(usds.balanceOf(alice), aliceBalanceBefore, "borrower balance rolled back");
+        assertEq(
+            usds.balanceOf(address(depositManager)),
+            custodyBalanceBefore,
+            "custody balance rolled back"
+        );
+        _assertPositionAndActiveDebt(
             address(usds),
             alice,
-            previewDeposit,
-            previewTotal,
-            deposited,
-            total
+            _HEALTH_INITIAL_COLLATERAL,
+            debtOhm,
+            maturity
         );
-        _assertPositionAndActiveDebt(address(usds), alice, 1_100e6, debtOhm, maturity);
     }
 
     // Condition tree:
     // - Position state: active debt with configured collateral and maturity
-    // - PRICE state: collateral price is zero after the initial collateral deposit
+    // - PRICE state: configured collateral price is zero
     // - Action: owner previews and deposits additional direct-custody collateral
-    // - Expected branch: deposit succeeds without PRICE and changes only credited collateral
-    function test_depositCollateral_givenActiveDebtAndZeroPrice_preservesDebtAndMaturity() public {
-        _mintAndApprove(address(usds), alice, 1_000e6);
+    // - Expected branch: preview and write revert, and the write rolls back custody and FLOAN state
+    function test_givenActiveDebt_givenZeroPrice_whenCollateralIsDeposited_revertsAndRollsBack()
+        public
+    {
+        _mintAndApprove(address(usds), alice, _ZERO_PRICE_INITIAL_COLLATERAL);
         vm.prank(alice);
-        burnerLoans.depositCollateral(address(usds), 1_000e6, alice);
+        (
+            uint256 initialDepositedCollateral,
+            uint256 initialTotalCollateral,
+            uint256 initialHealthFactor
+        ) = burnerLoans.depositCollateral(address(usds), _ZERO_PRICE_INITIAL_COLLATERAL, alice);
 
-        uint256 debtOhm = 1e9;
-        uint48 maturity = _setActiveDebtForAlice(1_000e6, debtOhm);
+        uint48 maturity = _setActiveDebtForAlice(
+            _ZERO_PRICE_INITIAL_COLLATERAL,
+            _ZERO_PRICE_DEBT_OHM
+        );
+        _configurePrice(address(ohm), _ZERO_PRICE_OHM_PRICE);
         price.setPrice(address(usds), 0);
-        _mintAndApprove(address(usds), alice, 100e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            100e6,
-            alice
-        );
+        _mintAndApprove(address(usds), alice, _ZERO_PRICE_DEPOSIT_AMOUNT);
+        uint256 aliceBalanceBefore = usds.balanceOf(alice);
+        uint256 custodyBalanceBefore = usds.balanceOf(address(depositManager));
 
-        vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 100e6, 100e6);
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
+        /// Reason: The call must revert before it can return preview values.
+        /// forge-lint: disable-next-line(unused-return)
+        burnerLoans.previewDepositCollateral(address(usds), _ZERO_PRICE_DEPOSIT_AMOUNT, alice);
+
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
-            address(usds),
-            100e6,
-            alice
-        );
+        vm.expectRevert(abi.encodeWithSelector(IPRICEv2.PRICE_PriceZero.selector, address(usds)));
+        /// Reason: The call must revert before it can return action values.
+        /// forge-lint: disable-next-line(unused-return)
+        burnerLoans.depositCollateral(address(usds), _ZERO_PRICE_DEPOSIT_AMOUNT, alice);
 
-        _assertDepositMatchesPreview(
+        assertEq(
+            initialDepositedCollateral,
+            _ZERO_PRICE_INITIAL_COLLATERAL,
+            "initial deposited collateral"
+        );
+        assertEq(
+            initialTotalCollateral,
+            _ZERO_PRICE_INITIAL_COLLATERAL,
+            "initial total collateral"
+        );
+        assertEq(initialHealthFactor, type(uint256).max, "initial debt-free health");
+        assertEq(usds.balanceOf(alice), aliceBalanceBefore, "borrower balance rolled back");
+        assertEq(
+            usds.balanceOf(address(depositManager)),
+            custodyBalanceBefore,
+            "custody balance rolled back"
+        );
+        _assertPositionAndActiveDebt(
             address(usds),
             alice,
-            previewDeposit,
-            previewTotal,
-            deposited,
-            total
+            _ZERO_PRICE_INITIAL_COLLATERAL,
+            _ZERO_PRICE_DEBT_OHM,
+            maturity
         );
-        assertEq(deposited, 100e6, "deposited");
-        assertEq(total, 1_100e6, "total collateral");
-        _assertPositionAndActiveDebt(address(usds), alice, 1_100e6, debtOhm, maturity);
     }
 
     // Condition tree:
-    // - Position state: collateral asset remains configured and enabled
-    // - PRICE state: configured collateral price is zero
-    // - Action: owner previews and deposits direct-custody collateral
-    // - Expected branch: deposit succeeds without PRICE and preview equals the write result
-    function test_depositCollateral_givenZeroPrice_succeedsWithoutPriceRead() public {
-        price.setPrice(address(usds), 0);
-        _mintAndApprove(address(usds), alice, 100e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
+    // - Position state: active debt with configured collateral and maturity
+    // - PRICE state: collateral is $1 and OHM is $10
+    // - Action: owner previews and deposits additional direct-custody collateral
+    // - Expected branch: preview and write return the independently calculated resulting health
+    function test_givenActiveDebt_whenCollateralIsDeposited_returnsResultingHealth() public {
+        _mintAndApprove(address(usds), alice, _HEALTH_INITIAL_COLLATERAL);
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(usds), _HEALTH_INITIAL_COLLATERAL, alice);
+
+        uint256 debtOhm = _HEALTH_SMALL_DEBT_OHM;
+        uint48 maturity = _setActiveDebtForAlice(_HEALTH_INITIAL_COLLATERAL, debtOhm);
+        _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
+        _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.CollateralDeposited(
+            alice,
             address(usds),
-            100e6,
+            alice,
+            _HEALTH_DEPOSIT_AMOUNT,
+            _HEALTH_DEPOSIT_AMOUNT
+        );
+        vm.prank(alice);
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
+            address(usds),
+            _HEALTH_DEPOSIT_AMOUNT,
             alice
         );
+
+        // total collateral USD = 1_100e6 * 1e18 / 1e6 = 1_100e18 (18 decimals)
+        // debt USD = 1e9 * 10e18 / 1e9 = 10e18 (18 decimals)
+        // market requirement = ceil(10e18 * 10_000 / 8_500)
+        //                    = 11_764_705_882_352_941_177 (18 decimals)
+        // backing requirement = ceil(1e18 * 12_500 / 10_000) = 1.25e18
+        // required collateral USD = max(market, backing) = market requirement
+        // health = floor(1_100e18 * 1e18 / 11_764_705_882_352_941_177)
+        //        = 93_499_999_999_999_999_995 (18 decimals)
+        uint256 expectedHealth = 93_499_999_999_999_999_995;
+        assertEq(previewHealth, expectedHealth, "preview resulting health");
+        assertEq(healthFactor, expectedHealth, "returned resulting health");
+        uint256 expectedTotalCollateral = _HEALTH_INITIAL_COLLATERAL + _HEALTH_DEPOSIT_AMOUNT;
+        assertEq(previewDeposit, _HEALTH_DEPOSIT_AMOUNT, "preview deposit");
+        assertEq(previewTotal, expectedTotalCollateral, "preview total collateral");
+        assertEq(deposited, _HEALTH_DEPOSIT_AMOUNT, "deposited");
+        assertEq(total, expectedTotalCollateral, "total collateral");
+        _assertPositionAndActiveDebt(
+            address(usds),
+            alice,
+            expectedTotalCollateral,
+            debtOhm,
+            maturity
+        );
+    }
+
+    // Condition tree:
+    // - Position state: active debt and health remains below 1e18 after the deposit
+    // - Action: owner previews and deposits additional direct-custody collateral
+    // - Expected branch: the improving action executes and both calls return the sub-1e18 health
+    function test_givenResultingHealthBelowOneWad_whenCollateralIsDeposited_returnsHealthAndExecutes()
+        public
+    {
+        _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
+        vm.prank(alice);
+        (
+            uint256 initialDeposited,
+            uint256 initialTotalCollateral,
+            uint256 initialHealthFactor
+        ) = burnerLoans.depositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
+
+        uint256 debtOhm = _HEALTH_LARGE_DEBT_OHM;
+        uint48 maturity = _setActiveDebtForAlice(_HEALTH_DEPOSIT_AMOUNT, debtOhm);
+        _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
+        _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
+
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
+        vm.prank(alice);
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
+            address(usds),
+            _HEALTH_DEPOSIT_AMOUNT,
+            alice
+        );
+
+        // collateral USD = 200e6 * 1e18 / 1e6 = 200e18 (18 decimals)
+        // debt USD = 100e9 * 10e18 / 1e9 = 1_000e18 (18 decimals)
+        // market requirement = ceil(1_000e18 * 10_000 / 8_500)
+        //                    = 1_176_470_588_235_294_117_648 (18 decimals)
+        // backing requirement = ceil(100e18 * 12_500 / 10_000) = 125e18
+        // required collateral USD = max(market, backing) = market requirement
+        // health = floor(200e18 * 1e18 / 1_176_470_588_235_294_117_648)
+        //        = 169_999_999_999_999_999 (18 decimals)
+        uint256 expectedHealth = 169_999_999_999_999_999;
+        uint256 expectedTotalCollateral = _HEALTH_DEPOSIT_AMOUNT * 2;
+        assertEq(initialDeposited, _HEALTH_DEPOSIT_AMOUNT, "initial deposited collateral");
+        assertEq(initialTotalCollateral, _HEALTH_DEPOSIT_AMOUNT, "initial total collateral");
+        assertEq(initialHealthFactor, type(uint256).max, "initial debt-free health");
+        assertEq(previewDeposit, _HEALTH_DEPOSIT_AMOUNT, "preview deposited collateral");
+        assertEq(previewTotal, expectedTotalCollateral, "preview total collateral");
+        assertEq(previewHealth, expectedHealth, "preview resulting health");
+        assertEq(deposited, _HEALTH_DEPOSIT_AMOUNT, "deposited collateral");
+        assertEq(total, expectedTotalCollateral, "total collateral");
+        assertEq(healthFactor, expectedHealth, "returned resulting health");
+        _assertPositionAndActiveDebt(
+            address(usds),
+            alice,
+            expectedTotalCollateral,
+            debtOhm,
+            maturity
+        );
+    }
+
+    // Condition tree:
+    // - Position state: borrower has no debt and the collateral asset remains configured and enabled
+    // - PRICE state: configured collateral price is zero
+    // - Action: owner previews and deposits direct-custody collateral
+    // - Expected branch: debt-free deposit succeeds and returns max health without reading PRICE
+    function test_givenDebtFreePosition_givenZeroPrice_whenCollateralIsDeposited() public {
+        price.setPrice(address(usds), 0);
+        _mintAndApprove(address(usds), alice, 100e6);
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 100e6, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 100e6, 100e6);
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             100e6,
             alice
@@ -296,11 +443,15 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(deposited, 100e6, "deposited");
         assertEq(total, 100e6, "total");
+        assertEq(previewHealth, type(uint256).max, "preview debt-free health");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
         assertEq(
             burnerLoans.getPosition(address(usds), alice).depositedCollateral,
             100e6,
@@ -323,16 +474,13 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         burnerLoans.depositCollateral(address(usds), 400e6, alice);
 
         _mintAndApprove(address(usds), alice, 600e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            600e6,
-            alice
-        );
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 600e6, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, 600e6, 600e6);
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             600e6,
             alice
@@ -343,8 +491,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(deposited, 600e6, "deposited");
         assertEq(total, 1_000e6, "total");
@@ -368,19 +518,16 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Custody path: direct DepositManager custody
     // - Expected branch: operator funds deposit and owner receives credited collateral
     function test_depositCollateral_givenAuthorizedOperator_creditsOwnerPosition() public {
-        _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(alice, _operator, uint48(block.timestamp + 1 days));
         _mintAndApprove(address(usds), alice, 1_000e6);
-        _mintAndApprove(address(usds), operator, 250e6);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            250e6,
-            alice
-        );
+        _mintAndApprove(address(usds), _operator, 250e6);
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 250e6, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.CollateralDeposited(operator, address(usds), alice, 250e6, 250e6);
-        vm.prank(operator);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        emit IBurnerLoans.CollateralDeposited(_operator, address(usds), alice, 250e6, 250e6);
+        vm.prank(_operator);
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             250e6,
             alice
@@ -391,8 +538,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(deposited, 250e6, "deposited");
         assertEq(total, 250e6, "total");
@@ -401,7 +550,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             250e6,
             "owner collateral"
         );
-        assertEq(usds.balanceOf(operator), 0, "operator balance");
+        assertEq(usds.balanceOf(_operator), 0, "operator balance");
         assertEq(usds.balanceOf(alice), 1_000e6, "owner balance");
     }
 
@@ -413,7 +562,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenUnauthorizedOperator_reverts() public {
         _mintAndApprove(address(usds), alice, 1e6);
 
-        vm.prank(operator);
+        vm.prank(_operator);
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
 
@@ -433,11 +582,11 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Parameters: asset is configured, onBehalfOf is owner
     // - Expected branch: authorization check reverts before custody
     function test_depositCollateral_givenExpiredAuthorization_reverts() public {
-        _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1));
+        _setAuthorizationAndExpectEvent(alice, _operator, uint48(block.timestamp + 1));
         vm.warp(block.timestamp + 2);
-        _mintAndApprove(address(usds), operator, 1e6);
+        _mintAndApprove(address(usds), _operator, 1e6);
 
-        vm.prank(operator);
+        vm.prank(_operator);
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
     }
@@ -449,9 +598,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Expected branch: authorization check reverts for every non-owner, non-operator caller
     function test_depositCollateral_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != alice);
-        vm.assume(caller_ != operator);
+        vm.assume(caller_ != _operator);
 
-        _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(alice, _operator, uint48(block.timestamp + 1 days));
         _mintAndApprove(address(usds), caller_, 1e6);
 
         vm.prank(caller_);
@@ -577,13 +726,11 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vm.prank(admin);
         rolesAdmin.revokeRole(depositOperatorRole, address(burnerLoans));
 
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            1_000e6,
-            alice
-        );
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), 1_000e6, alice);
         assertEq(previewDeposit, 1_000e6, "preview deposit");
         assertEq(previewTotal, 1_000e6, "preview total");
+        assertEq(previewHealth, type(uint256).max, "preview debt-free health");
 
         vm.prank(alice);
         vm.expectRevert(
@@ -876,7 +1023,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         );
 
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(callbackToken),
             amount,
             alice
@@ -890,6 +1037,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         );
         assertEq(deposited, amount, "deposited once");
         assertEq(total, amount, "total collateral");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
         _assertPositionAndActiveDebt(address(callbackToken), alice, amount, 0, 0);
     }
 
@@ -897,63 +1045,69 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Caller: owner
     // - Custody path: DepositManager asset uses ERC4626 vault with existing yield
     // - Rounding: vault share rate makes actual withdrawable amount differ from raw input
-    // - Expected branch: credited collateral equals DepositManager actual amount
-    function test_depositCollateral_givenVaultCustody_creditsActualAmount() public {
+    // - Expected branch: health uses the actual collateral credit reported by DepositManager
+    function test_givenVaultCustody_whenCollateralIsDeposited_healthUsesActualCredit() public {
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAssetWithYield();
-        uint128 amount = 1_000e6;
+        uint128 amount = _VAULT_DEPOSIT_AMOUNT;
+        uint48 maturity = type(uint48).max;
+        burnerLoans.setPositionForTest(
+            address(vaultAsset),
+            alice,
+            IBurnerLoans.Position({
+                depositedCollateral: 0,
+                debtOhm: _VAULT_DEBT_OHM,
+                maturity: maturity,
+                lastBorrowBlock: 0
+            })
+        );
+        burnerLoans.setActiveDebtForTest(address(vaultAsset), _VAULT_DEBT_OHM);
+        _configurePrice(address(ohm), _VAULT_OHM_PRICE);
         _mintAndApprove(address(vaultAsset), alice, amount);
-        (uint256 receiptTokenId, ) = depositManager.getReceiptToken(
-            IERC20(address(vaultAsset)),
-            BurnerLoansConstants.DEPOSIT_PERIOD,
-            address(burnerLoans)
-        );
 
-        uint256 expectedCredit = _expectedVaultCredit(vault, amount);
-        (uint256 previewCredit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(vaultAsset),
-            amount,
-            alice
-        );
+        (uint256 previewCredit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(vaultAsset), amount, alice);
 
-        vm.expectEmit(true, true, true, true, address(burnerLoans));
-        emit IBurnerLoans.CollateralDeposited(
-            alice,
-            address(vaultAsset),
-            alice,
-            amount,
-            expectedCredit
-        );
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(vaultAsset),
             amount,
             alice
         );
 
-        _assertDepositMatchesPreview(
-            address(vaultAsset),
-            alice,
-            previewCredit,
-            previewTotal,
-            deposited,
-            total
-        );
-        assertEq(deposited, expectedCredit, "deposited");
-        assertEq(total, expectedCredit, "total");
+        // Vault state before deposit: 1_000_000e6 shares and 1_000_100e6 assets.
+        // shares = floor(1_000e6 * 1_000_000e6 / 1_000_100e6) = 999_900_009
+        // actual credit = floor(999_900_009 * 1_001_100e6 / 1_000_999_900_009)
+        //               = 999_999_999 collateral units (6 decimals)
+        // collateral USD = 999_999_999 * 1e18 / 1e6 = 999_999_999e12 (18 decimals)
+        // debt USD = 1e9 * 10e18 / 1e9 = 10e18 (18 decimals)
+        // market requirement = ceil(10e18 * 10_000 / 8_500)
+        //                    = 11_764_705_882_352_941_177 (18 decimals)
+        // backing requirement = ceil(1e18 * 12_500 / 10_000) = 1.25e18
+        // health = floor(999_999_999e12 * 1e18 / 11_764_705_882_352_941_177)
+        //        = 84_999_999_914_999_999_996 (18 decimals)
+        assertEq(_expectedVaultCredit(vault, amount), _VAULT_ACTUAL_CREDIT, "manual actual credit");
+        assertEq(previewCredit, _VAULT_ACTUAL_CREDIT, "preview actual credit");
+        assertEq(previewTotal, _VAULT_ACTUAL_CREDIT, "preview total");
+        assertEq(previewHealth, _VAULT_RESULTING_HEALTH, "preview resulting health");
+        assertEq(healthFactor, _VAULT_RESULTING_HEALTH, "returned resulting health");
+        assertEq(deposited, _VAULT_ACTUAL_CREDIT, "deposited");
+        assertEq(total, _VAULT_ACTUAL_CREDIT, "total");
         assertEq(
             depositManager.getOperatorLiabilities(
                 IERC20(address(vaultAsset)),
                 address(burnerLoans)
             ),
-            expectedCredit,
+            _VAULT_ACTUAL_CREDIT,
             "deposit manager liabilities"
         );
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "burner loans asset residual");
         assertEq(vault.balanceOf(address(burnerLoans)), 0, "burner loans share residual");
-        assertEq(
-            receiptTokenManager.balanceOf(address(burnerLoans), receiptTokenId),
-            expectedCredit,
-            "receipt balance"
+        _assertPositionAndActiveDebt(
+            address(vaultAsset),
+            alice,
+            _VAULT_ACTUAL_CREDIT,
+            _VAULT_DEBT_OHM,
+            maturity
         );
     }
 
@@ -965,16 +1119,13 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenDirectCustodyAmount_creditsAmount(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, 1_000_000e6));
         _mintAndApprove(address(usds), alice, amount_);
-        (uint256 previewDeposit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(usds),
-            amount_,
-            alice
-        );
+        (uint256 previewDeposit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(usds), amount_, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(alice, address(usds), alice, amount_, amount_);
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(usds),
             amount_,
             alice
@@ -985,8 +1136,10 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             alice,
             previewDeposit,
             previewTotal,
+            previewHealth,
             deposited,
-            total
+            total,
+            healthFactor
         );
         assertEq(deposited, amount_, "deposited");
         assertEq(total, amount_, "total");
@@ -1012,11 +1165,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vm.assume(expectedCredit > 0);
         // The view quote is the exact assets redeemable from the shares previewed before deposit.
         uint256 expectedPreviewCredit = vault.previewRedeem(vault.previewDeposit(amount_));
-        (uint256 previewCredit, uint256 previewTotal) = burnerLoans.previewDepositCollateral(
-            address(vaultAsset),
-            amount_,
-            alice
-        );
+        (uint256 previewCredit, uint256 previewTotal, uint256 previewHealth) = burnerLoans
+            .previewDepositCollateral(address(vaultAsset), amount_, alice);
 
         vm.expectEmit(true, true, true, true, address(burnerLoans));
         emit IBurnerLoans.CollateralDeposited(
@@ -1027,7 +1177,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             expectedCredit
         );
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(vaultAsset),
             amount_,
             alice
@@ -1037,6 +1187,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         assertEq(total, expectedCredit, "total");
         assertEq(previewCredit, expectedPreviewCredit, "preview credit");
         assertEq(previewTotal, previewCredit, "preview total");
+        assertEq(previewHealth, type(uint256).max, "preview debt-free health");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
         assertEq(
             burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral,
             expectedCredit,
@@ -1069,18 +1221,15 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         _seedVault(vaultAsset, vault, seededAssets);
         _mintAndApprove(address(vaultAsset), alice, amount);
 
-        (uint256 quotedCredit, uint256 quotedTotal) = burnerLoans.previewDepositCollateral(
-            address(vaultAsset),
-            amount,
-            alice
-        );
+        (uint256 quotedCredit, uint256 quotedTotal, uint256 quotedHealth) = burnerLoans
+            .previewDepositCollateral(address(vaultAsset), amount, alice);
         vaultAsset.mint(address(vault), yield_);
         uint256 expectedCredit = _expectedVaultCredit(vault, amount);
 
         assertTrue(quotedCredit != expectedCredit, "quote changes after yield");
 
         vm.prank(alice);
-        (uint256 deposited, uint256 total) = burnerLoans.depositCollateral(
+        (uint256 deposited, uint256 total, uint256 healthFactor) = burnerLoans.depositCollateral(
             address(vaultAsset),
             amount,
             alice
@@ -1089,6 +1238,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         assertEq(deposited, expectedCredit, "deposited");
         assertEq(total, expectedCredit, "total");
         assertEq(total, quotedTotal - quotedCredit + deposited, "updated total");
+        assertEq(quotedHealth, type(uint256).max, "quoted debt-free health");
+        assertEq(healthFactor, type(uint256).max, "returned debt-free health");
         assertEq(
             burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral,
             expectedCredit,

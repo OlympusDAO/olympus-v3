@@ -88,7 +88,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     // repayAndWithdraw
     // given the caller has active debt
     //  when repaying partially without withdrawing collateral
-    //   then the repayment health sentinel is preserved
+    //   then the independently calculated resulting health is returned
     function test_givenActiveDebt_whenRepayingPartially_whenCollateralAmountIsZero() public {
         _openPosition();
         uint128 repayAmount = 40e9;
@@ -105,7 +105,14 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         assertEq(result.repaidOhm, repayAmount, "repaid OHM");
         assertEq(result.refundedOhm, 0, "refunded OHM");
         assertEq(result.remainingCollateral, _COLLATERAL, "remaining collateral");
-        assertEq(result.healthFactor, 0, "unknown health sentinel");
+        // collateral USD = 2_000e6 * 1e18 / 1e6 = 2_000e18 (18 decimals)
+        // remaining debt USD = 60e9 * 10e18 / 1e9 = 600e18 (18 decimals)
+        // market requirement = ceil(600e18 * 10_000 / 8_500)
+        //                    = 705_882_352_941_176_470_589 (18 decimals)
+        // backing requirement = ceil(60e18 * 12_500 / 10_000) = 75e18
+        // health = floor(2_000e18 * 1e18 / 705_882_352_941_176_470_589)
+        //        = 2_833_333_333_333_333_333 (18 decimals)
+        assertEq(result.healthFactor, 2_833_333_333_333_333_333, "resulting health factor");
         assertEq(
             burnerLoans.getPosition(address(usds), alice).debtOhm,
             _BORROW - repayAmount,

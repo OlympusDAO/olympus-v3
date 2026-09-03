@@ -377,7 +377,8 @@ interface IBurnerLoans {
     /// @notice Projected result of a repayment.
     /// @param repayAmount Principal repaid, in OHM decimals.
     /// @param remainingDebtOhm Principal remaining after repayment, in OHM decimals.
-    /// @param resultingHealthFactor Max uint after full repayment; zero after a partial repayment.
+    /// @param resultingHealthFactor Health factor after repayment, scaled by 1e18. Max uint after
+    ///        full repayment.
     /// @param executable Whether the repayment is executable under current state.
     struct RepayPreview {
         uint256 repayAmount;

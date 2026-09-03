@@ -32,11 +32,14 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         assertEq(result.totalCollateral, _COLLATERAL, "total collateral");
         assertEq(result.resultingDebtOhm, _BORROW, "resulting debt");
         assertEq(result.maturity, position.maturity, "maturity");
-        assertEq(
-            result.healthFactor,
-            burnerLoans.positionHealthFactor(address(usds), _COLLATERAL, _BORROW),
-            "health factor"
-        );
+        // collateral USD = 2_000e6 * 1e18 / 1e6 = 2_000e18 (18 decimals)
+        // debt USD = 100e9 * 10e18 / 1e9 = 1_000e18 (18 decimals)
+        // market requirement = ceil(1_000e18 * 10_000 / 8_500)
+        //                    = 1_176_470_588_235_294_117_648 (18 decimals)
+        // backing requirement = ceil(100e18 * 12_500 / 10_000) = 125e18
+        // health = floor(2_000e18 * 1e18 / 1_176_470_588_235_294_117_648)
+        //        = 1_699_999_999_999_999_999 (18 decimals)
+        assertEq(result.healthFactor, 1_699_999_999_999_999_999, "health factor");
         assertEq(position.debtOhm, _BORROW, "position debt");
         assertEq(ohm.balanceOf(alice), _BORROW, "borrowed OHM");
         assertEq(usds.balanceOf(address(trsry)), treasuryBefore + result.fee, "treasury fee");

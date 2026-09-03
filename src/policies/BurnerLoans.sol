@@ -203,7 +203,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external nonReentrant returns (uint256, uint256) {
+    ) external nonReentrant returns (uint256, uint256, uint256) {
         _requireEnabled();
         return BurnerLoansCustody.depositCollateral(asset_, amount_, onBehalfOf_);
     }
@@ -269,10 +269,10 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
     ///      - `repayOhm_` is zero, exceeds principal, or is submitted in the latest borrow block.
     ///      - The OHM transfer fails or Inventory receives an inexact amount.
     ///      - FLOAN debt reduction or Inventory settlement fails.
-    /// @dev Repayment deliberately avoids PRICE reads so debt reduction remains available when
-    ///      oracle data is stale. Returns FLOAN's actual remaining principal and the established
-    ///      no-oracle health sentinel. The transfer must increase Burner Loans Inventory's balance
-    ///      by exactly `repayOhm_`.
+    ///      - OHM or collateral PRICE is unsupported, zero, or stale when debt remains.
+    /// @dev Returns FLOAN's actual remaining principal and the resulting health factor. A full
+    ///      repayment returns max uint without reading PRICE. The transfer must increase Burner
+    ///      Loans Inventory's balance by exactly `repayOhm_`.
     function repay(
         address asset_,
         uint128 repayOhm_,
@@ -447,7 +447,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external view override returns (uint256 depositedCollateral, uint256 totalCollateral) {
+    ) external view override returns (uint256, uint256, uint256) {
         _requireEnabled();
         return
             BurnerLoansView.previewDepositCollateralForBorrower(

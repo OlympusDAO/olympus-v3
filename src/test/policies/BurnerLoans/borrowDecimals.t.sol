@@ -186,8 +186,10 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - OHM, collateral, and PRICE decimals: supplied by the concrete matrix configuration
     // - Collateral: one smallest native unit below the minimum healthy amount
-    // - Expected branch: preview and borrow revert with the exact rounded health factor
-    function test_givenLaunchMaximumLtv_whenOneCollateralUnitBelowHealthBoundary_reverts() public {
+    // - Expected branch: preview returns the exact rounded health as unexecutable; borrow reverts
+    function test_givenLaunchMaximumLtv_whenOneCollateralUnitBelowHealthBoundary_previewReturnsHealthAndBorrowReverts()
+        public
+    {
         LaunchBoundaryScenario memory scenario = _launchBoundaryScenario();
         _configureBoundaryPrices();
         _depositBoundaryCollateral(scenario.belowCollateral);
@@ -198,8 +200,13 @@ abstract contract BurnerLoansBorrowDecimalsTest is BurnerLoansBorrowTestBase {
         );
         uint128 borrowAmount = uint128(100 * 10 ** _ohmDecimals());
 
-        vm.expectRevert(error);
-        burnerLoans.previewBorrow(address(usds), borrowAmount, alice);
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            borrowAmount,
+            alice
+        );
+        assertEq(preview.resultingHealthFactor, scenario.belowHealth, "preview boundary health");
+        assertFalse(preview.executable, "preview boundary executable");
 
         vm.prank(alice);
         vm.expectRevert(error);

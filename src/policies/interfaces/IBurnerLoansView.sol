@@ -120,17 +120,22 @@ interface IBurnerLoansView is IBurnerLoans {
 
     /// @notice Projects a collateral deposit for a borrower.
     /// @dev Reverts if Burner Loans, originations, or custody is disabled; the asset is unavailable;
-    ///      the amount is zero; or custody cannot preview the deposit.
+    ///      the amount is zero; custody cannot preview the deposit; or required PRICE data is
+    ///      unavailable for an indebted position.
     /// @param asset_ Collateral asset to deposit.
     /// @param amount_ Proposed collateral deposit amount, in collateral token decimals.
     /// @param onBehalfOf_ Borrower whose position receives the collateral credit.
     /// @return depositedCollateral Projected collateral credit created by the deposit.
     /// @return totalCollateral Projected borrower collateral credit after the deposit.
+    /// @return healthFactor Projected borrower health factor after the deposit, scaled by 1e18.
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
         address onBehalfOf_
-    ) external view returns (uint256 depositedCollateral, uint256 totalCollateral);
+    )
+        external
+        view
+        returns (uint256 depositedCollateral, uint256 totalCollateral, uint256 healthFactor);
 
     /// @notice Projects a collateral withdrawal from a borrower's position.
     /// @dev Reverts if Burner Loans or custody is disabled, the asset or position is unavailable,
@@ -150,8 +155,9 @@ interface IBurnerLoansView is IBurnerLoans {
 
     /// @notice Projects an OHM borrow against a collateral position.
     /// @dev Reverts if Burner Loans, originations, or Inventory is disabled; the asset or position
-    ///      is unavailable; the amount is zero; price or custody validation fails; or a debt-cap,
-    ///      maturity, or health bound would be exceeded.
+    ///      is unavailable; the amount is zero; price or custody validation fails; or a debt-cap
+    ///      or maturity bound would be exceeded. An unhealthy current or resulting position is
+    ///      returned with `preview.executable == false`, including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param ohmAmount_ Principal requested, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
@@ -164,7 +170,10 @@ interface IBurnerLoansView is IBurnerLoans {
 
     /// @notice Projects an OHM principal repayment for a borrower.
     /// @dev Reverts if Burner Loans is disabled, the asset or debt position is unavailable, the
-    ///      amount is zero or exceeds debt, or repayment is attempted in the latest borrow block.
+    ///      amount is zero or exceeds debt, repayment is attempted in the latest borrow block, or
+    ///      required PRICE data is unavailable when projected debt remains. Projected health is
+    ///      returned even when it is below 1e18; repayment remains executable because it reduces
+    ///      debt.
     /// @param asset_ Collateral asset securing the position.
     /// @param repayOhm_ Principal to repay, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose debt is evaluated.
@@ -177,8 +186,9 @@ interface IBurnerLoansView is IBurnerLoans {
 
     /// @notice Projects an active position's maturity extension.
     /// @dev Reverts if Burner Loans or originations are disabled, the asset or position is
-    ///      unavailable, the term count is invalid, the position is matured or unhealthy, or the
-    ///      resulting maturity exceeds its configured horizon.
+    ///      unavailable, the term count is invalid, the position is matured, required PRICE data
+    ///      is unavailable, or the resulting maturity exceeds its configured horizon. An unhealthy
+    ///      position is returned with `preview.executable == false`, including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
     /// @param termCount_ Number of configured terms added to the maturity.

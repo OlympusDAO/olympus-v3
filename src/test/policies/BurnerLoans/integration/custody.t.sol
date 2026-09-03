@@ -209,15 +209,16 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         );
 
         vm.prank(alice);
-        (uint256 depositedAmount, uint256 resultingCollateral) = burnerLoans.depositCollateral(
-            address(vaultAsset),
-            transferredAmount,
-            alice
-        );
+        (
+            uint256 depositedAmount,
+            uint256 resultingCollateral,
+            uint256 resultingHealthFactor
+        ) = burnerLoans.depositCollateral(address(vaultAsset), transferredAmount, alice);
 
         assertLt(depositedAmount, transferredAmount, "credited less than transferred amount");
         assertEq(depositedAmount, quotedAmount, "DepositManager actual amount");
         assertEq(resultingCollateral, depositedAmount, "returned total collateral");
+        assertEq(resultingHealthFactor, type(uint256).max, "returned debt-free health");
         assertEq(
             burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral,
             depositedAmount,

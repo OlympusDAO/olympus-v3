@@ -429,11 +429,15 @@ abstract contract BurnerLoansTest is Test {
         address account_,
         uint256 previewDeposit_,
         uint256 previewTotal_,
+        uint256 previewHealth_,
         uint256 deposited_,
-        uint256 total_
+        uint256 total_,
+        uint256 health_
     ) internal view {
         assertEq(previewDeposit_, deposited_, "preview deposit");
         assertEq(previewTotal_, total_, "preview total");
+        assertEq(previewHealth_, type(uint256).max, "preview debt-free health");
+        assertEq(health_, type(uint256).max, "returned debt-free health");
         _assertFloanPositionMatchesBurnerLoans(asset_, account_);
     }
 
