@@ -56,6 +56,12 @@ contract BurnerLoansHandler is Test {
     uint256 public unexpectedRepayFailures;
     uint256 public unexpectedWithdrawFailures;
     uint256 public unexpectedExtendFailures;
+    uint256 public unexecutableBorrowAttempts;
+    uint256 public unexecutableWithdrawAttempts;
+    uint256 public unexecutableExtendAttempts;
+    uint256 public unexpectedUnexecutableBorrowSuccesses;
+    uint256 public unexpectedUnexecutableWithdrawSuccesses;
+    uint256 public unexpectedUnexecutableExtendSuccesses;
     uint256 public sameBlockRepayViolations;
     uint256 public claimYieldBoundViolations;
     uint256 public claimYieldConservationViolations;
@@ -170,9 +176,12 @@ contract BurnerLoansHandler is Test {
         uint128 amount = uint128(bound(amountSeed_, 1, 1_000e9));
         collateral.mint(actor, 10_000e18);
 
+        bool previewExecutable;
         try burnerLoans.previewBorrow(address(collateral), amount, actor) returns (
-            IBurnerLoans.BorrowPreview memory
-        ) {} catch {
+            IBurnerLoans.BorrowPreview memory preview
+        ) {
+            previewExecutable = preview.executable;
+        } catch {
             return;
         }
 
@@ -186,6 +195,11 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), amount, actor, actor, type(uint256).max)
             )
         );
+        if (!previewExecutable) {
+            ++unexecutableBorrowAttempts;
+            if (success) ++unexpectedUnexecutableBorrowSuccesses;
+            return;
+        }
         if (!success) {
             ++unexpectedBorrowFailures;
             return;
@@ -349,15 +363,14 @@ contract BurnerLoansHandler is Test {
         if (deposited == 0) return;
         uint128 amount = uint128(bound(amountSeed_, 1, deposited));
 
-        IBurnerLoans.WithdrawPreview memory preview;
+        bool previewExecutable;
         try burnerLoans.previewWithdrawCollateral(address(collateral), amount, actor) returns (
-            IBurnerLoans.WithdrawPreview memory preview_
+            IBurnerLoans.WithdrawPreview memory preview
         ) {
-            preview = preview_;
+            previewExecutable = preview.executable;
         } catch {
             return;
         }
-        if (!preview.executable) return;
 
         vm.prank(actor);
         (bool success, ) = address(burnerLoans).call(
@@ -366,6 +379,11 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), amount, actor, actor)
             )
         );
+        if (!previewExecutable) {
+            ++unexecutableWithdrawAttempts;
+            if (success) ++unexpectedUnexecutableWithdrawSuccesses;
+            return;
+        }
         if (!success) ++unexpectedWithdrawFailures;
     }
 
@@ -394,9 +412,12 @@ contract BurnerLoansHandler is Test {
         uint16 termCount = uint16(bound(termSeed_, 1, 2));
         collateral.mint(actor, 10_000e18);
 
+        bool previewExecutable;
         try burnerLoans.previewExtend(address(collateral), actor, termCount) returns (
-            IBurnerLoans.ExtendPreview memory
-        ) {} catch {
+            IBurnerLoans.ExtendPreview memory preview
+        ) {
+            previewExecutable = preview.executable;
+        } catch {
             return;
         }
 
@@ -407,6 +428,11 @@ contract BurnerLoansHandler is Test {
                 (address(collateral), actor, termCount, type(uint256).max)
             )
         );
+        if (!previewExecutable) {
+            ++unexecutableExtendAttempts;
+            if (success) ++unexpectedUnexecutableExtendSuccesses;
+            return;
+        }
         if (!success) ++unexpectedExtendFailures;
     }
 
@@ -478,6 +504,8 @@ contract BurnerLoansHandler is Test {
         try burnerLoans.previewBorrow(address(collateral), uint128(_OHM_SCALE), actor) returns (
             IBurnerLoans.BorrowPreview memory preview
         ) {
+            if (!preview.executable) ++unexecutableBorrowAttempts;
+
             vm.prank(actor);
             try
                 burnerLoans.borrow(
@@ -487,7 +515,13 @@ contract BurnerLoansHandler is Test {
                     actor,
                     preview.fee
                 )
-            {} catch {
+            {
+                if (!preview.executable) {
+                    ++unexpectedUnexecutableBorrowSuccesses;
+                    return;
+                }
+            } catch {
+                if (!preview.executable) return;
                 ++positionReuseViolations;
                 return;
             }

@@ -71,6 +71,13 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.borrow(0, 100e9);
         vm.roll(block.number + 1);
 
+        // Seed the unexecutable preview branches so their rejection checks cannot pass vacuously.
+        handler.moveOhmPrice(30e18);
+        handler.borrow(0, 1e9);
+        handler.withdraw(0, 1e18);
+        handler.extend(0, 1);
+        handler.moveOhmPrice(10e18);
+
         bytes4[] memory selectors = new bytes4[](21);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
@@ -206,6 +213,39 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         assertEq(handler.unexpectedBorrowFailures(), 0, "eligible borrow failed");
         assertEq(handler.unexpectedWithdrawFailures(), 0, "eligible withdrawal failed");
         assertEq(handler.unexpectedExtendFailures(), 0, "eligible extension failed");
+    }
+
+    // invariant
+    // given any sequence of Burner Loans handler calls
+    //  when an action's preview reports that it is not executable
+    //   then the corresponding state-changing action reverts
+    function invariant_UnexecutableActionsRevert() public view {
+        assertGt(handler.unexecutableBorrowAttempts(), 0, "unexecutable borrow was not exercised");
+        assertGt(
+            handler.unexecutableWithdrawAttempts(),
+            0,
+            "unexecutable withdrawal was not exercised"
+        );
+        assertGt(
+            handler.unexecutableExtendAttempts(),
+            0,
+            "unexecutable extension was not exercised"
+        );
+        assertEq(
+            handler.unexpectedUnexecutableBorrowSuccesses(),
+            0,
+            "unexecutable borrow succeeded"
+        );
+        assertEq(
+            handler.unexpectedUnexecutableWithdrawSuccesses(),
+            0,
+            "unexecutable withdrawal succeeded"
+        );
+        assertEq(
+            handler.unexpectedUnexecutableExtendSuccesses(),
+            0,
+            "unexecutable extension succeeded"
+        );
     }
 
     // invariant
