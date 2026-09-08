@@ -7,6 +7,7 @@ import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoo
 
 // Contracts
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRouterCandidate} from "src/test/policies/bridge/mocks/MockRouterCandidate.sol";
 
 import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
@@ -123,6 +124,22 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
         config.setRouter(address(0));
     }
 
+    // when the caller does not hold the admin role
+    //   when the router equals the current router
+    //     [X] it reverts with ROLES_RequireRole("admin")
+    // Pins the masking order: the role check answers before the unchanged check. The rig's
+    // router is the current one, so no candidate needs installing first.
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenValueEqualsCurrentRouter_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+
+        _expectRevertRequireRole(ADMIN_ROLE);
+        vm.prank(caller_);
+        config.setRouter(address(ccipRouter));
+    }
+
     // when the router is the zero address
     //   [X] it reverts with CCIPTokenPoolConfig_InvalidAddress("router")
     // Pins the error identity: the dedicated zero check answers before the code probe, which
@@ -162,15 +179,18 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
 
     // when the router candidate does not implement typeAndVersion
     //   [X] it reverts with CCIPTokenPoolConfig_InvalidRouter
-    // The probe call rejects the unknown selector; MockCCIPRouter itself is such a candidate
+    // The probe call rejects the unknown selector; MockCCIPRouter itself is such a candidate.
+    // A fresh instance rather than the rig's router, which the unchanged check would reject
+    // first as the pool's current router.
     function test_whenRouterDoesNotImplementTypeAndVersion_reverts()
         public
         givenEnabled
         givenPoolOwnershipAccepted
     {
-        // The mock router of the rig declares no typeAndVersion and no fallback, so the probe
-        // call itself fails
-        address candidate = address(ccipRouter);
+        // The mock router declares no typeAndVersion and no fallback, so the probe call itself
+        // fails
+        address candidate = address(new MockCCIPRouter());
+        vm.label(candidate, "routerWithoutTypeAndVersion");
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -368,10 +388,13 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
     }
 
     // when the value equals the current router
-    //   [X] it writes and emits both events again
-    // The valid candidate is installed first and then re-set; the rig's initial
-    // MockCCIPRouter cannot be re-set because it does not answer the probe.
-    function test_whenValueEqualsCurrentRouter() public givenEnabled givenPoolOwnershipAccepted {
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("router")
+    // The valid candidate is installed first and then re-set
+    function test_whenValueEqualsCurrentRouter_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
         address candidate = address(
             _newRouterCandidate(MockRouterCandidate.ReturnMode.ValidVersion)
         );
@@ -380,14 +403,42 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
         config.setRouter(candidate);
         assertEq(pool.getRouter(), candidate, "the pool router should be the candidate");
 
-        // The old and the new value of the pool event are the same address on the re-set
-        vm.expectEmit(true, true, true, true, address(pool));
-        emit ICCIPTokenPoolAdmin.RouterUpdated(candidate, candidate);
-        vm.expectEmit(true, true, true, true, address(config));
-        emit ICCIPTokenPoolConfig.PoolRouterSet(candidate);
+        _expectRevertAddressUnchanged("router");
         vm.prank(admin);
         config.setRouter(candidate);
 
         assertEq(pool.getRouter(), candidate, "the pool router should still be the candidate");
+    }
+
+    // when the value equals the current router
+    //   given the current router no longer answers the probe
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("router")
+    // Pins the order: the unchanged check answers before the probe, so the installed router's
+    // answer has no bearing on the rejection. The candidate is installed while valid and then
+    // switched to a reverting answer; the rig's initial MockCCIPRouter cannot serve this case
+    // because it never answered the probe.
+    function test_whenValueEqualsCurrentRouter_givenRouterNoLongerAnswersProbe_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        MockRouterCandidate candidate = _newRouterCandidate(
+            MockRouterCandidate.ReturnMode.ValidVersion
+        );
+        address candidateAddress = address(candidate);
+
+        vm.prank(admin);
+        config.setRouter(candidateAddress);
+        candidate.setMode(MockRouterCandidate.ReturnMode.Reverting);
+
+        _expectRevertAddressUnchanged("router");
+        vm.prank(admin);
+        config.setRouter(candidateAddress);
+
+        assertEq(
+            pool.getRouter(),
+            candidateAddress,
+            "the pool router should still be the candidate"
+        );
     }
 }

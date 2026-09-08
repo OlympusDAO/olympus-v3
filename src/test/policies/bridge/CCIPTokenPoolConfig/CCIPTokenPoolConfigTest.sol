@@ -7,6 +7,7 @@ import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Libraries
@@ -650,6 +651,16 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     function _expectRevertOnlyCallableByOwner() internal {
         vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPoolAdmin.OnlyCallableByOwner.selector));
+    }
+
+    /// @dev The error of a setter called with the value it already holds, naming the parameter
+    function _expectRevertAddressUnchanged(string memory parameter_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
+                parameter_
+            )
+        );
     }
 
     // ========== LIFECYCLE MODIFIERS ========== //

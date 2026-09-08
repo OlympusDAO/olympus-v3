@@ -3,6 +3,7 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {IERC20} from "@chainlink-ccip-1.6.0/vendor/openzeppelin-solidity/v4.8.3/contracts/token/ERC20/IERC20.sol";
+import {ICCIPLockReleaseTokenPool} from "src/external/bridge/ICCIPLockReleaseTokenPool.sol";
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenAdminRegistry} from "src/external/bridge/ICCIPTokenAdminRegistry.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -191,19 +192,24 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
     }
 
     /// @notice The OCG proposal, replayed as pranked calls of the OCG timelock in
-    ///         the proposal's action order. The role grant is conditional on the live state,
-    ///         exactly as the proposal builds it.
+    ///         the proposal's action order. The role grant and the three pool authority
+    ///         writes are conditional on the live state, exactly as the proposal builds them:
+    ///         the config rejects a write of the value it already holds, and the live pool
+    ///         carries no rate limit admin.
     function _ocgProposalAcceptAndWireStack() internal {
         address ohmAddress = address(ohm);
         bool needsBridgeAdminGrant = !roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE);
+        bool needsRebalancer = ICCIPLockReleaseTokenPool(address(pool)).getRebalancer() !=
+            ocgTimelock;
+        bool needsRateLimitAdminClear = pool.getRateLimitAdmin() != address(0);
         vm.startPrank(ocgTimelock);
         registry.acceptAdminRole(ohmAddress);
         if (needsBridgeAdminGrant) rolesAdmin.grantRole(BRIDGE_ADMIN_ROLE, daoMS);
         config.enable("");
         config.acceptPoolOwnership();
         config.setConfigOperator(address(timelock));
-        config.setRebalancer(ocgTimelock);
-        config.setRateLimitAdmin(address(0));
+        if (needsRebalancer) config.setRebalancer(ocgTimelock);
+        if (needsRateLimitAdminClear) config.setRateLimitAdmin(address(0));
         timelock.enable("");
         for (uint256 i; i < burnMintRoutes.length; ++i) {
             config.addChain(_toChainUpdate(burnMintRoutes[i]));

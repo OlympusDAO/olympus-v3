@@ -87,6 +87,23 @@ contract CCIPTokenPoolConfigTests_setRateLimitAdmin is CCIPTokenPoolConfigTest {
     }
 
     // when the caller does not hold the admin role
+    //   when the rate limit admin equals the current value
+    //     [X] it reverts with ROLES_RequireRole("admin")
+    // Pins the masking order: the role check answers before the unchanged check. The pool
+    // rate limit admin starts unset, so the zero address is the current value.
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenValueEqualsCurrentValue_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+        assertEq(pool.getRateLimitAdmin(), address(0), "the rate limit admin should start unset");
+
+        _expectRevertRequireRole(ADMIN_ROLE);
+        vm.prank(caller_);
+        config.setRateLimitAdmin(address(0));
+    }
+
+    // when the caller does not hold the admin role
     //   given the pool is owned by an unrelated third party
     //     [X] it reverts with ROLES_RequireRole("admin")
     // Pins the masking order: the role check answers before the pool's owner check
@@ -99,6 +116,24 @@ contract CCIPTokenPoolConfigTests_setRateLimitAdmin is CCIPTokenPoolConfigTest {
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);
         config.setRateLimitAdmin(caller_);
+    }
+
+    // when the rate limit admin equals the current value
+    //   given the pool is owned by an unrelated third party
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rateLimitAdmin")
+    // Pins the order: the unchanged check reads the pool and answers before the pool's owner
+    // check would. The pool rate limit admin is still unset after the migration.
+    function test_whenValueEqualsCurrentValue_givenPoolOwnedByThirdParty_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenPoolOwnedByThirdParty
+    {
+        assertEq(pool.getRateLimitAdmin(), address(0), "the rate limit admin should be unset");
+
+        _expectRevertAddressUnchanged("rateLimitAdmin");
+        vm.prank(admin);
+        config.setRateLimitAdmin(address(0));
     }
 
     // given the pool is owned by an unrelated third party
@@ -176,16 +211,18 @@ contract CCIPTokenPoolConfigTests_setRateLimitAdmin is CCIPTokenPoolConfigTest {
     }
 
     // when the value equals the current rate limit admin
-    //   [X] it writes and emits both events again
-    function test_whenValueEqualsCurrentValue() public givenEnabled givenPoolOwnershipAccepted {
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rateLimitAdmin")
+    // The holder is set first and then re-set
+    function test_whenValueEqualsCurrentValue_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
         address rateLimitAdmin = makeAddr("poolRateLimitAdmin");
         vm.prank(admin);
         config.setRateLimitAdmin(rateLimitAdmin);
 
-        vm.expectEmit(true, true, true, true, address(pool));
-        emit ICCIPTokenPoolAdmin.RateLimitAdminSet(rateLimitAdmin);
-        vm.expectEmit(true, true, true, true, address(config));
-        emit ICCIPTokenPoolConfig.PoolRateLimitAdminSet(rateLimitAdmin);
+        _expectRevertAddressUnchanged("rateLimitAdmin");
         vm.prank(admin);
         config.setRateLimitAdmin(rateLimitAdmin);
 
@@ -196,12 +233,34 @@ contract CCIPTokenPoolConfigTests_setRateLimitAdmin is CCIPTokenPoolConfigTest {
         );
     }
 
+    // when the rate limit admin is the zero address
+    //   given the rate limit admin is unset
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rateLimitAdmin")
+    // Zero is a value in its own right: clearing a role that is already unset is an unchanged
+    // write, not a no-op. This is the steady state the proposal reads and skips.
+    function test_whenRateLimitAdminIsZeroAddress_givenRateLimitAdminUnset_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        assertEq(pool.getRateLimitAdmin(), address(0), "the rate limit admin should start unset");
+
+        _expectRevertAddressUnchanged("rateLimitAdmin");
+        vm.prank(admin);
+        config.setRateLimitAdmin(address(0));
+
+        assertEq(pool.getRateLimitAdmin(), address(0), "the rate limit admin should stay unset");
+    }
+
     // when the rate limit admin is any address
     //   [X] the pool reports that address
-    // No candidate validation exists. Fuzzed over the address domain.
+    // No candidate validation exists. Fuzzed over the address domain less the zero address,
+    // which is the current value of the unset role and has its own test.
     function test_whenRateLimitAdminIsAnyAddress(
         address rateLimitAdmin_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(rateLimitAdmin_ != address(0));
+
         vm.expectEmit(true, true, true, true, address(config));
         emit ICCIPTokenPoolConfig.PoolRateLimitAdminSet(rateLimitAdmin_);
         vm.prank(admin);

@@ -52,6 +52,12 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         it starts unset, `setConfigOperator` replaces it immediately, and the zero address
 ///         revokes it. The route and rate limit functions accept it alongside the admin role.
 ///
+///         The address setters (`setConfigOperator`, `setRouter`, `setRebalancer`,
+///         `setRateLimitAdmin`) and `setRemoteToken` reject the value they already hold
+///         (`CCIPTokenPoolConfig_AddressUnchanged`), the zero address included where it is a
+///         value, so a call that lands always changes state; the check runs after the lifecycle
+///         and role gates and before any other validation of the candidate.
+///
 ///         Every check that this contract adds on top of the pool is shared between the
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
 ///         checks that the pool performs itself, so that a caller can learn the exact revert of a
@@ -278,25 +284,46 @@ contract CCIPTokenPoolConfig is
         emit PoolOwnershipTransferRequested(newOwner_);
     }
 
+    /// @inheritdoc IConfigOperator
+    /// @dev The mix-in setter, gated here with the lifecycle and role checks of the other admin
+    ///      functions and rejecting the value already held. The zero address revokes the operator
+    ///      and is a value in its own right: revoking an operator that is already unset reverts
+    ///      like any other unchanged write.
+    ///
+    ///      Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the admin role.
+    ///      - `configOperator_` is the current config operator.
+    function setConfigOperator(address configOperator_) public override givenEnabled onlyAdminRole {
+        if (configOperator_ == configOperator) {
+            revert CCIPTokenPoolConfig_AddressUnchanged("configOperator");
+        }
+
+        super.setConfigOperator(configOperator_);
+    }
+
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The candidate is probed with a static call to `typeAndVersion()`, which must succeed
     ///      within `_TYPE_AND_VERSION_PROBE_GAS` and return at least the ABI encoding of an empty
     ///      string; the string itself is never decoded. The probe runs through `SafeCall`, which
     ///      rejects a candidate without code before calling it and copies at most the 64 bytes the
     ///      check measures, so neither the gas nor the memory this call pays for depends on the
-    ///      candidate. Setting the current value writes and emits. Whether the candidate serves
-    ///      the configured routes is not checked.
+    ///      candidate. The current router is rejected before the probe runs, so the answer of the
+    ///      installed router has no bearing on the rejection. Whether the candidate serves the
+    ///      configured routes is not checked.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the admin role.
     ///      - `router_` is the zero address.
+    ///      - `router_` is the current router of the pool.
     ///      - `router_` holds no code.
     ///      - The `typeAndVersion()` probe of `router_` reverts, exhausts its gas budget or
     ///        answers with less than the ABI encoding of an empty string.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRouter(address router_) external override givenEnabled onlyAdminRole {
         if (router_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("router");
+        if (router_ == _POOL.getRouter()) revert CCIPTokenPoolConfig_AddressUnchanged("router");
 
         (bool success, bytes memory returnData) = SafeCall.safeStaticCall(
             router_,
@@ -315,15 +342,20 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The pool emits no event for this change; `PoolRebalancerSet` is the only log of it.
-    ///      Setting the current value writes and emits.
+    ///      The zero address clears the rebalancer and is a value in its own right: clearing a
+    ///      rebalancer that is already unset reverts like any other unchanged write.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The pool is not a liquidity container.
+    ///      - `rebalancer_` is the current rebalancer of the pool.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRebalancer(address rebalancer_) external override givenEnabled onlyAdminRole {
         _requireLiquidityContainer();
+        if (rebalancer_ == ICCIPLockReleaseTokenPool(address(_POOL)).getRebalancer()) {
+            revert CCIPTokenPoolConfig_AddressUnchanged("rebalancer");
+        }
 
         ICCIPLockReleaseTokenPool(address(_POOL)).setRebalancer(rebalancer_);
 
@@ -331,15 +363,21 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
-    /// @dev Setting the current value writes and emits.
+    /// @dev The zero address clears the role and is a value in its own right: clearing a rate
+    ///      limit admin that is already unset reverts like any other unchanged write.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the admin role.
+    ///      - `rateLimitAdmin_` is the current rate limit admin of the pool.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRateLimitAdmin(
         address rateLimitAdmin_
     ) external override givenEnabled onlyAdminRole {
+        if (rateLimitAdmin_ == _POOL.getRateLimitAdmin()) {
+            revert CCIPTokenPoolConfig_AddressUnchanged("rateLimitAdmin");
+        }
+
         _POOL.setRateLimitAdmin(rateLimitAdmin_);
 
         emit PoolRateLimitAdminSet(rateLimitAdmin_);
@@ -725,21 +763,11 @@ contract CCIPTokenPoolConfig is
     // ========== CONFIG OPERATOR HOOKS ========== //
 
     /// @inheritdoc ConfigOperatorSingleStep
-    /// @dev Setting the current operator writes and emits, and setting the zero address revokes
-    ///      the operator; the mix-in setter accepts both. The hook reverts on failure, so the
-    ///      mix-in never reports `ConfigOperator_Unauthorized` through this policy.
-    ///
-    ///      Reverts if:
-    ///      - The policy is disabled.
-    ///      - The caller does not hold the admin role.
-    function _authorizeSetConfigOperator()
-        internal
-        view
-        override
-        givenEnabled
-        onlyAdminRole
-        returns (bool authorized)
-    {
+    /// @dev Always authorizes. The policy gates `setConfigOperator` itself, in its override of
+    ///      the mix-in setter, with the lifecycle and role checks of the other admin functions
+    ///      and the unchanged-value check, all before the mix-in reaches this hook; the mix-in
+    ///      therefore never reports `ConfigOperator_Unauthorized` through this policy.
+    function _authorizeSetConfigOperator() internal pure override returns (bool authorized) {
         return true;
     }
 
@@ -794,7 +822,7 @@ contract CCIPTokenPoolConfig is
         if (remoteToken_.length == 0) revert CCIPTokenPoolConfig_RemoteTokenEmpty();
         _requireRemoteAddressLength(remoteToken_);
         if (keccak256(remoteToken_) == keccak256(_POOL.getRemoteToken(chainSelector_))) {
-            revert CCIPTokenPoolConfig_RemoteTokenUnchanged();
+            revert CCIPTokenPoolConfig_AddressUnchanged("remoteToken");
         }
         if (
             !_POOL.getCurrentOutboundRateLimiterState(chainSelector_).isEnabled ||

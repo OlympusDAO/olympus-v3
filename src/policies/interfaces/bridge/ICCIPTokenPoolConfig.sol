@@ -24,6 +24,13 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         It is meant to be the config timelock. A caller holding this interface casts to
 ///         `IConfigOperator` for those two functions, as it does to `IEnabler` for the lifecycle.
 ///
+///         The address setters (`setConfigOperator`, `setRouter`, `setRebalancer`,
+///         `setRateLimitAdmin`) and `setRemoteToken` reject the value they already hold with
+///         `CCIPTokenPoolConfig_AddressUnchanged`, so a call that lands always changes state.
+///         Where the zero address is a meaningful value, it is subject to the same rule: revoking
+///         an authority that is already unset reverts. Tooling that phrases a step as "set or
+///         validate" reads the live value and skips the call when it already matches.
+///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
 ///         Remote token and remote pool addresses are exactly 32 bytes: the ABI encoding of an
 ///         EVM address, or the raw account address of an SVM chain, the only length that the
@@ -66,8 +73,12 @@ interface ICCIPTokenPoolConfig {
     /// @notice Thrown when the remote token to set for a route is empty.
     error CCIPTokenPoolConfig_RemoteTokenEmpty();
 
-    /// @notice Thrown when the remote token to set for a route equals its current remote token.
-    error CCIPTokenPoolConfig_RemoteTokenUnchanged();
+    /// @notice Thrown when a setter is called with the value it already holds: the config
+    ///         operator, the router, the rebalancer or the rate limit admin of the pool, or the
+    ///         remote token of a route. The zero address is a value in its own right here, so
+    ///         revoking an authority that is already unset reverts as well.
+    /// @param parameter The name of the unchanged parameter.
+    error CCIPTokenPoolConfig_AddressUnchanged(string parameter);
 
     /// @notice Thrown when a remote token or remote pool address is not exactly 32 bytes long:
     ///         the ABI encoding of an EVM address, or the raw account address of an SVM chain.
@@ -206,20 +217,22 @@ interface ICCIPTokenPoolConfig {
     /// @param newOwner_ The proposed owner.
     function transferPoolOwnership(address newOwner_) external;
 
-    /// @notice Sets the router of the pool after checking that the candidate holds code and
-    ///         answers `typeAndVersion()` within a bounded gas budget. Intended to be callable
-    ///         only by the admin role while the policy is enabled.
+    /// @notice Sets the router of the pool after checking that the candidate differs from the
+    ///         current router, holds code and answers `typeAndVersion()` within a bounded gas
+    ///         budget. Intended to be callable only by the admin role while the policy is
+    ///         enabled.
     /// @param router_ The router address.
     function setRouter(address router_) external;
 
     /// @notice Sets the rebalancer of a liquidity container pool. The zero address clears the
-    ///         rebalancer. Intended to be callable only by the admin role while the policy is
-    ///         enabled.
+    ///         rebalancer; the current value, zero included, is rejected. Intended to be
+    ///         callable only by the admin role while the policy is enabled.
     /// @param rebalancer_ The rebalancer address.
     function setRebalancer(address rebalancer_) external;
 
-    /// @notice Sets the rate limit admin of the pool. The zero address clears the role. Intended
-    ///         to be callable only by the admin role while the policy is enabled.
+    /// @notice Sets the rate limit admin of the pool. The zero address clears the role; the
+    ///         current value, zero included, is rejected. Intended to be callable only by the
+    ///         admin role while the policy is enabled.
     /// @param rateLimitAdmin_ The rate limit admin address.
     function setRateLimitAdmin(address rateLimitAdmin_) external;
 
@@ -248,8 +261,8 @@ interface ICCIPTokenPoolConfig {
     ///         token, so the route is recreated: it is removed and re-added in one pool call with
     ///         the same remote pools and rate limiter configurations, after which the fill level
     ///         of both buckets is restored to its level before the replacement, with a floor of
-    ///         two units. Intended to be callable only by the config operator or the admin role
-    ///         while the policy is enabled.
+    ///         two units. The current remote token is rejected. Intended to be callable only by
+    ///         the config operator or the admin role while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
     function setRemoteToken(uint64 chainSelector_, bytes calldata remoteToken_) external;

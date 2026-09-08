@@ -12,7 +12,7 @@ import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
 contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     // given the policy is disabled
     //   [X] it reverts with NotEnabled
-    // The lifecycle gate lives inside the authorization hook of the mix-in setter
+    // The lifecycle gate lives on the policy's override of the mix-in setter
     function test_givenDisabled_reverts() public {
         _expectRevertNotEnabled();
         vm.prank(admin);
@@ -22,7 +22,7 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     // given the policy is disabled
     //   when the caller does not hold the admin role
     //     [X] it reverts with NotEnabled
-    // Pins the masking order inside the hook: givenEnabled runs before onlyAdminRole
+    // Pins the masking order on the override: givenEnabled runs before onlyAdminRole
     // Fuzzed over every address: the lifecycle error answers before any caller check
     function test_givenDisabled_whenCallerIsNotAdmin_reverts(address caller_) public {
         _expectRevertNotEnabled();
@@ -30,11 +30,43 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         config.setConfigOperator(operator);
     }
 
+    // given the policy is disabled
+    //   when the operator equals the current value
+    //     [X] it reverts with NotEnabled
+    // Pins the masking order on the override: the lifecycle gate answers before the unchanged
+    // check. The operator is set while enabled, then the policy is disabled.
+    function test_givenDisabled_whenValueEqualsCurrentValue_reverts()
+        public
+        givenEnabled
+        givenConfigOperatorSet
+        givenDisabled
+    {
+        _expectRevertNotEnabled();
+        vm.prank(admin);
+        config.setConfigOperator(operator);
+    }
+
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
-    // The mix-in's ConfigOperator_Unauthorized is dead through this policy: the hook reverts
-    // with the role error instead of returning false. The fuzz excludes the admin account.
+    // The mix-in's ConfigOperator_Unauthorized is dead through this policy: the override
+    // reverts with the role error before the mix-in reaches its hook, which always authorizes.
+    // The fuzz excludes the admin account.
     function test_whenCallerIsNotAdmin_reverts(address caller_) public givenEnabled {
+        vm.assume(caller_ != admin);
+
+        _expectRevertRequireRole(ADMIN_ROLE);
+        vm.prank(caller_);
+        config.setConfigOperator(operator);
+    }
+
+    // when the caller does not hold the admin role
+    //   when the operator equals the current value
+    //     [X] it reverts with ROLES_RequireRole("admin")
+    // Pins the masking order: the role check answers before the unchanged check
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenValueEqualsCurrentValue_reverts(
+        address caller_
+    ) public givenEnabled givenConfigOperatorSet {
         vm.assume(caller_ != admin);
 
         _expectRevertRequireRole(ADMIN_ROLE);
@@ -95,17 +127,31 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     }
 
     // when the operator equals the current value
-    //   [X] it writes and emits ConfigOperatorSet
-    // Writing the value that is already set succeeds rather than reverting
-    function test_whenValueEqualsCurrentValue() public givenEnabled givenConfigOperatorSet {
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("configOperator")
+    // Writing the value that is already set reverts: a call that lands always changes state
+    function test_whenValueEqualsCurrentValue_reverts() public givenEnabled givenConfigOperatorSet {
         assertEq(config.configOperator(), operator, "the operator should already be set");
 
-        vm.expectEmit(true, true, true, true, address(config));
-        emit IConfigOperator.ConfigOperatorSet(operator);
+        _expectRevertAddressUnchanged("configOperator");
         vm.prank(admin);
         config.setConfigOperator(operator);
 
         assertEq(config.configOperator(), operator, "the config operator should stay set");
+    }
+
+    // when the operator is the zero address
+    //   given no operator is set
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("configOperator")
+    // Zero is a value in its own right: revoking an operator that is already unset is an
+    // unchanged write, not a no-op
+    function test_whenOperatorIsZeroAddress_givenOperatorUnset_reverts() public givenEnabled {
+        assertEq(config.configOperator(), address(0), "the operator should start unset");
+
+        _expectRevertAddressUnchanged("configOperator");
+        vm.prank(admin);
+        config.setConfigOperator(address(0));
+
+        assertEq(config.configOperator(), address(0), "the config operator should stay unset");
     }
 
     // given an operator is set

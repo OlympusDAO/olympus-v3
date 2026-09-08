@@ -42,7 +42,8 @@ import {MockVersionedCCIPRouter} from "src/test/policies/bridge/mocks/MockVersio
 ///              liquidity transfer conserves the token supply, a rejected router candidate
 ///              leaves the router in place, an ownership round trip restores the pool state).
 ///         Deliberate negative probes (reEnable past the deadline, the rejected router
-///         candidates, the outsider probe, the rate limit bypass probe) use try/catch or a
+///         candidates, the outsider probe, the rate limit bypass probe, the unchanged-value
+///         writes of the address setters and the token replacement) use try/catch or a
 ///         low-level call; every catch tolerates only the expected error and bubbles anything
 ///         else.
 ///
@@ -129,6 +130,11 @@ contract CCIPTokenPoolConfigHandler is Test {
     ///         writes pool rate limits directly.
     bool public ghost_rateLimitBypassWithoutGrant;
 
+    /// @notice Set when a setter accepts the value it already holds: the config operator, the
+    ///         router, the rebalancer or the rate limit admin of the pool, or the remote token
+    ///         of a route.
+    bool public ghost_unchangedWriteLanded;
+
     /// @notice The total moved out of the liquidity source through the config's transfer path,
     ///         in token base units.
     uint256 public ghost_liquidityMovedFromSource;
@@ -155,6 +161,7 @@ contract CCIPTokenPoolConfigHandler is Test {
     uint256 public liquidityTransfers;
     uint256 public graceWindowUpdates;
     uint256 public ownershipRoundTrips;
+    uint256 public unchangedWriteRejections;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -292,6 +299,14 @@ contract CCIPTokenPoolConfigHandler is Test {
     function rotateOperator(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [operatorPrimary, operatorAlternate, address(0)][seed_ % 3];
+        if (candidate == config.configOperator()) {
+            _probeUnchangedWrite(
+                admin,
+                abi.encodeCall(IConfigOperator.setConfigOperator, (candidate)),
+                "configOperator"
+            );
+            return;
+        }
         bytes32 digestBefore = _poolDigest();
 
         vm.prank(admin);
@@ -333,6 +348,15 @@ contract CCIPTokenPoolConfigHandler is Test {
         address candidate = _routerCandidate(branch);
 
         if (branch < acceptingRouters.length) {
+            if (candidate == pool.getRouter()) {
+                _probeUnchangedWrite(
+                    admin,
+                    abi.encodeCall(ICCIPTokenPoolConfig.setRouter, (candidate)),
+                    "router"
+                );
+                return;
+            }
+
             vm.prank(admin);
             config.setRouter(candidate);
 
@@ -377,11 +401,19 @@ contract CCIPTokenPoolConfigHandler is Test {
         }
     }
 
-    /// @notice Writes the pool's rebalancer, which the config does not validate: the zero
-    ///         address clears it and any other value is accepted.
+    /// @notice Writes the pool's rebalancer, which the config does not validate beyond the
+    ///         unchanged check: the zero address clears it and any other value is accepted.
     function setPoolRebalancer(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [address(0), rebalancerCandidate, liquiditySource][seed_ % 3];
+        if (candidate == LockReleaseTokenPool(address(pool)).getRebalancer()) {
+            _probeUnchangedWrite(
+                admin,
+                abi.encodeCall(ICCIPTokenPoolConfig.setRebalancer, (candidate)),
+                "rebalancer"
+            );
+            return;
+        }
 
         vm.prank(admin);
         config.setRebalancer(candidate);
@@ -399,6 +431,14 @@ contract CCIPTokenPoolConfigHandler is Test {
     function setPoolRateLimitAdmin(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [address(0), rateLimitAdminCandidate, address(config)][seed_ % 3];
+        if (candidate == pool.getRateLimitAdmin()) {
+            _probeUnchangedWrite(
+                admin,
+                abi.encodeCall(ICCIPTokenPoolConfig.setRateLimitAdmin, (candidate)),
+                "rateLimitAdmin"
+            );
+            return;
+        }
 
         vm.prank(admin);
         config.setRateLimitAdmin(candidate);
@@ -595,7 +635,14 @@ contract CCIPTokenPoolConfigHandler is Test {
         uint64 selector = _pickSelector(selectorSeed_);
         if (!config.isEnabled() || !pool.isSupportedChain(selector)) return;
         bytes memory candidate = tokenCandidates[tokenSeed_ % tokenCandidates.length];
-        if (keccak256(candidate) == keccak256(pool.getRemoteToken(selector))) return;
+        if (keccak256(candidate) == keccak256(pool.getRemoteToken(selector))) {
+            _probeUnchangedWrite(
+                _routeCaller(tokenSeed_),
+                abi.encodeCall(ICCIPTokenPoolConfig.setRemoteToken, (selector, candidate)),
+                "remoteToken"
+            );
+            return;
+        }
 
         bytes[] memory poolsBefore = pool.getRemotePools(selector);
         ICCIPRateLimiter.TokenBucket memory outBefore = pool.getCurrentOutboundRateLimiterState(
@@ -849,6 +896,38 @@ contract CCIPTokenPoolConfigHandler is Test {
         }
         if (branch_ == 18) return abi.encodeCall(ICCIPTokenPoolConfig.disableChain, (selector));
         return abi.encodeCall(ICCIPTokenPoolConfig.disableAllChains, ());
+    }
+
+    // ========== UNCHANGED-VALUE PROBE ========== //
+
+    /// @notice Fires a setter with the value it already holds, as an authorized caller, and
+    ///         requires the exact `CCIPTokenPoolConfig_AddressUnchanged(parameter)` revert. A
+    ///         success sets the ghost flag; any other revert bubbles so the run fails.
+    function _probeUnchangedWrite(
+        address caller_,
+        bytes memory payload_,
+        string memory parameter_
+    ) internal {
+        bytes memory expected = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
+            parameter_
+        );
+
+        vm.prank(caller_);
+        // A low-level call so the expected revert does not bubble
+        // forge-lint: disable-next-line(unchecked-call)
+        (bool success, bytes memory reason) = address(config).call(payload_);
+
+        if (success) {
+            ghost_unchangedWriteLanded = true;
+            return;
+        }
+        if (keccak256(reason) != keccak256(expected)) {
+            assembly {
+                revert(add(reason, 0x20), mload(reason))
+            }
+        }
+        unchangedWriteRejections += 1;
     }
 
     // ========== SELECTION HELPERS ========== //

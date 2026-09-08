@@ -404,10 +404,12 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @notice Rotates the config's operator seat between the timelock, a foreign candidate
-    ///         and the zero address.
+    ///         and the zero address. The config rejects a write of the seat it already holds,
+    ///         which the config suite probes; here it is a no-op.
     function rotateOperatorSeat(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [address(timelock), seatCandidate, address(0)][seed_ % 3];
+        if (candidate == config.configOperator()) return;
 
         vm.prank(admin);
         config.setConfigOperator(candidate);

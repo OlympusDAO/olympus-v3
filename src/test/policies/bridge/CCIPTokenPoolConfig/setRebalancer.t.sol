@@ -75,6 +75,23 @@ contract CCIPTokenPoolConfigTests_setRebalancer is CCIPTokenPoolConfigTest {
     }
 
     // when the caller does not hold the admin role
+    //   when the rebalancer equals the current value
+    //     [X] it reverts with ROLES_RequireRole("admin")
+    // Pins the masking order: the role check answers before the unchanged check. The pool
+    // rebalancer starts unset, so the zero address is the current value.
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenValueEqualsCurrentValue_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+        assertEq(pool.getRebalancer(), address(0), "the pool rebalancer should start unset");
+
+        _expectRevertRequireRole(ADMIN_ROLE);
+        vm.prank(caller_);
+        config.setRebalancer(address(0));
+    }
+
+    // when the caller does not hold the admin role
     //   given the pool is not a liquidity container
     //     [X] it reverts with ROLES_RequireRole("admin")
     // Pins the masking order: the role check answers before the container gate
@@ -132,6 +149,24 @@ contract CCIPTokenPoolConfigTests_setRebalancer is CCIPTokenPoolConfigTest {
         );
         vm.prank(admin);
         config.setRebalancer(thirdParty);
+    }
+
+    // when the rebalancer equals the current value
+    //   given the pool is owned by an unrelated third party
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rebalancer")
+    // Pins the order: the unchanged check reads the pool and answers before the pool's owner
+    // check would. The pool rebalancer is still unset after the migration.
+    function test_whenValueEqualsCurrentValue_givenPoolOwnedByThirdParty_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenPoolOwnedByThirdParty
+    {
+        assertEq(pool.getRebalancer(), address(0), "the pool rebalancer should be unset");
+
+        _expectRevertAddressUnchanged("rebalancer");
+        vm.prank(admin);
+        config.setRebalancer(address(0));
     }
 
     // given the pool is owned by an unrelated third party
@@ -203,27 +238,53 @@ contract CCIPTokenPoolConfigTests_setRebalancer is CCIPTokenPoolConfigTest {
     }
 
     // when the value equals the current rebalancer
-    //   [X] it writes and emits PoolRebalancerSet again
-    function test_whenValueEqualsCurrentValue() public givenEnabled givenPoolOwnershipAccepted {
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rebalancer")
+    // The candidate is set first and then re-set
+    function test_whenValueEqualsCurrentValue_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
         address candidate = makeAddr("rebalancerCandidate");
 
         vm.prank(admin);
         config.setRebalancer(candidate);
 
-        vm.expectEmit(true, true, true, true, address(config));
-        emit ICCIPTokenPoolConfig.PoolRebalancerSet(candidate);
+        _expectRevertAddressUnchanged("rebalancer");
         vm.prank(admin);
         config.setRebalancer(candidate);
 
         assertEq(pool.getRebalancer(), candidate, "the pool rebalancer should be unchanged");
     }
 
+    // when the rebalancer is the zero address
+    //   given the rebalancer is unset
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("rebalancer")
+    // Zero is a value in its own right: clearing a rebalancer that is already unset is an
+    // unchanged write, not a no-op
+    function test_whenRebalancerIsZeroAddress_givenRebalancerUnset_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        assertEq(pool.getRebalancer(), address(0), "the pool rebalancer should start unset");
+
+        _expectRevertAddressUnchanged("rebalancer");
+        vm.prank(admin);
+        config.setRebalancer(address(0));
+
+        assertEq(pool.getRebalancer(), address(0), "the pool rebalancer should stay unset");
+    }
+
     // when the rebalancer is any address
     //   [X] the pool reports that address
-    // No candidate validation exists; EOAs are legal. Fuzzed over the address domain.
+    // No candidate validation exists; EOAs are legal. Fuzzed over the address domain less the
+    // zero address, which is the current value of the unset rebalancer and has its own test.
     function test_whenRebalancerIsAnyAddress(
         address rebalancer_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(rebalancer_ != address(0));
+
         vm.expectEmit(true, true, true, true, address(config));
         emit ICCIPTokenPoolConfig.PoolRebalancerSet(rebalancer_);
         vm.prank(admin);

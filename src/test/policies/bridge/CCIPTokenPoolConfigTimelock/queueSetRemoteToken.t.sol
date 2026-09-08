@@ -197,14 +197,15 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
     }
 
     // when the token equals the current remote token
-    //   [X] it reverts with CCIPTokenPoolConfig_RemoteTokenUnchanged
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("remoteToken")
     // The comparison is over exact bytes
     function test_whenTokenIsUnchanged_reverts() public givenEnabled givenChainAdded {
         bytes memory remoteToken = REMOTE_TOKEN;
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RemoteTokenUnchanged.selector
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
+                "remoteToken"
             )
         );
         vm.prank(bridgeAdmin);

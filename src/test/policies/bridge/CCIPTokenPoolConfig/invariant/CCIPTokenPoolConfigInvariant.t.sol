@@ -13,8 +13,9 @@ import {CCIPTokenPoolConfigTest} from "../CCIPTokenPoolConfigTest.sol";
 ///         routes, remote pools, remote token replacement, rate limits, containment, the
 ///         pool's router, rebalancer and rate limit admin, liquidity transfers from a funded
 ///         source pool, an ownership round trip, time skips, real bucket consumption through
-///         the mock ramps, an unauthorized-caller probe and a direct-path bypass probe); the
-///         invariants read the live pool state and the handler's ghost flags.
+///         the mock ramps, an unauthorized-caller probe, a direct-path bypass probe and the
+///         unchanged-value writes of the setters); the invariants read the live pool state and
+///         the handler's ghost flags.
 /// @dev    The run starts from the operational baseline: the policy enabled and owning the
 ///         pool. Every route of this suite is created through the config, so the
 ///         route-shape invariants describe what the config's validated paths can produce.
@@ -66,8 +67,9 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         //   - disable, two two-day skips, reEnable, enable: lifecycle transitions plus the
         //     deliberate reEnable probe past the three-day grace deadline;
         //   - the admin infrastructure surface: an accepted and a rejected router candidate,
-        //     the rebalancer, the rate limit grant with a probe on each side of it, one
-        //     liquidity transfer, one grace window write and one ownership round trip.
+        //     the rebalancer (written, then probed with the value it already holds), the rate
+        //     limit grant with a probe on each side of it, one liquidity transfer, one grace
+        //     window write and one ownership round trip.
         handler.addRoute(0, 0);
         handler.consumeOutbound(0, 5);
         handler.containChain(0, 0);
@@ -79,6 +81,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         handler.enablePolicy(0);
         handler.setPoolRouter(0);
         handler.setPoolRouter(3);
+        handler.setPoolRebalancer(1);
         handler.setPoolRebalancer(1);
         handler.setPoolRateLimitAdmin(1);
         handler.probeRateLimitAdminBypass(0);
@@ -101,6 +104,10 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         require(handler.routerChanges() > 0, "bootstrap: no router change ran");
         require(handler.routerRejections() > 0, "bootstrap: no router rejection ran");
         require(handler.rebalancerChanges() > 0, "bootstrap: no rebalancer change ran");
+        require(
+            handler.unchangedWriteRejections() > 0,
+            "bootstrap: the unchanged-value probe did not run"
+        );
         require(
             handler.rateLimitAdminChanges() > 1,
             "bootstrap: the rate limit grant did not cycle"
@@ -218,6 +225,17 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         );
     }
 
+    /// @notice A setter never accepts the value it already holds: the config operator, the
+    ///         router, the rebalancer, the rate limit admin and the remote token of a route
+    ///         reject an unchanged write, the zero address included where it is a value. The
+    ///         handler probes every such write it would otherwise make.
+    function invariant_unchangedWriteNeverLands() public view {
+        assertFalse(
+            handler.ghost_unchangedWriteLanded(),
+            "a setter accepted the value it already held"
+        );
+    }
+
     // ========== POOL INFRASTRUCTURE ========== //
 
     /// @notice The pool's router always points at an account holding code: the config installs
@@ -290,14 +308,15 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
     }
 
     /// @notice The admin infrastructure surface was exercised on both sides: an accepted and
-    ///         a rejected router candidate, the rebalancer, the rate limit grant and the
-    ///         re-enable window.
+    ///         a rejected router candidate, the rebalancer, the rate limit grant, the
+    ///         re-enable window and at least one unchanged-value write.
     function invariant_handler_adminInfrastructureExercised() public view {
         assertGt(handler.routerChanges(), 0, "no router installation ran");
         assertGt(handler.routerRejections(), 0, "no router rejection ran");
         assertGt(handler.rebalancerChanges(), 0, "no rebalancer write ran");
         assertGt(handler.rateLimitAdminChanges(), 0, "no rate limit admin write ran");
         assertGt(handler.graceWindowUpdates(), 0, "no grace window write ran");
+        assertGt(handler.unchangedWriteRejections(), 0, "the unchanged-value probe never ran");
     }
 
     /// @notice The liquidity transfer, the ownership migration and the direct-path bypass

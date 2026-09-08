@@ -171,7 +171,7 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
     }
 
     // when the remote token equals the current one
-    //   [X] it reverts with CCIPTokenPoolConfig_RemoteTokenUnchanged
+    //   [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("remoteToken")
     //   [X] validateSetRemoteToken reverts with the same error
     // The comparison is byte-exact through keccak256
     function test_whenRemoteTokenIsUnchanged_reverts()
@@ -181,7 +181,8 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
         givenChainAdded
     {
         bytes memory err = abi.encodeWithSelector(
-            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RemoteTokenUnchanged.selector
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
+            "remoteToken"
         );
 
         vm.expectRevert(err);
@@ -194,7 +195,7 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
 
     // when the remote token equals the current one
     //   given the outbound bucket is disabled
-    //     [X] it reverts with CCIPTokenPoolConfig_RemoteTokenUnchanged
+    //     [X] it reverts with CCIPTokenPoolConfig_AddressUnchanged("remoteToken")
     // Pins the order: the unchanged check runs before the bucket check. Needs the
     // pre-handover seed with the outbound bucket disabled.
     function test_whenRemoteTokenIsUnchanged_givenBucketDisabled_reverts()
@@ -203,11 +204,7 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
         givenEnabled
         givenPoolOwnershipAccepted
     {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RemoteTokenUnchanged.selector
-            )
-        );
+        _expectRevertAddressUnchanged("remoteToken");
         vm.prank(admin);
         config.setRemoteToken(CHAIN_SELECTOR_A, REMOTE_TOKEN);
     }
