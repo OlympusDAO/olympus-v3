@@ -21,9 +21,12 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
-    /// @dev Reverts if:
+    /// @dev The zero address is a valid value: it revokes delegated access.
+    ///
+    ///      Reverts if:
     ///      - `_authorizeSetConfigOperator` denies the caller (`ConfigOperator_Unauthorized`).
-    ///      - `configOperator_` is the operator already configured (`ConfigOperator_Unchanged`).
+    ///      - `configOperator_` is the operator already configured (`ConfigOperator_Unchanged`),
+    ///        the zero address over an unset operator included.
     function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
