@@ -20,7 +20,7 @@ interface ICCIPFeeRouter {
     function getOnRamp(uint64 destChainSelector) external view returns (address onRamp);
 }
 
-/// @notice The version probe shared by both on-ramp generations.
+/// @notice The version probe shared by every on-ramp generation.
 interface ICCIPFeeTypeAndVersion {
     /// @notice Returns the type and version string of the contract.
     /// @return version The type and version string.
@@ -47,7 +47,27 @@ interface ICCIPFeeOnRamp16 {
     function getDynamicConfig() external view returns (DynamicConfig memory config);
 }
 
-/// @notice The subset of the live `FeeQuoter 2.0.0` surface the fee budget reader uses.
+/// @notice The subset of the live `OnRamp 2.0.0` surface the fee budget reader uses.
+/// @dev The 2.0.0 dynamic configuration drops the message interceptor and the allowlist admin
+///      of 1.6.0; the fee quoter stays its first member. The layout follows
+///      `smartcontractkit/chainlink-ccip` main, the source with the same `typeAndVersion`.
+interface ICCIPFeeOnRamp20 {
+    /// @param feeQuoter The fee quoter every fee and budget read goes through.
+    /// @param reentrancyGuardEntered The transient reentrancy flag.
+    /// @param feeAggregator The recipient of accumulated fees.
+    struct DynamicConfig {
+        address feeQuoter;
+        bool reentrancyGuardEntered;
+        address feeAggregator;
+    }
+
+    /// @notice Returns the dynamic configuration of the on-ramp.
+    /// @return config The dynamic configuration, whose first member is the fee quoter.
+    function getDynamicConfig() external view returns (DynamicConfig memory config);
+}
+
+/// @notice The subset of the live `FeeQuoter 2.0.0` surface the fee budget reader uses. It
+///         serves the 1.6.0 and the 2.0.0 on-ramps alike.
 /// @dev The deployed `FeeQuoter 2.0.0` token transfer fee struct has four fields; the vendored
 ///      1.6.0 tree carries a six-field struct and must not be used here. The layouts follow
 ///      `smartcontractkit/chainlink-ccip` main, the source with the same `typeAndVersion`.
@@ -107,8 +127,8 @@ interface ICCIPFeeQuoter20 {
 }
 
 /// @notice The subset of the live `EVM2EVMOnRamp 1.5.0` surface the fee budget reader uses.
-/// @dev The 1.5 lanes (every lane touching Optimism or Berachain) have no fee quoter; both the
-///      per-token entry and the default sit on the lane's dedicated on-ramp. The layouts follow
+/// @dev A 1.5 lane has no fee quoter; both the per-token entry and the default sit on the
+///      lane's dedicated on-ramp. The layouts follow
 ///      `smartcontractkit/ccip` release/contracts-ccip-1.5.0; the 1.5 sources are not vendored.
 interface ICCIPFeeOnRamp15 {
     /// @param minFeeUSDCents The minimum fee per token transfer, in 0.01 USD.
@@ -172,8 +192,8 @@ interface ICCIPFeeOnRamp15 {
 
 /// @title CCIPFeeBudgetLib
 /// @notice Reads the OHM token delivery gas budget of a CCIP lane from the live fee contracts of
-///         the source chain: the fee quoter of a 1.6 lane, or the dedicated on-ramp of a 1.5
-///         lane. The budget must cover the destination `releaseOrMint` sequence; on a burn/mint
+///         the source chain: the fee quoter of a 1.6 or 2.0 lane, or the dedicated on-ramp of
+///         a 1.5 lane. The budget must cover the destination `releaseOrMint` sequence; on a burn/mint
 ///         chain that sequence runs two MINTR calls and does not fit the 90000 default, so every
 ///         lane toward a burn/mint chain must carry an enabled OHM entry of at least
 ///         `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens.
@@ -190,16 +210,18 @@ library CCIPFeeBudgetLib {
     uint32 internal constant OHM_MIN_DEST_GAS_OVERHEAD = 175_000;
 
     string internal constant _ROUTER_KEY = "external.ccip.Router";
+    string internal constant _ONRAMP_20 = "OnRamp 2.0.0";
     string internal constant _ONRAMP_16 = "OnRamp 1.6.0";
     string internal constant _ONRAMP_15 = "EVM2EVMOnRamp 1.5.0";
+    string internal constant _FEE_QUOTER_20 = "FeeQuoter 2.0.0";
 
     // ========== READS ========== //
 
     /// @notice Reads the OHM delivery gas budget of the lane from `localChain_` to
     ///         `remoteChain_`, together with whether it comes from an enabled OHM token entry
     ///         and a description of where the value came from.
-    /// @dev Fails closed: reverts when the local router carries no lane to the destination or
-    ///      when the on-ramp reports an unsupported version.
+    /// @dev Fails closed: reverts when the local router carries no lane to the destination, or
+    ///      when the on-ramp or its fee quoter reports an unsupported version.
     /// @param env_ The contents of `env.json`.
     /// @param localChain_ The source chain of the lane.
     /// @param remoteChain_ The destination chain of the lane.
@@ -229,8 +251,15 @@ library CCIPFeeBudgetLib {
 
         string memory version = ICCIPFeeTypeAndVersion(onRamp).typeAndVersion();
         bytes32 versionHash = keccak256(bytes(version));
+        if (versionHash == keccak256(bytes(_ONRAMP_20))) {
+            address feeQuoter = ICCIPFeeOnRamp20(onRamp).getDynamicConfig().feeQuoter;
+            _requireFeeQuoter20(feeQuoter, localChain_, remoteChain_);
+            return _readFeeQuoter(feeQuoter, destSelector, ohm);
+        }
         if (versionHash == keccak256(bytes(_ONRAMP_16))) {
-            return _read16(onRamp, destSelector, ohm);
+            address feeQuoter = ICCIPFeeOnRamp16(onRamp).getDynamicConfig().feeQuoter;
+            _requireFeeQuoter20(feeQuoter, localChain_, remoteChain_);
+            return _readFeeQuoter(feeQuoter, destSelector, ohm);
         }
         if (versionHash == keccak256(bytes(_ONRAMP_15))) {
             return _read15(onRamp, ohm);
@@ -298,20 +327,52 @@ library CCIPFeeBudgetLib {
 
     // ========== INTERNAL ========== //
 
-    function _read16(
-        address onRamp_,
+    /// @dev Reverts unless the fee quoter of a lane exists and reports `FeeQuoter 2.0.0`, the
+    ///      version whose ABI `ICCIPFeeQuoter20` mirrors.
+    function _requireFeeQuoter20(
+        address feeQuoter_,
+        string memory localChain_,
+        string memory remoteChain_
+    ) private view {
+        require(
+            feeQuoter_ != address(0),
+            string.concat(
+                "CCIPFeeBudgetLib: the on-ramp of the lane ",
+                localChain_,
+                " -> ",
+                remoteChain_,
+                " has no fee quoter"
+            )
+        );
+        string memory version = ICCIPFeeTypeAndVersion(feeQuoter_).typeAndVersion();
+        require(
+            keccak256(bytes(version)) == keccak256(bytes(_FEE_QUOTER_20)),
+            string.concat(
+                "CCIPFeeBudgetLib: unsupported fee quoter version '",
+                version,
+                "' on the lane ",
+                localChain_,
+                " -> ",
+                remoteChain_
+            )
+        );
+    }
+
+    /// @dev Shared by the 1.6.0 and the 2.0.0 on-ramps, which differ only in where the fee
+    ///      quoter address sits in their dynamic configuration; the caller checks the quoter
+    ///      version first.
+    function _readFeeQuoter(
+        address feeQuoter_,
         uint64 destSelector_,
         address ohm_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        address feeQuoter = ICCIPFeeOnRamp16(onRamp_).getDynamicConfig().feeQuoter;
-        require(feeQuoter != address(0), "CCIPFeeBudgetLib: the 1.6 on-ramp has no fee quoter");
-        ICCIPFeeQuoter20.TokenTransferFeeConfig memory entry = ICCIPFeeQuoter20(feeQuoter)
+        ICCIPFeeQuoter20.TokenTransferFeeConfig memory entry = ICCIPFeeQuoter20(feeQuoter_)
             .getTokenTransferFeeConfig(destSelector_, ohm_);
         if (entry.isEnabled) {
             return (entry.destGasOverhead, true, "OHM token entry, FeeQuoter 2.0.0");
         }
         return (
-            ICCIPFeeQuoter20(feeQuoter).getDestChainConfig(destSelector_).defaultTokenDestGasOverhead,
+            ICCIPFeeQuoter20(feeQuoter_).getDestChainConfig(destSelector_).defaultTokenDestGasOverhead,
             false,
             "chain default, FeeQuoter 2.0.0 (no OHM entry)"
         );

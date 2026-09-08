@@ -58,6 +58,12 @@ FUND_WEI_HEX="0x21E19E0C9BAB2400000"
 ANVIL_CUPS="${ANVIL_CUPS:-250}"
 ANVIL_BACKOFF_MS="${ANVIL_BACKOFF_MS:-1000}"
 
+# Broadcast with legacy (pre-EIP-1559) transactions: the forge EIP-1559 fee
+# estimation asks the fork for eth_feeHistory, which some upstream L2 archive
+# nodes answer with "historical state ... is not available"; cast send does the
+# same estimation. Override via env.
+TX_FLAGS="${TX_FLAGS:---legacy}"
+
 PORT="${PORT:-8545}"
 RPC="http://localhost:${PORT}"
 ANVIL_PID=""
@@ -194,7 +200,7 @@ deploy_sequence() {
       --sig "deploy(string)()" "$1" \
       --rpc-url "$RPC" \
       --private-key "$DEPLOYER_KEY" --sender "$DEPLOYER_ADDR" \
-      --slow --broadcast -vvv \
+      --slow $TX_FLAGS --broadcast -vvv \
       2>&1 | tee "$LOG_DIR/deploy.log"
   ) || die "deploy sequence failed; see $LOG_DIR/deploy.log"
 }
@@ -216,7 +222,7 @@ run_batch_from() {
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
       --sig "${fn}(bool,bool,string,string,bytes)()" "$useDaoMS" false "$argsfile" "" 0x \
-      --rpc-url "$RPC" --sender "$sender" --unlocked --slow -vvv --broadcast \
+      --rpc-url "$RPC" --sender "$sender" --unlocked --slow $TX_FLAGS -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
   ) || die "batch ${contract}.${fn} failed; see $LAST_BATCH_LOG"
 }
@@ -246,7 +252,7 @@ run_batch_expect_fail() {
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
       --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
-      --rpc-url "$RPC" --sender "$owner" --unlocked --slow -vvv --broadcast \
+      --rpc-url "$RPC" --sender "$owner" --unlocked --slow $TX_FLAGS -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
   ); then
     die "batch ${contract}.${fn} was expected to fail; see $LAST_BATCH_LOG"
@@ -270,7 +276,7 @@ run_script_fn() {
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
       --sig "$sig" "$@" \
-      --rpc-url "$RPC" --sender "$sender" --unlocked --slow -vvv --broadcast \
+      --rpc-url "$RPC" --sender "$sender" --unlocked --slow $TX_FLAGS -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
   ) || die "script ${contract} ${sig} failed; see $LAST_BATCH_LOG"
 }
@@ -297,7 +303,7 @@ expect_non_empty_batch() {
 cast_send_impersonated() {
   local from="$1" to="$2" sig="$3"; shift 3
   fund "$from"
-  cast send "$to" "$sig" "$@" --rpc-url "$RPC" --from "$from" --unlocked >/dev/null
+  cast send $TX_FLAGS "$to" "$sig" "$@" --rpc-url "$RPC" --from "$from" --unlocked >/dev/null
 }
 
 # inject_placeholder_contracts <ownChain>
@@ -331,11 +337,14 @@ inject_placeholder_contracts() {
 # Writes an enabled OHM token transfer fee entry (destGasOverhead 175000,
 # destBytesOverhead 32) for the lane on the forked local chain, impersonating
 # the owner of the live fee contract. Dispatches on the on-ramp version:
-#   OnRamp 1.6.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates
+#   OnRamp 2.0.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates (the fee
+#                          quoter is the first member of a three-field dynamic config)
+#   OnRamp 1.6.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates (five-field
+#                          dynamic config)
 #   EVM2EVMOnRamp 1.5.0 -> the on-ramp's own setTokenTransferFeeConfig
 mock_ohm_fee_entry() {
   local localChain="$1" remoteChain="$2"
-  local router ohm sel onramp version owner fq
+  local router ohm sel onramp version owner fq fqversion
   router="$(env_addr "$localChain" "external.ccip.Router")"
   ohm="$(env_addr "$localChain" "olympus.legacy.OHM")"
   sel="$(jq -r --arg c "$remoteChain" '.current[$c].external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
@@ -347,18 +356,27 @@ mock_ohm_fee_entry() {
     *"EVM2EVMOnRamp 1.5.0"*)
       owner="$(cast call "$onramp" 'owner()(address)' --rpc-url "$RPC")"
       fund "$owner"
-      cast send "$onramp" \
+      cast send $TX_FLAGS "$onramp" \
         "setTokenTransferFeeConfig((address,uint32,uint32,uint16,uint32,uint32,bool)[],address[])" \
         "[($ohm,0,0,0,175000,32,false)]" "[]" \
         --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
       log "Mocked OHM fee entry on the 1.5 on-ramp $onramp ($localChain -> $remoteChain)"
       ;;
-    *"OnRamp 1.6.0"*)
-      fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address,address,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')"
+    *"OnRamp 2.0.0"* | *"OnRamp 1.6.0"*)
+      case "$version" in
+        *"OnRamp 2.0.0"*) fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')" ;;
+        *) fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address,address,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')" ;;
+      esac
       require_addr "$fq" "fee quoter of $localChain -> $remoteChain"
+      # The entry below is encoded for the FeeQuoter 2.0.0 struct layout
+      fqversion="$(cast call "$fq" 'typeAndVersion()(string)' --rpc-url "$RPC")"
+      case "$fqversion" in
+        *"FeeQuoter 2.0.0"*) ;;
+        *) die "unsupported fee quoter version '$fqversion' for $localChain -> $remoteChain" ;;
+      esac
       owner="$(cast call "$fq" 'owner()(address)' --rpc-url "$RPC")"
       fund "$owner"
-      cast send "$fq" \
+      cast send $TX_FLAGS "$fq" \
         "applyTokenTransferFeeConfigUpdates((uint64,(address,(uint32,uint32,uint32,bool))[])[],(uint64,address)[])" \
         "[($sel,[($ohm,(0,175000,32,true))])]" "[]" \
         --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null

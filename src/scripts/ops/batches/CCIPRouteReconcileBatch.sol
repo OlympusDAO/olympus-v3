@@ -73,8 +73,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @dev    Desired routes are processed in remote chain name order; within a route the
     ///         identity change comes first, then one remote-pool change (additions before
     ///         removals), then the rate limits. A removal is queued only for a route whose entry
-    ///         carries `enabled: false`; a live route that `env.json` does not declare is
-    ///         reported and left untouched.
+    ///         carries `enabled: false`; a live route that `env.json` does not declare fails the
+    ///         run, since the declaration must be complete before anything is queued.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
@@ -123,7 +123,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         for (uint256 i; i < desired.length; ++i) {
             _planRoute(config, timelock, pool, desired[i]);
         }
-        _reportUnmanagedRoutes(desired, liveSelectors);
+        _requireRoutesDeclared(desired, liveSelectors);
 
         console2.log("\n--- Queue ---");
         _planCancellations(config, timelock);
@@ -782,10 +782,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         }
     }
 
-    function _reportUnmanagedRoutes(
+    /// @notice Reverts if a live route of the pool is not declared in `env.json`: removal is
+    ///         never derived from absence, so the declaration must name every live route, either
+    ///         with `enabled: true` and its limits or with `enabled: false` to remove it.
+    function _requireRoutesDeclared(
         CCIPConfigLib.DesiredRoute[] memory desired_,
         uint64[] memory liveSelectors_
-    ) internal pure {
+    ) internal view {
         for (uint256 i; i < liveSelectors_.length; ++i) {
             bool declared;
             for (uint256 j; j < desired_.length; ++j) {
@@ -794,13 +797,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     break;
                 }
             }
-            if (!declared) {
-                console2.log(
-                    "\nWARNING: live route",
-                    liveSelectors_[i],
-                    "is not declared in env.json and is left untouched; declare it, or declare it with enabled: false to remove it."
-                );
-            }
+            require(
+                declared,
+                string.concat(
+                    "CCIPRouteReconcileBatch: live route ",
+                    vm.toString(liveSelectors_[i]),
+                    " is not declared in env.json; declare it with enabled: true and its limits, or with enabled: false to remove it"
+                )
+            );
         }
     }
 

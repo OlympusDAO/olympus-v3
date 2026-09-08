@@ -15,6 +15,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
@@ -200,8 +201,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         }
 
         // 5. Add the missing routes directly under the admin role (the bootstrap needs no
-        //    timelock: the routes are voted on as part of the mainnet CCIP Token Pool Config
-        //    Activation proposal).
+        //    timelock: the routes are voted on as part of the mainnet CCIP Bridge Activation
+        //    proposal).
         _planRoutes(ICCIPTokenPoolConfig(config), ICCIPTokenPoolAdmin(pool));
 
         _setPostBatchValidateSelector(this._validateSetup.selector);
@@ -273,7 +274,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             IEnabler(timelock).isEnabled(),
             "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(registry)
             .getTokenConfig(ohm);
@@ -410,7 +411,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             ICCIPTokenPoolConfigTimelock(timelock).timelockDelay() == desired.timelockDelay,
             "CCIPTokenPoolConfigTimelock delay mismatch"
         );
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
         console2.log("setup post-batch validation passed");
     }
 
@@ -440,7 +441,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(roles.hasRole(_owner, ADMIN_ROLE), "The DAO MS does not hold admin");
         require(roles.hasRole(_owner, BRIDGE_ADMIN_ROLE), "The DAO MS does not hold bridge_admin");
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
         console2.log("finalize post-batch validation passed");
     }
 
@@ -777,13 +778,14 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                     break;
                 }
             }
-            if (!declared) {
-                console2.log(
-                    "\nWARNING: live route",
-                    liveSelectors[i],
-                    "is not declared in env.json and is left untouched."
-                );
-            }
+            require(
+                declared,
+                string.concat(
+                    "CCIPNonEthereumSetupBatch: live route ",
+                    vm.toString(liveSelectors[i]),
+                    " is not declared in env.json; declare it with enabled: true and its limits, or with enabled: false to remove it"
+                )
+            );
         }
     }
 
@@ -920,14 +922,40 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     }
 
     /// @notice Reverts unless every enabled desired route of `env.json` is live on the pool and
-    ///         matches it field by field, and every route declared with `enabled: false` (the
-    ///         removal marker) is absent from the pool.
-    function _requireRoutesConverged(ICCIPTokenPoolAdmin pool_) internal view {
+    ///         matches it field by field, every live route is declared, and every route declared
+    ///         with `enabled: false` (the removal marker) is absent from the pool or has its
+    ///         removal queued on the config timelock. A queued removal is an expected transient
+    ///         state and is reported as pending; a declared removal that is neither done nor
+    ///         queued is a mismatch.
+    function _requireRoutesConverged(
+        ICCIPTokenPoolAdmin pool_,
+        ICCIPTokenPoolConfigTimelock timelock_
+    ) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
             desired.length > 0,
             "CCIPNonEthereumSetupBatch: env.json declares no CCIP route for this chain"
         );
+
+        uint64[] memory liveSelectors = pool_.getSupportedChains();
+        for (uint256 i; i < liveSelectors.length; ++i) {
+            bool declared;
+            for (uint256 j; j < desired.length; ++j) {
+                if (desired[j].chainSelector == liveSelectors[i]) {
+                    declared = true;
+                    break;
+                }
+            }
+            require(
+                declared,
+                string.concat(
+                    "CCIPNonEthereumSetupBatch: live route ",
+                    vm.toString(liveSelectors[i]),
+                    " is not declared in env.json; declare it with enabled: true and its limits, or with enabled: false to remove it"
+                )
+            );
+        }
+
         for (uint256 i; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(
@@ -935,15 +963,22 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 route.chainSelector
             );
             if (!route.enabled) {
-                require(
-                    !live.exists,
+                if (!live.exists) continue;
+                if (_isRemovalQueued(timelock_, route.chainSelector)) {
+                    console2.log(
+                        "  Route",
+                        route.remoteChain,
+                        "is declared with enabled=false: its removal is queued on the config timelock (pending removal)"
+                    );
+                    continue;
+                }
+                revert(
                     string.concat(
                         "CCIPNonEthereumSetupBatch: route ",
                         route.remoteChain,
-                        " is declared with enabled=false but is configured on the pool; remove it through CCIPRouteReconcileBatch"
+                        " is declared with enabled=false but is configured on the pool and no removal is queued; queue it through CCIPRouteReconcileBatch"
                     )
                 );
-                continue;
             }
             require(
                 live.exists,
@@ -962,6 +997,29 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 )
             );
         }
+    }
+
+    /// @notice Returns whether an unexpired queued action of the config timelock removes the route.
+    function _isRemovalQueued(
+        ICCIPTokenPoolConfigTimelock timelock_,
+        uint64 chainSelector_
+    ) internal view returns (bool queued) {
+        uint64 actionId = timelock_.pendingActionId(timelock_.getRouteIdentityKey(chainSelector_));
+        if (actionId == 0) return false;
+
+        ITimelockBatchQueue.QueuedAction memory action = timelock_.getQueuedAction(actionId);
+        // The expiry is read by the script at simulation time
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp > action.expiresAt) return false;
+
+        bytes32 payloadHash = keccak256(abi.encode(chainSelector_));
+        for (uint256 i; i < action.actions.length; ++i) {
+            if (
+                action.actions[i].selector == ICCIPTokenPoolConfig.removeChain.selector &&
+                keccak256(action.actions[i].payload) == payloadHash
+            ) return true;
+        }
+        return false;
     }
 
     function _roles(address kernel_) internal view returns (ROLESv1 roles) {

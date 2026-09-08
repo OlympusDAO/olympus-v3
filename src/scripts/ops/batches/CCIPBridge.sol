@@ -27,8 +27,8 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 ///         - `reconcileTrustedRemotes`: compare the trusted remote and the gas limit of every
 ///           declared remote chain independently, and add only the differing fields. A remote is
 ///           unset only for a route or `periphery` block declared with `enabled: false`; a live
-///           trusted remote whose route has no `periphery` block is reported and left untouched.
-///           A second run on a converged state proposes nothing.
+///           trusted remote whose route has no `periphery` block fails the run, since removal
+///           is never derived from absence. A second run on a converged state proposes nothing.
 ///         - `enable` / `disable`: switch the periphery lifecycle flag, conditionally.
 ///         - `transferOwnership`: transfer the periphery to the DAO MS (run by the deployer once
 ///           after the deploy sequence).
@@ -53,6 +53,7 @@ contract CCIPBridge is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - The batch owner is not the owner of the periphery.
     ///         - A declared periphery block is malformed (see `CCIPConfigLib`).
+    ///         - A live trusted remote has no `periphery` block in `env.json`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -85,7 +86,7 @@ contract CCIPBridge is BatchScriptV2 {
         for (uint256 i; i < desired.length; ++i) {
             planned += _planPeriphery(bridge, desired[i]);
         }
-        _reportUnmanagedRemotes(bridge, desired);
+        _requireRemotesDeclared(bridge, desired);
 
         if (planned == 0) {
             console2.log("\nNo change needed: the periphery matches env.json.");
@@ -384,11 +385,13 @@ contract CCIPBridge is BatchScriptV2 {
         return 1;
     }
 
-    // =========== REPORTING =========== //
+    // =========== DECLARATION CHECKS =========== //
 
-    /// @notice Reports a live trusted remote whose route declares no `periphery` block; it is
-    ///         left untouched, since removal requires the explicit marker.
-    function _reportUnmanagedRemotes(
+    /// @notice Reverts if a live trusted remote of the periphery has no `periphery` block in
+    ///         `env.json`: removal is never derived from absence, so the declaration must name
+    ///         every live trusted remote, either with its block or with the block declared
+    ///         `enabled: false` to unset it.
+    function _requireRemotesDeclared(
         ICCIPCrossChainBridge bridge_,
         CCIPConfigLib.DesiredPeriphery[] memory desired_
     ) internal view {
@@ -413,13 +416,14 @@ contract CCIPBridge is BatchScriptV2 {
             bool isSet = ChainUtils._isSVMChain(remoteChain)
                 ? bridge_.getTrustedRemoteSVM(selector).isSet
                 : bridge_.getTrustedRemoteEVM(selector).isSet;
-            if (isSet) {
-                console2.log(
-                    "\nWARNING: the live trusted remote for",
+            require(
+                !isSet,
+                string.concat(
+                    "CCIPBridge: the live trusted remote for ",
                     remoteChain,
-                    "has no periphery block in env.json and is left untouched; declare it, or declare its periphery block with enabled: false to unset it."
-                );
-            }
+                    " has no periphery block in env.json; declare the block, or declare it with enabled: false to unset the remote"
+                )
+            );
         }
     }
 
