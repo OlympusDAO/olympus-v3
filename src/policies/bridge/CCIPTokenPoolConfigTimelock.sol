@@ -181,24 +181,30 @@ contract CCIPTokenPoolConfigTimelock is
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRateLimitsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
-        return _scopedKey(_routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector_));
+        return
+            _scopeConfigKey(address(_CONFIG), _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector_));
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRemotePoolsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
-        return _scopedKey(_routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector_));
+        return
+            _scopeConfigKey(address(_CONFIG), _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector_));
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getRouteIdentityKey(
         uint64 chainSelector_
     ) external view override returns (bytes32 key) {
-        return _scopedKey(_routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector_));
+        return
+            _scopeConfigKey(
+                address(_CONFIG),
+                _routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector_)
+            );
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
     function getAllowListKey() external view override returns (bytes32 key) {
-        return _scopedKey(ALLOWLIST_DOMAIN);
+        return _scopeConfigKey(address(_CONFIG), ALLOWLIST_DOMAIN);
     }
 
     // ========== QUEUE FUNCTIONS ========== //
@@ -803,13 +809,6 @@ contract CCIPTokenPoolConfigTimelock is
         uint64 chainSelector_
     ) internal pure returns (bytes32 localKey) {
         return keccak256(abi.encode(domain_, chainSelector_));
-    }
-
-    /// @notice Returns the destination-scoped key of a local key, as reserved by the shared base.
-    /// @param  localKey_ The local key.
-    /// @return key The key `keccak256(abi.encode(config, localKey_))`.
-    function _scopedKey(bytes32 localKey_) internal view returns (bytes32 key) {
-        return keccak256(abi.encode(address(_CONFIG), localKey_));
     }
 
     /// @notice Returns the state hash of the rate limits domain of a route.
