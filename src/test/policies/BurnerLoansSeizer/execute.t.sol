@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
@@ -229,3 +232,5 @@ contract BurnerLoansSeizerExecuteTest is BurnerLoansSeizerTest {
         assertEq(seizer.assetCursor(assetOne), 0, "wrapped cursor");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

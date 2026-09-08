@@ -102,8 +102,14 @@ contract BurnerLoansInventory is
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
         _TRSRY = TRSRYv1(getModuleAddress(dependencies[2]));
 
+        // MINTR compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 mintrMajor, ) = _MINTR.VERSION();
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = ROLES.VERSION();
+        // TRSRY compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 trsryMajor, ) = _TRSRY.VERSION();
         if (mintrMajor != 1 || rolesMajor != 1 || trsryMajor != 1) {
             revert BurnerLoansInventory_InvalidModuleVersion();
@@ -170,7 +176,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function supply(uint128 amount_) external givenEnabled nonReentrant {
+    function supply(uint128 amount_) external nonReentrant givenEnabled {
         _requireRole(msg.sender, BURNER_LOANS_INVENTORY_PROVIDER_ROLE);
         if (amount_ == 0) revert BurnerLoansInventory_ZeroAmount();
         _providerClaimOhm[msg.sender] += amount_;
@@ -187,7 +193,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function withdraw(uint128 amount_, address recipient_) external givenEnabled nonReentrant {
+    function withdraw(uint128 amount_, address recipient_) external nonReentrant givenEnabled {
         _requireRole(msg.sender, BURNER_LOANS_INVENTORY_PROVIDER_ROLE);
         if (amount_ == 0) revert BurnerLoansInventory_ZeroAmount();
         if (recipient_ == address(0)) revert BurnerLoansInventory_ZeroAddress();
@@ -207,7 +213,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function draw(address recipient_, uint128 amount_) external givenEnabled nonReentrant {
+    function draw(address recipient_, uint128 amount_) external nonReentrant givenEnabled {
         _onlyFacility();
         if (amount_ == 0) revert BurnerLoansInventory_ZeroAmount();
         if (recipient_ == address(0)) revert BurnerLoansInventory_ZeroAddress();
@@ -226,7 +232,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function settleRepayment(uint128 amount_) external givenEnabled nonReentrant {
+    function settleRepayment(uint128 amount_) external nonReentrant givenEnabled {
         _onlyFacility();
         if (amount_ == 0) revert BurnerLoansInventory_ZeroAmount();
         uint256 requiredBalance = uint256(_suppliedIdleOhm) + amount_;
@@ -255,7 +261,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function recordDefault(uint128 amount_) external givenEnabled nonReentrant {
+    function recordDefault(uint128 amount_) external nonReentrant givenEnabled {
         _onlyFacility();
         if (amount_ == 0) revert BurnerLoansInventory_ZeroAmount();
         _decreaseActivePrincipal(amount_);
@@ -264,14 +270,14 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function syncMintApproval() external givenEnabled nonReentrant returns (uint256 approval_) {
+    function syncMintApproval() external nonReentrant givenEnabled returns (uint256 approval_) {
         _requireRole(msg.sender, BURNER_LOANS_ADMIN_ROLE);
         approval_ = _syncMintApproval();
         emit MintApprovalSynchronized(approval_);
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function burnSurplus() external givenEnabled onlyAdminRole nonReentrant {
+    function burnSurplus() external nonReentrant givenEnabled onlyAdminRole {
         uint256 surplus = surplusOhm();
         if (surplus == 0) return;
         _MINTR.burnOhm(address(this), surplus);
@@ -279,7 +285,7 @@ contract BurnerLoansInventory is
     }
 
     /// @inheritdoc IBurnerLoansInventory
-    function rescueSurplus() external givenEnabled onlyAdminRole nonReentrant {
+    function rescueSurplus() external nonReentrant givenEnabled onlyAdminRole {
         uint256 surplus = surplusOhm();
         if (surplus == 0) return;
         ERC20(address(_OHM)).safeTransfer(address(_TRSRY), surplus);

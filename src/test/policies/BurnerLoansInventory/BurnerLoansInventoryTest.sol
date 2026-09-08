@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// forge-lint: disable-start(unused-return,missing-zero-check)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 
 // Contracts
 import {Test} from "forge-std/Test.sol";
-import {Actions, Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
+import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
@@ -15,26 +18,7 @@ import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
-
-contract BurnerLoansInventoryPrincipal is Policy {
-    address internal immutable _facility;
-
-    constructor(Kernel kernel_, address facility_) Policy(kernel_) {
-        _facility = facility_;
-    }
-
-    function facility() external view returns (address) {
-        return _facility;
-    }
-
-    function configureDependencies() external pure override returns (Keycode[] memory) {
-        return new Keycode[](0);
-    }
-
-    function requestPermissions() external pure override returns (Permissions[] memory) {
-        return new Permissions[](0);
-    }
-}
+import {BurnerLoansInventoryPrincipal} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryPrincipal.sol";
 
 abstract contract BurnerLoansInventoryTest is Test {
     uint128 internal constant DEFAULT_CAP = 1_000_000e9;
@@ -156,3 +140,5 @@ abstract contract BurnerLoansInventoryTest is Test {
         assertEq(inventory.availableCapacity(), expectedCapacity, "available capacity");
     }
 }
+
+// forge-lint: disable-end(unused-return,missing-zero-check)

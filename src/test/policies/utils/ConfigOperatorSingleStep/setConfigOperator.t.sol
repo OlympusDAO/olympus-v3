@@ -6,7 +6,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 
 // Contracts
 import {ConfigOperatorSingleStepTest} from "src/test/policies/utils/ConfigOperatorSingleStep/ConfigOperatorSingleStepTest.sol";
-import {ConfigOperatorSingleStepDefaultDenyHarness} from "src/test/policies/utils/ConfigOperatorSingleStep/fixtures/ConfigOperatorSingleStepHarness.sol";
+import {ConfigOperatorSingleStepDefaultDenyHarness} from "src/test/policies/utils/ConfigOperatorSingleStep/fixtures/ConfigOperatorSingleStepDefaultDenyHarness.sol";
 
 contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleStepTest {
     // configOperator

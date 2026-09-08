@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// forge-lint: disable-start(missing-zero-check)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
@@ -221,9 +224,13 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         );
 
         if (callThroughTarget != address(0) && action_.target == callThroughTarget) {
+            // Required to dispatch arbitrary payload and capture exact revert data.
+            // forge-lint: disable-next-line(low-level-calls)
             (bool success, bytes memory returnData) = action_.target.call(action_.payload);
             if (!success) {
-                assembly {
+                // Assembly preserves the target's exact revert data for atomic rollback tests.
+                // forge-lint: disable-next-line(inline-assembly)
+                assembly ("memory-safe") {
                     revert(add(returnData, 32), mload(returnData))
                 }
             }
@@ -269,3 +276,5 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         return maxBatchSizeOverride == 0 ? super._maxBatchSize() : maxBatchSizeOverride;
     }
 }
+
+// forge-lint: disable-end(missing-zero-check)

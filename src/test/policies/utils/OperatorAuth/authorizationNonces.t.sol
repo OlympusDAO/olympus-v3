@@ -4,6 +4,9 @@ pragma solidity >=0.8.24;
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {OperatorAuthTest} from "../OperatorAuth.t.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract OperatorAuthAuthorizationNoncesTest is OperatorAuthTest {
     function test_authorizationNonces_returnsNextSignatureNonce() public {
         assertEq(auth.authorizationNonces(owner), 0, "initial nonce");
@@ -28,3 +31,5 @@ contract OperatorAuthAuthorizationNoncesTest is OperatorAuthTest {
         assertEq(auth.authorizationNonces(owner), 2, "nonce after second authorization");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

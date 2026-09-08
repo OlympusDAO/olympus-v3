@@ -2,6 +2,9 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
@@ -17,6 +20,11 @@ import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 // Contracts
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop,multi-contract-file)
 
 contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     // seize
@@ -838,7 +846,7 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
 
     function _position(
         uint256 collateral_,
-        uint256 debt_,
+        uint128 debt_,
         uint48 maturity_
     ) internal pure returns (IBurnerLoans.Position memory) {
         return
@@ -993,3 +1001,7 @@ contract BurnerLoansIsSeizableTest is BurnerLoansBorrowTestBase {
         assertFalse(burnerLoans.isSeizable(address(usds), alice), "first-market health");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop,multi-contract-file)
+
+// forge-lint: disable-end(literal-instead-of-constant)

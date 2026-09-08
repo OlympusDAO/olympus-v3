@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
     event AssetDebtCapSet(address indexed asset, uint256 debtCapOhm);
@@ -170,3 +176,7 @@ contract BurnerLoansConfigSetAssetDebtCapTest is BurnerLoansTest {
         );
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

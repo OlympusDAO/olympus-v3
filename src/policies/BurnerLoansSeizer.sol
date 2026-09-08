@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
@@ -25,7 +26,13 @@ import {BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src
 /// @notice Heart task for bounded round-robin seizure.
 /// @dev Scan and seizure failures are isolated so this non-essential task cannot
 ///      revert the Heart transaction or block later periodic tasks.
-contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBurnerLoansSeizer {
+contract BurnerLoansSeizer is
+    Policy,
+    ReEnablerGracePeriod,
+    PolicyEnablerV2,
+    IBurnerLoansSeizer,
+    IVersioned
+{
     using ExcessivelySafeCall for address;
     using EnumerableSet for EnumerableSet.AddressSet;
 
@@ -98,6 +105,8 @@ contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBu
         dependencies[0] = toKeycode("ROLES");
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
 
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = Module(address(ROLES)).VERSION();
         if (rolesMajor != 1) revert Policy_WrongModuleVersion(abi.encode([1]));
     }
@@ -112,8 +121,8 @@ contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBu
         permissions = new Permissions[](0);
     }
 
-    /// @notice Returns the version of the policy.
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
+    /// @inheritdoc IVersioned
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -160,6 +169,8 @@ contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBu
             _MAX_RETURN_DATA_BYTES,
             abi.encodeCall(this.selfExecuteTask, ())
         );
+        // The event intentionally reports only the first four bytes of bounded revert data.
+        // forge-lint: disable-next-line(unsafe-typecast)
         if (!success) emit ExecutionFailed(bytes4(reason));
     }
 
@@ -200,14 +211,21 @@ contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBu
                 return;
             }
 
+            // Cursor state must remain unchanged on failure. The bound policy cannot cross the
+            // self-only task boundary during a callback.
+            // forge-lint: disable-next-line(reentrancy-no-eth)
             try IBurnerLoansLifecycle(_BURNER_LOANS).seize(asset, borrowers) {
                 // Commit the borrower cursor only after Burner Loans atomically settles the batch.
                 assetCursor[asset] = scannedNextIndex;
                 emit SeizureExecuted(asset, startIndex, scannedNextIndex, borrowers.length);
             } catch (bytes memory reason) {
+                // The event intentionally reports only the first four bytes of revert data.
+                // forge-lint: disable-next-line(unsafe-typecast)
                 emit SeizureFailed(asset, bytes4(reason));
             }
         } catch (bytes memory reason) {
+            // The event intentionally reports only the first four bytes of revert data.
+            // forge-lint: disable-next-line(unsafe-typecast)
             emit ScanFailed(asset, bytes4(reason));
         }
     }
@@ -262,6 +280,7 @@ contract BurnerLoansSeizer is Policy, ReEnablerGracePeriod, PolicyEnablerV2, IBu
         return
             interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IBurnerLoansSeizer).interfaceId ||
+            interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
 

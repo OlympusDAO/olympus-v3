@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
@@ -948,3 +951,5 @@ contract BurnerLoansMathTest is BurnerLoansTest {
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

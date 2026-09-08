@@ -11,7 +11,12 @@ import {Actions} from "src/Kernel.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansReEnableTest is BurnerLoansTest {
+    uint48 internal constant _DISABLED_AT = 1234;
+
     event Enabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -56,11 +61,11 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
         vm.prank(admin);
         burnerLoans.setGracePeriod(uint32(gracePeriod));
 
-        vm.warp(1234);
+        vm.warp(_DISABLED_AT);
         vm.prank(emergency);
         burnerLoans.disable("");
 
-        uint48 deadline = uint48(1234 + uint48(gracePeriod));
+        uint48 deadline = uint48(_DISABLED_AT + uint48(gracePeriod));
         vm.warp(uint256(deadline) + elapsedAfterDeadline);
 
         vm.prank(burnerLoansAdmin);
@@ -75,11 +80,11 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
     //  when reEnable is called
     //   then the policy is re-enabled
     function test_givenBurnerLoansAdminCallerWithinGracePeriod_reenablesPolicy() public {
-        vm.warp(1234);
+        vm.warp(_DISABLED_AT);
         vm.prank(emergency);
         burnerLoans.disable("");
 
-        vm.warp(1234 + BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+        vm.warp(_DISABLED_AT + BurnerLoansConstants.REENABLE_GRACE_PERIOD);
         vm.prank(burnerLoansAdmin);
         vm.expectEmit(address(burnerLoans));
         emit Enabled();
@@ -136,11 +141,11 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
         vm.prank(admin);
         burnerLoans.setGracePeriod(gracePeriod);
 
-        vm.warp(1234);
+        vm.warp(_DISABLED_AT);
         vm.prank(emergency);
         burnerLoans.disable("");
 
-        vm.warp(1234 + gracePeriod);
+        vm.warp(_DISABLED_AT + gracePeriod);
         vm.prank(admin);
         vm.expectEmit(address(burnerLoans));
         emit Enabled();
@@ -201,3 +206,5 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
         vm.stopPrank();
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

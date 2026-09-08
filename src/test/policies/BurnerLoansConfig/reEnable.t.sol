@@ -11,6 +11,9 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigReEnableTest is BurnerLoansTest {
     // reEnable
     // given the config was disabled within its grace period
@@ -179,3 +182,5 @@ contract BurnerLoansConfigReEnableTest is BurnerLoansTest {
         burnerLoansConfig.reEnable();
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

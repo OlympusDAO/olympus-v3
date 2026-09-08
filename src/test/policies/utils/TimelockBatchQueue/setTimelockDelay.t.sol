@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 
@@ -61,3 +64,5 @@ contract TimelockBatchQueueSetTimelockDelayTest is TimelockBatchQueueTest {
         queue.setTimelockDelay(delay_);
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

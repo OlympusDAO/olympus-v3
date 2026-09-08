@@ -7,16 +7,14 @@ import {Test} from "forge-std/Test.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {ECDSA} from "@openzeppelin-5.3.0/utils/cryptography/ECDSA.sol";
 import {MessageHashUtils} from "@openzeppelin-5.3.0/utils/cryptography/MessageHashUtils.sol";
 
 // Contracts
-import {OperatorAuth} from "src/policies/utils/OperatorAuth.sol";
+import {OperatorAuthHarness} from "src/test/policies/utils/OperatorAuth/OperatorAuthHarness.sol";
 
-contract OperatorAuthHarness is OperatorAuth {
-    function requireSenderAuthorized(address sender_, address onBehalfOf_) external view {
-        _requireSenderAuthorized(sender_, onBehalfOf_);
-    }
-}
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 abstract contract OperatorAuthTest is Test {
     event AuthorizationSet(
@@ -113,7 +111,7 @@ abstract contract OperatorAuthTest is Test {
     ) internal pure returns (address) {
         bytes32 structHash = keccak256(abi.encode(AUTHORIZATION_TYPEHASH, authorization_));
         bytes32 digest = MessageHashUtils.toTypedDataHash(domainSeparator_, structHash);
-        return ecrecover(digest, signature_.v, signature_.r, signature_.s);
+        return ECDSA.recover(digest, signature_.v, signature_.r, signature_.s);
     }
 
     function _domainSeparator(
@@ -150,3 +148,5 @@ abstract contract OperatorAuthTest is Test {
         auth.setAuthorizationWithSig(authorization, signature);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

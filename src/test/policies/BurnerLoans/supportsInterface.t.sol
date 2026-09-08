@@ -9,6 +9,7 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
@@ -34,6 +35,10 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         assertTrue(
             burnerLoans.supportsInterface(type(IBurnerLoansLifecycle).interfaceId),
             "IBurnerLoansLifecycle"
+        );
+        assertTrue(
+            burnerLoans.supportsInterface(type(IBurnerLoansSeizureContext).interfaceId),
+            "IBurnerLoansSeizureContext"
         );
         assertTrue(
             burnerLoans.supportsInterface(type(IBurnerLoansView).interfaceId),

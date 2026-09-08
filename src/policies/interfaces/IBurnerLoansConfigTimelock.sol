@@ -27,7 +27,8 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @notice Thrown when a configured module has an unsupported version.
     error BurnerLoansConfigTimelock_InvalidModuleVersion();
 
-    /// @notice Thrown when a supported sub-action reverts without error data.
+    /// @notice Thrown when a supported sub-action fails without an underlying error that can be
+    ///         safely propagated.
     /// @param target The contract called by the sub-action.
     /// @param selector The function selector called on the target.
     error BurnerLoansConfigTimelock_SubActionCallFailed(address target, bytes4 selector);
@@ -36,6 +37,8 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     /// @notice Partial update payload for asset-level risk and term configuration.
     /// @dev Fields are applied only when their matching selection boolean is true.
+    ///      `maxKeeperReward` matches the `uint128` width used by FLOAN market configuration, so
+    ///      every representable value is valid.
     /// @param maxLtvBps New maximum loan-to-value ratio, in bps.
     /// @param backingMultiplierBps New backing multiplier, in bps.
     /// @param keeperRewardBps New keeper reward share, in bps.
@@ -48,7 +51,7 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
         uint16 keeperRewardBps;
         uint48 termLength;
         uint48 maxMaturityHorizon;
-        uint256 maxKeeperReward;
+        uint128 maxKeeperReward;
     }
 
     /// @notice Selects which fields in an asset risk update should be applied.

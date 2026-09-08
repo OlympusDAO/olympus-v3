@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Unlicense
-/// forge-lint: disable-start(unwrapped-modifier-logic)
+// Test modifiers aid setup readability; test casts use bounded fixture values.
+// forge-lint: disable-start(unwrapped-modifier-logic,unsafe-typecast)
 pragma solidity >=0.8.24;
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
 
 import {Actions} from "src/Kernel.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -234,7 +238,9 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         internal
         pure
         returns (IBurnerLoans.AssetYieldRouting memory routing)
-    {}
+    {
+        return routing;
+    }
 
     function _repurchaseRouting(
         uint16 repurchaseRecipientBps_
@@ -269,4 +275,6 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         return _singleAction(selector_, payload_);
     }
 }
-/// forge-lint: disable-end(unwrapped-modifier-logic)
+// forge-lint: disable-end(unwrapped-modifier-logic,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

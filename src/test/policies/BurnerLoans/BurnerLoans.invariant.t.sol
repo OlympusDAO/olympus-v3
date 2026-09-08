@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(calls-loop)
+
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -510,3 +512,5 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         return false;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

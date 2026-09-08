@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(calls-loop)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -73,3 +76,5 @@ abstract contract BurnerLoansYieldRoutingTestBase is BurnerLoansTest {
         }
     }
 }
+
+// forge-lint: disable-end(calls-loop)

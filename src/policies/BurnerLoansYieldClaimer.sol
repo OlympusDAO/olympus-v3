@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
@@ -29,7 +30,8 @@ contract BurnerLoansYieldClaimer is
     ReEnablerGracePeriod,
     PolicyEnablerV2,
     IBurnerLoansYieldClaimer,
-    IPeriodicTask
+    IPeriodicTask,
+    IVersioned
 {
     using ExcessivelySafeCall for address;
 
@@ -80,6 +82,8 @@ contract BurnerLoansYieldClaimer is
         dependencies[0] = toKeycode("ROLES");
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
 
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = Module(address(ROLES)).VERSION();
         if (rolesMajor != 1) revert Policy_WrongModuleVersion(abi.encode([1]));
     }
@@ -95,8 +99,8 @@ contract BurnerLoansYieldClaimer is
         permissions = new Permissions[](0);
     }
 
-    /// @notice Returns the version of the policy.
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
+    /// @inheritdoc IVersioned
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 
@@ -115,6 +119,8 @@ contract BurnerLoansYieldClaimer is
             _MAX_RETURN_DATA_BYTES,
             abi.encodeCall(this.selfExecuteTask, ())
         );
+        // The event intentionally reports only the first four bytes of bounded revert data.
+        // forge-lint: disable-next-line(unsafe-typecast)
         if (!success) emit ExecutionFailed(bytes4(reason));
     }
 
@@ -125,6 +131,9 @@ contract BurnerLoansYieldClaimer is
         IBurnerLoansView facility = IBurnerLoansView(_BURNER_LOANS);
         uint256 assetCount = facility.getAssetCount();
         for (uint256 i; i < assetCount; ++i) {
+            // The governance-controlled registry is expected to remain small, and the task must
+            // attempt every configured asset while isolating individual claim failures.
+            // forge-lint: disable-next-line(calls-loop)
             address asset = facility.getAssetAt(i);
             (bool success, bytes memory returnData) = _BURNER_LOANS.excessivelySafeCall(
                 gasleft(),
@@ -187,6 +196,7 @@ contract BurnerLoansYieldClaimer is
         return
             interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IBurnerLoansYieldClaimer).interfaceId ||
+            interfaceId_ == type(IVersioned).interfaceId ||
             super.supportsInterface(interfaceId_);
     }
 

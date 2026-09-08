@@ -41,6 +41,7 @@ contract BurnerLoansConfig is
 
     uint256 internal constant _BPS = BurnerLoansConstants.MAX_BPS;
     uint256 internal constant _WAD = 1e18;
+    uint256 internal constant _BPS_TO_WAD = _WAD / _BPS;
     uint8 internal constant _MAX_TOKEN_DECIMALS = 36;
 
     // ========== DEPENDENCIES ========== //
@@ -79,7 +80,11 @@ contract BurnerLoansConfig is
         _FLOAN = IFLOANv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
+        // FLOAN compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 floanMajor, ) = Module(address(_FLOAN)).VERSION();
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = ROLES.VERSION();
         if (floanMajor != 1 || rolesMajor != 1) {
             revert BurnerLoans_InvalidModuleVersion();
@@ -199,7 +204,17 @@ contract BurnerLoansConfig is
             riskConfig_
         );
         _validateFeeConfig(feeConfig_);
+        BurnerLoansMarketConfig.Data memory marketData = BurnerLoansMarketConfig.Data({
+            maxKeeperReward: assetConfig.maxKeeperReward,
+            backingMultiplierBps: assetConfig.backingMultiplierBps,
+            keeperRewardBps: assetConfig.keeperRewardBps,
+            kinkBps: feeConfig_.kinkBps,
+            preKinkSlopeBps: feeConfig_.preKinkSlopeBps,
+            postKinkSlopeBps: feeConfig_.postKinkSlopeBps
+        });
 
+        // Burner Loans resolves this market by its unique facility and token pair, not its ID.
+        // forge-lint: disable-start(unused-return)
         _FLOAN.createMarket(
             IFLOANv1.MarketInput({
                 collateralToken: asset_,
@@ -213,8 +228,9 @@ contract BurnerLoansConfig is
                 maxLtvBps: riskConfig_.maxLtvBps,
                 baseFeeBps: feeConfig_.baseFeeBps
             }),
-            BurnerLoansMarketConfig.encode(assetConfig, feeConfig_)
+            abi.encode(marketData)
         );
+        // forge-lint: disable-end(unused-return)
         _FACILITY.addAsset(asset_);
 
         emit AssetAdded(asset_, assetConfig);
@@ -333,7 +349,6 @@ contract BurnerLoansConfig is
     ///      - Keeper reward bps is above 100%.
     ///      - `termLength` is zero, above the protocol maximum, or not below `maxMaturityHorizon`.
     ///      - `maxMaturityHorizon` is above the protocol maximum.
-    ///      - `maxKeeperReward` is above the protocol maximum.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete risk and term configuration.
     function setAssetRiskConfig(
@@ -344,8 +359,9 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, maximum
-    ///      maturity horizon, or maximum keeper reward violates Burner Loans bounds.
+    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, or maximum
+    ///      maturity horizon violates Burner Loans bounds. The `uint128` maximum-keeper-reward type
+    ///      enforces its storage bound.
     /// @param config_ Complete asset configuration to validate.
     function validateAssetRiskConfig(AssetRiskConfigInput calldata config_) external pure {
         _validateRiskConfig(config_);
@@ -526,7 +542,7 @@ contract BurnerLoansConfig is
         BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
         marketData.backingMultiplierBps = riskConfig_.backingMultiplierBps;
         marketData.keeperRewardBps = riskConfig_.keeperRewardBps;
-        marketData.maxKeeperReward = _toUint128(riskConfig_.maxKeeperReward);
+        marketData.maxKeeperReward = riskConfig_.maxKeeperReward;
         _FLOAN.setMarketRiskConfig(
             marketId_,
             riskConfig_.termLength,
@@ -580,14 +596,13 @@ contract BurnerLoansConfig is
 
     /// @notice Validates a risk-config input.
     /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, maximum
-    ///      maturity horizon, or maximum keeper reward violates Burner Loans bounds.
+    ///      maturity horizon violates Burner Loans bounds.
     /// @param config_ Complete risk and term input to validate.
     function _validateRiskConfig(AssetRiskConfigInput memory config_) internal pure {
         _validateMaxLtvBps(config_.maxLtvBps);
         _validateBackingMultiplierBps(config_.backingMultiplierBps);
         _validateBps(config_.keeperRewardBps);
         _validateMaturityConfig(config_.termLength, config_.maxMaturityHorizon);
-        _validateMaxKeeperReward(config_.maxKeeperReward);
     }
 
     /// @notice Validates an asset maximum LTV.
@@ -643,7 +658,7 @@ contract BurnerLoansConfig is
                 revert BurnerLoans_InvalidFeeConfig();
             }
         }
-        if (_feeRateWad(config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * (_WAD / _BPS)) {
+        if (_feeRateWad(config_) > uint256(BurnerLoansConstants.FEE_CAP_BPS) * _BPS_TO_WAD) {
             revert BurnerLoans_InvalidFeeConfig();
         }
     }
@@ -676,7 +691,7 @@ contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to query.
     /// @return configured True when at least one matching FLOAN market exists.
     function _isAssetConfigured(address asset_) internal view returns (bool) {
-        return BurnerLoansMarketConfig.hasMarket(_FLOAN, address(_FACILITY), asset_, address(_OHM));
+        return _FLOAN.getMarketIds(address(_FACILITY), asset_, address(_OHM)).length != 0;
     }
 
     /// @notice Resolves the unique FLOAN market for a collateral asset and OHM.
@@ -685,7 +700,14 @@ contract BurnerLoansConfig is
     /// @param asset_ Collateral asset to resolve.
     /// @return marketId_ Unique matching FLOAN market identifier.
     function _marketId(address asset_) internal view returns (uint32 marketId_) {
-        return BurnerLoansMarketConfig.marketId(_FLOAN, address(_FACILITY), asset_, address(_OHM));
+        uint256[] memory marketIds = _FLOAN.getMarketIds(address(_FACILITY), asset_, address(_OHM));
+        uint256 marketCount = marketIds.length;
+        if (marketCount == 0) revert BurnerLoans_AssetNotConfigured(asset_);
+        if (marketCount != 1) revert BurnerLoans_AmbiguousMarket(asset_, marketCount);
+
+        // FLOAN indexes only uint32-typed market IDs in this uint256-backed set.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint32(marketIds[0]);
     }
 
     /// @notice Decodes the Burner Loans asset configuration stored by a FLOAN market.
@@ -735,24 +757,6 @@ contract BurnerLoansConfig is
             );
     }
 
-    /// @notice Converts a value to the storage width used by FLOAN market configuration.
-    /// @dev Reverts with `BurnerLoans_InvalidCap` when `value_` exceeds `uint128`.
-    /// @param value_ Value to convert.
-    /// @return result Value represented as `uint128`.
-    function _toUint128(uint256 value_) internal pure returns (uint128 result) {
-        result = uint128(value_);
-        if (result != value_) revert BurnerLoans_InvalidCap();
-    }
-
-    /// @notice Validates the maximum keeper reward amount.
-    /// @dev Reverts with `BurnerLoans_InvalidParam` if the reward exceeds the protocol maximum.
-    /// @param maxKeeperReward_ Maximum keeper reward, in collateral token decimals.
-    function _validateMaxKeeperReward(uint256 maxKeeperReward_) internal pure {
-        if (maxKeeperReward_ > BurnerLoansConstants.MAX_KEEPER_REWARD) {
-            revert BurnerLoans_InvalidParam();
-        }
-    }
-
     /// @notice Asks Burner Loans to validate its PRICE registration and custody dependencies.
     /// @dev Keeping dependency validation on Burner Loans prevents this configuration policy from
     ///      carrying a second, independently configured PRICE or Deposit Manager reference. Live
@@ -787,7 +791,7 @@ contract BurnerLoansConfig is
         return
             uint256(
                 feeConfig_.baseFeeBps + feeConfig_.preKinkSlopeBps + feeConfig_.postKinkSlopeBps
-            ) * (_WAD / _BPS);
+            ) * _BPS_TO_WAD;
     }
 
     // ========== VERSION ========== //

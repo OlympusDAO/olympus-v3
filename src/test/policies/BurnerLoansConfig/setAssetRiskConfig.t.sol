@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -9,13 +12,15 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     uint16 internal constant _MAX_BPS = 10_000;
     uint16 internal constant _MAX_LTV_BPS = 10_000;
     uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
     uint48 internal constant _EXPECTED_MAX_TERM_LENGTH = 365 days;
     uint48 internal constant _EXPECTED_MAX_MATURITY_HORIZON = 366 days;
-    uint256 internal constant _MAX_KEEPER_REWARD = type(uint128).max;
 
     event AssetRiskConfigSet(address indexed asset, IBurnerLoans.AssetRiskConfigInput config);
 
@@ -171,17 +176,21 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
     }
 
     // setAssetRiskConfig
-    // given maxKeeperReward is above the protocol maximum
+    // given maxKeeperReward is the maximum representable value
     //  when setAssetRiskConfig is called by admin
-    //   then it reverts
-    function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
-        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
+    //   then it updates the config
+    function test_givenMaxKeeperRewardAtMaximum_updatesConfig() public {
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();
-        config.maxKeeperReward = maxKeeperReward_;
+        config.maxKeeperReward = type(uint128).max;
 
         vm.prank(admin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
         burnerLoansConfig.setAssetRiskConfig(address(usds), config);
+
+        assertEq(
+            burnerLoansConfig.getAssetConfig(address(usds)).maxKeeperReward,
+            type(uint128).max,
+            "max keeper reward"
+        );
     }
 
     // setAssetRiskConfig
@@ -326,7 +335,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
         uint16 keeperRewardBps_,
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
-        uint256 maxKeeperReward_
+        uint128 maxKeeperReward_
     ) public {
         maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
@@ -337,8 +346,6 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
         maxMaturityHorizon_ = uint48(
             bound(maxMaturityHorizon_, termLength_ + 1, _EXPECTED_MAX_MATURITY_HORIZON)
         );
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
-
         IBurnerLoans.AssetRiskConfigInput memory config = IBurnerLoans.AssetRiskConfigInput({
             maxLtvBps: maxLtvBps_,
             backingMultiplierBps: backingMultiplierBps_,
@@ -479,3 +486,7 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
         });
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

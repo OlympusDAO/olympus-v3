@@ -10,7 +10,12 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest {
+    uint48 internal constant _DISABLED_AT = 1234;
+
     event Enabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -74,11 +79,11 @@ contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest 
         vm.prank(admin);
         configTimelock.setGracePeriod(gracePeriod);
 
-        vm.warp(1234);
+        vm.warp(_DISABLED_AT);
         vm.prank(emergency);
         configTimelock.disable("");
 
-        uint48 deadline = uint48(1234 + uint48(gracePeriod));
+        uint48 deadline = uint48(_DISABLED_AT + uint48(gracePeriod));
         vm.warp(uint256(deadline) + elapsedAfterDeadline);
 
         vm.prank(burnerLoansAdmin);
@@ -134,11 +139,11 @@ contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest 
         vm.prank(admin);
         configTimelock.setGracePeriod(gracePeriod);
 
-        vm.warp(1234);
+        vm.warp(_DISABLED_AT);
         vm.prank(emergency);
         configTimelock.disable("");
 
-        vm.warp(1234 + gracePeriod);
+        vm.warp(_DISABLED_AT + gracePeriod);
         vm.prank(admin);
         vm.expectEmit(address(configTimelock));
         emit Enabled();
@@ -150,3 +155,5 @@ contract BurnerLoansConfigTimelockReEnableTest is BurnerLoansConfigTimelockTest 
         assertEq(configTimelock.lastTransitionAt(), uint48(block.timestamp), "last transition");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

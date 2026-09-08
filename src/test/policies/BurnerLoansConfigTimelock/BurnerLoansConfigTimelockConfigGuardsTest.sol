@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(calls-loop)
+
 // Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -136,3 +139,5 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
         selection.maxLtvBps = true;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -11,11 +14,13 @@ import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
+
 contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConfigTimelockTest {
     uint16 internal constant _MAX_BPS = 10_000;
     uint16 internal constant _MAX_LTV_BPS = 10_000;
     uint16 internal constant _MAX_BACKING_MULTIPLIER_BPS = 50_000;
-    uint256 internal constant _MAX_KEEPER_REWARD = type(uint128).max;
 
     // queueSetAssetRiskConfig
     // given caller has neither admin nor burner_loans_admin
@@ -342,19 +347,19 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
     }
 
     // queueSetAssetRiskConfig
-    // given maxKeeperReward is above the protocol maximum
+    // given maxKeeperReward is the maximum representable value
     //  when queueing the action
-    //   then it reverts
-    function test_givenMaxKeeperRewardAboveMax_reverts(uint256 maxKeeperReward_) public {
-        maxKeeperReward_ = bound(maxKeeperReward_, _MAX_KEEPER_REWARD + 1, type(uint256).max);
+    //   then it queues the action
+    function test_givenMaxKeeperRewardAtMaximum_queuesAction() public {
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update;
-        update.maxKeeperReward = maxKeeperReward_;
+        update.maxKeeperReward = type(uint128).max;
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection;
         selection.maxKeeperReward = true;
 
         vm.prank(burnerLoansAdmin);
-        vm.expectRevert(IBurnerLoans.BurnerLoans_InvalidParam.selector);
-        configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
+        uint64 actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
+
+        assertEq(actionId, 1, "action id");
     }
 
     // queueSetAssetRiskConfig
@@ -452,7 +457,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         uint16 keeperRewardBps_,
         uint48 termLength_,
         uint48 maxMaturityHorizon_,
-        uint256 maxKeeperReward_
+        uint128 maxKeeperReward_
     ) public {
         maxLtvBps_ = uint16(bound(maxLtvBps_, 1, _MAX_LTV_BPS));
         backingMultiplierBps_ = uint16(
@@ -463,8 +468,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         maxMaturityHorizon_ = uint48(
             bound(maxMaturityHorizon_, termLength_ + 1, BurnerLoansConstants.MAX_MATURITY_HORIZON)
         );
-        maxKeeperReward_ = bound(maxKeeperReward_, 0, _MAX_KEEPER_REWARD);
-
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update = IBurnerLoansConfigTimelock
             .AssetRiskConfigUpdate({
                 maxLtvBps: maxLtvBps_,
@@ -539,7 +542,11 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         } else if (field_ == 4) {
             update_.maxMaturityHorizon = uint48(value_);
         } else {
-            update_.maxKeeperReward = value_;
+            update_.maxKeeperReward = uint128(bound(value_, 1, type(uint128).max));
         }
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

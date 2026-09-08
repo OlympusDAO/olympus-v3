@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract FLOANCreateMarketTest is FLOANTest {
     // createMarket
@@ -462,3 +468,7 @@ contract FLOANCreateMarketTest is FLOANTest {
         assertEq(floan.getMarketCount(), 0, "market ID not consumed");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

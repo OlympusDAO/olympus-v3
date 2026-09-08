@@ -9,6 +9,9 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimelockTest {
     // setGracePeriod
     // given the policy is constructed
@@ -85,3 +88,5 @@ contract BurnerLoansConfigTimelockSetGracePeriodTest is BurnerLoansConfigTimeloc
         assertEq(configTimelock.gracePeriod(), type(uint32).max, "grace period");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

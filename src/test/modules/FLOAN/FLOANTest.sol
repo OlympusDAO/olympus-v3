@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -11,6 +14,10 @@ import {ModulePermissions} from "src/test/lib/generated/ModulePermissions.sol";
 import {Actions, Kernel, Module} from "src/Kernel.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 abstract contract FLOANTest is Test {
     using ModuleTestFixtureGenerator for OlympusFixedTermLoan;
@@ -210,3 +217,7 @@ abstract contract FLOANTest is Test {
         return false;
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

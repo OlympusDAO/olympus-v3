@@ -9,6 +9,8 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
+    uint48 internal constant _TRANSITION_TIMESTAMP = 2_345;
+
     event Disabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -30,17 +32,17 @@ contract BurnerLoansConfigTimelockDisableTest is BurnerLoansConfigTimelockTest {
     //  when disable is called
     //   then it disables the policy and records the transition
     function test_givenEmergencyCaller_disablesPolicyAndRecordsTransition() public {
-        vm.warp(2_345);
+        vm.warp(_TRANSITION_TIMESTAMP);
 
         vm.prank(emergency);
         vm.expectEmit(address(configTimelock));
         emit Disabled();
         vm.expectEmit(true, true, false, true, address(configTimelock));
-        emit Transition(emergency, false, "", 2_345);
+        emit Transition(emergency, false, "", _TRANSITION_TIMESTAMP);
         configTimelock.disable("");
 
         assertFalse(configTimelock.isEnabled(), "disabled");
-        assertEq(configTimelock.lastTransitionAt(), 2_345, "last transition");
+        assertEq(configTimelock.lastTransitionAt(), _TRANSITION_TIMESTAMP, "last transition");
     }
 
     // disable

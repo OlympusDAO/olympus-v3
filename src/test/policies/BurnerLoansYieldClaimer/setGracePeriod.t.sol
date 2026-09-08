@@ -11,13 +11,18 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansYieldClaimerTest} from "./BurnerLoansYieldClaimerTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansYieldClaimerSetGracePeriodTest is BurnerLoansYieldClaimerTest {
+    uint32 internal constant _GRACE_PERIOD = 1 days;
+
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
-        claimer.setGracePeriod(1 days);
+        claimer.setGracePeriod(_GRACE_PERIOD);
     }
 
     function test_givenZeroPeriod_reverts() public {
@@ -32,7 +37,7 @@ contract BurnerLoansYieldClaimerSetGracePeriodTest is BurnerLoansYieldClaimerTes
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(admin);
-        claimer.setGracePeriod(1 days);
+        claimer.setGracePeriod(_GRACE_PERIOD);
     }
 
     function test_givenValidPeriod_setsPeriod(uint32 period_) public {
@@ -51,3 +56,5 @@ contract BurnerLoansYieldClaimerSetGracePeriodTest is BurnerLoansYieldClaimerTes
         assertEq(claimer.gracePeriod(), type(uint32).max, "grace period");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

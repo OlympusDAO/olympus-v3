@@ -49,6 +49,8 @@ library BurnerLoansPositions {
         address borrower_
     ) internal view returns (bool exists, uint64 positionId, IFLOANv1.Position memory position) {
         (exists, positionId) = find(floan_, marketId_, borrower_);
+        // The true literal explicitly marks the populated tuple returned with its position data.
+        // forge-lint: disable-next-line(boolean-cst)
         if (exists) return (true, positionId, floan_.getPosition(positionId));
 
         position = IFLOANv1.Position({

@@ -2,13 +2,14 @@
 pragma solidity >=0.8.24;
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
     function test_givenQueuedYieldAction_cancellationReleasesRoutingGuard() public {
@@ -211,3 +212,5 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         assertEq(action.actions.length, 0, "sub-actions cleared");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)

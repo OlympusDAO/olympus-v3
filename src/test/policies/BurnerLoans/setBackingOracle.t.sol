@@ -10,6 +10,9 @@ import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(multi-contract-file)
+
 contract BurnerLoansSetBackingOracleTest is BurnerLoansTest {
     event BackingOracleSet(address indexed backingOracle);
 
@@ -87,3 +90,5 @@ contract MockInvalidBackingOracleForSetter is IERC165 {
         return false;
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)

@@ -8,6 +8,9 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigSetGlobalDebtCapTest is BurnerLoansTest {
     // [X] given admin and an enabled Config and Burner Loans Inventory
     //  when the global cap is set through Config
@@ -51,3 +54,5 @@ contract BurnerLoansConfigSetGlobalDebtCapTest is BurnerLoansTest {
         burnerLoansConfig.setGlobalDebtCap(1);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

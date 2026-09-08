@@ -25,9 +25,6 @@ library BurnerLoansConstants {
     /// @dev Maximum configurable maturity horizon.
     uint48 internal constant MAX_MATURITY_HORIZON = 366 days;
 
-    /// @dev Maximum keeper reward expressible by FLOAN's packed market configuration.
-    uint256 internal constant MAX_KEEPER_REWARD = type(uint128).max;
-
     /// @dev Grace period during which an authorized caller can re-enable Burner Loans.
     uint32 internal constant REENABLE_GRACE_PERIOD = 7 days;
 }

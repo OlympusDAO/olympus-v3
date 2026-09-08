@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {stdError} from "forge-std/StdError.sol";
 
@@ -263,3 +269,7 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

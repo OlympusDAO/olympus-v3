@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -9,6 +12,9 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTimelockTest {
     // queueSetAssetFeeConfig
@@ -780,3 +786,7 @@ contract BurnerLoansConfigTimelockQueueSetFeeConfigTest is BurnerLoansConfigTime
         }
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

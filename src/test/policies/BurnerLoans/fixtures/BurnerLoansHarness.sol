@@ -17,6 +17,9 @@ import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculato
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";
 
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
+
 contract BurnerLoansHarness is BurnerLoans {
     using SafeCast for uint256;
 
@@ -42,7 +45,7 @@ contract BurnerLoansHarness is BurnerLoans {
         uint256 collateralUsdPrice;
         uint8 collateralDecimals;
         uint256 rewardBps;
-        uint256 maxKeeperRewardAsset;
+        uint128 maxKeeperRewardAsset;
     }
 
     constructor(
@@ -252,11 +255,11 @@ contract BurnerLoansHarness is BurnerLoans {
             );
         }
         if (position_.debtOhm > current.principalDue) {
-            uint128 increase = (position_.debtOhm - current.principalDue).toUint128();
+            uint128 increase = position_.debtOhm - current.principalDue;
             _FLOAN.increaseDebt(positionId, increase, 0, position_.maturity);
             _INVENTORY.draw(address(this), increase);
         } else if (position_.debtOhm < current.principalDue) {
-            uint128 decrease = (current.principalDue - position_.debtOhm).toUint128();
+            uint128 decrease = current.principalDue - position_.debtOhm;
             _FLOAN.decreaseDebt(positionId, decrease, 0);
             _INVENTORY.recordDefault(decrease);
         }
@@ -274,3 +277,5 @@ contract BurnerLoansHarness is BurnerLoans {
         return _TRSRY;
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)

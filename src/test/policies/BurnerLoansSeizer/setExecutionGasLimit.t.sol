@@ -6,19 +6,29 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansSeizerSetExecutionGasLimitTest is BurnerLoansSeizerTest {
+    uint32 internal constant _ADMIN_GAS_LIMIT = 8_000_000;
+    uint32 internal constant _BURNER_LOANS_ADMIN_GAS_LIMIT = 9_000_000;
+
     function test_givenAdminOrBurnerLoansAdmin_setsExecutionGasLimit() public {
         vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.ExecutionGasLimitSet(8_000_000);
+        emit IBurnerLoansSeizer.ExecutionGasLimitSet(_ADMIN_GAS_LIMIT);
         vm.prank(admin);
-        seizer.setExecutionGasLimit(8_000_000);
-        assertEq(seizer.executionGasLimit(), 8_000_000, "admin gas limit");
+        seizer.setExecutionGasLimit(_ADMIN_GAS_LIMIT);
+        assertEq(seizer.executionGasLimit(), _ADMIN_GAS_LIMIT, "admin gas limit");
 
         vm.expectEmit(false, false, false, true, address(seizer));
-        emit IBurnerLoansSeizer.ExecutionGasLimitSet(9_000_000);
+        emit IBurnerLoansSeizer.ExecutionGasLimitSet(_BURNER_LOANS_ADMIN_GAS_LIMIT);
         vm.prank(burnerLoansAdmin);
-        seizer.setExecutionGasLimit(9_000_000);
-        assertEq(seizer.executionGasLimit(), 9_000_000, "Burner Loans admin gas limit");
+        seizer.setExecutionGasLimit(_BURNER_LOANS_ADMIN_GAS_LIMIT);
+        assertEq(
+            seizer.executionGasLimit(),
+            _BURNER_LOANS_ADMIN_GAS_LIMIT,
+            "Burner Loans admin gas limit"
+        );
     }
 
     function test_givenZeroExecutionGasLimit_reverts() public {
@@ -33,7 +43,7 @@ contract BurnerLoansSeizerSetExecutionGasLimitTest is BurnerLoansSeizerTest {
 
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
-        seizer.setExecutionGasLimit(8_000_000);
+        seizer.setExecutionGasLimit(_ADMIN_GAS_LIMIT);
     }
 
     function test_whenExecutionGasLimitIsValid(uint32 executionGasLimit_) public {
@@ -64,8 +74,10 @@ contract BurnerLoansSeizerSetExecutionGasLimitTest is BurnerLoansSeizerTest {
         seizer.disable("");
 
         vm.prank(burnerLoansAdmin);
-        seizer.setExecutionGasLimit(8_000_000);
+        seizer.setExecutionGasLimit(_ADMIN_GAS_LIMIT);
 
-        assertEq(seizer.executionGasLimit(), 8_000_000, "disabled execution gas limit");
+        assertEq(seizer.executionGasLimit(), _ADMIN_GAS_LIMIT, "disabled execution gas limit");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

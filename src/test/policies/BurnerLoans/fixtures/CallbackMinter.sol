@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// forge-lint: disable-start(missing-zero-check)
+
 import {Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {MINTRv1, OHM} from "src/modules/MINTR/MINTR.v1.sol";
 
@@ -35,13 +38,13 @@ contract CallbackMinter is MINTRv1 {
         mintApproval[msg.sender] = approval - amount_;
         callbackRevertSelector = bytes4(0);
         bytes memory returnData;
+        // The fixture invokes configurable callback data and records its result.
+        // forge-lint: disable-next-line(low-level-calls)
         (callbackSucceeded, returnData) = _callbackTarget.call(_callbackData);
         if (!callbackSucceeded && returnData.length >= 4) {
-            bytes4 selector;
-            assembly ("memory-safe") {
-                selector := mload(add(returnData, 0x20))
-            }
-            callbackRevertSelector = selector;
+            // The length check proves the selector exists; trailing revert data is ignored.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            callbackRevertSelector = bytes4(returnData);
         }
         ohm.mint(to_, amount_);
     }
@@ -67,3 +70,5 @@ contract CallbackMinter is MINTRv1 {
         active = true;
     }
 }
+
+// forge-lint: disable-end(missing-zero-check)

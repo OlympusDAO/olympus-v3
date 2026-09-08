@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
-import {BurnerLoansContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
+import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
@@ -31,7 +31,7 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 /// @dev Collateral assets must have exact ERC20 transfer semantics. Asset admission relies on
 ///      governance review; DepositManager verifies exact receipt when collateral enters custody.
 ///      All token-touching lifecycle entry points share one storage-backed reentrancy guard.
-contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
+contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizureContext {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @notice Oracle supplying the canonical backing value per OHM.
@@ -182,6 +182,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
     ///      - Burner Loans is disabled.
     ///      - The caller lacks the OCG admin role.
     ///      - `backingOracle_` is zero, has no code, or lacks `IOlympusBackingOracle` support.
+    // validateBackingOracle rejects zero, non-contract, and unsupported oracle addresses.
+    // forge-lint: disable-next-line(missing-zero-check)
     function setBackingOracle(address backingOracle_) external givenEnabled onlyAdminRole {
         BurnerLoansDependencies.validateBackingOracle(backingOracle_);
         backingOracle = backingOracle_;
@@ -536,9 +538,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
             );
     }
 
-    /// @notice Returns the dependency snapshot consumed by linked Burner Loans libraries.
-    /// @return dependencies Current token, module, custody, oracle, treasury, and role dependencies.
-    function context() external view returns (BurnerLoansContext memory dependencies) {
+    /// @inheritdoc IBurnerLoansSeizureContext
+    function context() external view override returns (BurnerLoansContext memory dependencies) {
         return
             BurnerLoansContext({
                 ohm: _OHM,
@@ -552,5 +553,12 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard {
                 treasury: address(_TRSRY),
                 roles: ROLES
             });
+    }
+
+    /// @inheritdoc BurnerLoansLifecycle
+    function supportsInterface(bytes4 interfaceId_) public view override returns (bool) {
+        return
+            interfaceId_ == type(IBurnerLoansSeizureContext).interfaceId ||
+            super.supportsInterface(interfaceId_);
     }
 }

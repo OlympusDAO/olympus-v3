@@ -9,6 +9,11 @@ import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {BurnerLoansInventoryTest} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryTest.sol";
 
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(unused-return,unsafe-typecast,missing-zero-check,multi-contract-file)
+
 contract BurnerLoansInventoryHandler is Policy, Test {
     uint128 internal constant _MAX_CAP = 4_000_000e9;
 
@@ -147,3 +152,5 @@ contract BurnerLoansInventoryInvariantTest is StdInvariant, BurnerLoansInventory
         _assertInventoryInvariant();
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,missing-zero-check,multi-contract-file)

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(unused-return,multi-contract-file)
+
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
@@ -201,3 +205,5 @@ contract BurnerLoansBorrowPriceIntegrationSixDecimalCollateralTest is
         return 100e6;
     }
 }
+
+// forge-lint: disable-end(unused-return,multi-contract-file)

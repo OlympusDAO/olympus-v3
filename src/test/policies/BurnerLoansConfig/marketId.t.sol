@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
@@ -30,3 +33,5 @@ contract BurnerLoansConfigMarketIdTest is BurnerLoansTest {
         burnerLoansConfig.marketId(address(usds));
     }
 }
+
+// forge-lint: disable-end(unused-return)

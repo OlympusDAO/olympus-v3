@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -16,6 +19,10 @@ import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockConfigGuardsTest {
     // queueBatch
@@ -763,3 +770,7 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         assertEq(payload, expected_.payload, "payload");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

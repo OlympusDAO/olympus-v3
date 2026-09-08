@@ -13,6 +13,8 @@ import {Actions} from "src/Kernel.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
 contract BurnerLoansEnableTest is BurnerLoansTest {
+    uint48 internal constant _TRANSITION_TIMESTAMP = 1234;
+
     event Enabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -21,7 +23,7 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
     //  when enable is called while disabled
     //   then the policy is enabled and transition time is recorded
     function test_enable_givenAdminCaller_enablesPolicyAndRecordsTransition() public {
-        vm.warp(1234);
+        vm.warp(_TRANSITION_TIMESTAMP);
         vm.prank(admin);
         burnerLoans.disable("");
 
@@ -29,11 +31,11 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
         vm.expectEmit(address(burnerLoans));
         emit Enabled();
         vm.expectEmit(true, true, false, true, address(burnerLoans));
-        emit Transition(admin, true, "", 1234);
+        emit Transition(admin, true, "", _TRANSITION_TIMESTAMP);
         burnerLoans.enable("");
 
         assertTrue(burnerLoans.isEnabled(), "enabled");
-        assertEq(burnerLoans.lastTransitionAt(), 1234, "last transition");
+        assertEq(burnerLoans.lastTransitionAt(), _TRANSITION_TIMESTAMP, "last transition");
     }
 
     // enable

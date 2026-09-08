@@ -12,7 +12,7 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 // Contracts
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 
-contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEnabler {
+contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEnabler, IERC165 {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     error MockYieldRepurchaseRecipient_GetVaultConfigFailed();
@@ -81,7 +81,7 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
         _enabled = false;
     }
 
-    function supportsInterface(bytes4 interfaceId_) external view returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) external view override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             (_supportsEnablerInterface && interfaceId_ == type(IEnabler).interfaceId) ||

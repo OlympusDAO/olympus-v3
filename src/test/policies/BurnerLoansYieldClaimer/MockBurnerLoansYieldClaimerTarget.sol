@@ -1,13 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// forge-lint: disable-start(missing-zero-check)
+
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
-contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
+contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYieldClaim {
     error ClaimReverted();
     error AssetViewReverted();
     error InvalidAssetIndex(uint256 index);
@@ -74,7 +77,7 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
         _assets = assets_;
     }
 
-    function claimYield(address asset_) external returns (uint256 claimed) {
+    function claimYield(address asset_) external override returns (uint256 claimed) {
         _claimYield(asset_);
         return 1;
     }
@@ -92,19 +95,26 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
 
     function _claimYield(address asset_) private {
         if (asset_ == claimConsumesAllGasAsset) {
+            // INVALID consumes the remaining gas to exercise bounded-call failure handling.
+            // forge-lint: disable-next-line(inline-assembly)
             assembly ("memory-safe") {
                 invalid()
             }
         }
         if (claimRevertsWithShortData) {
+            // Assembly constructs one-byte revert data that Solidity cannot express directly.
+            // forge-lint: disable-next-line(inline-assembly)
             assembly ("memory-safe") {
                 mstore(0, 0xab)
                 revert(0x1f, 1)
             }
         }
         if (claimRevertsWithLargeData) {
+            uint256 largeRevertDataSize = 100_000;
+            // Assembly produces oversized revert data without copying a Solidity byte array.
+            // forge-lint: disable-next-line(inline-assembly)
             assembly ("memory-safe") {
-                revert(0, 100000)
+                revert(0, largeRevertDataSize)
             }
         }
         if (claimReverts) revert ClaimReverted();
@@ -119,3 +129,5 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165 {
             (supportsAssetView && interfaceId_ == type(IBurnerLoansView).interfaceId);
     }
 }
+
+// forge-lint: disable-end(missing-zero-check)

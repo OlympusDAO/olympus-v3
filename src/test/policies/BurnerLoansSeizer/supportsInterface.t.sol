@@ -6,6 +6,7 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
 
@@ -33,6 +34,7 @@ contract BurnerLoansSeizerSupportsInterfaceTest is BurnerLoansSeizerTest {
             seizer.supportsInterface(type(IGracePeriod).interfaceId),
             "grace-period interface"
         );
+        assertTrue(seizer.supportsInterface(type(IVersioned).interfaceId), "versioned interface");
         assertFalse(seizer.supportsInterface(bytes4(0xffffffff)), "invalid interface");
     }
 }

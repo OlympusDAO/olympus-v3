@@ -19,6 +19,9 @@ import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(multi-contract-file)
+
 contract BurnerLoansConstructorTest is BurnerLoansTest {
     // constructor
     // given OHM address is zero
@@ -154,3 +157,5 @@ contract MockInvalidInventory is IERC165 {
         return false;
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)

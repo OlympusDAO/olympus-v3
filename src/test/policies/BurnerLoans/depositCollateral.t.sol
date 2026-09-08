@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -26,6 +29,9 @@ import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     address internal _operator;
@@ -206,7 +212,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vm.prank(alice);
         burnerLoans.depositCollateral(address(usds), _HEALTH_INITIAL_COLLATERAL, alice);
 
-        uint256 debtOhm = _HEALTH_SMALL_DEBT_OHM;
+        uint128 debtOhm = _HEALTH_SMALL_DEBT_OHM;
         uint48 maturity = _setActiveDebtForAlice(_HEALTH_INITIAL_COLLATERAL, debtOhm);
         _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
         vm.warp(block.timestamp + 10 days);
@@ -314,7 +320,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vm.prank(alice);
         burnerLoans.depositCollateral(address(usds), _HEALTH_INITIAL_COLLATERAL, alice);
 
-        uint256 debtOhm = _HEALTH_SMALL_DEBT_OHM;
+        uint128 debtOhm = _HEALTH_SMALL_DEBT_OHM;
         uint48 maturity = _setActiveDebtForAlice(_HEALTH_INITIAL_COLLATERAL, debtOhm);
         _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
         _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
@@ -376,7 +382,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             uint256 initialHealthFactor
         ) = burnerLoans.depositCollateral(address(usds), _HEALTH_DEPOSIT_AMOUNT, alice);
 
-        uint256 debtOhm = _HEALTH_LARGE_DEBT_OHM;
+        uint128 debtOhm = _HEALTH_LARGE_DEBT_OHM;
         uint48 maturity = _setActiveDebtForAlice(_HEALTH_DEPOSIT_AMOUNT, debtOhm);
         _configurePrice(address(ohm), _HEALTH_OHM_PRICE);
         _mintAndApprove(address(usds), alice, _HEALTH_DEPOSIT_AMOUNT);
@@ -1530,7 +1536,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
     function _setActiveDebtForAlice(
         uint256 collateral_,
-        uint256 debtOhm_
+        uint128 debtOhm_
     ) internal returns (uint48 maturity_) {
         maturity_ = uint48(block.timestamp + 30 days);
         burnerLoans.setPositionForTest(
@@ -1546,3 +1552,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         burnerLoans.setActiveDebtForTest(address(usds), debtOhm_);
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

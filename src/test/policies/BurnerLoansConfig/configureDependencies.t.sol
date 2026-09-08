@@ -8,7 +8,8 @@ import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockConfigUnsupportedFloan, MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigModules.sol";
+import {MockConfigUnsupportedFloan} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigModules.sol";
+import {MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigUnsupportedRoles.sol";
 import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
 
 contract BurnerLoansConfigConfigureDependenciesTest is BurnerLoansTest {

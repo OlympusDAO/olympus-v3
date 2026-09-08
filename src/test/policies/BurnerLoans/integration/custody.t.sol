@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -11,6 +14,10 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
     // integration
@@ -420,3 +427,7 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         );
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

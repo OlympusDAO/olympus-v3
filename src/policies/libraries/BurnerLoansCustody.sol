@@ -368,10 +368,13 @@ library BurnerLoansCustody {
             );
         }
 
+        // Deposit-cap validation uses the asset-equivalent balance, not its underlying share count.
+        // forge-lint: disable-start(unused-return)
         (, uint256 assetAmountBefore) = depositManager_.getOperatorAssets(
             IERC20(asset_),
             operator_
         );
+        // forge-lint: disable-end(unused-return)
         if (assetAmountBefore + amount_ > assetConfiguration_.depositCap) {
             revert IAssetManager.AssetManager_DepositCapExceeded(
                 asset_,
@@ -417,6 +420,8 @@ library BurnerLoansCustody {
         asset.safeApprove(address(depositManager_), amount_);
 
         uint256 depositedCollateralRaw;
+        // Burner Loans accounts for credited collateral, not the DepositManager receipt-token ID.
+        // forge-lint: disable-start(unused-return)
         (, depositedCollateralRaw) = depositManager_.deposit(
             IDepositManager.DepositParams({
                 asset: IERC20(asset_),
@@ -426,6 +431,7 @@ library BurnerLoansCustody {
                 shouldWrap: false
             })
         );
+        // forge-lint: disable-end(unused-return)
         depositedCollateral = SafeCast.toUint128(depositedCollateralRaw);
 
         // IDepositManager permits different implementations and does not guarantee that a
@@ -470,7 +476,7 @@ library BurnerLoansCustody {
         IDepositManager depositManager_,
         address asset_,
         address operator_
-    ) public view returns (IBurnerLoans.AssetCollateralStatus memory) {
+    ) public view returns (IBurnerLoans.AssetCollateralStatus memory collateralStatus) {
         validateCustodySupportFor(
             depositManager_,
             asset_,
@@ -478,7 +484,19 @@ library BurnerLoansCustody {
             false,
             operator_
         );
-        return BurnerLoansCustodyAccounting.status(depositManager_, asset_, operator_);
+        IERC20 asset = IERC20(asset_);
+        (collateralStatus.shares, collateralStatus.assets) = depositManager_.getOperatorAssets(
+            asset,
+            operator_
+        );
+        collateralStatus.borrowed = depositManager_.getBorrowedAmount(asset, operator_);
+        collateralStatus.liabilities = depositManager_.getOperatorLiabilities(asset, operator_);
+        collateralStatus.solvent = BurnerLoansCustodyAccounting.isSolvent(
+            collateralStatus.assets,
+            collateralStatus.borrowed,
+            collateralStatus.liabilities
+        );
+        collateralStatus.claimableYield = depositManager_.maxClaimYield(asset, operator_);
     }
 
     /// @notice Returns custody accounting for a registered Burner Loans collateral asset.

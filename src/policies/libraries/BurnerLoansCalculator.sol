@@ -8,10 +8,13 @@ import {FullMath} from "src/libraries/FullMath.sol";
 /// @notice Separately linked scale-aware calculations used by Burner Loans lifecycle policies.
 library BurnerLoansCalculator {
     /// @dev Basis-point denominator.
-    uint256 internal constant BPS = 10_000;
+    uint256 internal constant _BPS = 10_000;
 
     /// @dev Fixed-point scale for ratios and health factors.
-    uint256 internal constant WAD = 1e18;
+    uint256 internal constant _WAD = 1e18;
+
+    /// @dev Exact number of WAD units represented by one basis point.
+    uint256 internal constant _BPS_TO_WAD = _WAD / _BPS;
 
     /// @notice Returns the integer scale for a decimal precision.
     /// @param decimals_ Number of decimal places.
@@ -62,13 +65,13 @@ library BurnerLoansCalculator {
             FullMath.mulDivUp(
                 debtValueUsd(debt_, backingPerDebtUsd_, debtDecimals_),
                 backingMultiplierBps_,
-                BPS
+                _BPS
             );
     }
 
     /// @notice Returns the larger of market-LTV and backing collateral requirements.
-    /// @dev `debtValueUsd_` is PRICE-decimal USD, while `BPS` and `maxLtvBps_` use the
-    ///      basis-point scale. Therefore, `debtValueUsd_ * BPS / maxLtvBps_` remains
+    /// @dev `debtValueUsd_` is PRICE-decimal USD, while `_BPS` and `maxLtvBps_` use the
+    ///      basis-point scale. Therefore, `debtValueUsd_ * _BPS / maxLtvBps_` remains
     ///      PRICE-decimal USD. `FullMath.mulDivUp` rounds this maximum-LTV requirement upward.
     /// @param debtValueUsd_ Market value of the debt in USD.
     /// @param debt_ Debt amount in debt-token decimals.
@@ -85,7 +88,7 @@ library BurnerLoansCalculator {
         uint256 maxLtvBps_,
         uint256 backingMultiplierBps_
     ) public pure returns (uint256) {
-        uint256 marketRequirementUsd = FullMath.mulDivUp(debtValueUsd_, BPS, maxLtvBps_);
+        uint256 marketRequirementUsd = FullMath.mulDivUp(debtValueUsd_, _BPS, maxLtvBps_);
         uint256 backingRequirementUsd = requiredBackingUsd(
             debt_,
             backingPerDebtUsd_,
@@ -118,7 +121,7 @@ library BurnerLoansCalculator {
 
     /// @notice Calculates the WAD-scaled collateral health factor.
     /// @dev Returns `type(uint256).max` when no collateral requirement exists.
-    /// @dev Both USD inputs use `PRICE.decimals()`. Multiplying a PRICE-scaled USD value by WAD
+    /// @dev Both USD inputs use `PRICE.decimals()`. Multiplying a PRICE-scaled USD value by `_WAD`
     ///      and dividing by a PRICE-scaled USD requirement produces a WAD-scaled result.
     /// @param collateralValueUsd_ Gross collateral value in USD.
     /// @param requiredCollateralUsd_ Required collateral value in USD.
@@ -128,7 +131,7 @@ library BurnerLoansCalculator {
         uint256 requiredCollateralUsd_
     ) public pure returns (uint256) {
         if (requiredCollateralUsd_ == 0) return type(uint256).max;
-        return FullMath.mulDiv(collateralValueUsd_, WAD, requiredCollateralUsd_);
+        return FullMath.mulDiv(collateralValueUsd_, _WAD, requiredCollateralUsd_);
     }
 
     /// @notice Calculates asset debt utilization, rounded up.
@@ -138,7 +141,7 @@ library BurnerLoansCalculator {
     /// @return Utilization scaled by 1e18.
     function assetUtilizationWad(uint256 debt_, uint256 cap_) public pure returns (uint256) {
         if (cap_ == 0) return debt_ == 0 ? 0 : type(uint256).max;
-        return FullMath.mulDivUp(debt_, WAD, cap_);
+        return FullMath.mulDivUp(debt_, _WAD, cap_);
     }
 
     /// @notice Calculates the WAD-scaled fee rate for a kinked utilization curve.
@@ -156,26 +159,26 @@ library BurnerLoansCalculator {
         uint16 preKinkSlopeBps_,
         uint16 postKinkSlopeBps_
     ) public pure returns (uint256) {
-        uint256 baseFeeRateWad = uint256(baseFeeBps_) * (WAD / BPS);
+        uint256 baseFeeRateWad = uint256(baseFeeBps_) * _BPS_TO_WAD;
         if (kinkBps_ == 0) {
-            return baseFeeRateWad + FullMath.mulDiv(utilizationWad_, preKinkSlopeBps_, BPS);
+            return baseFeeRateWad + FullMath.mulDiv(utilizationWad_, preKinkSlopeBps_, _BPS);
         }
 
-        uint256 kinkWad = uint256(kinkBps_) * (WAD / BPS);
+        uint256 kinkWad = uint256(kinkBps_) * _BPS_TO_WAD;
         if (utilizationWad_ <= kinkWad) {
             return
                 baseFeeRateWad +
-                FullMath.mulDiv(utilizationWad_, uint256(preKinkSlopeBps_) * WAD, kinkWad * BPS);
+                FullMath.mulDiv(utilizationWad_, uint256(preKinkSlopeBps_) * _WAD, kinkWad * _BPS);
         }
 
         return
             baseFeeRateWad +
             uint256(preKinkSlopeBps_) *
-            (WAD / BPS) +
+            _BPS_TO_WAD +
             FullMath.mulDiv(
                 utilizationWad_ - kinkWad,
-                uint256(postKinkSlopeBps_) * WAD,
-                (WAD - kinkWad) * BPS
+                uint256(postKinkSlopeBps_) * _WAD,
+                (_WAD - kinkWad) * _BPS
             );
     }
 
@@ -187,6 +190,6 @@ library BurnerLoansCalculator {
         uint256 incrementalRequiredCollateral_,
         uint256 feeRateWad_
     ) public pure returns (uint256) {
-        return FullMath.mulDivUp(incrementalRequiredCollateral_, feeRateWad_, WAD);
+        return FullMath.mulDivUp(incrementalRequiredCollateral_, feeRateWad_, _WAD);
     }
 }

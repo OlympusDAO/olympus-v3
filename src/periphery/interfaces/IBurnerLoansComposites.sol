@@ -92,7 +92,7 @@ interface IBurnerLoansComposites {
     /// @param healthFactor Health reported after the composite operation. Returns max uint when the
     ///                     position is debt-free.
     struct RepayAndWithdrawResult {
-        uint256 repaidOhm;
+        uint128 repaidOhm;
         uint256 refundedOhm;
         address tokenOut;
         uint256 amountOut;

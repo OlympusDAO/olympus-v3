@@ -1,12 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTest {
     function test_whenYieldAssetRoutingHasZeroDirectAllocations_queues() public {
@@ -281,3 +286,7 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

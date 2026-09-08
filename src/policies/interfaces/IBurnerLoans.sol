@@ -305,7 +305,7 @@ interface IBurnerLoans {
     /// @param lastBorrowBlock Block number of the position's latest borrow.
     struct Position {
         uint256 depositedCollateral;
-        uint256 debtOhm;
+        uint128 debtOhm;
         uint48 maturity;
         uint48 lastBorrowBlock;
     }
@@ -328,11 +328,13 @@ interface IBurnerLoans {
         uint16 keeperRewardBps;
         uint48 termLength;
         uint48 maxMaturityHorizon;
-        uint256 debtCap;
-        uint256 maxKeeperReward;
+        uint128 debtCap;
+        uint128 maxKeeperReward;
     }
 
     /// @notice Mutable risk and term fields for a Burner Loans collateral market.
+    /// @dev `maxKeeperReward` matches the `uint128` width used by FLOAN market configuration;
+    ///      every representable value is valid, so no separate upper-bound check is required.
     /// @param maxLtvBps Maximum loan-to-value ratio applied to collateral value.
     /// @param backingMultiplierBps Multiplier applied to the protocol backing floor.
     /// @param keeperRewardBps Share of seized collateral awarded to the keeper.
@@ -345,7 +347,7 @@ interface IBurnerLoans {
         uint16 keeperRewardBps;
         uint48 termLength;
         uint48 maxMaturityHorizon;
-        uint256 maxKeeperReward;
+        uint128 maxKeeperReward;
     }
 
     /// @notice Piecewise-linear utilization fee configuration.

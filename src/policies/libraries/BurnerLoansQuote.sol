@@ -11,6 +11,7 @@ import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/inter
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
@@ -97,6 +98,8 @@ library BurnerLoansQuote {
         );
 
         if (position.collateral == 0) revert IBurnerLoans.BurnerLoans_NoCollateral();
+        // Loan maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (position.principalDue != 0 && block.timestamp >= position.maturity) {
             revert IBurnerLoans.BurnerLoans_PositionMatured(position.maturity);
         }
@@ -156,7 +159,7 @@ library BurnerLoansQuote {
             preview.executable = false;
         }
         preview.maturity = position.principalDue == 0
-            ? uint48(block.timestamp + config.termLength)
+            ? SafeCast.toUint48(block.timestamp + config.termLength)
             : position.maturity;
     }
 
@@ -406,6 +409,8 @@ library BurnerLoansQuote {
         uint256 requestedMaturity = uint256(context_.currentMaturity) +
             uint256(context_.config.termLength) *
             context_.termCount;
+        // Extension maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (requestedMaturity <= block.timestamp) {
             revert IBurnerLoans.BurnerLoans_ExtensionMaturityNotFuture(
                 requestedMaturity,
@@ -413,7 +418,11 @@ library BurnerLoansQuote {
             );
         }
         uint256 maximumMaturity = block.timestamp + uint256(context_.config.maxMaturityHorizon);
+        // This derived chain-time bound is only clamped to the uint48 storage range.
+        // forge-lint: disable-next-line(block-timestamp)
         if (maximumMaturity > type(uint48).max) maximumMaturity = type(uint48).max;
+        // Maturity horizons span protocol timeframes and tolerate normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (requestedMaturity > maximumMaturity) {
             revert IBurnerLoans.BurnerLoans_MaturityHorizonExceeded(
                 requestedMaturity,
@@ -471,6 +480,8 @@ library BurnerLoansQuote {
         if (
             price == 0 ||
             timestamp == 0 ||
+            // Price freshness windows tolerate normal validator timestamp drift.
+            // forge-lint: disable-next-line(block-timestamp)
             block.timestamp > uint256(timestamp) + uint256(frequency_)
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidPrice();

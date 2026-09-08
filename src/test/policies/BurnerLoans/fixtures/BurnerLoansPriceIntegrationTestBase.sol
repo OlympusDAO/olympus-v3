@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {ModuleTestFixtureGenerator} from "test/lib/ModuleTestFixtureGenerator.sol";
 import {ModulePermissions} from "test/lib/generated/ModulePermissions.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
@@ -9,7 +15,7 @@ import {Actions} from "src/Kernel.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
-import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
+import {toSubKeycode} from "src/Submodules.sol";
 
 import {BurnerLoansBorrowTestBase} from "./BurnerLoansBorrowTestBase.sol";
 
@@ -102,3 +108,7 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
         vm.stopPrank();
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

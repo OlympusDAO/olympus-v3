@@ -7,6 +7,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {MockTimelockBatchQueue} from "src/test/policies/utils/TimelockBatchQueue/fixtures/MockTimelockBatchQueue.sol";
 import {ReentrantSubAction} from "src/test/policies/utils/TimelockBatchQueue/fixtures/ReentrantSubAction.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 abstract contract TimelockBatchQueueTest is Test {
     uint48 internal constant TIMELOCK_DELAY = 1 days;
     uint48 internal constant EXECUTION_WINDOW = 7 days;
@@ -60,7 +63,7 @@ abstract contract TimelockBatchQueueTest is Test {
         for (uint256 i; i < size_; ++i) {
             actions[i] = ITimelockBatchQueue.BatchAction({
                 target: address(uint160(0x1000 + i)),
-                selector: bytes4(uint32(0xa0000000 + i)),
+                selector: bytes4(uint32(0xa000_0000 + i)),
                 payload: abi.encode(i)
             });
         }
@@ -84,3 +87,5 @@ abstract contract TimelockBatchQueueTest is Test {
         vm.warp(queue.getQueuedAction(actionId_).executableAt);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

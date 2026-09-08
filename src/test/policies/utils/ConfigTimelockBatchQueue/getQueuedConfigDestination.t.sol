@@ -4,8 +4,10 @@ pragma solidity >=0.8.24;
 import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelockBatchQueue/ConfigTimelockBatchQueueTest.sol";
 
 contract ConfigTimelockBatchQueueGetQueuedConfigDestinationTest is ConfigTimelockBatchQueueTest {
+    uint256 internal constant _CONFIG_VALUE = 11;
+
     function test_getQueuedConfigDestination_returnsQueueTimeDestination() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE), 1);
         assertEq(
             _queue.getQueuedConfigDestination(actionId, 0),
             address(_target),
@@ -14,7 +16,7 @@ contract ConfigTimelockBatchQueueGetQueuedConfigDestinationTest is ConfigTimeloc
     }
 
     function test_getQueuedConfigDestination_afterExecution_returnsZero() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE), 1);
         _warpReady(actionId);
         _queue.executeQueuedAction(actionId);
         assertEq(
@@ -25,7 +27,7 @@ contract ConfigTimelockBatchQueueGetQueuedConfigDestinationTest is ConfigTimeloc
     }
 
     function test_getQueuedConfigDestination_afterCancellation_returnsZero() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE), 1);
         _queue.cancelQueuedAction(actionId);
         assertEq(
             _queue.getQueuedConfigDestination(actionId, 0),

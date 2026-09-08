@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Test} from "forge-std/Test.sol";
 
 // Interfaces
@@ -111,3 +114,5 @@ abstract contract ConfigTimelockBatchQueueTest is Test {
         assertEq(_queue.pendingActionId(key_), corruptOwner_, "corrupt owner after write");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

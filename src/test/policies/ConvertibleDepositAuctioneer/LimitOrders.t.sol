@@ -7,6 +7,9 @@
 // solhint-disable one-contract-per-file
 pragma solidity ^0.8.20;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 // Test
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockConvertibleDepositAuctioneer} from "src/test/mocks/MockConvertibleDepositAuctioneer.sol";
@@ -3916,3 +3919,5 @@ contract CDAuctioneerLimitOrdersTest is Test {
     }
 }
 /// forge-lint: disable-end(mixed-case-variable)
+
+// forge-lint: disable-end(unused-return)

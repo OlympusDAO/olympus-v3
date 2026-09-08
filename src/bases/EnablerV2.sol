@@ -157,6 +157,8 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
     ///      override the source of time without modifying the implementation.
     /// @return timestamp The current block timestamp.
     function _getBlockTimestamp() internal view virtual returns (uint48 timestamp) {
+        // uint48 timestamps cover roughly 8.9 million years, beyond any supported chain lifetime.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint48(block.timestamp);
     }
 

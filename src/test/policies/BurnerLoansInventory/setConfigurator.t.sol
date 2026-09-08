@@ -6,7 +6,8 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
-import {BurnerLoansInventoryPrincipal, BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+import {BurnerLoansInventoryPrincipal} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryPrincipal.sol";
+import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 
 contract BurnerLoansInventorySetConfiguratorTest is BurnerLoansInventoryTest {
     function test_givenValidConfigurator_setsAddress() public {

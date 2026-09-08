@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {BURNER_LOANS_INVENTORY_PROVIDER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract BurnerLoansInventoryWithdrawTest is BurnerLoansInventoryTest {
     function setUp() public override {
@@ -207,3 +213,7 @@ contract BurnerLoansInventoryWithdrawTest is BurnerLoansInventoryTest {
         _assertInventoryInvariant();
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansPriceIntegrationTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansPriceIntegrationTestBase.sol";
@@ -116,3 +122,7 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
         assertEq(burnerLoans.totalActiveDebtOhm(), _BORROW_AMOUNT, "active debt");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

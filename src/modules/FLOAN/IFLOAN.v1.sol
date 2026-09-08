@@ -132,9 +132,29 @@ interface IFLOANv1 is IERC165 {
         address facility,
         bytes16 configId
     );
-    /// @notice Emitted when typed or opaque market configuration changes.
-    /// @dev Consumers should read the complete resulting configuration from the module.
-    event MarketConfigUpdated(uint32 indexed marketId);
+    /// @notice Emitted after a market's principal cap changes.
+    /// @param marketId Market whose principal cap changed.
+    /// @param principalCap New maximum live principal in debt-token decimals.
+    event MarketPrincipalCapSet(uint32 indexed marketId, uint128 principalCap);
+    /// @notice Emitted after a market's risk configuration changes.
+    /// @param marketId Market whose risk configuration changed.
+    /// @param termLength New standard origination term in seconds.
+    /// @param maxMaturityHorizon New maximum maturity distance from the current timestamp.
+    /// @param maxLtvBps New maximum loan-to-value ratio, in basis points.
+    event MarketRiskConfigSet(
+        uint32 indexed marketId,
+        uint48 termLength,
+        uint48 maxMaturityHorizon,
+        uint16 maxLtvBps
+    );
+    /// @notice Emitted after a market's base origination fee changes.
+    /// @param marketId Market whose base fee changed.
+    /// @param baseFeeBps New base origination fee, in basis points.
+    event MarketBaseFeeSet(uint32 indexed marketId, uint16 baseFeeBps);
+    /// @notice Emitted after a market's product-specific configuration changes.
+    /// @param marketId Market whose product-specific configuration changed.
+    /// @param configData New opaque product-specific configuration.
+    event MarketConfigDataSet(uint32 indexed marketId, bytes configData);
     /// @notice Emitted when market configuration authority is transferred.
     event MarketManagerSet(
         uint32 indexed marketId,

@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {BurnerLoansInventoryTest} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansInventoryDrawTest is BurnerLoansInventoryTest {
     uint128 internal constant DRAW_CAP = 1_000e9;
@@ -232,3 +238,7 @@ contract BurnerLoansInventoryDrawTest is BurnerLoansInventoryTest {
         inventory.draw(recipient, 1);
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

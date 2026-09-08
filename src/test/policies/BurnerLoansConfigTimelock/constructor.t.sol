@@ -5,7 +5,6 @@ pragma solidity >=0.8.24;
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 
@@ -17,6 +16,9 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(multi-contract-file)
 
 contract BurnerLoansConfigTimelockConstructorTest is BurnerLoansConfigTimelockTest {
     // constructor
@@ -206,3 +208,5 @@ contract MockNonConfigOperatorBurnerLoansConfig is Policy, IERC165 {
             interfaceId_ == type(IEnabler).interfaceId;
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)

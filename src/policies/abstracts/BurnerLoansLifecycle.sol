@@ -65,10 +65,12 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Fixed-term loan module holding markets and positions.
     IFLOANv1 internal _FLOAN;
 
-    /// @dev Price module used for collateral and OHM valuation.
+    /// @dev Used by the derived `BurnerLoans` implementation for collateral and OHM valuation.
+    // forge-lint: disable-next-line(unused-state-variables)
     IPRICEv2 internal _PRICE;
 
-    /// @dev Treasury module receiving fees, yield, and seized collateral.
+    /// @dev Used by the derived `BurnerLoans` implementation to receive protocol assets.
+    // forge-lint: disable-next-line(unused-state-variables)
     TRSRYv1 internal _TRSRY;
 
     /// @notice Initializes the facility's immutable Kernel, OHM, and custody dependencies.

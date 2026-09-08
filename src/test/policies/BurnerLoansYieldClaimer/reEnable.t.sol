@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -12,6 +15,9 @@ import {Actions} from "src/Kernel.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 import {BurnerLoansYieldClaimerTest} from "./BurnerLoansYieldClaimerTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract BurnerLoansYieldClaimerReEnableTest is BurnerLoansYieldClaimerTest {
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
@@ -85,3 +91,7 @@ contract BurnerLoansYieldClaimerReEnableTest is BurnerLoansYieldClaimerTest {
         assertTrue(claimer.isEnabled(), "enabled");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

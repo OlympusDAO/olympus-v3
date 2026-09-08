@@ -119,9 +119,13 @@ contract OlympusFixedTermLoan is FLOANv1 {
         EnumerableSet.UintSet storage positionIds = _positionIdsByMarketAndBorrower[marketId_][
             borrower_
         ];
+        // The false literal explicitly marks the absent tuple paired with a zero position ID.
+        // forge-lint: disable-next-line(boolean-cst)
         if (index_ >= positionIds.length()) return (false, 0);
 
-        // Position IDs enter this index only through uint64-typed storage helpers.
+        // Every value enters this uint256-backed index from a uint64 position ID, so it fits.
+        // The true literal explicitly marks the populated tuple.
+        // forge-lint: disable-next-line(boolean-cst,unsafe-typecast)
         return (true, uint64(positionIds.at(index_)));
     }
 
@@ -166,7 +170,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requireManager(marketId_);
         if (principalCap_ < getMarketPrincipalDue[marketId_]) revert FLOAN_InvalidConfig();
         _markets[marketId_].principalCap = principalCap_;
-        emit MarketConfigUpdated(marketId_);
+        emit MarketPrincipalCapSet(marketId_, principalCap_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -179,10 +183,12 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requireManager(marketId_);
         _validateRiskConfig(termLength_, maxMaturityHorizon_, maxLtvBps_);
         Market storage market = _markets[marketId_];
+        // Risk fields share storage with authorization fields but do not change access control.
+        // forge-lint: disable-next-line(missing-events-access-control)
         market.termLength = termLength_;
         market.maxMaturityHorizon = maxMaturityHorizon_;
         market.maxLtvBps = maxLtvBps_;
-        emit MarketConfigUpdated(marketId_);
+        emit MarketRiskConfigSet(marketId_, termLength_, maxMaturityHorizon_, maxLtvBps_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -190,7 +196,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
         _requireManager(marketId_);
         if (baseFeeBps_ > _BPS) revert FLOAN_InvalidConfig();
         _markets[marketId_].baseFeeBps = baseFeeBps_;
-        emit MarketConfigUpdated(marketId_);
+        emit MarketBaseFeeSet(marketId_, baseFeeBps_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -200,7 +206,7 @@ contract OlympusFixedTermLoan is FLOANv1 {
     ) external override permissioned {
         _requireManager(marketId_);
         _marketConfigData[marketId_] = configData_;
-        emit MarketConfigUpdated(marketId_);
+        emit MarketConfigDataSet(marketId_, configData_);
     }
 
     /// @inheritdoc IFLOANv1
@@ -288,6 +294,8 @@ contract OlympusFixedTermLoan is FLOANv1 {
     ) external override permissioned returns (Position memory position) {
         Position storage stored = _requireOriginatingPosition(positionId_);
         bool startsDebtEpisode = stored.principalDue == 0 && stored.interestDue == 0;
+        // Loan maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (maturity_ <= block.timestamp) revert FLOAN_InvalidAmount();
         if (principal_ == 0) {
             if (interest_ == 0 || startsDebtEpisode) revert FLOAN_InvalidAmount();
@@ -369,11 +377,15 @@ contract OlympusFixedTermLoan is FLOANv1 {
 
         Market storage market = _markets[stored.marketId];
         uint48 oldMaturity = stored.maturity;
+        // Extension maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (newMaturity_ <= oldMaturity || newMaturity_ <= block.timestamp) {
             revert FLOAN_InvalidMaturity(oldMaturity, newMaturity_);
         }
         if (market.maxMaturityHorizon != type(uint48).max) {
             uint256 maximumMaturity = block.timestamp + market.maxMaturityHorizon;
+            // Maturity horizons span protocol timeframes and tolerate normal validator drift.
+            // forge-lint: disable-next-line(block-timestamp)
             if (newMaturity_ > maximumMaturity) {
                 // The cast is safe: this branch requires maximumMaturity < newMaturity_, and the
                 // requested maturity is already bounded to uint48 by the function signature.

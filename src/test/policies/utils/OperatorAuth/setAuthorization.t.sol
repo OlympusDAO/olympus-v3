@@ -4,9 +4,15 @@ pragma solidity >=0.8.24;
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {OperatorAuthTest} from "../OperatorAuth.t.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract OperatorAuthSetAuthorizationTest is OperatorAuthTest {
+    uint48 internal constant _AUTHORIZATION_VALIDITY = 1 days;
+    uint48 internal constant _EXTENDED_AUTHORIZATION_VALIDITY = 2 days;
+
     function test_setAuthorization_givenBeforeDeadline_authorizesOperator() public {
-        uint48 deadline = uint48(block.timestamp + 1 days);
+        uint48 deadline = uint48(block.timestamp + _AUTHORIZATION_VALIDITY);
 
         _setAuthorizationAndExpectEvent(owner, operator, deadline);
 
@@ -62,11 +68,11 @@ contract OperatorAuthSetAuthorizationTest is OperatorAuthTest {
     function test_setAuthorization_givenSelfAuthorization_reverts() public {
         vm.prank(owner);
         vm.expectRevert(IOperatorAuth.OperatorAuth_SelfAuthorization.selector);
-        auth.setAuthorization(owner, uint48(block.timestamp + 1 days));
+        auth.setAuthorization(owner, uint48(block.timestamp + _AUTHORIZATION_VALIDITY));
     }
 
     function test_setAuthorization_givenCallerIsNotOwner_authorizesOnlyCaller() public {
-        uint48 deadline = uint48(block.timestamp + 1 days);
+        uint48 deadline = uint48(block.timestamp + _AUTHORIZATION_VALIDITY);
 
         vm.prank(caller);
         auth.setAuthorization(operator, deadline);
@@ -76,10 +82,18 @@ contract OperatorAuthSetAuthorizationTest is OperatorAuthTest {
     }
 
     function test_setAuthorization_givenExistingNonce() public {
-        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            operator,
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
+        );
         uint256 nonceBefore = auth.authorizationNonces(owner);
 
-        _setAuthorizationAndExpectEvent(owner, otherOperator, uint48(block.timestamp + 2 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            otherOperator,
+            uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY)
+        );
 
         assertEq(
             auth.authorizationNonces(owner),
@@ -89,8 +103,8 @@ contract OperatorAuthSetAuthorizationTest is OperatorAuthTest {
     }
 
     function test_setAuthorization_givenPendingSignature_invalidatesSignature() public {
-        uint48 directDeadline = uint48(block.timestamp + 1 days);
-        uint48 signedDeadline = uint48(block.timestamp + 2 days);
+        uint48 directDeadline = uint48(block.timestamp + _AUTHORIZATION_VALIDITY);
+        uint48 signedDeadline = uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY);
         (
             IOperatorAuth.Authorization memory authorization,
             IOperatorAuth.Signature memory signature
@@ -125,3 +139,5 @@ contract OperatorAuthSetAuthorizationTest is OperatorAuthTest {
         );
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

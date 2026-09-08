@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {Actions, Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
@@ -9,8 +12,12 @@ import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
 import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {BurnerLoansInventoryPrincipal} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryPrincipal.sol";
 
-import {BurnerLoansInventoryPrincipal, BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(multi-contract-file)
 
 contract BurnerLoansInventoryConfigureDependenciesTest is BurnerLoansInventoryTest {
     // configureDependencies
@@ -198,3 +205,7 @@ contract MockUnsupportedInventoryTrsry is Module {
         return (2, 0);
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(literal-instead-of-constant)

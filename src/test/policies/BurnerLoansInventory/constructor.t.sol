@@ -8,8 +8,9 @@ import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInvento
 // Contracts
 import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
+import {BurnerLoansInventoryPrincipal} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryPrincipal.sol";
 
-import {BurnerLoansInventoryPrincipal, BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
 
 contract BurnerLoansInventoryConstructorTest is BurnerLoansInventoryTest {
     // constructor

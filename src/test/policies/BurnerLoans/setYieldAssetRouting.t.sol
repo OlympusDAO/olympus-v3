@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -11,6 +14,10 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 // Contracts
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {BurnerLoansYieldRoutingTestBase} from "./fixtures/BurnerLoansYieldRoutingTestBase.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unsafe-typecast,calls-loop)
 
 contract BurnerLoansSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTestBase {
     function test_whenValidRouteValidated_callerIsArbitrary(address caller_) public {
@@ -349,3 +356,7 @@ contract BurnerLoansSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTestBase 
         _setYieldAssetRouting(address(asset), routing);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract FLOANSetMarketPrincipalCapTest is FLOANTest {
     // setMarketPrincipalCap
@@ -81,7 +87,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
         uint128 cap = 100e9 + surplus_;
 
         vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.MarketConfigUpdated(marketId);
+        emit IFLOANv1.MarketPrincipalCapSet(marketId, cap);
         vm.prank(manager);
         floan.setMarketPrincipalCap(marketId, cap);
 
@@ -90,3 +96,7 @@ contract FLOANSetMarketPrincipalCapTest is FLOANTest {
         assertEq(floan.getFacilityPrincipalDue(facility, debtToken), 100e9, "facility principal");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// missing-zero-check: Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// empty-block: Unsupported interface hooks are intentional no-ops in this focused test mock.
+// forge-lint: disable-start(missing-zero-check, empty-block)
+
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
-contract MockDepositManager is IDepositManager {
+contract MockDepositManager is IDepositManager, IERC165 {
     error MockDepositManager_TransferFailed();
 
     Kernel public kernel;
@@ -74,9 +80,13 @@ contract MockDepositManager is IDepositManager {
             );
         }
 
-        if (!params.asset.transferFrom(params.depositor, address(this), params.amount)) {
-            revert MockDepositManager_TransferFailed();
-        }
+        // The depositor authorizes this operator-initiated pull through ERC-20 allowance.
+        TransferHelper.safeTransferFromExact(
+            ERC20(address(params.asset)),
+            params.depositor,
+            address(this),
+            params.amount
+        );
 
         uint256 shares;
         if (configuration.vault == address(0)) {
@@ -140,6 +150,8 @@ contract MockDepositManager is IDepositManager {
     ) external override returns (uint256 actualAmount) {
         claimYieldCalls++;
         if (claimYieldCallbackTarget != address(0)) {
+            // The fixture records callback failure without reverting the claim.
+            // forge-lint: disable-next-line(low-level-calls)
             (claimYieldCallbackSucceeded, ) = claimYieldCallbackTarget.call(claimYieldCallbackData);
         }
 
@@ -389,7 +401,7 @@ contract MockDepositManager is IDepositManager {
         return _configuredAssets;
     }
 
-    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IDepositManager).interfaceId;
@@ -455,3 +467,5 @@ contract MockDepositManager is IDepositManager {
         return keccak256(abi.encode(address(asset_), operator_));
     }
 }
+
+// forge-lint: disable-end(missing-zero-check)

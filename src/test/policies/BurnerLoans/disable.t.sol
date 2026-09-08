@@ -8,7 +8,12 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansDisableTest is BurnerLoansTest {
+    uint48 internal constant _TRANSITION_TIMESTAMP = 2345;
+
     event Disabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -69,16 +74,16 @@ contract BurnerLoansDisableTest is BurnerLoansTest {
     //  when disable is called while enabled
     //   then the policy is disabled and transition time is recorded
     function test_givenEmergencyCaller_disablesPolicy() public {
-        vm.warp(2345);
+        vm.warp(_TRANSITION_TIMESTAMP);
         vm.prank(emergency);
         vm.expectEmit(address(burnerLoans));
         emit Disabled();
         vm.expectEmit(true, true, false, true, address(burnerLoans));
-        emit Transition(emergency, false, "", 2345);
+        emit Transition(emergency, false, "", _TRANSITION_TIMESTAMP);
         burnerLoans.disable("");
 
         assertFalse(burnerLoans.isEnabled(), "enabled");
-        assertEq(burnerLoans.lastTransitionAt(), 2345, "last transition");
+        assertEq(burnerLoans.lastTransitionAt(), _TRANSITION_TIMESTAMP, "last transition");
     }
 
     // disable
@@ -96,3 +101,5 @@ contract BurnerLoansDisableTest is BurnerLoansTest {
         assertFalse(burnerLoans.isEnabled(), "enabled");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -15,6 +18,10 @@ import {BurnerLoansYieldClaimer} from "src/policies/BurnerLoansYieldClaimer.sol"
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldTestBase {
     uint32 internal constant _ROUTE_EXECUTION_GAS_LIMIT = 700_000;
@@ -291,3 +298,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         vm.stopPrank();
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

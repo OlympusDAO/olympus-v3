@@ -1,9 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 
 import {FLOANTest} from "./FLOANTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract FLOANExtendMaturityTest is FLOANTest {
     // extendMaturity
@@ -216,3 +222,7 @@ contract FLOANExtendMaturityTest is FLOANTest {
         assertEq(floan.getMarketInterestDue(marketId), 10e9, "market interest");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -2,15 +2,22 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
     address internal operator;
@@ -691,7 +698,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
         uint256 aliceBalance = usds.balanceOf(alice);
         vm.prank(alice);
-        usds.transfer(operator, aliceBalance);
+        TransferHelper.safeTransfer(usds, operator, aliceBalance);
 
         vm.prank(alice);
         vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
@@ -763,3 +770,7 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         burnerLoans.extend(unknownAsset, alice, 1, type(uint256).max);
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

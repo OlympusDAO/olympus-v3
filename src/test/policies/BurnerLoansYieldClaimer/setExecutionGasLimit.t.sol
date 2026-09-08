@@ -6,19 +6,24 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 import {BurnerLoansYieldClaimerTest} from "./BurnerLoansYieldClaimerTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansYieldClaimerSetExecutionGasLimitTest is BurnerLoansYieldClaimerTest {
+    uint32 internal constant _UPDATED_EXECUTION_GAS_LIMIT = 500_000;
+
     function test_givenAdmin_setsLimit() public {
         vm.prank(admin);
-        claimer.setExecutionGasLimit(500_000);
+        claimer.setExecutionGasLimit(_UPDATED_EXECUTION_GAS_LIMIT);
 
-        assertEq(claimer.executionGasLimit(), 500_000, "execution gas limit");
+        assertEq(claimer.executionGasLimit(), _UPDATED_EXECUTION_GAS_LIMIT, "execution gas limit");
     }
 
     function test_givenBurnerLoansAdmin_setsLimit() public {
         vm.prank(burnerLoansAdmin);
-        claimer.setExecutionGasLimit(500_000);
+        claimer.setExecutionGasLimit(_UPDATED_EXECUTION_GAS_LIMIT);
 
-        assertEq(claimer.executionGasLimit(), 500_000, "execution gas limit");
+        assertEq(claimer.executionGasLimit(), _UPDATED_EXECUTION_GAS_LIMIT, "execution gas limit");
     }
 
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
@@ -27,7 +32,7 @@ contract BurnerLoansYieldClaimerSetExecutionGasLimitTest is BurnerLoansYieldClai
 
         vm.prank(caller_);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        claimer.setExecutionGasLimit(500_000);
+        claimer.setExecutionGasLimit(_UPDATED_EXECUTION_GAS_LIMIT);
     }
 
     function test_givenZeroLimit_reverts() public {
@@ -47,3 +52,5 @@ contract BurnerLoansYieldClaimerSetExecutionGasLimitTest is BurnerLoansYieldClai
         assertEq(claimer.executionGasLimit(), gasLimit_, "execution gas limit");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

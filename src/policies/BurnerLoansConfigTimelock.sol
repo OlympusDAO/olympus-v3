@@ -135,6 +135,8 @@ contract BurnerLoansConfigTimelock is
         dependencies[0] = toKeycode("ROLES");
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = Module(address(ROLES)).VERSION();
         if (rolesMajor != 1) {
             revert BurnerLoansConfigTimelock_InvalidModuleVersion();
@@ -638,8 +640,11 @@ contract BurnerLoansConfigTimelock is
     /// @dev Reverts with the same pending-key error used by `ConfigTimelockBatchQueue`.
     function _requireConfigKeyAvailable(bytes32 localKey_) internal view {
         bytes32 key = keccak256(abi.encode(address(_BURNER_LOANS_CONFIG), localKey_));
-        uint64 owner = this.pendingActionId(key);
+        uint64 owner = _pendingActionIds[key];
         if (owner != 0) {
+            // A registry-wide availability check is intentionally atomic: any pending route key
+            // must reject the complete configuration action.
+            // forge-lint: disable-next-line(require-revert-in-loop)
             revert IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending(key, owner);
         }
     }
@@ -651,6 +656,9 @@ contract BurnerLoansConfigTimelock is
         IBurnerLoansView facility = _yieldFacility();
         uint256 assetCount = facility.getAssetCount();
         for (uint256 i; i < assetCount; ++i) {
+            // The governance-controlled registry is expected to remain small, and a complete scan
+            // is required to prevent conflicting recipient and per-asset routing changes.
+            // forge-lint: disable-next-line(calls-loop)
             _requireConfigKeyAvailable(_yieldAssetRoutingKey(facility.getAssetAt(i)));
         }
     }

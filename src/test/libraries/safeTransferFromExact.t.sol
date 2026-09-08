@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
@@ -13,6 +16,8 @@ import {TransferHelperHarness} from "src/test/libraries/fixtures/TransferHelperH
 import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 
 contract TransferHelperSafeTransferFromExactTest is Test {
+    uint256 internal constant _EXISTING_BALANCE = 7e18;
+
     address internal _sender;
     address internal _recipient;
     address internal _feeRecipient;
@@ -52,7 +57,7 @@ contract TransferHelperSafeTransferFromExactTest is Test {
     }
 
     function test_whenAmountIsZero_preservesBalances() public {
-        uint256 existingBalance = 7e18;
+        uint256 existingBalance = _EXISTING_BALANCE;
         _token.mint(_recipient, existingBalance);
 
         uint256 balanceBefore = _helper.safeTransferFromExact(_token, _sender, _recipient, 0);
@@ -82,7 +87,7 @@ contract TransferHelperSafeTransferFromExactTest is Test {
             _feeRecipient
         );
         uint256 amount = 100e18;
-        uint256 existingBalance = 7e18;
+        uint256 existingBalance = _EXISTING_BALANCE;
         uint256 receivedAmount = 90e18;
         feeToken.mint(_sender, amount);
         feeToken.mint(_recipient, existingBalance);
@@ -123,3 +128,5 @@ contract TransferHelperSafeTransferFromExactTest is Test {
         assertEq(decreasingToken.balanceOf(_recipient), 1, "recipient balance rolled back");
     }
 }
+
+// forge-lint: disable-end(unused-return)

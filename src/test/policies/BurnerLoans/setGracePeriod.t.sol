@@ -9,6 +9,9 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansSetGracePeriodTest is BurnerLoansTest {
     // setGracePeriod
     // given caller does not have the admin role
@@ -73,3 +76,5 @@ contract BurnerLoansSetGracePeriodTest is BurnerLoansTest {
         assertEq(burnerLoans.gracePeriod(), type(uint32).max, "grace period");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

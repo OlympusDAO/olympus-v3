@@ -3,11 +3,16 @@ pragma solidity >=0.8.24;
 
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
-import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
+import {IBurnerLoansCompositesToken} from "src/test/periphery/BurnerLoansComposites/IBurnerLoansCompositesToken.sol";
 import {BurnerLoansBorrowTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansBorrowTestBase.sol";
 
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
+
 abstract contract BurnerLoansCompositesTest is BurnerLoansBorrowTestBase {
+    uint48 internal constant _AUTHORIZATION_DURATION = 1 days;
+
     bytes32 internal constant _AUTHORIZATION_TYPEHASH =
         keccak256(
             "Authorization(address account,address authorized,uint48 authorizationDeadline,uint256 nonce,uint48 signatureDeadline)"
@@ -30,13 +35,20 @@ abstract contract BurnerLoansCompositesTest is BurnerLoansBorrowTestBase {
         internal
         pure
         returns (IOperatorAuth.Authorization memory authorization)
-    {}
+    {
+        return authorization;
+    }
 
-    function _emptySignature() internal pure returns (IOperatorAuth.Signature memory signature) {}
+    function _emptySignature() internal pure returns (IOperatorAuth.Signature memory signature) {
+        return signature;
+    }
 
     function _authorize(address account_) internal {
         vm.prank(account_);
-        burnerLoans.setAuthorization(address(composites), uint48(block.timestamp + 1 days));
+        burnerLoans.setAuthorization(
+            address(composites),
+            uint48(block.timestamp + _AUTHORIZATION_DURATION)
+        );
     }
 
     function _signedAuthorization(
@@ -53,7 +65,7 @@ abstract contract BurnerLoansCompositesTest is BurnerLoansBorrowTestBase {
         authorization = IOperatorAuth.Authorization({
             account: account_,
             authorized: address(composites),
-            authorizationDeadline: uint48(block.timestamp + 1 days),
+            authorizationDeadline: uint48(block.timestamp + _AUTHORIZATION_DURATION),
             nonce: burnerLoans.authorizationNonces(account_),
             signatureDeadline: uint48(block.timestamp + 1 hours)
         });
@@ -110,8 +122,4 @@ abstract contract BurnerLoansCompositesTest is BurnerLoansBorrowTestBase {
     }
 }
 
-interface IBurnerLoansCompositesToken {
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function balanceOf(address account) external view returns (uint256);
-}
+// forge-lint: disable-end(unused-return,unsafe-typecast)

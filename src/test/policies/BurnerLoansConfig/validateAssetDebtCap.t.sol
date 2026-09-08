@@ -5,6 +5,9 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract BurnerLoansConfigValidateAssetDebtCapTest is BurnerLoansTest {
     // validateAssetDebtCap
     // given asset is not configured
@@ -79,3 +82,5 @@ contract BurnerLoansConfigValidateAssetDebtCapTest is BurnerLoansTest {
         burnerLoansConfig.validateAssetDebtCap(address(usds), cap_);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)

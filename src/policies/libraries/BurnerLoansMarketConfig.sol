@@ -9,6 +9,8 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @notice Encodes and decodes the Burner Loans-specific portion of a FLOAN market.
 library BurnerLoansMarketConfig {
     /// @notice FLOAN configuration schema identifier for Burner Loans v1.
+    // The 15-byte literal fits in bytes16; the fixed-width conversion cannot truncate it.
+    // forge-lint: disable-next-line(unsafe-typecast)
     bytes16 internal constant CONFIG_ID = bytes16("Burner Loans v1");
 
     /// @dev Exact ABI-encoded length of `Data`.
@@ -22,29 +24,6 @@ library BurnerLoansMarketConfig {
         uint16 kinkBps;
         uint16 preKinkSlopeBps;
         uint16 postKinkSlopeBps;
-    }
-
-    /// @notice Resolves the unique FLOAN market for a facility and token pair.
-    /// @dev Reverts when no matching market exists or the pair is ambiguous.
-    /// @param floan_ FLOAN module to query.
-    /// @param facility_ Facility servicing the market.
-    /// @param collateralToken_ Market collateral token.
-    /// @param debtToken_ Market debt token.
-    /// @return marketId_ Unique matching FLOAN market identifier.
-    function marketId(
-        IFLOANv1 floan_,
-        address facility_,
-        address collateralToken_,
-        address debtToken_
-    ) internal view returns (uint32) {
-        uint256[] memory marketIds = floan_.getMarketIds(facility_, collateralToken_, debtToken_);
-        if (marketIds.length == 0) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(collateralToken_);
-        }
-        if (marketIds.length != 1) {
-            revert IBurnerLoans.BurnerLoans_AmbiguousMarket(collateralToken_, marketIds.length);
-        }
-        return uint32(marketIds[0]);
     }
 
     /// @notice Resolves the first FLOAN market for a facility and token pair.
@@ -65,22 +44,9 @@ library BurnerLoansMarketConfig {
         if (marketIds.length == 0) {
             revert IBurnerLoans.BurnerLoans_AssetNotConfigured(collateralToken_);
         }
+        // FLOAN indexes only uint32-typed market IDs in this uint256-backed set.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return uint32(marketIds[0]);
-    }
-
-    /// @notice Returns whether FLOAN contains at least one market for a facility and token pair.
-    /// @param floan_ FLOAN module to query.
-    /// @param facility_ Facility servicing the market.
-    /// @param collateralToken_ Market collateral token.
-    /// @param debtToken_ Market debt token.
-    /// @return exists True when at least one matching market exists.
-    function hasMarket(
-        IFLOANv1 floan_,
-        address facility_,
-        address collateralToken_,
-        address debtToken_
-    ) internal view returns (bool) {
-        return floan_.getMarketIds(facility_, collateralToken_, debtToken_).length != 0;
     }
 
     /// @notice Validates and decodes Burner Loans-specific FLOAN market data.
@@ -112,27 +78,6 @@ library BurnerLoansMarketConfig {
         if (market_.configId != CONFIG_ID) {
             revert IBurnerLoans.BurnerLoans_IncompatibleMarketConfig(marketId_, market_.configId);
         }
-    }
-
-    /// @notice Encodes Burner Loans-specific market fields for FLOAN storage.
-    /// @param assetConfig_ Asset configuration containing risk and keeper fields.
-    /// @param feeConfig_ Utilization fee configuration.
-    /// @return data Encoded Burner Loans market data.
-    function encode(
-        IBurnerLoans.AssetConfig memory assetConfig_,
-        IBurnerLoans.AssetFeeConfig memory feeConfig_
-    ) internal pure returns (bytes memory) {
-        return
-            abi.encode(
-                Data({
-                    maxKeeperReward: uint128(assetConfig_.maxKeeperReward),
-                    backingMultiplierBps: assetConfig_.backingMultiplierBps,
-                    keeperRewardBps: assetConfig_.keeperRewardBps,
-                    kinkBps: feeConfig_.kinkBps,
-                    preKinkSlopeBps: feeConfig_.preKinkSlopeBps,
-                    postKinkSlopeBps: feeConfig_.postKinkSlopeBps
-                })
-            );
     }
 
     /// @notice Builds the complete Burner Loans asset configuration for a FLOAN market.

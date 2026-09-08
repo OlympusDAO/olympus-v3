@@ -1,18 +1,29 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ECDSA} from "@openzeppelin-5.3.0/utils/cryptography/ECDSA.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
-import {OperatorAuthHarness, OperatorAuthTest} from "../OperatorAuth.t.sol";
+import {OperatorAuthTest} from "../OperatorAuth.t.sol";
+import {OperatorAuthHarness} from "./OperatorAuthHarness.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
+    uint48 internal constant _SIGNATURE_VALIDITY = 1 hours;
+    uint48 internal constant _AUTHORIZATION_VALIDITY = 1 days;
+    uint48 internal constant _EXTENDED_AUTHORIZATION_VALIDITY = 2 days;
+
     function test_setAuthorizationWithSig_givenValidSignature_setsAuthorizationAndConsumesNonce(
         uint48 authorizationDeadline_
     ) public {
         uint48 authorizationDeadline = uint48(
             bound(authorizationDeadline_, block.timestamp, type(uint48).max)
         );
-        uint48 signatureDeadline = uint48(block.timestamp + 1 hours);
+        uint48 signatureDeadline = uint48(block.timestamp + _SIGNATURE_VALIDITY);
         (
             IOperatorAuth.Authorization memory authorization,
             IOperatorAuth.Signature memory signature
@@ -39,7 +50,11 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
     }
 
     function test_setAuthorizationWithSig_givenExistingNonce() public {
-        _setAuthorizationAndExpectEvent(owner, otherOperator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            otherOperator,
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
+        );
         uint256 nonceBefore = auth.authorizationNonces(owner);
         (
             IOperatorAuth.Authorization memory authorization,
@@ -48,9 +63,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 2 days),
+                uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY),
                 nonceBefore,
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         auth.setAuthorizationWithSig(authorization, signature);
@@ -70,9 +85,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 owner,
-                uint48(block.timestamp + 1 days),
+                uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(owner),
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         vm.expectRevert(IOperatorAuth.OperatorAuth_SelfAuthorization.selector);
@@ -150,7 +165,7 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
 
     function test_setAuthorizationWithSig_givenReplay_reverts() public {
         IOperatorAuth.Authorization memory authorization = _submitValidAuthorization(
-            uint48(block.timestamp + 1 days)
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
         );
         IOperatorAuth.Signature memory signature = _signWithDomain(
             authorization,
@@ -165,7 +180,7 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
     }
 
     function test_setAuthorizationWithSig_givenSequentialExactNonces_succeeds() public {
-        _submitValidAuthorization(uint48(block.timestamp + 1 days));
+        _submitValidAuthorization(uint48(block.timestamp + _AUTHORIZATION_VALIDITY));
 
         (
             IOperatorAuth.Authorization memory authorization,
@@ -174,9 +189,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 otherOperator,
-                uint48(block.timestamp + 2 days),
+                uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY),
                 1,
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         auth.setAuthorizationWithSig(authorization, signature);
@@ -186,8 +201,8 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
     }
 
     function test_setAuthorizationWithSig_givenPreviousNonce_reverts(uint256 nonce_) public {
-        _submitValidAuthorization(uint48(block.timestamp + 1 days));
-        _submitValidAuthorization(uint48(block.timestamp + 2 days));
+        _submitValidAuthorization(uint48(block.timestamp + _AUTHORIZATION_VALIDITY));
+        _submitValidAuthorization(uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY));
         uint256 nonce = bound(nonce_, 0, auth.authorizationNonces(owner) - 1);
 
         (
@@ -199,7 +214,7 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 operator,
                 uint48(block.timestamp + 3 days),
                 nonce,
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         vm.expectRevert(
@@ -212,9 +227,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
         IOperatorAuth.Authorization memory authorization = _authorization(
             owner,
             operator,
-            uint48(block.timestamp + 1 days),
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
             auth.authorizationNonces(owner),
-            uint48(block.timestamp + 1 hours)
+            uint48(block.timestamp + _SIGNATURE_VALIDITY)
         );
         IOperatorAuth.Signature memory signature = _signWithDomain(
             authorization,
@@ -233,7 +248,7 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
     }
 
     function test_setAuthorizationWithSig_givenSkippedNonce_reverts() public {
-        _submitValidAuthorization(uint48(block.timestamp + 1 days));
+        _submitValidAuthorization(uint48(block.timestamp + _AUTHORIZATION_VALIDITY));
 
         (
             IOperatorAuth.Authorization memory authorization,
@@ -242,9 +257,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 2 days),
+                uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY),
                 3,
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         vm.expectRevert(
@@ -261,9 +276,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 otherOwner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 1 days),
+                uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(otherOwner),
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
 
         address recovered = _recoverSigner(authorization, signature, auth.DOMAIN_SEPARATOR());
@@ -287,9 +302,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 1 days),
+                uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(owner),
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
         authorization.authorized = otherOperator;
 
@@ -312,9 +327,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
         IOperatorAuth.Authorization memory authorization = _authorization(
             owner,
             operator,
-            uint48(block.timestamp + 1 days),
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
             auth.authorizationNonces(owner),
-            uint48(block.timestamp + 1 hours)
+            uint48(block.timestamp + _SIGNATURE_VALIDITY)
         );
         IOperatorAuth.Signature memory signature = _signWithDomain(
             authorization,
@@ -337,9 +352,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
         IOperatorAuth.Authorization memory authorization = _authorization(
             owner,
             operator,
-            uint48(block.timestamp + 1 days),
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
             auth.authorizationNonces(owner),
-            uint48(block.timestamp + 1 hours)
+            uint48(block.timestamp + _SIGNATURE_VALIDITY)
         );
         IOperatorAuth.Signature memory signature = _signWithDomain(
             authorization,
@@ -366,9 +381,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 1 days),
+                uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(owner),
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
         signature.v = 1;
 
@@ -384,9 +399,9 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 1 days),
+                uint48(block.timestamp + _AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(owner),
-                uint48(block.timestamp + 1 hours)
+                uint48(block.timestamp + _SIGNATURE_VALIDITY)
             );
         signature.s = bytes32(0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a1);
 
@@ -394,3 +409,7 @@ contract OperatorAuthSetAuthorizationWithSigTest is OperatorAuthTest {
         auth.setAuthorizationWithSig(authorization, signature);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

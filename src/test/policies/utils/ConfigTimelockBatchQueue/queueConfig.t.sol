@@ -1,14 +1,27 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelockBatchQueue/ConfigTimelockBatchQueueTest.sol";
 import {ConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/ConfigTimelockBatchQueueHarness.sol";
 import {MockConfigTarget} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/MockConfigTarget.sol";
 
 contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest {
+    uint256 internal constant _CONFIG_VALUE_A = 11;
+    uint256 internal constant _CONFIG_VALUE_B = 22;
+
     function test_givenMultipleKeys_reservesEveryKeyAndStoresStateHashes() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        uint64 actionId = _queue.queueConfig(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
 
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionId, "first key owner");
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), actionId, "second key owner");
@@ -41,7 +54,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
             address(_target),
             keccak256(abi.encode(_KEY_B, uint256(20)))
         );
-        _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B), 1);
     }
 
     function test_givenNoKeys_revertsWithoutQueueState() public {
@@ -65,7 +78,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
                 uint256(0)
             )
         );
-        _queue.queueConfig(_keys(bytes32(0)), _values(11), 1);
+        _queue.queueConfig(_keys(bytes32(0)), _values(_CONFIG_VALUE_A), 1);
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
@@ -78,7 +91,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
                 uint256(0)
             )
         );
-        _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 
@@ -90,7 +103,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
                 uint64(1)
             )
         );
-        _queue.queueConfig(_keys(_KEY_A, _KEY_A), _values(11, 12), 1);
+        _queue.queueConfig(_keys(_KEY_A, _KEY_A), _values(_CONFIG_VALUE_A, 12), 1);
 
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), 0, "duplicate key not leaked");
         assertEq(_queue.getQueuedConfigStateCount(1, 0), 0, "duplicate guards rolled back");
@@ -98,7 +111,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
     }
 
     function test_givenPendingKey_revertsWithOwningAction() public {
-        uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
@@ -110,7 +123,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
     }
 
     function test_givenExpiredOwner_reverts() public {
-        uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 owner = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         vm.warp(uint256(_queue.getQueuedAction(owner).expiresAt) + 1);
 
         vm.expectRevert(
@@ -127,7 +140,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
     }
 
     function test_givenLaterKeyIsPending_rollsBackEarlierAcquisition() public {
-        uint64 owner = _queue.queueConfig(_keys(_KEY_B), _values(22), 1);
+        uint64 owner = _queue.queueConfig(_keys(_KEY_B), _values(_CONFIG_VALUE_B), 1);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector,
@@ -135,7 +148,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
                 owner
             )
         );
-        _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 23), 2);
+        _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(_CONFIG_VALUE_A, 23), 2);
 
         assertEq(
             _queue.pendingActionId(_scopedKey(_KEY_A)),
@@ -152,14 +165,14 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
     }
 
     function test_givenDifferentPendingKey_succeeds() public {
-        uint64 actionA = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
-        uint64 actionB = _queue.queueConfig(_keys(_KEY_B), _values(22), 2);
+        uint64 actionA = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
+        uint64 actionB = _queue.queueConfig(_keys(_KEY_B), _values(_CONFIG_VALUE_B), 2);
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionA, "first key owner");
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), actionB, "second key owner");
     }
 
     function test_givenSameLocalKeyForDifferentDestination_succeeds() public {
-        uint64 first = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 first = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         MockConfigTarget newDestination = new MockConfigTarget();
         newDestination.setConfigState(_KEY_A, 20);
         _queue.setConfigDestination(newDestination);
@@ -183,7 +196,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         vm.expectRevert(
             ConfigTimelockBatchQueueHarness.ConfigTimelockBatchQueueHarness_ActionInvalid.selector
         );
-        _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         assertEq(
             _queue.pendingActionId(_scopedKey(_KEY_A)),
             0,
@@ -197,7 +210,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         vm.expectRevert(
             ConfigTimelockBatchQueueHarness.ConfigTimelockBatchQueueHarness_ActionInvalid.selector
         );
-        _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         assertEq(
             _queue.pendingActionId(_scopedKey(_KEY_A)),
             0,
@@ -206,3 +219,7 @@ contract ConfigTimelockBatchQueueQueueConfigTest is ConfigTimelockBatchQueueTest
         assertEq(_queue.nextActionId(), 1, "action id not consumed");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
-
+// Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
+import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
 
 /// @title  TimelockBatchQueue
 /// @notice Reusable queue implementation for atomic batched timelocked actions.
@@ -204,6 +206,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         }
         _onBatchQueued(msg.sender, actionId, actions_);
 
+        // uint48 timestamps cover roughly 8.9 million years, beyond any supported chain lifetime.
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 queuedAt = uint48(block.timestamp);
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
@@ -283,10 +287,14 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view {
         _requireActionAccessible(actionId_, action_);
+
+        // Timelock readiness and expiry intentionally follow wall-clock timestamps.
+        // forge-lint: disable-start(block-timestamp)
         if (block.timestamp < action_.executableAt)
             revert ITimelockBatchQueue_ActionNotReady(actionId_, action_.executableAt);
         if (block.timestamp > action_.expiresAt)
             revert ITimelockBatchQueue_ActionExpired(actionId_, action_.expiresAt);
+        // forge-lint: disable-end(block-timestamp)
     }
 
     /// @notice Validate standard cancellable state for a queued action.

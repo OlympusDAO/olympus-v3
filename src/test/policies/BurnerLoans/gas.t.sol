@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Vm} from "forge-std/Vm.sol";
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -21,6 +24,10 @@ import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     uint128 internal constant _COLLATERAL = 2_000e18;
@@ -1125,3 +1132,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         assertTrue(false, "expected event not emitted");
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

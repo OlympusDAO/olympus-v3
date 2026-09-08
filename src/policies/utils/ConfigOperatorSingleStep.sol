@@ -19,6 +19,8 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
+    /// @dev The zero address is valid and revokes delegated configuration access.
+    // forge-lint: disable-next-line(missing-zero-check)
     function setConfigOperator(address configOperator_) external virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);

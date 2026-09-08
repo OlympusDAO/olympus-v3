@@ -112,7 +112,19 @@ runs = 256
 workers = 4
 
 [lint]
-exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
+exclude_lints = [
+    # Prefer auditable Solidity hashing; use assembly only when profiling justifies it.
+    "asm-keccak256",
+    # Framework module handles and test fixtures intentionally use uppercase identifiers.
+    "mixed-case-variable",
+    # Preserve framework and external ABI names such as KEYCODE, VERSION, sOHM, and gOHM.
+    "mixed-case-function",
+    # Events intentionally follow completed external effects. This heuristic cannot recognize
+    # reentrancy guards, STATICCALLs, or trusted dependencies and encourages misleading ordering.
+    "reentrancy-events",
+    # Solidity zero-initializes locals; explicit `= 0` can add gas for little readability gain.
+    "uninitialized-local",
+]
 # Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
 lint_on_build = false
 

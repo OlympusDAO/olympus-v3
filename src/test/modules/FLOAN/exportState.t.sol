@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// Test helpers update expected-model state after successful calls to controlled fixtures.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop,reentrancy-no-eth)
 
 contract FLOANExportStateTest is FLOANTest {
     IFLOANv1.Market[] internal _expectedMarkets;
@@ -137,7 +145,7 @@ contract FLOANExportStateTest is FLOANTest {
             debtToken,
             1_000_000e9
         );
-        market.configId = 0x6275726e65722d763100000000000000;
+        market.configId = "burner-v1";
         market.termLength = 14 days;
         market.maxMaturityHorizon = 120 days;
         market.maxLtvBps = 8_000;
@@ -145,7 +153,7 @@ contract FLOANExportStateTest is FLOANTest {
         _createExpectedMarket(market, abi.encode(uint32(7), address(0x1234)));
 
         market = _market(otherManager, facility, collateralToken, debtToken, 500_000e9);
-        market.configId = 0x656d7074792d636f6e66696700000000;
+        market.configId = "empty-config";
         market.termLength = 21 days;
         market.maxMaturityHorizon = 180 days;
         market.maxLtvBps = 7_500;
@@ -159,7 +167,7 @@ contract FLOANExportStateTest is FLOANTest {
             otherDebtToken,
             1_000_000e18
         );
-        market.configId = 0x6f746865722d646562742d7632000000;
+        market.configId = "other-debt-v2";
         market.termLength = 30 days;
         market.maxMaturityHorizon = 365 days;
         market.maxLtvBps = 6_500;
@@ -167,7 +175,7 @@ contract FLOANExportStateTest is FLOANTest {
         _createExpectedMarket(market, abi.encode("schema-2", uint256(42)));
 
         market = _market(manager, facility, otherCollateralToken, debtToken, 250_000e9);
-        market.configId = 0x726f74617461626c652d763100000000;
+        market.configId = "rotatable-v1";
         market.termLength = 7 days;
         market.maxMaturityHorizon = 60 days;
         market.maxLtvBps = 9_500;
@@ -599,3 +607,7 @@ contract FLOANExportStateTest is FLOANTest {
         return false;
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop,reentrancy-no-eth)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -123,9 +123,12 @@ library BurnerLoansSeizure {
         for (uint256 i; i < batch.positionIds.length; ++i) {
             // FLOAN owns position accounting. Capture each mutation result so settlement, events,
             // and action return values are based on stored outcomes rather than the earlier quote.
+            // The seizure batch is capped at 50, and every position must default atomically.
+            // forge-lint: disable-start(calls-loop)
             (uint128 debtDefaulted, , uint128 collateralSeized) = dependencies_
                 .floan
                 .defaultPosition(batch.positionIds[i]);
+            // forge-lint: disable-end(calls-loop)
             batch.debts[i] = debtDefaulted;
             batch.collaterals[i] = collateralSeized;
             actualDebtOhm += debtDefaulted;
@@ -308,10 +311,14 @@ library BurnerLoansSeizure {
         uint256 checked;
         uint256 activeCount = dependencies_.floan.getActiveBorrowerCount(params_.marketId);
         while (checked < params_.checkLimit && returned < params_.returnLimit) {
+            // Keeper executions cap this scan at 500; permissionless view callers choose and bear
+            // their scan limit. Each inspected cursor requires the current borrower lookup.
+            // forge-lint: disable-start(calls-loop)
             address borrower = dependencies_.floan.getActiveBorrowerAt(
                 params_.marketId,
                 params_.cursor
             );
+            // forge-lint: disable-end(calls-loop)
             params_.cursor = params_.cursor + 1 == activeCount ? 0 : params_.cursor + 1;
             ++checked;
 
@@ -422,6 +429,9 @@ library BurnerLoansSeizure {
         BatchContext memory context_,
         address borrower_
     ) private view returns (uint64 positionId, IFLOANv1.Position memory position) {
+        // Seizure batches are intentionally atomic: every borrower must resolve to a live,
+        // seizable position or the complete bounded batch must revert.
+        // forge-lint: disable-start(require-revert-in-loop)
         if (borrower_ == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
         bool exists;
         (exists, positionId) = BurnerLoansPositions.find(
@@ -430,11 +440,14 @@ library BurnerLoansSeizure {
             borrower_
         );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoDebt();
+        // Seizure batches are capped at 50, and each borrower requires its live FLOAN position.
+        // forge-lint: disable-next-line(calls-loop)
         position = dependencies_.floan.getPosition(positionId);
         if (position.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
         if (!_isSeizable(dependencies_.ohmDecimals, position, context_.config, context_.pricing)) {
             revert IBurnerLoans.BurnerLoans_PositionNotSeizable(borrower_);
         }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Rejects a borrower already present earlier in the batch.
@@ -443,11 +456,15 @@ library BurnerLoansSeizure {
         uint256 index_,
         address borrower_
     ) private pure {
+        // Seizure batches are intentionally atomic: a duplicate borrower must reject the complete
+        // bounded batch rather than be skipped.
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < index_; ++i) {
             if (borrowers_[i] == borrower_) {
                 revert IBurnerLoans.BurnerLoans_DuplicateBorrower(borrower_);
             }
         }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Splits seized collateral between the keeper and Treasury.
@@ -526,8 +543,13 @@ library BurnerLoansSeizure {
         Pricing memory pricing_
     ) private view returns (bool) {
         if (position_.principalDue == 0) return false;
+        // Loan maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp >= position_.maturity) return true;
 
+        // These trusted linked-library calls are pure and cannot reenter. Their repetition is
+        // controlled by the seizure batch or caller-selected scan limits.
+        // forge-lint: disable-start(calls-loop)
         uint256 collateralUsd = BurnerLoansCalculator.collateralValueUsd(
             position_.collateral,
             pricing_.collateralUsdPrice,
@@ -547,6 +569,7 @@ library BurnerLoansSeizure {
             config_.backingMultiplierBps
         );
         return BurnerLoansCalculator.healthFactor(collateralUsd, requiredCollateralUsd) < _WAD;
+        // forge-lint: disable-end(calls-loop)
     }
 
     /// @notice Loads fresh OHM and collateral prices plus canonical backing for a seizure.
@@ -585,6 +608,8 @@ library BurnerLoansSeizure {
         if (
             value == 0 ||
             timestamp == 0 ||
+            // Price freshness windows tolerate normal validator timestamp drift.
+            // forge-lint: disable-next-line(block-timestamp)
             block.timestamp > uint256(timestamp) + uint256(frequency_)
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidPrice();

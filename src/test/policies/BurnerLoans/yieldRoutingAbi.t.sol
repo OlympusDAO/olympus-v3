@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Libraries
 import {Vm} from "forge-std/Vm.sol";
 
@@ -9,6 +12,10 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 // Contracts
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(unsafe-typecast,multi-contract-file)
 
 contract BurnerLoansYieldRoutingAbiHarness {
     function roundTrip(
@@ -156,3 +163,7 @@ contract BurnerLoansYieldRoutingAbiTest is BurnerLoansTest {
         assertEq(actual_.amount, expected_.amount, string.concat(message_, " amount"));
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast,multi-contract-file)
+
+// forge-lint: disable-end(literal-instead-of-constant)

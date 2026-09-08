@@ -7,6 +7,7 @@ import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
 
@@ -20,6 +21,7 @@ contract BurnerLoansYieldClaimerSupportsInterfaceTest is BurnerLoansYieldClaimer
         assertTrue(claimer.supportsInterface(type(IReEnabler).interfaceId), "IReEnabler");
         assertTrue(claimer.supportsInterface(type(IGracePeriod).interfaceId), "IGracePeriod");
         assertTrue(claimer.supportsInterface(type(IPeriodicTask).interfaceId), "IPeriodicTask");
+        assertTrue(claimer.supportsInterface(type(IVersioned).interfaceId), "IVersioned");
         assertTrue(
             claimer.supportsInterface(type(IBurnerLoansYieldClaimer).interfaceId),
             "IBurnerLoansYieldClaimer"

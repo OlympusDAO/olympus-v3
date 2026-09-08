@@ -97,6 +97,8 @@ abstract contract OperatorAuth is IOperatorAuth {
         Signature calldata signature_
     ) external override {
         // Condition: the signature can only be submitted through its signed deadline.
+        // Signature deadlines use chain time and tolerate normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > authorization_.signatureDeadline) {
             revert OperatorAuth_ExpiredSignature(authorization_.signatureDeadline);
         }
@@ -154,6 +156,8 @@ abstract contract OperatorAuth is IOperatorAuth {
     ) public view override returns (bool) {
         return
             sender_ == onBehalfOf_ ||
+            // Authorization deadlines use chain time and tolerate normal validator drift.
+            // forge-lint: disable-next-line(block-timestamp)
             block.timestamp <= authorizationDeadlines[onBehalfOf_][sender_];
     }
 
@@ -174,6 +178,8 @@ abstract contract OperatorAuth is IOperatorAuth {
     ///      is before the current block timestamp.
     /// @param authorizationDeadline_ Timestamp until which authorization is valid, in seconds.
     function _validateAuthorizationDeadline(uint48 authorizationDeadline_) internal view {
+        // Authorization deadlines use chain time and tolerate normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > authorizationDeadline_) {
             revert OperatorAuth_ExpiredAuthorization(authorizationDeadline_);
         }

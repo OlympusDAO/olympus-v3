@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelockBatchQueue/ConfigTimelockBatchQueueTest.sol";
 import {MockConfigTarget} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/MockConfigTarget.sol";
 
 contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQueueTest {
+    uint256 internal constant _CONFIG_VALUE_A = 11;
+    uint256 internal constant _CONFIG_VALUE_B = 22;
+    uint256 internal constant _DRIFTED_CONFIG_VALUE = 99;
+    uint64 internal constant _CORRUPT_OWNER = 99;
+
     function test_givenDisjointKeys_executesInArrayOrder() public {
         uint64 actionId = _queue.queueBatch(_batch(_KEY_A, _KEY_B));
         _warpReady(actionId);
@@ -14,13 +22,13 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
 
         assertEq(_target.executionOrder(0), 1, "first dispatch order");
         assertEq(_target.executionOrder(1), 2, "second dispatch order");
-        assertEq(_target.configState(_KEY_A), 11, "first config applied");
-        assertEq(_target.configState(_KEY_B), 22, "second config applied");
+        assertEq(_target.configState(_KEY_A), _CONFIG_VALUE_A, "first config applied");
+        assertEq(_target.configState(_KEY_B), _CONFIG_VALUE_B, "second config applied");
     }
 
     function test_givenIndependentBatches_allowsReverseExecutionOrder() public {
-        uint64 first = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
-        uint64 second = _queue.queueConfig(_keys(_KEY_B), _values(22), 2);
+        uint64 first = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
+        uint64 second = _queue.queueConfig(_keys(_KEY_B), _values(_CONFIG_VALUE_B), 2);
         _warpReady(second);
 
         _queue.executeQueuedAction(second);
@@ -31,11 +39,11 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
     }
 
     function test_givenStateDrift_revertsAndKeepsGuard() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         bytes32 scopedKey = _scopedKey(_KEY_A);
         bytes32 expectedHash = keccak256(abi.encode(_KEY_A, uint256(10)));
-        _target.setConfigState(_KEY_A, 99);
-        bytes32 currentHash = keccak256(abi.encode(_KEY_A, uint256(99)));
+        _target.setConfigState(_KEY_A, _DRIFTED_CONFIG_VALUE);
+        bytes32 currentHash = keccak256(abi.encode(_KEY_A, uint256(_DRIFTED_CONFIG_VALUE)));
         _warpReady(actionId);
 
         vm.expectRevert(
@@ -52,11 +60,11 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
 
         assertEq(_queue.pendingActionId(scopedKey), actionId, "drifted key remains held");
         assertEq(_queue.getQueuedConfigStateCount(actionId, 0), 1, "guard remains stored");
-        assertEq(_target.configState(_KEY_A), 99, "out-of-band drift retained");
+        assertEq(_target.configState(_KEY_A), _DRIFTED_CONFIG_VALUE, "out-of-band drift retained");
     }
 
     function test_givenDestinationChanged_revertsAndKeepsGuard() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         MockConfigTarget newDestination = new MockConfigTarget();
         _queue.setConfigDestination(newDestination);
         _warpReady(actionId);
@@ -84,9 +92,13 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
     }
 
     function test_givenAnyMultiKeyDependencyDrifts_revertsBeforeDispatch() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        uint64 actionId = _queue.queueConfig(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
         bytes32 scopedKeyB = _scopedKey(_KEY_B);
-        _target.setConfigState(_KEY_B, 99);
+        _target.setConfigState(_KEY_B, _DRIFTED_CONFIG_VALUE);
         _warpReady(actionId);
 
         vm.expectRevert(
@@ -96,7 +108,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
                 uint256(0),
                 scopedKeyB,
                 keccak256(abi.encode(_KEY_B, uint256(20))),
-                keccak256(abi.encode(_KEY_B, uint256(99)))
+                keccak256(abi.encode(_KEY_B, uint256(_DRIFTED_CONFIG_VALUE)))
             )
         );
         _queue.executeQueuedAction(actionId);
@@ -108,7 +120,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
 
     function test_givenLaterSubActionStateDrift_rollsBackEarlierDispatch() public {
         uint64 actionId = _queue.queueBatch(_batch(_KEY_A, _KEY_B));
-        _target.setConfigState(_KEY_B, 99);
+        _target.setConfigState(_KEY_B, _DRIFTED_CONFIG_VALUE);
         _warpReady(actionId);
 
         vm.expectRevert(
@@ -118,13 +130,13 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
                 uint256(1),
                 _scopedKey(_KEY_B),
                 keccak256(abi.encode(_KEY_B, uint256(20))),
-                keccak256(abi.encode(_KEY_B, uint256(99)))
+                keccak256(abi.encode(_KEY_B, uint256(_DRIFTED_CONFIG_VALUE)))
             )
         );
         _queue.executeQueuedAction(actionId);
 
         assertEq(_target.configState(_KEY_A), 10, "earlier target write rolled back");
-        assertEq(_target.configState(_KEY_B), 99, "out-of-band drift retained");
+        assertEq(_target.configState(_KEY_B), _DRIFTED_CONFIG_VALUE, "out-of-band drift retained");
         assertEq(_target.executionOrderLength(), 0, "execution log rolled back");
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_A)), actionId, "earlier key remains held");
         assertEq(_queue.pendingActionId(_scopedKey(_KEY_B)), actionId, "drifted key remains held");
@@ -137,7 +149,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
         _warpReady(actionId);
 
         // _KEY_B derives its state hash from _KEY_A: the queue-time value is 10,
-        // then the first sub-action writes 11 before _KEY_B is validated.
+        // then the first sub-action writes _CONFIG_VALUE_A before _KEY_B is validated.
         vm.expectRevert(
             abi.encodeWithSelector(
                 IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigStateChanged.selector,
@@ -145,7 +157,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
                 uint256(1),
                 _scopedKey(_KEY_B),
                 keccak256(abi.encode(_KEY_B, uint256(10))),
-                keccak256(abi.encode(_KEY_B, uint256(11)))
+                keccak256(abi.encode(_KEY_B, uint256(_CONFIG_VALUE_A)))
             )
         );
         _queue.executeQueuedAction(actionId);
@@ -200,13 +212,17 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
             0,
             "second key released at completion"
         );
-        assertEq(_target.configState(_KEY_A), 11, "first config applied");
-        assertEq(_target.configState(_KEY_B), 22, "second config applied");
+        assertEq(_target.configState(_KEY_A), _CONFIG_VALUE_A, "first config applied");
+        assertEq(_target.configState(_KEY_B), _CONFIG_VALUE_B, "second config applied");
     }
 
     function test_givenQueuedBatch_releasesEveryKeyAndClearsEveryGuard() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        actions[0] = _queue.makeAction(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
         actions[1] = _queue.makeAction(_keys(_KEY_C), _values(33), 2);
         uint64 actionId = _queue.queueBatch(actions);
         _warpReady(actionId);
@@ -221,7 +237,7 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
     }
 
     function test_givenReleasedKey_allowsKeyToBeQueuedAgain() public {
-        uint64 executedActionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 executedActionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         _warpReady(executedActionId);
         _queue.executeQueuedAction(executedActionId);
 
@@ -236,8 +252,8 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
     }
 
     function test_givenOwnershipMismatch_revertsWithoutDeletingForeignLock() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
-        uint64 corruptOwner = 99;
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
+        uint64 corruptOwner = _CORRUPT_OWNER;
         bytes32 scopedKey = _scopedKey(_KEY_A);
         _corruptPendingActionId(scopedKey, actionId, corruptOwner);
         _warpReady(actionId);
@@ -259,3 +275,5 @@ contract ConfigTimelockBatchQueueExecuteQueuedActionTest is ConfigTimelockBatchQ
         assertFalse(_queue.getQueuedAction(actionId).executed, "action remains pending");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

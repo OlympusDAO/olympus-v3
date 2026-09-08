@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -8,6 +11,7 @@ import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
@@ -18,6 +22,9 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {CallbackMinter} from "./fixtures/CallbackMinter.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     using SafeCast for uint256;
@@ -130,9 +137,9 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         vm.stopPrank();
     }
 
-    function _setBackingMultiplier(uint256 backingMultiplierBps_) internal {
+    function _setBackingMultiplier(uint16 backingMultiplierBps_) internal {
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
-        config.backingMultiplierBps = uint16(backingMultiplierBps_);
+        config.backingMultiplierBps = backingMultiplierBps_;
 
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), config);
@@ -369,10 +376,10 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         // debt value = amount (9 decimals) * $10e18 / 1e9, in 18-decimal USD units.
         uint256 debtValueUsd = (uint256(amount) * 10e18) / 1e9;
         // required collateral = ceil(debt value * 10,000 / 8,500), in 18-decimal USDS units.
-        uint256 requiredCollateral = (debtValueUsd * 10_000 + 8_499) / 8_500;
+        uint256 requiredCollateral = FullMath.mulDivUp(debtValueUsd, 10_000, 8_500);
         // utilization is zero before the first borrow, so the fee rate is the 25 bps base fee.
         // expected fee = ceil(required collateral * 25 / 10,000), in 18-decimal USDS units.
-        uint256 expectedFee = (requiredCollateral * 25 + 9_999) / 10_000;
+        uint256 expectedFee = FullMath.mulDivUp(requiredCollateral, 25, 10_000);
         assertEq(preview.fee, expectedFee, "exact fuzzed borrow fee");
         assertEq(ohm.balanceOf(alice), amount, "exact fuzzed mint");
         assertEq(burnerLoans.totalActiveDebtOhm(), amount, "exact fuzzed debt");
@@ -1918,3 +1925,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.borrow(address(usds), 1e9, alice, caller_, 0);
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

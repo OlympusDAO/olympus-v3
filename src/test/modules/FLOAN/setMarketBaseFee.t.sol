@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract FLOANSetMarketBaseFeeTest is FLOANTest {
     // setMarketBaseFee
@@ -75,7 +81,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
         bytes32 configDataBefore = keccak256(abi.encode(floan.getMarketConfigData(marketId)));
 
         vm.expectEmit(true, false, false, true, address(floan));
-        emit IFLOANv1.MarketConfigUpdated(marketId);
+        emit IFLOANv1.MarketBaseFeeSet(marketId, fee_);
         vm.prank(manager);
         floan.setMarketBaseFee(marketId, fee_);
 
@@ -88,3 +94,7 @@ contract FLOANSetMarketBaseFeeTest is FLOANTest {
         );
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

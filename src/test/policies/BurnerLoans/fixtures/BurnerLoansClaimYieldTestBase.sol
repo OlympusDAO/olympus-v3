@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -137,3 +140,5 @@ abstract contract BurnerLoansClaimYieldTestBase is BurnerLoansTest {
         assertEq(actual_.lastBorrowBlock, expected_.lastBorrowBlock, "last borrow block");
     }
 }
+
+// forge-lint: disable-end(unused-return)

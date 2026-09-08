@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {stdError} from "forge-std/StdError.sol";
 
@@ -236,3 +239,5 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _assertCompositeBalances(address(token));
     }
 }
+
+// forge-lint: disable-end(unused-return)

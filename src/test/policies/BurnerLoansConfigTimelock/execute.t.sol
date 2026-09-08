@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -15,7 +18,12 @@ import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtur
 
 import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
+
 contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfigGuardsTest {
+    uint16 internal constant _MAX_RETURN_DATA_BYTES = 256;
+
     function test_givenYieldRecipientActionMatured_permissionlessExecutionAppliesRecipient(
         address executor_
     ) public {
@@ -362,23 +370,33 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
     //  when the queued action is executed
     //   then execution maps the empty revert to a descriptive custom error
     function test_givenTargetRevertsWithoutData_revertsWithSubActionError() public {
-        uint128 debtCapOhm = 50_000e9;
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
-        vm.mockCallRevert(
-            address(burnerLoansConfig),
-            abi.encodeCall(IBurnerLoansConfig.setAssetDebtCap, (address(usds), debtCapOhm)),
-            bytes("")
-        );
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
+        uint64 actionId = _queueDebtCapActionWithMockedRevert(bytes(""));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_SubActionCallFailed.selector,
-                address(burnerLoansConfig),
-                IBurnerLoansConfig.setAssetDebtCap.selector
-            )
+        _expectDebtCapSubActionCallFailed();
+        configTimelock.executeQueuedAction(actionId);
+    }
+
+    // executeQueuedAction
+    // given a supported target setter reverts with data at the copy limit
+    //  when the queued action is executed
+    //   then execution does not bubble potentially truncated data
+    function test_givenTargetRevertsWithMaximumCopiedData_revertsWithSubActionError() public {
+        uint64 actionId = _queueDebtCapActionWithMockedRevert(new bytes(_MAX_RETURN_DATA_BYTES));
+
+        _expectDebtCapSubActionCallFailed();
+        configTimelock.executeQueuedAction(actionId);
+    }
+
+    // executeQueuedAction
+    // given a supported target setter reverts with data above the copy limit
+    //  when the queued action is executed
+    //   then execution bounds the copied data and reports the sub-action failure
+    function test_givenTargetRevertsWithOversizedData_revertsWithSubActionError() public {
+        uint64 actionId = _queueDebtCapActionWithMockedRevert(
+            new bytes(_MAX_RETURN_DATA_BYTES + 1)
         );
+
+        _expectDebtCapSubActionCallFailed();
         configTimelock.executeQueuedAction(actionId);
     }
 
@@ -802,4 +820,32 @@ contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfig
         vm.prank(burnerLoansAdmin);
         actionId = configTimelock.queueSetAssetFeeConfig(address(usds), update_, selection_);
     }
+
+    function _queueDebtCapActionWithMockedRevert(
+        bytes memory revertData_
+    ) internal returns (uint64 actionId) {
+        uint128 debtCapOhm = 50_000e9;
+        vm.prank(burnerLoansAdmin);
+        actionId = configTimelock.queueSetAssetDebtCap(address(usds), debtCapOhm);
+        vm.mockCallRevert(
+            address(burnerLoansConfig),
+            abi.encodeCall(IBurnerLoansConfig.setAssetDebtCap, (address(usds), debtCapOhm)),
+            revertData_
+        );
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+    }
+
+    function _expectDebtCapSubActionCallFailed() internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_SubActionCallFailed.selector,
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.setAssetDebtCap.selector
+            )
+        );
+    }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

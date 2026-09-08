@@ -7,20 +7,25 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 
 contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
+    uint16 internal constant _UPDATED_CHECK_LIMIT = 20;
+    uint8 internal constant _UPDATED_SEIZE_LIMIT = 10;
+    uint16 internal constant _ALTERNATE_CHECK_LIMIT = 30;
+    uint8 internal constant _ALTERNATE_SEIZE_LIMIT = 15;
+
     // setScanLimits
     // given admin or burner loans admin
     //  when setScanLimits is called
     //   then it sets scan limits
     function test_givenAdminOrBurnerLoansAdmin_setsScanLimits() public {
         vm.prank(admin);
-        seizer.setScanLimits(20, 10);
-        assertEq(seizer.maxBorrowersToCheck(), 20, "admin check limit");
-        assertEq(seizer.maxBorrowersToSeize(), 10, "admin seize limit");
+        seizer.setScanLimits(_UPDATED_CHECK_LIMIT, _UPDATED_SEIZE_LIMIT);
+        assertEq(seizer.maxBorrowersToCheck(), _UPDATED_CHECK_LIMIT, "admin check limit");
+        assertEq(seizer.maxBorrowersToSeize(), _UPDATED_SEIZE_LIMIT, "admin seize limit");
 
         vm.prank(burnerLoansAdmin);
-        seizer.setScanLimits(30, 15);
-        assertEq(seizer.maxBorrowersToCheck(), 30, "operator check limit");
-        assertEq(seizer.maxBorrowersToSeize(), 15, "operator seize limit");
+        seizer.setScanLimits(_ALTERNATE_CHECK_LIMIT, _ALTERNATE_SEIZE_LIMIT);
+        assertEq(seizer.maxBorrowersToCheck(), _ALTERNATE_CHECK_LIMIT, "operator check limit");
+        assertEq(seizer.maxBorrowersToSeize(), _ALTERNATE_SEIZE_LIMIT, "operator seize limit");
     }
 
     // setScanLimits
@@ -55,7 +60,7 @@ contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
 
         vm.prank(caller_);
         vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
-        seizer.setScanLimits(20, 10);
+        seizer.setScanLimits(_UPDATED_CHECK_LIMIT, _UPDATED_SEIZE_LIMIT);
 
         assertEq(seizer.maxBorrowersToCheck(), 10, "check limit unchanged");
         assertEq(seizer.maxBorrowersToSeize(), 5, "seize limit unchanged");
@@ -95,9 +100,9 @@ contract BurnerLoansSeizerSetScanLimitsTest is BurnerLoansSeizerTest {
         seizer.disable("");
 
         vm.prank(burnerLoansAdmin);
-        seizer.setScanLimits(20, 10);
+        seizer.setScanLimits(_UPDATED_CHECK_LIMIT, _UPDATED_SEIZE_LIMIT);
 
-        assertEq(seizer.maxBorrowersToCheck(), 20, "disabled check limit");
-        assertEq(seizer.maxBorrowersToSeize(), 10, "disabled seize limit");
+        assertEq(seizer.maxBorrowersToCheck(), _UPDATED_CHECK_LIMIT, "disabled check limit");
+        assertEq(seizer.maxBorrowersToSeize(), _UPDATED_SEIZE_LIMIT, "disabled seize limit");
     }
 }

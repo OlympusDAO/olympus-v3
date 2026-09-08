@@ -14,11 +14,14 @@ import {ADMIN_ROLE, EMERGENCY_ROLE, MANAGER_ROLE} from "src/policies/utils/RoleD
 ///         resolving role membership through the `ROLES` module.
 /// @dev A bytecode-optimized copy of `PolicyAdmin` with identical behaviour.
 abstract contract PolicyAdminOptimized is IPolicyAdmin, RolesConsumer {
+    // Retained as a reusable role guard for inheriting policies.
+    // forge-lint: disable-start(modifier-used-only-once)
     /// @notice Reverts if the caller does not have the emergency or admin role.
     modifier onlyEmergencyOrAdminRole() {
         _requireAuthorized(!_isEmergency(msg.sender) && !_isAdmin(msg.sender));
         _;
     }
+    // forge-lint: disable-end(modifier-used-only-once)
 
     /// @notice Reverts if the caller does not have the manager or admin role.
     modifier onlyManagerOrAdminRole() {
@@ -32,11 +35,14 @@ abstract contract PolicyAdminOptimized is IPolicyAdmin, RolesConsumer {
         _;
     }
 
+    // Retained as a reusable role guard for inheriting policies.
+    // forge-lint: disable-start(modifier-used-only-once)
     /// @notice Reverts if the caller does not have the emergency role.
     modifier onlyEmergencyRole() {
         _requireRole(msg.sender, EMERGENCY_ROLE);
         _;
     }
+    // forge-lint: disable-end(modifier-used-only-once)
 
     /// @notice Reverts if the caller does not have the manager role.
     modifier onlyManagerRole() {

@@ -1,10 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
 
 contract BurnerLoansInventoryRecordDefaultTest is BurnerLoansInventoryTest {
     function setUp() public override {
@@ -175,3 +181,7 @@ contract BurnerLoansInventoryRecordDefaultTest is BurnerLoansInventoryTest {
         inventory.recordDefault(1e9);
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

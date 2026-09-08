@@ -9,7 +9,7 @@ import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansCo
 import {Actions, Kernel, Policy, toKeycode} from "src/Kernel.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
-import {MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigModules.sol";
+import {MockConfigUnsupportedRoles} from "src/test/policies/BurnerLoansConfig/fixtures/MockConfigUnsupportedRoles.sol";
 import {MockBurnerLoansPolicy} from "src/test/policies/BurnerLoansConfig/fixtures/MockBurnerLoansPolicy.sol";
 
 import {BurnerLoansConfigTimelockTest} from "src/test/policies/BurnerLoansConfigTimelock/BurnerLoansConfigTimelockTest.sol";

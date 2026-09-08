@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.24;
 
+// Libraries
+import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
+
 // Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -11,6 +14,11 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @title Burner Loans Config Timelock Library
 /// @notice Transformations and dispatch used by Burner Loans timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
+    using ExcessivelySafeCall for address;
+
+    /// @dev Caps copied return data so a callee cannot exhaust the caller's remaining gas.
+    uint16 internal constant _MAX_RETURN_DATA_BYTES = 256;
+
     error BurnerLoansConfigTimelockLib_NonCanonicalYieldAssetRoutingPayload();
 
     /// @notice Decodes an asset-yield-routing action payload.
@@ -31,6 +39,9 @@ library BurnerLoansConfigTimelockLib {
         address recipient_
     ) external view {
         uint256 assetCount = facility_.getAssetCount();
+        // Governance controls the asset registry, which is expected to remain small. Inspecting
+        // every route is required to validate a global recipient change.
+        // forge-lint: disable-start(calls-loop)
         if (recipient_ == address(0)) {
             // Count every active allocation so queue-time validation reports the same complete
             // state as the facility setter rather than stopping with an arbitrary count of one.
@@ -56,10 +67,13 @@ library BurnerLoansConfigTimelockLib {
             uint256 directAllocationCount = routing.directAllocations.length;
             for (uint256 j; j < directAllocationCount; ++j) {
                 if (routing.directAllocations[j].recipient == recipient_) {
+                    // Rejecting a collision immediately preserves atomic route validation.
+                    // forge-lint: disable-next-line(require-revert-in-loop)
                     revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(recipient_);
                 }
             }
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     /// @notice Hashes the complete yield-routing configuration guarded by the timelock.
@@ -70,12 +84,16 @@ library BurnerLoansConfigTimelockLib {
     ) external view returns (bytes32 stateHash) {
         uint256 assetCount = facility_.getAssetCount();
         bytes32 routesHash;
+        // Governance controls the asset registry, which is expected to remain small. The complete
+        // registry must be read to bind queued actions to the current global routing state.
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < assetCount; ++i) {
             address asset = facility_.getAssetAt(i);
             routesHash = keccak256(
                 abi.encode(routesHash, asset, facility_.getYieldAssetRouting(asset))
             );
         }
+        // forge-lint: disable-end(calls-loop)
         return
             keccak256(
                 abi.encode(address(facility_), facility_.getYieldRepurchaseRecipient(), routesHash)
@@ -101,14 +119,15 @@ library BurnerLoansConfigTimelockLib {
     }
 
     /// @notice Decodes and executes one supported Burner Loans configuration action.
-    /// @dev Reverts for unsupported selectors and bubbles the target setter's revert data.
+    /// @dev Reverts for unsupported selectors. Complete target errors below the return-data cap are
+    ///      bubbled verbatim. Empty or potentially truncated errors use a descriptive fallback.
     function executeSubAction(
         IBurnerLoansConfig burnerLoans_,
         ITimelockBatchQueue.BatchAction memory action_
     ) external {
-        bytes4 selector = action_.selector;
+        bytes4 actionSelector = action_.selector;
         bytes memory callData;
-        if (selector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
+        if (actionSelector == IBurnerLoansConfig.setAssetRiskConfig.selector) {
             (
                 address asset,
                 IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
@@ -126,8 +145,8 @@ library BurnerLoansConfigTimelockLib {
                 update,
                 selection
             );
-            callData = abi.encodeWithSelector(selector, asset, toRiskConfig(config));
-        } else if (selector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
+            callData = abi.encodeWithSelector(actionSelector, asset, toRiskConfig(config));
+        } else if (actionSelector == IBurnerLoansConfig.setAssetFeeConfig.selector) {
             (
                 address asset,
                 IBurnerLoans.AssetFeeConfig memory update,
@@ -145,27 +164,38 @@ library BurnerLoansConfigTimelockLib {
                 update,
                 selection
             );
-            callData = abi.encodeWithSelector(selector, asset, config);
+            callData = abi.encodeWithSelector(actionSelector, asset, config);
         } else if (
-            selector == IBurnerLoansConfig.setAssetDebtCap.selector ||
-            selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
-            selector == IBurnerLoansConfig.setYieldRepurchaseRecipient.selector ||
-            selector == IBurnerLoansConfig.setYieldAssetRouting.selector
+            actionSelector == IBurnerLoansConfig.setAssetDebtCap.selector ||
+            actionSelector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
+            actionSelector == IBurnerLoansConfig.setYieldRepurchaseRecipient.selector ||
+            actionSelector == IBurnerLoansConfig.setYieldAssetRouting.selector
         ) {
-            callData = abi.encodePacked(selector, action_.payload);
+            callData = abi.encodePacked(actionSelector, action_.payload);
         } else {
-            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(action_.target, selector);
+            revert ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid(
+                action_.target,
+                actionSelector
+            );
         }
 
-        (bool success, bytes memory returnData) = action_.target.call(callData);
+        (bool success, bytes memory returnData) = action_.target.excessivelySafeCall(
+            gasleft(),
+            0,
+            _MAX_RETURN_DATA_BYTES,
+            callData
+        );
         if (!success) {
-            if (returnData.length == 0) {
+            if (returnData.length == 0 || returnData.length == _MAX_RETURN_DATA_BYTES) {
                 revert IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_SubActionCallFailed(
                     action_.target,
-                    selector
+                    actionSelector
                 );
             }
-            assembly {
+
+            // Bounded return data is rethrown verbatim to preserve the underlying error.
+            // forge-lint: disable-next-line(inline-assembly)
+            assembly ("memory-safe") {
                 revert(add(returnData, 32), mload(returnData))
             }
         }
@@ -178,6 +208,41 @@ library BurnerLoansConfigTimelockLib {
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update_,
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
     ) public pure returns (IBurnerLoans.AssetConfig memory) {
+        _validateAssetRiskConfigUpdateShape(update_, selection_);
+
+        if (selection_.maxLtvBps) {
+            config.maxLtvBps = update_.maxLtvBps;
+        }
+        if (selection_.backingMultiplierBps) {
+            config.backingMultiplierBps = update_.backingMultiplierBps;
+        }
+        if (selection_.keeperRewardBps) {
+            config.keeperRewardBps = update_.keeperRewardBps;
+        }
+        if (selection_.termLength) {
+            config.termLength = update_.termLength;
+        }
+        if (selection_.maxMaturityHorizon) {
+            config.maxMaturityHorizon = update_.maxMaturityHorizon;
+        }
+        if (selection_.maxKeeperReward) {
+            config.maxKeeperReward = update_.maxKeeperReward;
+        }
+
+        return config;
+    }
+
+    /// @notice Validates the shape of a partial asset risk update.
+    /// @dev Reverts when no fields are selected or an unselected field is nonzero. Full-value
+    ///      validation is performed separately after applying the partial update because
+    ///      cross-field rules require the selected values to be merged with current state, and
+    ///      Burner Loans Config remains the single owner of those rules.
+    /// @param update_ Partial risk and term values to validate.
+    /// @param selection_ Fields selected for application from `update_`.
+    function _validateAssetRiskConfigUpdateShape(
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update_,
+        IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection_
+    ) private pure {
         if (
             !selection_.maxLtvBps &&
             !selection_.backingMultiplierBps &&
@@ -187,38 +252,35 @@ library BurnerLoansConfigTimelockLib {
             !selection_.maxKeeperReward
         ) revert IBurnerLoans.BurnerLoans_InvalidParam();
 
-        if (selection_.maxLtvBps) {
-            config.maxLtvBps = update_.maxLtvBps;
-        } else if (update_.maxLtvBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.backingMultiplierBps) {
-            config.backingMultiplierBps = update_.backingMultiplierBps;
-        } else if (update_.backingMultiplierBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.keeperRewardBps) {
-            config.keeperRewardBps = update_.keeperRewardBps;
-        } else if (update_.keeperRewardBps != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.termLength) {
-            config.termLength = update_.termLength;
-        } else if (update_.termLength != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.maxMaturityHorizon) {
-            config.maxMaturityHorizon = update_.maxMaturityHorizon;
-        } else if (update_.maxMaturityHorizon != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
-        if (selection_.maxKeeperReward) {
-            config.maxKeeperReward = update_.maxKeeperReward;
-        } else if (update_.maxKeeperReward != 0) {
-            revert IBurnerLoans.BurnerLoans_InvalidParam();
-        }
+        _requireUnselectedAssetRiskConfigFieldZero(selection_.maxLtvBps, update_.maxLtvBps);
+        _requireUnselectedAssetRiskConfigFieldZero(
+            selection_.backingMultiplierBps,
+            update_.backingMultiplierBps
+        );
+        _requireUnselectedAssetRiskConfigFieldZero(
+            selection_.keeperRewardBps,
+            update_.keeperRewardBps
+        );
+        _requireUnselectedAssetRiskConfigFieldZero(selection_.termLength, update_.termLength);
+        _requireUnselectedAssetRiskConfigFieldZero(
+            selection_.maxMaturityHorizon,
+            update_.maxMaturityHorizon
+        );
+        _requireUnselectedAssetRiskConfigFieldZero(
+            selection_.maxKeeperReward,
+            update_.maxKeeperReward
+        );
+    }
 
-        return config;
+    /// @notice Requires an unselected asset risk field to carry a zero update value.
+    /// @dev Selected values are validated as part of the resulting complete risk configuration.
+    /// @param selected_ Whether the field is selected for application.
+    /// @param value_ Proposed value for the field.
+    function _requireUnselectedAssetRiskConfigFieldZero(
+        bool selected_,
+        uint256 value_
+    ) private pure {
+        if (!selected_ && value_ != 0) revert IBurnerLoans.BurnerLoans_InvalidParam();
     }
 
     /// @notice Projects a complete asset configuration into the risk setter's input shape.

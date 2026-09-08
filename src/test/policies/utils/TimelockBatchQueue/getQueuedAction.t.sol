@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 
@@ -48,3 +51,5 @@ contract TimelockBatchQueueGetQueuedActionTest is TimelockBatchQueueTest {
         assertEq(queued.proposer, proposer, "proposer retained");
     }
 }
+
+// forge-lint: disable-end(unused-return)

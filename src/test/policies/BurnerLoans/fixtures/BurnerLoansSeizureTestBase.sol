@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Actions} from "src/Kernel.sol";
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BURNER_LOANS_SEIZER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansBorrowTestBase} from "./BurnerLoansBorrowTestBase.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 abstract contract BurnerLoansSeizureTestBase is BurnerLoansBorrowTestBase {
     address internal bob;
@@ -71,3 +77,7 @@ abstract contract BurnerLoansSeizureTestBase is BurnerLoansBorrowTestBase {
         borrowers[1] = second_;
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// forge-lint: disable-start(unused-return)
+
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
@@ -336,3 +341,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
         vm.stopPrank();
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

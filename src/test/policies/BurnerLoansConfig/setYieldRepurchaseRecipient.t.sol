@@ -18,12 +18,16 @@ contract BurnerLoansConfigSetYieldRepurchaseRecipientTest is BurnerLoansYieldRou
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenDisabled() {
         vm.prank(admin);
         burnerLoansConfig.disable("");
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenReEnabled() {
         vm.startPrank(admin);
         burnerLoansConfig.disable("");
@@ -32,6 +36,8 @@ contract BurnerLoansConfigSetYieldRepurchaseRecipientTest is BurnerLoansYieldRou
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenFacilityRejectsRecipient() {
         yieldRecipient.setEnabled(false);
         _;

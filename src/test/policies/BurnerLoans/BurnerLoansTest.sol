@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Unlicense
-/// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity >=0.8.24;
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test modifiers aid setup readability; test actions assert their effects directly.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// Test helpers update expected-model state after successful calls to controlled fixtures.
+// forge-lint: disable-start(unwrapped-modifier-logic,unused-return,calls-loop,reentrancy-no-eth)
 
 import {Test} from "forge-std/Test.sol";
 
@@ -573,4 +580,7 @@ abstract contract BurnerLoansTest is Test {
         configTimelock.enable("");
     }
 }
-/// forge-lint: disable-end(unwrapped-modifier-logic)
+
+// forge-lint: disable-end(unwrapped-modifier-logic,unused-return,calls-loop,reentrancy-no-eth)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -13,6 +16,10 @@ import {Vm} from "forge-std/Vm.sol";
 // Contracts
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {BurnerLoansYieldRoutingTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansYieldRoutingTestBase.sol";
+
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unsafe-typecast,calls-loop)
 
 contract BurnerLoansConfigSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTestBase {
     MockERC4626 internal usdsVault;
@@ -27,12 +34,16 @@ contract BurnerLoansConfigSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTes
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenDisabled() {
         vm.prank(admin);
         burnerLoansConfig.disable("");
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenReEnabled() {
         vm.startPrank(admin);
         burnerLoansConfig.disable("");
@@ -41,6 +52,8 @@ contract BurnerLoansConfigSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTes
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenRepurchaseRecipientConfigured() {
         _configureYieldRepurchaseRecipientAsset(address(usds), address(usdsVault));
         vm.prank(admin);
@@ -48,6 +61,8 @@ contract BurnerLoansConfigSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTes
         _;
     }
 
+    // Retained to express the test precondition with the suite's given* structure.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier givenYieldRepurchaseRecipient() {
         vm.prank(admin);
         burnerLoansConfig.setYieldRepurchaseRecipient(address(yieldRecipient));
@@ -209,3 +224,7 @@ contract BurnerLoansConfigSetYieldAssetRoutingTest is BurnerLoansYieldRoutingTes
         }
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

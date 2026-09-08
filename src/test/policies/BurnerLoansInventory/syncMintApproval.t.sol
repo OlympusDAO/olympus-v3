@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansInventorySyncMintApprovalTest is BurnerLoansInventoryTest {
     function setUp() public override {
@@ -129,3 +135,7 @@ contract BurnerLoansInventorySyncMintApprovalTest is BurnerLoansInventoryTest {
         _assertInventoryInvariant();
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
@@ -18,6 +21,10 @@ import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Scenario-specific contracts and fixtures have no cross-file consumers.
+// forge-lint: disable-start(unused-return,unsafe-typecast,multi-contract-file)
 
 abstract contract BurnerLoansWithdrawCollateralBoundaryTestBase is BurnerLoansTest {
     struct BoundaryScenario {
@@ -1296,7 +1303,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         burnerLoans.depositCollateral(address(asset_), amount_, alice);
     }
 
-    function _setActiveDebtPosition(uint256 collateral_, uint256 debtOhm_) internal {
+    function _setActiveDebtPosition(uint256 collateral_, uint128 debtOhm_) internal {
         burnerLoans.setPositionForTest(
             address(usds),
             alice,
@@ -1355,3 +1362,7 @@ contract WarmupVault is MockERC4626 {
         revert WarmupVault_RedeemUnsupported();
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,multi-contract-file)
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -13,6 +13,8 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 
 contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
+    uint48 internal constant _TRANSITION_TIMESTAMP = 1_234;
+
     event Enabled();
     event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
 
@@ -23,17 +25,17 @@ contract BurnerLoansConfigTimelockEnableTest is BurnerLoansConfigTimelockTest {
     function test_givenAdminCaller_enablesPolicyAndRecordsTransition() public {
         vm.prank(emergency);
         configTimelock.disable("");
-        vm.warp(1_234);
+        vm.warp(_TRANSITION_TIMESTAMP);
 
         vm.prank(admin);
         vm.expectEmit(address(configTimelock));
         emit Enabled();
         vm.expectEmit(true, true, false, true, address(configTimelock));
-        emit Transition(admin, true, "", 1_234);
+        emit Transition(admin, true, "", _TRANSITION_TIMESTAMP);
         configTimelock.enable("");
 
         assertTrue(configTimelock.isEnabled(), "enabled");
-        assertEq(configTimelock.lastTransitionAt(), 1_234, "last transition");
+        assertEq(configTimelock.lastTransitionAt(), _TRANSITION_TIMESTAMP, "last transition");
     }
 
     // enable

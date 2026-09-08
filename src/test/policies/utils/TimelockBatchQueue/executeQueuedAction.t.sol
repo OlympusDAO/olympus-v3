@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(calls-loop)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
@@ -270,3 +276,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         assertEq(queue.nextActionId(), newActionId + 1, "next action ID advanced");
     }
 }
+
+// forge-lint: disable-end(calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

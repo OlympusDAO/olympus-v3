@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+// Test fixtures accept zero addresses to model unset, cleared, and invalid states.
+// forge-lint: disable-start(missing-zero-check)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
+import {IConfigTimelockBatchQueueHarness} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/IConfigTimelockBatchQueueHarness.sol";
 import {MockConfigTarget} from "src/test/policies/utils/ConfigTimelockBatchQueue/fixtures/MockConfigTarget.sol";
 
-contract ConfigTimelockBatchQueueHarness is ConfigTimelockBatchQueue {
+contract ConfigTimelockBatchQueueHarness is
+    ConfigTimelockBatchQueue,
+    IConfigTimelockBatchQueueHarness
+{
     error ConfigTimelockBatchQueueHarness_ActionInvalid();
     error ConfigTimelockBatchQueueHarness_BatchRejected();
 
@@ -30,7 +36,7 @@ contract ConfigTimelockBatchQueueHarness is ConfigTimelockBatchQueue {
         bytes32[] memory keys_,
         uint256[] memory values_,
         uint256 marker_
-    ) external returns (uint64 actionId) {
+    ) external override returns (uint64 actionId) {
         return
             _queueAction(
                 address(configDestination),
@@ -153,11 +159,16 @@ contract ConfigTimelockBatchQueueHarness is ConfigTimelockBatchQueue {
         uint256,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal override {
+        // Required to dispatch arbitrary payload and capture exact revert data.
+        // forge-lint: disable-start(low-level-calls)
         (bool success, bytes memory returnData) = action_.target.call(
             abi.encodePacked(action_.selector, action_.payload)
         );
+        // forge-lint: disable-end(low-level-calls)
         if (!success) {
-            assembly {
+            // Assembly preserves the target's exact revert data for atomic rollback tests.
+            // forge-lint: disable-next-line(inline-assembly)
+            assembly ("memory-safe") {
                 revert(add(returnData, 32), mload(returnData))
             }
         }
@@ -167,13 +178,19 @@ contract ConfigTimelockBatchQueueHarness is ConfigTimelockBatchQueue {
         address,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
-    ) internal view override {}
+    ) internal pure override {
+        // This generic harness intentionally imposes no additional execution rules.
+        return;
+    }
 
     function _validateCancellation(
         address,
         uint64,
         ITimelockBatchQueue.QueuedAction storage
-    ) internal view override {}
+    ) internal pure override {
+        // This generic harness intentionally imposes no additional cancellation rules.
+        return;
+    }
 
     function _validateTimelockDelay(uint48 delay_) internal pure override {
         if (delay_ != _TIMELOCK_DELAY) {
@@ -193,3 +210,5 @@ contract ConfigTimelockBatchQueueHarness is ConfigTimelockBatchQueue {
         return maxConfigKeys == 0 ? super._maxConfigKeysPerBatch() : maxConfigKeys;
     }
 }
+
+// forge-lint: disable-end(missing-zero-check)

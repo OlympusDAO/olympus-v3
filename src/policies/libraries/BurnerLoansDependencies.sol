@@ -102,12 +102,22 @@ library BurnerLoansDependencies {
         address recipient_,
         address asset_
     ) private view {
+        // Facility-wide recipient validation is intentionally atomic: any incompatible asset-vault
+        // route must reject the complete recipient update.
+        // forge-lint: disable-start(require-revert-in-loop)
+        // The governance-controlled asset registry is expected to remain small, and every
+        // configured asset must be checked before a facility-wide recipient change.
+        // forge-lint: disable-next-line(calls-loop)
         address vault = depositManager_.getAssetConfiguration(IERC20(asset_)).vault;
         if (vault == address(0)) {
             revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientVaultRequired(asset_);
         }
+        // Each configured asset may map to a different vault, so recipient compatibility requires
+        // one view call per vault.
+        // forge-lint: disable-start(calls-loop)
         IYieldRepurchaseRecipient.VaultConfig memory config = IYieldRepurchaseRecipient(recipient_)
             .getVaultConfig(vault);
+        // forge-lint: disable-end(calls-loop)
 
         if (config.vault != vault) {
             revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientAssetVaultMismatch(
@@ -128,6 +138,7 @@ library BurnerLoansDependencies {
                 vault
             );
         }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Adds an asset to the append-only registry with implicit Treasury-only routing.
@@ -165,6 +176,9 @@ library BurnerLoansDependencies {
                 uint256 directCount = routing.directAllocations.length;
                 for (uint256 j; j < directCount; ++j) {
                     if (routing.directAllocations[j].recipient == recipient_) {
+                        // The recipient transition is intentionally atomic: a conflicting direct
+                        // allocation must reject the complete facility-wide update.
+                        // forge-lint: disable-next-line(require-revert-in-loop)
                         revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(recipient_);
                     }
                 }
@@ -273,6 +287,9 @@ library BurnerLoansDependencies {
     ) private view {
         uint256 directCount = routing_.directAllocations.length;
         uint256 totalBps = routing_.repurchaseRecipientBps;
+        // Route replacement is intentionally atomic: any invalid or duplicate allocation must
+        // reject the complete route rather than apply a partial configuration.
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < directCount; ++i) {
             IBurnerLoans.DirectYieldAllocation calldata allocation = routing_.directAllocations[i];
             if (
@@ -297,6 +314,7 @@ library BurnerLoansDependencies {
             }
             totalBps += allocation.bps;
         }
+        // forge-lint: disable-end(require-revert-in-loop)
         if (totalBps > BurnerLoansConstants.MAX_BPS) {
             revert IBurnerLoans.BurnerLoans_InvalidAssetYieldRoutingTotal(totalBps);
         }
@@ -323,6 +341,9 @@ library BurnerLoansDependencies {
     ) private view {
         uint256 directCount = routing_.directAllocations.length;
         uint256 totalBps = routing_.repurchaseRecipientBps;
+        // Stored-route validation is intentionally atomic: any invalid allocation must reject the
+        // complete operation that consumes the route.
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < directCount; ++i) {
             IBurnerLoans.DirectYieldAllocation storage allocation = routing_.directAllocations[i];
             if (
@@ -340,6 +361,7 @@ library BurnerLoansDependencies {
             }
             totalBps += allocation.bps;
         }
+        // forge-lint: disable-end(require-revert-in-loop)
         if (totalBps > BurnerLoansConstants.MAX_BPS) {
             revert IBurnerLoans.BurnerLoans_InvalidAssetYieldRoutingTotal(totalBps);
         }
@@ -473,9 +495,15 @@ library BurnerLoansDependencies {
             revert IBurnerLoans.BurnerLoans_InvalidModuleVersion();
         }
 
+        // FLOAN compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 floanMajor, ) = Module(address(floan_)).VERSION();
         (uint8 priceMajor, uint8 priceMinor) = Module(priceAddress_).VERSION();
+        // ROLES compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = roles_.VERSION();
+        // TRSRY compatibility depends only on its major version.
+        // forge-lint: disable-next-line(unused-return)
         (uint8 trsryMajor, ) = trsry_.VERSION();
 
         if (

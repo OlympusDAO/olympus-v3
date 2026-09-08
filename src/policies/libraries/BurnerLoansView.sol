@@ -97,6 +97,8 @@ library BurnerLoansView {
     ) public view returns (bool) {
         _getAssetConfig(dependencies_, asset_);
         if (position.principalDue == 0) return false;
+        // Loan maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp >= position.maturity) return true;
         return
             BurnerLoansQuote.positionHealthFactor(
@@ -117,6 +119,8 @@ library BurnerLoansView {
     ) public view returns (uint256) {
         uint256[] memory marketIds = floan_.getMarketIds(facility_, asset_, debtToken_);
         if (marketIds.length == 0) return 0;
+        // FLOAN indexes only uint32-typed market IDs in this uint256-backed set.
+        // forge-lint: disable-next-line(unsafe-typecast)
         return floan_.getMarketPrincipalDue(uint32(marketIds[0]));
     }
 

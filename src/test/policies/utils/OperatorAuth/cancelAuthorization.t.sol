@@ -4,7 +4,13 @@ pragma solidity >=0.8.24;
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {OperatorAuthTest} from "../OperatorAuth.t.sol";
 
+// Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
+// forge-lint: disable-start(unsafe-typecast)
+
 contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
+    uint48 internal constant _AUTHORIZATION_VALIDITY = 1 days;
+    uint48 internal constant _EXTENDED_AUTHORIZATION_VALIDITY = 2 days;
+
     function test_cancelAuthorization_givenNoAuthorizationExists_clearsWithoutRevert() public {
         vm.expectEmit(address(auth));
         emit AuthorizationSet(owner, owner, operator, 0);
@@ -17,7 +23,11 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
     }
 
     function test_cancelAuthorization_givenDirectAuthorizationExists_clearsAuthorization() public {
-        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            operator,
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
+        );
         assertEq(auth.isSenderAuthorized(operator, owner), true, "authorized before cancel");
 
         vm.expectEmit(address(auth));
@@ -31,7 +41,7 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
     }
 
     function test_cancelAuthorization_givenSignedAuthorizationExists_clearsAuthorization() public {
-        _submitValidAuthorization(uint48(block.timestamp + 1 days));
+        _submitValidAuthorization(uint48(block.timestamp + _AUTHORIZATION_VALIDITY));
         assertEq(auth.isSenderAuthorized(operator, owner), true, "authorized before cancel");
 
         vm.expectEmit(address(auth));
@@ -45,7 +55,11 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
     }
 
     function test_cancelAuthorization_givenExistingNonce() public {
-        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            operator,
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
+        );
         uint256 nonceBefore = auth.authorizationNonces(owner);
 
         vm.prank(owner);
@@ -55,7 +69,11 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
     }
 
     function test_cancelAuthorization_givenPendingSignature_invalidatesSignature() public {
-        _setAuthorizationAndExpectEvent(owner, operator, uint48(block.timestamp + 1 days));
+        _setAuthorizationAndExpectEvent(
+            owner,
+            operator,
+            uint48(block.timestamp + _AUTHORIZATION_VALIDITY)
+        );
         (
             IOperatorAuth.Authorization memory authorization,
             IOperatorAuth.Signature memory signature
@@ -63,7 +81,7 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
                 owner,
                 ownerKey,
                 operator,
-                uint48(block.timestamp + 2 days),
+                uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY),
                 auth.authorizationNonces(owner),
                 uint48(block.timestamp + 1 hours)
             );
@@ -89,11 +107,11 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
     }
 
     function test_cancelAuthorization_givenCallerIsNotOwner_clearsOnlyCallerAuthorization() public {
-        uint48 ownerDeadline = uint48(block.timestamp + 1 days);
+        uint48 ownerDeadline = uint48(block.timestamp + _AUTHORIZATION_VALIDITY);
         _setAuthorizationAndExpectEvent(owner, operator, ownerDeadline);
 
         vm.prank(caller);
-        auth.setAuthorization(operator, uint48(block.timestamp + 2 days));
+        auth.setAuthorization(operator, uint48(block.timestamp + _EXTENDED_AUTHORIZATION_VALIDITY));
 
         vm.prank(caller);
         auth.cancelAuthorization(operator);
@@ -107,3 +125,5 @@ contract OperatorAuthCancelAuthorizationTest is OperatorAuthTest {
         assertEq(auth.isSenderAuthorized(operator, owner), true, "owner still authorized");
     }
 }
+
+// forge-lint: disable-end(unsafe-typecast)
