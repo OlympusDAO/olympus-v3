@@ -40,8 +40,11 @@ interface ICCIPTokenPoolConfig is IConfigOperator {
     /// @param pool The rejected pool address.
     error CCIPTokenPoolConfig_InvalidPool(address pool);
 
-    /// @notice Thrown when a configured module has an unsupported major version.
-    error CCIPTokenPoolConfig_InvalidModuleVersion();
+    /// @notice Thrown when a configured module reports an unsupported version.
+    /// @param keycode The keycode of the module.
+    /// @param major The major version reported by the module.
+    /// @param minor The minor version reported by the module.
+    error CCIPTokenPoolConfig_UnsupportedModuleVersion(bytes5 keycode, uint8 major, uint8 minor);
 
     /// @notice Thrown when a router candidate holds no code or does not answer
     ///         `typeAndVersion()`.

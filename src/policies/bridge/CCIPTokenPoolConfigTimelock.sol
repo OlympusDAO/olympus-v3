@@ -90,6 +90,9 @@ contract CCIPTokenPoolConfigTimelock is
     /// @dev    A route contributes three keys and the allowlist one.
     uint256 internal constant _MAX_CONFIG_KEYS_PER_BATCH = 24;
 
+    /// @notice The keycode of the ROLES module this policy depends on.
+    bytes5 internal constant _ROLES_KEYCODE = "ROLES";
+
     // ========== IMMUTABLES ========== //
 
     /// @notice The config policy that receives the queued actions.
@@ -145,14 +148,22 @@ contract CCIPTokenPoolConfigTimelock is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
-    /// @dev Reverts if the installed ROLES module major version is not 1.
+    /// @dev Reverts if the installed ROLES module major version is not 1
+    ///      (`CCIPTokenPoolConfigTimelock_UnsupportedModuleVersion`, naming the keycode and the
+    ///      version read).
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
-        dependencies[0] = toKeycode("ROLES");
+        dependencies[0] = toKeycode(_ROLES_KEYCODE);
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        (uint8 rolesMajor, ) = ROLES.VERSION();
-        if (rolesMajor != 1) revert CCIPTokenPoolConfigTimelock_InvalidModuleVersion();
+        (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
+        if (rolesMajor != 1) {
+            revert CCIPTokenPoolConfigTimelock_UnsupportedModuleVersion(
+                _ROLES_KEYCODE,
+                rolesMajor,
+                rolesMinor
+            );
+        }
     }
 
     /// @inheritdoc Policy

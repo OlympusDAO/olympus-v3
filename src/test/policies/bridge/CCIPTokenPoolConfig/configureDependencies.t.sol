@@ -31,7 +31,8 @@ contract CCIPTokenPoolConfigTests_configureDependencies is CCIPTokenPoolConfigTe
     }
 
     // given the installed ROLES module reports a major version other than 1
-    //   [X] it reverts with CCIPTokenPoolConfig_InvalidModuleVersion
+    //   [X] it reverts with CCIPTokenPoolConfig_UnsupportedModuleVersion naming the ROLES keycode
+    //       and the version read
     //   [X] it leaves the previous ROLES pointer unchanged
     // Requires the MockRolesModule mock, installed through the kernel executor. The ROLES
     // write before the version read must roll back with the revert.
@@ -61,9 +62,15 @@ contract CCIPTokenPoolConfigTests_configureDependencies is CCIPTokenPoolConfigTe
         vm.label(address(wrongVersionRoles), "wrongVersionRolesModule");
         freshKernel.executeAction(Actions.UpgradeModule, address(wrongVersionRoles));
 
+        // The mock reports version 2.0; the error carries the keycode and both components
         vm.expectRevert(
             abi.encodeWithSelector(
-                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidModuleVersion.selector
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_UnsupportedModuleVersion.selector,
+                // casting to `bytes5` is safe: "ROLES" is exactly 5 bytes.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                bytes5("ROLES"),
+                uint8(2),
+                uint8(0)
             )
         );
         freshConfig.configureDependencies();

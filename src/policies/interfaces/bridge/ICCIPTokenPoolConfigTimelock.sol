@@ -68,8 +68,15 @@ interface ICCIPTokenPoolConfigTimelock is IConfigTimelockBatchQueue {
     /// @param config The config policy address.
     error CCIPTokenPoolConfigTimelock_ConfigNotActive(address config);
 
-    /// @notice Thrown when a configured module has an unsupported major version.
-    error CCIPTokenPoolConfigTimelock_InvalidModuleVersion();
+    /// @notice Thrown when a configured module reports an unsupported version.
+    /// @param keycode The keycode of the module.
+    /// @param major The major version reported by the module.
+    /// @param minor The minor version reported by the module.
+    error CCIPTokenPoolConfigTimelock_UnsupportedModuleVersion(
+        bytes5 keycode,
+        uint8 major,
+        uint8 minor
+    );
 
     /// @notice Thrown when the config policy does not name this timelock as its config
     ///         operator.

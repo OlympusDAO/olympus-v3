@@ -70,6 +70,9 @@ contract CCIPTokenPoolConfig is
 {
     // ========== CONSTANTS ========== //
 
+    /// @notice The keycode of the ROLES module this policy depends on.
+    bytes5 internal constant _ROLES_KEYCODE = "ROLES";
+
     /// @notice The capacity of the disabled rate limiter configuration written by the
     ///         containment functions, in token base units.
     uint128 internal constant _DISABLED_RATE_LIMIT_CAPACITY = 2;
@@ -141,14 +144,22 @@ contract CCIPTokenPoolConfig is
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
-    /// @dev Reverts if the installed ROLES module major version is not 1.
+    /// @dev Reverts if the installed ROLES module major version is not 1
+    ///      (`CCIPTokenPoolConfig_UnsupportedModuleVersion`, naming the keycode and the version
+    ///      read).
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](1);
-        dependencies[0] = toKeycode("ROLES");
+        dependencies[0] = toKeycode(_ROLES_KEYCODE);
 
         ROLES = ROLESv1(getModuleAddress(dependencies[0]));
-        (uint8 rolesMajor, ) = ROLES.VERSION();
-        if (rolesMajor != 1) revert CCIPTokenPoolConfig_InvalidModuleVersion();
+        (uint8 rolesMajor, uint8 rolesMinor) = ROLES.VERSION();
+        if (rolesMajor != 1) {
+            revert CCIPTokenPoolConfig_UnsupportedModuleVersion(
+                _ROLES_KEYCODE,
+                rolesMajor,
+                rolesMinor
+            );
+        }
     }
 
     /// @inheritdoc Policy

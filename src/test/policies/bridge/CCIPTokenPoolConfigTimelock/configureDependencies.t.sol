@@ -27,7 +27,8 @@ contract CCIPTokenPoolConfigTimelockTests_configureDependencies is CCIPTokenPool
     }
 
     // given the installed ROLES module reports a major version other than one
-    //   [X] it reverts with CCIPTokenPoolConfigTimelock_InvalidModuleVersion
+    //   [X] it reverts with CCIPTokenPoolConfigTimelock_UnsupportedModuleVersion naming the ROLES
+    //       keycode and the version read
     //   [X] it leaves the previously cached ROLES pointer unchanged
     // Requires MockRolesModule installed through the kernel executor. The ROLES write before
     // the version read rolls back with the revert.
@@ -52,11 +53,17 @@ contract CCIPTokenPoolConfigTimelockTests_configureDependencies is CCIPTokenPool
         vm.label(address(wrongVersionRoles), "wrongVersionRolesModule");
         freshKernel.executeAction(Actions.UpgradeModule, address(wrongVersionRoles));
 
+        // The mock reports version 2.0; the error carries the keycode and both components
         vm.expectRevert(
             abi.encodeWithSelector(
                 ICCIPTokenPoolConfigTimelock
-                    .CCIPTokenPoolConfigTimelock_InvalidModuleVersion
-                    .selector
+                    .CCIPTokenPoolConfigTimelock_UnsupportedModuleVersion
+                    .selector,
+                // casting to `bytes5` is safe: "ROLES" is exactly 5 bytes.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                bytes5("ROLES"),
+                uint8(2),
+                uint8(0)
             )
         );
         freshTimelock.configureDependencies();
