@@ -484,7 +484,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 string.concat(
                     "the config policy owns or is the pending owner of the pool (owner ",
                     vm.toString(poolOwner),
-                    "; if the deployer still owns it, run CCIPTokenPool.transferTokenPoolOwnershipToConfig)"
+                    "; if the deployer still owns it, run CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig)"
                 )
             );
             _check(
@@ -602,7 +602,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 vm.toString(poolBalance),
                 ", required ",
                 vm.toString(minBacking),
-                " (run CCIPTokenPool.fundPool and re-read shell/calc_bridged_supply.sh)"
+                " (run CCIPTokenPoolBatch.fundPool and re-read shell/calc_bridged_supply.sh)"
             )
         );
 
@@ -856,8 +856,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                     vm.toString(tokenConfig.pendingAdministrator),
                     "). ",
                     tokenConfig.pendingAdministrator == _owner
-                        ? "Run CCIPTokenPool.acceptAdminRole from the DAO MS first."
-                        : "Run CCIPTokenPool.transferTokenPoolAdminRoleToDaoMS from the deployer EOA, then CCIPTokenPool.acceptAdminRole from the DAO MS."
+                        ? "Run CCIPTokenPoolBatch.acceptAdminRole from the DAO MS first."
+                        : "Run CCIPTokenPoolBatch.transferTokenPoolAdminRoleToDaoMS from the deployer EOA, then CCIPTokenPoolBatch.acceptAdminRole from the DAO MS."
                 )
             );
         }
@@ -879,7 +879,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             string.concat(
                 "CCIPNonEthereumSetupBatch: the config policy is neither the owner nor the pending owner of the pool (owner ",
                 vm.toString(poolOwner),
-                "); run CCIPTokenPool.transferTokenPoolOwnershipToConfig from the pool owner"
+                "); run CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig from the pool owner"
             )
         );
     }

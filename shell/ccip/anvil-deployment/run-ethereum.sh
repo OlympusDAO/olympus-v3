@@ -8,7 +8,7 @@
 #      (ccip_config_mainnet.json) and sync their addresses into the OCG
 #      proposal registry.
 #   2. Phase B (DAO MS): CCIPTokenPoolConfigBatch.prepareHandover, then a second
-#      run that must propose nothing; then CCIPTokenPool.fundPool up to the
+#      run that must propose nothing; then CCIPTokenPoolBatch.fundPool up to the
 #      env.json minimum backing (with an empty re-run).
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
@@ -128,9 +128,9 @@ if [ "$pool_balance" -lt "$min_backing" ] && [ "$dao_balance" -lt "$((min_backin
     log "minting $top_up OHM to the DAO MS from the OHM vault $ohm_vault"
     cast_send_impersonated "$ohm_vault" "$ohm" "mint(address,uint256)" "$dao" "$top_up"
 fi
-run_batch CCIPTokenPool fundPool dao
+run_batch CCIPTokenPoolBatch fundPool dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "fundPool"
-run_batch CCIPTokenPool fundPool dao "" "-rerun"
+run_batch CCIPTokenPoolBatch fundPool dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "fundPool re-run"
 echo "pool OHM balance = $(cast call "$ohm" 'balanceOf(address)(uint256)' "$pool" --rpc-url "$RPC")  (target=$min_backing)"
 
@@ -185,12 +185,12 @@ run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-converged"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (converged: the proposal added the four routes)"
 
 step "Periphery reconcile (DAO MS): four EVM trusted remotes, nothing for solana"
-run_batch CCIPBridge reconcileTrustedRemotes dao
+run_batch CCIPBridgeBatch reconcileTrustedRemotes dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes"
 if grep -q "Added: setTrustedRemoteSVM\|Added: unsetTrustedRemoteSVM" "$LAST_BATCH_LOG"; then
     die "the periphery reconciler proposed a solana change on the migrated env; see $LAST_BATCH_LOG"
 fi
-run_batch CCIPBridge reconcileTrustedRemotes dao "" "-rerun"
+run_batch CCIPBridgeBatch reconcileTrustedRemotes dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes re-run"
 
 step "Timelock path: change the desired Solana outbound rate, reconcile, execute, reconcile"

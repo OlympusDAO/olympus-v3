@@ -210,7 +210,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           rate limiter roles.
     ///         - The config policy is neither the owner nor the rate limit admin of the pool
     ///           (before the handover, containment belongs to the pool owner through
-    ///           `CCIPTokenPool.emergencyShutdown`).
+    ///           `CCIPTokenPoolBatch.emergencyShutdown`).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "disableChain.remoteChain").
@@ -292,7 +292,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           rate limiter roles.
     ///         - The config policy is neither the owner nor the rate limit admin of the pool
     ///           (before the handover, containment belongs to the pool owner through
-    ///           `CCIPTokenPool.emergencyShutdownAll`).
+    ///           `CCIPTokenPoolBatch.emergencyShutdownAll`).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -712,7 +712,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         require(
             ICCIPTokenPoolAdmin(pool).owner() == config ||
                 ICCIPTokenPoolAdmin(pool).getRateLimitAdmin() == config,
-            "CCIPTokenPoolConfigBatch: the config policy is neither the owner nor the rate limit admin of the pool, so it cannot write the rate limits; before the handover use CCIPTokenPool.emergencyShutdown or emergencyShutdownAll from the pool owner"
+            "CCIPTokenPoolConfigBatch: the config policy is neither the owner nor the rate limit admin of the pool, so it cannot write the rate limits; before the handover use CCIPTokenPoolBatch.emergencyShutdown or emergencyShutdownAll from the pool owner"
         );
         ROLESv1 roles = _roles(kernel);
         require(

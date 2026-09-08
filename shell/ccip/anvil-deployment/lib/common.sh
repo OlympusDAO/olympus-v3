@@ -264,7 +264,7 @@ run_batch_expect_fail() {
 
 # run_script_fn <ContractName> <sig> <senderAddr> <logName> [args...]
 # Runs a non-standard batch entry point (custom signature) from an impersonated
-# sender, e.g. the registry admin handover functions of CCIPTokenPool.
+# sender, e.g. the registry admin handover functions of CCIPTokenPoolBatch.
 run_script_fn() {
   local contract="$1" sig="$2" sender="$3" logname="$4"; shift 4
   fund "$sender"

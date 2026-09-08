@@ -17,7 +17,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 // Contracts
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 
-/// @title CCIPBridge
+/// @title CCIPBridgeBatch
 /// @notice Declarative reconciliation of the CCIPCrossChainBridge periphery against `env.json`.
 ///         The desired state is the `periphery` block of each route under
 ///         `olympus.config.CCIP.routes.<remoteChain>`; the live state is the periphery contract;
@@ -34,9 +34,9 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 ///           after the deploy sequence).
 ///
 ///         The legacy `olympus.config.CCIPCrossChainBridge.chains` list is not read by the
-///         reconciler; it remains for the direct pool owner functions of `CCIPTokenPool.sol`,
+///         reconciler; it remains for the direct pool owner functions of `CCIPTokenPoolBatch.sol`,
 ///         and a drift between it and the set of `periphery` blocks is reported.
-contract CCIPBridge is BatchScriptV2 {
+contract CCIPBridgeBatch is BatchScriptV2 {
     // =========== ENTRY POINTS =========== //
 
     /// @notice Converges the trusted remotes and the gas limits of the periphery to the
@@ -419,7 +419,7 @@ contract CCIPBridge is BatchScriptV2 {
             require(
                 !isSet,
                 string.concat(
-                    "CCIPBridge: the live trusted remote for ",
+                    "CCIPBridgeBatch: the live trusted remote for ",
                     remoteChain,
                     " has no periphery block in env.json; declare the block, or declare it with enabled: false to unset the remote"
                 )
@@ -430,7 +430,7 @@ contract CCIPBridge is BatchScriptV2 {
     /// @notice Reports a drift between the legacy `olympus.config.CCIPCrossChainBridge.chains`
     ///         list and the set of declared `periphery` blocks. The reconciler ignores the
     ///         legacy list; it remains for the direct pool owner functions of
-    ///         `CCIPTokenPool.sol`.
+    ///         `CCIPTokenPoolBatch.sol`.
     function _warnLegacyChainsDrift(
         CCIPConfigLib.DesiredPeriphery[] memory desired_
     ) internal view {
@@ -465,7 +465,7 @@ contract CCIPBridge is BatchScriptV2 {
         require(
             owner == _owner,
             string.concat(
-                "CCIPBridge: the batch owner is not the owner of the periphery (",
+                "CCIPBridgeBatch: the batch owner is not the owner of the periphery (",
                 vm.toString(owner),
                 ")"
             )

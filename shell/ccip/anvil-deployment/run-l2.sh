@@ -5,7 +5,7 @@
 # Flow:
 #   1. Inject placeholder pools/peripheries for the other burn/mint chains.
 #   2. Registry handover: transferAdminRole from the Olympus deployer EOA, then
-#      acceptAdminRole from the DAO MS (the real CCIPTokenPool entry points).
+#      acceptAdminRole from the DAO MS (the real CCIPTokenPoolBatch entry points).
 #   3. Deploy ccip_full_not_mainnet.json (pool, periphery, config, timelock).
 #   4. transferTokenPoolOwnershipToConfig and the periphery transferOwnership,
 #      both from the deployer.
@@ -82,8 +82,8 @@ mainnet_sel="$(jq -r '.current.mainnet.external.ccip.ChainSelector' "$REPO_ROOT/
 
 step "Registry handover: deployer EOA -> DAO MS"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
-run_script_fn CCIPTokenPool "transferTokenPoolAdminRoleToDaoMS()" "$OLYMPUS_DEPLOYER_EOA" "transferAdminRole-$CHAIN"
-run_script_fn CCIPTokenPool "acceptAdminRole(bool)" "$dao" "acceptAdminRole-$CHAIN" true
+run_script_fn CCIPTokenPoolBatch "transferTokenPoolAdminRoleToDaoMS()" "$OLYMPUS_DEPLOYER_EOA" "transferAdminRole-$CHAIN"
+run_script_fn CCIPTokenPoolBatch "acceptAdminRole(bool)" "$dao" "acceptAdminRole-$CHAIN" true
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
 
 deploy_sequence "src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json"
@@ -106,8 +106,8 @@ echo "config.gracePeriod()          = $(cast call "$cfg" 'gracePeriod()(uint32)'
 echo "config.isLiquidityContainer() = $(cast call "$cfg" 'isLiquidityContainer()(bool)' --rpc-url "$RPC")"
 
 step "Pool and periphery ownership handover (deployer)"
-run_script_fn CCIPTokenPool "transferTokenPoolOwnershipToConfig()" "$DEPLOYER_ADDR" "transferPoolOwnership-$CHAIN"
-run_batch_from CCIPBridge transferOwnership "$DEPLOYER_ADDR" false "" "-deployer"
+run_script_fn CCIPTokenPoolBatch "transferTokenPoolOwnershipToConfig()" "$DEPLOYER_ADDR" "transferPoolOwnership-$CHAIN"
+run_batch_from CCIPBridgeBatch transferOwnership "$DEPLOYER_ADDR" false "" "-deployer"
 expect_non_empty_batch "$LAST_BATCH_LOG" "periphery transferOwnership"
 echo "pool.owner()      = $(cast call "$pool" 'owner()(address)' --rpc-url "$RPC")  (deployer=$DEPLOYER_ADDR)"
 echo "periphery.owner() = $(cast call "$per" 'owner()(address)' --rpc-url "$RPC")  (dao=$dao)"
@@ -153,13 +153,13 @@ run_batch CCIPNonEthereumSetupBatch finalize dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "finalize re-run"
 
 step "Periphery reconcile and enable (DAO MS)"
-run_batch CCIPBridge reconcileTrustedRemotes dao
+run_batch CCIPBridgeBatch reconcileTrustedRemotes dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes"
-run_batch CCIPBridge reconcileTrustedRemotes dao "" "-rerun"
+run_batch CCIPBridgeBatch reconcileTrustedRemotes dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes re-run"
-run_batch CCIPBridge enable dao
+run_batch CCIPBridgeBatch enable dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "periphery enable"
-run_batch CCIPBridge enable dao "" "-rerun"
+run_batch CCIPBridgeBatch enable dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "periphery enable re-run"
 
 step "Containment (DAO MS as bridge_admin) and declarative recovery"

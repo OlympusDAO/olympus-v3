@@ -23,7 +23,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 // Contracts
 import {Kernel, Actions} from "src/Kernel.sol";
 
-/// @title CCIPTokenPool
+/// @title CCIPTokenPoolBatch
 /// @notice Multisig batches that act directly on the CCIP token pool and on the OHM entry of the
 ///         Chainlink TokenAdminRegistry, from the pool owner or the OHM administrator.
 /// @dev    These entry points act from the direct pool owner, the OHM administrator or the
@@ -34,7 +34,7 @@ import {Kernel, Actions} from "src/Kernel.sol";
 ///         with the path to use instead. Route configuration runs through `CCIPRouteReconcileBatch`
 ///         (config timelock), containment and re-enable through `CCIPTokenPoolConfigBatch`, and the
 ///         registry, the rebalancer and liquidity withdrawals through an OCG proposal.
-contract CCIPTokenPool is BatchScriptV2 {
+contract CCIPTokenPoolBatch is BatchScriptV2 {
     using SafeCast for uint256;
 
     // ========== HELPERS ========== //
@@ -77,7 +77,7 @@ contract CCIPTokenPool is BatchScriptV2 {
 
         revert(
             string.concat(
-                "CCIPTokenPool: the batch owner is not the pool owner (",
+                "CCIPTokenPoolBatch: the batch owner is not the pool owner (",
                 vm.toString(owner),
                 _isPoolOwnedByConfig(tokenPool_) ? ", the CCIPTokenPoolConfig policy). " : "). ",
                 alternative_
@@ -95,7 +95,7 @@ contract CCIPTokenPool is BatchScriptV2 {
 
         revert(
             string.concat(
-                "CCIPTokenPool: the batch owner is not the OHM administrator (",
+                "CCIPTokenPoolBatch: the batch owner is not the OHM administrator (",
                 vm.toString(config_.administrator),
                 "). ",
                 alternative_
@@ -220,7 +220,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         if (tokenConfig.pendingAdministrator != _owner) {
             revert(
                 string.concat(
-                    "CCIPTokenPool: the batch owner is not the pending OHM administrator (administrator ",
+                    "CCIPTokenPoolBatch: the batch owner is not the pending OHM administrator (administrator ",
                     vm.toString(tokenConfig.administrator),
                     ", pending ",
                     vm.toString(tokenConfig.pendingAdministrator),
@@ -362,7 +362,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         address config = _configAddress();
         require(
             config != address(0),
-            "CCIPTokenPool: no CCIPTokenPoolConfig is recorded for this chain; deploy it first"
+            "CCIPTokenPoolBatch: no CCIPTokenPoolConfig is recorded for this chain; deploy it first"
         );
 
         if (ICCIPTokenPoolAdmin(tokenPool).owner() == config) {
@@ -408,7 +408,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         if (pending != _owner) {
             revert(
                 string.concat(
-                    "CCIPTokenPool: the batch owner is not the pending owner of the pool (",
+                    "CCIPTokenPoolBatch: the batch owner is not the pending owner of the pool (",
                     vm.toString(pending),
                     "). ",
                     _OWNERSHIP_ALTERNATIVE
@@ -876,7 +876,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         _skipHeartbeatValidation = true;
         require(
             ChainUtils._isCanonicalChain(chain),
-            "CCIPTokenPool: funding applies to the canonical lock/release pool only"
+            "CCIPTokenPoolBatch: funding applies to the canonical lock/release pool only"
         );
 
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
@@ -897,7 +897,7 @@ contract CCIPTokenPool is BatchScriptV2 {
             require(
                 ownerBalance >= shortfall,
                 string.concat(
-                    "CCIPTokenPool: the batch owner holds ",
+                    "CCIPTokenPoolBatch: the batch owner holds ",
                     vm.toString(ownerBalance),
                     " OHM, below the funding shortfall ",
                     vm.toString(shortfall)
@@ -950,7 +950,7 @@ contract CCIPTokenPool is BatchScriptV2 {
         if (rebalancer != _owner) {
             revert(
                 string.concat(
-                    "CCIPTokenPool: the batch owner is not the rebalancer of the pool (",
+                    "CCIPTokenPoolBatch: the batch owner is not the rebalancer of the pool (",
                     vm.toString(rebalancer),
                     "). On mainnet the rebalancer is the OCG timelock after the handover, so liquidity withdrawals are OCG proposals."
                 )

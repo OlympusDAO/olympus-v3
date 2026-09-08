@@ -74,7 +74,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///           resolves its accepted remote pool from there unless it declares an explicit
 ///           `remotePools` override.
 ///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
-///           outstanding on the burn/mint chains; `CCIPTokenPool.fundPool`).
+///           outstanding on the burn/mint chains; `CCIPTokenPoolBatch.fundPool`).
 ///         - Every mainnet lane toward the four chains carries an enabled OHM fee entry with a
 ///           delivery gas budget of at least 175000, obtained from Chainlink.
 contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
@@ -185,7 +185,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     );
 
     /// @notice Thrown when the pool holds less OHM than `olympus.config.CCIP.minimumPoolBacking`
-    ///         (re-read `shell/calc_bridged_supply.sh` and run `CCIPTokenPool.fundPool` first).
+    ///         (re-read `shell/calc_bridged_supply.sh` and run `CCIPTokenPoolBatch.fundPool`
+    ///         first).
     /// @param balance The OHM balance of the pool.
     /// @param minimum The required minimum.
     error CCIPTokenPoolConfigProposal_BackingTooLow(uint256 balance, uint256 minimum);

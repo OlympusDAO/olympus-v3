@@ -4,8 +4,8 @@ Deploys the CCIP config policies from scratch on a local Anvil fork of Ethereum 
 
 ## Requirements
 
--   `anvil`, `forge`, `cast`, `jq`, `git`
--   `.env` in the repo root with `ALCHEMY_API_KEY`
+- `anvil`, `forge`, `cast`, `jq`, `git`
+- `.env` in the repo root with `ALCHEMY_API_KEY`
 
 ## What the scripts touch
 
@@ -22,10 +22,10 @@ Steps:
 1. Inject placeholder pools and peripheries for the four burn/mint chains into `env.json` (the proposal encodes them into its route actions; the mainnet fork cannot see the real ones). Start an Anvil fork of mainnet; fund the deployer and the timelock.
 2. Deploy `ccip_config_mainnet.json` (`CCIPTokenPoolConfig`, then `CCIPTokenPoolConfigTimelock`) and print the binding (`config.pool()`, `timelock.config()`, delay, grace periods).
 3. Sync the deployed addresses into `addresses.json`.
-4. Phase B (DAO MS as Kernel executor, pool owner and OHM administrator): `CCIPTokenPoolConfigBatch.prepareHandover`, then a second run that must propose nothing. Then `CCIPTokenPool.fundPool` tops the pool up to `olympus.config.CCIP.minimumPoolBacking` (minting to the DAO MS from the impersonated MINTR module first if its balance were ever short), with an empty re-run.
+4. Phase B (DAO MS as Kernel executor, pool owner and OHM administrator): `CCIPTokenPoolConfigBatch.prepareHandover`, then a second run that must propose nothing. Then `CCIPTokenPoolBatch.fundPool` tops the pool up to `olympus.config.CCIP.minimumPoolBacking` (minting to the DAO MS from the impersonated MINTR module first if its balance were ever short), with an empty re-run.
 5. Negative checks: the mainnet readiness report is RED and the proposal build fails naming a lane while the OHM fee budgets read the 90k default; then the four mainnet lanes are mocked to 175k and the readiness report turns GREEN.
 6. Phase C (OCG): `executeOnAnvilFork.sh` replays `CCIPTokenPoolConfigProposal` (12 actions: the handover plus four `addChain`) from the timelock. The replay first runs the proposal through the governance simulation and its own `_validate` inside a snapshot, then sends the actions from the impersonated timelock. The four routes must exist on the pool afterwards.
-7. Post-OCG (DAO MS as `bridge_admin`): `CCIPRouteReconcileBatch.reconcileRoutes` on the converged routes must propose nothing. `CCIPBridge.reconcileTrustedRemotes` adds the four EVM trusted remotes and gas limits (and must propose nothing for solana), with an empty re-run. The timelock path is then exercised end to end: the desired outbound rate in `env.json` is changed, `reconcileRoutes` queues `setChainRateLimits`, a second run proposes nothing (the change is already queued), `executeReadyActions` proposes nothing before the delay, the clock is warped past the delay, `executeReadyActions` executes, and `reconcileRoutes` proposes nothing again. The original rate is then restored through the same cycle.
+7. Post-OCG (DAO MS as `bridge_admin`): `CCIPRouteReconcileBatch.reconcileRoutes` on the converged routes must propose nothing. `CCIPBridgeBatch.reconcileTrustedRemotes` adds the four EVM trusted remotes and gas limits (and must propose nothing for solana), with an empty re-run. The timelock path is then exercised end to end: the desired outbound rate in `env.json` is changed, `reconcileRoutes` queues `setChainRateLimits`, a second run proposes nothing (the change is already queued), `executeReadyActions` proposes nothing before the delay, the clock is warped past the delay, `executeReadyActions` executes, and `reconcileRoutes` proposes nothing again. The original rate is then restored through the same cycle.
 8. Containment: `CCIPTokenPoolConfigBatch.disableChain` from the DAO MS as `bridge_admin` contains the Solana route, a re-run through the Emergency MS variant (`disableChainEmergencyMS`) proposes nothing, and the declarative recovery (`reconcileRoutes` -> warp -> `executeReadyActions` -> `reconcileRoutes`) restores the approved limits.
 9. Print the final authority state: pool owner and pending owner, rebalancer, rate limit admin, config operator, enabled flags, registry entry, DAO MS roles, routes and buckets.
 
@@ -40,13 +40,13 @@ Every batch log is asserted: steps that must change state must report `Batch exe
 Steps:
 
 1. Inject placeholder pools and peripheries for the other burn/mint chains; fork the L2.
-2. Registry handover with the real entry points: `CCIPTokenPool.transferTokenPoolAdminRoleToDaoMS` from the impersonated Olympus deployer EOA, `CCIPTokenPool.acceptAdminRole` from the DAO MS.
+2. Registry handover with the real entry points: `CCIPTokenPoolBatch.transferTokenPoolAdminRoleToDaoMS` from the impersonated Olympus deployer EOA, `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS.
 3. Deploy `ccip_full_not_mainnet.json` (pool, periphery, config policy, timelock) and print the binding.
-4. Ownership handover from the deployer: `CCIPTokenPool.transferTokenPoolOwnershipToConfig` and `CCIPBridge.transferOwnership`.
+4. Ownership handover from the deployer: `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` and `CCIPBridgeBatch.transferOwnership`.
 5. Negative checks: the chain's readiness report is RED and `CCIPNonEthereumSetupBatch.setup` fails naming a lane while the fee budgets read the 90k default; then the outgoing burn/mint lanes are mocked to 175k and the readiness report turns GREEN.
 6. `CCIPNonEthereumSetupBatch.setup` (legacy LZ deactivation, activations, roles, config/timelock enablement, pool acceptance, `addChain` per route), with an empty re-run; the pool must still be disabled and unregistered afterwards.
 7. `CCIPNonEthereumSetupBatch.finalize` (`pool.enable`, `setPool`), with an empty re-run.
-8. Periphery: `CCIPBridge.reconcileTrustedRemotes` and `CCIPBridge.enable`, each with an empty re-run.
+8. Periphery: `CCIPBridgeBatch.reconcileTrustedRemotes` and `CCIPBridgeBatch.enable`, each with an empty re-run.
 9. Containment and recovery on the local pool: `CCIPTokenPoolConfigBatch.disableChain` from the DAO MS as `bridge_admin` contains the mainnet route (args file `CCIPTokenPoolConfigBatch_disableChain_mainnet.json`), a re-run through `disableChainEmergencyMS` from the Emergency MS proposes nothing, and the declarative recovery (`reconcileRoutes` -> warp -> `executeReadyActions` -> `reconcileRoutes`) restores the approved limits through the local config timelock.
 10. Control plane: `CCIPTokenPoolConfigBatch.disablePolicies` from the DAO MS as the local `admin` freezes the config policy and the timelock, and `CCIPTokenPoolConfigBatch.reEnable` from the DAO MS as `bridge_admin` restores them inside the grace window, each with an empty re-run.
 11. Print the final authority state.
@@ -61,9 +61,9 @@ Once the config policies are live on mainnet (their addresses recorded in `env.j
 
 ## Options
 
--   `--port <port>`: Anvil port (default `8545`).
--   `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
--   `--use-deployed`: skip the deploy step and run against the config addresses already in `env.json` / `addresses.json`.
+- `--port <port>`: Anvil port (default `8545`).
+- `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
+- `--use-deployed`: skip the deploy step and run against the config addresses already in `env.json` / `addresses.json`.
 
 Env overrides: `ANVIL_CUPS` (default `250`) and `ANVIL_BACKOFF_MS` (default `1000`) throttle the fork's upstream RPC; `TX_FLAGS` (default `--legacy`) is passed to every `forge script` broadcast and `cast send` of the harness itself (the proposal replay through `src/scripts/proposals/executeOnAnvilFork.sh` runs without it), since the EIP-1559 fee estimation asks the fork for `eth_feeHistory`, which some upstream L2 archive nodes refuse with "historical state is not available". Per-step logs are written to `logs/`.
 
