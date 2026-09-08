@@ -5,6 +5,9 @@ pragma solidity ^0.8.24;
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Libraries
+import {ConfigTimelockKeyLib} from "src/policies/utils/ConfigTimelockKeyLib.sol";
+
 // Contracts
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
@@ -26,8 +29,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
     }
 
     /// @notice The unresolved action holding a configuration key, or zero when the key is free.
-    /// @dev    Keyed by the destination-scoped key (`_scopeConfigKey`) that `pendingActionId`
-    ///         and `getQueuedConfigState` report.
+    /// @dev    Keyed by the destination-scoped key (`ConfigTimelockKeyLib.scope`) that
+    ///         `pendingActionId` and `getQueuedConfigState` report.
     mapping(bytes32 key => uint64 actionId) internal _pendingActionIds;
 
     /// @notice The configuration states recorded for a sub-action at queue time, by local key.
@@ -85,7 +88,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
 
         QueuedConfigState storage state = states[configStateIndex_];
         address destination = _queuedConfigDestinations[actionId_][index_];
-        return (_scopeConfigKey(destination, state.localKey), state.expectedStateHash);
+        return (ConfigTimelockKeyLib.scope(destination, state.localKey), state.expectedStateHash);
     }
 
     function _onSubActionQueued(
@@ -121,7 +124,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                 revert IConfigTimelockBatchQueue_ConfigKeyZero(actionId_, index_, i);
             }
 
-            bytes32 key = _scopeConfigKey(destination, localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(destination, localKey);
 
             uint64 owner = _pendingActionIds[key];
             if (owner != 0) {
@@ -171,7 +174,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         uint256 length = states.length;
         for (uint256 i; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            bytes32 key = _scopeConfigKey(expectedDestination, state.localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
             uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -216,7 +219,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             address destination = _queuedConfigDestinations[actionId_][index];
             uint256 length = states.length;
             for (uint256 i; i < length; ++i) {
-                bytes32 key = _scopeConfigKey(destination, states[i].localKey);
+                bytes32 key = ConfigTimelockKeyLib.scope(destination, states[i].localKey);
                 uint64 owner = _pendingActionIds[key];
                 if (owner != actionId_) {
                     revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -240,18 +243,6 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         for (uint256 index; index < endIndex_; ++index) {
             count += _queuedConfigStates[actionId_][index].length;
         }
-    }
-
-    /// @notice Returns the destination-scoped key of a local key: the key that the reservations
-    ///         are stored under and that `pendingActionId` takes.
-    /// @param destination_ The destination the key is scoped to.
-    /// @param localKey_ The destination-local key.
-    /// @return key The key `keccak256(abi.encode(destination_, localKey_))`.
-    function _scopeConfigKey(
-        address destination_,
-        bytes32 localKey_
-    ) internal pure returns (bytes32 key) {
-        return keccak256(abi.encode(destination_, localKey_));
     }
 
     /// @notice Validates queue-wide authorization and lifecycle requirements.

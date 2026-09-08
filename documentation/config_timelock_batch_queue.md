@@ -102,7 +102,9 @@ Each guard has four parts.
 | Scoped key  | The key that the base reserves                             | The shared base           |
 | State hash  | The canonical state that must stay unchanged               | `_currentConfigStateHash` |
 
-The base calculates the scoped key as follows:
+The base calculates the scoped key with `ConfigTimelockKeyLib.scope`
+(`src/policies/utils/ConfigTimelockKeyLib.sol`), the one formula that the base, the product
+timelocks and the tooling that reads `pendingActionId` share:
 
 ```solidity
 bytes32 scopedKey = keccak256(abi.encode(destination, localKey));
