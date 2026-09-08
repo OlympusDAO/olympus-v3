@@ -26,11 +26,12 @@ contract CCIPTokenPoolConfigTests_reEnable is CCIPTokenPoolConfigTest {
     //   when the caller does not hold the bridge admin role
     //     [X] it reverts with NotDisabled
     // Pins the masking order: the lifecycle modifier answers before the authorization hook
-    function test_givenEnabled_whenCallerIsNotBridgeAdmin_reverts() public givenEnabled {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenEnabled_whenCallerIsNotBridgeAdmin_reverts(
+        address caller_
+    ) public givenEnabled {
         _expectRevertNotDisabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.reEnable();
     }
 
@@ -49,22 +50,20 @@ contract CCIPTokenPoolConfigTests_reEnable is CCIPTokenPoolConfigTest {
     //   when the caller does not hold the bridge admin role
     //     [X] it reverts with NeverEnabled
     // Pins the order: the NeverEnabled check runs before the authorization hook
-    function test_givenNeverEnabled_whenCallerIsNotBridgeAdmin_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenNeverEnabled_whenCallerIsNotBridgeAdmin_reverts(address caller_) public {
         vm.expectRevert(abi.encodeWithSelector(IReEnabler.NeverEnabled.selector));
-        vm.prank(caller);
+        vm.prank(caller_);
         config.reEnable();
     }
 
     // when the caller does not hold the bridge admin role
     //   [X] it reverts with ROLES_RequireRole("bridge_admin")
-    // The fuzz excludes the bridge admin account and the zero address
+    // The fuzz excludes the bridge admin account
     function test_whenCallerIsNotBridgeAdmin_reverts(
         address caller_
     ) public givenEnabled givenDisabled {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);
         vm.prank(caller_);
@@ -115,16 +114,14 @@ contract CCIPTokenPoolConfigTests_reEnable is CCIPTokenPoolConfigTest {
     //     [X] it reverts with ROLES_RequireRole("bridge_admin")
     // Pins the order: the role check runs before the grace check, so an unauthorized caller
     // never learns whether the window is still open.
-    function test_givenGraceExpired_whenCallerIsNotBridgeAdmin_reverts()
-        public
-        givenEnabled
-        givenDisabled
-        givenGraceExpired
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the bridge admin account
+    function test_givenGraceExpired_whenCallerIsNotBridgeAdmin_reverts(
+        address caller_
+    ) public givenEnabled givenDisabled givenGraceExpired {
+        vm.assume(caller_ != bridgeAdmin);
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);
-        vm.prank(caller);
+        vm.prank(caller_);
         config.reEnable();
     }
 
@@ -167,6 +164,51 @@ contract CCIPTokenPoolConfigTests_reEnable is CCIPTokenPoolConfigTest {
         config.reEnable();
 
         assertTrue(config.isEnabled(), "the policy should be enabled at the deadline");
+    }
+
+    // given the block timestamp is anywhere inside the grace window
+    //   [X] it enables the policy
+    // Fuzzed over the elapsed time in [0, gracePeriod]: every point up to and including the
+    // deadline is open. The explicit deadline and deadline + 1 cases pin the boundary itself.
+    function test_givenTimestampWithinGraceWindow(
+        uint32 elapsed_
+    ) public givenEnabled givenDisabled {
+        uint256 boundedElapsed = bound(elapsed_, 0, config.gracePeriod());
+        // boundedElapsed is in the open interval [0, gracePeriod]
+        uint48 deadline = config.lastTransitionAt() + config.gracePeriod();
+        skip(boundedElapsed);
+        assertLe(
+            vm.getBlockTimestamp(),
+            deadline,
+            "the block timestamp should not pass the grace deadline"
+        );
+
+        vm.prank(bridgeAdmin);
+        config.reEnable();
+
+        assertTrue(config.isEnabled(), "the policy should be enabled inside the grace window");
+    }
+
+    // given the block timestamp is anywhere past the grace window
+    //   [X] it reverts with GracePeriod_Expired carrying the deadline
+    // Fuzzed over the elapsed time in [gracePeriod + 1, gracePeriod + 365 days]; the deadline
+    // is fixed by the disable and does not move with the elapsed time
+    function test_givenTimestampPastGraceWindow_reverts(
+        uint32 elapsed_
+    ) public givenEnabled givenDisabled {
+        uint256 gracePeriod = config.gracePeriod();
+        uint256 boundedElapsed = bound(elapsed_, gracePeriod + 1, gracePeriod + 365 days);
+        // boundedElapsed is in the closed interval [gracePeriod + 1, gracePeriod + 365 days]
+        uint48 deadline = config.lastTransitionAt() + config.gracePeriod();
+        skip(boundedElapsed);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IGracePeriod.GracePeriod_Expired.selector, deadline)
+        );
+        vm.prank(bridgeAdmin);
+        config.reEnable();
+
+        assertFalse(config.isEnabled(), "the policy should stay disabled past the grace window");
     }
 
     // when the caller holds the bridge admin role

@@ -23,22 +23,19 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     //   when the caller does not hold the admin role
     //     [X] it reverts with NotEnabled
     // Pins the masking order inside the hook: givenEnabled runs before onlyAdminRole
-    function test_givenDisabled_whenCallerIsNotAdmin_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAdmin_reverts(address caller_) public {
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.setConfigOperator(operator);
     }
 
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
     // The mix-in's ConfigOperator_Unauthorized is dead through this policy: the hook reverts
-    // with the role error instead of returning false. The fuzz excludes the admin account and
-    // the zero address.
+    // with the role error instead of returning false. The fuzz excludes the admin account.
     function test_whenCallerIsNotAdmin_reverts(address caller_) public givenEnabled {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);

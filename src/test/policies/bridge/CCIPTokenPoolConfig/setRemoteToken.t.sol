@@ -34,23 +34,22 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
     // given the policy is disabled
     //   when the caller is not authorized
     //     [X] it reverts with NotEnabled
-    function test_givenDisabled_whenCallerIsNotAuthorized_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAuthorized_reverts(address caller_) public {
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.setRemoteToken(CHAIN_SELECTOR_A, newRemoteToken);
     }
 
     // when the caller is neither the config operator nor an admin
     //   [X] it reverts with NotAuthorised
-    // The fuzz excludes the admin, the operator and the zero address
+    // The fuzz excludes the admin and the operator; the zero address stays in the domain and
+    // has its own pin
     function test_whenCallerIsNotAuthorized_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted givenConfigOperatorSet givenChainAdded {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != operator);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);
@@ -100,16 +99,16 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
     //   when the route does not exist
     //     [X] it reverts with NotAuthorised
     // Pins the masking order: authorization answers before validation
-    function test_whenCallerIsNotAuthorized_whenRouteMissing_reverts()
-        public
-        givenEnabled
-        givenPoolOwnershipAccepted
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAuthorized_whenRouteMissing_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+
         assertFalse(pool.isSupportedChain(CHAIN_SELECTOR_A), "the route should not exist");
 
         _expectRevertNotAuthorised();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.setRemoteToken(CHAIN_SELECTOR_A, newRemoteToken);
     }
 
@@ -554,6 +553,23 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
             0,
             "the empty remote pool set should be carried forward"
         );
+        // The seeded default configurations survive the replacement with both fills full
+        _assertBucket(
+            _outboundBucket(CHAIN_SELECTOR_A),
+            true,
+            DEFAULT_OUTBOUND_CAPACITY,
+            DEFAULT_OUTBOUND_RATE,
+            DEFAULT_OUTBOUND_CAPACITY,
+            "outbound"
+        );
+        _assertBucket(
+            _inboundBucket(CHAIN_SELECTOR_A),
+            true,
+            DEFAULT_INBOUND_CAPACITY,
+            DEFAULT_INBOUND_RATE,
+            DEFAULT_INBOUND_CAPACITY,
+            "inbound"
+        );
     }
 
     // when the remote token differs in a single byte
@@ -602,6 +618,30 @@ contract CCIPTokenPoolConfigTests_setRemoteToken is CCIPTokenPoolConfigTest {
             pool.getRemoteToken(CHAIN_SELECTOR_A),
             longToken,
             "the different-length token should be stored verbatim"
+        );
+    }
+
+    // when the remote token is a 32-byte raw value
+    //   [X] it replaces the remote token
+    // The shape a non-EVM family uses for an account address: the same length as the
+    // ABI-encoded EVM current token, differing in content only
+    function test_whenRemoteTokenIsSvmShaped()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        bytes memory svmToken = abi.encodePacked(keccak256("svm-remote-token"));
+        assertEq(svmToken.length, 32, "the replacement token should be 32 bytes long");
+        config.validateSetRemoteToken(CHAIN_SELECTOR_A, svmToken);
+
+        vm.prank(admin);
+        config.setRemoteToken(CHAIN_SELECTOR_A, svmToken);
+
+        assertEq(
+            pool.getRemoteToken(CHAIN_SELECTOR_A),
+            svmToken,
+            "the 32-byte raw token should be stored verbatim"
         );
     }
 

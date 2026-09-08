@@ -27,22 +27,20 @@ contract CCIPTokenPoolConfigTests_transferLiquidity is CCIPTokenPoolConfigTest {
     // given the policy is disabled
     //   when the caller does not hold the admin role
     //     [X] it reverts with NotEnabled
-    function test_givenDisabled_whenCallerIsNotAdmin_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAdmin_reverts(address caller_) public {
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.transferLiquidity(makeAddr("someSource"), TRANSFER_AMOUNT);
     }
 
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
-    // The fuzz excludes the admin account and the zero address
+    // The fuzz excludes the admin account
     function test_whenCallerIsNotAdmin_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted givenLiquiditySourceConfigured {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);
@@ -95,15 +93,14 @@ contract CCIPTokenPoolConfigTests_transferLiquidity is CCIPTokenPoolConfigTest {
     //   when the amount is zero
     //     [X] it reverts with ROLES_RequireRole("admin")
     // Pins the masking order: the role check answers before the validation
-    function test_whenCallerIsNotAdmin_whenAmountIsZero_reverts()
-        public
-        givenEnabled
-        givenPoolOwnershipAccepted
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenAmountIsZero_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
 
         _expectRevertRequireRole(ADMIN_ROLE);
-        vm.prank(caller);
+        vm.prank(caller_);
         config.transferLiquidity(makeAddr("someSource"), 0);
     }
 

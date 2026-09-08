@@ -37,25 +37,25 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
     // given the policy is disabled
     //   when the caller does not hold the admin role
     //     [X] it reverts with NotEnabled
-    function test_givenDisabled_whenCallerIsNotAdmin_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAdmin_reverts(address caller_) public {
         address candidate = address(
             _newRouterCandidate(MockRouterCandidate.ReturnMode.ValidVersion)
         );
 
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.setRouter(candidate);
     }
 
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
-    // The fuzz excludes the admin account and the zero address
+    // The fuzz excludes the admin account
     function test_whenCallerIsNotAdmin_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(0));
+
         address candidate = address(
             _newRouterCandidate(MockRouterCandidate.ReturnMode.ValidVersion)
         );
@@ -112,15 +112,14 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
     //   when the router is the zero address
     //     [X] it reverts with ROLES_RequireRole("admin")
     // Pins the masking order: the role check answers before the candidate checks
-    function test_whenCallerIsNotAdmin_whenRouterIsZero_reverts()
-        public
-        givenEnabled
-        givenPoolOwnershipAccepted
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAdmin_whenRouterIsZero_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
 
         _expectRevertRequireRole(ADMIN_ROLE);
-        vm.prank(caller);
+        vm.prank(caller_);
         config.setRouter(address(0));
     }
 

@@ -38,23 +38,22 @@ contract CCIPTokenPoolConfigTests_applyAllowListUpdates is CCIPTokenPoolConfigTe
     // given the policy is disabled
     //   when the caller is not authorized
     //     [X] it reverts with NotEnabled
-    function test_givenDisabled_whenCallerIsNotAuthorized_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAuthorized_reverts(address caller_) public {
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.applyAllowListUpdates(new address[](0), _singleAddress(thirdParty));
     }
 
     // when the caller is neither the config operator nor an admin
     //   [X] it reverts with NotAuthorised
-    // The fuzz excludes the admin, the operator and the zero address
+    // The fuzz excludes the admin and the operator; the zero address stays in the domain and
+    // has its own pin
     function test_whenCallerIsNotAuthorized_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted givenConfigOperatorSet {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != operator);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);
@@ -93,16 +92,16 @@ contract CCIPTokenPoolConfigTests_applyAllowListUpdates is CCIPTokenPoolConfigTe
     //   given the pool has no allowlist
     //     [X] it reverts with NotAuthorised
     // Pins the masking order: authorization answers before the allowlist probe
-    function test_whenCallerIsNotAuthorized_givenPoolHasNoAllowList_reverts()
-        public
-        givenEnabled
-        givenPoolOwnershipAccepted
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAuthorized_givenPoolHasNoAllowList_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+
         assertFalse(pool.getAllowListEnabled(), "the primary rig pool has no allowlist");
 
         _expectRevertNotAuthorised();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.applyAllowListUpdates(new address[](0), _singleAddress(thirdParty));
     }
 

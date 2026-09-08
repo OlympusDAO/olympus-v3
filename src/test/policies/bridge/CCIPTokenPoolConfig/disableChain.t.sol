@@ -12,7 +12,6 @@ contract CCIPTokenPoolConfigTests_disableChain is CCIPTokenPoolConfigTest {
     // when the caller holds none of the four containment roles
     //   [X] it reverts with NotAuthorised
     // The fuzz excludes the emergency, admin, bridge admin and bridge rate limiter accounts
-    // and the zero address.
     function test_whenCallerIsNotAuthorized_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted givenChainAdded {
@@ -20,7 +19,6 @@ contract CCIPTokenPoolConfigTests_disableChain is CCIPTokenPoolConfigTest {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != bridgeAdmin);
         vm.assume(caller_ != bridgeRateLimiter);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);

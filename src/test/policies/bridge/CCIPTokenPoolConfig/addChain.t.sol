@@ -23,23 +23,22 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     //   when the caller is not authorized
     //     [X] it reverts with NotEnabled
     // Pins the masking order: the lifecycle gate answers before the authorization modifier
-    function test_givenDisabled_whenCallerIsNotAuthorized_reverts() public {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenDisabled_whenCallerIsNotAuthorized_reverts(address caller_) public {
         _expectRevertNotEnabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.addChain(_defaultChainUpdate(CHAIN_SELECTOR_A));
     }
 
     // when the caller is neither the config operator nor an admin
     //   [X] it reverts with NotAuthorised
-    // The fuzz excludes the admin, the operator and the zero address
+    // The fuzz excludes the admin and the operator; the zero address stays in the domain and
+    // has its own pin
     function test_whenCallerIsNotAuthorized_reverts(
         address caller_
     ) public givenEnabled givenPoolOwnershipAccepted givenConfigOperatorSet {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != operator);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);
@@ -97,17 +96,17 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     //   when the update is invalid
     //     [X] it reverts with NotAuthorised
     // Pins the masking order: authorization answers before any validation
-    function test_whenCallerIsNotAuthorized_whenUpdateIsInvalid_reverts()
-        public
-        givenEnabled
-        givenPoolOwnershipAccepted
-    {
-        address caller = makeAddr("unauthorizedCaller");
+    // The fuzz excludes the admin account
+    function test_whenCallerIsNotAuthorized_whenUpdateIsInvalid_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != admin);
+
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.outboundRateLimiterConfig = _disabledConfig();
 
         _expectRevertNotAuthorised();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.addChain(update);
     }
 
@@ -679,6 +678,73 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
             type(uint128).max,
             "the inbound bucket should start full at the uint128 maximum"
         );
+    }
+
+    // when the rate is below the capacity and non-zero
+    //   [X] it adds the route with both buckets starting full at the capacity
+    //   [X] validateAddChain returns for the same input
+    // The valid interval of the shared rate limiter validator, 0 < rate < capacity, fuzzed in
+    // both directions at once. The capacity ranges over [2, type(uint128).max], since a
+    // capacity below two leaves no room for a non-zero rate below it.
+    function test_whenRateIsBelowCapacity(
+        uint128 capacity_,
+        uint128 rate_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        uint128 boundedCapacity = uint128(bound(capacity_, 2, type(uint128).max));
+        // boundedCapacity is in [2, type(uint128).max]
+        uint128 boundedRate = uint128(bound(rate_, 1, boundedCapacity - 1));
+        // boundedRate is in the valid interval [1, capacity - 1]
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _rateLimiterConfig(true, boundedCapacity, boundedRate);
+        update.inboundRateLimiterConfig = _rateLimiterConfig(true, boundedCapacity, boundedRate);
+
+        config.validateAddChain(update);
+        vm.prank(admin);
+        config.addChain(update);
+
+        _assertBucket(
+            _outboundBucket(CHAIN_SELECTOR_A),
+            true,
+            boundedCapacity,
+            boundedRate,
+            boundedCapacity,
+            "outbound"
+        );
+        _assertBucket(
+            _inboundBucket(CHAIN_SELECTOR_A),
+            true,
+            boundedCapacity,
+            boundedRate,
+            boundedCapacity,
+            "inbound"
+        );
+    }
+
+    // when the rate is not below the capacity
+    //   [X] it reverts with InvalidRateLimitRate carrying the outbound config
+    //   [X] validateAddChain reverts with the same error
+    // The invalid interval of the shared rate limiter validator: rate in
+    // [capacity, type(uint128).max] for any capacity. A zero capacity lands on the zero-rate
+    // half of the predicate, every other capacity on the rate >= capacity half.
+    function test_whenRateIsNotBelowCapacity_reverts(
+        uint128 capacity_,
+        uint128 rate_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        uint128 boundedRate = uint128(bound(rate_, capacity_, type(uint128).max));
+        // boundedRate is in the invalid interval [capacity, type(uint128).max]
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _rateLimiterConfig(true, capacity_, boundedRate);
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPRateLimiter.InvalidRateLimitRate.selector,
+            update.outboundRateLimiterConfig
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
     }
 
     // when the remote addresses are not EVM-encoded

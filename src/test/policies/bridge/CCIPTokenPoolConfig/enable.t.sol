@@ -25,20 +25,18 @@ contract CCIPTokenPoolConfigTests_enable is CCIPTokenPoolConfigTest {
     //     [X] it reverts with NotDisabled
     // Pins the masking order: the givenDisabled modifier runs before the authorization hook, so
     // the lifecycle error hides the role error from an unauthorized prober.
-    function test_givenEnabled_whenCallerIsNotAdmin_reverts() public givenEnabled {
-        address caller = makeAddr("unauthorizedCaller");
-
+    // Fuzzed over every address: the lifecycle error answers before any caller check
+    function test_givenEnabled_whenCallerIsNotAdmin_reverts(address caller_) public givenEnabled {
         _expectRevertNotDisabled();
-        vm.prank(caller);
+        vm.prank(caller_);
         config.enable("");
     }
 
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
-    // The fuzz excludes the admin account and the zero address
+    // The fuzz excludes the admin account
     function test_whenCallerIsNotAdmin_reverts(address caller_) public {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);
@@ -117,6 +115,7 @@ contract CCIPTokenPoolConfigTests_enable is CCIPTokenPoolConfigTest {
     // The payload is never decoded; authorization must not depend on it. Fuzzed bytes.
     function test_whenDataIsNotEmpty(bytes calldata data_) public {
         vm.assume(data_.length > 0);
+
         uint48 timestamp = uint48(vm.getBlockTimestamp());
 
         vm.expectEmit(true, true, true, true, address(config));
