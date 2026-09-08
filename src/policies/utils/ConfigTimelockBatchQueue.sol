@@ -25,11 +25,18 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         bytes32 expectedStateHash;
     }
 
-    mapping(bytes32 key => uint64 actionId) private _pendingActionIds;
+    /// @notice The unresolved action holding a configuration key, or zero when the key is free.
+    /// @dev    Keyed by the destination-scoped key that `pendingActionId` and
+    ///         `getQueuedConfigState` report.
+    mapping(bytes32 key => uint64 actionId) internal _pendingActionIds;
+
+    /// @notice The configuration states recorded for a sub-action at queue time, by local key.
     mapping(uint64 actionId => mapping(uint256 index => QueuedConfigState[] states))
-        private _queuedConfigStates;
+        internal _queuedConfigStates;
+
+    /// @notice The destination recorded for a sub-action at queue time.
     mapping(uint64 actionId => mapping(uint256 index => address destination))
-        private _queuedConfigDestinations;
+        internal _queuedConfigDestinations;
 
     constructor(uint48 initialTimelockDelay_) TimelockBatchQueue(initialTimelockDelay_) {}
 
