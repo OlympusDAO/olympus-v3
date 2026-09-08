@@ -19,7 +19,7 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
-    function setConfigOperator(address configOperator_) external virtual override {
+    function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
         }
