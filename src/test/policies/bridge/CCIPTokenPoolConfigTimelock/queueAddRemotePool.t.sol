@@ -428,14 +428,11 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
 
     // when the pool value is non-EVM-shaped
     //   [X] it queues successfully
-    // The mirror checks emptiness and membership only; a 64-byte value queues
+    // A 32-byte raw value, the account address shape of an SVM pool: the mirror validates the
+    // length, emptiness and membership only, so any 32-byte content queues
     function test_whenPoolIsNonEvmShaped() public givenEnabled givenChainAdded {
-        // Two words instead of the single word of an EVM-shaped address
-        bytes memory remotePool = abi.encode(
-            keccak256("nonEvmRemotePoolHigh"),
-            keccak256("nonEvmRemotePoolLow")
-        );
-        assertEq(remotePool.length, 64, "the fixture pool value should be 64 bytes");
+        bytes memory remotePool = abi.encodePacked(keccak256("nonEvmRemotePool"));
+        assertEq(remotePool.length, 32, "the fixture pool value should be 32 bytes");
 
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
@@ -449,7 +446,37 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         assertEq(
             storedPayload,
             abi.encode(CHAIN_SELECTOR_A, remotePool),
-            "the stored payload should carry the free-form pool value"
+            "the stored payload should carry the raw pool value"
+        );
+    }
+
+    // when the pool value is not 32 bytes long
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength carrying the value
+    //   [X] the remote pools key stays free
+    // The mirror rejects a 64-byte value: the source pool of an EVM message is recorded as the
+    // ABI encoding of its address and an SVM pool as its raw account address, both exactly 32
+    // bytes
+    function test_whenPoolLengthIsNot32_reverts() public givenEnabled givenChainAdded {
+        // Two words instead of the single word of an EVM-shaped address
+        bytes memory remotePool = abi.encode(
+            keccak256("nonEvmRemotePoolHigh"),
+            keccak256("nonEvmRemotePoolLow")
+        );
+        assertEq(remotePool.length, 64, "the fixture pool value should be 64 bytes");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+                remotePool
+            )
+        );
+        vm.prank(bridgeAdmin);
+        timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
+
+        assertEq(
+            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the remote pools key should stay free after the rejected queue"
         );
     }
 }

@@ -203,10 +203,9 @@ contract CCIPTokenPoolConfigHandler is Test {
         tokenCandidates.push(abi.encode(makeAddr("handlerRemoteTokenOne")));
         tokenCandidates.push(abi.encode(makeAddr("handlerRemoteTokenTwo")));
         tokenCandidates.push(abi.encode(makeAddr("handlerRemoteTokenThree")));
-        // A 64-byte family-encoded shape next to the EVM encodings
-        tokenCandidates.push(
-            abi.encodePacked(keccak256("handlerFamilyTokenA"), keccak256("handlerFamilyTokenB"))
-        );
+        // A 32-byte raw shape next to the EVM encodings: the only other length the config
+        // accepts, the raw account address of an SVM chain
+        tokenCandidates.push(abi.encodePacked(keccak256("handlerFamilyToken")));
 
         poolCandidates.push(abi.encode(makeAddr("handlerRemotePoolOne")));
         poolCandidates.push(abi.encode(makeAddr("handlerRemotePoolTwo")));

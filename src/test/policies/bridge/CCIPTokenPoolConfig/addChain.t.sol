@@ -322,6 +322,7 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     // when the remote token is empty
     //   [X] it reverts with ZeroAddressNotAllowed
     //   [X] validateAddChain reverts with the same error
+    // The empty value is also not 32 bytes long; the pool-shaped emptiness check answers first
     function test_whenRemoteTokenIsEmpty_reverts() public givenEnabled givenPoolOwnershipAccepted {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.remoteTokenAddress = "";
@@ -335,6 +336,81 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
 
         vm.expectRevert(err);
         config.validateAddChain(update);
+    }
+
+    // when the remote token is not 32 bytes long
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength carrying the token
+    //   [X] validateAddChain reverts with the same error
+    // Fuzzed over every non-empty length from 1 to 96 bytes except 32: the ABI encoding of an
+    // EVM address and the raw account address of an SVM chain are both exactly 32 bytes, and
+    // the ramps reject any other length at send time (config-only check)
+    function test_whenRemoteTokenLengthIsNot32_reverts(
+        uint8 length_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        length_ = uint8(bound(length_, 1, 96));
+        vm.assume(length_ != 32);
+
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.remoteTokenAddress = _bytesOfLength(length_);
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+            update.remoteTokenAddress
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+    }
+
+    // when the remote token is one byte longer or shorter than 32 bytes
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength
+    // The two boundary lengths, pinned explicitly next to the fuzz
+    function test_whenRemoteTokenLengthIsOffByOne_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        uint256[2] memory lengths = [uint256(31), 33];
+        for (uint256 i; i < lengths.length; ++i) {
+            ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+            update.remoteTokenAddress = _bytesOfLength(lengths[i]);
+
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+                    update.remoteTokenAddress
+                )
+            );
+            vm.prank(admin);
+            config.addChain(update);
+        }
+    }
+
+    // given the route already exists
+    //   when the remote token is not 32 bytes long
+    //     [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength
+    // Pins the order: the token length check sits next to the token emptiness check, before
+    // the existence check
+    function test_givenRouteExists_whenRemoteTokenLengthIsNot32_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.remoteTokenAddress = _bytesOfLength(20);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+                update.remoteTokenAddress
+            )
+        );
+        vm.prank(admin);
+        config.addChain(update);
     }
 
     // given the route already exists
@@ -430,6 +506,62 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
 
         vm.expectRevert(err);
         config.validateAddChain(update);
+    }
+
+    // when a remote pool entry is not 32 bytes long
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength carrying the entry
+    //   [X] validateAddChain reverts with the same error
+    // Fuzzed over every non-empty length from 1 to 96 bytes except 32; the entry sits at index 1
+    // so the loop coverage goes past the first element (config-only check)
+    function test_whenARemotePoolEntryLengthIsNot32_reverts(
+        uint8 length_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        length_ = uint8(bound(length_, 1, 96));
+        vm.assume(length_ != 32);
+
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        bytes[] memory remotePools = new bytes[](2);
+        remotePools[0] = REMOTE_POOL_ONE;
+        remotePools[1] = _bytesOfLength(length_);
+        update.remotePoolAddresses = remotePools;
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+            remotePools[1]
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+    }
+
+    // when a remote pool entry is not 32 bytes long and duplicated
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength
+    // The pool alone would report PoolAlreadyAdded for the second occurrence; the config
+    // reports the length at the first occurrence, since every entry is length-checked before
+    // the duplicate scan reaches its repeat
+    function test_whenARemotePoolEntryLengthIsNot32_whenDuplicated_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        bytes memory shortPool = _bytesOfLength(20);
+        bytes[] memory remotePools = new bytes[](2);
+        remotePools[0] = shortPool;
+        remotePools[1] = shortPool;
+        update.remotePoolAddresses = remotePools;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+                shortPool
+            )
+        );
+        vm.prank(admin);
+        config.addChain(update);
     }
 
     // when the remote pool entries contain a duplicate
@@ -749,8 +881,8 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
 
     // when the remote addresses are not EVM-encoded
     //   [X] it adds the route
-    // Family-encoded bytes of arbitrary length (a 32-byte SVM-style token and pool) are
-    // accepted; no shape validation exists.
+    // A 32-byte SVM-style token and pool are accepted: only the length is validated, never
+    // the content.
     function test_whenRemoteAddressesAreNotEvmEncoded()
         public
         givenEnabled

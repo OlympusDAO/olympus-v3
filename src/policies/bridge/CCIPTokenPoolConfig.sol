@@ -90,6 +90,16 @@ contract CCIPTokenPoolConfig is
     ///         configuration to be non-zero and below its capacity.
     uint128 internal constant _MIN_ENABLED_CAPACITY = 2;
 
+    /// @notice The length of every remote token and remote pool address the policy accepts, in
+    ///         bytes: the ABI encoding of an EVM address, or the raw account address of an SVM
+    ///         chain. It is the only length that both the 1.6 and the 2.0.0 ramps accept, and
+    ///         the one every live 1.5 route carries: the 1.6 fee quoter rejects a remote token of
+    ///         any other length at send time, the 2.0.0 on-ramp unpads a 32-byte EVM remote token
+    ///         to 20 bytes, and the source pool of an EVM message is delivered as its ABI
+    ///         encoding, which the destination pool matches byte for byte against its accepted
+    ///         remote pools.
+    uint256 internal constant _REMOTE_ADDRESS_LENGTH = 32;
+
     /// @notice The minimum length of the return data of a successful `typeAndVersion()` call:
     ///         the ABI encoding of an empty string. It is also the number of bytes the probe
     ///         copies, since the probe measures the length of the answer and never decodes it.
@@ -402,8 +412,11 @@ contract CCIPTokenPoolConfig is
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The route state is read from the pool before the replacement: the remote pools, both
     ///      rate limiter configurations and both fill levels projected to the current block. The
-    ///      replacement is one `applyChainUpdates` call with `chainSelector_` in both the removals
-    ///      and the additions, after which both buckets are full. Each fill level is then
+    ///      remote pools are carried forward as read, without the checks that `addChain` applies
+    ///      to a new list, so a route seeded directly on the pool before the handover keeps an
+    ///      empty set or an entry of another length. The replacement is one `applyChainUpdates`
+    ///      call with `chainSelector_` in both the removals and the additions, after which both
+    ///      buckets are full. Each fill level is then
     ///      restored by two `setChainRateLimiterConfig` calls in the same transaction: first a
     ///      configuration with `capacity = max(previousTokens, 2)` and `rate = 1`, which clamps
     ///      the bucket down to that level, then the original configuration. A previous fill
@@ -602,16 +615,19 @@ contract CCIPTokenPoolConfig is
     // ========== VALIDATION FUNCTIONS ========== //
 
     /// @inheritdoc ICCIPTokenPoolConfig
-    /// @dev The checks run in the order in which the pool would perform its own.
+    /// @dev The checks run in the order in which the pool would perform its own, with the
+    ///      config-only length check of each remote address right after its emptiness check.
     ///
     ///      Reverts if:
     ///      - Either rate limiter configuration is disabled.
     ///      - Either rate limiter configuration has a zero rate or a rate that is not below its
     ///        capacity (`InvalidRateLimitRate`).
     ///      - The remote token is empty (`ZeroAddressNotAllowed`).
+    ///      - The remote token is not 32 bytes long.
     ///      - The route already exists (`ChainAlreadyExists`).
     ///      - The remote pool list is empty.
     ///      - A remote pool entry is empty (`ZeroAddressNotAllowed`).
+    ///      - A remote pool entry is not 32 bytes long.
     ///      - A remote pool entry is duplicated (`PoolAlreadyAdded`).
     function validateAddChain(
         ICCIPTokenPoolAdmin.ChainUpdate calldata update_
@@ -630,6 +646,7 @@ contract CCIPTokenPoolConfig is
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - `remoteToken_` is empty.
+    ///      - `remoteToken_` is not 32 bytes long.
     ///      - `remoteToken_` equals the current remote token of the route.
     ///      - Either current bucket of the route is disabled.
     function validateSetRemoteToken(
@@ -643,6 +660,7 @@ contract CCIPTokenPoolConfig is
     /// @dev Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     ///      - `remotePool_` is empty (`ZeroAddressNotAllowed`).
+    ///      - `remotePool_` is not 32 bytes long.
     ///      - `remotePool_` is already accepted for the route (`PoolAlreadyAdded`).
     function validateAddRemotePool(
         uint64 chainSelector_,
@@ -735,6 +753,7 @@ contract CCIPTokenPoolConfig is
         if (update_.remoteTokenAddress.length == 0) {
             revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
         }
+        _requireRemoteAddressLength(update_.remoteTokenAddress);
         if (_POOL.isSupportedChain(update_.remoteChainSelector)) {
             revert ICCIPTokenPoolAdmin.ChainAlreadyExists(update_.remoteChainSelector);
         }
@@ -744,6 +763,7 @@ contract CCIPTokenPoolConfig is
         for (uint256 i; i < length; ++i) {
             bytes calldata remotePool = update_.remotePoolAddresses[i];
             if (remotePool.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
+            _requireRemoteAddressLength(remotePool);
 
             bytes32 remotePoolHash = keccak256(remotePool);
             for (uint256 j; j < i; ++j) {
@@ -772,6 +792,7 @@ contract CCIPTokenPoolConfig is
     ) internal view {
         _requireSupportedChain(chainSelector_);
         if (remoteToken_.length == 0) revert CCIPTokenPoolConfig_RemoteTokenEmpty();
+        _requireRemoteAddressLength(remoteToken_);
         if (keccak256(remoteToken_) == keccak256(_POOL.getRemoteToken(chainSelector_))) {
             revert CCIPTokenPoolConfig_RemoteTokenUnchanged();
         }
@@ -790,6 +811,7 @@ contract CCIPTokenPoolConfig is
     ) internal view {
         _requireSupportedChain(chainSelector_);
         if (remotePool_.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
+        _requireRemoteAddressLength(remotePool_);
         if (_POOL.isRemotePool(chainSelector_, remotePool_)) {
             revert ICCIPTokenPoolAdmin.PoolAlreadyAdded(chainSelector_, remotePool_);
         }
@@ -849,6 +871,15 @@ contract CCIPTokenPoolConfig is
         if (!config_.isEnabled) revert CCIPTokenPoolConfig_RateLimiterDisabled();
         if (config_.rate == 0 || config_.rate >= config_.capacity) {
             revert ICCIPRateLimiter.InvalidRateLimitRate(config_);
+        }
+    }
+
+    /// @notice Reverts with `CCIPTokenPoolConfig_InvalidRemoteAddressLength` unless
+    ///         `remoteAddress_` is exactly `_REMOTE_ADDRESS_LENGTH` bytes long.
+    /// @param  remoteAddress_ The remote token or remote pool address to check.
+    function _requireRemoteAddressLength(bytes calldata remoteAddress_) internal pure {
+        if (remoteAddress_.length != _REMOTE_ADDRESS_LENGTH) {
+            revert CCIPTokenPoolConfig_InvalidRemoteAddressLength(remoteAddress_);
         }
     }
 

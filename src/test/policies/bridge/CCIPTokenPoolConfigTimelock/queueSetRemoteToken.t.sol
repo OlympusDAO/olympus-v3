@@ -418,14 +418,11 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
 
     // when the token is non-EVM-shaped
     //   [X] it queues successfully
-    // The mirror checks only non-empty and changed; a 64-byte value queues
+    // A 32-byte raw value, the account address shape of an SVM chain: the mirror validates the
+    // length only, so any 32-byte content queues
     function test_whenTokenIsNonEvmShaped() public givenEnabled givenChainAdded {
-        // Two words instead of the single word of an EVM-shaped address
-        bytes memory remoteToken = abi.encode(
-            keccak256("nonEvmRemoteTokenHigh"),
-            keccak256("nonEvmRemoteTokenLow")
-        );
-        assertEq(remoteToken.length, 64, "the fixture token should be 64 bytes");
+        bytes memory remoteToken = abi.encodePacked(keccak256("nonEvmRemoteToken"));
+        assertEq(remoteToken.length, 32, "the fixture token should be 32 bytes");
 
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
@@ -435,8 +432,33 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         assertEq(
             storedPayload,
             abi.encode(CHAIN_SELECTOR_A, remoteToken),
-            "the stored payload should carry the free-form token"
+            "the stored payload should carry the raw token"
         );
+    }
+
+    // when the token is not 32 bytes long
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRemoteAddressLength carrying the token
+    //   [X] no key is reserved
+    // The mirror rejects a 64-byte value: the ramps require the ABI encoding of an EVM address
+    // or the raw account address of an SVM chain, both exactly 32 bytes
+    function test_whenTokenLengthIsNot32_reverts() public givenEnabled givenChainAdded {
+        // Two words instead of the single word of an EVM-shaped address
+        bytes memory remoteToken = abi.encode(
+            keccak256("nonEvmRemoteTokenHigh"),
+            keccak256("nonEvmRemoteTokenLow")
+        );
+        assertEq(remoteToken.length, 64, "the fixture token should be 64 bytes");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRemoteAddressLength.selector,
+                remoteToken
+            )
+        );
+        vm.prank(bridgeAdmin);
+        timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
+
+        _assertRouteKeysFree(CHAIN_SELECTOR_A, "after the rejected queue");
     }
 
     // given the route is contained

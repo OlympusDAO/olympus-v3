@@ -264,6 +264,19 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         return pools;
     }
 
+    /// @notice A remote address candidate of an arbitrary length, filled with non-zero bytes so
+    ///         that only its length distinguishes it from a valid value. Used by the length
+    ///         checks of the remote token and remote pool arguments.
+    function _bytesOfLength(uint256 length_) internal pure returns (bytes memory value) {
+        value = new bytes(length_);
+        for (uint256 i; i < length_; ++i) {
+            // casting to `uint8` is safe: the value is reduced modulo 255 first
+            // forge-lint: disable-next-line(unsafe-typecast)
+            value[i] = bytes1(uint8((i % 255) + 1));
+        }
+        return value;
+    }
+
     /// @notice ChainUpdate factory. Tests override single fields by mutating the returned
     ///         memory struct.
     function _chainUpdate(

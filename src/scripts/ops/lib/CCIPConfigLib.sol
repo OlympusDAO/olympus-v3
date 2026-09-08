@@ -36,7 +36,9 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        the trusted remote for removal);
 ///      - `CCIP.minimumPoolBacking` is the funding target of the canonical lock/release pool.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
-///      or a disabled rate limiter reverts with a message naming the key.
+///      or a disabled rate limiter reverts with a message naming the key, and a remote token or
+///      remote pool that is not 32 bytes long (the only length the config policy and the CCIP
+///      ramps accept) with a message naming the route and the field.
 library CCIPConfigLib {
     using stdJson for string;
 
@@ -53,6 +55,11 @@ library CCIPConfigLib {
     string internal constant EVM_BRIDGE_KEY = "olympus.periphery.CCIPCrossChainBridge";
     string internal constant OHM_KEY = "olympus.legacy.OHM";
     string internal constant CHAIN_SELECTOR_KEY = "external.ccip.ChainSelector";
+
+    /// @notice The length of a remote token or remote pool address, in bytes: the ABI encoding
+    ///         of an EVM address, or the raw account address of an SVM chain. The config policy
+    ///         rejects any other length, so an override in `env.json` is checked here first.
+    uint256 internal constant REMOTE_ADDRESS_LENGTH = 32;
 
     // ========== DATA STRUCTURES ========== //
 
@@ -420,6 +427,7 @@ library CCIPConfigLib {
             route.remoteToken.length != 0,
             string.concat("CCIPConfigLib: empty remote token for route ", remoteChain_)
         );
+        _requireRemoteAddressLength(route.remoteToken, "remote token", remoteChain_);
 
         string memory poolsKey = string.concat(base, ".remotePools");
         if (_VM.keyExistsJson(env_, poolsKey)) {
@@ -437,6 +445,7 @@ library CCIPConfigLib {
                 route.remotePools[i].length != 0,
                 string.concat("CCIPConfigLib: empty remote pool for route ", remoteChain_)
             );
+            _requireRemoteAddressLength(route.remotePools[i], "remote pool", remoteChain_);
         }
 
         route.outbound = _readConfig(env_, string.concat(base, ".outboundRateLimit"));
@@ -559,6 +568,26 @@ library CCIPConfigLib {
         for (uint256 i; i < count; ++i) {
             result[i] = buffer[i];
         }
+    }
+
+    function _requireRemoteAddressLength(
+        bytes memory value_,
+        string memory label_,
+        string memory remoteChain_
+    ) private pure {
+        require(
+            value_.length == REMOTE_ADDRESS_LENGTH,
+            string.concat(
+                "CCIPConfigLib: the ",
+                label_,
+                " of route ",
+                remoteChain_,
+                " is ",
+                _VM.toString(value_.length),
+                " bytes long, expected ",
+                _VM.toString(REMOTE_ADDRESS_LENGTH)
+            )
+        );
     }
 
     function _toAddress(bytes32 word_) private pure returns (address value) {

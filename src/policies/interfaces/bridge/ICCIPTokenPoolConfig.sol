@@ -24,9 +24,10 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 ///         timelock.
 ///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
-///         Remote addresses are ABI-encoded for EVM chains and encoded per the remote chain
-///         family otherwise. Every operation on the pool is emitted by this contract in addition
-///         to the events that the pool emits itself.
+///         Remote token and remote pool addresses are exactly 32 bytes: the ABI encoding of an
+///         EVM address, or the raw account address of an SVM chain, the only length that the
+///         CCIP ramps accept on every generation in service. Every operation on the pool is
+///         emitted by this contract in addition to the events that the pool emits itself.
 interface ICCIPTokenPoolConfig is IConfigOperator {
     // ========== ERRORS ========== //
 
@@ -66,6 +67,12 @@ interface ICCIPTokenPoolConfig is IConfigOperator {
 
     /// @notice Thrown when the remote token to set for a route equals its current remote token.
     error CCIPTokenPoolConfig_RemoteTokenUnchanged();
+
+    /// @notice Thrown when a remote token or remote pool address is not exactly 32 bytes long:
+    ///         the ABI encoding of an EVM address, or the raw account address of an SVM chain.
+    ///         An empty value raises the emptiness error of its function instead.
+    /// @param remoteAddress The rejected remote address.
+    error CCIPTokenPoolConfig_InvalidRemoteAddressLength(bytes remoteAddress);
 
     /// @notice Thrown when a supplied or current rate limiter configuration is disabled.
     ///         Every route served by the pool carries enabled limiters in both directions.
