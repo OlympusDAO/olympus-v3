@@ -24,11 +24,12 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         It is meant to be the config timelock. A caller holding this interface casts to
 ///         `IConfigOperator` for those two functions, as it does to `IEnabler` for the lifecycle.
 ///
-///         The address setters (`setConfigOperator`, `setRouter`, `setRebalancer`,
-///         `setRateLimitAdmin`) and `setRemoteToken` reject the value they already hold with
-///         `CCIPTokenPoolConfig_AddressUnchanged`, so a call that lands always changes state.
-///         Where the zero address is a meaningful value, it is subject to the same rule: revoking
-///         an authority that is already unset reverts. Tooling that phrases a step as "set or
+///         The address setters and `setRemoteToken` reject the value they already hold, so a
+///         call that lands always changes state: `setRouter`, `setRebalancer`,
+///         `setRateLimitAdmin` and `setRemoteToken` with `CCIPTokenPoolConfig_AddressUnchanged`,
+///         `setConfigOperator` with `ConfigOperator_Unchanged` of `IConfigOperator`. Where the
+///         zero address is a meaningful value, it is subject to the same rule: revoking an
+///         authority that is already unset reverts. Tooling that phrases a step as "set or
 ///         validate" reads the live value and skips the call when it already matches.
 ///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
@@ -73,10 +74,11 @@ interface ICCIPTokenPoolConfig {
     /// @notice Thrown when the remote token to set for a route is empty.
     error CCIPTokenPoolConfig_RemoteTokenEmpty();
 
-    /// @notice Thrown when a setter is called with the value it already holds: the config
-    ///         operator, the router, the rebalancer or the rate limit admin of the pool, or the
-    ///         remote token of a route. The zero address is a value in its own right here, so
-    ///         revoking an authority that is already unset reverts as well.
+    /// @notice Thrown when a setter is called with the value it already holds: the router, the
+    ///         rebalancer or the rate limit admin of the pool, or the remote token of a route.
+    ///         The zero address is a value in its own right here, so revoking an authority that
+    ///         is already unset reverts as well. The config operator setter raises the mix-in's
+    ///         `ConfigOperator_Unchanged` instead.
     /// @param parameter The name of the unchanged parameter.
     error CCIPTokenPoolConfig_AddressUnchanged(string parameter);
 

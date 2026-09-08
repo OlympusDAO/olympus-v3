@@ -303,7 +303,7 @@ contract CCIPTokenPoolConfigHandler is Test {
             _probeUnchangedWrite(
                 admin,
                 abi.encodeCall(IConfigOperator.setConfigOperator, (candidate)),
-                "configOperator"
+                abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector)
             );
             return;
         }
@@ -352,7 +352,7 @@ contract CCIPTokenPoolConfigHandler is Test {
                 _probeUnchangedWrite(
                     admin,
                     abi.encodeCall(ICCIPTokenPoolConfig.setRouter, (candidate)),
-                    "router"
+                    _addressUnchanged("router")
                 );
                 return;
             }
@@ -410,7 +410,7 @@ contract CCIPTokenPoolConfigHandler is Test {
             _probeUnchangedWrite(
                 admin,
                 abi.encodeCall(ICCIPTokenPoolConfig.setRebalancer, (candidate)),
-                "rebalancer"
+                _addressUnchanged("rebalancer")
             );
             return;
         }
@@ -435,7 +435,7 @@ contract CCIPTokenPoolConfigHandler is Test {
             _probeUnchangedWrite(
                 admin,
                 abi.encodeCall(ICCIPTokenPoolConfig.setRateLimitAdmin, (candidate)),
-                "rateLimitAdmin"
+                _addressUnchanged("rateLimitAdmin")
             );
             return;
         }
@@ -639,7 +639,7 @@ contract CCIPTokenPoolConfigHandler is Test {
             _probeUnchangedWrite(
                 _routeCaller(tokenSeed_),
                 abi.encodeCall(ICCIPTokenPoolConfig.setRemoteToken, (selector, candidate)),
-                "remoteToken"
+                _addressUnchanged("remoteToken")
             );
             return;
         }
@@ -901,18 +901,15 @@ contract CCIPTokenPoolConfigHandler is Test {
     // ========== UNCHANGED-VALUE PROBE ========== //
 
     /// @notice Fires a setter with the value it already holds, as an authorized caller, and
-    ///         requires the exact `CCIPTokenPoolConfig_AddressUnchanged(parameter)` revert. A
-    ///         success sets the ghost flag; any other revert bubbles so the run fails.
+    ///         requires the exact unchanged-value revert (`CCIPTokenPoolConfig_AddressUnchanged`
+    ///         naming the parameter, or the mix-in's `ConfigOperator_Unchanged` for the
+    ///         operator). A success sets the ghost flag; any other revert bubbles so the run
+    ///         fails.
     function _probeUnchangedWrite(
         address caller_,
         bytes memory payload_,
-        string memory parameter_
+        bytes memory expected_
     ) internal {
-        bytes memory expected = abi.encodeWithSelector(
-            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
-            parameter_
-        );
-
         vm.prank(caller_);
         // A low-level call so the expected revert does not bubble
         // forge-lint: disable-next-line(unchecked-call)
@@ -922,12 +919,20 @@ contract CCIPTokenPoolConfigHandler is Test {
             ghost_unchangedWriteLanded = true;
             return;
         }
-        if (keccak256(reason) != keccak256(expected)) {
+        if (keccak256(reason) != keccak256(expected_)) {
             assembly {
                 revert(add(reason, 0x20), mload(reason))
             }
         }
         unchangedWriteRejections += 1;
+    }
+
+    function _addressUnchanged(string memory parameter_) internal pure returns (bytes memory) {
+        return
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
+                parameter_
+            );
     }
 
     // ========== SELECTION HELPERS ========== //

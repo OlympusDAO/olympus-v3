@@ -52,11 +52,12 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         it starts unset, `setConfigOperator` replaces it immediately, and the zero address
 ///         revokes it. The route and rate limit functions accept it alongside the admin role.
 ///
-///         The address setters (`setConfigOperator`, `setRouter`, `setRebalancer`,
-///         `setRateLimitAdmin`) and `setRemoteToken` reject the value they already hold
-///         (`CCIPTokenPoolConfig_AddressUnchanged`), the zero address included where it is a
-///         value, so a call that lands always changes state; the check runs after the lifecycle
-///         and role gates and before any other validation of the candidate.
+///         The address setters and `setRemoteToken` reject the value they already hold, the zero
+///         address included where it is a value, so a call that lands always changes state:
+///         `setRouter`, `setRebalancer`, `setRateLimitAdmin` and `setRemoteToken` with
+///         `CCIPTokenPoolConfig_AddressUnchanged`, `setConfigOperator` with the mix-in's
+///         `ConfigOperator_Unchanged`. The check runs after the lifecycle and role gates and
+///         before any other validation of the candidate.
 ///
 ///         Every check that this contract adds on top of the pool is shared between the
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
@@ -282,24 +283,6 @@ contract CCIPTokenPoolConfig is
         _POOL.transferOwnership(newOwner_);
 
         emit PoolOwnershipTransferRequested(newOwner_);
-    }
-
-    /// @inheritdoc IConfigOperator
-    /// @dev The mix-in setter, gated here with the lifecycle and role checks of the other admin
-    ///      functions and rejecting the value already held. The zero address revokes the operator
-    ///      and is a value in its own right: revoking an operator that is already unset reverts
-    ///      like any other unchanged write.
-    ///
-    ///      Reverts if:
-    ///      - The policy is disabled.
-    ///      - The caller does not hold the admin role.
-    ///      - `configOperator_` is the current config operator.
-    function setConfigOperator(address configOperator_) public override givenEnabled onlyAdminRole {
-        if (configOperator_ == configOperator) {
-            revert CCIPTokenPoolConfig_AddressUnchanged("configOperator");
-        }
-
-        super.setConfigOperator(configOperator_);
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
@@ -763,11 +746,23 @@ contract CCIPTokenPoolConfig is
     // ========== CONFIG OPERATOR HOOKS ========== //
 
     /// @inheritdoc ConfigOperatorSingleStep
-    /// @dev Always authorizes. The policy gates `setConfigOperator` itself, in its override of
-    ///      the mix-in setter, with the lifecycle and role checks of the other admin functions
-    ///      and the unchanged-value check, all before the mix-in reaches this hook; the mix-in
-    ///      therefore never reports `ConfigOperator_Unauthorized` through this policy.
-    function _authorizeSetConfigOperator() internal pure override returns (bool authorized) {
+    /// @dev The hook reverts on failure, so the mix-in never reports `ConfigOperator_Unauthorized`
+    ///      through this policy; the mix-in then rejects the operator already set, the zero
+    ///      address included, with `ConfigOperator_Unchanged`, so the setter carries the
+    ///      lifecycle and role errors of the other admin functions followed by the unchanged
+    ///      check, in that order.
+    ///
+    ///      Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the admin role.
+    function _authorizeSetConfigOperator()
+        internal
+        view
+        override
+        givenEnabled
+        onlyAdminRole
+        returns (bool authorized)
+    {
         return true;
     }
 
