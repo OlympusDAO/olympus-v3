@@ -26,8 +26,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
     }
 
     /// @notice The unresolved action holding a configuration key, or zero when the key is free.
-    /// @dev    Keyed by the destination-scoped key that `pendingActionId` and
-    ///         `getQueuedConfigState` report.
+    /// @dev    Keyed by the destination-scoped key (`_scopeConfigKey`) that `pendingActionId`
+    ///         and `getQueuedConfigState` report.
     mapping(bytes32 key => uint64 actionId) internal _pendingActionIds;
 
     /// @notice The configuration states recorded for a sub-action at queue time, by local key.
@@ -242,10 +242,15 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         }
     }
 
+    /// @notice Returns the destination-scoped key of a local key: the key that the reservations
+    ///         are stored under and that `pendingActionId` takes.
+    /// @param destination_ The destination the key is scoped to.
+    /// @param localKey_ The destination-local key.
+    /// @return key The key `keccak256(abi.encode(destination_, localKey_))`.
     function _scopeConfigKey(
         address destination_,
         bytes32 localKey_
-    ) private pure returns (bytes32) {
+    ) internal pure returns (bytes32 key) {
         return keccak256(abi.encode(destination_, localKey_));
     }
 
