@@ -20,57 +20,30 @@ interface ICCIPFeeRouter {
     function getOnRamp(uint64 destChainSelector) external view returns (address onRamp);
 }
 
-/// @notice The version probe shared by every on-ramp generation.
+/// @notice The version probe shared by every ramp and fee quoter generation.
 interface ICCIPFeeTypeAndVersion {
-    /// @notice Returns the type and version string of the contract.
+    /// @notice Returns the type and version string of the contract, `<family> <major>.<minor>.<patch>`.
     /// @return version The type and version string.
     function typeAndVersion() external view returns (string memory version);
 }
 
-/// @notice The subset of the live `OnRamp 1.6.0` surface the fee budget reader uses.
-interface ICCIPFeeOnRamp16 {
-    /// @param feeQuoter The fee quoter every fee and budget read goes through.
-    /// @param reentrancyGuardEntered The transient reentrancy flag.
-    /// @param messageInterceptor The optional aggregate rate limiter, or the zero address.
-    /// @param feeAggregator The recipient of accumulated fees.
-    /// @param allowlistAdmin The optional allowlist administrator.
-    struct DynamicConfig {
-        address feeQuoter;
-        bool reentrancyGuardEntered;
-        address messageInterceptor;
-        address feeAggregator;
-        address allowlistAdmin;
-    }
-
-    /// @notice Returns the dynamic configuration of the on-ramp.
-    /// @return config The dynamic configuration, whose first member is the fee quoter.
-    function getDynamicConfig() external view returns (DynamicConfig memory config);
-}
-
-/// @notice The subset of the live `OnRamp 2.0.0` surface the fee budget reader uses.
-/// @dev The 2.0.0 dynamic configuration drops the message interceptor and the allowlist admin
-///      of 1.6.0; the fee quoter stays its first member. The layout follows
-///      `smartcontractkit/chainlink-ccip` main, the source with the same `typeAndVersion`.
-interface ICCIPFeeOnRamp20 {
-    /// @param feeQuoter The fee quoter every fee and budget read goes through.
-    /// @param reentrancyGuardEntered The transient reentrancy flag.
-    /// @param feeAggregator The recipient of accumulated fees.
-    struct DynamicConfig {
-        address feeQuoter;
-        bool reentrancyGuardEntered;
-        address feeAggregator;
-    }
-
-    /// @notice Returns the dynamic configuration of the on-ramp.
-    /// @return config The dynamic configuration, whose first member is the fee quoter.
-    function getDynamicConfig() external view returns (DynamicConfig memory config);
+/// @notice The dynamic configuration getter of the `OnRamp` family (1.6.0 and 2.0.0).
+/// @dev Declared without return values on purpose: the layout differs by generation, five
+///      words on 1.6.0 (`feeQuoter, reentrancyGuardEntered, messageInterceptor, feeAggregator,
+///      allowlistAdmin`) and three on 2.0.0 (`feeQuoter, reentrancyGuardEntered,
+///      feeAggregator`), and the reader only needs the fee quoter, which is word zero of both.
+///      The return data is read raw and validated by `CCIPFeeBudgetLib`.
+interface ICCIPFeeOnRampConfig {
+    /// @notice Returns the dynamic configuration of the on-ramp; word zero is the fee quoter.
+    function getDynamicConfig() external view;
 }
 
 /// @notice The subset of the live `FeeQuoter 2.0.0` surface the fee budget reader uses. It
 ///         serves the 1.6.0 and the 2.0.0 on-ramps alike.
 /// @dev The deployed `FeeQuoter 2.0.0` token transfer fee struct has four fields; the vendored
 ///      1.6.0 tree carries a six-field struct and must not be used here. The layouts follow
-///      `smartcontractkit/chainlink-ccip` main, the source with the same `typeAndVersion`.
+///      `smartcontractkit/chainlink-ccip`, tag `contracts-ccip-v2.0.0`, and are checked against
+///      the return data before any field is read.
 interface ICCIPFeeQuoter20 {
     /// @param feeUSDCents The minimum fee to charge per token transfer, in 0.01 USD.
     /// @param destGasOverhead The gas charged to execute the token transfer on the destination.
@@ -192,11 +165,19 @@ interface ICCIPFeeOnRamp15 {
 
 /// @title CCIPFeeBudgetLib
 /// @notice Reads the OHM token delivery gas budget of a CCIP lane from the live fee contracts of
-///         the source chain: the fee quoter of a 1.6 or 2.0 lane, or the dedicated on-ramp of
-///         a 1.5 lane. The budget must cover the destination `releaseOrMint` sequence; on a burn/mint
-///         chain that sequence runs two MINTR calls and does not fit the 90000 default, so every
-///         lane toward a burn/mint chain must carry an enabled OHM entry of at least
-///         `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens.
+///         the source chain: the fee quoter of an `OnRamp` lane (1.6 or 2.0), or the dedicated
+///         on-ramp of a 1.5 lane. The budget must cover the destination `releaseOrMint` sequence;
+///         on a burn/mint chain that sequence runs two MINTR calls and does not fit the 90000
+///         default, so every lane toward a burn/mint chain must carry an enabled OHM entry of at
+///         least `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens.
+/// @dev Chainlink migrates lanes between ramp generations and bumps `typeAndVersion` per contract
+///      change, so the reader does not pin exact version strings. It dispatches on the contract
+///      family and the major version of the on-ramp and of its fee quoter, then checks the form
+///      of every return it reads (the word count, and the range of each word it consumes) before
+///      taking a value. A patch or minor release that keeps the layouts passes; a new family, a
+///      new major, a moved fee quoter or a changed layout fails closed with a message naming the
+///      lane and what was read. The residual risk of matching on the major is noted at
+///      `_readFeeQuoter`.
 library CCIPFeeBudgetLib {
     // ========== CONSTANTS ========== //
 
@@ -210,32 +191,70 @@ library CCIPFeeBudgetLib {
     uint32 internal constant OHM_MIN_DEST_GAS_OVERHEAD = 175_000;
 
     string internal constant _ROUTER_KEY = "external.ccip.Router";
-    string internal constant _ONRAMP_20 = "OnRamp 2.0.0";
-    string internal constant _ONRAMP_16 = "OnRamp 1.6.0";
-    string internal constant _ONRAMP_15 = "EVM2EVMOnRamp 1.5.0";
-    string internal constant _FEE_QUOTER_20 = "FeeQuoter 2.0.0";
+    string internal constant _OHM_KEY = "olympus.legacy.OHM";
+
+    /// @notice The on-ramp family whose dynamic config names the fee quoter in word zero;
+    ///         majors 1 (`OnRamp 1.6.x`) and 2 (`OnRamp 2.x`) are accepted.
+    string internal constant _ON_RAMP_FAMILY = "OnRamp";
+    uint256 internal constant _ON_RAMP_MIN_MAJOR = 1;
+    uint256 internal constant _ON_RAMP_MAX_MAJOR = 2;
+
+    /// @notice The dedicated 1.5 on-ramp family; a frozen line, matched on major and minor.
+    string internal constant _LEGACY_ON_RAMP_FAMILY = "EVM2EVMOnRamp";
+    uint256 internal constant _LEGACY_ON_RAMP_MAJOR = 1;
+    uint256 internal constant _LEGACY_ON_RAMP_MINOR = 5;
+
+    /// @notice The fee quoter family and major whose layouts `ICCIPFeeQuoter20` mirrors.
+    string internal constant _FEE_QUOTER_FAMILY = "FeeQuoter";
+    uint256 internal constant _FEE_QUOTER_MAJOR = 2;
+
+    /// @notice The `chainFamilySelector` of an EVM destination in the fee quoter config.
+    bytes4 internal constant _EVM_CHAIN_FAMILY_SELECTOR = 0x2812d52c;
+
+    // Return shapes, in 32-byte words
+    uint256 internal constant _FEE_QUOTER_TOKEN_ENTRY_WORDS = 4;
+    uint256 internal constant _FEE_QUOTER_DEST_CONFIG_WORDS = 11;
+    uint256 internal constant _LEGACY_TOKEN_ENTRY_WORDS = 7;
+    uint256 internal constant _LEGACY_DYNAMIC_CONFIG_WORDS = 13;
+
+    // ========== DATA STRUCTURES ========== //
+
+    /// @notice A parsed `typeAndVersion` string.
+    /// @param raw The string as returned by the contract.
+    /// @param family The name part, everything before the last space.
+    /// @param major The major version.
+    /// @param minor The minor version.
+    struct TypeAndVersion {
+        string raw;
+        string family;
+        uint256 major;
+        uint256 minor;
+    }
 
     // ========== READS ========== //
 
     /// @notice Reads the OHM delivery gas budget of the lane from `localChain_` to
     ///         `remoteChain_`, together with whether it comes from an enabled OHM token entry
     ///         and a description of where the value came from.
-    /// @dev Fails closed: reverts when the local router carries no lane to the destination, or
-    ///      when the on-ramp or its fee quoter reports an unsupported version.
+    /// @dev Fails closed: reverts when the local router carries no lane to the destination, when
+    ///      the on-ramp or its fee quoter is of an unsupported family or major version, or when
+    ///      a return does not have the expected form.
     /// @param env_ The contents of `env.json`.
     /// @param localChain_ The source chain of the lane.
     /// @param remoteChain_ The destination chain of the lane.
     /// @return overhead The applicable `destGasOverhead` in gas units.
     /// @return isTokenEntry True when the value comes from an enabled OHM token entry, false
     ///         when it is the chain default.
-    /// @return source A description of the read (token entry or chain default, and the version).
+    /// @return source A description of the read: token entry or chain default, and the
+    ///         `typeAndVersion` strings of the contracts it came from.
     function readOhmDestGasOverhead(
         string memory env_,
         string memory localChain_,
         string memory remoteChain_
     ) internal view returns (uint32 overhead, bool isTokenEntry, string memory source) {
+        string memory lane = string.concat(localChain_, " -> ", remoteChain_);
         address router = _envAddress(env_, localChain_, _ROUTER_KEY);
-        address ohm = _envAddress(env_, localChain_, "olympus.legacy.OHM");
+        address ohm = _envAddress(env_, localChain_, _OHM_KEY);
         uint64 destSelector = CCIPConfigLib.chainSelector(env_, remoteChain_);
 
         address onRamp = ICCIPFeeRouter(router).getOnRamp(destSelector);
@@ -249,29 +268,27 @@ library CCIPFeeBudgetLib {
             )
         );
 
-        string memory version = ICCIPFeeTypeAndVersion(onRamp).typeAndVersion();
-        bytes32 versionHash = keccak256(bytes(version));
-        if (versionHash == keccak256(bytes(_ONRAMP_20))) {
-            address feeQuoter = ICCIPFeeOnRamp20(onRamp).getDynamicConfig().feeQuoter;
-            _requireFeeQuoter20(feeQuoter, localChain_, remoteChain_);
-            return _readFeeQuoter(feeQuoter, destSelector, ohm);
+        TypeAndVersion memory onRampVersion = _readTypeAndVersion(onRamp, "on-ramp", lane);
+        if (
+            _isFamily(onRampVersion, _ON_RAMP_FAMILY) &&
+            onRampVersion.major >= _ON_RAMP_MIN_MAJOR &&
+            onRampVersion.major <= _ON_RAMP_MAX_MAJOR
+        ) {
+            return _readViaFeeQuoter(onRamp, onRampVersion.raw, destSelector, ohm, lane);
         }
-        if (versionHash == keccak256(bytes(_ONRAMP_16))) {
-            address feeQuoter = ICCIPFeeOnRamp16(onRamp).getDynamicConfig().feeQuoter;
-            _requireFeeQuoter20(feeQuoter, localChain_, remoteChain_);
-            return _readFeeQuoter(feeQuoter, destSelector, ohm);
-        }
-        if (versionHash == keccak256(bytes(_ONRAMP_15))) {
-            return _read15(onRamp, ohm);
+        if (
+            _isFamily(onRampVersion, _LEGACY_ON_RAMP_FAMILY) &&
+            onRampVersion.major == _LEGACY_ON_RAMP_MAJOR &&
+            onRampVersion.minor == _LEGACY_ON_RAMP_MINOR
+        ) {
+            return _read15(onRamp, onRampVersion.raw, ohm, lane);
         }
         revert(
             string.concat(
                 "CCIPFeeBudgetLib: unsupported on-ramp version '",
-                version,
+                onRampVersion.raw,
                 "' on the lane ",
-                localChain_,
-                " -> ",
-                remoteChain_
+                lane
             )
         );
     }
@@ -325,73 +342,330 @@ library CCIPFeeBudgetLib {
         );
     }
 
+    // ========== VERSION PARSING ========== //
+
+    /// @notice Parses a `typeAndVersion` string of the form `<family> <major>.<minor>[.<patch>][-<suffix>]`.
+    /// @dev The family is everything before the last space; the major and the minor are the
+    ///      decimal runs before and after the first dot of the rest. The patch and any suffix
+    ///      (`1.6.1-dev`) are ignored. Returns `ok` false when the string has no space, no
+    ///      family, no major digits, no dot or no minor digits.
+    /// @param raw_ The string to parse.
+    /// @return version The parsed string; meaningless when `ok` is false.
+    /// @return ok Whether the string had the expected form.
+    function parseTypeAndVersion(
+        string memory raw_
+    ) internal pure returns (TypeAndVersion memory version, bool ok) {
+        bytes memory raw = bytes(raw_);
+        uint256 length = raw.length;
+
+        // The last space separates the family from the version
+        uint256 split = length;
+        for (uint256 i = length; i > 0; --i) {
+            if (raw[i - 1] == 0x20) {
+                split = i - 1;
+                break;
+            }
+        }
+        if (split == length || split == 0) return (version, false);
+
+        (uint256 major, uint256 majorDigits, uint256 next) = _parseDigits(raw, split + 1);
+        if (majorDigits == 0 || next >= length || raw[next] != 0x2e) return (version, false);
+        (uint256 minor, uint256 minorDigits, ) = _parseDigits(raw, next + 1);
+        if (minorDigits == 0) return (version, false);
+
+        bytes memory family = new bytes(split);
+        for (uint256 i; i < split; ++i) {
+            family[i] = raw[i];
+        }
+
+        return (
+            TypeAndVersion({raw: raw_, family: string(family), major: major, minor: minor}),
+            true
+        );
+    }
+
     // ========== INTERNAL ========== //
 
-    /// @dev Reverts unless the fee quoter of a lane exists and reports `FeeQuoter 2.0.0`, the
-    ///      version whose ABI `ICCIPFeeQuoter20` mirrors.
-    function _requireFeeQuoter20(
-        address feeQuoter_,
-        string memory localChain_,
-        string memory remoteChain_
-    ) private view {
+    /// @dev Reads and parses `typeAndVersion()` of a contract; reverts when the call fails or
+    ///      the string does not parse.
+    function _readTypeAndVersion(
+        address target_,
+        string memory label_,
+        string memory lane_
+    ) private view returns (TypeAndVersion memory version) {
         require(
-            feeQuoter_ != address(0),
+            target_.code.length != 0,
+            string.concat("CCIPFeeBudgetLib: the ", label_, " of the lane ", lane_, " has no code")
+        );
+        (bool ok, bytes memory data) = target_.staticcall(
+            abi.encodeCall(ICCIPFeeTypeAndVersion.typeAndVersion, ())
+        );
+        require(
+            ok && data.length >= 64,
             string.concat(
-                "CCIPFeeBudgetLib: the on-ramp of the lane ",
-                localChain_,
-                " -> ",
-                remoteChain_,
-                " has no fee quoter"
+                "CCIPFeeBudgetLib: the ",
+                label_,
+                " of the lane ",
+                lane_,
+                " does not answer typeAndVersion()"
             )
         );
-        string memory version = ICCIPFeeTypeAndVersion(feeQuoter_).typeAndVersion();
+        string memory raw = abi.decode(data, (string));
+        bool parsed;
+        (version, parsed) = parseTypeAndVersion(raw);
         require(
-            keccak256(bytes(version)) == keccak256(bytes(_FEE_QUOTER_20)),
+            parsed,
             string.concat(
-                "CCIPFeeBudgetLib: unsupported fee quoter version '",
-                version,
-                "' on the lane ",
-                localChain_,
-                " -> ",
-                remoteChain_
+                "CCIPFeeBudgetLib: the ",
+                label_,
+                " of the lane ",
+                lane_,
+                " reports typeAndVersion '",
+                raw,
+                "', not a '<family> <major>.<minor>' string"
             )
         );
     }
 
-    /// @dev Shared by the 1.6.0 and the 2.0.0 on-ramps, which differ only in where the fee
-    ///      quoter address sits in their dynamic configuration; the caller checks the quoter
-    ///      version first.
+    /// @dev Reads the fee quoter named by word zero of the on-ramp's dynamic config, requires
+    ///      it to be a `FeeQuoter` of the supported major, and reads the budget from it. Only
+    ///      word zero of the on-ramp config is read, so a generation that appends members keeps
+    ///      working; one that moves the fee quoter out of word zero resolves to a contract that
+    ///      fails the version check and fails closed.
+    function _readViaFeeQuoter(
+        address onRamp_,
+        string memory onRampVersion_,
+        uint64 destSelector_,
+        address ohm_,
+        string memory lane_
+    ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
+        (bool ok, bytes memory data) = onRamp_.staticcall(
+            abi.encodeCall(ICCIPFeeOnRampConfig.getDynamicConfig, ())
+        );
+        require(
+            ok && data.length >= 32,
+            string.concat(
+                "CCIPFeeBudgetLib: the on-ramp of the lane ",
+                lane_,
+                " does not answer getDynamicConfig()"
+            )
+        );
+        _requireWordFits(data, 0, 160, "getDynamicConfig().feeQuoter", lane_);
+        // casting to 'address' is safe because the word is checked to fit 160 bits above
+        // forge-lint: disable-next-line(unsafe-typecast)
+        address feeQuoter = address(uint160(_word(data, 0)));
+        require(
+            feeQuoter != address(0),
+            string.concat("CCIPFeeBudgetLib: the on-ramp of the lane ", lane_, " has no fee quoter")
+        );
+
+        TypeAndVersion memory quoterVersion = _readTypeAndVersion(feeQuoter, "fee quoter", lane_);
+        require(
+            _isFamily(quoterVersion, _FEE_QUOTER_FAMILY) &&
+                quoterVersion.major == _FEE_QUOTER_MAJOR,
+            string.concat(
+                "CCIPFeeBudgetLib: unsupported fee quoter version '",
+                quoterVersion.raw,
+                "' on the lane ",
+                lane_
+            )
+        );
+
+        return
+            _readFeeQuoter(
+                feeQuoter,
+                destSelector_,
+                ohm_,
+                string.concat(quoterVersion.raw, " via ", onRampVersion_),
+                lane_
+            );
+    }
+
+    /// @dev Reads the OHM entry, then the chain default, from a `FeeQuoter` of major 2, checking
+    ///      the form of each return before reading a word of it: the token entry must be four
+    ///      words with `uint32` values and a `bool`, the destination config eleven words with
+    ///      the EVM chain family selector in word five.
+    ///
+    ///      Residual risk of matching on the major rather than on the exact version: a
+    ///      `FeeQuoter 2.x` that reordered the four-word token entry while keeping its word
+    ///      count would pass this check. Within that entry the only numeric fields besides
+    ///      `destGasOverhead` are a fee in USD cents and a byte count, so a reorder can only
+    ///      lower the value read and the budget check fails closed; the chain default read
+    ///      here is reported but never accepted by `requireOhmFeeBudget`, so a misread of it
+    ///      cannot open the gate either. A change that adds or removes a word, or bumps the
+    ///      major, fails closed on the checks above.
     function _readFeeQuoter(
         address feeQuoter_,
         uint64 destSelector_,
-        address ohm_
+        address ohm_,
+        string memory versions_,
+        string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        ICCIPFeeQuoter20.TokenTransferFeeConfig memory entry = ICCIPFeeQuoter20(feeQuoter_)
-            .getTokenTransferFeeConfig(destSelector_, ohm_);
-        if (entry.isEnabled) {
-            return (entry.destGasOverhead, true, "OHM token entry, FeeQuoter 2.0.0");
+        (bool ok, bytes memory data) = feeQuoter_.staticcall(
+            abi.encodeCall(ICCIPFeeQuoter20.getTokenTransferFeeConfig, (destSelector_, ohm_))
+        );
+        _requireWords(ok, data, _FEE_QUOTER_TOKEN_ENTRY_WORDS, "getTokenTransferFeeConfig", lane_);
+        _requireWordFits(data, 1, 32, "getTokenTransferFeeConfig().destGasOverhead", lane_);
+        _requireWordFits(data, 3, 1, "getTokenTransferFeeConfig().isEnabled", lane_);
+        if (_word(data, 3) == 1) {
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+            // forge-lint: disable-next-line(unsafe-typecast)
+            return (uint32(_word(data, 1)), true, string.concat("OHM token entry, ", versions_));
         }
+
+        (ok, data) = feeQuoter_.staticcall(
+            abi.encodeCall(ICCIPFeeQuoter20.getDestChainConfig, (destSelector_))
+        );
+        _requireWords(ok, data, _FEE_QUOTER_DEST_CONFIG_WORDS, "getDestChainConfig", lane_);
+        _requireChainFamily(data, 5, lane_);
+        _requireWordFits(data, 7, 32, "getDestChainConfig().defaultTokenDestGasOverhead", lane_);
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
         return (
-            ICCIPFeeQuoter20(feeQuoter_).getDestChainConfig(destSelector_).defaultTokenDestGasOverhead,
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32(_word(data, 7)),
             false,
-            "chain default, FeeQuoter 2.0.0 (no OHM entry)"
+            string.concat("chain default, ", versions_, " (no OHM entry)")
         );
     }
 
+    /// @dev Reads the OHM entry, then the lane default, from a dedicated `EVM2EVMOnRamp 1.5`,
+    ///      checking the form of each return: seven words for the token entry, thirteen for the
+    ///      dynamic config.
     function _read15(
         address onRamp_,
-        address ohm_
+        string memory onRampVersion_,
+        address ohm_,
+        string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        ICCIPFeeOnRamp15.TokenTransferFeeConfig memory entry = ICCIPFeeOnRamp15(onRamp_)
-            .getTokenTransferFeeConfig(ohm_);
-        if (entry.isEnabled) {
-            return (entry.destGasOverhead, true, "OHM token entry, EVM2EVMOnRamp 1.5.0");
-        }
-        return (
-            ICCIPFeeOnRamp15(onRamp_).getDynamicConfig().defaultTokenDestGasOverhead,
-            false,
-            "chain default, EVM2EVMOnRamp 1.5.0 (no OHM entry)"
+        (bool ok, bytes memory data) = onRamp_.staticcall(
+            abi.encodeCall(ICCIPFeeOnRamp15.getTokenTransferFeeConfig, (ohm_))
         );
+        _requireWords(ok, data, _LEGACY_TOKEN_ENTRY_WORDS, "getTokenTransferFeeConfig", lane_);
+        _requireWordFits(data, 3, 32, "getTokenTransferFeeConfig().destGasOverhead", lane_);
+        _requireWordFits(data, 6, 1, "getTokenTransferFeeConfig().isEnabled", lane_);
+        if (_word(data, 6) == 1) {
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+            return (
+                // forge-lint: disable-next-line(unsafe-typecast)
+                uint32(_word(data, 3)),
+                true,
+                string.concat("OHM token entry, ", onRampVersion_)
+            );
+        }
+
+        (ok, data) = onRamp_.staticcall(abi.encodeCall(ICCIPFeeOnRamp15.getDynamicConfig, ()));
+        _requireWords(ok, data, _LEGACY_DYNAMIC_CONFIG_WORDS, "getDynamicConfig", lane_);
+        _requireWordFits(data, 11, 32, "getDynamicConfig().defaultTokenDestGasOverhead", lane_);
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        return (
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint32(_word(data, 11)),
+            false,
+            string.concat("chain default, ", onRampVersion_, " (no OHM entry)")
+        );
+    }
+
+    /// @dev Reverts unless the call succeeded and returned exactly `words_` words.
+    function _requireWords(
+        bool ok_,
+        bytes memory data_,
+        uint256 words_,
+        string memory call_,
+        string memory lane_
+    ) private pure {
+        require(
+            ok_,
+            string.concat("CCIPFeeBudgetLib: ", call_, " reverted on the lane ", lane_)
+        );
+        require(
+            data_.length == words_ * 32,
+            string.concat(
+                "CCIPFeeBudgetLib: ",
+                call_,
+                " on the lane ",
+                lane_,
+                " returned ",
+                _VM.toString(data_.length / 32),
+                " words, expected ",
+                _VM.toString(words_)
+            )
+        );
+    }
+
+    /// @dev Reverts unless word `index_` of `data_` fits in `bits_` bits (a `bool` is one bit).
+    function _requireWordFits(
+        bytes memory data_,
+        uint256 index_,
+        uint256 bits_,
+        string memory field_,
+        string memory lane_
+    ) private pure {
+        require(
+            _word(data_, index_) >> bits_ == 0,
+            string.concat(
+                "CCIPFeeBudgetLib: ",
+                field_,
+                " on the lane ",
+                lane_,
+                " does not fit its type; the layout differs from the supported one"
+            )
+        );
+    }
+
+    /// @dev Reverts unless word `index_` of `data_` is the left-aligned EVM chain family selector.
+    function _requireChainFamily(
+        bytes memory data_,
+        uint256 index_,
+        string memory lane_
+    ) private pure {
+        bytes32 word = bytes32(_word(data_, index_));
+        // casting to 'bytes4' is intended: the selector is the left-aligned first four bytes,
+        // and the second clause requires the remaining bytes to be zero
+        require(
+            // forge-lint: disable-next-line(unsafe-typecast)
+            bytes4(word) == _EVM_CHAIN_FAMILY_SELECTOR && (uint256(word) << 32) == 0,
+            string.concat(
+                "CCIPFeeBudgetLib: getDestChainConfig().chainFamilySelector on the lane ",
+                lane_,
+                " is ",
+                _VM.toString(word),
+                ", expected the EVM family; the layout or the destination differs from the supported one"
+            )
+        );
+    }
+
+    function _word(bytes memory data_, uint256 index_) private pure returns (uint256 word) {
+        // solhint-disable-next-line no-inline-assembly
+        assembly {
+            word := mload(add(add(data_, 32), mul(index_, 32)))
+        }
+    }
+
+    function _isFamily(
+        TypeAndVersion memory version_,
+        string memory family_
+    ) private pure returns (bool same) {
+        return keccak256(bytes(version_.family)) == keccak256(bytes(family_));
+    }
+
+    /// @dev Parses the run of ASCII digits starting at `from_`.
+    /// @return value The parsed value.
+    /// @return digits The number of digits consumed.
+    /// @return next The index after the last digit.
+    function _parseDigits(
+        bytes memory raw_,
+        uint256 from_
+    ) private pure returns (uint256 value, uint256 digits, uint256 next) {
+        next = from_;
+        while (next < raw_.length) {
+            uint8 char = uint8(raw_[next]);
+            if (char < 0x30 || char > 0x39) break;
+            // A version component longer than ten digits (the width of a uint32) is not a version
+            if (digits == 10) return (0, 0, from_);
+            value = value * 10 + (char - 0x30);
+            ++digits;
+            ++next;
+        }
     }
 
     function _envAddress(

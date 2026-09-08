@@ -336,56 +336,70 @@ inject_placeholder_contracts() {
 # mock_ohm_fee_entry <localChain> <remoteChain>
 # Writes an enabled OHM token transfer fee entry (destGasOverhead 175000,
 # destBytesOverhead 32) for the lane on the forked local chain, impersonating
-# the owner of the live fee contract. Dispatches on the on-ramp version:
-#   OnRamp 2.0.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates (the fee
-#                          quoter is the first member of a three-field dynamic config)
-#   OnRamp 1.6.0        -> FeeQuoter 2.0.0 applyTokenTransferFeeConfigUpdates (five-field
-#                          dynamic config)
-#   EVM2EVMOnRamp 1.5.0 -> the on-ramp's own setTokenTransferFeeConfig
+# the owner of the live fee contract. Dispatches the way CCIPFeeBudgetLib does,
+# on the contract family and major version of typeAndVersion rather than on an
+# exact string, so a patch release of the ramps does not break the rehearsal:
+#   OnRamp 1.x / 2.x    -> the fee quoter is word 0 of the raw getDynamicConfig()
+#                          return (five words on 1.6, three on 2.0; only word 0 is
+#                          read); it must be a FeeQuoter 2.x, and the entry is
+#                          written with the four-field 2.x struct through
+#                          applyTokenTransferFeeConfigUpdates
+#   EVM2EVMOnRamp 1.5   -> the on-ramp's own setTokenTransferFeeConfig
 mock_ohm_fee_entry() {
   local localChain="$1" remoteChain="$2"
-  local router ohm sel onramp version owner fq fqversion
+  local router ohm sel onramp version family major minor owner fq fqversion fqfamily fqmajor
   router="$(env_addr "$localChain" "external.ccip.Router")"
   ohm="$(env_addr "$localChain" "olympus.legacy.OHM")"
   sel="$(jq -r --arg c "$remoteChain" '.current[$c].external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
   require_addr "$router" "$localChain external.ccip.Router"
   onramp="$(cast call "$router" 'getOnRamp(uint64)(address)' "$sel" --rpc-url "$RPC")"
   require_addr "$onramp" "on-ramp of $localChain -> $remoteChain"
-  version="$(cast call "$onramp" 'typeAndVersion()(string)' --rpc-url "$RPC")"
-  case "$version" in
-    *"EVM2EVMOnRamp 1.5.0"*)
-      owner="$(cast call "$onramp" 'owner()(address)' --rpc-url "$RPC")"
-      fund "$owner"
-      cast send $TX_FLAGS "$onramp" \
-        "setTokenTransferFeeConfig((address,uint32,uint32,uint16,uint32,uint32,bool)[],address[])" \
-        "[($ohm,0,0,0,175000,32,false)]" "[]" \
-        --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
-      log "Mocked OHM fee entry on the 1.5 on-ramp $onramp ($localChain -> $remoteChain)"
-      ;;
-    *"OnRamp 2.0.0"* | *"OnRamp 1.6.0"*)
-      case "$version" in
-        *"OnRamp 2.0.0"*) fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')" ;;
-        *) fq="$(cast call "$onramp" 'getDynamicConfig()((address,bool,address,address,address))' --rpc-url "$RPC" | sed 's/[()]//g' | cut -d, -f1 | tr -d ' ')" ;;
-      esac
-      require_addr "$fq" "fee quoter of $localChain -> $remoteChain"
-      # The entry below is encoded for the FeeQuoter 2.0.0 struct layout
-      fqversion="$(cast call "$fq" 'typeAndVersion()(string)' --rpc-url "$RPC")"
-      case "$fqversion" in
-        *"FeeQuoter 2.0.0"*) ;;
-        *) die "unsupported fee quoter version '$fqversion' for $localChain -> $remoteChain" ;;
-      esac
-      owner="$(cast call "$fq" 'owner()(address)' --rpc-url "$RPC")"
-      fund "$owner"
-      cast send $TX_FLAGS "$fq" \
-        "applyTokenTransferFeeConfigUpdates((uint64,(address,(uint32,uint32,uint32,bool))[])[],(uint64,address)[])" \
-        "[($sel,[($ohm,(0,175000,32,true))])]" "[]" \
-        --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
-      log "Mocked OHM fee entry on FeeQuoter $fq ($localChain -> $remoteChain)"
-      ;;
-    *)
-      die "unsupported on-ramp version '$version' for $localChain -> $remoteChain"
-      ;;
-  esac
+  version="$(cast call "$onramp" 'typeAndVersion()(string)' --rpc-url "$RPC" | tr -d '"')"
+  read -r family major minor < <(parse_type_and_version "$version") || true
+  if [ "$family" = "EVM2EVMOnRamp" ] && [ "$major" = "1" ] && [ "$minor" = "5" ]; then
+    owner="$(cast call "$onramp" 'owner()(address)' --rpc-url "$RPC")"
+    fund "$owner"
+    cast send $TX_FLAGS "$onramp" \
+      "setTokenTransferFeeConfig((address,uint32,uint32,uint16,uint32,uint32,bool)[],address[])" \
+      "[($ohm,0,0,0,175000,32,false)]" "[]" \
+      --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
+    log "Mocked OHM fee entry on the 1.5 on-ramp $onramp ($localChain -> $remoteChain, $version)"
+  elif [ "$family" = "OnRamp" ] && { [ "$major" = "1" ] || [ "$major" = "2" ]; }; then
+    # Word 0 of the raw return, whatever the generation's struct length
+    fq="$(cast call "$onramp" 'getDynamicConfig()' --rpc-url "$RPC")"
+    fq="0x${fq:26:40}"
+    require_addr "$fq" "fee quoter of $localChain -> $remoteChain"
+    fqversion="$(cast call "$fq" 'typeAndVersion()(string)' --rpc-url "$RPC" | tr -d '"')"
+    read -r fqfamily fqmajor _ < <(parse_type_and_version "$fqversion") || true
+    if [ "$fqfamily" != "FeeQuoter" ] || [ "$fqmajor" != "2" ]; then
+      die "unsupported fee quoter version '$fqversion' for $localChain -> $remoteChain (expected FeeQuoter 2.x)"
+    fi
+    # The entry below is encoded for the FeeQuoter 2.x struct layout
+    owner="$(cast call "$fq" 'owner()(address)' --rpc-url "$RPC")"
+    fund "$owner"
+    cast send $TX_FLAGS "$fq" \
+      "applyTokenTransferFeeConfigUpdates((uint64,(address,(uint32,uint32,uint32,bool))[])[],(uint64,address)[])" \
+      "[($sel,[($ohm,(0,175000,32,true))])]" "[]" \
+      --rpc-url "$RPC" --from "$owner" --unlocked >/dev/null
+    log "Mocked OHM fee entry on $fqversion $fq ($localChain -> $remoteChain via $version)"
+  else
+    die "unsupported on-ramp version '$version' for $localChain -> $remoteChain"
+  fi
+}
+
+# parse_type_and_version <typeAndVersion>  ->  "<family> <major> <minor>" on stdout
+# The family is everything before the last space; the major and the minor are the
+# digit runs before and after the first dot of the rest ("FeeQuoter 1.6.1-dev" ->
+# "FeeQuoter 1 6"). Prints nothing for a string without that form.
+parse_type_and_version() {
+  local raw="$1" family num major rest minor
+  [[ "$raw" == *" "* ]] || return 0
+  family="${raw% *}"; num="${raw##* }"
+  major="${num%%.*}"; rest="${num#*.}"; minor="${rest%%.*}"
+  [ -n "$family" ] && [[ "$major" =~ ^[0-9]+$ ]] && [[ "$num" == *.* ]] || return 0
+  minor="$(printf '%s' "$minor" | sed -E 's/^([0-9]*).*/\1/')"
+  [ -n "$minor" ] || return 0
+  printf '%s %s %s\n' "$family" "$major" "$minor"
 }
 
 # l2_route_peers <chain>  ->  the burn/mint EVM peers of a chain (its env.json

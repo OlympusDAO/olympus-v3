@@ -1,11 +1,11 @@
 # CCIP config Anvil deployment harness
 
-Deploys the CCIP config policies from scratch on a local Anvil fork of Ethereum mainnet (`run-ethereum.sh`) or of one burn/mint L2 (`run-l2.sh`) and runs the real deploy / batch / OCG-proposal scripts against it. Deploys are signed with an Anvil dev key; DAO MS, Emergency MS, deployer EOA and timelock actions are sent from the real on-chain owners via Anvil impersonation. The OHM fee budgets that only Chainlink can set are mocked on the fork by impersonating the owners of the live fee contracts (FeeQuoter 2.0.0 on the 1.6 and 2.0 lanes, the dedicated on-ramp on the 1.5 lanes); the negative runs first assert that the scripts fail closed without the mock.
+Deploys the CCIP config policies from scratch on a local Anvil fork of Ethereum mainnet (`run-ethereum.sh`) or of one burn/mint L2 (`run-l2.sh`) and runs the real deploy / batch / OCG-proposal scripts against it. Deploys are signed with an Anvil dev key; DAO MS, Emergency MS, deployer EOA and timelock actions are sent from the real on-chain owners via Anvil impersonation. The OHM fee budgets that only Chainlink can set are mocked on the fork by impersonating the owners of the live fee contracts (the chain's FeeQuoter 2.x, read from word zero of the on-ramp's dynamic config, on the `OnRamp` 1.x and 2.x lanes; the dedicated on-ramp on the `EVM2EVMOnRamp` 1.5 lanes; the mock dispatches on the contract family and major version the way `CCIPFeeBudgetLib` does, so a patch release of the ramps does not break the rehearsal); the negative runs first assert that the scripts fail closed without the mock.
 
 ## Requirements
 
-- `anvil`, `forge`, `cast`, `jq`, `git`
-- `.env` in the repo root with `ALCHEMY_API_KEY`
+-   `anvil`, `forge`, `cast`, `jq`, `git`
+-   `.env` in the repo root with `ALCHEMY_API_KEY`
 
 ## What the scripts touch
 
@@ -34,7 +34,7 @@ Every batch log is asserted: steps that must change state must report `Batch exe
 ## Burn/mint L2
 
 ```bash
-./run-l2.sh --chain arbitrum   # or optimism | base | berachain
+./run-l2.sh --chain arbitrum # or optimism | base | berachain
 ```
 
 Steps:
@@ -61,9 +61,9 @@ Once the config policies are live on mainnet (their addresses recorded in `env.j
 
 ## Options
 
-- `--port <port>`: Anvil port (default `8545`).
-- `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
-- `--use-deployed`: skip the deploy step and run against the config addresses already in `env.json` / `addresses.json`.
+-   `--port <port>`: Anvil port (default `8545`).
+-   `--keep-fork`: leave Anvil running and the env/addresses files populated on exit.
+-   `--use-deployed`: skip the deploy step and run against the config addresses already in `env.json` / `addresses.json`.
 
 Env overrides: `ANVIL_CUPS` (default `250`) and `ANVIL_BACKOFF_MS` (default `1000`) throttle the fork's upstream RPC; `TX_FLAGS` (default `--legacy`) is passed to every `forge script` broadcast and `cast send` of the harness itself (the proposal replay through `src/scripts/proposals/executeOnAnvilFork.sh` runs without it), since the EIP-1559 fee estimation asks the fork for `eth_feeHistory`, which some upstream L2 archive nodes refuse with "historical state is not available". Per-step logs are written to `logs/`.
 
