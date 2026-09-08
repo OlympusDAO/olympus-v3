@@ -234,7 +234,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should stay free after the rejected queue"
         );
@@ -288,7 +288,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _defaultOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _defaultInboundConfig();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -303,7 +303,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -316,7 +316,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -339,7 +339,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         // The domain is not free at all: the addChain action holds it while the mirror
         // reports a missing route
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             holderActionId,
             "the rate limits key should still be held by the pending addChain action"
         );
@@ -362,7 +362,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         bytes memory payload = abi.encode(CHAIN_SELECTOR_A, outbound, inbound);
 
         bytes32[] memory keys = new bytes32[](1);
-        keys[0] = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
+        keys[0] = _rateLimitsKey(CHAIN_SELECTOR_A);
 
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
@@ -439,12 +439,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
 
         // The narrowness of the reservation: the two sibling domains of the route stay free
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
             0,
             "the remote pools key should stay free"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRouteIdentityKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_routeIdentityKey(CHAIN_SELECTOR_A)),
             0,
             "the route identity key should stay free"
         );
@@ -466,7 +466,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         uint64 actionId = timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             actionId,
             "the rate limits key should belong to the boundary action"
         );
@@ -483,7 +483,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         uint64 actionId = timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             actionId,
             "the rate limits key should belong to the minimal-config action"
         );
@@ -516,7 +516,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         uint64 actionId = _queueRateLimitAction(CHAIN_SELECTOR_A);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             actionId,
             "the rate limits key should belong to the un-containment action"
         );
@@ -542,12 +542,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
 
         assertEq(firstRouteActionId, secondRouteActionId + 1, "the ids should be sequential");
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_B)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_B)),
             secondRouteActionId,
             "the second route's rate limits key should belong to its own action"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             firstRouteActionId,
             "the first route's rate limits key should belong to its own action"
         );

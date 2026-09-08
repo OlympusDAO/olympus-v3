@@ -263,7 +263,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         uint64 holderActionId = _queueSetRemoteTokenAction(CHAIN_SELECTOR_A);
         bytes memory remoteToken = REMOTE_POOL_B;
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
     }
@@ -280,7 +280,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
     {
         bytes memory remoteToken = REMOTE_TOKEN_B;
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
     }
@@ -292,12 +292,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         uint64 holderActionId = _queueAddRemotePoolAction(CHAIN_SELECTOR_A);
         bytes memory remoteToken = REMOTE_TOKEN_B;
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be free before the conflicting queue"
         );
 
-        _expectRevertConfigKeyPending(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_remotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
     }
@@ -318,9 +318,9 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
 
         // The scoped keys in _configKeys order: rate limits, remote pools, route identity
         bytes32[] memory keys = new bytes32[](3);
-        keys[0] = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
-        keys[1] = timelock.getRemotePoolsKey(CHAIN_SELECTOR_A);
-        keys[2] = timelock.getRouteIdentityKey(CHAIN_SELECTOR_A);
+        keys[0] = _rateLimitsKey(CHAIN_SELECTOR_A);
+        keys[1] = _remotePoolsKey(CHAIN_SELECTOR_A);
+        keys[2] = _routeIdentityKey(CHAIN_SELECTOR_A);
 
         bytes32[] memory expectedHashes = new bytes32[](3);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);

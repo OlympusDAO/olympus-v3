@@ -334,7 +334,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         timelock.queueBatch(batch);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the earlier sub-action's key should be free after the rollback"
         );
@@ -418,7 +418,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         batch[1] = _removeChainBatchAction(CHAIN_SELECTOR_A);
         uint64 currentActionId = timelock.nextActionId();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), currentActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), currentActionId);
         vm.prank(bridgeAdmin);
         timelock.queueBatch(batch);
     }
@@ -433,7 +433,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         batch[1] = _addChainBatchAction(_defaultChainUpdate(freshSelector));
         uint64 currentActionId = timelock.nextActionId();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(freshSelector), currentActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(freshSelector), currentActionId);
         vm.prank(bridgeAdmin);
         timelock.queueBatch(batch);
     }
@@ -450,7 +450,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
     {
         ITimelockBatchQueue.BatchAction[] memory batch = _probeBatch();
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
         vm.prank(bridgeAdmin);
         timelock.queueBatch(batch);
     }
@@ -472,8 +472,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         );
         batch[1] = _addRemotePoolBatchAction(CHAIN_SELECTOR_A, REMOTE_POOL_THREE);
 
-        bytes32 rateLimitsKey = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
-        bytes32 remotePoolsKey = timelock.getRemotePoolsKey(CHAIN_SELECTOR_A);
+        bytes32 rateLimitsKey = _rateLimitsKey(CHAIN_SELECTOR_A);
+        bytes32 remotePoolsKey = _remotePoolsKey(CHAIN_SELECTOR_A);
         bytes32 rateLimitsHash = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
         bytes32 remotePoolsHash = _expectedRemotePoolsHash(CHAIN_SELECTOR_A);
         uint64 expectedActionId = timelock.nextActionId();
@@ -570,7 +570,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         // define, so the stored shape below is exactly what queueSetChainRateLimits stores
         ITimelockBatchQueue.BatchAction[] memory batch = _probeBatch();
         bytes32[] memory keys = new bytes32[](1);
-        keys[0] = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
+        keys[0] = _rateLimitsKey(CHAIN_SELECTOR_A);
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
 
@@ -612,7 +612,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         );
         for (uint256 i; i < routeSelectors.length; ++i) {
             assertEq(
-                timelock.pendingActionId(timelock.getRateLimitsKey(routeSelectors[i])),
+                timelock.pendingActionId(_rateLimitsKey(routeSelectors[i])),
                 actionId,
                 "each route's rate limits key should be reserved by the batch"
             );
@@ -660,7 +660,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
 
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "route half of the spanning batch");
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             actionId,
             "the allowlist key should be reserved by the same batch"
         );
@@ -734,22 +734,22 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_B, firstActionId + 1, "removeChain shape");
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, firstActionId + 2, "setRemoteToken shape");
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(selectorC)),
+            timelock.pendingActionId(_remotePoolsKey(selectorC)),
             firstActionId + 3,
             "the addRemotePool shape should hold its remote pools key"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(selectorD)),
+            timelock.pendingActionId(_remotePoolsKey(selectorD)),
             firstActionId + 4,
             "the removeRemotePool shape should hold its remote pools key"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(selectorE)),
+            timelock.pendingActionId(_rateLimitsKey(selectorE)),
             firstActionId + 5,
             "the setChainRateLimits shape should hold its rate limits key"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             firstActionId + 6,
             "the applyAllowListUpdates shape should hold the allowlist key"
         );

@@ -68,7 +68,7 @@ contract CCIPMigrationForkTests_ReplaceConfigPairNonEthereum is CCIPNonEthereumM
         );
         assertTrue(seeded.cancelled, "the seeded action should be cancelled");
         assertEq(
-            oldTimelock.pendingActionId(oldTimelock.getRateLimitsKey(sepoliaSelector)),
+            oldTimelock.pendingActionId(_rateLimitsKeyOf(oldTimelock, sepoliaSelector)),
             0,
             "the cancellation should release the seeded action's domain"
         );
@@ -115,7 +115,7 @@ contract CCIPMigrationForkTests_ReplaceConfigPairNonEthereum is CCIPNonEthereumM
         vm.prank(daoMS);
         oldTimelock.enable("");
 
-        bytes32 seededKey = oldTimelock.getRateLimitsKey(sepoliaSelector);
+        bytes32 seededKey = _rateLimitsKeyOf(oldTimelock, sepoliaSelector);
         assertEq(
             oldTimelock.pendingActionId(seededKey),
             seededActionId,

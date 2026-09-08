@@ -143,7 +143,7 @@ abstract contract CCIPMigrationForkTestBase is Test {
         vm.prank(proposer_);
         seededActionId = timelock_.queueSetChainRateLimits(chainSelector_, outbound, inbound);
         assertEq(
-            timelock_.pendingActionId(timelock_.getRateLimitsKey(chainSelector_)),
+            timelock_.pendingActionId(_rateLimitsKeyOf(timelock_, chainSelector_)),
             seededActionId,
             "seeding: the queued action should reserve the rate limits domain"
         );
@@ -251,6 +251,24 @@ abstract contract CCIPMigrationForkTestBase is Test {
         assertEq(actual_.rate, expected_.rate, string.concat(label_, ": rate"));
     }
 
+    // ========== KEY SHAPE ========== //
+
+    /// @notice The reserved key of the rate limits domain of a route on a timelock, recomputed
+    ///         from the documented shape rather than read from the contract: the domain and
+    ///         selector hash, scoped to the config policy the timelock is bound to.
+    function _rateLimitsKeyOf(
+        CCIPTokenPoolConfigTimelock timelock_,
+        uint64 chainSelector_
+    ) internal view returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(
+                    timelock_.config(),
+                    keccak256(abi.encode(timelock_.RATE_LIMITS_DOMAIN(), chainSelector_))
+                )
+            );
+    }
+
     // ========== TRIAD END-STATE ASSERTIONS ========== //
 
     /// @notice Asserts the steady-state wiring every procedure must end in: the config policy
@@ -312,7 +330,7 @@ abstract contract CCIPMigrationForkTestBase is Test {
         vm.prank(bridgeAdmin_);
         uint64 actionId = timelock_.queueSetChainRateLimits(chainSelector_, outbound, inbound);
         assertEq(
-            timelock_.pendingActionId(timelock_.getRateLimitsKey(chainSelector_)),
+            timelock_.pendingActionId(_rateLimitsKeyOf(timelock_, chainSelector_)),
             actionId,
             "steady state: the queued action should reserve the rate limits domain"
         );
@@ -323,7 +341,7 @@ abstract contract CCIPMigrationForkTestBase is Test {
         timelock_.executeQueuedAction(actionId);
 
         assertEq(
-            timelock_.pendingActionId(timelock_.getRateLimitsKey(chainSelector_)),
+            timelock_.pendingActionId(_rateLimitsKeyOf(timelock_, chainSelector_)),
             0,
             "steady state: the executed action should release its domain"
         );

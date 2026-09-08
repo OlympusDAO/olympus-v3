@@ -16,6 +16,7 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 
 // Contracts
@@ -122,7 +123,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
         console2.log("\n--- Plan ---");
         for (uint256 i; i < desired.length; ++i) {
-            _planRoute(config, timelock, pool, desired[i]);
+            _planRoute(config, pool, desired[i]);
         }
         _requireRoutesDeclared(desired, liveSelectors);
 
@@ -341,7 +342,6 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     function _planRoute(
         ICCIPTokenPoolConfig config_,
-        ICCIPTokenPoolConfigTimelock timelock_,
         ICCIPTokenPoolAdmin pool_,
         CCIPConfigLib.DesiredRoute memory desired_
     ) internal {
@@ -364,7 +364,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 ICCIPTokenPoolConfig.removeChain.selector,
                 abi.encode(selector),
                 abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueRemoveChain, (selector)),
-                _routeKeys(timelock_, selector)
+                _routeKeys(address(config_), selector)
             );
             return;
         }
@@ -384,7 +384,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 ICCIPTokenPoolConfig.addChain.selector,
                 abi.encode(update),
                 abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueAddChain, (update)),
-                _routeKeys(timelock_, selector)
+                _routeKeys(address(config_), selector)
             );
             return;
         }
@@ -411,7 +411,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     ICCIPTokenPoolConfigTimelock.queueSetRemoteToken,
                     (selector, desired_.remoteToken)
                 ),
-                _routeKeys(timelock_, selector)
+                _routeKeys(address(config_), selector)
             );
             return;
         }
@@ -427,7 +427,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     ICCIPTokenPoolConfigTimelock.queueAddRemotePool,
                     (selector, diff.poolsToAdd[0])
                 ),
-                _singleKey(timelock_.getRemotePoolsKey(selector))
+                _singleKey(CCIPTokenPoolConfigKeyLib.remotePoolsKey(address(config_), selector))
             );
             _logDeferredPools(diff.poolsToAdd.length - 1, diff.poolsToRemove.length);
         } else if (diff.poolsToRemove.length > 0) {
@@ -444,7 +444,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     ICCIPTokenPoolConfigTimelock.queueRemoveRemotePool,
                     (selector, diff.poolsToRemove[0])
                 ),
-                _singleKey(timelock_.getRemotePoolsKey(selector))
+                _singleKey(CCIPTokenPoolConfigKeyLib.remotePoolsKey(address(config_), selector))
             );
             _logDeferredPools(0, diff.poolsToRemove.length - 1);
         }
@@ -464,7 +464,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     ICCIPTokenPoolConfigTimelock.queueSetChainRateLimits,
                     (selector, desired_.outbound, desired_.inbound)
                 ),
-                _singleKey(timelock_.getRateLimitsKey(selector))
+                _singleKey(CCIPTokenPoolConfigKeyLib.rateLimitsKey(address(config_), selector))
             );
         }
     }
@@ -669,14 +669,15 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         console2.log("  Planned:", description_);
     }
 
+    /// @notice The three reserved keys of a route, in the order the timelock reserves them.
     function _routeKeys(
-        ICCIPTokenPoolConfigTimelock timelock_,
+        address config_,
         uint64 selector_
-    ) internal view returns (bytes32[] memory keys) {
+    ) internal pure returns (bytes32[] memory keys) {
         keys = new bytes32[](3);
-        keys[0] = timelock_.getRateLimitsKey(selector_);
-        keys[1] = timelock_.getRemotePoolsKey(selector_);
-        keys[2] = timelock_.getRouteIdentityKey(selector_);
+        keys[0] = CCIPTokenPoolConfigKeyLib.rateLimitsKey(config_, selector_);
+        keys[1] = CCIPTokenPoolConfigKeyLib.remotePoolsKey(config_, selector_);
+        keys[2] = CCIPTokenPoolConfigKeyLib.routeIdentityKey(config_, selector_);
     }
 
     function _singleKey(bytes32 key_) internal pure returns (bytes32[] memory keys) {

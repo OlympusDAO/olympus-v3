@@ -320,7 +320,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         uint64 holderActionId = _queueAddChainAction(CHAIN_SELECTOR_A);
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueAddChain(update);
     }
@@ -338,7 +338,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _directRemoveChain(CHAIN_SELECTOR_A);
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
 
-        _expectRevertConfigKeyPending(timelock.getRateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
+        _expectRevertConfigKeyPending(_rateLimitsKey(CHAIN_SELECTOR_A), queuedActionId);
         vm.prank(bridgeAdmin);
         timelock.queueAddChain(update);
     }
@@ -357,7 +357,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _directRemoveChain(CHAIN_SELECTOR_A);
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
 
-        _expectRevertConfigKeyPending(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_remotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueAddChain(update);
     }
@@ -382,9 +382,9 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
 
         // The scoped keys in _configKeys order: rate limits, remote pools, route identity
         bytes32[] memory keys = new bytes32[](3);
-        keys[0] = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
-        keys[1] = timelock.getRemotePoolsKey(CHAIN_SELECTOR_A);
-        keys[2] = timelock.getRouteIdentityKey(CHAIN_SELECTOR_A);
+        keys[0] = _rateLimitsKey(CHAIN_SELECTOR_A);
+        keys[1] = _remotePoolsKey(CHAIN_SELECTOR_A);
+        keys[2] = _routeIdentityKey(CHAIN_SELECTOR_A);
 
         // For an absent route every pool getter answers its default, so the recomputed live
         // hashes reduce to the documented absent-route preimages:

@@ -13,6 +13,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -40,6 +41,8 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         config policy's validation mirror of the targeted function. Execution is permissionless once the delay elapses and requires this policy
 ///         and the config policy to be enabled and this timelock to still be the config operator;
 ///         the shared base then checks the reserved keys and state hashes before each dispatch.
+///         The domains and keys are those of `CCIPTokenPoolConfigKeyLib`, scoped to the config
+///         policy; tooling derives the key of a reservation from the same library.
 ///         An action whose config policy is disabled after queueing holds its configuration
 ///         keys until it is executed once the config policy is enabled again, or until it is
 ///         cancelled; so does an action whose dispatch reverts because the config
@@ -69,22 +72,6 @@ contract CCIPTokenPoolConfigTimelock is
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
     uint48 public constant override EXECUTION_WINDOW = 3 days;
-
-    /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    bytes32 public constant override RATE_LIMITS_DOMAIN =
-        keccak256("CCIP_TOKEN_POOL_CONFIG_RATE_LIMITS");
-
-    /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    bytes32 public constant override REMOTE_POOLS_DOMAIN =
-        keccak256("CCIP_TOKEN_POOL_CONFIG_REMOTE_POOLS");
-
-    /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    bytes32 public constant override ROUTE_IDENTITY_DOMAIN =
-        keccak256("CCIP_TOKEN_POOL_CONFIG_ROUTE_IDENTITY");
-
-    /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    bytes32 public constant override ALLOWLIST_DOMAIN =
-        keccak256("CCIP_TOKEN_POOL_CONFIG_ALLOWLIST");
 
     /// @notice The maximum number of configuration keys that one batch may reserve.
     /// @dev    A route contributes three keys and the allowlist one.
@@ -180,31 +167,23 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    function getRateLimitsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
-        return
-            _scopeConfigKey(address(_CONFIG), _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector_));
+    function RATE_LIMITS_DOMAIN() external pure override returns (bytes32 domain) {
+        return CCIPTokenPoolConfigKeyLib.RATE_LIMITS_DOMAIN;
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    function getRemotePoolsKey(uint64 chainSelector_) external view override returns (bytes32 key) {
-        return
-            _scopeConfigKey(address(_CONFIG), _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector_));
+    function REMOTE_POOLS_DOMAIN() external pure override returns (bytes32 domain) {
+        return CCIPTokenPoolConfigKeyLib.REMOTE_POOLS_DOMAIN;
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    function getRouteIdentityKey(
-        uint64 chainSelector_
-    ) external view override returns (bytes32 key) {
-        return
-            _scopeConfigKey(
-                address(_CONFIG),
-                _routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector_)
-            );
+    function ROUTE_IDENTITY_DOMAIN() external pure override returns (bytes32 domain) {
+        return CCIPTokenPoolConfigKeyLib.ROUTE_IDENTITY_DOMAIN;
     }
 
     /// @inheritdoc ICCIPTokenPoolConfigTimelock
-    function getAllowListKey() external view override returns (bytes32 key) {
-        return _scopeConfigKey(address(_CONFIG), ALLOWLIST_DOMAIN);
+    function ALLOWLIST_DOMAIN() external pure override returns (bytes32 domain) {
+        return CCIPTokenPoolConfigKeyLib.ALLOWLIST_DOMAIN;
     }
 
     // ========== QUEUE FUNCTIONS ========== //
@@ -488,8 +467,9 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    /// @dev Route domains are keyed by `keccak256(abi.encode(domain, chainSelector))`; the
-    ///      allowlist domain is keyed by `ALLOWLIST_DOMAIN` itself.
+    /// @dev The local keys of `CCIPTokenPoolConfigKeyLib`: route domains are keyed by
+    ///      `keccak256(abi.encode(domain, chainSelector))`, the allowlist domain by
+    ///      `ALLOWLIST_DOMAIN` itself.
     ///
     ///      Reverts if:
     ///      - The selector is not one of the supported config functions
@@ -501,7 +481,7 @@ contract CCIPTokenPoolConfigTimelock is
 
         if (selector == ICCIPTokenPoolConfig.applyAllowListUpdates.selector) {
             keys = new bytes32[](1);
-            keys[0] = ALLOWLIST_DOMAIN;
+            keys[0] = CCIPTokenPoolConfigKeyLib.allowListLocalKey();
             return keys;
         }
 
@@ -512,20 +492,20 @@ contract CCIPTokenPoolConfigTimelock is
             selector == ICCIPTokenPoolConfig.setRemoteToken.selector
         ) {
             keys = new bytes32[](3);
-            keys[0] = _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector);
-            keys[1] = _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector);
-            keys[2] = _routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector);
+            keys[0] = CCIPTokenPoolConfigKeyLib.rateLimitsLocalKey(chainSelector);
+            keys[1] = CCIPTokenPoolConfigKeyLib.remotePoolsLocalKey(chainSelector);
+            keys[2] = CCIPTokenPoolConfigKeyLib.routeIdentityLocalKey(chainSelector);
         } else if (
             selector == ICCIPTokenPoolConfig.addRemotePool.selector ||
             selector == ICCIPTokenPoolConfig.removeRemotePool.selector
         ) {
             keys = new bytes32[](1);
-            keys[0] = _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector);
+            keys[0] = CCIPTokenPoolConfigKeyLib.remotePoolsLocalKey(chainSelector);
         } else {
             // Only `setChainRateLimits` remains: `_routeChainSelector` reverts for any
             // unsupported selector.
             keys = new bytes32[](1);
-            keys[0] = _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector);
+            keys[0] = CCIPTokenPoolConfigKeyLib.rateLimitsLocalKey(chainSelector);
         }
     }
 
@@ -562,16 +542,16 @@ contract CCIPTokenPoolConfigTimelock is
         bytes32 key_,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
-        if (key_ == ALLOWLIST_DOMAIN) return _allowListStateHash();
+        if (key_ == CCIPTokenPoolConfigKeyLib.allowListLocalKey()) return _allowListStateHash();
 
         uint64 chainSelector = _routeChainSelector(action_);
-        if (key_ == _routeLocalKey(RATE_LIMITS_DOMAIN, chainSelector)) {
+        if (key_ == CCIPTokenPoolConfigKeyLib.rateLimitsLocalKey(chainSelector)) {
             return _rateLimitsStateHash(chainSelector);
         }
-        if (key_ == _routeLocalKey(REMOTE_POOLS_DOMAIN, chainSelector)) {
+        if (key_ == CCIPTokenPoolConfigKeyLib.remotePoolsLocalKey(chainSelector)) {
             return _remotePoolsStateHash(chainSelector);
         }
-        if (key_ == _routeLocalKey(ROUTE_IDENTITY_DOMAIN, chainSelector)) {
+        if (key_ == CCIPTokenPoolConfigKeyLib.routeIdentityLocalKey(chainSelector)) {
             return _routeIdentityStateHash(chainSelector);
         }
 
@@ -800,17 +780,6 @@ contract CCIPTokenPoolConfigTimelock is
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
-    /// @notice Returns the destination-local key of a route domain.
-    /// @param  domain_ The domain constant.
-    /// @param  chainSelector_ The chain selector of the route.
-    /// @return localKey The local key `keccak256(abi.encode(domain_, chainSelector_))`.
-    function _routeLocalKey(
-        bytes32 domain_,
-        uint64 chainSelector_
-    ) internal pure returns (bytes32 localKey) {
-        return keccak256(abi.encode(domain_, chainSelector_));
-    }
-
     /// @notice Returns the state hash of the rate limits domain of a route.
     /// @param  chainSelector_ The chain selector of the route.
     /// @return stateHash The state hash.
@@ -825,7 +794,7 @@ contract CCIPTokenPoolConfigTimelock is
         return
             keccak256(
                 abi.encode(
-                    RATE_LIMITS_DOMAIN,
+                    CCIPTokenPoolConfigKeyLib.RATE_LIMITS_DOMAIN,
                     chainSelector_,
                     outbound.isEnabled,
                     outbound.capacity,
@@ -852,7 +821,15 @@ contract CCIPTokenPoolConfigTimelock is
             aggregate ^= keccak256(remotePools[i]);
         }
 
-        return keccak256(abi.encode(REMOTE_POOLS_DOMAIN, chainSelector_, count, aggregate));
+        return
+            keccak256(
+                abi.encode(
+                    CCIPTokenPoolConfigKeyLib.REMOTE_POOLS_DOMAIN,
+                    chainSelector_,
+                    count,
+                    aggregate
+                )
+            );
     }
 
     /// @notice Returns the state hash of the identity domain of a route.
@@ -864,7 +841,7 @@ contract CCIPTokenPoolConfigTimelock is
         return
             keccak256(
                 abi.encode(
-                    ROUTE_IDENTITY_DOMAIN,
+                    CCIPTokenPoolConfigKeyLib.ROUTE_IDENTITY_DOMAIN,
                     chainSelector_,
                     _POOL.isSupportedChain(chainSelector_),
                     _POOL.getRemoteToken(chainSelector_)
@@ -885,7 +862,14 @@ contract CCIPTokenPoolConfigTimelock is
         }
 
         return
-            keccak256(abi.encode(ALLOWLIST_DOMAIN, _POOL.getAllowListEnabled(), count, aggregate));
+            keccak256(
+                abi.encode(
+                    CCIPTokenPoolConfigKeyLib.ALLOWLIST_DOMAIN,
+                    _POOL.getAllowListEnabled(),
+                    count,
+                    aggregate
+                )
+            );
     }
 
     // ========== VERSION ========== //

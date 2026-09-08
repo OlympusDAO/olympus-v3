@@ -142,7 +142,7 @@ contract CCIPTokenPoolConfigTimelockTests_disable is CCIPTokenPoolConfigTimelock
         );
         // The canonical action is a rate limit change, so it reserves the rate limits key of
         // route A alone
-        bytes32 rateLimitsKey = timelock.getRateLimitsKey(CHAIN_SELECTOR_A);
+        bytes32 rateLimitsKey = _rateLimitsKey(CHAIN_SELECTOR_A);
 
         vm.prank(admin);
         timelock.disable("");

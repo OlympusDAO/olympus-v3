@@ -85,7 +85,7 @@ contract CCIPMigrationForkTests_ReplaceConfigPairEthereum is CCIPEthereumMigrati
         assertTrue(seeded.cancelled, "activation batch: the seeded action should be cancelled");
         assertEq(
             oldTimelock.pendingActionId(
-                oldTimelock.getRateLimitsKey(burnMintRoutes[0].chainSelector)
+                _rateLimitsKeyOf(oldTimelock, burnMintRoutes[0].chainSelector)
             ),
             0,
             "activation batch: the cancellation should release the seeded action's domain"
@@ -152,7 +152,7 @@ contract CCIPMigrationForkTests_ReplaceConfigPairEthereum is CCIPEthereumMigrati
 
         // The forgotten action still holds its domain in the outgoing namespace, and
         // cancellation stays reachable in every product state: the proposer clears it
-        bytes32 seededKey = oldTimelock.getRateLimitsKey(burnMintRoutes[0].chainSelector);
+        bytes32 seededKey = _rateLimitsKeyOf(oldTimelock, burnMintRoutes[0].chainSelector);
         assertEq(
             oldTimelock.pendingActionId(seededKey),
             seededActionId,

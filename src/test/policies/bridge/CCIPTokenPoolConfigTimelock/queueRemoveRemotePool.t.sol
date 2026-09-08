@@ -199,7 +199,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
         timelock.queueRemoveRemotePool(CHAIN_SELECTOR_A, remotePool);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
             0,
             "the remote pools key should stay free after the rejected queue"
         );
@@ -252,7 +252,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
         uint64 holderActionId = _queueAddRemotePoolAction(CHAIN_SELECTOR_A);
         bytes memory remotePool = REMOTE_POOL_TWO;
 
-        _expectRevertConfigKeyPending(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_remotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueRemoveRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
@@ -264,7 +264,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
         uint64 holderActionId = _queueSetRemoteTokenAction(CHAIN_SELECTOR_A);
         bytes memory remotePool = REMOTE_POOL_TWO;
 
-        _expectRevertConfigKeyPending(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
+        _expectRevertConfigKeyPending(_remotePoolsKey(CHAIN_SELECTOR_A), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueRemoveRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
@@ -286,7 +286,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
         bytes memory payload = abi.encode(CHAIN_SELECTOR_A, remotePool);
 
         bytes32[] memory keys = new bytes32[](1);
-        keys[0] = timelock.getRemotePoolsKey(CHAIN_SELECTOR_A);
+        keys[0] = _remotePoolsKey(CHAIN_SELECTOR_A);
 
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedRemotePoolsHash(CHAIN_SELECTOR_A);
@@ -355,12 +355,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
 
         // The narrowness of the reservation: the two sibling domains of the route stay free
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should stay free"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRouteIdentityKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_routeIdentityKey(CHAIN_SELECTOR_A)),
             0,
             "the route identity key should stay free"
         );
@@ -379,12 +379,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
 
         assertEq(poolActionId, queuedActionId + 1, "the ids should be sequential");
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             queuedActionId,
             "the rate limits key should stay with the rate limit action"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
             poolActionId,
             "the remote pools key should belong to the pool removal"
         );
@@ -410,12 +410,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
 
         assertEq(firstRouteActionId, secondRouteActionId + 1, "the ids should be sequential");
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_B)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_B)),
             secondRouteActionId,
             "the second route's remote pools key should belong to its own action"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
             firstRouteActionId,
             "the first route's remote pools key should belong to its own action"
         );

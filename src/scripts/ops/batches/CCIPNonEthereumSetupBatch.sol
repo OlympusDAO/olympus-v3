@@ -19,6 +19,7 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 import {CCIPFeeBudgetLib} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
@@ -275,7 +276,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             IEnabler(timelock).isEnabled(),
             "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
+        _requireRoutesConverged(
+            ICCIPTokenPoolAdmin(pool),
+            config,
+            IConfigTimelockBatchQueue(timelock)
+        );
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(registry)
             .getTokenConfig(ohm);
@@ -412,7 +417,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             ITimelockBatchQueue(timelock).timelockDelay() == desired.timelockDelay,
             "CCIPTokenPoolConfigTimelock delay mismatch"
         );
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
+        _requireRoutesConverged(
+            ICCIPTokenPoolAdmin(pool),
+            config,
+            IConfigTimelockBatchQueue(timelock)
+        );
         console2.log("setup post-batch validation passed");
     }
 
@@ -442,7 +451,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(roles.hasRole(_owner, ADMIN_ROLE), "The DAO MS does not hold admin");
         require(roles.hasRole(_owner, BRIDGE_ADMIN_ROLE), "The DAO MS does not hold bridge_admin");
-        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
+        _requireRoutesConverged(
+            ICCIPTokenPoolAdmin(pool),
+            config,
+            IConfigTimelockBatchQueue(timelock)
+        );
         console2.log("finalize post-batch validation passed");
     }
 
@@ -930,7 +943,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         queued is a mismatch.
     function _requireRoutesConverged(
         ICCIPTokenPoolAdmin pool_,
-        ICCIPTokenPoolConfigTimelock timelock_
+        address config_,
+        IConfigTimelockBatchQueue queue_
     ) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
@@ -965,7 +979,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
             if (!route.enabled) {
                 if (!live.exists) continue;
-                if (_isRemovalQueued(timelock_, route.chainSelector)) {
+                if (_isRemovalQueued(config_, queue_, route.chainSelector)) {
                     console2.log(
                         "  Route",
                         route.remoteChain,
@@ -1001,15 +1015,18 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     }
 
     /// @notice Returns whether an unexpired queued action of the config timelock removes the route.
+    /// @dev    A removal reserves all three route domains; the route identity key is the one read.
     function _isRemovalQueued(
-        ICCIPTokenPoolConfigTimelock timelock_,
+        address config_,
+        IConfigTimelockBatchQueue queue_,
         uint64 chainSelector_
     ) internal view returns (bool queued) {
-        IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
-        uint64 actionId = queue.pendingActionId(timelock_.getRouteIdentityKey(chainSelector_));
+        uint64 actionId = queue_.pendingActionId(
+            CCIPTokenPoolConfigKeyLib.routeIdentityKey(config_, chainSelector_)
+        );
         if (actionId == 0) return false;
 
-        ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = queue_.getQueuedAction(actionId);
         // The expiry is read by the script at simulation time
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > action.expiresAt) return false;

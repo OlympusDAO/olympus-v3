@@ -777,6 +777,43 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
             );
     }
 
+    // ========== KEY SHAPES ========== //
+    //
+    // The reserved keys are recomputed here from the documented shape, never read from the
+    // contract or the key library: a route key is the config-scoped hash of the (domain,
+    // selector) hash, the allowlist key the config-scoped bare domain constant.
+
+    /// @notice The reserved key of a route domain of the rig's timelock.
+    function _routeKey(bytes32 domain_, uint64 chainSelector_) internal view returns (bytes32) {
+        return _routeKeyOf(address(config), domain_, chainSelector_);
+    }
+
+    /// @notice The reserved key of a route domain of a timelock bound to `config_`.
+    function _routeKeyOf(
+        address config_,
+        bytes32 domain_,
+        uint64 chainSelector_
+    ) internal pure returns (bytes32) {
+        return keccak256(abi.encode(config_, keccak256(abi.encode(domain_, chainSelector_))));
+    }
+
+    function _rateLimitsKey(uint64 chainSelector_) internal view returns (bytes32) {
+        return _routeKey(timelock.RATE_LIMITS_DOMAIN(), chainSelector_);
+    }
+
+    function _remotePoolsKey(uint64 chainSelector_) internal view returns (bytes32) {
+        return _routeKey(timelock.REMOTE_POOLS_DOMAIN(), chainSelector_);
+    }
+
+    function _routeIdentityKey(uint64 chainSelector_) internal view returns (bytes32) {
+        return _routeKey(timelock.ROUTE_IDENTITY_DOMAIN(), chainSelector_);
+    }
+
+    /// @notice The reserved key of the allowlist domain: the config-scoped domain constant.
+    function _allowListKey() internal view returns (bytes32) {
+        return keccak256(abi.encode(address(config), timelock.ALLOWLIST_DOMAIN()));
+    }
+
     // ========== RESERVATION ASSERTIONS ========== //
 
     /// @notice Asserts that all three route domain keys of a selector are reserved by one
@@ -787,17 +824,17 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         string memory label_
     ) internal view {
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(chainSelector_)),
+            timelock.pendingActionId(_rateLimitsKey(chainSelector_)),
             actionId_,
             string.concat(label_, ": rate limits key owner")
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(chainSelector_)),
+            timelock.pendingActionId(_remotePoolsKey(chainSelector_)),
             actionId_,
             string.concat(label_, ": remote pools key owner")
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRouteIdentityKey(chainSelector_)),
+            timelock.pendingActionId(_routeIdentityKey(chainSelector_)),
             actionId_,
             string.concat(label_, ": route identity key owner")
         );
@@ -806,17 +843,17 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     /// @notice Asserts that all three route domain keys of a selector are free.
     function _assertRouteKeysFree(uint64 chainSelector_, string memory label_) internal view {
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(chainSelector_)),
+            timelock.pendingActionId(_rateLimitsKey(chainSelector_)),
             0,
             string.concat(label_, ": rate limits key should be free")
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(chainSelector_)),
+            timelock.pendingActionId(_remotePoolsKey(chainSelector_)),
             0,
             string.concat(label_, ": remote pools key should be free")
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRouteIdentityKey(chainSelector_)),
+            timelock.pendingActionId(_routeIdentityKey(chainSelector_)),
             0,
             string.concat(label_, ": route identity key should be free")
         );

@@ -71,7 +71,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         timelock.cancelQueuedAction(queuedActionId);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
@@ -97,7 +97,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
             "the action should be cancelled"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
@@ -115,7 +115,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
             "the action should be cancelled"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
@@ -175,7 +175,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         givenActionExpired
     {
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             queuedActionId,
             "expiry alone should free nothing"
         );
@@ -184,7 +184,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         timelock.cancelQueuedAction(queuedActionId);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the cancellation should release the expired action's key"
         );
@@ -249,7 +249,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
             "the outgoing timelock's action should be cancelled"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
@@ -273,7 +273,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
             "the undispatchable action should be cancelled"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
@@ -301,7 +301,7 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         timelock.cancelQueuedAction(queuedActionId);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the drifted domain should be released"
         );
@@ -330,12 +330,12 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         timelock.cancelQueuedAction(actionId);
 
         assertEq(
-            timelock.pendingActionId(timelock.getRateLimitsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
             0,
             "the rate limits key should be released"
         );
         assertEq(
-            timelock.pendingActionId(timelock.getRemotePoolsKey(CHAIN_SELECTOR_A)),
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
             0,
             "the remote pools key should be released"
         );

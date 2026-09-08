@@ -292,7 +292,7 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
             }
         }
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             0,
             "the allowlist key must never be reserved on the primary rig"
         );

@@ -178,7 +178,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         timelock.queueApplyAllowListUpdates(new address[](0), adds);
 
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             0,
             "the allowlist key should stay free on the primary rig"
         );
@@ -197,7 +197,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         timelock.queueApplyAllowListUpdates(new address[](0), new address[](0));
 
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             0,
             "the allowlist key should stay free after the rejected queue"
         );
@@ -217,7 +217,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         // A different payload: the domain conflicts regardless of the values
         address[] memory removes = _singleAddress(allowListedOne);
 
-        _expectRevertConfigKeyPending(timelock.getAllowListKey(), holderActionId);
+        _expectRevertConfigKeyPending(_allowListKey(), holderActionId);
         vm.prank(bridgeAdmin);
         timelock.queueApplyAllowListUpdates(removes, new address[](0));
     }
@@ -239,7 +239,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         bytes memory payload = abi.encode(removes, adds);
 
         bytes32[] memory keys = new bytes32[](1);
-        keys[0] = timelock.getAllowListKey();
+        keys[0] = _allowListKey();
 
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedAllowListHash();
@@ -320,7 +320,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         uint64 actionId = timelock.queueApplyAllowListUpdates(new address[](0), adds);
 
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             actionId,
             "the allowlist key should belong to the adds-only action"
         );
@@ -336,7 +336,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         uint64 actionId = timelock.queueApplyAllowListUpdates(removes, new address[](0));
 
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             actionId,
             "the allowlist key should belong to the removes-only action"
         );
@@ -357,7 +357,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         uint64 actionId = timelock.queueApplyAllowListUpdates(removes, adds);
 
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             actionId,
             "the allowlist key should belong to the action"
         );
@@ -381,7 +381,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         assertEq(allowListActionId, routeActionId + 1, "the ids should be sequential");
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, routeActionId, "pending route action");
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             allowListActionId,
             "the allowlist key should belong to the allowlist action"
         );
@@ -397,7 +397,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
 
         assertEq(routeActionId, allowListActionId + 1, "the ids should be sequential");
         assertEq(
-            timelock.pendingActionId(timelock.getAllowListKey()),
+            timelock.pendingActionId(_allowListKey()),
             allowListActionId,
             "the allowlist key should stay with the allowlist action"
         );

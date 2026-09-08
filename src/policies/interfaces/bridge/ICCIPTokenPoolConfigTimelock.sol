@@ -46,6 +46,12 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         its domains until it executes or is cancelled. Enabling and re-enabling the timelock
 ///         require the config policy to be an active policy of the timelock's kernel.
 ///
+///         A reserved key is scoped to the config policy: for a route domain it is
+///         `keccak256(abi.encode(config, keccak256(abi.encode(domain, chainSelector))))`, for the
+///         allowlist `keccak256(abi.encode(config, ALLOWLIST_DOMAIN))`, with the domain constants
+///         exposed below. `CCIPTokenPoolConfigKeyLib` derives these keys for the tooling that
+///         reads `pendingActionId`.
+///
 ///         The queue itself (`executeQueuedAction`, `cancelQueuedAction`, the stored actions,
 ///         `pendingActionId` and the other reservation views) is the `IConfigTimelockBatchQueue`
 ///         surface of the shared base, which the implementing contract exposes as a separate
@@ -114,42 +120,25 @@ interface ICCIPTokenPoolConfigTimelock {
     function EXECUTION_WINDOW() external view returns (uint48);
 
     /// @notice Returns the domain constant of the rate limits of a route.
+    /// @return domain The domain constant.
     // solhint-disable-next-line func-name-mixedcase
-    function RATE_LIMITS_DOMAIN() external view returns (bytes32);
+    function RATE_LIMITS_DOMAIN() external view returns (bytes32 domain);
 
     /// @notice Returns the domain constant of the accepted remote pools of a route.
+    /// @return domain The domain constant.
     // solhint-disable-next-line func-name-mixedcase
-    function REMOTE_POOLS_DOMAIN() external view returns (bytes32);
+    function REMOTE_POOLS_DOMAIN() external view returns (bytes32 domain);
 
     /// @notice Returns the domain constant of the identity of a route.
+    /// @return domain The domain constant.
     // solhint-disable-next-line func-name-mixedcase
-    function ROUTE_IDENTITY_DOMAIN() external view returns (bytes32);
+    function ROUTE_IDENTITY_DOMAIN() external view returns (bytes32 domain);
 
-    /// @notice Returns the domain constant of the pool-wide sender allowlist.
+    /// @notice Returns the domain constant of the pool-wide sender allowlist, which is also its
+    ///         destination-local key.
+    /// @return domain The domain constant.
     // solhint-disable-next-line func-name-mixedcase
-    function ALLOWLIST_DOMAIN() external view returns (bytes32);
-
-    /// @notice Returns the reserved key of the rate limits domain of a route, as used by
-    ///         `pendingActionId`.
-    /// @param chainSelector_ The chain selector of the route.
-    /// @return key The destination-scoped key.
-    function getRateLimitsKey(uint64 chainSelector_) external view returns (bytes32 key);
-
-    /// @notice Returns the reserved key of the remote pools domain of a route, as used by
-    ///         `pendingActionId`.
-    /// @param chainSelector_ The chain selector of the route.
-    /// @return key The destination-scoped key.
-    function getRemotePoolsKey(uint64 chainSelector_) external view returns (bytes32 key);
-
-    /// @notice Returns the reserved key of the identity domain of a route, as used by
-    ///         `pendingActionId`.
-    /// @param chainSelector_ The chain selector of the route.
-    /// @return key The destination-scoped key.
-    function getRouteIdentityKey(uint64 chainSelector_) external view returns (bytes32 key);
-
-    /// @notice Returns the reserved key of the allowlist domain, as used by `pendingActionId`.
-    /// @return key The destination-scoped key.
-    function getAllowListKey() external view returns (bytes32 key);
+    function ALLOWLIST_DOMAIN() external view returns (bytes32 domain);
 
     // ========== QUEUE FUNCTIONS ========== //
 
