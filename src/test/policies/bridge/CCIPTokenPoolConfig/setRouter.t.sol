@@ -338,6 +338,35 @@ contract CCIPTokenPoolConfigTests_setRouter is CCIPTokenPoolConfigTest {
         assertEq(pool.getRouter(), candidate, "the pool router should be the candidate");
     }
 
+    // given the candidate's typeAndVersion does not fit the probe budget
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidRouter
+    // The candidate answers with 256 KiB, which costs it 262144 / 32 = 8192 words of memory:
+    // 3 * 8192 + 8192^2 / 512 = 24,576 + 131,072 = 155,648 gas, five times the 30,000 the probe
+    // forwards. The candidate therefore runs out of gas inside its own frame, this call keeps the
+    // rest of its own gas, and the rejection is the ordinary error rather than an out-of-gas of
+    // the whole transaction: without the budget the candidate would consume 63/64 of what the
+    // caller holds before failing.
+    function test_givenTypeAndVersionExceedsProbeBudget_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        address candidate = address(
+            _newRouterCandidate(MockRouterCandidate.ReturnMode.OversizedReturn)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRouter.selector,
+                candidate
+            )
+        );
+        vm.prank(admin);
+        config.setRouter(candidate);
+
+        assertEq(pool.getRouter(), address(ccipRouter), "the pool router should be unchanged");
+    }
+
     // when the value equals the current router
     //   [X] it writes and emits both events again
     // The valid candidate is installed first and then re-set; the rig's initial

@@ -14,6 +14,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 // Libraries
 import {Pool} from "@chainlink-ccip-1.6.0/ccip/libraries/Pool.sol";
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -87,8 +88,17 @@ contract CCIPTokenPoolConfig is
     uint128 internal constant _MIN_ENABLED_CAPACITY = 2;
 
     /// @notice The minimum length of the return data of a successful `typeAndVersion()` call:
-    ///         the ABI encoding of an empty string.
-    uint256 internal constant _MIN_TYPE_AND_VERSION_RETURN_LENGTH = 64;
+    ///         the ABI encoding of an empty string. It is also the number of bytes the probe
+    ///         copies, since the probe measures the length of the answer and never decodes it.
+    uint16 internal constant _MIN_TYPE_AND_VERSION_RETURN_LENGTH = 64;
+
+    /// @notice The gas forwarded to the `typeAndVersion()` probe of a router candidate.
+    /// @dev    An implementation of `typeAndVersion()` returns a constant string: the deployed
+    ///         CCIP `Router 1.2.0` answers in 726 gas on mainnet. This is the budget that
+    ///         OpenZeppelin's `ERC165Checker` and Chainlink's `ERC165CheckerReverting` forward
+    ///         per probe, about forty times that cost, and it bounds what a candidate can spend
+    ///         of the caller's gas.
+    uint256 internal constant _TYPE_AND_VERSION_PROBE_GAS = 30_000;
 
     // ========== IMMUTABLES ========== //
 
@@ -249,21 +259,28 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The candidate is probed with a static call to `typeAndVersion()`, which must succeed
-    ///      and return at least the ABI encoding of an empty string. Setting the current value
-    ///      writes and emits. Whether the candidate serves the configured routes is not checked.
+    ///      within `_TYPE_AND_VERSION_PROBE_GAS` and return at least the ABI encoding of an empty
+    ///      string; the string itself is never decoded. The probe runs through `SafeCall`, which
+    ///      rejects a candidate without code before calling it and copies at most the 64 bytes the
+    ///      check measures, so neither the gas nor the memory this call pays for depends on the
+    ///      candidate. Setting the current value writes and emits. Whether the candidate serves
+    ///      the configured routes is not checked.
     ///
     ///      Reverts if:
     ///      - The policy is disabled.
     ///      - The caller does not hold the admin role.
     ///      - `router_` is the zero address.
     ///      - `router_` holds no code.
-    ///      - The `typeAndVersion()` probe of `router_` fails.
+    ///      - The `typeAndVersion()` probe of `router_` reverts, exhausts its gas budget or
+    ///        answers with less than the ABI encoding of an empty string.
     ///      - This policy does not own the pool (`OnlyCallableByOwner`).
     function setRouter(address router_) external override givenEnabled onlyAdminRole {
         if (router_ == address(0)) revert CCIPTokenPoolConfig_InvalidAddress("router");
-        if (router_.code.length == 0) revert CCIPTokenPoolConfig_InvalidRouter(router_);
 
-        (bool success, bytes memory returnData) = router_.staticcall(
+        (bool success, bytes memory returnData) = SafeCall.safeStaticCall(
+            router_,
+            _TYPE_AND_VERSION_PROBE_GAS,
+            _MIN_TYPE_AND_VERSION_RETURN_LENGTH,
             abi.encodeWithSelector(ITypeAndVersion.typeAndVersion.selector)
         );
         if (!success || returnData.length < _MIN_TYPE_AND_VERSION_RETURN_LENGTH) {

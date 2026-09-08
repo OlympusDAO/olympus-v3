@@ -196,8 +196,8 @@ interface ICCIPTokenPoolConfig is IConfigOperator {
     function transferPoolOwnership(address newOwner_) external;
 
     /// @notice Sets the router of the pool after checking that the candidate holds code and
-    ///         answers `typeAndVersion()`. Intended to be callable only by the admin role while
-    ///         the policy is enabled.
+    ///         answers `typeAndVersion()` within a bounded gas budget. Intended to be callable
+    ///         only by the admin role while the policy is enabled.
     /// @param router_ The router address.
     function setRouter(address router_) external;
 

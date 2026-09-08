@@ -2,7 +2,7 @@
 pragma solidity ^0.8.24;
 
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
-import {MockRouterCandidate} from "src/test/policies/bridge/mocks/MockRouterCandidate.sol";
+import {MockRouterCandidate, OVERSIZED_RETURN_LENGTH} from "src/test/policies/bridge/mocks/MockRouterCandidate.sol";
 
 /// @notice Router candidate that answers the `typeAndVersion()` probe and also serves the ramp
 ///         lookups a token pool performs on its router.
@@ -36,6 +36,14 @@ contract MockVersionedCCIPRouter is MockCCIPRouter {
         }
         // 64 bytes: the ABI encoding of the empty string
         if (currentMode == MockRouterCandidate.ReturnMode.EmptyString) return abi.encode("");
+        // Raw memory of the oversized length of `MockRouterCandidate`, returned without the
+        // ABI encoder so that the caller sees the length exactly
+        if (currentMode == MockRouterCandidate.ReturnMode.OversizedReturn) {
+            // solhint-disable-next-line no-inline-assembly
+            assembly {
+                return(0, OVERSIZED_RETURN_LENGTH)
+            }
+        }
         // 96 bytes of data that does not decode as a string
         return
             abi.encodePacked(
