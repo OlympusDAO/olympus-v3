@@ -11,6 +11,7 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -161,7 +162,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
-        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         uint64 nextActionId = timelock.nextActionId();
@@ -273,7 +274,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Validates the state after `reconcileRoutes`: every queued change holds its keys
     ///         and every cancelled action is cancelled.
     function _validateReconcileRoutes() external view {
-        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
@@ -307,7 +308,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     /// @notice Validates the state after `executeReadyActions`.
     function _validateExecuted() external view {
-        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
 
@@ -324,7 +325,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     /// @notice Validates the state after a cancellation.
     function _validateCancelled() external view {
-        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
 
@@ -476,16 +477,15 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         ICCIPTokenPoolConfig config_,
         ICCIPTokenPoolConfigTimelock timelock_
     ) internal {
+        IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
         ROLESv1 roles = _roles();
         for (uint256 i; i < _plan.length; ++i) {
             Planned storage planned = _plan[i];
             for (uint256 k; k < planned.keys.length; ++k) {
-                uint64 pendingId = timelock_.pendingActionId(planned.keys[k]);
+                uint64 pendingId = queue.pendingActionId(planned.keys[k]);
                 if (pendingId == 0 || _isCancelled(pendingId)) continue;
 
-                ITimelockBatchQueue.QueuedAction memory pending = timelock_.getQueuedAction(
-                    pendingId
-                );
+                ITimelockBatchQueue.QueuedAction memory pending = queue.getQueuedAction(pendingId);
                 // The expiry is read by the script at simulation time
                 // forge-lint: disable-next-line(block-timestamp)
                 bool expired = block.timestamp > pending.expiresAt;
@@ -529,18 +529,19 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         carries it. After `_planCancellations` every remaining holder of a needed key is
     ///         such an action.
     function _queuePlanned(ICCIPTokenPoolConfigTimelock timelock_, uint256 index_) internal {
+        IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
         Planned storage planned = _plan[index_];
         console2.log("\n", planned.description);
 
         for (uint256 k; k < planned.keys.length; ++k) {
-            uint64 pendingId = timelock_.pendingActionId(planned.keys[k]);
+            uint64 pendingId = queue.pendingActionId(planned.keys[k]);
             if (pendingId == 0 || _isCancelled(pendingId)) continue;
 
             console2.log(
                 "  Already queued as action",
                 pendingId,
                 "executable at",
-                timelock_.getQueuedAction(pendingId).executableAt
+                queue.getQueuedAction(pendingId).executableAt
             );
             planned.skipped = true;
             return;
@@ -553,7 +554,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     function _planCancel(string memory functionName_) internal {
         _skipHeartbeatValidation = true;
 
-        ICCIPTokenPoolConfigTimelock timelock = ICCIPTokenPoolConfigTimelock(
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
         uint64 actionId = uint64(_readBatchArgUint256(functionName_, "actionId"));
@@ -625,7 +626,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 ", not by the config policy; complete the handover first"
             )
         );
-        address configOperator = config_.configOperator();
+        address configOperator = IConfigOperator(address(config_)).configOperator();
         require(
             configOperator == address(timelock_),
             string.concat(
@@ -712,7 +713,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Executes an action inside a state snapshot that is reverted afterwards, to learn
     ///         whether the execution would succeed.
     function _dryRunExecute(
-        ICCIPTokenPoolConfigTimelock timelock_,
+        IConfigTimelockBatchQueue timelock_,
         uint64 actionId_
     ) internal returns (bool success, bytes memory revertData) {
         uint256 snapshotId = vm.snapshotState();

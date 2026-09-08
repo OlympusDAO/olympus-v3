@@ -25,6 +25,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Constants
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -424,7 +425,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         }
 
         // 5. Set the config timelock as config operator (conditional)
-        if (c.config.configOperator() != address(c.configTimelock)) {
+        if (IConfigOperator(address(c.config)).configOperator() != address(c.configTimelock)) {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(
@@ -603,7 +604,11 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 address(0)
             );
         }
-        _requireAddress("config operator", c.config.configOperator(), address(c.configTimelock));
+        _requireAddress(
+            "config operator",
+            IConfigOperator(address(c.config)).configOperator(),
+            address(c.configTimelock)
+        );
         _requireAddress(
             "pool rebalancer",
             ICCIPLockReleaseTokenPool(address(c.pool)).getRebalancer(),
@@ -670,7 +675,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         );
         _requireParameter(
             "CCIPTokenPoolConfigTimelock delay",
-            c.configTimelock.timelockDelay(),
+            ITimelockBatchQueue(address(c.configTimelock)).timelockDelay(),
             desired.timelockDelay
         );
     }

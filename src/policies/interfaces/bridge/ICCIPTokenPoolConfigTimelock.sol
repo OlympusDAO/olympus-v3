@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 /// @title  ICCIPTokenPoolConfigTimelock
@@ -46,7 +45,13 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         policy to be enabled; an action whose config policy is disabled after queueing holds
 ///         its domains until it executes or is cancelled. Enabling and re-enabling the timelock
 ///         require the config policy to be an active policy of the timelock's kernel.
-interface ICCIPTokenPoolConfigTimelock is IConfigTimelockBatchQueue {
+///
+///         The queue itself (`executeQueuedAction`, `cancelQueuedAction`, the stored actions,
+///         `pendingActionId` and the other reservation views) is the `IConfigTimelockBatchQueue`
+///         surface of the shared base, which the implementing contract exposes as a separate
+///         interface next to this one; a caller holding this interface casts to it for those
+///         functions, as it does to `IEnabler` for the lifecycle.
+interface ICCIPTokenPoolConfigTimelock {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a constructor argument is the zero address.

@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
-import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 /// @title  ICCIPTokenPoolConfig
 /// @notice The interface of the policy that owns the local Chainlink CCIP token pool of OHM and
@@ -17,18 +16,20 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 ///         callable while the policy is disabled.
 ///         Every other state-changing function requires the policy to be enabled.
 ///
-///         The config operator is the delegated operator of `IConfigOperator`: `configOperator`
-///         returns it, or the zero address when none is set, and `setConfigOperator` replaces it
-///         immediately or revokes it with the zero address; the setter is intended to be callable
-///         only by the admin role while the policy is enabled. It is meant to be the config
-///         timelock.
+///         The config operator is the delegated operator of `IConfigOperator`, which the
+///         implementing contract exposes as a separate interface next to this one:
+///         `configOperator` returns it, or the zero address when none is set, and
+///         `setConfigOperator` replaces it immediately or revokes it with the zero address; the
+///         setter is intended to be callable only by the admin role while the policy is enabled.
+///         It is meant to be the config timelock. A caller holding this interface casts to
+///         `IConfigOperator` for those two functions, as it does to `IEnabler` for the lifecycle.
 ///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
 ///         Remote token and remote pool addresses are exactly 32 bytes: the ABI encoding of an
 ///         EVM address, or the raw account address of an SVM chain, the only length that the
 ///         CCIP ramps accept on every generation in service. Every operation on the pool is
 ///         emitted by this contract in addition to the events that the pool emits itself.
-interface ICCIPTokenPoolConfig is IConfigOperator {
+interface ICCIPTokenPoolConfig {
     // ========== ERRORS ========== //
 
     /// @notice Thrown when a required address argument is the zero address.

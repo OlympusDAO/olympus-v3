@@ -737,7 +737,7 @@ contract CCIPTokenPoolConfigTimelock is
     /// @notice Reverts with `CCIPTokenPoolConfigTimelock_NotConfigOperator` unless the config
     ///         policy names this timelock as its config operator.
     function _requireOperatorOfConfig() internal view {
-        address currentConfigOperator = _CONFIG.configOperator();
+        address currentConfigOperator = IConfigOperator(address(_CONFIG)).configOperator();
         if (currentConfigOperator != address(this)) {
             revert CCIPTokenPoolConfigTimelock_NotConfigOperator(currentConfigOperator);
         }

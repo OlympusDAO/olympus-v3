@@ -15,6 +15,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
@@ -178,7 +179,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
             console2.log("Added: CCIPTokenPoolConfig.acceptPoolOwnership");
         }
-        if (ICCIPTokenPoolConfig(config).configOperator() != timelock) {
+        if (IConfigOperator(config).configOperator() != timelock) {
             addToBatch(
                 config,
                 abi.encodeWithSelector(IConfigOperator.setConfigOperator.selector, timelock)
@@ -386,7 +387,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
         require(CCIPConfigLib.pendingOwner(pool) == address(0), "The pool has a pending owner");
         require(
-            ICCIPTokenPoolConfig(config).configOperator() == timelock,
+            IConfigOperator(config).configOperator() == timelock,
             "CCIPTokenPoolConfigTimelock is not the config operator"
         );
         require(
@@ -408,7 +409,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             "CCIPTokenPoolConfigTimelock grace period mismatch"
         );
         require(
-            ICCIPTokenPoolConfigTimelock(timelock).timelockDelay() == desired.timelockDelay,
+            ITimelockBatchQueue(timelock).timelockDelay() == desired.timelockDelay,
             "CCIPTokenPoolConfigTimelock delay mismatch"
         );
         _requireRoutesConverged(ICCIPTokenPoolAdmin(pool), ICCIPTokenPoolConfigTimelock(timelock));
@@ -1004,10 +1005,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         ICCIPTokenPoolConfigTimelock timelock_,
         uint64 chainSelector_
     ) internal view returns (bool queued) {
-        uint64 actionId = timelock_.pendingActionId(timelock_.getRouteIdentityKey(chainSelector_));
+        IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
+        uint64 actionId = queue.pendingActionId(timelock_.getRouteIdentityKey(chainSelector_));
         if (actionId == 0) return false;
 
-        ITimelockBatchQueue.QueuedAction memory action = timelock_.getQueuedAction(actionId);
+        ITimelockBatchQueue.QueuedAction memory action = queue.getQueuedAction(actionId);
         // The expiry is read by the script at simulation time
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > action.expiresAt) return false;
