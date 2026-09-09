@@ -65,7 +65,6 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         address caller_
     ) public givenEnabled givenChainAdded {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
         bytes memory remotePool = REMOTE_POOL_THREE;
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);

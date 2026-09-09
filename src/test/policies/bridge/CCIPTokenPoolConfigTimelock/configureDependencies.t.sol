@@ -81,8 +81,6 @@ contract CCIPTokenPoolConfigTimelockTests_configureDependencies is CCIPTokenPool
     // The hook is deliberately unrestricted (base behavior); the fuzz pins that success does
     // not depend on the caller
     function test_whenCallerIsAnyAddress(address caller_) public {
-        vm.assume(caller_ != address(0));
-
         vm.prank(caller_);
         Keycode[] memory dependencies = timelock.configureDependencies();
 

@@ -59,7 +59,6 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
     // Fuzzed; excludes the bridge admin account
     function test_whenCallerIsNotBridgeAdmin_reverts(address caller_) public givenEnabled {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);

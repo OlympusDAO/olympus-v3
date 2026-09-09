@@ -70,7 +70,6 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
     // Fuzzed; excludes the bridge admin account
     function test_whenCallerIsNotBridgeAdmin_reverts(address caller_) public givenEnabled {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
         address[] memory adds = _singleAddress(allowListedThree);
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);

@@ -50,7 +50,6 @@ contract CCIPTokenPoolConfigTimelockTests_reEnable is CCIPTokenPoolConfigTimeloc
         address caller_
     ) public givenEnabled givenDisabled {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);
         vm.prank(caller_);

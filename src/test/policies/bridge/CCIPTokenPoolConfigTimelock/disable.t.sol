@@ -35,7 +35,6 @@ contract CCIPTokenPoolConfigTimelockTests_disable is CCIPTokenPoolConfigTimelock
     function test_whenCallerIsNotAuthorized_reverts(address caller_) public givenEnabled {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != emergency);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);

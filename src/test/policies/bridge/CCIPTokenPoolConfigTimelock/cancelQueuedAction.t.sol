@@ -19,7 +19,6 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         vm.assume(caller_ != admin);
         vm.assume(caller_ != emergency);
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertNotAuthorised();
         vm.prank(caller_);

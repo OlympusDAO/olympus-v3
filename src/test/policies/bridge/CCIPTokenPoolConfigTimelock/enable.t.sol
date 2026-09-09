@@ -39,7 +39,6 @@ contract CCIPTokenPoolConfigTimelockTests_enable is CCIPTokenPoolConfigTimelockT
     // Fuzzed; excludes the admin account
     function test_whenCallerIsNotAdmin_reverts(address caller_) public {
         vm.assume(caller_ != admin);
-        vm.assume(caller_ != address(0));
 
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);

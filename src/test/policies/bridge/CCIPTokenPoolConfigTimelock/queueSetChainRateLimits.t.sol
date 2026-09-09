@@ -71,7 +71,6 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         address caller_
     ) public givenEnabled givenChainAdded {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 

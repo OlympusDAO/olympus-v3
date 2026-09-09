@@ -72,8 +72,6 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
     function test_whenCallerIsAnyAddress(
         address caller_
     ) public givenEnabled givenChainAdded givenActionQueued givenActionReady {
-        vm.assume(caller_ != address(0));
-
         vm.prank(caller_);
         timelock.executeQueuedAction(queuedActionId);
 

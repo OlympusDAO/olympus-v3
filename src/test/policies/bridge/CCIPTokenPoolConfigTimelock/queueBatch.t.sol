@@ -104,7 +104,6 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         address caller_
     ) public givenEnabled givenChainAdded {
         vm.assume(caller_ != bridgeAdmin);
-        vm.assume(caller_ != address(0));
         ITimelockBatchQueue.BatchAction[] memory batch = _probeBatch();
 
         _expectRevertRequireRole(BRIDGE_ADMIN_ROLE);
