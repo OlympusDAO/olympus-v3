@@ -204,6 +204,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         }
         _onBatchQueued(msg.sender, actionId, actions_);
 
+        // Casting to 'uint48' is safe because the timestamp fits 48 bits for about 8.9 million
+        // years.
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 queuedAt = uint48(block.timestamp);
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
@@ -219,6 +222,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         stored.expiresAt = expiresAt;
         for (uint256 i = 0; i < len; ++i) {
             stored.actions.push(actions_[i]);
+            // The queue hook of the subclass has already run; the events describe the stored
+            // action.
+            // forge-lint: disable-next-item(reentrancy-events)
             emit TimelockSubActionQueued(
                 actionId,
                 actions_[i].target,
@@ -228,6 +234,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
             );
         }
 
+        // forge-lint: disable-next-item(reentrancy-events)
         emit TimelockActionQueued(
             actionId,
             msg.sender,
@@ -283,8 +290,11 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view {
         _requireActionAccessible(actionId_, action_);
+        // The delay and the execution window are measured in block time by design
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp < action_.executableAt)
             revert ITimelockBatchQueue_ActionNotReady(actionId_, action_.executableAt);
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > action_.expiresAt)
             revert ITimelockBatchQueue_ActionExpired(actionId_, action_.expiresAt);
     }

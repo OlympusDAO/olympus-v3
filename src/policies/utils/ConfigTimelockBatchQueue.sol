@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: MIT
+// The reservation loops write one storage slot per configuration key and reject a batch on its
+// first conflicting key by design.
+// forge-lint: disable-start(require-revert-in-loop, costly-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -118,7 +121,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             revert IConfigTimelockBatchQueue_ConfigKeysTooMany(newKeyCount, maximum);
         }
 
-        for (uint256 i; i < keyLength; ++i) {
+        for (uint256 i = 0; i < keyLength; ++i) {
             bytes32 localKey = keys[i];
             if (localKey == bytes32(0)) {
                 revert IConfigTimelockBatchQueue_ConfigKeyZero(actionId_, index_, i);
@@ -172,7 +175,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
 
         QueuedConfigState[] storage states = _queuedConfigStates[actionId_][index_];
         uint256 length = states.length;
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             QueuedConfigState storage state = states[i];
             bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
             uint64 owner = _pendingActionIds[key];
@@ -214,11 +217,11 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
     }
 
     function _releaseConfigKeys(uint64 actionId_, uint256 subActionCount_) private {
-        for (uint256 index; index < subActionCount_; ++index) {
+        for (uint256 index = 0; index < subActionCount_; ++index) {
             QueuedConfigState[] storage states = _queuedConfigStates[actionId_][index];
             address destination = _queuedConfigDestinations[actionId_][index];
             uint256 length = states.length;
-            for (uint256 i; i < length; ++i) {
+            for (uint256 i = 0; i < length; ++i) {
                 bytes32 key = ConfigTimelockKeyLib.scope(destination, states[i].localKey);
                 uint64 owner = _pendingActionIds[key];
                 if (owner != actionId_) {
@@ -240,7 +243,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         uint64 actionId_,
         uint256 endIndex_
     ) private view returns (uint256 count) {
-        for (uint256 index; index < endIndex_; ++index) {
+        for (uint256 index = 0; index < endIndex_; ++index) {
             count += _queuedConfigStates[actionId_][index].length;
         }
     }
