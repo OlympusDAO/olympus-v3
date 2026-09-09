@@ -100,6 +100,10 @@ interface ICCIPTokenPoolConfig {
     /// @notice Thrown when an allowlist update contains neither removals nor additions.
     error CCIPTokenPoolConfig_AllowListUpdatesEmpty();
 
+    /// @notice Thrown when every route of the pool is to be contained and the pool has no
+    ///         configured route.
+    error CCIPTokenPoolConfig_NoRoutesConfigured();
+
     // ========== EVENTS ========== //
 
     /// @notice Emitted when the policy accepts ownership of the pool.
@@ -316,9 +320,9 @@ interface ICCIPTokenPoolConfig {
     function disableChain(uint64 chainSelector_) external;
 
     /// @notice Sets both buckets of every configured route to the disabled rate limiter
-    ///         configuration. Does nothing when no route is configured. Intended to be callable
-    ///         only by the emergency, admin, bridge admin or bridge rate limiter role, whether
-    ///         or not the policy is enabled.
+    ///         configuration. Reverts when no route is configured. Intended to be callable only
+    ///         by the emergency, admin, bridge admin or bridge rate limiter role, whether or not
+    ///         the policy is enabled.
     function disableAllChains() external;
 
     // ========== VALIDATION FUNCTIONS ========== //

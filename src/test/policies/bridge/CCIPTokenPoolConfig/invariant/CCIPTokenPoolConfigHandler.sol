@@ -43,9 +43,9 @@ import {MockVersionedCCIPRouter} from "src/test/policies/bridge/mocks/MockVersio
 ///              leaves the router in place, an ownership round trip restores the pool state).
 ///         Deliberate negative probes (reEnable past the deadline, the rejected router
 ///         candidates, the outsider probe, the rate limit bypass probe, the unchanged-value
-///         writes of the address setters and the token replacement) use try/catch or a
-///         low-level call; every catch tolerates only the expected error and bubbles anything
-///         else.
+///         writes of the address setters and the token replacement, the containment sweep of
+///         a pool without a route) use try/catch or a low-level call; every catch tolerates
+///         only the expected error and bubbles anything else.
 ///
 ///         The pool ownership rests with the config at every action boundary: the migration
 ///         action moves it to a candidate and back inside a single call, so no partial
@@ -135,6 +135,9 @@ contract CCIPTokenPoolConfigHandler is Test {
     ///         of a route.
     bool public ghost_unchangedWriteLanded;
 
+    /// @notice Set when a containment sweep succeeds on a pool without a configured route.
+    bool public ghost_emptySweepLanded;
+
     /// @notice The total moved out of the liquidity source through the config's transfer path,
     ///         in token base units.
     uint256 public ghost_liquidityMovedFromSource;
@@ -162,6 +165,7 @@ contract CCIPTokenPoolConfigHandler is Test {
     uint256 public graceWindowUpdates;
     uint256 public ownershipRoundTrips;
     uint256 public unchangedWriteRejections;
+    uint256 public emptySweepRejections;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -728,14 +732,20 @@ contract CCIPTokenPoolConfigHandler is Test {
         containmentCalls += 1;
     }
 
+    /// @dev On a pool without a configured route the sweep is a negative probe.
     function containAllChains(uint256 callerSeed_) external {
         uint64[] memory selectors = pool.getSupportedChains();
+        address caller = _containmentCaller(callerSeed_);
+        if (selectors.length == 0) {
+            _probeEmptySweep(caller);
+            return;
+        }
+
         uint128[] memory outTokensBefore = new uint128[](selectors.length);
         uint128[] memory inTokensBefore = new uint128[](selectors.length);
         for (uint256 i; i < selectors.length; ++i) {
             (outTokensBefore[i], inTokensBefore[i]) = _fills(selectors[i]);
         }
-        address caller = _containmentCaller(callerSeed_);
 
         vm.prank(caller);
         config.disableAllChains();
@@ -933,6 +943,35 @@ contract CCIPTokenPoolConfigHandler is Test {
                 ICCIPTokenPoolConfig.CCIPTokenPoolConfig_AddressUnchanged.selector,
                 parameter_
             );
+    }
+
+    // ========== EMPTY SWEEP PROBE ========== //
+
+    /// @notice Fires `disableAllChains` on a pool without a configured route, as a holder of a
+    ///         containment role, and requires the exact `CCIPTokenPoolConfig_NoRoutesConfigured`
+    ///         revert. A success sets the ghost flag; any other revert bubbles so the run fails.
+    function _probeEmptySweep(address caller_) internal {
+        bytes memory expected = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_NoRoutesConfigured.selector
+        );
+
+        vm.prank(caller_);
+        // A low-level call so the expected revert does not bubble
+        // forge-lint: disable-next-line(unchecked-call)
+        (bool success, bytes memory reason) = address(config).call(
+            abi.encodeCall(ICCIPTokenPoolConfig.disableAllChains, ())
+        );
+
+        if (success) {
+            ghost_emptySweepLanded = true;
+            return;
+        }
+        if (keccak256(reason) != keccak256(expected)) {
+            assembly {
+                revert(add(reason, 0x20), mload(reason))
+            }
+        }
+        emptySweepRejections += 1;
     }
 
     // ========== SELECTION HELPERS ========== //

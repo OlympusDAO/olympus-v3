@@ -600,7 +600,9 @@ contract CCIPTokenPoolConfig is
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Every configured route is written in one `setChainRateLimiterConfigs` call and one
     ///      `RouteDisabled` event is emitted per route. The policy's enabled state is not
-    ///      checked. The order of the routes follows the pool's enumerable set.
+    ///      checked. The order of the routes follows the pool's enumerable set. A pool without
+    ///      a configured route is rejected before it is written to, so a sweep that lands always
+    ///      contains at least one route.
     ///
     ///      The cost is linear in the number of configured routes: one `getSupportedChains`
     ///      read and one `setChainRateLimiterConfigs` call, plus, per route, the storage writes
@@ -611,12 +613,13 @@ contract CCIPTokenPoolConfig is
     ///      Reverts if:
     ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
     ///        limiter roles.
-    ///      - At least one route is configured and this policy does not own the pool and is not
-    ///        its rate limit admin (`Unauthorized`).
+    ///      - No route is configured on the pool.
+    ///      - This policy does not own the pool and is not its rate limit admin
+    ///        (`Unauthorized`).
     function disableAllChains() external override onlyContainmentRole {
         uint64[] memory chainSelectors = _POOL.getSupportedChains();
         uint256 length = chainSelectors.length;
-        if (length == 0) return;
+        if (length == 0) revert CCIPTokenPoolConfig_NoRoutesConfigured();
 
         ICCIPRateLimiter.Config memory disabledConfig = _disabledRateLimiterConfig();
         ICCIPRateLimiter.Config[] memory outboundConfigs = new ICCIPRateLimiter.Config[](length);

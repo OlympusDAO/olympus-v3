@@ -78,28 +78,45 @@ contract CCIPTokenPoolConfigTests_disableAllChains is CCIPTokenPoolConfigTest {
     }
 
     // given no route is configured
-    //   [X] it returns successfully
-    //   [X] it emits no pool or config event
-    // The early return: only the getSupportedChains read reaches the pool, and the write path
-    // is never entered. The observable proof is log absence, which needs vm.recordLogs.
-    function test_givenNoRoutesConfigured() public givenEnabled givenPoolOwnershipAccepted {
+    //   when the caller holds none of the four containment roles
+    //     [X] it reverts with NotAuthorised
+    // Pins the masking order: the role gate answers before the pool is read
+    function test_givenNoRoutesConfigured_whenCallerIsNotAuthorized_reverts(
+        address caller_
+    ) public givenEnabled givenPoolOwnershipAccepted {
+        vm.assume(caller_ != emergency);
+        vm.assume(caller_ != admin);
+        vm.assume(caller_ != bridgeAdmin);
+        vm.assume(caller_ != bridgeRateLimiter);
         assertEq(pool.getSupportedChains().length, 0, "no route should be configured");
 
-        vm.recordLogs();
+        _expectRevertNotAuthorised();
+        vm.prank(caller_);
+        config.disableAllChains();
+    }
+
+    // given no route is configured
+    //   [X] it reverts with CCIPTokenPoolConfig_NoRoutesConfigured
+    // The pool is read (getSupportedChains) and never written: the revert answers before the
+    // per-route arrays are built
+    function test_givenNoRoutesConfigured_reverts() public givenEnabled givenPoolOwnershipAccepted {
+        assertEq(pool.getSupportedChains().length, 0, "no route should be configured");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_NoRoutesConfigured.selector
+            )
+        );
         vm.prank(emergency);
         config.disableAllChains();
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        assertEq(_countLogsFrom(logs, address(pool)), 0, "the pool should emit nothing");
-        assertEq(_countLogsFrom(logs, address(config)), 0, "the config should emit nothing");
     }
 
     // given no route is configured
     //   given the pool is owned by an unrelated third party
-    //     [X] it returns successfully
-    // Pins the masking order: the early return answers before the pool would reject the
-    // caller, so the zero-route no-op needs no pool authority at all.
-    function test_givenNoRoutesConfigured_givenPoolOwnedByThirdParty()
+    //     [X] it reverts with CCIPTokenPoolConfig_NoRoutesConfigured
+    // Pins the masking order: the empty route set answers before the pool would reject the
+    // config, so the error names the missing routes rather than the missing authority
+    function test_givenNoRoutesConfigured_givenPoolOwnedByThirdParty_reverts()
         public
         givenEnabled
         givenPoolOwnershipAccepted
@@ -108,12 +125,13 @@ contract CCIPTokenPoolConfigTests_disableAllChains is CCIPTokenPoolConfigTest {
         assertEq(pool.owner(), thirdParty, "the third party should own the pool");
         assertEq(pool.getSupportedChains().length, 0, "no route should be configured");
 
-        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_NoRoutesConfigured.selector
+            )
+        );
         vm.prank(emergency);
         config.disableAllChains();
-
-        Vm.Log[] memory logs = vm.getRecordedLogs();
-        assertEq(_countLogsFrom(logs, address(pool)), 0, "the pool should emit nothing");
     }
 
     // when the caller holds the emergency role

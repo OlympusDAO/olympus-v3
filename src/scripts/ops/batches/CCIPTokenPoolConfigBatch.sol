@@ -284,7 +284,8 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///         holder of a containment role as owner).
     /// @dev    `disableAllChainsEmergencyMS` is the same batch with the Emergency MS as owner.
     ///         Not gated on the config policy being enabled. Skipped when every route is already
-    ///         contained or when no route is configured. See `disableChain` for the recovery.
+    ///         contained, and when no route is configured, which the config policy would reject
+    ///         (`CCIPTokenPoolConfig_NoRoutesConfigured`). See `disableChain` for the recovery.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.

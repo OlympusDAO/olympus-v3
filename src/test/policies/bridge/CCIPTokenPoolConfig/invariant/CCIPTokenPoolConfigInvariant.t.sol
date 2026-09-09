@@ -13,9 +13,9 @@ import {CCIPTokenPoolConfigTest} from "../CCIPTokenPoolConfigTest.sol";
 ///         routes, remote pools, remote token replacement, rate limits, containment, the
 ///         pool's router, rebalancer and rate limit admin, liquidity transfers from a funded
 ///         source pool, an ownership round trip, time skips, real bucket consumption through
-///         the mock ramps, an unauthorized-caller probe, a direct-path bypass probe and the
-///         unchanged-value writes of the setters); the invariants read the live pool state and
-///         the handler's ghost flags.
+///         the mock ramps, an unauthorized-caller probe, a direct-path bypass probe, the
+///         unchanged-value writes of the setters and the containment sweep of a pool without
+///         a route); the invariants read the live pool state and the handler's ghost flags.
 /// @dev    The run starts from the operational baseline: the policy enabled and owning the
 ///         pool. Every route of this suite is created through the config, so the
 ///         route-shape invariants describe what the config's validated paths can produce.
@@ -61,6 +61,8 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         // Bootstrap the coverage-signal counters by running real handler actions, so the
         // verification code paths are exercised by the bootstrap itself and the first
         // invariant call of every run observes non-zero counters:
+        //   - containAllChains before any route exists: the empty-sweep probe, which needs the
+        //     pool as the rig hands it over, without a route;
         //   - addRoute + consumeOutbound + containChain: route, consumption, containment and
         //     fill-transition checks;
         //   - probeUnauthorized: the outsider surface;
@@ -70,6 +72,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         //     the rebalancer (written, then probed with the value it already holds), the rate
         //     limit grant with a probe on each side of it, one liquidity transfer, one grace
         //     window write and one ownership round trip.
+        handler.containAllChains(0);
         handler.addRoute(0, 0);
         handler.consumeOutbound(0, 5);
         handler.containChain(0, 0);
@@ -93,6 +96,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         require(handler.routesAdded() > 0, "bootstrap: no route was added");
         require(handler.bucketConsumptions() > 0, "bootstrap: no consumption ran");
         require(handler.containmentCalls() > 0, "bootstrap: no containment ran");
+        require(handler.emptySweepRejections() > 0, "bootstrap: the empty-sweep probe did not run");
         require(handler.fillTransitionsChecked() > 0, "bootstrap: no fill check ran");
         require(handler.outsiderProbes() > 0, "bootstrap: no outsider probe ran");
         require(handler.lifecycleTransitions() > 1, "bootstrap: lifecycle did not cycle");
@@ -236,6 +240,14 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         );
     }
 
+    /// @notice A containment sweep does not land on a pool without a configured route.
+    function invariant_emptySweepNeverLands() public view {
+        assertFalse(
+            handler.ghost_emptySweepLanded(),
+            "a containment sweep landed on a pool without a route"
+        );
+    }
+
     // ========== POOL INFRASTRUCTURE ========== //
 
     /// @notice The pool's router always points at an account holding code: the config installs
@@ -289,6 +301,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
     /// @notice The containment surface was exercised at least once.
     function invariant_handler_containmentExercised() public view {
         assertGt(handler.containmentCalls(), 0, "no containment ran");
+        assertGt(handler.emptySweepRejections(), 0, "the empty-sweep probe never ran");
     }
 
     /// @notice The fill-transition ghost check ran at least once.
