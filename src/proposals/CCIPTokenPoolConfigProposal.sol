@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
+// forge-lint: disable-start(calls-loop, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
 
 // OCG Proposal Simulator
@@ -198,6 +199,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 
     /// @dev The chain selectors of the four routes this proposal opens. The build fails closed
     ///      unless the set of desired routes missing from the pool equals exactly this set.
+    uint256 internal constant _EXPECTED_ROUTE_COUNT = 4;
     uint64 internal constant _ARBITRUM_SELECTOR = 4949039107694359620;
     uint64 internal constant _OPTIMISM_SELECTOR = 3734403246176062136;
     uint64 internal constant _BASE_SELECTOR = 15971525489660198786;
@@ -326,6 +328,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         _kernel = Kernel(addresses.getAddress("olympus-kernel"));
     }
 
+    // forge-lint: disable-next-line(empty-block)
     function _afterDeploy(Addresses addresses, address) internal override {}
 
     function _build(Addresses addresses) internal override {
@@ -483,22 +486,22 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             _readEnv(),
             _chain()
         );
-        uint64[4] memory expected = [
+        uint64[_EXPECTED_ROUTE_COUNT] memory expected = [
             _ARBITRUM_SELECTOR,
             _OPTIMISM_SELECTOR,
             _BASE_SELECTOR,
             _BERACHAIN_SELECTOR
         ];
-        bool[4] memory added;
-        uint256 missingCount;
+        bool[_EXPECTED_ROUTE_COUNT] memory added;
+        uint256 missingCount = 0;
 
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
             if (!route.enabled) continue;
             if (CCIPConfigLib.liveRoute(c.pool, route.chainSelector).exists) continue;
 
             uint256 expectedIndex = type(uint256).max;
-            for (uint256 j; j < expected.length; ++j) {
+            for (uint256 j = 0; j < expected.length; ++j) {
                 if (expected[j] == route.chainSelector) {
                     expectedIndex = j;
                     break;
@@ -546,7 +549,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 
         string memory env = _readEnv();
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, _chain());
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
             CCIPFeeBudgetLib.requireOhmFeeBudget(env, _chain(), desired[i].remoteChain);
@@ -649,7 +652,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             address(c.configTimelock),
             proposer
         ];
-        for (uint256 i; i < noRateLimiter.length; ++i) {
+        for (uint256 i = 0; i < noRateLimiter.length; ++i) {
             if (c.roles.hasRole(noRateLimiter[i], BRIDGE_RATE_LIMITER_ROLE)) {
                 revert CCIPTokenPoolConfigProposal_RoleNotUnassigned(
                     BRIDGE_RATE_LIMITER_ROLE,
@@ -785,9 +788,9 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         CCIPConfigLib.DesiredRoute[] memory desired
     ) internal view {
         uint64[] memory liveSelectors = pool_.getSupportedChains();
-        for (uint256 i; i < liveSelectors.length; ++i) {
-            bool declared;
-            for (uint256 j; j < desired.length; ++j) {
+        for (uint256 i = 0; i < liveSelectors.length; ++i) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired.length; ++j) {
                 if (desired[j].chainSelector == liveSelectors[i] && desired[j].enabled) {
                     declared = true;
                     break;
@@ -812,7 +815,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         CCIPConfigLib.DesiredRoute[] memory desired,
         bool requireDesiredLive_
     ) internal view {
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(
                 pool_,

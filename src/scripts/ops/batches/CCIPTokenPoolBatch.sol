@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: Unlicensed
 // solhint-disable custom-errors
+// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";

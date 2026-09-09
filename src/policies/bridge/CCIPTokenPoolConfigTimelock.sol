@@ -77,6 +77,14 @@ contract CCIPTokenPoolConfigTimelock is
     /// @dev    A route contributes three keys and the allowlist one.
     uint256 internal constant _MAX_CONFIG_KEYS_PER_BATCH = 24;
 
+    /// @notice The number of interfaces the constructor requires the config policy to
+    ///         advertise: `ICCIPTokenPoolConfig`, `IConfigOperator` and `IEnabler`.
+    uint256 internal constant _CONFIG_INTERFACE_COUNT = 3;
+
+    /// @notice The number of configuration domains of one route: rate limits, remote pools and
+    ///         route identity.
+    uint256 internal constant _ROUTE_DOMAIN_COUNT = 3;
+
     /// @notice The keycode of the ROLES module this policy depends on.
     bytes5 internal constant _ROLES_KEYCODE = "ROLES";
 
@@ -116,7 +124,7 @@ contract CCIPTokenPoolConfigTimelock is
         ConfigTimelockBatchQueue(initialTimelockDelay_)
     {
         if (config_ == address(0)) revert CCIPTokenPoolConfigTimelock_InvalidAddress("config");
-        bytes4[] memory configInterfaceIds = new bytes4[](3);
+        bytes4[] memory configInterfaceIds = new bytes4[](_CONFIG_INTERFACE_COUNT);
         configInterfaceIds[0] = type(ICCIPTokenPoolConfig).interfaceId;
         configInterfaceIds[1] = type(IConfigOperator).interfaceId;
         configInterfaceIds[2] = type(IEnabler).interfaceId;
@@ -491,7 +499,7 @@ contract CCIPTokenPoolConfigTimelock is
             selector == ICCIPTokenPoolConfig.removeChain.selector ||
             selector == ICCIPTokenPoolConfig.setRemoteToken.selector
         ) {
-            keys = new bytes32[](3);
+            keys = new bytes32[](_ROUTE_DOMAIN_COUNT);
             keys[0] = CCIPTokenPoolConfigKeyLib.rateLimitsLocalKey(chainSelector);
             keys[1] = CCIPTokenPoolConfigKeyLib.remotePoolsLocalKey(chainSelector);
             keys[2] = CCIPTokenPoolConfigKeyLib.routeIdentityLocalKey(chainSelector);
@@ -816,8 +824,8 @@ contract CCIPTokenPoolConfigTimelock is
     ) internal view returns (bytes32 stateHash) {
         bytes[] memory remotePools = _POOL.getRemotePools(chainSelector_);
         uint256 count = remotePools.length;
-        bytes32 aggregate;
-        for (uint256 i; i < count; ++i) {
+        bytes32 aggregate = bytes32(0);
+        for (uint256 i = 0; i < count; ++i) {
             aggregate ^= keccak256(remotePools[i]);
         }
 
@@ -856,8 +864,8 @@ contract CCIPTokenPoolConfigTimelock is
     function _allowListStateHash() internal view returns (bytes32 stateHash) {
         address[] memory allowList = _POOL.getAllowList();
         uint256 count = allowList.length;
-        bytes32 aggregate;
-        for (uint256 i; i < count; ++i) {
+        bytes32 aggregate = bytes32(0);
+        for (uint256 i = 0; i < count; ++i) {
             aggregate ^= keccak256(abi.encode(allowList[i]));
         }
 

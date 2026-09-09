@@ -114,7 +114,12 @@ runs = 256
 workers = 4
 
 [lint]
-exclude_lints = ["asm-keccak256", "mixed-case-variable", "mixed-case-function"]
+exclude_lints = [
+    "asm-keccak256",
+    "mixed-case-variable",
+    "mixed-case-function",
+    "pragma-inconsistent",
+]
 # Builds do not print lint diagnostics. `forge lint`, which CI runs, still reports all of them.
 lint_on_build = false
 

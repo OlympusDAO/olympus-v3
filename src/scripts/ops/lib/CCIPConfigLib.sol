@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable custom-errors
+// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Scripting
@@ -157,7 +158,7 @@ library CCIPConfigLib {
         _sort(names);
 
         routes = new DesiredRoute[](names.length);
-        for (uint256 i; i < names.length; ++i) {
+        for (uint256 i = 0; i < names.length; ++i) {
             routes[i] = _desiredRoute(env_, chain_, names[i]);
         }
     }
@@ -181,15 +182,15 @@ library CCIPConfigLib {
         _sort(names);
 
         DesiredPeriphery[] memory buffer = new DesiredPeriphery[](names.length);
-        uint256 count;
-        for (uint256 i; i < names.length; ++i) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < names.length; ++i) {
             string memory base = string.concat(routesPath, ".", names[i], ".periphery");
             if (!_VM.keyExistsJson(env_, base)) continue;
             buffer[count++] = _desiredPeriphery(env_, chain_, names[i], base);
         }
 
         peripheries = new DesiredPeriphery[](count);
-        for (uint256 i; i < count; ++i) {
+        for (uint256 i = 0; i < count; ++i) {
             peripheries[i] = buffer[i];
         }
     }
@@ -251,6 +252,7 @@ library CCIPConfigLib {
     }
 
     /// @notice Encodes a base58 SVM public key as the 32 packed bytes that the pool expects.
+    // forge-lint: disable-next-item(internal-function-used-once)
     function encodeSvmAddress(
         string memory base58_
     ) internal pure returns (bytes memory encoded) {
@@ -279,7 +281,7 @@ library CCIPConfigLib {
     function pendingOwner(address pool_) internal view returns (address pending) {
         address owner = ICCIPTokenPoolGetters(pool_).owner();
         uint256[2] memory pendingSlots = [uint256(0), 2];
-        for (uint256 i; i < pendingSlots.length; ++i) {
+        for (uint256 i = 0; i < pendingSlots.length; ++i) {
             uint256 slot = pendingSlots[i];
             if (_toAddress(_VM.load(pool_, bytes32(slot + 1))) == owner) {
                 return _toAddress(_VM.load(pool_, bytes32(slot)));
@@ -353,12 +355,13 @@ library CCIPConfigLib {
     }
 
     /// @notice Returns whether a set of encoded addresses contains an entry.
+    // forge-lint: disable-next-item(internal-function-used-once)
     function containsBytes(
         bytes[] memory set_,
         bytes memory item_
     ) internal pure returns (bool contained) {
         bytes32 itemHash = keccak256(item_);
-        for (uint256 i; i < set_.length; ++i) {
+        for (uint256 i = 0; i < set_.length; ++i) {
             if (keccak256(set_[i]) == itemHash) return true;
         }
         return false;
@@ -397,7 +400,7 @@ library CCIPConfigLib {
     /// @notice Formats a set of encoded addresses for logs.
     function describe(bytes[] memory set_) internal pure returns (string memory text) {
         text = "[";
-        for (uint256 i; i < set_.length; ++i) {
+        for (uint256 i = 0; i < set_.length; ++i) {
             text = string.concat(text, i == 0 ? "" : ", ", _VM.toString(set_[i]));
         }
         text = string.concat(text, "]");
@@ -440,7 +443,7 @@ library CCIPConfigLib {
             route.remotePools.length != 0,
             string.concat("CCIPConfigLib: no remote pools for route ", remoteChain_)
         );
-        for (uint256 i; i < route.remotePools.length; ++i) {
+        for (uint256 i = 0; i < route.remotePools.length; ++i) {
             require(
                 route.remotePools[i].length != 0,
                 string.concat("CCIPConfigLib: empty remote pool for route ", remoteChain_)
@@ -560,12 +563,12 @@ library CCIPConfigLib {
         bytes[] memory right_
     ) private pure returns (bytes[] memory result) {
         bytes[] memory buffer = new bytes[](left_.length);
-        uint256 count;
-        for (uint256 i; i < left_.length; ++i) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < left_.length; ++i) {
             if (!containsBytes(right_, left_[i])) buffer[count++] = left_[i];
         }
         result = new bytes[](count);
-        for (uint256 i; i < count; ++i) {
+        for (uint256 i = 0; i < count; ++i) {
             result[i] = buffer[i];
         }
     }
@@ -625,7 +628,7 @@ library CCIPConfigLib {
         bytes memory a = bytes(a_);
         bytes memory b = bytes(b_);
         uint256 length = a.length < b.length ? a.length : b.length;
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             if (a[i] != b[i]) return a[i] < b[i];
         }
         return a.length < b.length;

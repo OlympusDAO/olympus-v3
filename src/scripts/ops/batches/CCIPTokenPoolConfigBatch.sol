@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // solhint-disable custom-errors
+// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -343,8 +344,8 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         console2.log("\n=== Containment: disable all routes ===");
         console2.log("Configured routes:", selectors.length);
 
-        bool anyOpen;
-        for (uint256 i; i < selectors.length; ++i) {
+        bool anyOpen = false;
+        for (uint256 i = 0; i < selectors.length; ++i) {
             bool disabled = ICCIPTokenPoolConfig(config).isChainDisabled(selectors[i]);
             console2.log("  Route", selectors[i], disabled ? "contained" : "open");
             if (!disabled) anyOpen = true;
@@ -446,7 +447,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @notice Validates the state after `disablePolicies`.
     function _validateDisabledPolicies() external view {
         console2.log("\nValidating disablePolicies post-batch state");
-        for (uint256 i; i < _expectedDisabledPolicies.length; ++i) {
+        for (uint256 i = 0; i < _expectedDisabledPolicies.length; ++i) {
             require(
                 !IEnabler(_expectedDisabledPolicies[i]).isEnabled(),
                 string.concat(
@@ -533,7 +534,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
 
         console2.log("\nValidating containment post-batch state");
-        for (uint256 i; i < _expectedDisabledSelectors.length; ++i) {
+        for (uint256 i = 0; i < _expectedDisabledSelectors.length; ++i) {
             uint64 selector = _expectedDisabledSelectors[i];
             require(
                 ICCIPTokenPoolConfig(config).isChainDisabled(selector),

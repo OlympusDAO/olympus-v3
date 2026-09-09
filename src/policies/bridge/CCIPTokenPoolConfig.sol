@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+// forge-lint: disable-start(reentrancy-events, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -196,6 +197,7 @@ contract CCIPTokenPoolConfig is
 
     /// @notice Reverts with `NotAuthorised` unless the caller holds the bridge rate limiter
     ///         role, is the config operator or holds the admin role.
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier onlyRateLimiterOrConfigOperatorOrAdmin() {
         _requireAuthorized(
             !_hasRole(msg.sender, BRIDGE_RATE_LIMITER_ROLE) &&
@@ -624,14 +626,14 @@ contract CCIPTokenPoolConfig is
         ICCIPRateLimiter.Config memory disabledConfig = _disabledRateLimiterConfig();
         ICCIPRateLimiter.Config[] memory outboundConfigs = new ICCIPRateLimiter.Config[](length);
         ICCIPRateLimiter.Config[] memory inboundConfigs = new ICCIPRateLimiter.Config[](length);
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             outboundConfigs[i] = disabledConfig;
             inboundConfigs[i] = disabledConfig;
         }
 
         _POOL.setChainRateLimiterConfigs(chainSelectors, outboundConfigs, inboundConfigs);
 
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             emit RouteDisabled(chainSelectors[i]);
         }
     }
@@ -786,13 +788,13 @@ contract CCIPTokenPoolConfig is
 
         uint256 length = update_.remotePoolAddresses.length;
         if (length == 0) revert CCIPTokenPoolConfig_RemotePoolsEmpty();
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             bytes calldata remotePool = update_.remotePoolAddresses[i];
             if (remotePool.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
             _requireRemoteAddressLength(remotePool);
 
             bytes32 remotePoolHash = keccak256(remotePool);
-            for (uint256 j; j < i; ++j) {
+            for (uint256 j = 0; j < i; ++j) {
                 if (keccak256(update_.remotePoolAddresses[j]) == remotePoolHash) {
                     revert ICCIPTokenPoolAdmin.PoolAlreadyAdded(
                         update_.remoteChainSelector,

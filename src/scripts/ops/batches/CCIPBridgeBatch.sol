@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 // solhint-disable custom-errors
+// Script code: the loops call the periphery and revert per remote by design.
+// forge-lint: disable-start(calls-loop, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -82,8 +84,8 @@ contract CCIPBridgeBatch is BatchScriptV2 {
 
         _warnLegacyChainsDrift(desired);
 
-        uint256 planned;
-        for (uint256 i; i < desired.length; ++i) {
+        uint256 planned = 0;
+        for (uint256 i = 0; i < desired.length; ++i) {
             planned += _planPeriphery(bridge, desired[i]);
         }
         _requireRemotesDeclared(bridge, desired);
@@ -219,7 +221,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         );
 
         console2.log("\nValidating reconcileTrustedRemotes post-batch state");
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             CCIPConfigLib.DesiredPeriphery memory entry = desired[i];
             if (entry.isSvm) {
                 ICCIPCrossChainBridge.TrustedRemoteSVM memory live = bridge.getTrustedRemoteSVM(
@@ -396,12 +398,12 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         CCIPConfigLib.DesiredPeriphery[] memory desired_
     ) internal view {
         string[] memory allChains = ChainUtils._getChains(chain);
-        for (uint256 i; i < allChains.length; ++i) {
+        for (uint256 i = 0; i < allChains.length; ++i) {
             string memory remoteChain = allChains[i];
             if (keccak256(bytes(remoteChain)) == keccak256(bytes(chain))) continue;
 
-            bool declared;
-            for (uint256 j; j < desired_.length; ++j) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired_.length; ++j) {
                 if (keccak256(bytes(desired_[j].remoteChain)) == keccak256(bytes(remoteChain))) {
                     declared = true;
                     break;
@@ -438,7 +440,7 @@ contract CCIPBridgeBatch is BatchScriptV2 {
 
         bool drift = legacy.length != desired_.length;
         if (!drift) {
-            for (uint256 i; i < desired_.length; ++i) {
+            for (uint256 i = 0; i < desired_.length; ++i) {
                 if (!ArrayUtils.contains(legacy, desired_[i].remoteChain)) {
                     drift = true;
                     break;

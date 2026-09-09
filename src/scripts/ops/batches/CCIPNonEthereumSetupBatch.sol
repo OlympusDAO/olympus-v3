@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // solhint-disable custom-errors, one-contract-per-file
+// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
@@ -553,7 +554,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         // enabled=false (the removal marker) would make the setup batch fail after the
         // submission, so it is surfaced here, before it.
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             _check(
                 desired[i].enabled,
                 string.concat(
@@ -627,7 +628,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         burn/mint chain.
     function _checkLanes() internal {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
             _checkLane(desired[i].remoteChain);
@@ -737,7 +738,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
 
         console2.log("\n--- Routes ---");
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(
                 pool_,
@@ -784,9 +785,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         }
 
         uint64[] memory liveSelectors = pool_.getSupportedChains();
-        for (uint256 i; i < liveSelectors.length; ++i) {
-            bool declared;
-            for (uint256 j; j < desired.length; ++j) {
+        for (uint256 i = 0; i < liveSelectors.length; ++i) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired.length; ++j) {
                 if (desired[j].chainSelector == liveSelectors[i]) {
                     declared = true;
                     break;
@@ -903,7 +904,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     function _requireFeeBudgets() internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         console2.log("\n--- Outgoing lane fee budgets ---");
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) {
                 console2.log(
@@ -953,9 +954,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
 
         uint64[] memory liveSelectors = pool_.getSupportedChains();
-        for (uint256 i; i < liveSelectors.length; ++i) {
-            bool declared;
-            for (uint256 j; j < desired.length; ++j) {
+        for (uint256 i = 0; i < liveSelectors.length; ++i) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired.length; ++j) {
                 if (desired[j].chainSelector == liveSelectors[i]) {
                     declared = true;
                     break;
@@ -971,7 +972,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
         }
 
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = desired[i];
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(
                 pool_,
@@ -1032,7 +1033,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         if (block.timestamp > action.expiresAt) return false;
 
         bytes32 payloadHash = keccak256(abi.encode(chainSelector_));
-        for (uint256 i; i < action.actions.length; ++i) {
+        for (uint256 i = 0; i < action.actions.length; ++i) {
             if (
                 action.actions[i].selector == ICCIPTokenPoolConfig.removeChain.selector &&
                 keccak256(action.actions[i].payload) == payloadHash

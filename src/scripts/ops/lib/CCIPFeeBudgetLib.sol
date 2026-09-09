@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable custom-errors, one-contract-per-file
+// forge-lint: disable-start(require-revert-in-loop, boolean-cst, multi-contract-file)
 pragma solidity ^0.8.24;
 
 // Scripting
@@ -217,6 +218,33 @@ library CCIPFeeBudgetLib {
     uint256 internal constant _LEGACY_TOKEN_ENTRY_WORDS = 7;
     uint256 internal constant _LEGACY_DYNAMIC_CONFIG_WORDS = 13;
 
+    // Positions of the words read, within those returns
+    uint256 internal constant _ON_RAMP_FEE_QUOTER_WORD = 0;
+    uint256 internal constant _FEE_QUOTER_ENTRY_GAS_WORD = 1;
+    uint256 internal constant _FEE_QUOTER_ENTRY_ENABLED_WORD = 3;
+    uint256 internal constant _FEE_QUOTER_DEST_FAMILY_WORD = 5;
+    uint256 internal constant _FEE_QUOTER_DEST_DEFAULT_GAS_WORD = 7;
+    uint256 internal constant _LEGACY_ENTRY_GAS_WORD = 3;
+    uint256 internal constant _LEGACY_ENTRY_ENABLED_WORD = 6;
+    uint256 internal constant _LEGACY_DYNAMIC_DEFAULT_GAS_WORD = 11;
+
+    // ABI encoding
+    uint256 internal constant _WORD_BYTES = 32;
+    uint256 internal constant _MIN_STRING_RETURN_BYTES = 64;
+    uint256 internal constant _ADDRESS_BITS = 160;
+    uint256 internal constant _UINT32_BITS = 32;
+    uint256 internal constant _BOOL_BITS = 1;
+    uint256 internal constant _TRUE_WORD = 1;
+
+    // ASCII of a `typeAndVersion` string, and the digit bound of a version component (the width
+    // of a `uint32`)
+    bytes1 internal constant _SPACE = 0x20;
+    bytes1 internal constant _DOT = 0x2e;
+    uint8 internal constant _DIGIT_ZERO = 0x30;
+    uint8 internal constant _DIGIT_NINE = 0x39;
+    uint256 internal constant _DECIMAL_BASE = 10;
+    uint256 internal constant _MAX_VERSION_DIGITS = 10;
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice A parsed `typeAndVersion` string.
@@ -352,6 +380,7 @@ library CCIPFeeBudgetLib {
     /// @param raw_ The string to parse.
     /// @return version The parsed string; meaningless when `ok` is false.
     /// @return ok Whether the string had the expected form.
+    // forge-lint: disable-next-item(internal-function-used-once)
     function parseTypeAndVersion(
         string memory raw_
     ) internal pure returns (TypeAndVersion memory version, bool ok) {
@@ -361,7 +390,7 @@ library CCIPFeeBudgetLib {
         // The last space separates the family from the version
         uint256 split = length;
         for (uint256 i = length; i > 0; --i) {
-            if (raw[i - 1] == 0x20) {
+            if (raw[i - 1] == _SPACE) {
                 split = i - 1;
                 break;
             }
@@ -369,12 +398,12 @@ library CCIPFeeBudgetLib {
         if (split == length || split == 0) return (version, false);
 
         (uint256 major, uint256 majorDigits, uint256 next) = _parseDigits(raw, split + 1);
-        if (majorDigits == 0 || next >= length || raw[next] != 0x2e) return (version, false);
+        if (majorDigits == 0 || next >= length || raw[next] != _DOT) return (version, false);
         (uint256 minor, uint256 minorDigits, ) = _parseDigits(raw, next + 1);
         if (minorDigits == 0) return (version, false);
 
         bytes memory family = new bytes(split);
-        for (uint256 i; i < split; ++i) {
+        for (uint256 i = 0; i < split; ++i) {
             family[i] = raw[i];
         }
 
@@ -397,11 +426,13 @@ library CCIPFeeBudgetLib {
             target_.code.length != 0,
             string.concat("CCIPFeeBudgetLib: the ", label_, " of the lane ", lane_, " has no code")
         );
+        // The return is measured and decoded by hand
+        // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = target_.staticcall(
             abi.encodeCall(ICCIPFeeTypeAndVersion.typeAndVersion, ())
         );
         require(
-            ok && data.length >= 64,
+            ok && data.length >= _MIN_STRING_RETURN_BYTES,
             string.concat(
                 "CCIPFeeBudgetLib: the ",
                 label_,
@@ -439,21 +470,29 @@ library CCIPFeeBudgetLib {
         address ohm_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
+        // The return is read raw: its length differs by generation
+        // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRampConfig.getDynamicConfig, ())
         );
         require(
-            ok && data.length >= 32,
+            ok && data.length >= _WORD_BYTES,
             string.concat(
                 "CCIPFeeBudgetLib: the on-ramp of the lane ",
                 lane_,
                 " does not answer getDynamicConfig()"
             )
         );
-        _requireWordFits(data, 0, 160, "getDynamicConfig().feeQuoter", lane_);
+        _requireWordFits(
+            data,
+            _ON_RAMP_FEE_QUOTER_WORD,
+            _ADDRESS_BITS,
+            "getDynamicConfig().feeQuoter",
+            lane_
+        );
         // casting to 'address' is safe because the word is checked to fit 160 bits above
         // forge-lint: disable-next-line(unsafe-typecast)
-        address feeQuoter = address(uint160(_word(data, 0)));
+        address feeQuoter = address(uint160(_word(data, _ON_RAMP_FEE_QUOTER_WORD)));
         require(
             feeQuoter != address(0),
             string.concat("CCIPFeeBudgetLib: the on-ramp of the lane ", lane_, " has no fee quoter")
@@ -501,28 +540,53 @@ library CCIPFeeBudgetLib {
         string memory versions_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
+        // The returns are shape-checked word by word before a field is read
+        // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = feeQuoter_.staticcall(
             abi.encodeCall(ICCIPFeeQuoter20.getTokenTransferFeeConfig, (destSelector_, ohm_))
         );
         _requireWords(ok, data, _FEE_QUOTER_TOKEN_ENTRY_WORDS, "getTokenTransferFeeConfig", lane_);
-        _requireWordFits(data, 1, 32, "getTokenTransferFeeConfig().destGasOverhead", lane_);
-        _requireWordFits(data, 3, 1, "getTokenTransferFeeConfig().isEnabled", lane_);
-        if (_word(data, 3) == 1) {
+        _requireWordFits(
+            data,
+            _FEE_QUOTER_ENTRY_GAS_WORD,
+            _UINT32_BITS,
+            "getTokenTransferFeeConfig().destGasOverhead",
+            lane_
+        );
+        _requireWordFits(
+            data,
+            _FEE_QUOTER_ENTRY_ENABLED_WORD,
+            _BOOL_BITS,
+            "getTokenTransferFeeConfig().isEnabled",
+            lane_
+        );
+        if (_word(data, _FEE_QUOTER_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
             // casting to 'uint32' is safe because the word is checked to fit 32 bits above
-            // forge-lint: disable-next-line(unsafe-typecast)
-            return (uint32(_word(data, 1)), true, string.concat("OHM token entry, ", versions_));
+            return (
+                // forge-lint: disable-next-line(unsafe-typecast)
+                uint32(_word(data, _FEE_QUOTER_ENTRY_GAS_WORD)),
+                true,
+                string.concat("OHM token entry, ", versions_)
+            );
         }
 
+        // forge-lint: disable-next-item(low-level-calls)
         (ok, data) = feeQuoter_.staticcall(
             abi.encodeCall(ICCIPFeeQuoter20.getDestChainConfig, (destSelector_))
         );
         _requireWords(ok, data, _FEE_QUOTER_DEST_CONFIG_WORDS, "getDestChainConfig", lane_);
-        _requireChainFamily(data, 5, lane_);
-        _requireWordFits(data, 7, 32, "getDestChainConfig().defaultTokenDestGasOverhead", lane_);
+        _requireChainFamily(data, _FEE_QUOTER_DEST_FAMILY_WORD, lane_);
+        _requireWordFits(
+            data,
+            _FEE_QUOTER_DEST_DEFAULT_GAS_WORD,
+            _UINT32_BITS,
+            "getDestChainConfig().defaultTokenDestGasOverhead",
+            lane_
+        );
         // casting to 'uint32' is safe because the word is checked to fit 32 bits above
         return (
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint32(_word(data, 7)),
+            uint32(_word(data, _FEE_QUOTER_DEST_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", versions_, " (no OHM entry)")
         );
@@ -537,29 +601,50 @@ library CCIPFeeBudgetLib {
         address ohm_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
+        // The returns are shape-checked word by word before a field is read
+        // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRamp15.getTokenTransferFeeConfig, (ohm_))
         );
         _requireWords(ok, data, _LEGACY_TOKEN_ENTRY_WORDS, "getTokenTransferFeeConfig", lane_);
-        _requireWordFits(data, 3, 32, "getTokenTransferFeeConfig().destGasOverhead", lane_);
-        _requireWordFits(data, 6, 1, "getTokenTransferFeeConfig().isEnabled", lane_);
-        if (_word(data, 6) == 1) {
+        _requireWordFits(
+            data,
+            _LEGACY_ENTRY_GAS_WORD,
+            _UINT32_BITS,
+            "getTokenTransferFeeConfig().destGasOverhead",
+            lane_
+        );
+        _requireWordFits(
+            data,
+            _LEGACY_ENTRY_ENABLED_WORD,
+            _BOOL_BITS,
+            "getTokenTransferFeeConfig().isEnabled",
+            lane_
+        );
+        if (_word(data, _LEGACY_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
             // casting to 'uint32' is safe because the word is checked to fit 32 bits above
             return (
                 // forge-lint: disable-next-line(unsafe-typecast)
-                uint32(_word(data, 3)),
+                uint32(_word(data, _LEGACY_ENTRY_GAS_WORD)),
                 true,
                 string.concat("OHM token entry, ", onRampVersion_)
             );
         }
 
+        // forge-lint: disable-next-item(low-level-calls)
         (ok, data) = onRamp_.staticcall(abi.encodeCall(ICCIPFeeOnRamp15.getDynamicConfig, ()));
         _requireWords(ok, data, _LEGACY_DYNAMIC_CONFIG_WORDS, "getDynamicConfig", lane_);
-        _requireWordFits(data, 11, 32, "getDynamicConfig().defaultTokenDestGasOverhead", lane_);
+        _requireWordFits(
+            data,
+            _LEGACY_DYNAMIC_DEFAULT_GAS_WORD,
+            _UINT32_BITS,
+            "getDynamicConfig().defaultTokenDestGasOverhead",
+            lane_
+        );
         // casting to 'uint32' is safe because the word is checked to fit 32 bits above
         return (
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint32(_word(data, 11)),
+            uint32(_word(data, _LEGACY_DYNAMIC_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", onRampVersion_, " (no OHM entry)")
         );
@@ -578,14 +663,14 @@ library CCIPFeeBudgetLib {
             string.concat("CCIPFeeBudgetLib: ", call_, " reverted on the lane ", lane_)
         );
         require(
-            data_.length == words_ * 32,
+            data_.length == words_ * _WORD_BYTES,
             string.concat(
                 "CCIPFeeBudgetLib: ",
                 call_,
                 " on the lane ",
                 lane_,
                 " returned ",
-                _VM.toString(data_.length / 32),
+                _VM.toString(data_.length / _WORD_BYTES),
                 " words, expected ",
                 _VM.toString(words_)
             )
@@ -635,9 +720,11 @@ library CCIPFeeBudgetLib {
     }
 
     function _word(bytes memory data_, uint256 index_) private pure returns (uint256 word) {
+        // A word read past the length word of the array; the caller has checked the length
         // solhint-disable-next-line no-inline-assembly
+        // forge-lint: disable-next-item(inline-assembly)
         assembly {
-            word := mload(add(add(data_, 32), mul(index_, 32)))
+            word := mload(add(add(data_, _WORD_BYTES), mul(index_, _WORD_BYTES)))
         }
     }
 
@@ -659,10 +746,10 @@ library CCIPFeeBudgetLib {
         next = from_;
         while (next < raw_.length) {
             uint8 char = uint8(raw_[next]);
-            if (char < 0x30 || char > 0x39) break;
-            // A version component longer than ten digits (the width of a uint32) is not a version
-            if (digits == 10) return (0, 0, from_);
-            value = value * 10 + (char - 0x30);
+            if (char < _DIGIT_ZERO || char > _DIGIT_NINE) break;
+            // A version component longer than the digit bound is not a version
+            if (digits == _MAX_VERSION_DIGITS) return (0, 0, from_);
+            value = value * _DECIMAL_BASE + (char - _DIGIT_ZERO);
             ++digits;
             ++next;
         }

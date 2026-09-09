@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // solhint-disable custom-errors
+// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 
 // Interfaces
-import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -16,6 +16,7 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 
@@ -122,14 +123,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         _logDesiredRoutes(desired);
 
         console2.log("\n--- Plan ---");
-        for (uint256 i; i < desired.length; ++i) {
+        for (uint256 i = 0; i < desired.length; ++i) {
             _planRoute(config, pool, desired[i]);
         }
         _requireRoutesDeclared(desired, liveSelectors);
 
         console2.log("\n--- Queue ---");
         _planCancellations(config, timelock);
-        for (uint256 i; i < _plan.length; ++i) {
+        for (uint256 i = 0; i < _plan.length; ++i) {
             _queuePlanned(timelock, i);
         }
         if (_plan.length == 0) console2.log("No change needed: the pool matches env.json.");
@@ -281,17 +282,17 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
 
         console2.log("\nValidating reconcileRoutes post-batch state");
-        for (uint256 i; i < _cancelledIds.length; ++i) {
+        for (uint256 i = 0; i < _cancelledIds.length; ++i) {
             require(
                 timelock.getQueuedAction(_cancelledIds[i]).cancelled,
                 string.concat("Action ", vm.toString(_cancelledIds[i]), " is not cancelled")
             );
             console2.log("  Action", _cancelledIds[i], "is cancelled");
         }
-        for (uint256 i; i < _plan.length; ++i) {
+        for (uint256 i = 0; i < _plan.length; ++i) {
             Planned memory planned = _plan[i];
             if (planned.skipped) continue;
-            for (uint256 k; k < planned.keys.length; ++k) {
+            for (uint256 k = 0; k < planned.keys.length; ++k) {
                 uint64 actionId = timelock.pendingActionId(planned.keys[k]);
                 require(
                     actionId != 0,
@@ -314,7 +315,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         );
 
         console2.log("\nValidating executeReadyActions post-batch state");
-        for (uint256 i; i < _expectedExecuted.length; ++i) {
+        for (uint256 i = 0; i < _expectedExecuted.length; ++i) {
             require(
                 timelock.getQueuedAction(_expectedExecuted[i]).executed,
                 string.concat("Action ", vm.toString(_expectedExecuted[i]), " is not executed")
@@ -479,9 +480,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ) internal {
         IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
         ROLESv1 roles = _roles();
-        for (uint256 i; i < _plan.length; ++i) {
+        for (uint256 i = 0; i < _plan.length; ++i) {
             Planned storage planned = _plan[i];
-            for (uint256 k; k < planned.keys.length; ++k) {
+            for (uint256 k = 0; k < planned.keys.length; ++k) {
                 uint64 pendingId = queue.pendingActionId(planned.keys[k]);
                 if (pendingId == 0 || _isCancelled(pendingId)) continue;
 
@@ -533,7 +534,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         Planned storage planned = _plan[index_];
         console2.log("\n", planned.description);
 
-        for (uint256 k; k < planned.keys.length; ++k) {
+        for (uint256 k = 0; k < planned.keys.length; ++k) {
             uint64 pendingId = queue.pendingActionId(planned.keys[k]);
             if (pendingId == 0 || _isCancelled(pendingId)) continue;
 
@@ -557,7 +558,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
-        uint64 actionId = uint64(_readBatchArgUint256(functionName_, "actionId"));
+        uint64 actionId = SafeCast.toUint64(_readBatchArgUint256(functionName_, "actionId"));
         ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(actionId);
 
         console2.log("\n=== Cancel CCIP config timelock action", actionId, "===");
@@ -693,7 +694,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         Planned memory planned_
     ) internal pure returns (bool holds) {
         bytes32 payloadHash = keccak256(planned_.payload);
-        for (uint256 i; i < action_.actions.length; ++i) {
+        for (uint256 i = 0; i < action_.actions.length; ++i) {
             ITimelockBatchQueue.BatchAction memory sub = action_.actions[i];
             if (
                 sub.target == config_ &&
@@ -705,7 +706,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     }
 
     function _isCancelled(uint64 actionId_) internal view returns (bool cancelled) {
-        for (uint256 i; i < _cancelledIds.length; ++i) {
+        uint256 length = _cancelledIds.length;
+        for (uint256 i = 0; i < length; ++i) {
             if (_cancelledIds[i] == actionId_) return true;
         }
         return false;
@@ -718,10 +720,15 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         uint64 actionId_
     ) internal returns (bool success, bytes memory revertData) {
         uint256 snapshotId = vm.snapshotState();
+        // A raw call so that the revert data of a failing execution is captured
+        // forge-lint: disable-next-item(low-level-calls)
         (success, revertData) = address(timelock_).call(
             abi.encodeWithSelector(ITimelockBatchQueue.executeQueuedAction.selector, actionId_)
         );
-        vm.revertToStateAndDelete(snapshotId);
+        require(
+            vm.revertToStateAndDelete(snapshotId),
+            "CCIPRouteReconcileBatch: the dry run state was not reverted"
+        );
     }
 
     function _describeRevert(bytes memory revertData_) internal pure returns (string memory text) {
@@ -759,7 +766,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     function _logLiveRoutes(ICCIPTokenPoolAdmin pool_, uint64[] memory selectors_) internal view {
         console2.log("\n--- Live routes on the pool:", selectors_.length, "---");
-        for (uint256 i; i < selectors_.length; ++i) {
+        for (uint256 i = 0; i < selectors_.length; ++i) {
             CCIPConfigLib.LiveRoute memory live = CCIPConfigLib.liveRoute(pool_, selectors_[i]);
             console2.log("Selector", selectors_[i]);
             console2.log("  remote token:", vm.toString(live.remoteToken));
@@ -771,7 +778,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     function _logDesiredRoutes(CCIPConfigLib.DesiredRoute[] memory routes_) internal view {
         console2.log("\n--- Desired routes in env.json:", routes_.length, "---");
-        for (uint256 i; i < routes_.length; ++i) {
+        for (uint256 i = 0; i < routes_.length; ++i) {
             CCIPConfigLib.DesiredRoute memory route = routes_[i];
             console2.log(route.remoteChain, "selector", route.chainSelector);
             console2.log("  enabled:", route.enabled);
@@ -791,9 +798,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         CCIPConfigLib.DesiredRoute[] memory desired_,
         uint64[] memory liveSelectors_
     ) internal view {
-        for (uint256 i; i < liveSelectors_.length; ++i) {
-            bool declared;
-            for (uint256 j; j < desired_.length; ++j) {
+        for (uint256 i = 0; i < liveSelectors_.length; ++i) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired_.length; ++j) {
                 if (desired_[j].chainSelector == liveSelectors_[i]) {
                     declared = true;
                     break;

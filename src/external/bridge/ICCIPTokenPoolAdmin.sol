@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// forge-lint: disable-start(event-fields)
 pragma solidity ^0.8.4;
 
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
