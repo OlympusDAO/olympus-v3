@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0-or-later
+// SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
 // forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;

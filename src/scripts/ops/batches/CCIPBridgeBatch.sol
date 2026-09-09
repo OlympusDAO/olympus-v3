@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
 // Script code: the loops call the periphery and revert per remote by design.
 // forge-lint: disable-start(calls-loop, require-revert-in-loop)

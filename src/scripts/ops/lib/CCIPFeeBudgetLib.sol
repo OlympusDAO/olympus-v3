@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
 // forge-lint: disable-start(require-revert-in-loop, boolean-cst, multi-contract-file)
 pragma solidity ^0.8.24;

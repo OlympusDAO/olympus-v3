@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 /// @notice A mock that answers any call with the raw return data configured for its selector,

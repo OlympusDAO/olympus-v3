@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
 // forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
