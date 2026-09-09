@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
+// forge-lint: disable-start(inline-assembly, literal-instead-of-constant, internal-function-used-once)
 
 pragma solidity ^0.8.20;
 
