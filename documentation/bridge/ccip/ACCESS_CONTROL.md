@@ -6,7 +6,7 @@ This document describes the intended state after the complete rollout.
 
 | Authority | Ethereum | Non-Ethereum EVM chains |
 | --- | --- | --- |
-| Kernel executor | DAO MS | Local DAO MS  |
+| Kernel executor | DAO MS | Local DAO MS |
 | `RolesAdmin.admin` | OCG timelock | Local DAO MS |
 | `admin` role | OCG timelock | Local DAO MS |
 | `bridge_admin` role | DAO MS | Local DAO MS |
@@ -20,7 +20,7 @@ This document describes the intended state after the complete rollout.
 | `CCIPCrossChainBridge` owner | DAO MS | Local DAO MS |
 
 | Holder | Address |
-| ---| --- |
+| --- | --- |
 | OCG timelock | `0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39` |
 | Ethereum DAO MS | `0x245cc372C84B3645Bf0Ffe6538620B04a217988B` |
 | Arbitrum DAO MS | `0x012BBf0481b97170577745D2167ee14f63E2aD4C` |
@@ -30,7 +30,7 @@ This document describes the intended state after the complete rollout.
 | Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` |
 | Zero address | `0x0000000000000000000000000000000000000000` |
 
-The non-Ethereum EVM chains are Arbitrum, Optimism, Base and Berachain. Each carries its own `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock`, `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`, and its own DAO MS.
+The non-Ethereum EVM chains are Arbitrum, Optimism, Base and Berachain. Each carries its own `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock`, `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`, and its own DAO MS. The Holder columns below name the Ethereum holders; on those chains the local DAO MS stands in for both the OCG timelock and the DAO MS.
 
 ## Timelock parameters
 
@@ -100,7 +100,7 @@ The two functions below are present on every deployment of the config policy, bu
 | `cancelQueuedAction` | `admin`, `emergency`, or the original proposer; works while disabled and after expiry | OCG timelock; Emergency MS; DAO MS |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
 | `reEnable` | `bridge_admin`; within the grace period | DAO MS |
-| `changeKernel` | Kernel  | Kernel |
+| `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
 All functions require the timelock to be enabled, except `enable` and `reEnable` (require disabled), `cancelQueuedAction`, and the Kernel-invoked ones. Queueing and execution both additionally require the config policy to be enabled and to still name this timelock as its config operator.
@@ -127,7 +127,7 @@ Deployed with an empty allowlist, so `applyAllowListUpdates` reverts with `Allow
 | `disable` | `emergency` or local `admin` | Emergency MS; local DAO MS |
 | `lockOrBurn` | on-ramp of the configured router | Chainlink |
 | `releaseOrMint` | off-ramp of the configured router | Chainlink |
-| `changeKernel` | Kernel  | Kernel |
+| `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
 ### `LockReleaseTokenPool` (deployed on Ethereum)

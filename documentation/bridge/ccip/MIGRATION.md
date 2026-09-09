@@ -42,7 +42,7 @@ sequenceDiagram
     DAO->>P: transferOwnership(config)
     DAO->>REG: transferAdminRole(OHM, OCG timelock)
 
-    Note over DAO,REG: Phase C: OCG proposal, up to 12 actions, one transaction
+    Note over DAO,REG: Phase C: OCG proposal, up to 12 actions, each only if the live state lacks it, one transaction
     OCG->>REG: acceptAdminRole(OHM)
     OCG->>RA: grantRole(bridge_admin, DAO Multisig)
     OCG->>C: enable("")
@@ -204,7 +204,7 @@ sequenceDiagram
 
     Note over DAO,REG: Phase 1: deployment and DAO Multisig batch
     Note over DAO: deploy new pool (same OHM address), Config, Timelock, Activator
-    DAO->>NP: transferOwnership(newConfig)
+    Note over DAO,NP: the pool deployer calls newPool.transferOwnership(newConfig)
     DAO->>K: executeAction(ActivatePolicy, newConfig)
     DAO->>K: executeAction(ActivatePolicy, newTimelock)
     DAO->>OT: cancelQueuedAction(id) for anything that must not survive
@@ -264,7 +264,7 @@ sequenceDiagram
 
     Note over ETH,REG: Phase 2: single batch, local DAO Multisig
     Note over DAO: deploy new pool, Config, Timelock
-    DAO->>NP: transferOwnership(newConfig)
+    Note over DAO,NP: the pool deployer calls newPool.transferOwnership(newConfig)
     DAO->>OT: cancelQueuedAction(id) for anything that must not survive
     DAO->>K: executeAction(ActivatePolicy, newPool)
     DAO->>K: executeAction(ActivatePolicy, newConfig)
