@@ -69,6 +69,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     ) BurnerLoansLifecycle(kernel_, ohm_, depositManager_) {
         BurnerLoansDependencies.validateBackingOracle(address(backingOracle_));
         backingOracle = address(backingOracle_);
+        emit BackingOracleSet(address(backingOracle_));
     }
 
     // ========== POLICY SETUP ========== //

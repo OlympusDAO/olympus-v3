@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
@@ -137,6 +138,19 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
         );
         assertEq(burnerLoans.backingOracle(), address(backingOracle), "backing oracle");
         assertEq(burnerLoans.inventory(), address(inventory), "configured inventory");
+    }
+
+    // constructor
+    // given constructor parameters are valid
+    //  when BurnerLoans is deployed
+    //   then it emits the initial backing oracle
+    function test_givenValidParams_whenDeployed() public {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+        vm.expectEmit(true, false, false, true);
+        emit IBurnerLoans.BackingOracleSet(address(backingOracle));
+
+        new BurnerLoans(kernel, IERC20(address(ohm)), depositManager, backingOracle);
     }
 }
 

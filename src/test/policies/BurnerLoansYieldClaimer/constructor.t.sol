@@ -2,7 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
+
+// Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
@@ -63,7 +66,12 @@ contract BurnerLoansYieldClaimerConstructorTest is BurnerLoansYieldClaimerTest {
         new BurnerLoansYieldClaimer(kernel, address(target), 0);
     }
 
-    function test_givenValidConfiguration_setsImmutableTargetAndGasLimit() public {
+    function test_givenValidConfiguration_whenDeployed() public {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+        vm.expectEmit(false, false, false, true);
+        emit IBurnerLoansYieldClaimer.ExecutionGasLimitSet(_EXECUTION_GAS_LIMIT);
+
         BurnerLoansYieldClaimer deployed = new BurnerLoansYieldClaimer(
             kernel,
             address(target),

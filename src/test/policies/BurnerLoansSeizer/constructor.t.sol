@@ -4,9 +4,16 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
+// Interfaces
+import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
+import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
+
+// Libraries
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+
+// Contracts
 import {Kernel} from "src/Kernel.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
-import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol";
 
 import {BurnerLoansSeizerTest} from "./BurnerLoansSeizerTest.sol";
 import {MockBurnerLoansSeizerTarget} from "./MockBurnerLoansSeizerTarget.sol";
@@ -16,13 +23,29 @@ contract BurnerLoansSeizerConstructorTest is BurnerLoansSeizerTest {
     // given valid parameters
     //  when the seizer is deployed
     //   then it stores its immutable target and initial scan state
-    function test_givenValidParameters_setsInitialState() public view {
-        assertEq(seizer.burnerLoans(), address(target), "burner loans");
-        assertEq(seizer.maxBorrowersToCheck(), 10, "borrowers to check");
-        assertEq(seizer.maxBorrowersToSeize(), 5, "borrowers to seize");
-        assertEq(seizer.executionGasLimit(), _EXECUTION_GAS_LIMIT, "execution gas limit");
-        assertEq(seizer.nextAssetIndex(), 0, "next asset index");
-        assertEq(seizer.getAssets().length, 0, "managed assets");
+    //   then it emits the initial mutable configuration
+    function test_givenValidParameters_whenDeployed() public {
+        vm.expectEmit(false, false, false, true);
+        emit IGracePeriod.GracePeriodSet(BurnerLoansConstants.REENABLE_GRACE_PERIOD);
+        vm.expectEmit(false, false, false, true);
+        emit IBurnerLoansSeizer.ScanLimitsSet(10, 5);
+        vm.expectEmit(false, false, false, true);
+        emit IBurnerLoansSeizer.ExecutionGasLimitSet(_EXECUTION_GAS_LIMIT);
+
+        BurnerLoansSeizer deployed = new BurnerLoansSeizer(
+            kernel,
+            address(target),
+            10,
+            5,
+            _EXECUTION_GAS_LIMIT
+        );
+
+        assertEq(deployed.burnerLoans(), address(target), "burner loans");
+        assertEq(deployed.maxBorrowersToCheck(), 10, "borrowers to check");
+        assertEq(deployed.maxBorrowersToSeize(), 5, "borrowers to seize");
+        assertEq(deployed.executionGasLimit(), _EXECUTION_GAS_LIMIT, "execution gas limit");
+        assertEq(deployed.nextAssetIndex(), 0, "next asset index");
+        assertEq(deployed.getAssets().length, 0, "managed assets");
     }
 
     // constructor
