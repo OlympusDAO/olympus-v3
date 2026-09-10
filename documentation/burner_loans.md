@@ -32,15 +32,15 @@ flowchart LR
     SEIZER -->|"bounded scan and seize"| BL
 ```
 
-| Component                                             | Responsibility                                                                |
-| ----------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `BurnerLoans`                                         | User lifecycle, health, custody, fees, seizure, and yield-routing state       |
-| [`BurnerLoansInventory`](./burner_loans_inventory.md) | OHM custody, provider claim, global cap, principal total, and MINTR authority |
-| `BurnerLoansConfig`                                   | Authorized market, debt-cap, and yield-routing forwarding                     |
-| [`BurnerLoansConfigTimelock`](./burner_loans_access_control.md#config-timelock-matrix) | Timelocked delegate for bounded Config setters |
-| `BurnerLoansSeizer`                                   | Gas-bounded, fail-open periodic seizure                                       |
-| `FLOAN`                                               | Generic fixed-term market, position, active-index, and aggregate state        |
-| `DepositManager`                                      | Collateral custody and optional ERC-4626 routing                              |
+| Component                                                                              | Responsibility                                                                |
+| -------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `BurnerLoans`                                                                          | User lifecycle, health, custody, fees, seizure, and yield-routing state       |
+| [`BurnerLoansInventory`](./burner_loans_inventory.md)                                  | OHM custody, provider claim, global cap, principal total, and MINTR authority |
+| `BurnerLoansConfig`                                                                    | Authorized market, debt-cap, and yield-routing forwarding                     |
+| [`BurnerLoansConfigTimelock`](./burner_loans_access_control.md#config-timelock-matrix) | Timelocked delegate for bounded Config setters                                |
+| `BurnerLoansSeizer`                                                                    | Gas-bounded, fail-open periodic seizure                                       |
+| `FLOAN`                                                                                | Generic fixed-term market, position, active-index, and aggregate state        |
+| `DepositManager`                                                                       | Collateral custody and optional ERC-4626 routing                              |
 
 Burner Loans Config requires exactly one FLOAN market for its facility, collateral token, and OHM
 pair when reading or updating configuration. FLOAN itself permits another contract to create an
@@ -463,6 +463,66 @@ Config creates one market per collateral/OHM pair under its currently bound Burn
 Each market stores Config as its manager and Burner Loans as its facility: Config is the
 Kernel-permissioned pass-through for market configuration, while Burner Loans services positions.
 Config finds those markets by the bound facility, collateral token, and OHM debt-token tuple.
+
+### Replacing Burner Loans Config
+
+Replacing Config keeps the existing Burner Loans facility, Inventory, FLOAN markets, positions, and
+DepositManager operator namespace. The handoff changes the Config address stored by Burner Loans and
+Inventory and transfers every registered FLOAN market's manager from the outgoing Config to the
+replacement.
+
+The replacement Config must be an active policy in the same Kernel, use the same OHM token, and be
+bound to the existing Burner Loans facility. `BurnerLoans.setConfigurator` remains callable only by
+OCG admin while Burner Loans is disabled. During replacement it uses Burner Loans' explicit FLOAN
+permission to transfer each market manager as that market's facility. FLOAN still rejects a facility
+that lacks Kernel permission for `setMarketManager`.
+
+The initial Config assignment and a same-address assignment validate and update the Config pointer
+without writing any FLOAN market. A replacement validates the new Config before attempting a market
+rotation.
+
+Perform the migration as one governance batch:
+
+1. Deploy the replacement `BurnerLoansConfig(kernel, ohm)` and activate it in the Kernel. Leave its
+   application-level state disabled.
+2. Call `ReplacementConfig.setFacility(BurnerLoans)`.
+3. Deploy and activate a replacement ConfigTimelock if delegated configuration will continue.
+4. Disable the outgoing Config, Burner Loans Inventory, and Burner Loans so no configuration or user
+   operation can race the handoff.
+5. Call `BurnerLoansInventory.setConfigurator(ReplacementConfig)`.
+6. Call `BurnerLoans.setConfigurator(ReplacementConfig)`. This call validates the replacement,
+   requires every registered asset to resolve to at least one market and every matching market to be
+   managed by the outgoing Config, transfers all matching market managers, and then stores the
+   replacement Config address.
+7. Enable the replacement Config. If applicable, set its config operator to the replacement
+   ConfigTimelock and enable that timelock.
+8. Re-enable Burner Loans Inventory and then Burner Loans after their dependency checks pass.
+9. For every registered asset, query FLOAN for every matching market and verify that each names the
+   replacement Config as manager. When exactly one market matches, also verify that the replacement
+   Config returns the expected risk, fee, cap, and origination state. Only then deactivate the
+   outgoing Config and its ConfigTimelock in the Kernel.
+
+Migration transfers every matching manager but does not resolve pre-existing market ambiguity. If
+multiple markets match an asset, Config's getters and setters that resolve a specific market
+continue to revert because they require a unique market. Inspect every manager through FLOAN and
+remediate the ambiguity separately before relying on Config for that asset.
+
+The market-manager transfers and Burner Loans pointer update are atomic. A missing market, an
+unexpected current manager on any matching market, an invalid replacement, or any failed FLOAN call
+reverts the entire `setConfigurator` transaction, so there is no partial migration to repair. Retry
+only after correcting a transient preflight or permission failure. A missing market or unexpected
+manager can require a separate, explicitly governed remediation or FLOAN module upgrade before the
+handoff can proceed.
+
+The migration intentionally has no on-chain asset-count maximum or batching path: a replacement is
+atomic over the complete append-only asset registry and every matching market. Call-only gas
+snapshots measured 78,046 gas for zero registered assets, 126,822 gas for one asset with one market,
+160,832 gas for one asset with two markets, and 211,081 gas for three assets with one matching market
+each in the test environment. These snapshots are operational references, not transaction guarantees.
+Before a live migration, simulate or estimate the exact call against current state and confirm that
+all registered assets and matching markets fit safely below the live chain's transaction gas limit.
+If they do not, governance must remediate the market or module design before attempting the handoff;
+a partial manager rotation is not supported.
 
 `Config.setFacility` is disabled-state, one-time deployment wiring. Rebinding only Config would
 switch that lookup tuple without updating the manager or facility stored in existing markets, so

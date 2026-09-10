@@ -4,18 +4,67 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
+// Interfaces
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+
+// Contracts
+import {Actions, Module, Permissions} from "src/Kernel.sol";
+import {ModuleTestFixture} from "src/test/lib/ModuleTestFixtureGenerator.sol";
 import {FLOANTest} from "src/test/modules/FLOAN/FLOANTest.sol";
 
 contract FLOANSetMarketManagerTest is FLOANTest {
+    uint32 internal _marketId;
+
+    modifier givenMarketExists(address manager_, address facility_) {
+        _marketId = _createMarket(manager_, facility_, collateralToken, debtToken, 1_000e9);
+        _;
+    }
+
     // setMarketManager
     // given caller without kernel permission
     //  when setMarketManager is called
     //   then it reverts
-    function test_givenCallerWithoutKernelPermission_reverts(address caller_) public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+    function test_givenCallerWithoutKernelPermission_reverts(
+        address caller_
+    ) public givenMarketExists(manager, facility) {
         _expectKernelPermissionRevert(caller_);
+        floan.setMarketManager(_marketId, otherManager);
+    }
+
+    // setMarketManager
+    // given the current facility lacks Kernel permission
+    //  when setMarketManager is called
+    //   then it reverts at the Kernel boundary
+    function test_givenCurrentFacilityWithoutKernelPermission_reverts() public {
+        address facilityWithoutPermission = makeAddr("facilityWithoutPermission");
+        uint32 marketId = _createMarket(
+            manager,
+            facilityWithoutPermission,
+            collateralToken,
+            debtToken,
+            1_000e9
+        );
+
+        vm.prank(facilityWithoutPermission);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Module.Module_PolicyNotPermitted.selector,
+                facilityWithoutPermission
+            )
+        );
         floan.setMarketManager(marketId, otherManager);
+    }
+
+    // setMarketManager
+    // given the zero address caller
+    //  when setMarketManager is called
+    //   then it reverts at the Kernel boundary
+    function test_givenZeroAddressCaller_reverts() public givenMarketExists(manager, facility) {
+        vm.prank(address(0));
+        vm.expectRevert(
+            abi.encodeWithSelector(Module.Module_PolicyNotPermitted.selector, address(0))
+        );
+        floan.setMarketManager(_marketId, otherManager);
     }
 
     // setMarketManager
@@ -23,69 +72,135 @@ contract FLOANSetMarketManagerTest is FLOANTest {
     //  when setMarketManager is called
     //   then it reverts
     function test_givenInvalidMarket_reverts(uint32 marketId_) public {
-        vm.assume(marketId_ != 0);
         vm.prank(manager);
         vm.expectRevert(abi.encodeWithSelector(IFLOANv1.FLOAN_InvalidMarket.selector, marketId_));
         floan.setMarketManager(marketId_, otherManager);
     }
 
     // setMarketManager
-    // given current manager
+    // given a Kernel-permissioned caller that is neither the market manager nor facility
     //  when setMarketManager is called
-    //   then it transfers configuration authority
-    function test_givenCurrentManager_transfersConfigurationAuthority() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        vm.expectEmit(true, true, true, true, address(floan));
-        emit IFLOANv1.MarketManagerSet(marketId, manager, otherManager);
-        vm.prank(manager);
-        floan.setMarketManager(marketId, otherManager);
+    //   then it reverts
+    function test_givenCallerIsNeitherMarketManagerNorFacility_reverts(
+        bytes32 salt_
+    ) public givenMarketExists(manager, facility) {
+        Permissions[] memory requests = new Permissions[](1);
+        requests[0] = Permissions({
+            keycode: floan.KEYCODE(),
+            funcSelector: IFLOANv1.setMarketManager.selector
+        });
+        address caller = address(new ModuleTestFixture{salt: salt_}(kernel, floan, requests));
+        vm.assume(caller != manager);
+        vm.assume(caller != facility);
+        kernel.executeAction(Actions.ActivatePolicy, caller);
 
-        assertEq(floan.getMarket(marketId).manager, otherManager, "manager");
-        vm.prank(manager);
+        vm.prank(caller);
         vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, manager)
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, _marketId, caller)
         );
-        floan.setMarketManager(marketId, manager);
-        vm.prank(otherManager);
-        floan.setMarketManager(marketId, manager);
-        assertEq(floan.getMarket(marketId).manager, manager, "restored manager");
+        floan.setMarketManager(_marketId, otherManager);
     }
 
     // setMarketManager
-    // given zero manager
+    // given the caller services a different market
     //  when setMarketManager is called
     //   then it reverts
-    function test_givenZeroManager_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+    function test_givenCallerServicesDifferentMarket_reverts()
+        public
+        givenMarketExists(manager, facility)
+    {
+        uint32 otherMarketId = _createMarket(
+            manager,
+            otherFacility,
+            otherCollateralToken,
+            debtToken,
+            1_000e9
+        );
+
+        vm.prank(otherFacility);
+        vm.expectRevert(
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, _marketId, otherFacility)
+        );
+        floan.setMarketManager(_marketId, otherManager);
+
+        assertEq(floan.getMarket(_marketId).manager, manager, "target market manager");
+        assertEq(floan.getMarket(otherMarketId).manager, manager, "serviced market manager");
+    }
+
+    // setMarketManager
+    // given the current manager
+    //  when the new manager is zero
+    //   then it reverts
+    function test_givenCurrentManager_whenNewManagerIsZero_reverts()
+        public
+        givenMarketExists(manager, facility)
+    {
         vm.prank(manager);
         vm.expectRevert(IFLOANv1.FLOAN_ZeroAddress.selector);
-        floan.setMarketManager(marketId, address(0));
+        floan.setMarketManager(_marketId, address(0));
     }
 
     // setMarketManager
-    // given caller is not the market manager
-    //  when setMarketManager is called
+    // given the current facility
+    //  when the new manager is zero
     //   then it reverts
-    function test_givenCallerIsNotMarketManager_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
-        vm.prank(otherManager);
-        vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, otherManager)
-        );
-        floan.setMarketManager(marketId, otherManager);
-    }
-
-    // setMarketManager
-    // given caller is the facility but not the market manager
-    //  when setMarketManager is called
-    //   then it reverts
-    function test_givenCallerIsMarketFacilityButNotManager_reverts() public {
-        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+    function test_givenCurrentFacility_whenNewManagerIsZero_reverts()
+        public
+        givenMarketExists(manager, facility)
+    {
         vm.prank(facility);
+        vm.expectRevert(IFLOANv1.FLOAN_ZeroAddress.selector);
+        floan.setMarketManager(_marketId, address(0));
+    }
+
+    // setMarketManager
+    // given the current manager
+    //  when setMarketManager is called
+    //   then it transfers configuration authority
+    function test_givenCurrentManager() public givenMarketExists(manager, facility) {
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.MarketManagerSet(_marketId, manager, otherManager);
+        vm.prank(manager);
+        floan.setMarketManager(_marketId, otherManager);
+
+        assertEq(floan.getMarket(_marketId).manager, otherManager, "market manager");
+        vm.prank(manager);
         vm.expectRevert(
-            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, marketId, facility)
+            abi.encodeWithSelector(IFLOANv1.FLOAN_NotManager.selector, _marketId, manager)
         );
-        floan.setMarketManager(marketId, otherManager);
+        floan.setMarketManager(_marketId, manager);
+        vm.prank(otherManager);
+        floan.setMarketManager(_marketId, manager);
+        assertEq(floan.getMarket(_marketId).manager, manager, "restored market manager");
+    }
+
+    // setMarketManager
+    // given the current facility
+    //  when setMarketManager is called
+    //   then it transfers configuration authority
+    function test_givenCurrentFacility() public givenMarketExists(manager, facility) {
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.MarketManagerSet(_marketId, manager, otherManager);
+        vm.prank(facility);
+        floan.setMarketManager(_marketId, otherManager);
+
+        assertEq(floan.getMarket(_marketId).manager, otherManager, "market manager");
+    }
+
+    // setMarketManager
+    // given the current manager is also the current facility
+    //  when setMarketManager is called
+    //   then it transfers configuration authority
+    function test_givenCurrentManagerIsCurrentFacility()
+        public
+        givenMarketExists(manager, manager)
+    {
+        vm.expectEmit(true, true, true, true, address(floan));
+        emit IFLOANv1.MarketManagerSet(_marketId, manager, otherManager);
+        vm.prank(manager);
+        floan.setMarketManager(_marketId, otherManager);
+
+        assertEq(floan.getMarket(_marketId).manager, otherManager, "market manager");
     }
 }
 

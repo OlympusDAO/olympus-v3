@@ -406,8 +406,7 @@ interface IFLOANv1 is IERC165 {
     function setMarketConfigData(uint32 marketId_, bytes calldata configData_) external;
 
     /// @notice Transfers market configuration authority.
-    /// @dev Kernel-permissioned and current-manager-only. Reverts for a zero manager, invalid
-    ///      market, or caller other than the current manager.
+    /// @dev Kernel-permissioned. The current market manager or current market facility may call.
     /// @param marketId_ Market to configure.
     /// @param manager_ New manager address.
     function setMarketManager(uint32 marketId_, address manager_) external;

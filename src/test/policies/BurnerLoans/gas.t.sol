@@ -17,10 +17,12 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
@@ -711,6 +713,116 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(asset)), "asset configured");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // setConfigurator
+    // given no registered assets and a compatible replacement Config
+    //  when governance replaces an existing Config
+    //   then it records the fixed migration gas cost without market writes
+    function test_gasSnapshot_setConfigurator_zeroAssets() public {
+        BurnerLoansHarness freshFacility = new BurnerLoansHarness(
+            kernel,
+            IERC20(address(ohm)),
+            depositManager,
+            backingOracle
+        );
+        BurnerLoansConfig outgoing = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        BurnerLoansConfig replacement = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, address(freshFacility));
+        kernel.executeAction(Actions.ActivatePolicy, address(outgoing));
+        kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        outgoing.setFacility(address(freshFacility));
+        replacement.setFacility(address(freshFacility));
+        freshFacility.setConfigurator(address(outgoing));
+
+        vm.startSnapshotGas("BurnerLoans.setConfigurator.zeroAssets");
+        freshFacility.setConfigurator(address(replacement));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(freshFacility.configurator(), address(replacement), "replacement configurator");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // setConfigurator
+    // given one registered asset and a compatible replacement Config
+    //  when governance migrates Config
+    //   then it records the fixed plus one-market migration gas cost
+    function test_gasSnapshot_setConfigurator_oneAsset() public {
+        BurnerLoansConfig replacement = _activateReplacementConfigurator();
+
+        vm.prank(admin);
+        burnerLoans.disable("");
+        vm.startPrank(admin);
+        vm.startSnapshotGas("BurnerLoans.setConfigurator.oneAsset");
+        burnerLoans.setConfigurator(address(replacement));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(
+            floan.getMarket(burnerLoansConfig.marketId(address(usds))).manager,
+            address(replacement),
+            "market manager"
+        );
+        _assertGasRecorded(gasUsed);
+    }
+
+    // setConfigurator
+    // given one registered asset with two matching markets and a compatible replacement Config
+    //  when governance migrates Config
+    //   then it records the incremental matching-market migration gas cost
+    function test_gasSnapshot_setConfigurator_oneAssetTwoMarkets() public {
+        uint32 firstMarketId = burnerLoansConfig.marketId(address(usds));
+        uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
+        BurnerLoansConfig replacement = _activateReplacementConfigurator();
+
+        vm.prank(admin);
+        burnerLoans.disable("");
+        vm.startPrank(admin);
+        vm.startSnapshotGas("BurnerLoans.setConfigurator.oneAssetTwoMarkets");
+        burnerLoans.setConfigurator(address(replacement));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(floan.getMarket(firstMarketId).manager, address(replacement), "first manager");
+        assertEq(floan.getMarket(secondMarketId).manager, address(replacement), "second manager");
+        _assertGasRecorded(gasUsed);
+    }
+
+    // setConfigurator
+    // given three registered assets and a compatible replacement Config
+    //  when governance migrates Config
+    //   then it records representative multi-market migration gas scaling
+    function test_gasSnapshot_setConfigurator_threeAssets() public {
+        address secondAsset = address(_addDirectAssetForTest());
+        address thirdAsset = address(_addDirectAssetForTest());
+        BurnerLoansConfig replacement = _activateReplacementConfigurator();
+
+        vm.prank(admin);
+        burnerLoans.disable("");
+        vm.startPrank(admin);
+        vm.startSnapshotGas("BurnerLoans.setConfigurator.threeAssets");
+        burnerLoans.setConfigurator(address(replacement));
+        uint256 gasUsed = vm.stopSnapshotGas();
+        vm.stopPrank();
+
+        assertEq(
+            floan.getMarket(burnerLoansConfig.marketId(address(usds))).manager,
+            address(replacement),
+            "first market manager"
+        );
+        assertEq(
+            floan.getMarket(burnerLoansConfig.marketId(secondAsset)).manager,
+            address(replacement),
+            "second market manager"
+        );
+        assertEq(
+            floan.getMarket(burnerLoansConfig.marketId(thirdAsset)).manager,
+            address(replacement),
+            "third market manager"
+        );
         _assertGasRecorded(gasUsed);
     }
 

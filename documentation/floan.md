@@ -46,9 +46,10 @@ through DepositManager, while [BurnerLoansInventory](./burner_loans_inventory.md
 reading FLOAN.
 
 Every mutation requires the relevant Kernel selector permission. After creation, configuration
-also requires the current manager and position servicing requires the current facility. Migration
-to a future module version is outside FLOAN 1.0; v1 exposes the source ledger but does not import
-destination state.
+requires the current manager, except that `setMarketManager` also accepts the current facility so a
+product can transfer configuration authority without cooperation from the outgoing manager.
+Position servicing requires the current facility. Migration to a future module version is outside
+FLOAN 1.0; v1 exposes the source ledger but does not import destination state.
 
 ## Markets
 
@@ -162,7 +163,7 @@ multiplication. Timestamps use `uint48`, and `lastBorrowBlock` uses `uint32`.
 | Create market               | Kernel-permissioned creator | Standard configuration must be valid                      |
 | Configure market            | Current manager             | Standard configuration must remain valid                  |
 | Enable/disable originations | Current manager             | Controls exposure-increasing actions                      |
-| Rotate manager              | Current manager             | Transfers configuration authority                         |
+| Rotate manager              | Current manager or facility | Transfers configuration authority; new manager is nonzero  |
 | Rotate facility             | Current manager             | Transfers servicing authority and live facility principal |
 | Create/mutate position      | Current facility            | Position must belong to its market                        |
 
@@ -171,6 +172,10 @@ principal aggregate, but does not transfer collateral, approvals, receipt tokens
 custody. A product must coordinate those resources and authorities itself or first reduce exposure
 to zero. A malicious manager can appoint a malicious facility, so both authorities are
 governance-critical.
+
+The manager-or-facility rule applies only to `setMarketManager`. Every caller still needs the
+Kernel permission for that selector. All other market configuration setters, including
+`setMarketFacility`, remain current-manager-only in addition to their selector permissions.
 
 ### Authoritative And Derived State
 

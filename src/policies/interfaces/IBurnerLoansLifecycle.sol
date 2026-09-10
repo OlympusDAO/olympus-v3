@@ -18,7 +18,12 @@ interface IBurnerLoansLifecycle {
 
     /// @notice Sets the Burner Loans Config policy authorized to configure this facility.
     /// @dev Callable only by OCG admin while Burner Loans is globally disabled. The policy must be
-    ///      same-Kernel, compatible, and currently point back to this facility.
+    ///      same-Kernel, compatible, and currently point back to this facility. A different nonzero
+    ///      replacement atomically transfers every registered FLOAN market manager from the outgoing
+    ///      Config before storing and emitting the new address. Initial and same-address assignments
+    ///      do not write market managers. Reverts if a registered asset has no matching markets, a
+    ///      matching market is not managed by the outgoing Config, or FLOAN rejects a manager update.
+    ///      Any failure rolls back all earlier manager updates in the transaction.
     /// @param configurator_ Burner Loans Config policy to bind.
     function setConfigurator(address configurator_) external;
 

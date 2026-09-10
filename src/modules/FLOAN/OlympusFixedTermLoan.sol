@@ -210,10 +210,16 @@ contract OlympusFixedTermLoan is FLOANv1 {
     }
 
     /// @inheritdoc IFLOANv1
+    /// @dev Reverts if the caller lacks Kernel permission for this selector, `manager_` is zero,
+    ///      `marketId_` is invalid, or the caller is neither the current market manager nor the
+    ///      current market facility.
     function setMarketManager(uint32 marketId_, address manager_) external override permissioned {
         if (manager_ == address(0)) revert FLOAN_ZeroAddress();
-        _requireManager(marketId_);
+        _requireMarket(marketId_);
         Market storage market = _markets[marketId_];
+        if (market.manager != msg.sender && market.facility != msg.sender) {
+            revert FLOAN_NotManager(marketId_, msg.sender);
+        }
         address oldManager = market.manager;
         market.manager = manager_;
         emit MarketManagerSet(marketId_, oldManager, manager_);

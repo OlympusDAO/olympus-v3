@@ -14,7 +14,7 @@ contract BurnerLoansRequestPermissionsTest is BurnerLoansTest {
     function test_requestPermissions_requestsLifecyclePermissions() public view {
         Permissions[] memory permissions = burnerLoans.requestPermissions();
 
-        assertEq(permissions.length, 7, "permissions length");
+        assertEq(permissions.length, 8, "permissions length");
         assertEq(
             Keycode.unwrap(permissions[0].keycode),
             Keycode.unwrap(toKeycode("FLOAN")),
@@ -34,6 +34,11 @@ contract BurnerLoansRequestPermissionsTest is BurnerLoansTest {
             permissions[6].funcSelector,
             IFLOANv1.defaultPosition.selector,
             "default position"
+        );
+        assertEq(
+            permissions[7].funcSelector,
+            IFLOANv1.setMarketManager.selector,
+            "set market manager"
         );
     }
 }

@@ -414,6 +414,45 @@ library BurnerLoansDependencies {
         _validateConfigurator(facility_, ohm_, configurator_);
     }
 
+    /// @notice Transfers every matching registered facility market from one Config manager to another.
+    /// @dev Each asset must resolve to at least one market and every matching market must still name
+    ///      `outgoingConfigurator_` as manager. A later failure reverts every earlier rotation.
+    function migrateMarketManagers(
+        EnumerableSet.AddressSet storage assets_,
+        IFLOANv1 floan_,
+        address facility_,
+        address debtToken_,
+        address outgoingConfigurator_,
+        address replacementConfigurator_
+    ) public {
+        uint256 assetCount = assets_.length();
+        // Migration is intentionally atomic over the governance-controlled append-only registry.
+        // forge-lint: disable-start(calls-loop,require-revert-in-loop)
+        for (uint256 i; i < assetCount; ++i) {
+            address asset = assets_.at(i);
+            uint256[] memory marketIds = floan_.getMarketIds(facility_, asset, debtToken_);
+            if (marketIds.length == 0) {
+                revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset);
+            }
+
+            for (uint256 j; j < marketIds.length; ++j) {
+                // FLOAN indexes only uint32-typed market IDs in this uint256-backed set.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                uint32 marketId = uint32(marketIds[j]);
+                address manager = floan_.getMarket(marketId).manager;
+                if (manager != outgoingConfigurator_) {
+                    revert IBurnerLoans.BurnerLoans_MarketManagerMismatch(
+                        marketId,
+                        outgoingConfigurator_,
+                        manager
+                    );
+                }
+                floan_.setMarketManager(marketId, replacementConfigurator_);
+            }
+        }
+        // forge-lint: disable-end(calls-loop,require-revert-in-loop)
+    }
+
     /// @notice Validates every linked Burner Loans policy before operational enablement.
     function validateConfiguration(
         Kernel kernel_,
@@ -452,7 +491,7 @@ library BurnerLoansDependencies {
 
     /// @notice Returns the FLOAN permissions required by the lifecycle policy.
     function permissions() public pure returns (Permissions[] memory requests) {
-        requests = new Permissions[](7);
+        requests = new Permissions[](8);
         requests[0] = Permissions({
             keycode: _FLOAN_KEYCODE,
             funcSelector: IFLOANv1.addCollateral.selector
@@ -480,6 +519,10 @@ library BurnerLoansDependencies {
         requests[6] = Permissions({
             keycode: _FLOAN_KEYCODE,
             funcSelector: IFLOANv1.defaultPosition.selector
+        });
+        requests[7] = Permissions({
+            keycode: _FLOAN_KEYCODE,
+            funcSelector: IFLOANv1.setMarketManager.selector
         });
     }
 

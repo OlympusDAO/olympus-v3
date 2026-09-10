@@ -51,40 +51,52 @@ enabled.
 `setConfigOperator` accepts the zero address. Setting it to zero revokes ConfigTimelock access. When
 delegated access is enabled, the expected address is `BurnerLoansConfigTimelock`.
 
-| Contract                  | Function                                | Authorized caller               | Delay          | Main state requirements                                             |
-| ------------------------- | --------------------------------------- | ------------------------------- | -------------- | ------------------------------------------------------------------- |
-| `BurnerLoans`             | `setInventory`                          | `admin`                         | OCG governance | Burner Loans is disabled                                            |
-| `BurnerLoans`             | `setConfigurator`                       | `admin`                         | OCG governance | Burner Loans is disabled                                            |
-| `BurnerLoans`             | `setBackingOracle`                      | `admin`                         | OCG governance | Burner Loans is enabled                                             |
-| `BurnerLoansConfig`       | `setFacility`                           | `admin`                         | OCG governance | Config is disabled, and the facility can be set only once           |
-| `BurnerLoansConfig`       | `addAsset`                              | `admin`                         | OCG governance | Config is enabled, and the new market starts with originations on   |
-| `BurnerLoansConfig`       | `setGlobalDebtCap`                      | `admin`                         | OCG governance | Config is enabled                                                   |
-| `BurnerLoansConfig`       | `setConfigOperator`                     | `admin`                         | OCG governance | Config is enabled, and zero revokes delegated access                |
-| `BurnerLoansConfig`       | `setAssetDebtCap`                       | `admin`                         | OCG governance | Config is enabled, and the cap cannot be less than active debt      |
-| `BurnerLoansConfig`       | `setAssetDebtCap`                       | ConfigTimelock                  | >= 1 day       | Config is enabled, and the cap cannot be less than active debt      |
-| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | `admin`                         | OCG governance | Config is enabled, and the asset and values must be valid           |
-| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | ConfigTimelock                  | >= 1 day       | Config is enabled, and the asset and values must be valid           |
-| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | `admin`                         | OCG governance | Config is enabled, and the complete fee curve must be valid         |
-| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | ConfigTimelock                  | >= 1 day       | Config is enabled, and the complete fee curve must be valid         |
-| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | `admin`                         | OCG governance | Config is enabled, and enabling revalidates asset dependencies      |
-| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | ConfigTimelock                  | >= 1 day       | Config is enabled, and enabling revalidates asset dependencies      |
-| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | `admin`                         | OCG governance | Config and Burner Loans are enabled                                 |
-| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                 |
-| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | `admin`                         | OCG governance | Config and Burner Loans are enabled                                 |
-| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                 |
-| `BurnerLoansInventory`    | `setConfigurator`                       | `admin`                         | OCG governance | Inventory is disabled                                               |
-| `BurnerLoansInventory`    | `setGlobalDebtCap`                      | `admin` via `BurnerLoansConfig` | OCG governance | Config is enabled, and the cap cannot be less than active principal |
-| `BurnerLoansInventory`    | `syncMintApproval`                      | `burner_loans_admin`            | Immediate      | Inventory is enabled                                                |
-| `BurnerLoansInventory`    | `burnSurplus`                           | `admin`                         | OCG governance | Inventory is enabled                                                |
-| `BurnerLoansInventory`    | `rescueSurplus`                         | `admin`                         | OCG governance | Inventory is enabled                                                |
-| `BurnerLoansSeizer`       | `addAsset`, `removeAsset`               | `admin`                         | OCG governance | The asset-list transition must be valid                             |
-| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `admin`                         | OCG governance | The new limits must be valid                                        |
-| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `burner_loans_admin`            | Immediate      | The new limits must be valid                                        |
-| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `admin`                         | OCG governance | The gas limit must be nonzero                                       |
-| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `burner_loans_admin`            | Immediate      | The gas limit must be nonzero                                       |
+| Contract                  | Function                                | Authorized caller               | Delay          | Main state requirements                                                 |
+| ------------------------- | --------------------------------------- | ------------------------------- | -------------- | ----------------------------------------------------------------------- |
+| `BurnerLoans`             | `setInventory`                          | `admin`                         | OCG governance | Burner Loans is disabled                                                |
+| `BurnerLoans`             | `setConfigurator`                       | `admin`                         | OCG governance | Burner Loans is disabled; replacement validates and migrates atomically |
+| `BurnerLoans`             | `setBackingOracle`                      | `admin`                         | OCG governance | Burner Loans is enabled                                                 |
+| `BurnerLoansConfig`       | `setFacility`                           | `admin`                         | OCG governance | Config is disabled, and the facility can be set only once               |
+| `BurnerLoansConfig`       | `addAsset`                              | `admin`                         | OCG governance | Config is enabled, and the new market starts with originations on       |
+| `BurnerLoansConfig`       | `setGlobalDebtCap`                      | `admin`                         | OCG governance | Config is enabled                                                       |
+| `BurnerLoansConfig`       | `setConfigOperator`                     | `admin`                         | OCG governance | Config is enabled, and zero revokes delegated access                    |
+| `BurnerLoansConfig`       | `setAssetDebtCap`                       | `admin`                         | OCG governance | Config is enabled, and the cap cannot be less than active debt          |
+| `BurnerLoansConfig`       | `setAssetDebtCap`                       | ConfigTimelock                  | >= 1 day       | Config is enabled, and the cap cannot be less than active debt          |
+| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | `admin`                         | OCG governance | Config is enabled, and the asset and values must be valid               |
+| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | ConfigTimelock                  | >= 1 day       | Config is enabled, and the asset and values must be valid               |
+| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | `admin`                         | OCG governance | Config is enabled, and the complete fee curve must be valid             |
+| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | ConfigTimelock                  | >= 1 day       | Config is enabled, and the complete fee curve must be valid             |
+| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | `admin`                         | OCG governance | Config is enabled, and enabling revalidates asset dependencies          |
+| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | ConfigTimelock                  | >= 1 day       | Config is enabled, and enabling revalidates asset dependencies          |
+| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
+| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                     |
+| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
+| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                     |
+| `BurnerLoansInventory`    | `setConfigurator`                       | `admin`                         | OCG governance | Inventory is disabled                                                   |
+| `BurnerLoansInventory`    | `setGlobalDebtCap`                      | `admin` via `BurnerLoansConfig` | OCG governance | Config is enabled, and the cap cannot be less than active principal     |
+| `BurnerLoansInventory`    | `syncMintApproval`                      | `burner_loans_admin`            | Immediate      | Inventory is enabled                                                    |
+| `BurnerLoansInventory`    | `burnSurplus`                           | `admin`                         | OCG governance | Inventory is enabled                                                    |
+| `BurnerLoansInventory`    | `rescueSurplus`                         | `admin`                         | OCG governance | Inventory is enabled                                                    |
+| `BurnerLoansSeizer`       | `addAsset`, `removeAsset`               | `admin`                         | OCG governance | The asset-list transition must be valid                                 |
+| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `admin`                         | OCG governance | The new limits must be valid                                            |
+| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `burner_loans_admin`            | Immediate      | The new limits must be valid                                            |
+| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `admin`                         | OCG governance | The gas limit must be nonzero                                           |
+| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `burner_loans_admin`            | Immediate      | The gas limit must be nonzero                                           |
 
 `burner_loans_admin` cannot add a market or call a Config setter directly. It can queue only the
 supported Config changes through `BurnerLoansConfigTimelock`.
+
+### FLOAN Manager Rotation
+
+`FLOAN.setMarketManager` has two independent checks. The caller must have the Kernel permission for
+that selector and must be either the market's current manager or its current facility. The
+manager-or-facility identity check does not apply to other FLOAN market setters; they remain
+current-manager-only.
+
+Burner Loans requests only the `setMarketManager` selector for configuration migration. Its facility
+authority is reachable through `BurnerLoans.setConfigurator`, which remains `admin`-only and
+disabled-state-only. See [Replacing Burner Loans Config](./burner_loans.md#replacing-burner-loans-config)
+for the complete migration procedure and rollback guarantees.
 
 ## Config Timelock Matrix
 

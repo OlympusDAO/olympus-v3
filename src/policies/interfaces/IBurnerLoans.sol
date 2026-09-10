@@ -162,6 +162,16 @@ interface IBurnerLoans {
     /// @param marketCount Number of matching markets.
     error BurnerLoans_AmbiguousMarket(address asset, uint256 marketCount);
 
+    /// @notice A registered market is no longer managed by the outgoing Burner Loans Config.
+    /// @param marketId Market whose manager drifted.
+    /// @param expectedManager Outgoing Config required to authorize an atomic replacement.
+    /// @param actualManager Current FLOAN market manager.
+    error BurnerLoans_MarketManagerMismatch(
+        uint32 marketId,
+        address expectedManager,
+        address actualManager
+    );
+
     /// @notice The resolved FLOAN market does not use the Burner Loans configuration schema.
     /// @param marketId Incompatible FLOAN market identifier.
     /// @param configId Actual configuration schema identifier stored by the market.

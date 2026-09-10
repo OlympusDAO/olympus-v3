@@ -286,6 +286,14 @@ abstract contract BurnerLoansTest is Test {
         );
     }
 
+    function _activateReplacementConfigurator() internal returns (BurnerLoansConfig replacement) {
+        replacement = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        replacement.setFacility(address(burnerLoans));
+        vm.stopPrank();
+    }
+
     function _configureUsdsDependencies() internal {
         _configurePrice(address(usds), 1e18);
         _configureDepositManagerAsset(address(usds));

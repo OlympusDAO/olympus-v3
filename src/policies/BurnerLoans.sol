@@ -99,7 +99,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
 
     /// @inheritdoc IBurnerLoansLifecycle
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
-        _setConfigurator(configurator_);
+        _setConfigurator(_ASSETS, configurator_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle

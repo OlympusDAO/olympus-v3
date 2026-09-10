@@ -16,6 +16,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
+import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
@@ -117,14 +118,35 @@ abstract contract BurnerLoansLifecycle is
         emit InventorySet(inventory_);
     }
 
-    /// @dev Validates and stores the Burner Loans Config policy for this facility.
-    function _setConfigurator(address configurator_) internal {
+    /// @dev Validates a replacement Config, atomically migrates every registered FLOAN market when
+    ///      replacing a different nonzero Config, then stores and emits only after all rotations.
+    function _setConfigurator(
+        EnumerableSet.AddressSet storage assets_,
+        address configurator_
+    ) internal {
         BurnerLoansDependencies.validateConfiguratorLink(
             kernel,
             address(this),
             address(_OHM),
             configurator_
         );
+
+        address outgoingConfigurator = address(_CONFIGURATOR);
+        if (outgoingConfigurator != address(0) && outgoingConfigurator != configurator_) {
+            // FLOAN is a trusted Kernel module and setMarketManager makes no callback. Storage is
+            // intentionally updated only after every external manager rotation succeeds.
+            // forge-lint: disable-start(reentrancy-no-eth)
+            BurnerLoansDependencies.migrateMarketManagers(
+                assets_,
+                _FLOAN,
+                address(this),
+                address(_OHM),
+                outgoingConfigurator,
+                configurator_
+            );
+            // forge-lint: disable-end(reentrancy-no-eth)
+        }
+
         _CONFIGURATOR = IBurnerLoansConfig(configurator_);
         emit ConfiguratorSet(configurator_);
     }
