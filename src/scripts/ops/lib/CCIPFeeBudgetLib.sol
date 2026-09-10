@@ -168,9 +168,11 @@ interface ICCIPFeeOnRamp15 {
 /// @notice Reads the OHM token delivery gas budget of a CCIP lane from the live fee contracts of
 ///         the source chain: the fee quoter of an `OnRamp` lane (1.6 or 2.0), or the dedicated
 ///         on-ramp of a 1.5 lane. The budget must cover the destination `releaseOrMint` sequence;
-///         on a burn/mint chain that sequence runs two MINTR calls and does not fit the 90000
-///         default, so every lane toward a burn/mint chain must carry an enabled OHM entry of at
-///         least `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens.
+///         on an EVM burn/mint chain that sequence runs two MINTR calls and does not fit the
+///         90000 default, so every lane toward an EVM burn/mint chain must carry an enabled OHM
+///         entry of at least `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens. The reader is
+///         meant for EVM destinations: the chain default it falls back to is accepted only from
+///         a destination config that carries the EVM chain family selector.
 /// @dev Chainlink migrates lanes between ramp generations and bumps `typeAndVersion` per contract
 ///      change, so the reader does not pin exact version strings. It dispatches on the contract
 ///      family and the major version of the on-ramp and of its fee quoter, then checks the form

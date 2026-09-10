@@ -207,9 +207,11 @@ library CCIPConfigLib {
         require(backing != 0, string.concat("CCIPConfigLib: zero value for ", key));
     }
 
-    /// @notice Returns whether a chain hosts a burn/mint pool: an EVM chain that is not
+    /// @notice Returns whether a chain hosts an EVM burn/mint pool: an EVM chain that is not
     ///         canonical. Deliveries to such a chain mint through MINTR and need the raised OHM
-    ///         fee budget on the source lane.
+    ///         fee budget on the source lane. An SVM chain also hosts a burn/mint pool, but its
+    ///         delivery is billed under the fee quoter's default budget for the SVM destination
+    ///         and is not gated by the EVM tooling, so it answers false here.
     function isBurnMintEvmChain(string memory chain_) internal pure returns (bool isBurnMint) {
         return !ChainUtils._isSVMChain(chain_) && !ChainUtils._isCanonicalChain(chain_);
     }

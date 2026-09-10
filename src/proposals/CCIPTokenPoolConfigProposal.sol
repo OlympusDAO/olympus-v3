@@ -315,10 +315,11 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "## Next Steps\n",
                 "\n",
-                "The following are performed by the DAO MS of each chain and are not part of this proposal:\n",
+                "The following are performed by the DAO MS of each chain and by the Olympus multisig on Solana, and are not part of this proposal:\n",
                 "\n",
-                "- On Arbitrum, Optimism, Base and Berachain: the local CCIP contracts, including the local pool's routes to mainnet and to the other burn/mint chains (less the Optimism-Berachain pair, for which Chainlink serves no lane), are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. The same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain.\n",
-                "- On mainnet and on those four chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the four new peripheries.\n"
+                "- On Arbitrum, Optimism, Base and Berachain: the local CCIP contracts, including the local pool's routes to mainnet, to the other burn/mint chains (less the Optimism-Berachain pair, for which Chainlink serves no lane) and to Solana, are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. The same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the Solana token pool receives one per-chain configuration per new chain (remote token, accepted remote pool, both rate limits), signed by the Olympus multisig on Solana, and then the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain toward mainnet, the other burn/mint chains and Solana.\n",
+                "- On mainnet and on those four chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the four new peripheries.\n",
+                "- The lanes from Solana toward the four chains need the same raised OHM delivery gas budget on the Solana fee quoter, requested from Chainlink and checked outside this proposal; the lanes toward Solana run under the fee quoter's default budget for the SVM destination, as the existing Ethereum-Solana route does.\n"
             );
     }
 

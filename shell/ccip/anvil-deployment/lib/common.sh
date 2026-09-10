@@ -299,6 +299,36 @@ expect_non_empty_batch() {
   fi
 }
 
+# expect_log_line <log> <substring> <label>: the log must carry the substring.
+expect_log_line() {
+  if grep -qF -- "$2" "$1"; then
+    log "OK: $3"
+  else
+    die "$3: '$2' not found in $1"
+  fi
+}
+
+# expect_eq <actual> <expected> <label>: prints the value and fails on a mismatch.
+expect_eq() {
+  echo "$3 = $1"
+  [ "$1" = "$2" ] || die "$3: expected '$2', got '$1'"
+}
+
+# bucket_config <pool> <getter> <selector>  ->  "<isEnabled> <capacity> <rate>"
+# The configuration fields of a rate limiter bucket, decoded from the raw
+# return words of getCurrentOutboundRateLimiterState / getCurrentInboundRateLimiterState
+# ((tokens, lastUpdated, isEnabled, capacity, rate); the live tokens and the
+# timestamp are left out, so the result is comparable with env.json).
+bucket_config() {
+  local pool="$1" getter="$2" sel="$3" raw
+  raw="$(cast call "$pool" "${getter}(uint64)" "$sel" --rpc-url "$RPC")"
+  [ "${#raw}" -eq $((2 + 5 * 64)) ] || die "unexpected return length ${#raw} from $getter($sel)"
+  printf '%s %s %s\n' \
+    "$(cast to-dec "0x${raw:$((2 + 2 * 64)):64}")" \
+    "$(cast to-dec "0x${raw:$((2 + 3 * 64)):64}")" \
+    "$(cast to-dec "0x${raw:$((2 + 4 * 64)):64}")"
+}
+
 # cast_send_impersonated <from> <to> <sig> [args...]
 cast_send_impersonated() {
   local from="$1" to="$2" sig="$3"; shift 3
@@ -403,8 +433,10 @@ parse_type_and_version() {
 }
 
 # l2_route_peers <chain>  ->  the burn/mint EVM peers of a chain (its env.json
-# routes minus mainnet and any SVM chain, whose lanes bill on the SVM side and
-# cannot be mocked here), one per line.
+# routes minus mainnet, a lock/release destination that needs no raised budget,
+# and any SVM chain, whose delivery is billed under the fee quoter's default for
+# the SVM destination and is not gated by the scripts; the reverse SVM -> EVM
+# lane bills on the SVM side and is checked by the Solana tooling), one per line.
 l2_route_peers() {
   jq -r --arg c "$1" '.current[$c].olympus.config.CCIP.routes | keys[]
     | select(. != "mainnet" and . != "solana" and . != "solana-devnet")' "$REPO_ROOT/$ENV_JSON"

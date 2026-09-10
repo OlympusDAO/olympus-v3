@@ -11,9 +11,15 @@
 #      both from the deployer.
 #   5. Negative checks: the readiness report is RED and the setup batch fails
 #      naming a lane while the OHM fee budgets are still at the 90k default.
-#   6. Mock the OHM fee entries (175k) on the live fee contracts of this chain.
-#   7. Readiness GREEN; setup (and an empty re-run); finalize (and an empty
-#      re-run); periphery reconcile + enable (and empty re-runs).
+#   6. Mock the OHM fee entries (175k) on the live fee contracts of this chain
+#      for the burn/mint EVM peers; the solana lane is not mocked, since the
+#      scripts do not gate it (they print a note instead).
+#   7. Readiness GREEN (with the solana lane note); setup, which adds every
+#      declared route, the solana one included (and an empty re-run); finalize
+#      (and an empty re-run); periphery reconcile, which sets the SVM trusted
+#      remote next to the EVM ones, + enable (and empty re-runs); then the
+#      solana route state is asserted (both buckets, the SVM trusted remote and
+#      the gas limit).
 #   8. Containment of the mainnet route from the DAO MS as bridge_admin, an
 #      empty re-run through the Emergency MS variant, and the declarative
 #      recovery through the local config timelock.
@@ -79,6 +85,16 @@ kernel="$(env_addr "$CHAIN" olympus.Kernel)"
 roles_mod="$(env_addr "$CHAIN" olympus.modules.OlympusRoles)"
 ems="$(env_addr "$CHAIN" olympus.multisig.emergency)"
 mainnet_sel="$(jq -r '.current.mainnet.external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
+solana_sel="$(jq -r '.current.solana.external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
+# The desired solana route of this chain, asserted against the pool after finalize
+sol_out_cap="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.outboundRateLimit.capacity)"
+sol_out_rate="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.outboundRateLimit.rate)"
+sol_in_cap="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.inboundRateLimit.capacity)"
+sol_in_rate="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.inboundRateLimit.rate)"
+sol_receiver="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.periphery.svmReceiver)"
+sol_gas="$(env_addr "$CHAIN" olympus.config.CCIP.routes.solana.periphery.gasLimit)"
+[ -n "$sol_out_cap" ] && [ -n "$sol_in_cap" ] && [ -n "$sol_receiver" ] && [ -n "$sol_gas" ] \
+    || die "$CHAIN declares no complete solana route in env.json"
 
 step "Registry handover: deployer EOA -> DAO MS"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
@@ -135,16 +151,24 @@ env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$CHA
     2>&1 | tee "$LOG_DIR/readiness-$CHAIN-green.log"
 grep -q "READINESS RESULT $CHAIN: GREEN" "$LOG_DIR/readiness-$CHAIN-green.log" \
     || die "the readiness report was expected to be GREEN; see $LOG_DIR/readiness-$CHAIN-green.log"
+expect_log_line "$LOG_DIR/readiness-$CHAIN-green.log" "[INFO] lane $CHAIN -> solana: not gated here" \
+    "readiness prints the solana lane note"
 
 step "Setup (DAO MS)"
 run_batch CCIPNonEthereumSetupBatch setup dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "setup"
+expect_log_line "$LAST_BATCH_LOG" "Note: lane $CHAIN -> solana: not gated here" \
+    "setup prints the solana lane note instead of reading a budget"
+expect_log_line "$LAST_BATCH_LOG" "Route solana selector $solana_sel" "setup plans the solana route"
+expect_eq "$(cast call "$pool" 'isSupportedChain(uint64)(bool)' "$solana_sel" --rpc-url "$RPC")" "true" \
+    "pool.isSupportedChain(solana) after setup"
 run_batch CCIPNonEthereumSetupBatch setup dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "setup re-run"
 
 step "Pre-finalize state: the pool must be inactive and unregistered"
 echo "pool.isEnabled()             = $(cast call "$pool" 'isEnabled()(bool)' --rpc-url "$RPC")"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
+echo "pool.getSupportedChains()    = $(cast call "$pool" 'getSupportedChains()(uint64[])' --rpc-url "$RPC")"
 
 step "Finalize (DAO MS)"
 run_batch CCIPNonEthereumSetupBatch finalize dao
@@ -155,12 +179,25 @@ expect_empty_batch "$LAST_BATCH_LOG" "finalize re-run"
 step "Periphery reconcile and enable (DAO MS)"
 run_batch CCIPBridgeBatch reconcileTrustedRemotes dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes"
+expect_log_line "$LAST_BATCH_LOG" "Added: setTrustedRemoteSVM" "reconcileTrustedRemotes sets the SVM trusted remote"
 run_batch CCIPBridgeBatch reconcileTrustedRemotes dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes re-run"
 run_batch CCIPBridgeBatch enable dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "periphery enable"
 run_batch CCIPBridgeBatch enable dao "" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "periphery enable re-run"
+
+step "Solana route state after finalize and the periphery reconcile"
+expect_eq "$(cast call "$pool" 'isSupportedChain(uint64)(bool)' "$solana_sel" --rpc-url "$RPC")" "true" \
+    "pool.isSupportedChain(solana)"
+expect_eq "$(bucket_config "$pool" getCurrentOutboundRateLimiterState "$solana_sel")" \
+    "1 $sol_out_cap $sol_out_rate" "solana outbound bucket (isEnabled capacity rate)"
+expect_eq "$(bucket_config "$pool" getCurrentInboundRateLimiterState "$solana_sel")" \
+    "1 $sol_in_cap $sol_in_rate" "solana inbound bucket (isEnabled capacity rate)"
+expect_eq "$(cast call "$per" 'getTrustedRemoteSVM(uint64)((bytes32,bool))' "$solana_sel" --rpc-url "$RPC")" \
+    "($sol_receiver, true)" "periphery.getTrustedRemoteSVM(solana)"
+expect_eq "$(cast call "$per" 'getGasLimit(uint64)(uint32)' "$solana_sel" --rpc-url "$RPC")" \
+    "$sol_gas" "periphery.getGasLimit(solana)"
 
 step "Containment (DAO MS as bridge_admin) and declarative recovery"
 run_batch CCIPTokenPoolConfigBatch disableChain dao "$DISABLE_ARGS"
@@ -206,9 +243,13 @@ echo "Emergency MS emergency        = $(cast call "$roles_mod" 'hasRole(address,
 echo "pool.getSupportedChains()     = $(cast call "$pool" 'getSupportedChains()(uint64[])' --rpc-url "$RPC")"
 echo "outbound bucket (mainnet)     = $(cast call "$pool" 'getCurrentOutboundRateLimiterState(uint64)((uint128,uint32,bool,uint128,uint128))' "$mainnet_sel" --rpc-url "$RPC")"
 echo "inbound bucket (mainnet)      = $(cast call "$pool" 'getCurrentInboundRateLimiterState(uint64)((uint128,uint32,bool,uint128,uint128))' "$mainnet_sel" --rpc-url "$RPC")"
+echo "outbound bucket (solana)      = $(cast call "$pool" 'getCurrentOutboundRateLimiterState(uint64)((uint128,uint32,bool,uint128,uint128))' "$solana_sel" --rpc-url "$RPC")"
+echo "inbound bucket (solana)       = $(cast call "$pool" 'getCurrentInboundRateLimiterState(uint64)((uint128,uint32,bool,uint128,uint128))' "$solana_sel" --rpc-url "$RPC")"
 echo "periphery.isEnabled()         = $(cast call "$per" 'isEnabled()(bool)' --rpc-url "$RPC")"
 echo "trusted remote (mainnet)      = $(cast call "$per" 'getTrustedRemoteEVM(uint64)((address,bool))' "$mainnet_sel" --rpc-url "$RPC")"
 echo "gas limit (mainnet)           = $(cast call "$per" 'getGasLimit(uint64)(uint32)' "$mainnet_sel" --rpc-url "$RPC")"
+echo "trusted remote (solana)       = $(cast call "$per" 'getTrustedRemoteSVM(uint64)((bytes32,bool))' "$solana_sel" --rpc-url "$RPC")"
+echo "gas limit (solana)            = $(cast call "$per" 'getGasLimit(uint64)(uint32)' "$solana_sel" --rpc-url "$RPC")"
 
 step "L2 CCIP rollout complete for $CHAIN"
 log "pool=$pool config=$cfg timelock=$tl periphery=$per"

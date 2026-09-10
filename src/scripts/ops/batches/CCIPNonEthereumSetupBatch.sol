@@ -76,7 +76,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     /// @dev    Each action is added only when the live state lacks it. The batch refuses to run
     ///         until the deploy sequence, the registry administrator handover to the DAO MS and
     ///         the pool ownership transfer to the config policy have happened, and until every
-    ///         outgoing lane toward a burn/mint chain carries the raised OHM fee budget.
+    ///         outgoing lane toward an EVM burn/mint chain carries the raised OHM fee budget. A
+    ///         lane toward an SVM chain is not gated: the OHM delivery there runs under the fee
+    ///         quoter's default budget for the SVM destination, the same budget as the live
+    ///         mainnet to Solana lane, and the budget of the reverse lane is checked by the
+    ///         Solana tooling; the batch prints a note for such a lane (`_svmLaneNote`).
     ///
     ///         The `admin` grant is chain wide: it applies to every policy of this Kernel, not
     ///         only to the CCIP policies.
@@ -90,8 +94,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///           the pool reports itself as a liquidity container.
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - The config policy is neither the owner nor the pending owner of the pool.
-    ///         - A lane toward a burn/mint destination carries an OHM delivery gas budget below
-    ///           175000 (the revert names the lane).
+    ///         - A lane toward an EVM burn/mint destination carries an OHM delivery gas budget
+    ///           below 175000 (the revert names the lane).
     ///         - A desired route is declared with `enabled: false` (the removal marker), or a
     ///           live route differs from `env.json` (the bootstrap expects a clean pool with
     ///           every declared route enabled; reconcile through the config timelock afterwards).
@@ -324,10 +328,13 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     /// @notice The per-chain half of the rollout readiness report (read-only, any sender). On a
     ///         non-canonical chain it checks the deployment, the authority handovers and every
-    ///         outgoing lane; on mainnet it checks the Phase B state, the pool backing and the
-    ///         mainnet-side lanes. `shell/ccip/check_rollout_readiness.sh` aggregates the answers
-    ///         of every chain; the proposal is not submitted until the aggregate is green.
-    /// @dev    Prints one `[ OK ]`/`[FAIL]` line per check and a final
+    ///         outgoing EVM lane; on mainnet it checks the Phase B state, the pool backing and
+    ///         the mainnet-side lanes. `shell/ccip/check_rollout_readiness.sh` aggregates the
+    ///         answers of every EVM chain; the proposal is not submitted until the aggregate is
+    ///         green and the Solana tooling reports the lanes from Solana toward the burn/mint
+    ///         chains ready.
+    /// @dev    Prints one `[ OK ]`/`[FAIL]` line per check, an `[INFO]` line for a lane the
+    ///         fee budget gate does not cover (an SVM destination), and a final
     ///         `READINESS RESULT <chain>: GREEN|RED` line. It does not revert on a red result:
     ///         a reverted script would swallow its own log, so the shell wrapper derives the
     ///         exit code from the verdict line instead. A revert can still happen when the
@@ -624,12 +631,18 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         _checkLanes();
     }
 
-    /// @notice Checks the OHM delivery gas budget of every outgoing lane whose destination is a
-    ///         burn/mint chain.
+    /// @notice Checks the OHM delivery gas budget of every outgoing lane whose destination is an
+    ///         EVM burn/mint chain. A lane toward an SVM destination is reported as a note
+    ///         rather than checked (see `_svmLaneNote`); a lane toward a canonical chain needs
+    ///         no raised budget.
     function _checkLanes() internal {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
+            if (ChainUtils._isSVMChain(desired[i].remoteChain)) {
+                console2.log(string.concat("  [INFO] ", _svmLaneNote(desired[i].remoteChain)));
+                continue;
+            }
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
             _checkLane(desired[i].remoteChain);
         }
@@ -899,18 +912,25 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         );
     }
 
-    /// @notice Reverts unless every outgoing lane toward a burn/mint destination carries the
-    ///         raised OHM delivery gas budget.
+    /// @notice Reverts unless every outgoing lane toward an EVM burn/mint destination carries
+    ///         the raised OHM delivery gas budget. A lane toward an SVM destination is not
+    ///         gated and is reported as a note (see `_svmLaneNote`); a lane toward a canonical
+    ///         chain needs no raised budget, since the lock/release pool releases with a plain
+    ///         transfer.
     function _requireFeeBudgets() internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         console2.log("\n--- Outgoing lane fee budgets ---");
         for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
+            if (ChainUtils._isSVMChain(desired[i].remoteChain)) {
+                console2.log(string.concat("Note: ", _svmLaneNote(desired[i].remoteChain)));
+                continue;
+            }
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) {
                 console2.log(
                     "Lane to",
                     desired[i].remoteChain,
-                    "needs no raised budget (not a burn/mint destination)."
+                    "needs no raised budget (a lock/release destination)."
                 );
                 continue;
             }
@@ -934,6 +954,43 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
             CCIPFeeBudgetLib.requireOhmFeeBudget(env, chain, desired[i].remoteChain);
         }
+    }
+
+    /// @notice The note printed for an outgoing lane toward an SVM destination, which the fee
+    ///         budget gate does not cover. The OHM delivery on the SVM side is billed under the
+    ///         fee quoter's default budget for the SVM destination, which is what the live
+    ///         mainnet to Solana lane runs under without an OHM entry, so no request to
+    ///         Chainlink is needed for this direction. The reverse lane depends on the local
+    ///         pool: on a burn/mint chain it delivers through MINTR and needs the raised budget
+    ///         on the Solana fee quoter, which the EVM tooling cannot read and the Solana
+    ///         tooling checks instead; on a canonical chain it releases from the lock/release
+    ///         pool with a plain transfer and needs no raise.
+    function _svmLaneNote(string memory remoteChain_) internal view returns (string memory note) {
+        string memory reverseLane = string.concat(remoteChain_, " -> ", chain);
+        string memory reverseNote = ChainUtils._isCanonicalChain(chain)
+            ? string.concat(
+                "the reverse lane ",
+                reverseLane,
+                " needs no raised budget either (a lock/release delivery)"
+            )
+            : string.concat(
+                "the budget of the reverse lane ",
+                reverseLane,
+                " (an enabled OHM entry of at least ",
+                vm.toString(uint256(CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD)),
+                " on the Solana fee quoter) is checked by the Solana tooling"
+            );
+        return
+            string.concat(
+                "lane ",
+                chain,
+                " -> ",
+                remoteChain_,
+                ": not gated here; the OHM delivery on ",
+                remoteChain_,
+                " runs under the fee quoter's default budget for the SVM destination, the budget the live mainnet -> solana lane runs under without an OHM entry; ",
+                reverseNote
+            );
     }
 
     /// @notice Reverts unless every enabled desired route of `env.json` is live on the pool and

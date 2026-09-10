@@ -4,7 +4,11 @@
 #
 # Runs CCIPNonEthereumSetupBatch.checkReadiness (read-only) on mainnet and the four
 # burn/mint chains, and aggregates a green/red verdict per chain and per outgoing
-# lane. The proposal must not be submitted until every chain reports GREEN.
+# EVM lane. The proposal must not be submitted until every chain reports GREEN.
+# This is the EVM half of the gate: the lanes from Solana toward the burn/mint
+# chains (the OHM fee entries on the Solana fee quoter and the Solana pool's
+# per-chain configs) are reported by the Solana repository's readiness report,
+# which must be green as well.
 #
 # Usage:
 #   ./shell/ccip/check_rollout_readiness.sh [--chains "mainnet arbitrum optimism base berachain"] [--env <env-file>]
