@@ -870,7 +870,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     /// @dev Read from disk on every use rather than cached in storage: `run` executes as one
     ///      isolated transaction under the block gas limit, and storing the file would spend most
     ///      of it.
-    function _readEnv() internal view returns (string memory env) {
+    function _readEnv() internal view virtual returns (string memory env) {
         /// forge-lint: disable-next-line(unsafe-cheatcode)
         return vm.readFile(_ENV_PATH);
     }
