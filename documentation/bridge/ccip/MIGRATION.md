@@ -10,7 +10,7 @@ flowchart TD
     START --> NONE["Nothing yet: the chain has<br/>no config policy and no timelock"]
     START --> CFGONLY["Config policy and timelock"]
     START --> WITHPOOL["Token pool"]
-    NONE --> S0["Scenario 0<br/>Bootstrap: stand the triad up and hand authority over<br/>Ethereum: DAO batch + OCG proposal<br/>Elsewhere: two DAO batches around the mainnet proposal"]
+    NONE --> S0["Scenario 0<br/>Bootstrap: stand the triad up and hand authority over<br/>Ethereum: DAO batch + OCG proposal<br/>Elsewhere: two DAO batches around the mainnet proposal,<br/>the Solana per-chain config before the second"]
     CFGONLY --> A["Scenario A<br/>Pool, registry, liquidity and routes untouched<br/>No Solana action"]
     WITHPOOL --> B["Scenario B<br/>Full triad, registry updated<br/>Solana pre-step required"]
     WITHPOOL --> NOTSUP["Pool alone is not supported:<br/>the config policy's pool address<br/>is fixed at construction"]
@@ -76,7 +76,7 @@ sequenceDiagram
     participant P as BurnMint pool
     participant REG as local TokenAdminRegistry
 
-    Note over EOA,REG: Prerequisites: Chainlink fee budgets set; registry handover
+    Note over EOA,REG: Prerequisites: Chainlink fee budgets set (the EVM lanes here, the lane from Solana on its fee quoter); registry handover
     EOA->>REG: transferAdminRole(OHM, DAO Multisig)
     DAO->>REG: acceptAdminRole(OHM)
 
@@ -94,18 +94,20 @@ sequenceDiagram
     C->>P: acceptOwnership()
     DAO->>C: setConfigOperator(timelock)
     DAO->>T: enable("")
-    DAO->>C: addChain per env.json route
+    DAO->>C: addChain per env.json route (mainnet, the other burn/mint chains, Solana)
     C->>P: applyChainUpdates
     Note over P,REG: pool disabled and unregistered: the chain is inert
 
     Note over EOA,REG: mainnet proposal executes
+
+    Note over EOA,REG: on Solana (Squads): per-chain config for this chain on the Solana pool (remote token, remote pool, both limits)
 
     Note over EOA,REG: Batch 2: finalize
     DAO->>P: enable("")
     DAO->>REG: setPool(OHM, pool)
 ```
 
-`enable` on the pool precedes `setPool` so that a registered pool is never unable to mint, and the activation in batch 1 already granted its MINTR permissions. Unlike Scenario B on these chains, `setPool` is deferred to a separate batch: until `finalize`, no outbound send and no inbound delivery can touch the pool, so a failed mainnet vote leaves nothing to roll back. A message sent toward the chain between the proposal execution and `finalize` parks in FAILURE and is recovered permissionlessly with manual execution afterwards.
+`enable` on the pool precedes `setPool` so that a registered pool is never unable to mint, and the activation in batch 1 already granted its MINTR permissions. Unlike Scenario B on these chains, `setPool` is deferred to a separate batch: until `finalize`, no outbound send and no inbound delivery can touch the pool, so a failed mainnet vote leaves nothing to roll back. The Solana side of the chain's Solana route follows the same rule: its per-chain config on the Solana pool is applied after the proposal executes and before `finalize`, so both sides of that pair open at `finalize`, and a config applied during the vote would let a send from Solana strand on the unregistered pool for the whole voting window. A message sent toward the chain between the proposal execution and `finalize`, from mainnet, from an already finalized chain or from Solana once its config is in place, parks in FAILURE and is recovered permissionlessly with manual execution afterwards.
 
 ## Scenario A on Ethereum
 
