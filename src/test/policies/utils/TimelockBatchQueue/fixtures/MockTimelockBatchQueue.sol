@@ -226,7 +226,9 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
         if (callThroughTarget != address(0) && action_.target == callThroughTarget) {
             // Required to dispatch arbitrary payload and capture exact revert data.
             // forge-lint: disable-next-line(low-level-calls)
-            (bool success, bytes memory returnData) = action_.target.call(action_.payload);
+            (bool success, bytes memory returnData) = action_.target.call(
+                abi.encodePacked(action_.selector, action_.payload)
+            );
             if (!success) {
                 // Assembly preserves the target's exact revert data for atomic rollback tests.
                 // forge-lint: disable-next-line(inline-assembly)

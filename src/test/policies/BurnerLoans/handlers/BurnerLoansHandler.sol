@@ -38,6 +38,7 @@ import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 contract BurnerLoansHandler is Test {
     uint256 internal constant _WAD = 1e18;
     uint256 internal constant _OHM_SCALE = 1e9;
+    uint256 internal constant _COLLATERAL_SCALE = 1e6;
 
     BurnerLoansHarness internal immutable _BURNER_LOANS;
     BurnerLoansConfig internal immutable _BURNER_LOANS_CONFIG;
@@ -851,9 +852,17 @@ contract BurnerLoansHandler is Test {
         uint256 liquidCollateral = status.assets +
             status.borrowed +
             _COLLATERAL.balanceOf(_TREASURY);
-        uint256 liquidBackingUsd = FullMath.mulDiv(liquidCollateral, collateralPrice, _WAD);
+        // liquidCollateral: 6 decimals; collateralPrice: 18 decimals.
+        // Expected: 6 + 18 - 6 = 18-decimal USD value, rounded down.
+        uint256 liquidBackingUsd = FullMath.mulDiv(
+            liquidCollateral,
+            collateralPrice,
+            _COLLATERAL_SCALE
+        );
         uint256 totalBackedDebt = _BURNER_LOANS.totalActiveDebtOhm() +
             _FLOAN.getMarketPrincipalDefaulted(_BURNER_LOANS_CONFIG.marketId(address(_COLLATERAL)));
+        // totalBackedDebt: 9 decimals; backing floor: 18 decimals per OHM.
+        // Expected: 9 + 18 - 9 = 18-decimal required backing, rounded down.
         uint256 requiredBackingUsd = FullMath.mulDiv(totalBackedDebt, _WAD, _OHM_SCALE);
         if (liquidBackingUsd < requiredBackingUsd) ++backingViolations;
     }
