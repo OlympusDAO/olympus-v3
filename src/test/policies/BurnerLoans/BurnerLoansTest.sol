@@ -523,6 +523,8 @@ abstract contract BurnerLoansTest is Test {
     function _useMockDepositManager() internal {
         vm.startPrank(admin);
         kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
 
         mockDepositManager = new MockDepositManager(kernel, address(usds));
         depositManager = IDepositManager(address(mockDepositManager));

@@ -1055,7 +1055,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_givenVaultCustody_whenCollateralIsDeposited_healthUsesActualCredit() public {
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAssetWithYield();
         uint128 amount = _VAULT_DEPOSIT_AMOUNT;
-        uint48 maturity = type(uint48).max;
+        uint48 maturity = uint48(block.timestamp + 30 days);
         burnerLoans.setPositionForTest(
             address(vaultAsset),
             alice,

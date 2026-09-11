@@ -468,4 +468,4 @@ contract MockDepositManager is IDepositManager, IERC165 {
     }
 }
 
-// forge-lint: disable-end(missing-zero-check)
+// forge-lint: disable-end(missing-zero-check, empty-block)
