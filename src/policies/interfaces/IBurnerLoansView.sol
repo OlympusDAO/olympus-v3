@@ -154,10 +154,13 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (WithdrawPreview memory preview);
 
     /// @notice Projects an OHM borrow against a collateral position.
-    /// @dev Reverts if Burner Loans, originations, or Inventory is disabled; the asset or position
-    ///      is unavailable; the amount is zero; price or custody validation fails; or a debt-cap
-    ///      or maturity bound would be exceeded. An unhealthy current or resulting position is
-    ///      returned with `preview.executable == false`, including health below 1e18.
+    /// @dev A new debt episode uses the currently configured term. An additional borrow joins an
+    ///      active position without changing its existing maturity, including after the configured
+    ///      term or horizon is reduced. Reverts if Burner Loans, originations, or Inventory is
+    ///      disabled; the asset or position is unavailable; the amount is zero; price or custody
+    ///      validation fails; or a debt cap or new-episode maturity bound would be exceeded. An
+    ///      unhealthy current or resulting position is returned with `preview.executable == false`,
+    ///      including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param ohmAmount_ Principal requested, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
@@ -185,10 +188,12 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (RepayPreview memory preview);
 
     /// @notice Projects an active position's maturity extension.
-    /// @dev Reverts if Burner Loans or originations are disabled, the asset or position is
-    ///      unavailable, the term count is invalid, the position is matured, required PRICE data
-    ///      is unavailable, or the resulting maturity exceeds its configured horizon. An unhealthy
-    ///      position is returned with `preview.executable == false`, including health below 1e18.
+    /// @dev Applies the currently configured term length and maturity horizon to the position's
+    ///      entire outstanding principal. Reverts if Burner Loans or originations are disabled, the
+    ///      asset or position is unavailable, the term count is invalid, the position is matured,
+    ///      required PRICE data is unavailable, or the resulting maturity exceeds its current
+    ///      configured horizon. An unhealthy position is returned with
+    ///      `preview.executable == false`, including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
     /// @param termCount_ Number of configured terms added to the maturity.

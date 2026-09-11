@@ -155,7 +155,9 @@ interface IBurnerLoansConfig {
 
     /// @notice Updates a configured asset's risk and term fields.
     /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if
-    ///      the asset is not uniquely configured or any risk or term field violates its bound.
+    ///      the asset is not uniquely configured or any risk or term field violates its bound. A
+    ///      term or horizon update does not rewrite active positions' maturities. Current values
+    ///      apply when a new debt episode begins or an active position is extended.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete risk configuration.
     function setAssetRiskConfig(

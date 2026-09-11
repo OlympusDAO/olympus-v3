@@ -60,6 +60,31 @@ revalidates the complete relationship before Burner Loans becomes operational.
 Burner Loans uses the first FLOAN position for a borrower and market. FLOAN remains generic and can
 store multiple positions. A completed Burner Loans debt episode reuses its position ID.
 
+> **Important: one position has one maturity for all of its debt.** The first borrow in a debt
+> episode fixes an absolute maturity using the term configured at that time. A later borrow adds to
+> the same aggregate principal without changing that maturity, even if governance has since reduced
+> the term length or maturity horizon. A later extension is different: it applies the term length
+> and maturity horizon configured when the extension is requested to the position's entire
+> outstanding principal. Neither a future borrow nor a future extension is guaranteed; current
+> enablement, capacity, health, price, fee, and other validation still apply.
+
+**Integration warning:** a preview does not lock the term configuration. `borrow` and `extend`
+protect the accepted fee with `maxFee`, but they do not accept a maturity-slippage bound. Clients
+should refresh the preview immediately before submission and display the resulting maturity
+prominently for confirmation.
+
+For example, suppose a position has 1,000 OHM of principal with a maturity established under a
+30-day term and a 90-day horizon. If governance later changes the configuration to a 15-day term
+and 30-day horizon, borrowing another 1 OHM does not shorten or otherwise reset the existing
+maturity. The complete 1,001 OHM remains due at that same timestamp. If the borrower later extends,
+the then-current 15-day term advances the shared maturity for all 1,001 OHM, and the resulting
+maturity must fit within the then-current 30-day horizon.
+
+Configuration changes therefore do not rewrite an active position's stored maturity. They do
+govern new debt episodes and future extensions. A borrower is protected from a retroactive
+shortening of an agreed maturity, but is not promised that current configuration or origination
+availability will remain available for a later borrow or extension.
+
 ```mermaid
 stateDiagram-v2
     [*] --> CollateralOnly: deposit collateral
@@ -74,10 +99,10 @@ stateDiagram-v2
 | Action              | Effect                                                        | Main condition                                                   |
 | ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
 | Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                  |
-| Borrow              | Adds principal and draws OHM from Burner Loans Inventory      | Position is healthy, within both caps, and not matured           |
+| Borrow              | Adds principal; a new debt episode also fixes its maturity     | Position is healthy, within both caps, and not matured           |
 | Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; live PRICE unless repayment clears debt |
 | Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                     |
-| Extend              | Advances the prior maturity by whole terms                    | Position stays healthy and maturity remains within its horizon   |
+| Extend              | Advances the shared maturity of all debt by current terms      | Position stays healthy and maturity remains within current horizon |
 | Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary                 |
 | Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                          |
 

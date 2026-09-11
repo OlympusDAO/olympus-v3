@@ -112,7 +112,9 @@ interface IBurnerLoansLifecycle {
         );
 
     /// @notice Borrows OHM against a collateral position.
-    /// @dev Reverts if:
+    /// @dev The first borrow in a debt episode establishes its maturity from the current term. An
+    ///      additional borrow joins the aggregate position without changing its existing maturity,
+    ///      including after the configured term or horizon is reduced. Reverts if:
     ///      - Burner Loans, asset originations, or Burner Loans Inventory is disabled.
     ///      - The caller is unauthorized or the market or position is unavailable.
     ///      - The amount or recipient is zero, or PRICE, backing, maturity, or health validation
@@ -166,10 +168,13 @@ interface IBurnerLoansLifecycle {
     ) external returns (uint256 remainingDebtOhm, uint256 healthFactor);
 
     /// @notice Extends an active position's maturity and charges any applicable fee.
-    /// @dev Reverts if Burner Loans or originations are disabled, the caller is unauthorized, the
-    ///      asset or position is unavailable, the term count is invalid, the position is matured or
-    ///      unhealthy, the resulting maturity exceeds its horizon, the fee exceeds `maxFee_`, or
-    ///      the collateral-fee transfer to Treasury fails.
+    /// @dev Applies the currently configured term length and maturity horizon to the position's
+    ///      entire outstanding principal; configuration present when the debt episode began does
+    ///      not guarantee a future extension. Reverts if Burner Loans or originations are disabled,
+    ///      the caller is unauthorized, the asset or position is unavailable, the term count is
+    ///      invalid, the position is matured or unhealthy, the resulting maturity exceeds its
+    ///      current horizon, the fee exceeds `maxFee_`, or the collateral-fee transfer to Treasury
+    ///      fails.
     /// @param asset_ Collateral asset securing the position.
     /// @param onBehalfOf_ Borrower whose maturity is extended.
     /// @param termCount_ Number of configured terms added to the maturity.

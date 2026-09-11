@@ -305,20 +305,22 @@ contract OlympusFixedTermLoan is FLOANv1 {
         if (maturity_ <= block.timestamp) revert FLOAN_InvalidAmount();
         if (principal_ == 0) {
             if (interest_ == 0 || startsDebtEpisode) revert FLOAN_InvalidAmount();
-        } else {
+        }
+
+        if (!startsDebtEpisode && stored.maturity != maturity_) {
+            revert FLOAN_InvalidMaturity(stored.maturity, maturity_);
+        }
+
+        if (principal_ != 0) {
+            if (startsDebtEpisode) {
+                _validateMaturityHorizon(stored.marketId, maturity_);
+                stored.maturity = maturity_;
+            }
             _increasePrincipal(stored.marketId, stored.borrower, principal_, startsDebtEpisode);
             stored.principalDrawn = startsDebtEpisode
                 ? principal_
                 : stored.principalDrawn + principal_;
             stored.lastBorrowBlock = SafeCast.toUint32(block.number);
-        }
-
-        if (startsDebtEpisode) {
-            stored.maturity = maturity_;
-        } else {
-            if (stored.maturity != maturity_) {
-                revert FLOAN_InvalidMaturity(stored.maturity, maturity_);
-            }
         }
 
         stored.principalDue += principal_;
@@ -381,25 +383,13 @@ contract OlympusFixedTermLoan is FLOANv1 {
         Position storage stored = _requireOriginatingPosition(positionId_);
         if (stored.principalDue == 0 && stored.interestDue == 0) revert FLOAN_InvalidAmount();
 
-        Market storage market = _markets[stored.marketId];
         uint48 oldMaturity = stored.maturity;
         // Extension maturity uses chain time and tolerates normal validator drift.
         // forge-lint: disable-next-line(block-timestamp)
         if (newMaturity_ <= oldMaturity || newMaturity_ <= block.timestamp) {
             revert FLOAN_InvalidMaturity(oldMaturity, newMaturity_);
         }
-        if (market.maxMaturityHorizon != type(uint48).max) {
-            uint256 maximumMaturity = block.timestamp + market.maxMaturityHorizon;
-            // Maturity horizons span protocol timeframes and tolerate normal validator drift.
-            // forge-lint: disable-next-line(block-timestamp)
-            if (newMaturity_ > maximumMaturity) {
-                // The cast is safe: this branch requires maximumMaturity < newMaturity_, and the
-                // requested maturity is already bounded to uint48 by the function signature.
-                // forge-lint: disable-next-line(unsafe-typecast)
-                uint48 maximumMaturityUint48 = uint48(maximumMaturity);
-                revert FLOAN_MaturityHorizonExceeded(newMaturity_, maximumMaturityUint48);
-            }
-        }
+        _validateMaturityHorizon(stored.marketId, newMaturity_);
 
         stored.maturity = newMaturity_;
         emit PositionMaturityExtended(positionId_, oldMaturity, newMaturity_);
@@ -549,6 +539,19 @@ contract OlympusFixedTermLoan is FLOANv1 {
     function _increaseInterest(uint32 marketId_, uint128 interest_) internal {
         if (interest_ == 0) return;
         getMarketInterestDue[marketId_] += interest_;
+    }
+
+    /// @dev Reverts when a maturity exceeds a market's finite horizon from the current timestamp.
+    function _validateMaturityHorizon(uint32 marketId_, uint48 maturity_) internal view {
+        uint48 maturityHorizon = _markets[marketId_].maxMaturityHorizon;
+        if (maturityHorizon == type(uint48).max) return;
+
+        // Maturity horizons span protocol timeframes and tolerate normal validator drift.
+        uint256 maximumMaturity = block.timestamp + maturityHorizon;
+        // forge-lint: disable-next-line(block-timestamp)
+        if (maturity_ <= maximumMaturity) return;
+
+        revert FLOAN_MaturityHorizonExceeded(maturity_, SafeCast.toUint48(maximumMaturity));
     }
 
     function _closeDebtEpisode(Position storage position_) internal {

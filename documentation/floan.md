@@ -68,7 +68,10 @@ parameters.
 | Extension   | `configData`                               | Product data interpreted according to `configId` |
 
 `termLength` is always non-zero. `type(uint48).max` permits an unlimited maturity horizon. FLOAN
-reads token decimals when a market is created rather than trusting caller-supplied values.
+enforces a finite horizon when a debt episode starts and whenever maturity is extended. Principal
+and interest added during an active episode must retain its stored maturity; they do not revalidate
+that maturity against a horizon reduced after the episode began. FLOAN reads token decimals when a
+market is created rather than trusting caller-supplied values.
 `maxLtvBps` must be between one and 10,000 basis points. FLOAN stores the boundary but leaves price
 selection, rounding, health, and liquidation behavior to the facility.
 
@@ -163,7 +166,7 @@ multiplication. Timestamps use `uint48`, and `lastBorrowBlock` uses `uint32`.
 | Create market               | Kernel-permissioned creator | Standard configuration must be valid                      |
 | Configure market            | Current manager             | Standard configuration must remain valid                  |
 | Enable/disable originations | Current manager             | Controls exposure-increasing actions                      |
-| Rotate manager              | Current manager or facility | Transfers configuration authority; new manager is nonzero  |
+| Rotate manager              | Current manager or facility | Transfers configuration authority; new manager is nonzero |
 | Rotate facility             | Current manager             | Transfers servicing authority and live facility principal |
 | Create/mutate position      | Current facility            | Position must belong to its market                        |
 

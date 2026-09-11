@@ -537,6 +537,39 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     }
 
     // Condition tree:
+    // - Debt episode: active position maturity exceeds a subsequently reduced horizon
+    // - Action: preview and execute an additional principal borrow
+    // - Expected branch: both preserve the existing maturity rather than applying new-loan terms
+    function test_givenExistingMaturityExceedsUpdatedHorizon_whenAdditionalBorrow_preservesMaturity()
+        public
+    {
+        _depositDefaultCollateral(alice);
+        IBurnerLoans.BorrowPreview memory firstPreview = _borrowWithPreview(
+            alice,
+            alice,
+            alice,
+            50e9
+        );
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.termLength = 1 days;
+        riskConfig.maxMaturityHorizon = 2 days;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+
+        IBurnerLoans.BorrowPreview memory secondPreview = _borrowWithPreview(
+            alice,
+            alice,
+            alice,
+            1e9
+        );
+
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        assertEq(secondPreview.maturity, firstPreview.maturity, "preview maturity preserved");
+        assertEq(position.debtOhm, 51e9, "aggregate debt");
+        assertEq(position.maturity, firstPreview.maturity, "position maturity preserved");
+    }
+
+    // Condition tree:
     // - Borrow sequence: two fuzzed positive amounts totaling at most 100 OHM
     // - Time: both borrows execute in the same block and timestamp
     // - Expected branch: repeat borrowing is permitted with exact cumulative debt and one index entry

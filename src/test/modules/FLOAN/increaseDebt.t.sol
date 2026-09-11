@@ -131,6 +131,109 @@ contract FLOANIncreaseDebtTest is FLOANTest {
     }
 
     // increaseDebt
+    // given a finite market maturity horizon
+    //  when maturity is within the permitted range
+    //   then it starts the debt episode
+    function test_givenFiniteMaturityHorizon_whenMaturityIsWithinPermittedRange(
+        uint48 maturity_
+    ) public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+        uint48 maximumMaturity = uint48(block.timestamp + 365 days);
+        maturity_ = uint48(bound(maturity_, block.timestamp + 1, maximumMaturity));
+
+        vm.prank(facility);
+        floan.increaseDebt(positionId, 1, 0, maturity_);
+
+        assertEq(floan.getPosition(positionId).maturity, maturity_, "position maturity");
+    }
+
+    // increaseDebt
+    // given a finite market maturity horizon
+    //  when maturity exceeds the maximum permitted timestamp
+    //   then it reverts
+    function test_givenFiniteMaturityHorizon_whenMaturityExceedsMaximum_reverts(
+        uint48 maturity_
+    ) public {
+        uint48 maximumMaturity = uint48(block.timestamp + 365 days);
+        maturity_ = uint48(bound(maturity_, uint256(maximumMaturity) + 1, type(uint48).max));
+
+        _expectFiniteMaturityHorizonExceeded(maturity_, maximumMaturity);
+    }
+
+    function _expectFiniteMaturityHorizonExceeded(
+        uint48 maturity_,
+        uint48 maximumMaturity_
+    ) internal {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+
+        vm.prank(facility);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IFLOANv1.FLOAN_MaturityHorizonExceeded.selector,
+                maturity_,
+                maximumMaturity_
+            )
+        );
+        floan.increaseDebt(positionId, 1, 0, maturity_);
+    }
+
+    // increaseDebt
+    // given the market maturity horizon is unlimited
+    //  when maturity is the maximum uint48 value
+    //   then it starts the debt episode
+    function test_givenUnlimitedMaturityHorizon_whenMaturityIsUint48Max() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        vm.prank(manager);
+        floan.setMarketRiskConfig(marketId, 30 days, type(uint48).max, 8_500);
+        uint64 positionId = _createPosition(marketId, facility, borrower);
+
+        vm.prank(facility);
+        floan.increaseDebt(positionId, 1, 0, type(uint48).max);
+
+        assertEq(floan.getPosition(positionId).maturity, type(uint48).max, "position maturity");
+    }
+
+    // increaseDebt
+    // given active debt whose maturity exceeds a subsequently reduced horizon
+    //  when principal is increased
+    //   then it preserves the active debt episode's maturity
+    function test_givenExistingMaturityExceedsUpdatedHorizon_whenPrincipalIncreases() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        uint48 maturity = floan.getPosition(positionId).maturity;
+        vm.prank(manager);
+        floan.setMarketRiskConfig(marketId, 1 days, 2 days, 8_500);
+
+        vm.prank(facility);
+        floan.increaseDebt(positionId, 1, 0, maturity);
+
+        IFLOANv1.Position memory position = floan.getPosition(positionId);
+        assertEq(position.principalDue, 100e9 + 1, "position principal");
+        assertEq(position.maturity, maturity, "position maturity");
+    }
+
+    // increaseDebt
+    // given active debt whose maturity exceeds a subsequently reduced horizon
+    //  when only deferred interest is increased
+    //   then it records the interest without changing episode maturity
+    function test_givenExistingMaturityExceedsUpdatedHorizon_whenOnlyInterestIncreases() public {
+        uint32 marketId = _createMarket(manager, facility, collateralToken, debtToken, 1_000e9);
+        uint64 positionId = _createPositionWithDebt(marketId, facility, borrower, 100e9);
+        uint48 maturity = floan.getPosition(positionId).maturity;
+        vm.prank(manager);
+        floan.setMarketRiskConfig(marketId, 1 days, 2 days, 8_500);
+
+        vm.prank(facility);
+        floan.increaseDebt(positionId, 0, 1, maturity);
+
+        IFLOANv1.Position memory position = floan.getPosition(positionId);
+        assertEq(position.interestDue, 1, "position interest");
+        assertEq(position.maturity, maturity, "position maturity");
+    }
+
+    // increaseDebt
     // given active debt
     //  when increaseDebt is called
     //   then it requires existing maturity

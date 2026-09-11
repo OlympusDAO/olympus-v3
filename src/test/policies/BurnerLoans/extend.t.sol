@@ -445,6 +445,63 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // Condition tree:
+    // - Debt episode: active position receives an additional borrow after shorter terms are set
+    // - Time: extension becomes available at the exact updated horizon
+    // - Expected branch: borrow preserves maturity; extension rolls the aggregate debt by the new term
+    function test_givenUpdatedTermsAndAdditionalBorrow_whenExtend_appliesToAggregateDebt() public {
+        _borrowForAlice();
+        IBurnerLoans.Position memory originalPosition = burnerLoans.getPosition(
+            address(usds),
+            alice
+        );
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.termLength = 15 days;
+        riskConfig.maxMaturityHorizon = 30 days;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+
+        IBurnerLoans.BorrowPreview memory borrowPreview = burnerLoans.previewBorrow(
+            address(usds),
+            1e9,
+            alice
+        );
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, borrowPreview.fee);
+
+        IBurnerLoans.Position memory afterBorrow = burnerLoans.getPosition(address(usds), alice);
+        assertEq(afterBorrow.debtOhm, originalPosition.debtOhm + 1e9, "aggregate debt");
+        assertEq(afterBorrow.maturity, originalPosition.maturity, "borrow preserves maturity");
+
+        uint256 requestedMaturity = uint256(originalPosition.maturity) + 15 days;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_MaturityHorizonExceeded.selector,
+                requestedMaturity,
+                block.timestamp + 30 days
+            )
+        );
+        burnerLoans.previewExtend(address(usds), alice, 1);
+
+        vm.warp(block.timestamp + 15 days);
+        price.setTimestamp(uint48(block.timestamp));
+        IBurnerLoans.ExtendPreview memory extendPreview = burnerLoans.previewExtend(
+            address(usds),
+            alice,
+            1
+        );
+        vm.prank(alice);
+        burnerLoans.extend(address(usds), alice, 1, extendPreview.fee);
+
+        IBurnerLoans.Position memory afterExtension = burnerLoans.getPosition(address(usds), alice);
+        assertEq(afterExtension.debtOhm, afterBorrow.debtOhm, "extension preserves aggregate debt");
+        assertEq(
+            afterExtension.maturity,
+            originalPosition.maturity + 15 days,
+            "current term extends aggregate debt"
+        );
+    }
+
     // extend
     // given unhealthy position
     //  when extension is previewed or executed

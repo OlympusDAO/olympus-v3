@@ -460,9 +460,11 @@ interface IFLOANv1 is IERC165 {
 
     /// @notice Increases principal and optional deferred interest for a position.
     /// @dev Kernel-permissioned. Reverts for an invalid position, caller other than the facility,
-    ///      disabled originations, invalid amount or maturity, a maturity differing from
-    ///      the active episode, or resulting principal above the cap. A new episode requires
-    ///      nonzero principal; an active episode may accrue interest alone.
+    ///      disabled originations, invalid amount or maturity, a new debt episode beyond the
+    ///      current maturity horizon, a maturity differing from the active episode, or resulting
+    ///      principal above the cap. A new episode requires nonzero principal. Principal and
+    ///      interest added to an active episode retain its existing maturity without revalidating
+    ///      that maturity against a subsequently reduced horizon.
     /// @param positionId_ Position to mutate.
     /// @param principal_ Principal increase in debt-token decimals.
     /// @param interest_ Deferred-interest increase in debt-token decimals.

@@ -364,6 +364,51 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
+    // repay and borrow
+    // given a fully repaid debt episode and subsequently updated terms
+    //  when the borrower starts another debt episode
+    //   then the reused position adopts the updated term
+    function test_givenFullRepaymentAndUpdatedTerms_whenBorrow_startsEpisodeWithUpdatedTerm()
+        public
+    {
+        _borrowForAlice(100e9);
+        uint32 marketId = burnerLoansConfig.marketId(address(usds));
+        uint256[] memory positionIdsBefore = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+
+        vm.roll(block.number + 1);
+        _approveOhm(alice, 100e9);
+        vm.prank(alice);
+        burnerLoans.repay(address(usds), 100e9, alice);
+
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.termLength = 15 days;
+        riskConfig.maxMaturityHorizon = 30 days;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            1e9,
+            alice
+        );
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, preview.fee);
+
+        uint256[] memory positionIdsAfter = floan.getPositionIdsForMarketAndBorrower(
+            marketId,
+            alice
+        );
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
+        assertEq(positionIdsAfter.length, 1, "one position retained");
+        assertEq(positionIdsAfter[0], positionIdsBefore[0], "same position ID reused");
+        assertEq(position.debtOhm, 1e9, "new episode debt");
+        assertEq(preview.maturity, block.timestamp + 15 days, "preview uses updated term");
+        assertEq(position.maturity, preview.maturity, "stored maturity uses updated term");
+    }
+
     // repay
     // given the global mint capacity has been fully consumed
     //  when all borrowed OHM is repaid and burned

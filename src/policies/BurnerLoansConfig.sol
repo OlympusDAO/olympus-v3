@@ -339,7 +339,9 @@ contract BurnerLoansConfig is
 
     /// @inheritdoc IBurnerLoansConfig
     /// @dev Callable by admin or the config operator. Replaces all risk and term fields
-    ///      while preserving admin-only fields such as enabled status, collateral decimals, and debt cap.
+    ///      while preserving admin-only fields such as enabled status, collateral decimals, and debt
+    ///      cap. Term changes do not rewrite active positions' maturities; current terms apply to new
+    ///      debt episodes and extensions.
     /// @dev Reverts if:
     ///      - The contract is disabled.
     ///      - The caller is neither admin nor the config operator.

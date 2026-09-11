@@ -70,8 +70,9 @@ library BurnerLoansQuote {
     }
 
     /// @notice Quotes a borrow against a supplied FLOAN position snapshot.
-    /// @dev Applies the same validation and rounding used by previews and execution. Set
-    ///      `enforceHealth_` for execution to revert on unhealthy current or resulting debt.
+    /// @dev Applies the same validation and rounding used by previews and execution. An active
+    ///      position retains its maturity even if the configured horizon is subsequently reduced.
+    ///      Set `enforceHealth_` for execution to revert on unhealthy current or resulting debt.
     function quoteBorrow(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -98,11 +99,7 @@ library BurnerLoansQuote {
         );
 
         if (position.collateral == 0) revert IBurnerLoans.BurnerLoans_NoCollateral();
-        // Loan maturity uses chain time and tolerates normal validator drift.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (position.principalDue != 0 && block.timestamp >= position.maturity) {
-            revert IBurnerLoans.BurnerLoans_PositionMatured(position.maturity);
-        }
+        _validateActiveBorrowPosition(position);
 
         uint256 assetDebt = _validateCaps(
             dependencies_.floan,
@@ -417,18 +414,7 @@ library BurnerLoansQuote {
                 block.timestamp
             );
         }
-        uint256 maximumMaturity = block.timestamp + uint256(context_.config.maxMaturityHorizon);
-        // This derived chain-time bound is only clamped to the uint48 storage range.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (maximumMaturity > type(uint48).max) maximumMaturity = type(uint48).max;
-        // Maturity horizons span protocol timeframes and tolerate normal validator drift.
-        // forge-lint: disable-next-line(block-timestamp)
-        if (requestedMaturity > maximumMaturity) {
-            revert IBurnerLoans.BurnerLoans_MaturityHorizonExceeded(
-                requestedMaturity,
-                maximumMaturity
-            );
-        }
+        _validateMaturityHorizon(requestedMaturity, context_.config.maxMaturityHorizon);
 
         return
             IBurnerLoans.ExtendPreview({
@@ -438,6 +424,34 @@ library BurnerLoansQuote {
                 healthFactor: context_.health,
                 executable: context_.executable
             });
+    }
+
+    function _validateMaturityHorizon(
+        uint256 requestedMaturity_,
+        uint48 maxMaturityHorizon_
+    ) private view {
+        uint256 maximumMaturity = block.timestamp + uint256(maxMaturityHorizon_);
+        // This derived chain-time bound is only clamped to the uint48 storage range.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (maximumMaturity > type(uint48).max) maximumMaturity = type(uint48).max;
+        // Maturity horizons span protocol timeframes and tolerate normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (requestedMaturity_ > maximumMaturity) {
+            revert IBurnerLoans.BurnerLoans_MaturityHorizonExceeded(
+                requestedMaturity_,
+                maximumMaturity
+            );
+        }
+    }
+
+    function _validateActiveBorrowPosition(IFLOANv1.Position memory position_) private view {
+        if (position_.principalDue == 0) return;
+
+        // Loan maturity uses chain time and tolerates normal validator drift.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp >= position_.maturity) {
+            revert IBurnerLoans.BurnerLoans_PositionMatured(position_.maturity);
+        }
     }
 
     function _extensionFee(
