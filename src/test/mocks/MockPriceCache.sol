@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";

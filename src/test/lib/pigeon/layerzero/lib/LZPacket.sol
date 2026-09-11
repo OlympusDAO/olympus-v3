@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-FileCopyrightText: 2022 LayerZero Labs Ltd
+// SPDX-License-Identifier: LicenseRef-LayerZero-BUSL-1.1
 
 pragma solidity >=0.7.6 <0.9.0;
 

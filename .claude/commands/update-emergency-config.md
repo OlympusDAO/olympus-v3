@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Update Emergency Config
 
 This skill updates `documentation/emergency/emergency-config.json` by analyzing contract source code.

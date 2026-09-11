@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GLP-3.0
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {Test, console2} from "forge-std/Test.sol";

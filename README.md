@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Olympus V3
 
 Olympus V3, aka Bophades, is the latest iteration of the Olympus protocol. It is a foundation for the future of the protocol, utilizing the [Default Framework](https://github.com/fullyallocated/Default) to allow extensibility at the base layer via fully onchain governance mechanisms.
@@ -53,6 +56,10 @@ Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_g
 ## Deployment
 
 See [DEPLOY.md](src/scripts/DEPLOY.md) and [DEPLOY_L2.md](src/scripts/DEPLOY_L2.md) for more detailed steps.
+
+## Licensing
+
+See [LICENSING.md](LICENSING.md) for the repository policy and file-level licensing boundaries.
 
 ## Boosted Liquidity Vault Setup
 

@@ -1,8 +1,13 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Sample Test File
 
 This is a reference example demonstrating the Olympus V3 testing standards.
 
 ## Parent Test Contract: `SimpleVaultTest.sol`
+
+<!-- REUSE-IgnoreStart -->
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -133,7 +138,11 @@ abstract contract SimpleVaultTest is Test {
 }
 ```
 
+<!-- REUSE-IgnoreEnd -->
+
 ## Function-Specific Test File: `deposit.t.sol`
+
+<!-- REUSE-IgnoreStart -->
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -299,6 +308,8 @@ contract DepositTest is SimpleVaultTest {
     }
 }
 ```
+
+<!-- REUSE-IgnoreEnd -->
 
 ## Key Standards Demonstrated
 

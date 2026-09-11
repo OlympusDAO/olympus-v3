@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GLP-3.0
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.15;
 
 import {IERC20} from "forge-std/interfaces/IERC20.sol";

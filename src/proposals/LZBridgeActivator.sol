@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.30;
 
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";

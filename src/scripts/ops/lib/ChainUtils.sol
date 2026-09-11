@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {ArrayUtils} from "./ArrayUtils.sol";

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-FileCopyrightText: 2023 Dai Foundation
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.4;
 
 interface IDaiUsdsMigrator {

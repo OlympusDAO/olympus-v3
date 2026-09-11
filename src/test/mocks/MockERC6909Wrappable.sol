@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
 import {ERC6909Wrappable} from "src/libraries/ERC6909Wrappable.sol";

@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";

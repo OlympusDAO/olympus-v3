@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # deal_gohm.sh - Deal 15 gOHM to a wallet and set up voting checkpoint for anvil
 

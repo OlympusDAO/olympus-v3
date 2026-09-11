@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Operational tooling for an already-deployed testnet bridge: unblock a stuck inbound message and
 # correct the canonical bridged supply, plus a read-only discovery helper. The local gateway

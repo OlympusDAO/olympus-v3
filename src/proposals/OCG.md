@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Olympus Governor Bravo Implementation
 
 The Olympus protocol is governed and upgraded by gOHM (Governance OHM) token holders, using three distinct components: the [gOHM](https://etherscan.io/token/0x0ab87046fBb341D058F17CBC4c1133F25a20a52f) token, the governance policy ([Governor Bravo](../external/governance/GovernorBravoDelegate.sol)), and a [Timelock](../external/governance/Timelock.sol). Together, these contracts enable the community to propose, vote on, and implement changes to the Olympus V3 system. Proposals can modify system parameters, activate or deactivate policies, and even install or upgrade modules, effectively allowing the addition of new features and the mutation of the protocol.

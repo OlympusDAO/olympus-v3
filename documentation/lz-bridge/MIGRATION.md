@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # LZ Bridge Migration Flow
 
 Step-by-step operational sequence for replacing `CrossChainBridge` (LZ V1) with `LZBridgeGateway` + `LZEndpointDelegate` + `LZCrossChainBridge` + `LZBridgeAndDelegateConfig` (LZ V2).

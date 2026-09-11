@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Bophades Coding Standard
 
 The following establishes a coding standard for the Olympus v3/Bophades repo.
