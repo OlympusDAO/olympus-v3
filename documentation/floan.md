@@ -67,11 +67,12 @@ parameters.
 | Derived     | token decimals, `originationsEnabled`      | Cached scales and exposure-control state         |
 | Extension   | `configData`                               | Product data interpreted according to `configId` |
 
-`termLength` is always non-zero. `type(uint48).max` permits an unlimited maturity horizon. FLOAN
-enforces a finite horizon when a debt episode starts and whenever maturity is extended. Principal
-and interest added during an active episode must retain its stored maturity; they do not revalidate
-that maturity against a horizon reduced after the episode began. FLOAN reads token decimals when a
-market is created rather than trusting caller-supplied values.
+`termLength` is always non-zero. `type(uint48).max` permits an unlimited maturity horizon. When
+`maxMaturityHorizon` is below that sentinel, FLOAN enforces the finite horizon when a debt episode
+starts and whenever maturity is extended. Principal and interest added during an active episode must
+retain its stored maturity; they do not revalidate that maturity against a horizon reduced after the
+episode began. FLOAN reads token decimals when a market is created rather than trusting
+caller-supplied values.
 `maxLtvBps` must be between one and 10,000 basis points. FLOAN stores the boundary but leaves price
 selection, rounding, health, and liquidation behavior to the facility.
 
