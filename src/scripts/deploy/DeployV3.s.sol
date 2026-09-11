@@ -23,6 +23,8 @@ import {IVault} from "src/libraries/Balancer/interfaces/IVault.sol";
 import {Kernel, Module} from "src/Kernel.sol";
 
 // Bridge
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {LZCrossChainBridge} from "src/periphery/bridge/LZCrossChainBridge.sol";
@@ -97,10 +99,16 @@ import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
 ///         - helper functions for reading deployment arguments from the sequence file
 ///         - remove the use of state variables for all of the contracts, since they can be loaded easily with `_envAddressNotZero()`
 ///         - deployment functions can reference deployments from the same sequence file (using `_getAddressNotZero()`)
-/// @dev    Do not import contracts with non-default optimizer settings into this script. Restrictions
-///         apply to the entire import graph, including every contract created with `new`, even if the
-///         restricted contract is not deployed. For example, importing Operator would apply its 10-run
-///         setting to the graph. Use interfaces for interactions and dedicated deployment scripts.
+///
+///         Run this script under the `deploy` profile, which `shell/deployV3.sh` sets. That profile
+///         is the source of deployment bytecode: it compiles the whole graph with the optimizer at
+///         400 runs and clears the per-path `compilation_restrictions` that the everyday profile
+///         applies. Under the everyday profile the settings follow the import graph, since a
+///         restriction covers the whole connected graph: this script lands in the same 400-runs
+///         job through its `src/proposals` imports, and its bytecode carries the 400-runs
+///         creation code of every contract it deploys. That is incidental rather than guaranteed,
+///         and the runtime code of a large contract compiled without the optimizer exceeds the
+///         24,576 B limit and cannot be deployed.
 contract DeployV3 is WithEnvironment {
     using stdJson for string;
 
@@ -368,6 +376,33 @@ contract DeployV3 is WithEnvironment {
         return uint8Array;
     }
 
+    /// @notice Reads a uint256 deployment argument, falling back to an `env.json` value of the
+    ///         current chain when the sequence file does not declare the argument.
+    /// @dev    Used for parameters whose source of truth is `env.json` (the desired-state
+    ///         configuration that the batches and proposals validate against), so that a
+    ///         sequence file only needs to name them to override them.
+    function _readDeploymentArgUint256OrEnv(
+        string memory deploymentName_,
+        string memory key_,
+        string memory envKey_
+    ) internal view returns (uint256) {
+        string memory path = string.concat(
+            ".sequence[?(@.name == '",
+            deploymentName_,
+            "')].args.",
+            key_
+        );
+        if (vm.keyExistsJson(sequenceFile, path)) {
+            uint256 value = sequenceFile.readUint(path);
+            console2.log("  %s: %s (from sequence args)", key_, value);
+            return value;
+        }
+
+        uint256 envValue = _envUintNotZero(envKey_);
+        console2.log("  %s: %s (from env.json %s)", key_, envValue, envKey_);
+        return envValue;
+    }
+
     function _readDeploymentArgBool(
         string memory deploymentName_,
         string memory key_
@@ -486,6 +521,87 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(ccipCrossChainBridge), "olympus.periphery");
+    }
+
+    /// @notice Deploys the CCIPTokenPoolConfig policy for the local token pool.
+    /// @dev    The pool is the lock/release pool on a canonical chain and the burn/mint pool
+    ///         otherwise, resolved from the same sequence first so that the pool and the config
+    ///         policy can be deployed together. `gracePeriod` defaults to
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod` and can be overridden by the
+    ///         sequence argument of the same name.
+    function deployCCIPTokenPoolConfig() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address pool = ChainUtils._isCanonicalChain(chain)
+            ? _getAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool")
+            : _getAddressNotZero("olympus.policies.CCIPBurnMintTokenPool");
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfig",
+                "gracePeriod",
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfig parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  pool", pool);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfig config = new CCIPTokenPoolConfig(Kernel(kernel), pool, gracePeriod);
+
+        return (address(config), "olympus.policies");
+    }
+
+    /// @notice Deploys the CCIPTokenPoolConfigTimelock policy for the CCIPTokenPoolConfig policy.
+    /// @dev    The config policy must already be deployed (in this sequence or in `env.json`); the
+    ///         timelock constructor requires it to advertise `ICCIPTokenPoolConfig`,
+    ///         `IConfigOperator` and `IEnabler` and to report the same Kernel.
+    ///         `initialTimelockDelay` defaults to
+    ///         `olympus.config.CCIPTokenPoolConfig.timelockDelay` and `gracePeriod` to
+    ///         `olympus.config.CCIPTokenPoolConfig.gracePeriod`; both can be overridden by the
+    ///         sequence arguments of the same name.
+    function deployCCIPTokenPoolConfigTimelock() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address config = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        uint48 initialTimelockDelay = SafeCast.encodeUInt48(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfigTimelock",
+                "initialTimelockDelay",
+                "olympus.config.CCIPTokenPoolConfig.timelockDelay"
+            )
+        );
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _readDeploymentArgUint256OrEnv(
+                "CCIPTokenPoolConfigTimelock",
+                "gracePeriod",
+                "olympus.config.CCIPTokenPoolConfig.gracePeriod"
+            )
+        );
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfigTimelock parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  config", config);
+        console2.log("  initialTimelockDelay", initialTimelockDelay);
+        console2.log("  gracePeriod", gracePeriod);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfigTimelock timelock = new CCIPTokenPoolConfigTimelock(
+            Kernel(kernel),
+            config,
+            initialTimelockDelay,
+            gracePeriod
+        );
+
+        return (address(timelock), "olympus.policies");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {

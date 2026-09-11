@@ -24,6 +24,11 @@ echo "*** Running forge soldeer update"
 rm -rf dependencies/
 forge soldeer update
 
+# Local fixes for known upstream defects; see shell/patches/README.md.
+echo "*** Patching chainlink-local 0.2.9 (sender abi.encode)"
+git apply --verbose --directory=dependencies/chainlink-local-0.2.9 \
+    shell/patches/chainlink-local-sender-abi-encode.patch
+
 # This must happen after the dependencies are installed, otherwise it may complain
 echo "*** Cleaning build artifacts"
 forge clean

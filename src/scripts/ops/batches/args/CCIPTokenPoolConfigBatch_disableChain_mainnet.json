@@ -1,0 +1,16 @@
+{
+    "functions": [
+        {
+            "args": {
+                "remoteChain": "mainnet"
+            },
+            "name": "disableChain"
+        },
+        {
+            "args": {
+                "remoteChain": "mainnet"
+            },
+            "name": "disableChainEmergencyMS"
+        }
+    ]
+}

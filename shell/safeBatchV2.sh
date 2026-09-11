@@ -15,6 +15,7 @@
 # [--broadcast <true|false>]
 # [--tenderly <true|false>]
 # [--fork <true|false>]
+# [--owner <dao|emergency>] (fork mode only: the multisig to impersonate; defaults to dao)
 # [--verbose <true|false>]
 # [--args <args-file>]
 # [--env <env-file>]
@@ -40,6 +41,7 @@ fork=${fork:-false}
 multisig=${multisig:-false}
 signonly=${signonly:-false}
 verbose=${verbose:-false}
+owner=${owner:-dao}
 signature=${signature:-"0x"}
 ARGS_FILE=${args:-}
 
@@ -55,6 +57,10 @@ validate_boolean "$broadcast" "Invalid value for --broadcast. Must be true or fa
 validate_boolean "$multisig" "Invalid value for --multisig. Must be true or false."
 validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
 validate_boolean "$verbose" "Invalid value for --verbose. Must be true or false."
+if [ "$owner" != "dao" ] && [ "$owner" != "emergency" ]; then
+    display_error "Invalid value for --owner. Must be dao or emergency."
+    exit 1
+fi
 
 # Validate and set account flags (consistent with deployV3.sh)
 if [ "$signonly" == "true" ]; then
@@ -91,8 +97,8 @@ if [ "$fork" == "true" ]; then
         exit 1
     fi
 
-    # Set the unlocked address
-    ACCOUNT_ADDRESS="$(get_address_not_zero "$chain" "olympus.multisig.dao")"
+    # Set the unlocked address: the multisig whose batch functions are being run
+    ACCOUNT_ADDRESS="$(get_address_not_zero "$chain" "olympus.multisig.$owner")"
     UNLOCKED_FLAG="--unlocked"
 
     # Override RPC and set env var for Anvil mode
@@ -114,6 +120,7 @@ echo "  Executing as multisig: $multisig"
 echo "  Sign only: $signonly"
 echo "  Tenderly mode: $tenderly"
 echo "  Fork mode: $fork"
+echo "  Fork owner: $owner"
 echo "  Broadcasting: $broadcast"
 echo "  Verbose: $verbose"
 if [ -n "$ARGS_FILE" ]; then
