@@ -64,6 +64,12 @@ git = "https://github.com/wighawag/clones-with-immutable-args.git"
 rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce"
 
 [[dependencies]]
+name = "excessively-safe-call"
+version = "0.0.1"
+git = "https://github.com/nomad-xyz/ExcessivelySafeCall.git"
+rev = "81cd99ce3e69117d665d7601c330ea03b97acce0"
+
+[[dependencies]]
 name = "forge-proposal-simulator"
 version = "1.0.1"
 git = "https://github.com/OlympusDAO/forge-proposal-simulator.git"
