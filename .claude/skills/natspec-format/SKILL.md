@@ -24,8 +24,8 @@ NatSpec (Ethereum Natural Language Specification) is the format for documenting 
 2. **Tab after tag** - The tag name (`@notice`, `@dev`, `@param`, `@return`) is followed by a tab
 3. **Tab-aligned descriptions** - Align descriptions at the first tab stop after the longest parameter name in the list
 4. **Tab-aligned returns** - For `@return`: `@return<TAB>name-or-type<TAB>description`
-   - If the Solidity return value is named, use that return name.
-   - If the Solidity return value is unnamed, use the return type.
+    - If the Solidity return value is named, use that return name.
+    - If the Solidity return value is unnamed, use the return type.
 5. **Named interface returns** - Interface functions should name every return value. The interface NatSpec should document each return by name. Implementation contracts may omit return names when appropriate.
 6. **All parameters documented** - Every parameter must have a `@param` entry
 7. **Multi-line `@dev`** - Continue multi-line `@dev` comments on separate `/// @dev` lines
@@ -301,7 +301,7 @@ modifier onlyAdmin() {
 | Undocumented parameters   | No `@param` for some parameters            | All parameters documented                        |
 | Struct fields inline      | Inline `/// @notice` on each field         | Document fields as `@param` at struct level      |
 | Multi-line on single line | Very long `/// @notice` line               | Break across multiple `/// @notice` lines        |
-| Missing @inheritdoc       | Duplicating interface docs               | Use `/// @inheritdoc InterfaceName`              |
+| Missing @inheritdoc       | Duplicating interface docs                 | Use `/// @inheritdoc InterfaceName`              |
 
 ## GOOD vs BAD Examples
 
@@ -371,15 +371,15 @@ struct DeviationConfig {
 
 ## Quick Reference
 
-| Element                | Tag             | Required          | Format                                      |
-| ---------------------- | --------------- | ----------------- | ------------------------------------------- |
-| Function description   | `@notice`       | Yes               | `/// @notice<TAB>description`               |
-| Implementation details | `@dev`          | As needed         | `/// @dev<TAB>description`                  |
-| Parameters             | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description` |
-| Return values          | `@return`       | Yes (if non-void) | `/// @return<TAB>type<TAB>description`      |
-| Events                 | (use `@notice`) | Yes               | `/// @notice<TAB>when emitted`              |
-| Struct fields          | `@param`        | Yes (all)         | `/// @param<TAB>fieldName<TAB>description`  |
-| Error params           | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description` |
+| Element                | Tag             | Required          | Format                                         |
+| ---------------------- | --------------- | ----------------- | ---------------------------------------------- |
+| Function description   | `@notice`       | Yes               | `/// @notice<TAB>description`                  |
+| Implementation details | `@dev`          | As needed         | `/// @dev<TAB>description`                     |
+| Parameters             | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description`    |
+| Return values          | `@return`       | Yes (if non-void) | `/// @return<TAB>name-or-type<TAB>description` |
+| Events                 | (use `@notice`) | Yes               | `/// @notice<TAB>when emitted`                 |
+| Struct fields          | `@param`        | Yes (all)         | `/// @param<TAB>fieldName<TAB>description`     |
+| Error params           | `@param`        | Yes (all)         | `/// @param<TAB>paramName_<TAB>description`    |
 
 ## Checklist
 
@@ -389,7 +389,7 @@ When writing NatSpec documentation:
 - [ ] `@dev` tags for implementation details (if needed)
 - [ ] Blank `///` line before `@param`/`@return` tags
 - [ ] All parameters documented with `@param`
-- [ ] Return values documented with `@return` (format: type + description)
+- [ ] Return values documented with `@return` (format: named return or unnamed type + description)
 - [ ] Descriptions tab-aligned based on longest parameter name
 - [ ] Parameter names use trailing underscore (e.g., `amount_`)
 - [ ] Struct fields documented at struct level, not inline
