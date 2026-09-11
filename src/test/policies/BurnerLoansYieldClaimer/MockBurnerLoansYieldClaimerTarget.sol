@@ -122,7 +122,7 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
         ++claimCalls;
     }
 
-    function supportsInterface(bytes4 interfaceId_) external view returns (bool) {
+    function supportsInterface(bytes4 interfaceId_) external view override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId ||
