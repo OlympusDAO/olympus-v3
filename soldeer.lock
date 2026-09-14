@@ -53,9 +53,9 @@ rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
 
 [[dependencies]]
 name = "chainlink-local"
-version = "0.2.5"
+version = "0.2.9"
 git = "https://github.com/smartcontractkit/chainlink-local.git"
-rev = "b429481536095867f9cd2c6480066c472b9594de"
+rev = "f8c0efe8685660dac07e08f4558f1b578ae991aa"
 
 [[dependencies]]
 name = "clones-with-immutable-args"

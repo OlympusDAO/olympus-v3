@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: MIT
+// forge-lint: disable-start(pascal-case-struct)
 pragma solidity ^0.8.0;
 
 /// @dev Copied from `Client.sol` in `chainlink-ccip-1.6.0`
