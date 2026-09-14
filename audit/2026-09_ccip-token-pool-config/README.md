@@ -27,8 +27,12 @@ roles can immediately contain one or all routes.
     `IConfigOperator` and `IEnabler` and report the same Kernel.
 - `ConfigTimelockBatchQueue` reserves the configuration domains touched by an action and records
     their state hashes. Execution fails if the destination or guarded state changed after queueing.
-    This shared abstraction and `ConfigOperatorSingleStep` originated in Burner Loans PR
-    [`#330`](https://github.com/OlympusDAO/olympus-v3/pull/330) and were copied into this branch.
+    The scoped key it reserves comes from `ConfigTimelockKeyLib`, and `CCIPTokenPoolConfigKeyLib`
+    derives the CCIP domains and keys on top of it, so the timelock and the tooling that reads
+    `pendingActionId` compute a key with one formula. This shared abstraction and
+    `ConfigOperatorSingleStep` originated in Burner Loans PR
+    [`#330`](https://github.com/OlympusDAO/olympus-v3/pull/330), were copied into this branch and
+    have since been extended here; see Scope.
 - Ethereum uses the deployed Chainlink lock/release pool. The four other production EVM chains
     receive the Olympus `CCIPBurnMintTokenPool` policy, which this work does not modify. The same
     config and timelock policies manage both pool types.
@@ -55,12 +59,22 @@ Code commit: `<to-be-added>`. See
     [interface](../../src/policies/interfaces/utils/IConfigOperator.sol)
 - [ConfigTimelockBatchQueue](../../src/policies/utils/ConfigTimelockBatchQueue.sol) and its
     [interface](../../src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol)
+- [ConfigTimelockKeyLib](../../src/policies/utils/ConfigTimelockKeyLib.sol), the one formula of
+    the destination-scoped key that the base reserves, and
+    [CCIPTokenPoolConfigKeyLib](../../src/policies/utils/CCIPTokenPoolConfigKeyLib.sol), the CCIP
+    domain constants and the local and scoped keys derived from it. The timelock takes its domains
+    and keys from the library; the reconciler and the setup batch derive the key they pass to
+    `pendingActionId` from the same library.
 - The execution-completion hook added to
     [TimelockBatchQueue](../../src/policies/utils/TimelockBatchQueue.sol)
 
-The four shared abstraction files are in scope. The CCIP copies match PR `#330` except
-for Solidity pragma normalization. For `TimelockBatchQueue`, only the `_onActionExecuted` hook and
-its invocation are in scope.
+The four shared abstraction files, the two mix-ins and their interfaces, are in scope. The CCIP
+copies started as the PR `#330` versions and have since diverged:
+`ConfigOperatorSingleStep.setConfigOperator` is `public` and rejects the operator already
+configured, the zero address included, with `IConfigOperator.ConfigOperator_Unchanged`, and
+`ConfigTimelockBatchQueue` keeps its reservation mappings `internal` for subclasses and scopes its
+keys through `ConfigTimelockKeyLib`. For `TimelockBatchQueue`, only the `_onActionExecuted` hook
+and its invocation are in scope.
 
 ### Lifecycle and Authorization Mix-Ins
 
@@ -95,13 +109,13 @@ The Solidity metrics extension accepts file paths, not line ranges. It will ther
 file below in full. Audit scope is limited to these ranges at commit
 [`<to-be-added>`](https://github.com/#<to-be-added>):
 
-| File                     | In-scope code                                                                                                                                                       | Baseline                                                                                                                   |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `TimelockBatchQueue.sol` | Interaction in `executeQueuedAction`, lines 134-154; `_onActionExecuted`, lines 389-397. The new call is line 149 and the new hook is line 397.                     | Audited version at [`0b7e6138`](https://github.com/OlympusDAO/olympus-v3/commit/0b7e61388c7da4fc443f814228ea234a185e76cc)  |
-| `DeployV3.s.sol`         | `_readDeploymentArgUint256OrEnv`, lines 384-404; `deployCCIPTokenPoolConfig`, lines 526-558; `deployCCIPTokenPoolConfigTimelock`, lines 560-605; supporting imports | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
-| `BatchScriptV2.sol`      | `setUpWithEmergencyMS`, lines 133-147                                                                                                                               | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
-| `CCIPBridge.sol`         | All changes in the audit-commit diff: declarative trusted-remote and gas-limit reconciliation, lifecycle and ownership entry points                                 | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
-| `CCIPTokenPool.sol`      | All changes in the audit-commit diff: bootstrap authority checks, registry and ownership handover, liquidity and direct pool-owner entry points                     | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
+| File                      | In-scope code                                                                                                                                                                                                 | Baseline                                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `TimelockBatchQueue.sol`  | Interaction in `executeQueuedAction`, lines 134-154; `_onActionExecuted`, lines 399-407. The new call is line 149 and the new hook is line 407.                                                               | Audited version at [`0b7e6138`](https://github.com/OlympusDAO/olympus-v3/commit/0b7e61388c7da4fc443f814228ea234a185e76cc)  |
+| `DeployV3.s.sol`          | `_readDeploymentArgUint256OrEnv`, lines 384-404; `deployCCIPTokenPoolConfig`, lines 526-558; `deployCCIPTokenPoolConfigTimelock`, lines 560-605; supporting imports                                           | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
+| `BatchScriptV2.sol`       | `setUpWithEmergencyMS`, lines 133-147                                                                                                                                                                         | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
+| `CCIPBridgeBatch.sol`     | All changes in the audit-commit diff: declarative trusted-remote and gas-limit reconciliation, lifecycle and ownership entry points. Renamed in this work from `CCIPBridge.sol`; diff with rename detection    | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
+| `CCIPTokenPoolBatch.sol`  | All changes in the audit-commit diff: bootstrap authority checks, registry and ownership handover, liquidity and direct pool-owner entry points. Renamed in this work from `CCIPTokenPool.sol`; diff with rename detection | `origin/develop` at [`ad2a6a04`](https://github.com/OlympusDAO/olympus-v3/commit/ad2a6a04263da4e8644a96708dbfa4474b59afbf) |
 
 Line numbers are informational and pinned to the audit commit. The named functions and commit diff
 define the scope if later edits move the lines.
@@ -113,6 +127,16 @@ Chainlink pool, registry, rate-limiter and liquidity calls used by the config po
 scripts. Their selectors, struct layouts and compatibility with the deployed Chainlink contracts
 are in scope.
 
+### Shared Libraries
+
+- [SafeCall](../../src/libraries/SafeCall.sol)
+
+`CCIPTokenPoolConfig.setRouter` probes a router candidate's `typeAndVersion()` through
+`SafeCall.safeStaticCall` with a 30,000 gas budget and a 64-byte cap on the returndata it copies.
+The library is a vendored copy of LayerZero's `SafeCall`, itself the nomad `ExcessivelySafeCall`
+with the differences from the source stated in its header. The copy and the probe's use
+of it are in scope.
+
 ### Deployment and Configuration
 
 - [CCIPTokenPoolConfigProposal](../../src/proposals/CCIPTokenPoolConfigProposal.sol)
@@ -120,8 +144,9 @@ are in scope.
 - [CCIPTokenPoolConfigBatch](../../src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol)
 - [CCIPNonEthereumSetupBatch](../../src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol)
 - [CCIPRouteReconcileBatch](../../src/scripts/ops/batches/CCIPRouteReconcileBatch.sol)
-- The modified [CCIPBridge](../../src/scripts/ops/batches/CCIPBridge.sol) and
-    [CCIPTokenPool](../../src/scripts/ops/batches/CCIPTokenPool.sol) batch scripts
+- The modified [CCIPBridgeBatch](../../src/scripts/ops/batches/CCIPBridgeBatch.sol) and
+    [CCIPTokenPoolBatch](../../src/scripts/ops/batches/CCIPTokenPoolBatch.sol) batch scripts,
+    renamed in this work from `CCIPBridge.sol` and `CCIPTokenPool.sol`
 - [CCIPConfigLib](../../src/scripts/ops/lib/CCIPConfigLib.sol),
     [CCIPFeeBudgetLib](../../src/scripts/ops/lib/CCIPFeeBudgetLib.sol) and the Emergency Multisig
     setup added to [BatchScriptV2](../../src/scripts/ops/lib/BatchScriptV2.sol)

@@ -9,8 +9,10 @@ src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol
 
 # Configuration Timelock Infrastructure
 
+src/policies/utils/CCIPTokenPoolConfigKeyLib.sol
 src/policies/utils/ConfigOperatorSingleStep.sol
 src/policies/utils/ConfigTimelockBatchQueue.sol
+src/policies/utils/ConfigTimelockKeyLib.sol
 src/policies/utils/TimelockBatchQueue.sol
 src/policies/interfaces/utils/IConfigOperator.sol
 src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol
@@ -36,6 +38,10 @@ src/external/bridge/ICCIPTokenAdminRegistry.sol
 src/external/bridge/ICCIPTokenPoolAdmin.sol
 src/external/bridge/ICCIPTokenPoolGetters.sol
 
+# Shared Libraries
+
+src/libraries/SafeCall.sol
+
 # Deployment and OCG Proposal
 
 src/scripts/deploy/DeployV3.s.sol
@@ -43,11 +49,11 @@ src/proposals/CCIPTokenPoolConfigProposal.sol
 
 # Multisig and Operational Configuration
 
-src/scripts/ops/batches/CCIPBridge.sol
+src/scripts/ops/batches/CCIPBridgeBatch.sol
 src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol
 src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol
 src/scripts/ops/batches/CCIPRouteReconcileBatch.sol
-src/scripts/ops/batches/CCIPTokenPool.sol
+src/scripts/ops/batches/CCIPTokenPoolBatch.sol
 src/scripts/ops/lib/BatchScriptV2.sol
 src/scripts/ops/lib/CCIPConfigLib.sol
 src/scripts/ops/lib/CCIPFeeBudgetLib.sol
