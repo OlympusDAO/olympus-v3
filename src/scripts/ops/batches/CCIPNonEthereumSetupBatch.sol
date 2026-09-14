@@ -79,8 +79,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         outgoing lane toward an EVM burn/mint chain carries the raised OHM fee budget. A
     ///         lane toward an SVM chain is not gated: the OHM delivery there runs under the fee
     ///         quoter's default budget for the SVM destination, the same budget as the live
-    ///         mainnet to Solana lane, and the budget of the reverse lane is checked by the
-    ///         Solana tooling; the batch prints a note for such a lane (`_svmLaneNote`).
+    ///         mainnet to Solana lane, and the budget of the reverse lane lives on the Solana
+    ///         fee quoter, which this tooling cannot read; the batch prints a note for such a
+    ///         lane (`_svmLaneNote`).
     ///
     ///         The `admin` grant is chain wide: it applies to every policy of this Kernel, not
     ///         only to the CCIP policies.
@@ -330,9 +331,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         non-canonical chain it checks the deployment, the authority handovers and every
     ///         outgoing EVM lane; on mainnet it checks the Phase B state, the pool backing and
     ///         the mainnet-side lanes. `shell/ccip/check_rollout_readiness.sh` aggregates the
-    ///         answers of every EVM chain; the proposal is not submitted until the aggregate is
-    ///         green and the Solana tooling reports the lanes from Solana toward the burn/mint
-    ///         chains ready.
+    ///         answers of every chain; the proposal is not submitted until the aggregate is
+    ///         green.
     /// @dev    Prints one `[ OK ]`/`[FAIL]` line per check, an `[INFO]` line for a lane the
     ///         fee budget gate does not cover (an SVM destination), and a final
     ///         `READINESS RESULT <chain>: GREEN|RED` line. It does not revert on a red result:
@@ -962,9 +962,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         mainnet to Solana lane runs under without an OHM entry, so no request to
     ///         Chainlink is needed for this direction. The reverse lane depends on the local
     ///         pool: on a burn/mint chain it delivers through MINTR and needs the raised budget
-    ///         on the Solana fee quoter, which the EVM tooling cannot read and the Solana
-    ///         tooling checks instead; on a canonical chain it releases from the lock/release
-    ///         pool with a plain transfer and needs no raise.
+    ///         on the Solana fee quoter, which this tooling cannot read, so it should be confirmed
+    ///         before the route opens; on a canonical chain it releases from the lock/release pool
+    ///         with a plain transfer and needs no raise.
     function _svmLaneNote(string memory remoteChain_) internal view returns (string memory note) {
         string memory reverseLane = string.concat(remoteChain_, " -> ", chain);
         string memory reverseNote = ChainUtils._isCanonicalChain(chain)
@@ -974,11 +974,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 " needs no raised budget either (a lock/release delivery)"
             )
             : string.concat(
-                "the budget of the reverse lane ",
+                "the reverse lane ",
                 reverseLane,
-                " (an enabled OHM entry of at least ",
+                " needs an enabled OHM entry of at least ",
                 vm.toString(uint256(CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD)),
-                " on the Solana fee quoter) is checked by the Solana tooling"
+                " on the Solana fee quoter, which this tooling cannot read; confirm it before opening the route"
             );
         return
             string.concat(

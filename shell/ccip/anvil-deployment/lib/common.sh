@@ -436,7 +436,7 @@ parse_type_and_version() {
 # routes minus mainnet, a lock/release destination that needs no raised budget,
 # and any SVM chain, whose delivery is billed under the fee quoter's default for
 # the SVM destination and is not gated by the scripts; the reverse SVM -> EVM
-# lane bills on the SVM side and is checked by the Solana tooling), one per line.
+# lane bills on the SVM side, which are not mocked here), one per line.
 l2_route_peers() {
   jq -r --arg c "$1" '.current[$c].olympus.config.CCIP.routes | keys[]
     | select(. != "mainnet" and . != "solana" and . != "solana-devnet")' "$REPO_ROOT/$ENV_JSON"
