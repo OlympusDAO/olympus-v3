@@ -113,7 +113,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "2. Execute the one-shot YieldRepurchaseFacilityV2Activator, which wires and enables the YieldRepurchaseFacilityConfigTimelock, the BackingOracle, and the YieldRepurchaseFacilityV2, shuts down YRF v1.2, migrates its accounting into the v2 seeds, registers sUSDe as a second yield asset, includes the Cooler v1 Clearinghouses in the backing yield, resumes the interrupted v1.2 week, and swaps the Heart periodic task from v1.2 to v2.\n",
                 "3. Revoke the temporary roles from the activator and retire the v1.2 `loop_daddy` role.\n",
                 "\n",
-                "The migration preserves the v1.2 economics for sUSDS through a 100% yield buyback share and a 3% initial market discount. The new sUSDe asset also starts with a 100% yield buyback share. Backing launches at the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in v1.2.\n",
+                "The migration preserves the v1.2 economics for sUSDS through a 100% yield buyback share and a 3% initial market discount. It adds a max price premium parameter that bounds the maximum value the bond market will pay for a single OHM token. The premium is measured from the oracle price, independently of the initial discount, so the bound is `oraclePrice * (1 + maxPricePremium)`. The initial value is 10%: if the oracle price is $18, the maximum paid per OHM is $19.80. The new sUSDe asset also starts with a 100% yield buyback share. Backing launches at the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in v1.2.\n",
                 "\n",
                 "The `yrf_admin` role queues bounded facility parameter changes through the YieldRepurchaseFacilityConfigTimelock, which launches with a 1-day delay, a 3-day permissionless execution window, and emergency cancellation. It can also re-enable the facility during its 5-day grace period and rescue untracked token balances or excess balances above the facility's accounting. The `backing_admin` role queues backing updates through the BackingOracle's 1-day timelock; each executed update is limited to a 10% increase or decrease, execution is permissionless for 7 days, and the emergency role can cancel queued updates. The OCG timelock's `admin` role retains a direct setter subject to the same 10% bound.\n",
                 "\n",
@@ -159,7 +159,7 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
                 "   - Validates the pre-requisites (Kernel activation, callback authorization, YRF v1.2 in Heart slot 4).\n",
                 "   - Wires the YieldRepurchaseFacilityConfigTimelock to the facility and enables it.\n",
                 "   - Enables the BackingOracle with the current liquid backing value of 12.04 USDS per OHM, replacing the 11.33 value hardcoded in YRF v1.2. The value becomes governance-updatable; `backing_admin` updates are timelocked and bounded to +/-10% per executed update.\n",
-                "   - Enables the facility with a 3% initial discount and an empty seed array.\n",
+                "   - Enables the facility with a 3% initial discount, a 10% maximum price premium, and an empty seed array.\n",
                 "   - Reads the v1.2 accounting (epoch, projected next yield, yield snapshots, residual funds) and shuts v1.2 down, burning its entire OHM balance and sweeping its USDS and sUSDS to the treasury.\n",
                 "   - Registers sUSDS as the backing vault (100% buyback share) with the migrated v1.2 seeds.\n",
                 "   - Registers sUSDe as a sell-shares yield asset (100% buyback share). Because it has no v1 history to migrate, its snapshots use the live treasury position and its fixed next-yield seed is a 4% annualized estimate: approximately 23,543 USDe for the first full week.\n",
@@ -411,6 +411,10 @@ contract YieldRepurchaseFacilityV2Proposal is GovernorBravoProposal {
             require(
                 yrf.initialDiscount() == activator.INITIAL_DISCOUNT(),
                 "YRF v2 initial discount is incorrect"
+            );
+            require(
+                yrf.maxPricePremium() == activator.MAX_PRICE_PREMIUM(),
+                "YRF v2 max price premium is incorrect"
             );
         }
 

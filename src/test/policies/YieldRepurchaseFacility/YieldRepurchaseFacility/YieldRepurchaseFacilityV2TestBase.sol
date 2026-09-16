@@ -106,6 +106,10 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
     /// @notice The discount `_enableFacility` seeds through the enable payload (3%).
     uint256 internal initialDiscount = 3e16;
 
+    /// @notice The max price premium `_enableFacility` seeds through the enable payload
+    ///         (10%).
+    uint256 internal maxPricePremium = 10e16;
+
     /// @notice The mocked OHM price, in the 18-decimal oracle scale.
     uint256 internal ohmPrice = 10e18;
 
@@ -215,12 +219,16 @@ abstract contract YieldRepurchaseFacilityV2TestBase is Test {
 
     // ========== STATE HELPERS ========== //
 
-    /// @notice Enables the facility with the base-configured initial discount and no
-    ///         next-yield seeds.
+    /// @notice Enables the facility with the base-configured initial discount and max
+    ///         price premium, and no next-yield seeds.
     function _enableFacility() internal {
         vm.prank(guardian);
         yieldRepo.enable(
-            abi.encode(initialDiscount, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+            abi.encode(
+                initialDiscount,
+                maxPricePremium,
+                new IYieldRepurchaseFacilityV2.NextYieldSeed[](0)
+            )
         );
     }
 }

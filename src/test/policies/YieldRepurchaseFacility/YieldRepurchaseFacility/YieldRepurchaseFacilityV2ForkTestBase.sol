@@ -166,6 +166,11 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint256 internal constant BACKING = 11.33e18;
     /// @notice The initial bond market discount (3%, 18 decimals), matching YRF v1.2.
     uint256 internal constant INITIAL_DISCOUNT = 3e16;
+    /// @notice The bond market max price premium (10%, 18 decimals): the ceiling of a
+    ///         market, measured from the oracle price. The market floor is placed at
+    ///         `oraclePrice * (1 + MAX_PRICE_PREMIUM)`, so the decay band spans
+    ///         `(1 + MAX_PRICE_PREMIUM) / (1 - INITIAL_DISCOUNT)`.
+    uint256 internal constant MAX_PRICE_PREMIUM = 10e16;
     uint32 internal constant GRACE_PERIOD = 5 days;
     uint48 internal constant CONFIG_TIMELOCK_DELAY = 1 days;
 
@@ -513,7 +518,11 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         configTimelock.enable("");
         backingOracle.enable(abi.encode(BACKING));
         yieldRepo.enable(
-            abi.encode(INITIAL_DISCOUNT, new IYieldRepurchaseFacilityV2.NextYieldSeed[](0))
+            abi.encode(
+                INITIAL_DISCOUNT,
+                MAX_PRICE_PREMIUM,
+                new IYieldRepurchaseFacilityV2.NextYieldSeed[](0)
+            )
         );
         vm.stopPrank();
     }
@@ -1036,12 +1045,31 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         pure
         returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
     {
+        // discountFactor = 1e18 - INITIAL_DISCOUNT (both 18 decimals);
+        // e.g. 1e18 - 3e16 = 0.97e18.
         uint256 discountFactor = ONE_HUNDRED_PERCENT - INITIAL_DISCOUNT;
+        // effectivePrice = oraclePrice (18 decimals) * discountFactor (18 decimals)
+        // / 1e18 -> 18 decimals (floor). This is the price a market opens at.
         uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        // The premium is measured from the oracle price, not from the discounted price,
+        // so the two parameters do not compound.
+        //
+        // maxPrice = oraclePrice (18 decimals) * (1e18 + MAX_PRICE_PREMIUM) (18 decimals)
+        // / 1e18 -> 18 decimals (floor); e.g. 1e18 + 1e17 = 1.1e18 gives 1.1x the oracle
+        // price. This is the highest payout the market can reach for one OHM.
+        uint256 maxPrice = oraclePrice_.mulDiv(
+            ONE_HUNDRED_PERCENT + MAX_PRICE_PREMIUM,
+            ONE_HUNDRED_PERCENT
+        );
+        // The market quotes OHM per payout unit, so both prices invert the oracle price
+        // across the 18-decimal oracle scale squared: 1e18 * 1e18 = 1e36.
         uint256 oracleSquare = 1e36;
 
+        // Both inversions are 1e36 / (18 decimals) -> 18 decimals, and both round down.
+        // Inversion reverses the ordering, so maxPrice >= effectivePrice becomes
+        // minPrice <= initialPrice, which the Bond SDA requires.
         uint256 initialPrice = oracleSquare / effectivePrice;
-        uint256 minPrice = oracleSquare / oraclePrice_;
+        uint256 minPrice = oracleSquare / maxPrice;
 
         int8 priceDecimals = _mirrorPriceDecimals(initialPrice);
         // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2
