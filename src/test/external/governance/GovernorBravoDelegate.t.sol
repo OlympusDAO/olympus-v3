@@ -1088,6 +1088,12 @@ contract GovernorBravoDelegateTest is Test {
         bytes[] memory calldatas = new bytes[](actions_);
         string memory description = "Test Proposal";
 
+        // Use a stable deployed target with a no-op fallback. The zero address is also used as the
+        // test voter, which changes its code hash once isolation executes that vote as a transaction.
+        for (uint256 i; i < actions_; ++i) {
+            targets[i] = address(timelock);
+        }
+
         // Create proposal
         vm.prank(alice);
         bytes memory data = address(governorBravoDelegator).functionCall(
@@ -1371,7 +1377,7 @@ contract GovernorBravoDelegateTest is Test {
         // Artificially queue an action on the timelock
         uint256 eta = block.timestamp + timelock.delay();
         vm.prank(address(governorBravoDelegator));
-        timelock.queueTransaction(proposalId, address(0), 0, "", "", eta);
+        timelock.queueTransaction(proposalId, address(timelock), 0, "", "", eta);
 
         // Try to queue proposal
         bytes memory err = abi.encodeWithSignature("GovernorBravo_Queue_AlreadyQueued()");
@@ -1462,6 +1468,7 @@ contract GovernorBravoDelegateTest is Test {
         uint256[] memory values = new uint256[](1);
         string[] memory signatures = new string[](1);
         bytes[] memory calldatas = new bytes[](1);
+        targets[0] = address(timelock);
         bool queuedOnTimelock = timelock.queuedTransactions(
             keccak256(
                 abi.encode(proposalId, targets[0], values[0], signatures[0], calldatas[0], eta)
@@ -2264,6 +2271,7 @@ contract GovernorBravoDelegateTest is Test {
         uint256[] memory values = new uint256[](1);
         string[] memory signatures = new string[](1);
         bytes[] memory calldatas = new bytes[](1);
+        targets[0] = address(timelock);
 
         bool isQueuedOnTimelock = timelock.queuedTransactions(
             keccak256(
@@ -2352,6 +2360,7 @@ contract GovernorBravoDelegateTest is Test {
         uint256[] memory values = new uint256[](1);
         string[] memory signatures = new string[](1);
         bytes[] memory calldatas = new bytes[](1);
+        targets[0] = address(timelock);
 
         bool isQueuedOnTimelock = timelock.queuedTransactions(
             keccak256(
@@ -3413,7 +3422,7 @@ contract GovernorBravoDelegateTest is Test {
         assertEq(signatures.length, 1);
         assertEq(calldatas.length, 1);
 
-        assertEq(targets[0], address(0));
+        assertEq(targets[0], address(timelock), "proposal target should be the timelock");
         assertEq(values[0], 0);
         assertEq(signatures[0], "");
         assertEq(calldatas[0].length, 0);

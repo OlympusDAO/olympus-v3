@@ -33,7 +33,7 @@ runs:
           if: ${{ inputs.install-foundry == 'true' }}
           uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
           with:
-              version: 1.7.1
+              version: 1.8.1
 
         # The postinstall hook resolves the Solidity dependencies and ends with `forge clean`, so it
         # requires Forge and it wipes any build artifacts restored before this action runs. Restore
