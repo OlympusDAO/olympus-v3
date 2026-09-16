@@ -39,6 +39,7 @@ gas_snapshot_emit = false
 # generating their ABI encoding/decoding assembly.
 additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
 compilation_restrictions = [
+    { paths = "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol", optimizer_runs = 400 },
     { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
     { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
