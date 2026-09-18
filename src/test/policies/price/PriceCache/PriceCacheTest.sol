@@ -79,6 +79,16 @@ abstract contract PriceCacheTest is Test {
         return cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
+    function _assertCachedPriceEq(
+        IPriceCache.CachedPrice memory actual_,
+        IPriceCache.CachedPrice memory expected_
+    ) internal pure {
+        assertEq(actual_.assetPriceUsd, expected_.assetPriceUsd, "asset price");
+        assertEq(actual_.quotePriceUsd, expected_.quotePriceUsd, "quote price");
+        assertEq(actual_.updatedAt, expected_.updatedAt, "updated at");
+        assertEq(actual_.roundId, expected_.roundId, "round id");
+    }
+
     function _registerNonContractAsset(address asset_) internal {
         priceModule.registerNonContractAsset(asset_);
     }

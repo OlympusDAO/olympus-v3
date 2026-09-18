@@ -3,11 +3,12 @@ pragma solidity ^0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC165} from "@openzeppelin-4.8.0/interfaces/IERC165.sol";
 
-contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
+contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
     address internal constant _UNIT_OF_ACCOUNT = address(0x348);
     string internal constant _UNIT_OF_ACCOUNT_SYMBOL = "USD";
 
@@ -25,6 +26,10 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
     address public kernel;
     address public priceModule;
     uint8 public override decimals = 18;
+    uint8 public versionMajor = 1;
+    uint8 public versionMinor = 0;
+
+    mapping(bytes4 interfaceId => bool supported) internal _supportedInterfaces;
 
     uint256 public cachePriceCallCount;
     uint256 public cachePriceIfNecessaryCallCount;
@@ -41,6 +46,9 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
 
     constructor(address kernel_) {
         kernel = kernel_;
+        _supportedInterfaces[type(IPriceCache).interfaceId] = true;
+        _supportedInterfaces[type(IEnabler).interfaceId] = true;
+        _supportedInterfaces[type(IVersioned).interfaceId] = true;
         _nonContractAssetMetadata[_UNIT_OF_ACCOUNT] = IPriceCache.NonContractAssetMetadata({
             registered: true,
             decimals: 18,
@@ -61,12 +69,27 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         decimals = decimals_;
     }
 
+    function setVersion(uint8 major_, uint8 minor_) external {
+        versionMajor = major_;
+        versionMinor = minor_;
+    }
+
+    function setInterfaceSupport(bytes4 interfaceId_, bool supported_) external {
+        _supportedInterfaces[interfaceId_] = supported_;
+    }
+
     function assetDecimals(address asset_) external view override returns (uint8 decimals_) {
         return _assetDecimals(asset_);
     }
 
     function assetSymbol(address asset_) external view override returns (string memory symbol_) {
         return _assetSymbol(asset_);
+    }
+
+    function validateAssetPair(address asset_, address quote_) external view override {
+        _validatePair(asset_, quote_);
+        _assetDecimals(asset_);
+        _assetDecimals(quote_);
     }
 
     function _assetDecimals(address asset_) internal view returns (uint8 decimals_) {
@@ -179,7 +202,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) external override {
+    ) external override returns (CachedPrice memory cachedPrice) {
         if (!policyActive) revert IPriceCache.PriceCache_PolicyNotActive();
         if (!isEnabled) revert NotEnabled();
 
@@ -188,9 +211,22 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         lastQuote = quote_;
         lastMaxAge = maxAge_;
 
-        if (isStale(asset_, quote_, maxAge_)) {
+        cachedPrice = getCachedPrice(asset_, quote_);
+        if (
+            cachedPrice.updatedAt == 0 ||
+            // Mirrors the production PriceCache freshness boundary.
+            // forge-lint: disable-next-line(block-timestamp)
+            block.timestamp > uint256(cachedPrice.updatedAt) + uint256(maxAge_)
+        ) {
             cachePrice(asset_, quote_);
+            return getCachedPrice(asset_, quote_);
         }
+
+        return cachedPrice;
+    }
+
+    function VERSION() external view override returns (uint8 major, uint8 minor) {
+        return (versionMajor, versionMinor);
     }
 
     function getCachedPrice(
@@ -284,9 +320,7 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165 {
         return _usdPrices[asset_];
     }
 
-    function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
-        return
-            interfaceId_ == type(IPriceCache).interfaceId ||
-            interfaceId_ == type(IERC165).interfaceId;
+    function supportsInterface(bytes4 interfaceId_) external view override returns (bool) {
+        return interfaceId_ == type(IERC165).interfaceId || _supportedInterfaces[interfaceId_];
     }
 }

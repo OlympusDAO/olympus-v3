@@ -478,6 +478,8 @@ abstract contract BaseOracleFactory is
         // Use the oracle's configured max age from factory storage.
         // This avoids any drift between caller-provided values and configured oracle policy.
         uint48 maxAge_ = configuredMaxAge;
+        // The factory caller only needs the cache freshness side effect.
+        // forge-lint: disable-next-line(unused-return)
         priceCache.cachePriceIfNecessary(baseToken_, quoteToken_, maxAge_);
     }
 
