@@ -23,12 +23,17 @@ flowchart LR
     BL -->|"draw, repay, default"| INV
     INV -->|"mint, burn, approval"| MINTR["MINTR"]
     INV -->|"surplus rescue"| TRSRY["TRSRY"]
-    BL --> PRICE["PRICE and backing oracle"]
+    BL --> CACHE["PriceCache (optional)"]
+    CACHE --> PRICE["PRICE"]
+    BL -.->|"fallback"| PRICE
+    BL --> BACKING["backing oracle"]
     BL --> DM["DepositManager / ERC-4626"]
     BL -->|"floor shares"| YRF["Yield repurchase recipient"]
     BL -->|"floor shares"| DIRECT["0+ direct recipients"]
     BL -->|"exact remainder"| TRSRY
-    HEART["Heart"] --> SEIZER["BurnerLoansSeizer"]
+    HEART["Heart"] --> CACHER["PriceCacher"]
+    CACHER -->|"configured pairs"| CACHE
+    HEART --> SEIZER["BurnerLoansSeizer"]
     SEIZER -->|"bounded scan and seize"| BL
 ```
 
@@ -39,6 +44,8 @@ flowchart LR
 | `BurnerLoansConfig`                                                                    | Authorized market, debt-cap, and yield-routing forwarding                     |
 | [`BurnerLoansConfigTimelock`](./burner_loans_access_control.md#config-timelock-matrix) | Timelocked delegate for bounded Config setters                                |
 | `BurnerLoansSeizer`                                                                    | Gas-bounded, fail-open periodic seizure                                       |
+| `PriceCacher`                                                                          | Generic fail-soft warming of independently configured PriceCache pairs        |
+| `PriceCache`                                                                           | Reusable timestamped snapshots sourced from the installed PRICE module        |
 | `FLOAN`                                                                                | Generic fixed-term market, position, active-index, and aggregate state        |
 | `DepositManager`                                                                       | Collateral custody and optional ERC-4626 routing                              |
 
@@ -193,12 +200,22 @@ Previews expose unhealthy hypothetical outcomes instead of reverting solely beca
 writes still revert. Deposits and repayments remain executable when they improve a position but
 leave health below `1e18`.
 
-When resulting debt is nonzero, these returns require the standard live collateral and OHM pricing
-inputs. The preview or action is expected to revert if PRICE is unavailable, unsupported, zero, or
-stale. A write that reaches the health calculation and then encounters a PRICE failure reverts the
-entire collateral or debt transition atomically. There is no no-oracle escape-hatch flag: seizure
-that depends on the same unavailable prices cannot proceed either. Full repayment and debt-free
-collateral operations remain available because their health is unambiguous without PRICE.
+When resulting debt is nonzero, these returns require the standard collateral and OHM pricing
+inputs. A zero PriceCache address selects direct PRICE mode. A configured PriceCache is used only
+while its policy is active and enabled; otherwise Burner Loans falls back to PRICE without probing
+the cache. A nonzero cache must implement the cache, enabler, and version interfaces, report
+PriceCache major version 1, and belong to the same Kernel. OCG admin may rotate or clear it
+while Burner Loans is enabled or disabled. A configured nonzero cache must be an active policy when
+Burner Loans is enabled or re-enabled; it may be disabled because that state has a defined PRICE
+fallback. See [Price Cache](./price_cache.md) for cache behavior and lifecycle details.
+
+`priceCacheMaxAge` is a `uint48` value set through BurnerLoansConfig and delayed through
+BurnerLoansConfigTimelock. It deliberately has no protocol upper bound. Ordinary views use a cached
+snapshot no older than this value and otherwise read PRICE without mutating the cache. Actions call
+`cachePriceIfNecessary` once when pricing is required and use the returned snapshot throughout the
+calculation. A failure from an operational cache propagates; Burner Loans does not reinterpret it
+as availability failure and retry PRICE. Full repayment and debt-free collateral operations remain
+available without either source because their health is unambiguous.
 
 Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
 credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee
@@ -475,6 +492,26 @@ The seizer bounds both its scan and its complete self-execution gas. A scan or s
 not advance its cursor and does not fail Heart. The seizer does not reconcile MINTR approval. If
 automatic restoration does not occur, `burner_loans_admin` must call `syncMintApproval`.
 
+Seizure views follow the same source selection as other price-dependent views: they use an
+operational cache snapshot no older than `priceCacheMaxAge`, otherwise they read PRICE without mutating
+the cache. `seize` is self-sufficient and refreshes the cache when necessary using the same age. A
+caller can warm the cache before previewing to make preview and execution select the same snapshot
+within that freshness window; separate transactions do not guarantee that another permissionless
+cache update will not intervene.
+
+The generic PriceCacher can be placed before Seizer in Heart. Its asset pairs are configured
+independently from Seizer's managed assets; the intended Burner Loans deployment starts with
+OHM/USDS and OHM/USDe. OCG admin may add or remove pairs while PriceCacher is enabled or disabled,
+and removal may reorder the remaining pairs. Every pair is attempted with `maxAge = 0`.
+Because timestamps have block granularity, a same-block snapshot can satisfy that call even if
+another caller wrote it first. PriceCacher contains ordinary aggregate and per-pair reverts and
+no-ops when its cache is inactive or disabled. It deliberately has no configurable gas limit, so
+pathological gas consumption can prevent later pair attempts, later Heart tasks, or Heart
+finalization. OCG admin must keep the configured pair set and pricing cost operationally bounded.
+OCG admin can rotate its cache independently while enabled or disabled, subject to interface,
+version, same-Kernel, and configured pair validation. See
+[Price Cacher Access Control](./price_cacher_access_control.md) for its independent authority model.
+
 ## Configuration Model
 
 See [Burner Loans Access Control](./burner_loans_access_control.md) for the function-level role and
@@ -483,6 +520,11 @@ governance delay.
 
 Backing-oracle rotation is intentionally available only while Burner Loans is enabled. It changes
 health and seizure economics, so it cannot be performed while borrower actions are paused.
+
+PriceCache rotation is instead an availability and integration repair operation and is allowed
+while Burner Loans is enabled or disabled. The PriceCacher has its own cache reference, so a cache
+migration must update and verify Burner Loans and PriceCacher separately. The two policies do not
+derive configuration from one another.
 
 Config creates one market per collateral/OHM pair under its currently bound Burner Loans facility.
 Each market stores Config as its manager and Burner Loans as its facility: Config is the
@@ -601,10 +643,17 @@ circular enablement dependency.
     it as the global recipient. Then use Config directly or through ConfigTimelock to replace each
     complete per-asset route. Assets that do not need custom routing may retain the Treasury-only
     route installed by `addAsset`.
-13. Enable Burner Loans Inventory, then enable Burner Loans last. Burner Loans enablement requires
+13. Deploy and configure Burner Loans' optional PriceCache. A configured nonzero cache must be
+    active before Burner Loans is enabled. Enable it when caching is intended; a disabled cache is
+    permitted and causes Burner Loans to fall back to PRICE. If periodic warming is desired, deploy
+    and activate the generic PriceCacher, add the intended OHM/USDS and OHM/USDe pairs through OCG
+    admin, enable it, and place it immediately before Seizer in Heart. Configure PriceCacher and
+    Seizer asset sets independently.
+14. Enable Burner Loans Inventory, then enable Burner Loans last. Burner Loans enablement requires
     active Config and DepositManager policies plus an active, enabled, compatible Burner Loans
-    Inventory. Then configure and enable Seizer and other periphery contracts, including seizer
-    assets and its execution gas limit.
+    Inventory. Once Burner Loans is enabled, set `priceCacheMaxAge` through Config. Then configure and
+    enable Seizer and other periphery contracts, including seizer assets and its execution gas
+    limit.
 
 V1 launches with zero Burner Loans Inventory active principal, supplied idle, and provider claim.
 Importing a non-zero live Burner Loans Inventory ledger requires a future migration design. See

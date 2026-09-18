@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
@@ -70,21 +71,32 @@ abstract contract BurnerLoansLifecycle is
     // forge-lint: disable-next-line(unused-state-variables)
     IPRICEv2 internal _PRICE;
 
+    /// @dev Optional PriceCache. Zero selects direct PRICE mode.
+    IPriceCache internal _PRICE_CACHE;
+
+    /// @dev Maximum accepted cached-price age. Defaults to zero until Config updates it.
+    // This slot must remain mutable for governed Config updates and is consumed by the derived
+    // BurnerLoans implementation.
+    // forge-lint: disable-next-line(could-be-immutable,unused-state-variables)
+    uint48 internal _priceCacheMaxAge;
+
     /// @dev Used by the derived `BurnerLoans` implementation to receive protocol assets.
     // forge-lint: disable-next-line(unused-state-variables)
     TRSRYv1 internal _TRSRY;
 
-    /// @notice Initializes the facility's immutable Kernel, OHM, and custody dependencies.
+    /// @notice Initializes the facility's Kernel, OHM, custody, and optional cache dependencies.
     /// @dev Reverts with `BurnerLoans_ZeroAddress` for a zero token or DepositManager,
     ///      `BurnerLoans_InvalidDepositManager` for an incompatible DepositManager, or
     ///      `BurnerLoans_DepositManagerKernelMismatch` when it belongs to another Kernel.
     /// @param kernel_ Kernel governing this policy.
     /// @param ohm_ OHM debt token used by the facility.
     /// @param depositManager_ DepositManager that custodies collateral.
+    /// @param priceCache_ Optional PriceCache, or zero for direct PRICE mode.
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
-        IDepositManager depositManager_
+        IDepositManager depositManager_,
+        IPriceCache priceCache_
     ) Policy(kernel_) ReEnablerGracePeriod(BurnerLoansConstants.REENABLE_GRACE_PERIOD) {
         if (address(ohm_) == address(0) || address(depositManager_) == address(0)) {
             revert BurnerLoans_ZeroAddress();
@@ -104,6 +116,9 @@ abstract contract BurnerLoansLifecycle is
         _OHM = ohm_;
         _OHM_DECIMALS = ohm_.decimals();
         _DEPOSIT_MANAGER = depositManager_;
+        BurnerLoansDependencies.validatePriceCache(kernel_, address(priceCache_));
+        _PRICE_CACHE = priceCache_;
+        emit PriceCacheSet(address(priceCache_));
     }
 
     /// @dev Validates and stores a compatible Burner Loans Inventory contract bound to this facility.
@@ -149,6 +164,13 @@ abstract contract BurnerLoansLifecycle is
 
         _CONFIGURATOR = IBurnerLoansConfig(configurator_);
         emit ConfiguratorSet(configurator_);
+    }
+
+    /// @dev Validates and stores an optional PriceCache dependency.
+    function _setPriceCache(address priceCache_) internal {
+        BurnerLoansDependencies.validatePriceCache(kernel, priceCache_);
+        _PRICE_CACHE = IPriceCache(priceCache_);
+        emit PriceCacheSet(priceCache_);
     }
 
     /// @dev Reverts unless the configured Burner Loans Inventory is an active policy.
@@ -215,6 +237,7 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Prevents enabling Burner Loans before compatible Config and Burner Loans Inventory
     ///      policies are bound and agree.
     function _beforeEnable(bytes calldata) internal view override {
+        BurnerLoansDependencies.validateActivePriceCache(kernel, address(_PRICE_CACHE));
         BurnerLoansDependencies.validateConfiguration(
             kernel,
             address(this),
@@ -228,6 +251,7 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Preserves the grace-period gate and revalidates configuration before re-enabling.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
+        BurnerLoansDependencies.validateActivePriceCache(kernel, address(_PRICE_CACHE));
         BurnerLoansDependencies.validateConfiguration(
             kernel,
             address(this),

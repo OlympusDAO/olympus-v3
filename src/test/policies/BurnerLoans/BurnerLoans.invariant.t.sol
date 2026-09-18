@@ -12,6 +12,7 @@ import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
@@ -23,6 +24,8 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     BurnerLoansHandler internal handler;
     BurnerLoansComposites internal composites;
     BurnerLoansSeizer internal seizer;
+    PriceCache internal primaryPriceCache;
+    PriceCache internal secondaryPriceCache;
     address[] internal invariantActors;
     MockYieldRepurchaseRecipient internal yieldRecipient;
 
@@ -36,12 +39,18 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
 
         vm.startPrank(admin);
         yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
+        primaryPriceCache = new PriceCache(kernel, price.decimals(), "USD");
+        secondaryPriceCache = new PriceCache(kernel, price.decimals(), "USD");
         kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
+        kernel.executeAction(Actions.ActivatePolicy, address(primaryPriceCache));
+        kernel.executeAction(Actions.ActivatePolicy, address(secondaryPriceCache));
         burnerLoansConfig.setYieldRepurchaseRecipient(address(yieldRecipient));
         seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
         seizer.addAsset(address(usds));
+        primaryPriceCache.enable("");
+        secondaryPriceCache.enable("");
         vm.stopPrank();
 
         handler = new BurnerLoansHandler(
@@ -59,6 +68,8 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
                 treasury: address(trsry),
                 inventoryProvider: protocolProvider,
                 yieldRecipient: yieldRecipient,
+                primaryPriceCache: primaryPriceCache,
+                secondaryPriceCache: secondaryPriceCache,
                 actors: invariantActors
             })
         );
@@ -80,7 +91,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.extend(0, 1);
         handler.moveOhmPrice(10e18);
 
-        bytes4[] memory selectors = new bytes4[](21);
+        bytes4[] memory selectors = new bytes4[](22);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -102,6 +113,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[18] = handler.setYieldAssetRouting.selector;
         selectors[19] = handler.toggleYieldRecipient.selector;
         selectors[20] = handler.setYieldRepurchaseRecipient.selector;
+        selectors[21] = handler.configurePriceCache.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -175,8 +187,9 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
 
         uint256 capRoom = globalCap > activePrincipal ? globalCap - activePrincipal : 0;
         uint256 expectedCapacity;
-        if (suppliedIdle >= capRoom) expectedCapacity = capRoom;
-        else {
+        if (suppliedIdle >= capRoom) {
+            expectedCapacity = capRoom;
+        } else {
             uint256 requiredApproval = capRoom - suppliedIdle;
             expectedCapacity = approval < requiredApproval ? suppliedIdle + approval : capRoom;
         }
@@ -275,7 +288,10 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         for (uint256 i; i < invariantActors.length; ++i) {
             address actor = invariantActors[i];
             IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), actor);
-            if (position.debtOhm == 0 || burnerLoans.isSeizable(address(usds), actor)) continue;
+            if (position.debtOhm == 0) continue;
+
+            bool seizable = burnerLoans.isSeizable(address(usds), actor);
+            if (seizable) continue;
             assertGe(
                 burnerLoans.positionHealthFactor(
                     address(usds),
@@ -508,7 +524,9 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     }
 
     function _contains(address[] memory values_, address value_) private pure returns (bool) {
-        for (uint256 i; i < values_.length; ++i) if (values_[i] == value_) return true;
+        for (uint256 i; i < values_.length; ++i) {
+            if (values_[i] == value_) return true;
+        }
         return false;
     }
 }

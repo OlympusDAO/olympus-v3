@@ -9,6 +9,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -318,6 +319,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
             kernel,
             IERC20(address(ohm)),
             depositManager,
+            IPriceCache(address(0)),
             backingOracle
         );
         vm.prank(admin);

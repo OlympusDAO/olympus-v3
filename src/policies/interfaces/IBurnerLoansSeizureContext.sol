@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
@@ -18,6 +19,8 @@ struct BurnerLoansContext {
     address backingOracle;
     IFLOANv1 floan;
     IPRICEv2 price;
+    IPriceCache priceCache;
+    uint48 priceCacheMaxAge;
     address treasury;
     ROLESv1 roles;
 }

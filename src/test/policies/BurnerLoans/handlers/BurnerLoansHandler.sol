@@ -16,6 +16,7 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 
 // Contracts
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
@@ -53,6 +54,8 @@ contract BurnerLoansHandler is Test {
     address internal immutable _TREASURY;
     address internal immutable _INVENTORY_PROVIDER;
     MockYieldRepurchaseRecipient internal immutable _YIELD_RECIPIENT;
+    PriceCache internal immutable _PRIMARY_PRICE_CACHE;
+    PriceCache internal immutable _SECONDARY_PRICE_CACHE;
 
     address[] internal _actors;
     uint256 public collateralPrice = _WAD;
@@ -106,6 +109,8 @@ contract BurnerLoansHandler is Test {
         address treasury;
         address inventoryProvider;
         MockYieldRepurchaseRecipient yieldRecipient;
+        PriceCache primaryPriceCache;
+        PriceCache secondaryPriceCache;
         address[] actors;
     }
 
@@ -133,6 +138,8 @@ contract BurnerLoansHandler is Test {
         _TREASURY = dependencies_.treasury;
         _INVENTORY_PROVIDER = dependencies_.inventoryProvider;
         _YIELD_RECIPIENT = dependencies_.yieldRecipient;
+        _PRIMARY_PRICE_CACHE = dependencies_.primaryPriceCache;
+        _SECONDARY_PRICE_CACHE = dependencies_.secondaryPriceCache;
         _actors = dependencies_.actors;
 
         for (uint256 i; i < _directYieldRecipients.length; ++i) {
@@ -500,6 +507,32 @@ contract BurnerLoansHandler is Test {
         _PRICE.setTimestamp(uint48(block.timestamp));
     }
 
+    function configurePriceCache(
+        uint8 modeSeed_,
+        uint48 priceCacheMaxAge_,
+        bool warmCache_
+    ) external {
+        uint8 mode = modeSeed_ % 5;
+        PriceCache selectedCache = mode < 3 ? _PRIMARY_PRICE_CACHE : _SECONDARY_PRICE_CACHE;
+        bool useCache = mode != 0;
+        bool operational = mode == 1 || mode == 3;
+
+        vm.startPrank(_ADMIN);
+        if (useCache && !selectedCache.isEnabled()) selectedCache.enable("");
+        _BURNER_LOANS.setPriceCache(useCache ? address(selectedCache) : address(0));
+        _BURNER_LOANS_CONFIG.setPriceCacheMaxAge(priceCacheMaxAge_);
+        vm.stopPrank();
+
+        if (useCache && warmCache_) {
+            selectedCache.cachePrice(address(_OHM), address(_COLLATERAL));
+        }
+
+        if (useCache && !operational) {
+            vm.prank(_ADMIN);
+            selectedCache.disable("");
+        }
+    }
+
     function seize() external {
         try _BURNER_LOANS.getSeizableBorrowers(address(_COLLATERAL), 0, 8, 4) returns (
             address[] memory borrowers,
@@ -657,7 +690,9 @@ contract BurnerLoansHandler is Test {
             if (
                 priorHash !=
                 keccak256(abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL))))
-            ) ++routingFailureMutationViolations;
+            ) {
+                ++routingFailureMutationViolations;
+            }
         }
     }
 

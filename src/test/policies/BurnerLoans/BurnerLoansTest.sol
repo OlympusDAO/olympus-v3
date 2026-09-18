@@ -19,6 +19,7 @@ import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
@@ -31,6 +32,7 @@ import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -112,6 +114,7 @@ abstract contract BurnerLoansTest is Test {
             kernel,
             IERC20(address(ohm)),
             depositManager,
+            IPriceCache(address(0)),
             backingOracle
         );
         inventory = new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(burnerLoans));
@@ -222,6 +225,15 @@ abstract contract BurnerLoansTest is Test {
 
     function _configurePrice(address asset_, uint256 price_) internal {
         price.setPrice(asset_, price_);
+    }
+
+    function _deployPriceCache(
+        bool activate_,
+        bool enable_
+    ) internal returns (PriceCache priceCache_) {
+        priceCache_ = new PriceCache(kernel, PRICE_DECIMALS, "USD");
+        if (activate_) kernel.executeAction(Actions.ActivatePolicy, address(priceCache_));
+        if (enable_) priceCache_.enable("");
     }
 
     function _configureDepositManagerAsset(address asset_) internal {
@@ -532,6 +544,7 @@ abstract contract BurnerLoansTest is Test {
             kernel,
             IERC20(address(ohm)),
             mockDepositManager,
+            IPriceCache(address(0)),
             backingOracle
         );
         inventory = new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(burnerLoans));

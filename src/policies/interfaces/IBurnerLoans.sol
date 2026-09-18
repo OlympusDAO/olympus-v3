@@ -65,6 +65,24 @@ interface IBurnerLoans {
     /// @param actualKernel Kernel reported by DepositManager.
     error BurnerLoans_DepositManagerKernelMismatch(address expectedKernel, address actualKernel);
 
+    /// @notice The supplied PriceCache does not implement the required interfaces.
+    /// @param priceCache Invalid PriceCache address.
+    error BurnerLoans_InvalidPriceCache(address priceCache);
+
+    /// @notice The supplied PriceCache version is incompatible with Burner Loans.
+    /// @param priceCache Incompatible PriceCache address.
+    /// @param major Reported major version.
+    /// @param minor Reported minor version.
+    error BurnerLoans_UnsupportedPriceCacheVersion(address priceCache, uint8 major, uint8 minor);
+
+    /// @notice The supplied PriceCache belongs to a different Kernel.
+    /// @param expectedKernel Kernel governing Burner Loans.
+    /// @param actualKernel Kernel reported by PriceCache.
+    error BurnerLoans_PriceCacheKernelMismatch(address expectedKernel, address actualKernel);
+
+    /// @notice Thrown when a configured PriceCache is not an active Kernel policy at enablement.
+    error BurnerLoans_PriceCacheNotActive(address priceCache);
+
     /// @notice An operation was requested with a zero token amount.
     error BurnerLoans_ZeroAmount();
 
@@ -516,6 +534,14 @@ interface IBurnerLoans {
     /// @notice Emitted when the Burner Loans Config policy is bound or replaced.
     /// @param configurator New Burner Loans Config policy.
     event ConfiguratorSet(address indexed configurator);
+
+    /// @notice Emitted when the optional PriceCache is set, replaced, or cleared.
+    /// @param priceCache New PriceCache policy, or zero for direct PRICE mode.
+    event PriceCacheSet(address indexed priceCache);
+
+    /// @notice Emitted when the maximum accepted cached-price age changes.
+    /// @param priceCacheMaxAge New maximum cached-price age, in seconds.
+    event PriceCacheMaxAgeSet(uint48 priceCacheMaxAge);
 
     /// @notice Emitted when the facility-wide yield repurchase recipient changes.
     /// @param recipient New recipient, or zero after every repurchase allocation is cleared.

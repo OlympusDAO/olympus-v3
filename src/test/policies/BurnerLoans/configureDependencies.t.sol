@@ -6,6 +6,7 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant)
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {Actions, Kernel, Keycode, Module, toKeycode} from "src/Kernel.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
@@ -124,6 +125,7 @@ contract BurnerLoansConfigureDependenciesTest is BurnerLoansTest {
             kernel_,
             IERC20(address(ohm)),
             new MockDepositManager(kernel_, address(usds)),
+            IPriceCache(address(0)),
             backingOracle
         );
 

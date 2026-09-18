@@ -15,6 +15,7 @@ import {Actions} from "src/Kernel.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {OlympusPricev2} from "src/modules/PRICE/OlympusPrice.v2.sol";
 import {ChainlinkPriceFeeds} from "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {toSubKeycode} from "src/Submodules.sol";
 
 import {BurnerLoansBorrowTestBase} from "./BurnerLoansBorrowTestBase.sol";
@@ -66,12 +67,15 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
     }
 
     function _newPriceFeed(int256 price_) internal returns (MockPriceFeed feed) {
+        // Forge incorrectly attributes these setup calls to a loop; this helper has no loop.
+        // forge-lint: disable-start(calls-loop)
         feed = new MockPriceFeed();
         feed.setDecimals(8);
         feed.setLatestAnswer(price_);
         feed.setTimestamp(block.timestamp);
         feed.setRoundId(1);
         feed.setAnsweredInRound(1);
+        // forge-lint: disable-end(calls-loop)
     }
 
     function _addPriceAsset(address asset_, MockPriceFeed feed_) internal {
@@ -106,6 +110,20 @@ abstract contract BurnerLoansPriceIntegrationTestBase is BurnerLoansBorrowTestBa
         usds.approve(address(burnerLoans), type(uint256).max);
         burnerLoans.depositCollateral(address(usds), amount_, alice);
         vm.stopPrank();
+    }
+
+    function _installOperationalPriceCache(
+        uint48 priceCacheMaxAge_
+    ) internal returns (PriceCache cache_) {
+        vm.startPrank(admin);
+        cache_ = _deployPriceCache(true, true);
+        burnerLoans.setPriceCache(address(cache_));
+        burnerLoansConfig.setPriceCacheMaxAge(priceCacheMaxAge_);
+        vm.stopPrank();
+    }
+
+    function _cacheConfiguredPair(PriceCache cache_) internal {
+        cache_.cachePrice(address(ohm), address(usds));
     }
 }
 

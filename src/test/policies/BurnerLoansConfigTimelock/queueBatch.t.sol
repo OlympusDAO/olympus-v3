@@ -86,7 +86,7 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
     //  when the actions are queued together
     //   then each action stores its documented configuration key and pre-state hash
     function test_givenEverySupportedAction_whenQueuedTogether_storesDocumentedGuards() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](4);
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](5);
         actions[0] = _feeAction(30);
         actions[1] = _riskAction(9_500);
         actions[2] = _singleAction(
@@ -96,6 +96,10 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
         actions[3] = _singleAction(
             IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
             abi.encode(address(usds), false)
+        );
+        actions[4] = _singleAction(
+            IBurnerLoansConfig.setPriceCacheMaxAge.selector,
+            abi.encode(uint48(1))
         );
 
         vm.prank(burnerLoansAdmin);
@@ -133,6 +137,7 @@ contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockCon
             _ORIGINATIONS_DOMAIN,
             keccak256(abi.encode(facility, address(usds), config.originationsEnabled))
         );
+        _assertPriceCacheMaxAgeGuard(actionId, 4);
     }
 
     // queueBatch

@@ -2,6 +2,7 @@
 pragma solidity >=0.8.24;
 
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {Kernel} from "src/Kernel.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
@@ -52,8 +53,9 @@ contract BurnerLoansHarness is BurnerLoans {
         Kernel kernel_,
         IERC20 ohm_,
         IDepositManager depositManager_,
+        IPriceCache priceCache_,
         IOlympusBackingOracle backingOracle_
-    ) BurnerLoans(kernel_, ohm_, depositManager_, backingOracle_) {}
+    ) BurnerLoans(kernel_, ohm_, depositManager_, priceCache_, backingOracle_) {}
 
     function floanForTest() external view returns (IFLOANv1) {
         return _FLOAN;

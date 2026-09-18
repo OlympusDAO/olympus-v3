@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -19,6 +18,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
+import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -116,7 +116,12 @@ library BurnerLoansSeizure {
     ) public returns (uint256 keeperReward, uint256 collateralToTreasury) {
         BurnerLoansContext memory dependencies_ = _dependencies();
         bool isProtocolCaller = _isProtocolCaller(dependencies_);
-        Batch memory batch = _quoteBatch(dependencies_, asset_, borrowers_, isProtocolCaller);
+        Batch memory batch = _quoteBatchForAction(
+            dependencies_,
+            asset_,
+            borrowers_,
+            isProtocolCaller
+        );
 
         uint256 actualDebtOhm;
         uint256 actualCollateral;
@@ -241,7 +246,10 @@ library BurnerLoansSeizure {
             return result;
         }
 
-        result.pricing = _pricing(dependencies_, request_.asset);
+        result.pricing = _pricingFromPricePair(
+            dependencies_,
+            BurnerLoansQuote.resolveViewPricePair(dependencies_, request_.asset)
+        );
         ScanResult memory scanned = _scan(
             dependencies_,
             result.config,
@@ -348,14 +356,48 @@ library BurnerLoansSeizure {
         address asset_,
         address[] memory borrowers_,
         bool isProtocolCaller_
-    ) private view returns (Batch memory batch) {
+    ) private view returns (Batch memory) {
+        BatchContext memory context = _prepareBatchContext(
+            dependencies_,
+            asset_,
+            borrowers_.length
+        );
+        context.pricing = _pricingFromPricePair(
+            dependencies_,
+            BurnerLoansQuote.resolveViewPricePair(dependencies_, asset_)
+        );
+        return _quotePreparedBatch(dependencies_, asset_, borrowers_, isProtocolCaller_, context);
+    }
+
+    /// @notice Validates and prices a state-changing seizure from one resolved cache snapshot.
+    function _quoteBatchForAction(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        address[] memory borrowers_,
+        bool isProtocolCaller_
+    ) private returns (Batch memory) {
+        BatchContext memory context = _prepareBatchContext(
+            dependencies_,
+            asset_,
+            borrowers_.length
+        );
+        context.pricing = _pricingFromPricePair(
+            dependencies_,
+            BurnerLoansQuote.resolveActionPricePair(dependencies_, asset_)
+        );
+        return _quotePreparedBatch(dependencies_, asset_, borrowers_, isProtocolCaller_, context);
+    }
+
+    function _prepareBatchContext(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint256 borrowerCount_
+    ) private view returns (BatchContext memory context) {
         if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
-        uint256 borrowerCount = borrowers_.length;
-        if (borrowerCount == 0 || borrowerCount > MAX_BATCH_SIZE) {
+        if (borrowerCount_ == 0 || borrowerCount_ > MAX_BATCH_SIZE) {
             revert IBurnerLoans.BurnerLoans_InvalidBatch();
         }
 
-        BatchContext memory context;
         context.marketId = BurnerLoansMarketConfig.firstMarketId(
             dependencies_.floan,
             dependencies_.facility,
@@ -363,8 +405,16 @@ library BurnerLoansSeizure {
             address(dependencies_.ohm)
         );
         context.config = _assetConfigForMarket(dependencies_.floan, context.marketId);
-        context.pricing = _pricing(dependencies_, asset_);
-        batch = _validateBatch(dependencies_, borrowers_, context);
+    }
+
+    function _quotePreparedBatch(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        address[] memory borrowers_,
+        bool isProtocolCaller_,
+        BatchContext memory context_
+    ) private view returns (Batch memory batch) {
+        batch = _validateBatch(dependencies_, borrowers_, context_);
 
         IDepositManager.AssetConfiguration memory custody = BurnerLoansCustody
             .validateCustodySupportFor(
@@ -572,18 +622,12 @@ library BurnerLoansSeizure {
         // forge-lint: disable-end(calls-loop)
     }
 
-    /// @notice Loads fresh OHM and collateral prices plus canonical backing for a seizure.
-    function _pricing(
+    function _pricingFromPricePair(
         BurnerLoansContext memory dependencies_,
-        address asset_
+        BurnerLoansQuote.PricePair memory pricePair_
     ) private view returns (Pricing memory pricing) {
-        uint48 frequency = dependencies_.price.observationFrequency();
-        pricing.ohmUsdPrice = _freshPrice(
-            dependencies_.price,
-            address(dependencies_.ohm),
-            frequency
-        );
-        pricing.collateralUsdPrice = _freshPrice(dependencies_.price, asset_, frequency);
+        pricing.ohmUsdPrice = pricePair_.ohmUsdPrice;
+        pricing.collateralUsdPrice = pricePair_.collateralUsdPrice;
 
         if (dependencies_.backingOracle == address(0)) {
             revert IBurnerLoans.BurnerLoans_ZeroAddress();
@@ -595,25 +639,6 @@ library BurnerLoansSeizure {
             BurnerLoansCalculator.scale(dependencies_.price.decimals()),
             _WAD
         );
-    }
-
-    /// @notice Loads a nonzero current price that is no older than one observation frequency.
-    function _freshPrice(
-        IPRICEv2 price_,
-        address asset_,
-        uint48 frequency_
-    ) private view returns (uint256 value) {
-        uint48 timestamp;
-        (value, timestamp) = price_.getPrice(asset_, IPRICEv2.Variant.CURRENT);
-        if (
-            value == 0 ||
-            timestamp == 0 ||
-            // Price freshness windows tolerate normal validator timestamp drift.
-            // forge-lint: disable-next-line(block-timestamp)
-            block.timestamp > uint256(timestamp) + uint256(frequency_)
-        ) {
-            revert IBurnerLoans.BurnerLoans_InvalidPrice();
-        }
     }
 
     /// @notice Decodes the Burner Loans configuration stored on a FLOAN market.

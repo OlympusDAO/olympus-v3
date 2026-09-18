@@ -22,6 +22,8 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
         keccak256("BURNER_LOANS_YIELD_REPURCHASE_RECIPIENT");
     bytes32 internal constant _YIELD_ASSET_ROUTING_DOMAIN =
         keccak256("BURNER_LOANS_YIELD_ASSET_ROUTING");
+    bytes32 internal constant _PRICE_CACHE_MAX_AGE_DOMAIN =
+        keccak256("BURNER_LOANS_PRICE_CACHE_MAX_AGE");
 
     function _feeAction(
         uint16 baseFeeBps_
@@ -65,6 +67,26 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
         assertEq(configTimelock.pendingActionId(key), actionId_, "key owner");
     }
 
+    function _assertPriceCacheMaxAgeGuard(uint64 actionId_, uint256 index_) internal view {
+        (bytes32 key, bytes32 expectedHash) = configTimelock.getQueuedConfigState(
+            actionId_,
+            index_,
+            0
+        );
+        assertEq(key, _scopedPriceCacheMaxAgeKey(), "maximum cache age key");
+        assertEq(
+            configTimelock.getQueuedConfigDestination(actionId_, index_),
+            address(burnerLoansConfig),
+            "maximum cache age destination"
+        );
+        assertEq(
+            expectedHash,
+            keccak256(abi.encode(address(burnerLoans), burnerLoans.priceCacheMaxAge())),
+            "maximum cache age state hash"
+        );
+        assertEq(configTimelock.pendingActionId(key), actionId_, "maximum cache age key owner");
+    }
+
     function _scopedConfigKey(bytes32 domain_) internal view returns (bytes32 key) {
         bytes32 localKey = keccak256(abi.encode(domain_, address(usds)));
         return keccak256(abi.encode(address(burnerLoansConfig), localKey));
@@ -77,6 +99,11 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
 
     function _scopedYieldAssetRoutingKey(address asset_) internal view returns (bytes32 key) {
         bytes32 localKey = keccak256(abi.encode(_YIELD_ASSET_ROUTING_DOMAIN, asset_));
+        return keccak256(abi.encode(address(burnerLoansConfig), localKey));
+    }
+
+    function _scopedPriceCacheMaxAgeKey() internal view returns (bytes32 key) {
+        bytes32 localKey = keccak256(abi.encode(_PRICE_CACHE_MAX_AGE_DOMAIN));
         return keccak256(abi.encode(address(burnerLoansConfig), localKey));
     }
 

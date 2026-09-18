@@ -60,6 +60,9 @@ contract BurnerLoansConfigTimelock is
     /// @dev ABI-encoded byte length of one address.
     uint256 internal constant _LEN_ADDRESS = 32;
 
+    /// @dev ABI-encoded byte length of one static value.
+    uint256 internal constant _LEN_UINT256 = 32;
+
     bytes32 internal constant _FEE_CONFIG_DOMAIN = keccak256("BURNER_LOANS_FEE_CONFIG");
     bytes32 internal constant _RISK_CONFIG_DOMAIN = keccak256("BURNER_LOANS_RISK_CONFIG");
     bytes32 internal constant _DEBT_CAP_DOMAIN = keccak256("BURNER_LOANS_DEBT_CAP");
@@ -69,6 +72,8 @@ contract BurnerLoansConfigTimelock is
         keccak256("BURNER_LOANS_YIELD_REPURCHASE_RECIPIENT");
     bytes32 internal constant _YIELD_ASSET_ROUTING_DOMAIN =
         keccak256("BURNER_LOANS_YIELD_ASSET_ROUTING");
+    bytes32 internal constant _PRICE_CACHE_MAX_AGE_DOMAIN =
+        keccak256("BURNER_LOANS_PRICE_CACHE_MAX_AGE");
 
     /// @inheritdoc IBurnerLoansConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
@@ -216,6 +221,16 @@ contract BurnerLoansConfigTimelock is
             );
     }
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
+    function queueSetPriceCacheMaxAge(uint48 priceCacheMaxAge_) external returns (uint64 actionId) {
+        return
+            _queueAction(
+                address(_BURNER_LOANS_CONFIG),
+                IBurnerLoansConfig.setPriceCacheMaxAge.selector,
+                abi.encode(priceCacheMaxAge_)
+            );
+    }
+
     /// @notice Queues a partial asset risk-configuration update.
     /// @dev Reverts if:
     ///      - The timelock is disabled.
@@ -294,6 +309,8 @@ contract BurnerLoansConfigTimelock is
             // Every route depends on the recipient, but different assets remain independent.
             _requireConfigKeyAvailable(_yieldRepurchaseRecipientKey());
             key = _yieldAssetRoutingKey(abi.decode(action_.payload, (address)));
+        } else if (selector == IBurnerLoansConfig.setPriceCacheMaxAge.selector) {
+            key = _priceCacheMaxAgeKey();
         } else {
             address asset = abi.decode(action_.payload, (address));
             bytes32 domain;
@@ -339,6 +356,13 @@ contract BurnerLoansConfigTimelock is
                 BurnerLoansConfigTimelockLib.yieldAssetRoutingStateHash(
                     _yieldFacility(),
                     yieldAsset
+                );
+        }
+        if (selector == IBurnerLoansConfig.setPriceCacheMaxAge.selector) {
+            address maxAgeFacility = _BURNER_LOANS_CONFIG.facility();
+            return
+                keccak256(
+                    abi.encode(maxAgeFacility, IBurnerLoansView(maxAgeFacility).priceCacheMaxAge())
                 );
         }
 
@@ -478,6 +502,14 @@ contract BurnerLoansConfigTimelock is
             _requireYieldFacilityEnabled(facility);
             _requireAssetConfigured(asset);
             facility.validateYieldAssetRouting(asset, routing);
+            return;
+        }
+
+        if (actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector) {
+            _requirePayloadLength(action_.target, action_.payload, _LEN_UINT256, actionSelector);
+            if (abi.decode(action_.payload, (uint256)) > type(uint48).max) {
+                revert ITimelockBatchQueue_ActionInvalid(action_.target, actionSelector);
+            }
             return;
         }
 
@@ -634,6 +666,11 @@ contract BurnerLoansConfigTimelock is
     /// @notice Returns the local guard key for one asset's complete yield route.
     function _yieldAssetRoutingKey(address asset_) internal pure returns (bytes32 key) {
         return keccak256(abi.encode(_YIELD_ASSET_ROUTING_DOMAIN, asset_));
+    }
+
+    /// @notice Returns the local guard key for the facility-wide maximum cached-price age.
+    function _priceCacheMaxAgeKey() internal pure returns (bytes32 key) {
+        return keccak256(abi.encode(_PRICE_CACHE_MAX_AGE_DOMAIN));
     }
 
     /// @notice Requires a destination-local configuration key to have no pending owner.

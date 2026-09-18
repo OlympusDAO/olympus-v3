@@ -110,13 +110,15 @@ library BurnerLoansCustody {
         params_.maxFee = maxFee_;
         (, uint64 positionId, IFLOANv1.Position memory position) = BurnerLoansPositions
             .getWithIdOrEmpty(dependencies_.floan, params_.marketId, params_.onBehalfOf);
-        IBurnerLoans.BorrowPreview memory preview = BurnerLoansQuote.quoteBorrow(
-            dependencies_,
-            params_.asset,
-            params_.ohmAmount,
-            position,
-            true
-        );
+        (
+            IBurnerLoans.BorrowPreview memory preview,
+            BurnerLoansQuote.PricePair memory pricePair
+        ) = BurnerLoansQuote.quoteBorrowForAction(
+                dependencies_,
+                params_.asset,
+                params_.ohmAmount,
+                position
+            );
         if (preview.fee > params_.maxFee) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, params_.maxFee);
         }
@@ -140,11 +142,12 @@ library BurnerLoansCustody {
         }
         dependencies_.inventory.draw(params_.recipient, params_.ohmAmount);
 
-        uint256 healthFactor = BurnerLoansQuote.positionHealthFactor(
+        uint256 healthFactor = BurnerLoansQuote.positionHealthFactorWithPricePair(
             dependencies_,
             params_.asset,
             resultingPosition.collateral,
-            resultingPosition.principalDue
+            resultingPosition.principalDue,
+            pricePair
         );
 
         emit IBurnerLoans.Borrowed(
@@ -215,7 +218,7 @@ library BurnerLoansCustody {
             positionId,
             depositedCollateral_
         );
-        uint256 healthFactor_ = BurnerLoansQuote.positionHealthFactor(
+        uint256 healthFactor_ = BurnerLoansQuote.positionHealthFactorForAction(
             dependencies_,
             asset_,
             totalCollateral_,
@@ -288,7 +291,7 @@ library BurnerLoansCustody {
         // Debit FLOAN before calculating action outputs so the returned collateral is the module's
         // authoritative value. Any later health or custody failure reverts this mutation atomically.
         remainingCollateral = dependencies_.floan.removeCollateral(positionId, params_.amount);
-        healthFactor = BurnerLoansQuote.positionHealthFactor(
+        healthFactor = BurnerLoansQuote.positionHealthFactorForAction(
             dependencies_,
             params_.asset,
             remainingCollateral,
@@ -712,7 +715,7 @@ library BurnerLoansCustody {
         dependencies_.inventory.settleRepayment(repayOhm_);
 
         remainingDebtOhm = resultingPosition.principalDue;
-        healthFactor = BurnerLoansQuote.positionHealthFactor(
+        healthFactor = BurnerLoansQuote.positionHealthFactorForAction(
             dependencies_,
             asset_,
             resultingPosition.collateral,
@@ -734,7 +737,7 @@ library BurnerLoansCustody {
     ///      underlying FLOAN mutation failure.
     /// @return fee Actual extension fee charged.
     /// @return maturity Maturity stored by FLOAN.
-    /// @return healthFactor Health factor calculated from FLOAN's resulting position.
+    /// @return healthFactor Quoted health factor preserved by the maturity-only FLOAN mutation.
     function extend(
         uint32 marketId_,
         address asset_,
@@ -749,12 +752,11 @@ library BurnerLoansCustody {
             onBehalfOf_
         );
         if (!exists) revert IBurnerLoans.BurnerLoans_NoCollateral();
-        IBurnerLoans.ExtendPreview memory preview = BurnerLoansQuote.quoteExtend(
+        IBurnerLoans.ExtendPreview memory preview = BurnerLoansQuote.quoteExtendForAction(
             dependencies_,
             asset_,
             termCount_,
-            dependencies_.floan.getPosition(positionId),
-            true
+            dependencies_.floan.getPosition(positionId)
         );
         if (preview.fee > maxFee_) {
             revert IBurnerLoans.BurnerLoans_FeeExceedsMax(preview.fee, maxFee_);
@@ -774,12 +776,7 @@ library BurnerLoansCustody {
             );
         }
 
-        healthFactor = BurnerLoansQuote.positionHealthFactor(
-            dependencies_,
-            asset_,
-            resultingPosition.collateral,
-            resultingPosition.principalDue
-        );
+        healthFactor = preview.healthFactor;
         fee = preview.fee;
         maturity = resultingPosition.maturity;
         emit IBurnerLoans.Extended(msg.sender, asset_, onBehalfOf_, maturity, fee);

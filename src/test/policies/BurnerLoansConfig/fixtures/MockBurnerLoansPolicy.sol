@@ -12,6 +12,7 @@ import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 contract MockBurnerLoansPolicy is Policy, IERC165 {
     address internal immutable _OHM;
+    uint48 internal _priceCacheMaxAge;
 
     constructor(Kernel kernel_, address ohm_) Policy(kernel_) {
         _OHM = ohm_;
@@ -39,6 +40,14 @@ contract MockBurnerLoansPolicy is Policy, IERC165 {
 
     function inventory() external pure returns (address) {
         return address(0);
+    }
+
+    function setPriceCacheMaxAge(uint48 priceCacheMaxAge_) external {
+        _priceCacheMaxAge = priceCacheMaxAge_;
+    }
+
+    function priceCacheMaxAge() external view returns (uint48) {
+        return _priceCacheMaxAge;
     }
 
     function ohm() external view returns (address) {

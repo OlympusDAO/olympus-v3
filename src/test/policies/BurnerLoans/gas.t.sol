@@ -13,6 +13,7 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
@@ -725,6 +726,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             kernel,
             IERC20(address(ohm)),
             depositManager,
+            IPriceCache(address(0)),
             backingOracle
         );
         BurnerLoansConfig outgoing = new BurnerLoansConfig(kernel, IERC20(address(ohm)));

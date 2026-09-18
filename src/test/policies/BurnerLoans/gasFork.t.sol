@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: Unlicense
+// Live-PRICE and cached variants share one fork fixture so their gas measurements remain comparable.
+// forge-lint: disable-start(multi-contract-file)
 pragma solidity >=0.8.24;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
@@ -14,6 +17,7 @@ import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -71,8 +75,9 @@ contract BurnerLoansLivePriceForkGasTest is Test {
     BurnerLoans internal _burnerLoans;
     BurnerLoansInventory internal _inventory;
     BurnerLoansConfig internal _burnerLoansConfig;
+    MockOlympusBackingOracle internal _backingOracle;
 
-    function setUp() public {
+    function setUp() public virtual {
         uint256 forkId = vm.createSelectFork("mainnet", _FORK_BLOCK);
         assertEq(vm.activeFork(), forkId, "active mainnet fork");
 
@@ -110,7 +115,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_depositCollateral_newPosition() public {
         vm.startPrank(_carol);
-        vm.startSnapshotGas("BurnerLoans.livePrice.depositCollateral.newPosition");
+        vm.startSnapshotGas(_snapshotName("depositCollateral.newPosition"));
         (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor) = _burnerLoans
             .depositCollateral(_USDS, _NEW_POSITION_COLLATERAL, _carol);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -140,7 +145,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_depositCollateral_existingDebtPosition() public {
         vm.startPrank(_alice);
-        vm.startSnapshotGas("BurnerLoans.livePrice.depositCollateral.existingDebtPosition");
+        vm.startSnapshotGas(_snapshotName("depositCollateral.existingDebtPosition"));
         (uint256 depositedAmount, uint256 resultingCollateral, uint256 healthFactor) = _burnerLoans
             .depositCollateral(_USDS, _COLLATERAL_CHANGE, _alice);
         uint256 gasUsed = vm.stopSnapshotGas();
@@ -180,7 +185,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_withdrawCollateral_partialWithDebt() public {
         vm.startPrank(_alice);
-        vm.startSnapshotGas("BurnerLoans.livePrice.withdrawCollateral.partialWithDebt");
+        vm.startSnapshotGas(_snapshotName("withdrawCollateral.partialWithDebt"));
         (
             address tokenOut,
             uint256 amountOut,
@@ -225,7 +230,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_withdrawCollateral_allWithoutDebt() public {
         vm.startPrank(_bob);
-        vm.startSnapshotGas("BurnerLoans.livePrice.withdrawCollateral.allWithoutDebt");
+        vm.startSnapshotGas(_snapshotName("withdrawCollateral.allWithoutDebt"));
         (
             address tokenOut,
             uint256 amountOut,
@@ -260,7 +265,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_borrow_first() public {
         vm.startPrank(_bob);
-        vm.startSnapshotGas("BurnerLoans.livePrice.borrow.first");
+        vm.startSnapshotGas(_snapshotName("borrow.first"));
         (
             uint256 principal,
             uint256 fee,
@@ -295,7 +300,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_repay_partial() public {
         vm.startPrank(_alice);
-        vm.startSnapshotGas("BurnerLoans.livePrice.repay.partial");
+        vm.startSnapshotGas(_snapshotName("repay.partial"));
         (uint256 remainingDebt, uint256 healthFactor) = _burnerLoans.repay(
             _USDS,
             _REPAYMENT,
@@ -333,7 +338,7 @@ contract BurnerLoansLivePriceForkGasTest is Test {
 
     function test_gasSnapshot_extend_oneTerm() public {
         vm.startPrank(_alice);
-        vm.startSnapshotGas("BurnerLoans.livePrice.extend.oneTerm");
+        vm.startSnapshotGas(_snapshotName("extend.oneTerm"));
         (uint256 fee, uint48 maturity, uint256 healthFactor) = _burnerLoans.extend(
             _USDS,
             _alice,
@@ -357,6 +362,28 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         _assertGasRecorded(gasUsed);
     }
 
+    // seize
+    // given one active position is unhealthy under the backing requirement
+    //  when a keeper seizes the position
+    //   then it records the production PRICE or fresh-cache seizure cost
+    function test_gasSnapshot_seize_single() public {
+        _backingOracle.setBacking(40e18);
+        address[] memory borrowers = new address[](1);
+        borrowers[0] = _alice;
+
+        vm.startSnapshotGas(_snapshotName("seize.single"));
+        (uint256 keeperReward, uint256 collateralToTreasury) = _burnerLoans.seize(_USDS, borrowers);
+        uint256 gasUsed = vm.stopSnapshotGas();
+
+        assertEq(keeperReward, 0, "keeper reward");
+        assertEq(collateralToTreasury, _COLLATERAL, "collateral routed to Treasury");
+        IBurnerLoans.Position memory positionAfter = _burnerLoans.getPosition(_USDS, _alice);
+        assertEq(positionAfter.debtOhm, 0, "position debt");
+        assertEq(positionAfter.depositedCollateral, 0, "position collateral");
+        assertEq(_burnerLoans.totalActiveDebtOhm(), 0, "total active debt");
+        _assertGasRecorded(gasUsed);
+    }
+
     function _assertPinnedPriceConfiguration() internal view {
         (uint8 major, uint8 minor) = OlympusPricev1_2(address(_price)).VERSION();
         assertEq(major, 1, "PRICE major version");
@@ -372,12 +399,22 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         assertEq(usdsFeeds.length, 3, "USDS production feed count");
     }
 
+    function _snapshotName(string memory action_) internal pure virtual returns (string memory) {
+        return string.concat("BurnerLoans.livePrice.", action_);
+    }
+
     function _deployAndConfigureBurnerLoans() internal {
         OlympusFixedTermLoan floan = new OlympusFixedTermLoan(_kernel);
         ReceiptTokenManager receiptTokenManager = new ReceiptTokenManager();
         _depositManager = new DepositManager(address(_kernel), address(receiptTokenManager));
-        MockOlympusBackingOracle backingOracle = new MockOlympusBackingOracle(_BACKING_PER_OHM_USD);
-        _burnerLoans = new BurnerLoans(_kernel, _ohm, _depositManager, backingOracle);
+        _backingOracle = new MockOlympusBackingOracle(_BACKING_PER_OHM_USD);
+        _burnerLoans = new BurnerLoans(
+            _kernel,
+            _ohm,
+            _depositManager,
+            IPriceCache(address(0)),
+            _backingOracle
+        );
         _inventory = new BurnerLoansInventory(_kernel, _ohm, address(_burnerLoans));
         _burnerLoansConfig = new BurnerLoansConfig(_kernel, _ohm);
 
@@ -492,3 +529,28 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         assertGt(gasUsed_, 0, "gas snapshot should record a positive value");
     }
 }
+
+contract BurnerLoansFreshPriceCacheForkGasTest is BurnerLoansLivePriceForkGasTest {
+    uint48 internal constant _MAX_CACHE_AGE = 1 days;
+
+    PriceCache internal _priceCache;
+
+    function setUp() public override {
+        super.setUp();
+
+        _priceCache = new PriceCache(_kernel, _price.decimals(), "USD");
+        address kernelExecutor = _kernel.executor();
+        vm.prank(kernelExecutor);
+        _kernel.executeAction(Actions.ActivatePolicy, address(_priceCache));
+
+        _priceCache.enable("");
+        _burnerLoans.setPriceCache(address(_priceCache));
+        _burnerLoansConfig.setPriceCacheMaxAge(_MAX_CACHE_AGE);
+        _priceCache.cachePrice(_OHM, _USDS);
+    }
+
+    function _snapshotName(string memory action_) internal pure override returns (string memory) {
+        return string.concat("BurnerLoans.freshPriceCache.", action_);
+    }
+}
+// forge-lint: disable-end(multi-contract-file)

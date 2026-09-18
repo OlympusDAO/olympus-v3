@@ -264,6 +264,13 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    function setPriceCacheMaxAge(
+        uint48 priceCacheMaxAge_
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
+        _FACILITY.setPriceCacheMaxAge(priceCacheMaxAge_);
+    }
+
+    /// @inheritdoc IBurnerLoansConfig
     /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
     ///      Burner Loans rejects the recipient transition.
     function setYieldRepurchaseRecipient(

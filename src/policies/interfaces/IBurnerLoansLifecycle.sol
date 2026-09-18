@@ -27,6 +27,19 @@ interface IBurnerLoansLifecycle {
     /// @param configurator_ Burner Loans Config policy to bind.
     function setConfigurator(address configurator_) external;
 
+    /// @notice Sets the optional PriceCache used by Burner Loans.
+    /// @dev Callable only by OCG admin while Burner Loans is enabled or disabled. Zero selects
+    ///      direct PRICE mode. A nonzero candidate must implement the PriceCache, enabler, and
+    ///      version interfaces, use a compatible version, and belong to the same Kernel.
+    /// @param priceCache_ New PriceCache policy, or zero to use PRICE directly.
+    function setPriceCache(address priceCache_) external;
+
+    /// @notice Sets the maximum age of cached prices used by Burner Loans.
+    /// @dev Callable only by the configured Burner Loans Config policy while Burner Loans is
+    ///      enabled. Every `uint48` value is valid, including zero and `type(uint48).max`.
+    /// @param priceCacheMaxAge_ New maximum cached-price age, in seconds.
+    function setPriceCacheMaxAge(uint48 priceCacheMaxAge_) external;
+
     /// @notice Adds a collateral asset after Config creates its FLOAN market.
     /// @dev Reverts if:
     ///      - Burner Loans is disabled.

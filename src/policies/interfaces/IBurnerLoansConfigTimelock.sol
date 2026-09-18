@@ -124,6 +124,12 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
         uint128 debtCapOhm_
     ) external returns (uint64 actionId);
 
+    /// @notice Queues a facility-wide maximum cached-price age update.
+    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
+    /// @param priceCacheMaxAge_ New maximum cached-price age, in seconds.
+    /// @return actionId The queued action ID.
+    function queueSetPriceCacheMaxAge(uint48 priceCacheMaxAge_) external returns (uint64 actionId);
+
     /// @notice Queues a partial asset risk-configuration update.
     /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.

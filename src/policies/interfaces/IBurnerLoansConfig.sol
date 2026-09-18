@@ -127,6 +127,12 @@ interface IBurnerLoansConfig {
     /// @param debtCapOhm_ New facility-wide principal cap, in OHM decimals.
     function setGlobalDebtCap(uint128 debtCapOhm_) external;
 
+    /// @notice Sets the maximum age of cached prices used by Burner Loans.
+    /// @dev Callable only by OCG admin or the configured config operator while Config and Burner
+    ///      Loans are enabled. Every `uint48` value is valid.
+    /// @param priceCacheMaxAge_ New maximum cached-price age, in seconds.
+    function setPriceCacheMaxAge(uint48 priceCacheMaxAge_) external;
+
     /// @notice Sets the facility-wide yield repurchase recipient.
     /// @dev Callable only by OCG admin or the configured config operator while this policy is
     ///      enabled. The bound Burner Loans facility must also be enabled. Validation, storage, and

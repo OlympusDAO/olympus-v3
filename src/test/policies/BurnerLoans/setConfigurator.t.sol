@@ -7,6 +7,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
@@ -58,6 +59,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
             kernel,
             IERC20(address(ohm)),
             depositManager,
+            IPriceCache(address(0)),
             backingOracle
         );
         BurnerLoansConfig initialConfigurator = new BurnerLoansConfig(kernel, IERC20(address(ohm)));

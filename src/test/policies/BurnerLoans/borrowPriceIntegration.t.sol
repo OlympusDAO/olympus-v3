@@ -5,7 +5,9 @@ pragma solidity >=0.8.24;
 // Scenario-specific contracts and fixtures have no cross-file consumers.
 // forge-lint: disable-start(unused-return,multi-contract-file)
 
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 import {BurnerLoansPriceIntegrationTestBase} from "./fixtures/BurnerLoansPriceIntegrationTestBase.sol";
@@ -13,6 +15,9 @@ import {BurnerLoansPriceIntegrationTestBase} from "./fixtures/BurnerLoansPriceIn
 abstract contract BurnerLoansBorrowPriceIntegrationSharedTest is
     BurnerLoansPriceIntegrationTestBase
 {
+    uint16 internal constant _FULL_LTV_BPS = 10_000;
+    uint48 internal constant _MAX_CACHE_AGE = 1 days;
+
     function _exactBoundaryCollateral() internal pure virtual returns (uint128);
 
     function _launchBoundaryCollateral() internal pure virtual returns (uint128);
@@ -27,7 +32,7 @@ abstract contract BurnerLoansBorrowPriceIntegrationSharedTest is
     // - Expected branch: preview and write agree at exactly 1e18 health
     function test_givenProductionPriceAtExactHealthBoundary_borrowMatchesPreview() public {
         IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
-        riskConfig.maxLtvBps = 10_000;
+        riskConfig.maxLtvBps = _FULL_LTV_BPS;
         vm.prank(admin);
         burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
 
@@ -42,6 +47,78 @@ abstract contract BurnerLoansBorrowPriceIntegrationSharedTest is
     // - Expected branch: preview and write agree at the fixed rounded health factor
     function test_givenProductionPriceAtLaunchMaximumLtv_borrowMatchesPreview() public {
         _borrowAndAssertExpectedHealth(_launchBoundaryCollateral(), _launchBoundaryHealth());
+    }
+
+    // given PriceCache is operational with a fresh OHM/collateral snapshot
+    //  when PRICE becomes unavailable after the snapshot
+    //   then Burner Loans uses PriceCache instead of PRICE for preview and execution
+    //   then execution checks the cache at most once and does not read it again
+    function test_givenFreshOperationalPriceCache_borrowMatchesPreviewWithoutPriceFallback()
+        public
+    {
+        IBurnerLoans.AssetRiskConfigInput memory riskConfig = _defaultAssetRiskConfigInput();
+        riskConfig.maxLtvBps = _FULL_LTV_BPS;
+        vm.prank(admin);
+        burnerLoansConfig.setAssetRiskConfig(address(usds), riskConfig);
+        _depositCollateral(_exactBoundaryCollateral());
+
+        vm.startPrank(admin);
+        PriceCache cache = _deployPriceCache(true, true);
+        burnerLoans.setPriceCache(address(cache));
+        burnerLoansConfig.setPriceCacheMaxAge(_MAX_CACHE_AGE);
+        vm.stopPrank();
+        cache.cachePrice(address(ohm), address(usds));
+
+        _ohmUsdFeed.setTimestamp(block.timestamp - _FEED_UPDATE_THRESHOLD - 1);
+        _usdsUsdFeed.setTimestamp(block.timestamp - _FEED_UPDATE_THRESHOLD - 1);
+
+        vm.expectCall(
+            address(cache),
+            abi.encodeCall(IPriceCache.getCachedPrice, (address(ohm), address(usds))),
+            1
+        );
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            _BORROW_AMOUNT,
+            alice
+        );
+
+        bytes memory unexpectedGetter = abi.encodeWithSelector(
+            IPriceCache.getCachedPrice.selector,
+            address(ohm),
+            address(usds)
+        );
+        vm.mockCallRevert(address(cache), unexpectedGetter, bytes("unexpected cache getter"));
+        vm.expectCall(
+            address(cache),
+            abi.encodeCall(
+                IPriceCache.cachePriceIfNecessary,
+                (address(ohm), address(usds), _MAX_CACHE_AGE)
+            ),
+            1
+        );
+
+        vm.prank(alice);
+        (, uint256 fee, uint256 totalDebtOhm, , uint256 healthFactor) = burnerLoans.borrow(
+            address(usds),
+            _BORROW_AMOUNT,
+            alice,
+            alice,
+            preview.fee
+        );
+
+        assertTrue(preview.executable, "cached preview should be executable");
+        assertEq(fee, preview.fee, "cached execution fee should match preview");
+        assertEq(
+            totalDebtOhm,
+            preview.resultingDebtOhm,
+            "cached execution debt should match preview"
+        );
+        assertEq(
+            healthFactor,
+            preview.resultingHealthFactor,
+            "cached execution health should match preview"
+        );
     }
 
     function _borrowAndAssertExpectedHealth(

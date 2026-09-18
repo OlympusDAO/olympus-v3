@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -18,12 +18,23 @@ import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCu
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 
+// Contracts
+import {Policy} from "src/Kernel.sol";
+
 /// @title Burner Loans Quote Library
 /// @notice Shared pricing and health validation for Burner Loans previews and execution.
 /// @dev Separately linked to keep the policy below EIP-170 without duplicating module state.
 library BurnerLoansQuote {
     /// @dev Fixed-point scale for health and utilization values.
     uint256 internal constant _WAD = 1e18;
+
+    /// @notice OHM and collateral USD prices resolved from one source for one operation.
+    /// @param ohmUsdPrice OHM/USD price, in PRICE decimals.
+    /// @param collateralUsdPrice Collateral/USD price, in PRICE decimals.
+    struct PricePair {
+        uint256 ohmUsdPrice;
+        uint256 collateralUsdPrice;
+    }
 
     /// @notice Price snapshot and derived collateral valuation for one quote.
     /// @param ohmUsdPrice OHM/USD price, in PRICE decimals.
@@ -49,6 +60,64 @@ library BurnerLoansQuote {
         bool executable;
     }
 
+    /// @notice Validated non-price inputs shared by borrow preview and execution.
+    struct BorrowContext {
+        IBurnerLoans.AssetConfig config;
+        uint256 assetDebt;
+        uint32 marketId;
+    }
+
+    /// @notice Returns whether the configured PriceCache can be used by the current policy.
+    /// @dev Availability is determined explicitly. Faults from an active cache's enabled-state
+    ///      query are not reinterpreted as cache unavailability.
+    function _isPriceCacheOperational(
+        BurnerLoansContext memory dependencies_
+    ) private view returns (bool) {
+        address priceCache = address(dependencies_.priceCache);
+        if (priceCache == address(0)) return false;
+        if (!Policy(address(this)).kernel().isPolicyActive(Policy(priceCache))) return false;
+        return IEnabler(priceCache).isEnabled();
+    }
+
+    /// @notice Resolves prices for an ordinary non-mutating quote.
+    /// @dev A missing or stale operational-cache snapshot falls back to direct PRICE.
+    function resolveViewPricePair(
+        BurnerLoansContext memory dependencies_,
+        address asset_
+    ) public view returns (PricePair memory) {
+        if (_isPriceCacheOperational(dependencies_)) {
+            IPriceCache.CachedPrice memory cachedPrice = dependencies_.priceCache.getCachedPrice(
+                address(dependencies_.ohm),
+                asset_
+            );
+            if (!_isCachedPriceStale(cachedPrice, dependencies_.priceCacheMaxAge)) {
+                return _cachedPricePair(cachedPrice);
+            }
+        }
+        return _directPricePair(dependencies_, asset_);
+    }
+
+    /// @notice Resolves prices for a state-changing loan or seizure action.
+    /// @dev An operational cache is called exactly once and its returned snapshot is consumed.
+    function resolveActionPricePair(
+        BurnerLoansContext memory dependencies_,
+        address asset_
+    ) public returns (PricePair memory) {
+        if (!_isPriceCacheOperational(dependencies_)) {
+            return _directPricePair(dependencies_, asset_);
+        }
+
+        // Assumes cachePriceIfNecessary returns a snapshot within the supplied maximum age.
+        // PriceCache satisfies this by returning a fresh snapshot or recaching from PRICE, whose
+        // current-price timestamp is the current block timestamp.
+        IPriceCache.CachedPrice memory cachedPrice = dependencies_.priceCache.cachePriceIfNecessary(
+            address(dependencies_.ohm),
+            asset_,
+            dependencies_.priceCacheMaxAge
+        );
+        return _cachedPricePair(cachedPrice);
+    }
+
     /// @notice Quotes a borrow for the first borrower position in a known market.
     /// @dev Reverts on invalid configuration, disabled originations, custody shortfall, cap breach,
     ///      stale pricing, matured debt, or unhealthy current/resulting debt.
@@ -59,37 +128,63 @@ library BurnerLoansQuote {
         address borrower_
     ) public view returns (IBurnerLoans.BorrowPreview memory) {
         BurnerLoansContext memory dependencies_ = _dependencies();
+        IFLOANv1.Position memory position = BurnerLoansPositions.getOrEmpty(
+            dependencies_.floan,
+            marketId_,
+            borrower_
+        );
+        BorrowContext memory context = _prepareBorrow(dependencies_, asset_, ohmAmount_, position);
         return
-            quoteBorrow(
+            _quoteBorrow(
                 dependencies_,
-                asset_,
                 ohmAmount_,
-                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_),
+                position,
+                context,
+                _pricing(dependencies_, asset_, position.collateral, context.config),
                 false
             );
     }
 
-    /// @notice Quotes a borrow against a supplied FLOAN position snapshot.
-    /// @dev Applies the same validation and rounding used by previews and execution. An active
-    ///      position retains its maturity even if the configured horizon is subsequently reduced.
-    ///      Set `enforceHealth_` for execution to revert on unhealthy current or resulting debt.
-    function quoteBorrow(
+    /// @notice Quotes a borrow using one cache refresh or direct-PRICE resolution.
+    /// @return preview Borrow quote calculated from the resolved pair.
+    /// @return pricePair Price legs consumed by the quote and final action result.
+    function quoteBorrowForAction(
         BurnerLoansContext memory dependencies_,
         address asset_,
         uint128 ohmAmount_,
-        IFLOANv1.Position memory position,
-        bool enforceHealth_
-    ) public view returns (IBurnerLoans.BorrowPreview memory preview) {
+        IFLOANv1.Position memory position
+    ) public returns (IBurnerLoans.BorrowPreview memory preview, PricePair memory pricePair) {
+        BorrowContext memory context = _prepareBorrow(dependencies_, asset_, ohmAmount_, position);
+        pricePair = resolveActionPricePair(dependencies_, asset_);
+        preview = _quoteBorrow(
+            dependencies_,
+            ohmAmount_,
+            position,
+            context,
+            _pricingFromPricePair(
+                dependencies_.backingOracle,
+                dependencies_.price,
+                position.collateral,
+                context.config,
+                pricePair
+            ),
+            true
+        );
+    }
+
+    function _prepareBorrow(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint128 ohmAmount_,
+        IFLOANv1.Position memory position
+    ) private view returns (BorrowContext memory context) {
         if (!IEnabler(address(dependencies_.inventory)).isEnabled()) revert IEnabler.NotEnabled();
-        (
-            uint32 marketId,
-            IBurnerLoans.AssetConfig memory config
-        ) = _requireAssetOriginationsEnabled(
-                dependencies_.floan,
-                dependencies_.facility,
-                address(dependencies_.ohm),
-                asset_
-            );
+        (context.marketId, context.config) = _requireAssetOriginationsEnabled(
+            dependencies_.floan,
+            dependencies_.facility,
+            address(dependencies_.ohm),
+            asset_
+        );
         if (ohmAmount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
         BurnerLoansCustodyAccounting.requireSolvent(
@@ -101,30 +196,32 @@ library BurnerLoansQuote {
         if (position.collateral == 0) revert IBurnerLoans.BurnerLoans_NoCollateral();
         _validateActiveBorrowPosition(position);
 
-        uint256 assetDebt = _validateCaps(
+        context.assetDebt = _validateCaps(
             dependencies_.floan,
             dependencies_.inventory.availableCapacity(),
             asset_,
-            marketId,
+            context.marketId,
             ohmAmount_,
-            config.debtCap
+            context.config.debtCap
         );
-        Pricing memory pricing = _pricing(
-            dependencies_.ohm,
-            dependencies_.backingOracle,
-            dependencies_.price,
-            asset_,
-            position.collateral,
-            config
-        );
+    }
+
+    function _quoteBorrow(
+        BurnerLoansContext memory dependencies_,
+        uint128 ohmAmount_,
+        IFLOANv1.Position memory position,
+        BorrowContext memory context_,
+        Pricing memory pricing,
+        bool enforceHealth_
+    ) private view returns (IBurnerLoans.BorrowPreview memory preview) {
         preview.fee = _borrowFee(
             dependencies_.ohmDecimals,
             dependencies_.floan,
-            marketId,
+            context_.marketId,
             ohmAmount_,
-            assetDebt,
+            context_.assetDebt,
             pricing,
-            config
+            context_.config
         );
         preview.executable = true;
         if (position.principalDue != 0) {
@@ -132,7 +229,7 @@ library BurnerLoansQuote {
                 dependencies_.ohmDecimals,
                 position.principalDue,
                 pricing,
-                config
+                context_.config
             );
             if (currentHealth < _WAD) {
                 if (enforceHealth_) {
@@ -147,7 +244,7 @@ library BurnerLoansQuote {
             dependencies_.ohmDecimals,
             preview.resultingDebtOhm,
             pricing,
-            config
+            context_.config
         );
         if (preview.resultingHealthFactor < _WAD) {
             if (enforceHealth_) {
@@ -156,7 +253,7 @@ library BurnerLoansQuote {
             preview.executable = false;
         }
         preview.maturity = position.principalDue == 0
-            ? SafeCast.toUint48(block.timestamp + config.termLength)
+            ? SafeCast.toUint48(block.timestamp + context_.config.termLength)
             : position.maturity;
     }
 
@@ -170,12 +267,22 @@ library BurnerLoansQuote {
         address borrower_
     ) public view returns (IBurnerLoans.ExtendPreview memory) {
         BurnerLoansContext memory dependencies_ = _dependencies();
+        IFLOANv1.Position memory position = BurnerLoansPositions.getOrEmpty(
+            dependencies_.floan,
+            marketId_,
+            borrower_
+        );
+        ExtensionContext memory context = _prepareExtension(
+            dependencies_,
+            asset_,
+            termCount_,
+            position
+        );
         return
-            quoteExtend(
+            _quoteExtension(
                 dependencies_,
-                asset_,
-                termCount_,
-                BurnerLoansPositions.getOrEmpty(dependencies_.floan, marketId_, borrower_),
+                context,
+                _pricing(dependencies_, asset_, position.collateral, context.config),
                 false
             );
     }
@@ -211,38 +318,100 @@ library BurnerLoansQuote {
             _health(
                 dependencies_.ohmDecimals,
                 debtOhm_,
-                _pricing(
-                    dependencies_.ohm,
+                _pricing(dependencies_, asset_, collateral_, config),
+                config
+            );
+    }
+
+    /// @notice Calculates health for an action after resolving one price pair.
+    /// @dev Zero debt remains price-free.
+    function positionHealthFactorForAction(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint256 collateral_,
+        uint256 debtOhm_
+    ) public returns (uint256 healthFactor) {
+        if (debtOhm_ == 0) return type(uint256).max;
+        return
+            positionHealthFactorWithPricePair(
+                dependencies_,
+                asset_,
+                collateral_,
+                debtOhm_,
+                resolveActionPricePair(dependencies_, asset_)
+            );
+    }
+
+    /// @notice Calculates health using price legs already resolved for the current action.
+    function positionHealthFactorWithPricePair(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint256 collateral_,
+        uint256 debtOhm_,
+        PricePair memory pricePair_
+    ) public view returns (uint256) {
+        if (debtOhm_ == 0) return type(uint256).max;
+        (, IBurnerLoans.AssetConfig memory config) = _requireAssetConfigured(
+            dependencies_.floan,
+            dependencies_.facility,
+            address(dependencies_.ohm),
+            asset_
+        );
+        return
+            _health(
+                dependencies_.ohmDecimals,
+                debtOhm_,
+                _pricingFromPricePair(
                     dependencies_.backingOracle,
                     dependencies_.price,
-                    asset_,
                     collateral_,
-                    config
+                    config,
+                    pricePair_
                 ),
                 config
             );
     }
 
-    /// @notice Quotes an extension against a supplied FLOAN position snapshot.
-    /// @dev Calculates the new maturity from the previous maturity rather than the current block
-    ///      timestamp. The resulting maturity must be in the future and within the configured
-    ///      horizon. Set `enforceHealth_` for execution to revert on unhealthy debt.
-    function quoteExtend(
+    /// @notice Quotes an extension using one cache refresh or direct-PRICE resolution.
+    /// @return preview Extension quote calculated from the resolved pair.
+    function quoteExtendForAction(
         BurnerLoansContext memory dependencies_,
         address asset_,
         uint16 termCount_,
-        IFLOANv1.Position memory position_,
-        bool enforceHealth_
-    ) public view returns (IBurnerLoans.ExtendPreview memory) {
-        (
-            uint32 marketId,
-            IBurnerLoans.AssetConfig memory config
-        ) = _requireAssetOriginationsEnabled(
-                dependencies_.floan,
-                dependencies_.facility,
-                address(dependencies_.ohm),
-                asset_
-            );
+        IFLOANv1.Position memory position_
+    ) public returns (IBurnerLoans.ExtendPreview memory preview) {
+        ExtensionContext memory context = _prepareExtension(
+            dependencies_,
+            asset_,
+            termCount_,
+            position_
+        );
+        preview = _quoteExtension(
+            dependencies_,
+            context,
+            _pricingFromPricePair(
+                dependencies_.backingOracle,
+                dependencies_.price,
+                position_.collateral,
+                context.config,
+                resolveActionPricePair(dependencies_, asset_)
+            ),
+            true
+        );
+    }
+
+    function _prepareExtension(
+        BurnerLoansContext memory dependencies_,
+        address asset_,
+        uint16 termCount_,
+        IFLOANv1.Position memory position_
+    ) private view returns (ExtensionContext memory context) {
+        (context.marketId, context.config) = _requireAssetOriginationsEnabled(
+            dependencies_.floan,
+            dependencies_.facility,
+            address(dependencies_.ohm),
+            asset_
+        );
         if (termCount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
         if (position_.principalDue == 0) revert IBurnerLoans.BurnerLoans_NoDebt();
 
@@ -252,35 +421,32 @@ library BurnerLoansQuote {
             dependencies_.facility
         );
 
-        Pricing memory pricing = _pricing(
-            dependencies_.ohm,
-            dependencies_.backingOracle,
-            dependencies_.price,
-            asset_,
-            position_.collateral,
-            config
-        );
+        context.debtOhm = position_.principalDue;
+        context.currentMaturity = position_.maturity;
+        context.termCount = termCount_;
+    }
+
+    function _quoteExtension(
+        BurnerLoansContext memory dependencies_,
+        ExtensionContext memory context,
+        Pricing memory pricing_,
+        bool enforceHealth_
+    ) private view returns (IBurnerLoans.ExtendPreview memory preview) {
         uint256 health = _health(
             dependencies_.ohmDecimals,
-            position_.principalDue,
-            pricing,
-            config
+            context.debtOhm,
+            pricing_,
+            context.config
         );
         bool executable = health >= _WAD;
         if (enforceHealth_ && !executable) {
             revert IBurnerLoans.BurnerLoans_UnhealthyPosition(health);
         }
 
-        ExtensionContext memory context;
-        context.pricing = pricing;
-        context.config = config;
+        context.pricing = pricing_;
         context.health = health;
-        context.debtOhm = position_.principalDue;
-        context.currentMaturity = position_.maturity;
-        context.marketId = marketId;
-        context.termCount = termCount_;
         context.executable = executable;
-        return _quoteExtensionTerms(dependencies_, context);
+        preview = _quoteExtensionTerms(dependencies_, context);
     }
 
     function _validateCaps(
@@ -303,17 +469,32 @@ library BurnerLoansQuote {
     }
 
     function _pricing(
-        IERC20 ohm_,
-        address backingOracle_,
-        IPRICEv2 price_,
+        BurnerLoansContext memory dependencies_,
         address asset_,
         uint256 collateral_,
         IBurnerLoans.AssetConfig memory config_
     ) private view returns (Pricing memory pricing) {
-        uint48 frequency = price_.observationFrequency();
-        pricing.ohmUsdPrice = _freshPrice(price_, address(ohm_), frequency);
+        PricePair memory pricePair = resolveViewPricePair(dependencies_, asset_);
+        return
+            _pricingFromPricePair(
+                dependencies_.backingOracle,
+                dependencies_.price,
+                collateral_,
+                config_,
+                pricePair
+            );
+    }
+
+    function _pricingFromPricePair(
+        address backingOracle_,
+        IPRICEv2 price_,
+        uint256 collateral_,
+        IBurnerLoans.AssetConfig memory config_,
+        PricePair memory pricePair_
+    ) private view returns (Pricing memory pricing) {
+        pricing.ohmUsdPrice = pricePair_.ohmUsdPrice;
         pricing.backingPerOhmUsd = _backingPerOhmUsd(backingOracle_, price_);
-        pricing.collateralUsdPrice = _freshPrice(price_, asset_, frequency);
+        pricing.collateralUsdPrice = pricePair_.collateralUsdPrice;
         pricing.collateralValueUsd = BurnerLoansCalculator.collateralValueUsd(
             collateral_,
             pricing.collateralUsdPrice,
@@ -500,6 +681,40 @@ library BurnerLoansQuote {
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidPrice();
         }
+    }
+
+    function _directPricePair(
+        BurnerLoansContext memory dependencies_,
+        address asset_
+    ) private view returns (PricePair memory pricePair) {
+        uint48 frequency = dependencies_.price.observationFrequency();
+        pricePair.ohmUsdPrice = _freshPrice(
+            dependencies_.price,
+            address(dependencies_.ohm),
+            frequency
+        );
+        pricePair.collateralUsdPrice = _freshPrice(dependencies_.price, asset_, frequency);
+    }
+
+    function _cachedPricePair(
+        IPriceCache.CachedPrice memory cachedPrice_
+    ) private pure returns (PricePair memory pricePair) {
+        if (cachedPrice_.assetPriceUsd == 0 || cachedPrice_.quotePriceUsd == 0) {
+            revert IBurnerLoans.BurnerLoans_InvalidPrice();
+        }
+        pricePair.ohmUsdPrice = cachedPrice_.assetPriceUsd;
+        pricePair.collateralUsdPrice = cachedPrice_.quotePriceUsd;
+    }
+
+    function _isCachedPriceStale(
+        IPriceCache.CachedPrice memory cachedPrice_,
+        uint48 maxAge_
+    ) private view returns (bool) {
+        return
+            cachedPrice_.updatedAt == 0 ||
+            // Cache freshness windows tolerate normal validator timestamp drift.
+            // forge-lint: disable-next-line(block-timestamp)
+            block.timestamp > uint256(cachedPrice_.updatedAt) + uint256(maxAge_);
     }
 
     function _backingPerOhmUsd(address oracle_, IPRICEv2 price_) private view returns (uint256) {

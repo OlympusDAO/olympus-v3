@@ -4,6 +4,8 @@ pragma solidity >=0.8.24;
 // Interfaces
 import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -60,6 +62,44 @@ library BurnerLoansDependencies {
             !IERC165(backingOracle_).supportsInterface(type(IOlympusBackingOracle).interfaceId)
         ) {
             revert IBurnerLoans.BurnerLoans_InvalidBackingOracle(backingOracle_);
+        }
+    }
+
+    /// @notice Validates an optional PriceCache dependency.
+    /// @dev Zero selects direct PRICE mode. A configured cache is validated without requiring it
+    ///      to be active or enabled so governance can stage and repair the dependency separately.
+    function validatePriceCache(Kernel kernel_, address priceCache_) public view {
+        if (priceCache_ == address(0)) return;
+
+        bytes4[] memory interfaceIds = new bytes4[](3);
+        interfaceIds[0] = type(IPriceCache).interfaceId;
+        interfaceIds[1] = type(IEnabler).interfaceId;
+        interfaceIds[2] = type(IVersioned).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(priceCache_, interfaceIds)) {
+            revert IBurnerLoans.BurnerLoans_InvalidPriceCache(priceCache_);
+        }
+
+        (uint8 major, uint8 minor) = IVersioned(priceCache_).VERSION();
+        if (major != 1) {
+            revert IBurnerLoans.BurnerLoans_UnsupportedPriceCacheVersion(priceCache_, major, minor);
+        }
+
+        address priceCacheKernel = address(Policy(priceCache_).kernel());
+        if (priceCacheKernel != address(kernel_)) {
+            revert IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch(
+                address(kernel_),
+                priceCacheKernel
+            );
+        }
+    }
+
+    /// @notice Validates a PriceCache and requires a configured cache to be an active policy.
+    /// @dev Zero remains valid and selects direct PRICE mode. Enabled state is intentionally not
+    ///      required because an active disabled cache falls back to PRICE at runtime.
+    function validateActivePriceCache(Kernel kernel_, address priceCache_) public view {
+        validatePriceCache(kernel_, priceCache_);
+        if (priceCache_ != address(0) && !kernel_.isPolicyActive(Policy(priceCache_))) {
+            revert IBurnerLoans.BurnerLoans_PriceCacheNotActive(priceCache_);
         }
     }
 

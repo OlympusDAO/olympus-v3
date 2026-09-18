@@ -169,7 +169,8 @@ library BurnerLoansConfigTimelockLib {
             actionSelector == IBurnerLoansConfig.setAssetDebtCap.selector ||
             actionSelector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
             actionSelector == IBurnerLoansConfig.setYieldRepurchaseRecipient.selector ||
-            actionSelector == IBurnerLoansConfig.setYieldAssetRouting.selector
+            actionSelector == IBurnerLoansConfig.setYieldAssetRouting.selector ||
+            actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector
         ) {
             callData = abi.encodePacked(actionSelector, action_.payload);
         } else {
@@ -310,7 +311,9 @@ library BurnerLoansConfigTimelockLib {
             !selection_.kinkBps &&
             !selection_.preKinkSlopeBps &&
             !selection_.postKinkSlopeBps
-        ) revert IBurnerLoans.BurnerLoans_InvalidParam();
+        ) {
+            revert IBurnerLoans.BurnerLoans_InvalidParam();
+        }
 
         if (selection_.baseFeeBps) {
             config.baseFeeBps = update_.baseFeeBps;

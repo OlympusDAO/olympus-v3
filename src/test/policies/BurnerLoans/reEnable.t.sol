@@ -5,9 +5,11 @@ import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {Actions} from "src/Kernel.sol";
+import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 
@@ -204,6 +206,94 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
         );
         burnerLoans.reEnable();
         vm.stopPrank();
+    }
+
+    // given PriceCache is inactive
+    //  when the policy is re-enabled
+    //   then the call reverts
+    function test_givenPriceCacheIsInactive_reverts() public {
+        vm.prank(admin);
+        PriceCache candidate = _deployPriceCache(false, false);
+
+        vm.prank(admin);
+        burnerLoans.setPriceCache(address(candidate));
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_PriceCacheNotActive.selector,
+                address(candidate)
+            )
+        );
+        vm.prank(burnerLoansAdmin);
+        burnerLoans.reEnable();
+
+        assertFalse(burnerLoans.isEnabled(), "Burner Loans should remain disabled");
+    }
+
+    // given PriceCache is active and disabled
+    //  when the policy is re-enabled
+    //   then Burner Loans becomes re-enabled
+    function test_givenPriceCacheIsActiveAndDisabled_reenables() public {
+        vm.startPrank(admin);
+        PriceCache candidate = _deployPriceCache(true, false);
+        vm.stopPrank();
+
+        _assertReEnableAcceptsPriceCache(candidate);
+    }
+
+    // given PriceCache is active and enabled
+    //  when the policy is re-enabled
+    //   then Burner Loans becomes re-enabled
+    function test_givenPriceCacheIsActiveAndEnabled_reenables() public {
+        vm.startPrank(admin);
+        PriceCache candidate = _deployPriceCache(true, true);
+        vm.stopPrank();
+
+        _assertReEnableAcceptsPriceCache(candidate);
+    }
+
+    // given the PriceCache Kernel has become incompatible
+    //  when the policy is re-enabled
+    //   then the call reverts
+    function test_givenPriceCacheKernelBecameIncompatible_reverts() public {
+        MockPriceCache candidate = new MockPriceCache(address(kernel));
+        address otherKernel = makeAddr("otherKernel");
+        vm.startPrank(admin);
+        burnerLoans.setPriceCache(address(candidate));
+        burnerLoans.disable("");
+        vm.mockCall(
+            address(candidate),
+            abi.encodeWithSignature("kernel()"),
+            abi.encode(otherKernel)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch.selector,
+                address(kernel),
+                otherKernel
+            )
+        );
+        burnerLoans.reEnable();
+        vm.stopPrank();
+
+        assertFalse(burnerLoans.isEnabled(), "Burner Loans should remain disabled");
+        assertEq(burnerLoans.priceCache(), address(candidate), "price cache should be preserved");
+    }
+
+    function _assertReEnableAcceptsPriceCache(PriceCache candidate_) internal {
+        vm.prank(admin);
+        burnerLoans.setPriceCache(address(candidate_));
+        vm.prank(emergency);
+        burnerLoans.disable("");
+
+        vm.prank(burnerLoansAdmin);
+        burnerLoans.reEnable();
+
+        assertTrue(burnerLoans.isEnabled(), "Burner Loans should be enabled");
+        assertEq(burnerLoans.priceCache(), address(candidate_), "price cache getter");
     }
 }
 

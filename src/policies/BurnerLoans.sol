@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
@@ -65,8 +66,9 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         Kernel kernel_,
         IERC20 ohm_,
         IDepositManager depositManager_,
+        IPriceCache priceCache_,
         IOlympusBackingOracle backingOracle_
-    ) BurnerLoansLifecycle(kernel_, ohm_, depositManager_) {
+    ) BurnerLoansLifecycle(kernel_, ohm_, depositManager_, priceCache_) {
         BurnerLoansDependencies.validateBackingOracle(address(backingOracle_));
         backingOracle = address(backingOracle_);
         emit BackingOracleSet(address(backingOracle_));
@@ -101,6 +103,18 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     /// @inheritdoc IBurnerLoansLifecycle
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
         _setConfigurator(_ASSETS, configurator_);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    function setPriceCache(address priceCache_) external override onlyAdminRole {
+        _setPriceCache(priceCache_);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    function setPriceCacheMaxAge(uint48 priceCacheMaxAge_) external override onlyConfigurator {
+        _requireEnabled();
+        _priceCacheMaxAge = priceCacheMaxAge_;
+        emit PriceCacheMaxAgeSet(priceCacheMaxAge_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -355,6 +369,16 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    function priceCache() external view override returns (address) {
+        return address(_PRICE_CACHE);
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function priceCacheMaxAge() external view override returns (uint48) {
+        return _priceCacheMaxAge;
+    }
+
+    /// @inheritdoc IBurnerLoansView
     /// @dev Reads facility-owned routing storage and does not perform live recipient validation.
     function getYieldRepurchaseRecipient() external view override returns (address recipient) {
         return _YIELD_ROUTING.repurchaseRecipient;
@@ -551,6 +575,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
                 backingOracle: backingOracle,
                 floan: _FLOAN,
                 price: _PRICE,
+                priceCache: _PRICE_CACHE,
+                priceCacheMaxAge: _priceCacheMaxAge,
                 treasury: address(_TRSRY),
                 roles: ROLES
             });

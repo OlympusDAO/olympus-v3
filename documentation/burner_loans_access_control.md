@@ -8,6 +8,9 @@ required caller, the delay, and the contract-state requirements for each functio
 This document does not list read-only functions. See [ROLES](../ROLES.md) for the protocol-wide role
 catalog and expected role allocations.
 
+The generic `PriceCacher` policy is not part of Burner Loans. Its permissions are documented in
+[Price Cacher Access Control](./price_cacher_access_control.md).
+
 ## Delay Types
 
 The Burner Loans system uses two different delay mechanisms:
@@ -56,9 +59,12 @@ delegated access is enabled, the expected address is `BurnerLoansConfigTimelock`
 | `BurnerLoans`             | `setInventory`                          | `admin`                         | OCG governance | Burner Loans is disabled                                                |
 | `BurnerLoans`             | `setConfigurator`                       | `admin`                         | OCG governance | Burner Loans is disabled; replacement validates and migrates atomically |
 | `BurnerLoans`             | `setBackingOracle`                      | `admin`                         | OCG governance | Burner Loans is enabled                                                 |
+| `BurnerLoans`             | `setPriceCache`                         | `admin`                         | OCG governance | Zero selects PRICE; nonzero cache must be compatible and same-Kernel    |
 | `BurnerLoansConfig`       | `setFacility`                           | `admin`                         | OCG governance | Config is disabled, and the facility can be set only once               |
 | `BurnerLoansConfig`       | `addAsset`                              | `admin`                         | OCG governance | Config is enabled, and the new market starts with originations on       |
 | `BurnerLoansConfig`       | `setGlobalDebtCap`                      | `admin`                         | OCG governance | Config is enabled                                                       |
+| `BurnerLoansConfig`       | `setPriceCacheMaxAge`                    | `admin`                         | OCG governance | Config and Burner Loans are enabled; complete `uint48` range is valid   |
+| `BurnerLoansConfig`       | `setPriceCacheMaxAge`                    | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled; queued pre-state still matches     |
 | `BurnerLoansConfig`       | `setConfigOperator`                     | `admin`                         | OCG governance | Config is enabled, and zero revokes delegated access                    |
 | `BurnerLoansConfig`       | `setAssetDebtCap`                       | `admin`                         | OCG governance | Config is enabled, and the cap cannot be less than active debt          |
 | `BurnerLoansConfig`       | `setAssetDebtCap`                       | ConfigTimelock                  | >= 1 day       | Config is enabled, and the cap cannot be less than active debt          |
@@ -105,6 +111,7 @@ for the complete migration procedure and rollback guarantees.
 | `queueSetAssetFeeConfig`  | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
 | `queueSetAssetDebtCap`    | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
 | `queueSetAssetRiskConfig` | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
+| `queueSetPriceCacheMaxAge`     | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
 | `queueBatch`              | `admin` or `burner_loans_admin` | >= 1 day  | Every sub-action must pass its queue-time checks                                    |
 | `executeQueuedAction`     | Any address                     | >= 1 day  | The action is executable and unexpired, and Timelock and Config remain enabled      |
 | `cancelQueuedAction`      | `emergency`                     | Immediate | The action exists and is not executed or cancelled                                  |
@@ -117,11 +124,12 @@ for the complete migration procedure and rollback guarantees.
 | `setAssetRiskConfig`          |
 | `setAssetFeeConfig`           |
 | `setAssetOriginationsEnabled` |
+| `setPriceCacheMaxAge`          |
 | `setYieldRepurchaseRecipient` |
 | `setYieldAssetRouting`        |
 
-The typed queue helpers cover debt-cap, risk, and fee changes. Asset-originations and yield-routing
-changes use `queueBatch`.
+The typed queue helpers cover debt-cap, risk, fee, and PriceCache max-age changes.
+Asset-originations and yield-routing changes use `queueBatch`.
 
 Each queued configuration key records its expected pre-state. Execution fails if that pre-state
 changes before execution. A stale action does not block an unrelated action.
@@ -209,7 +217,7 @@ A direct permissionless seizure can receive the configured keeper reward. A call
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `burner_loans_admin`         | Cannot add assets, change the global cap, rotate the backing oracle, change policy links, or bypass ConfigTimelock |
 | `emergency`                  | Cannot change parameters, add assets, enable asset originations, or enable a policy                                |
-| `heart`                      | Cannot change parameters and can call only the two periodic task entry points                                      |
+| `heart`                      | Cannot change parameters and can call only configured periodic task entry points                                   |
 | ConfigTimelock               | Cannot call functions outside the delegated Config surface                                                         |
 | Borrower-authorized operator | Cannot change protocol configuration or another borrower's position                                                |
 | Permissionless caller        | Can only repay, seize, claim yield, relay a signed authorization, and execute a valid queued action                |

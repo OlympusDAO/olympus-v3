@@ -19,6 +19,14 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @return configurator_ Burner Loans Config address, or zero before it is bound.
     function configurator() external view returns (address configurator_);
 
+    /// @notice Returns the optional PriceCache used by the facility.
+    /// @return priceCache_ PriceCache policy, or zero when direct PRICE mode is configured.
+    function priceCache() external view returns (address priceCache_);
+
+    /// @notice Returns the maximum accepted age of a cached price.
+    /// @return priceCacheMaxAge_ Maximum cached-price age, in seconds.
+    function priceCacheMaxAge() external view returns (uint48 priceCacheMaxAge_);
+
     /// @notice Returns the facility-wide yield repurchase recipient.
     /// @return recipient Current repurchase recipient, or zero when none is configured.
     function getYieldRepurchaseRecipient() external view returns (address recipient);
