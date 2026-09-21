@@ -1,0 +1,117 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "poly_", "type": "address"},
+            {"internalType": "address", "name": "ohm_", "type": "address"},
+            {"internalType": "address", "name": "dai_", "type": "address"},
+            {"internalType": "address", "name": "gohm_", "type": "address"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "DAI",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "OHM",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "address", "name": "", "type": "address"}
+        ],
+        "name": "allowance",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "spender_", "type": "address"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "approve",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "amount_", "type": "uint256"}],
+        "name": "claim",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "fractionalizeClaim",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "name": "fractionalizedTerms",
+        "outputs": [
+            {"internalType": "uint256", "name": "percent", "type": "uint256"},
+            {"internalType": "uint256", "name": "gClaimed", "type": "uint256"},
+            {"internalType": "uint256", "name": "max", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "gOHM",
+        "outputs": [{"internalType": "contract IgOHM", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "pOLY",
+        "outputs": [{"internalType": "contract IPOLY", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "user_", "type": "address"}],
+        "name": "redeemableFor",
+        "outputs": [
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "to_", "type": "address"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "transfer",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "from_", "type": "address"},
+            {"internalType": "address", "name": "to_", "type": "address"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "transferFrom",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {"inputs": [], "name": "CT_IllegalClaim", "type": "error"}
+]

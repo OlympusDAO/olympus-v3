@@ -1,0 +1,244 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner_", "type": "address"},
+            {"internalType": "address", "name": "coolerV2_", "type": "address"},
+            {"internalType": "address", "name": "dai_", "type": "address"},
+            {"internalType": "address", "name": "usds_", "type": "address"},
+            {"internalType": "address", "name": "gohm_", "type": "address"},
+            {"internalType": "address", "name": "migrator_", "type": "address"},
+            {"internalType": "address", "name": "flash_", "type": "address"},
+            {"internalType": "address", "name": "chreg_", "type": "address"},
+            {"internalType": "address[]", "name": "coolerFactories_", "type": "address[]"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "CHREG",
+        "outputs": [{"internalType": "contract CHREGv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "COOLERV2",
+        "outputs": [{"internalType": "contract IMonoCooler", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "DAI",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "FLASH",
+        "outputs": [
+            {"internalType": "contract IERC3156FlashLender", "name": "", "type": "address"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "GOHM",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MIGRATOR",
+        "outputs": [{"internalType": "contract IDaiUsdsMigrator", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "USDS",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "coolerFactory_", "type": "address"}],
+        "name": "addCoolerFactory",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address[]", "name": "coolers_", "type": "address[]"},
+            {"internalType": "address", "name": "newOwner_", "type": "address"},
+            {
+                "components": [
+                    {"internalType": "address", "name": "account", "type": "address"},
+                    {"internalType": "address", "name": "authorized", "type": "address"},
+                    {"internalType": "uint96", "name": "authorizationDeadline", "type": "uint96"},
+                    {"internalType": "uint256", "name": "nonce", "type": "uint256"},
+                    {"internalType": "uint256", "name": "signatureDeadline", "type": "uint256"}
+                ],
+                "internalType": "struct IMonoCooler.Authorization",
+                "name": "authorization_",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {"internalType": "uint8", "name": "v", "type": "uint8"},
+                    {"internalType": "bytes32", "name": "r", "type": "bytes32"},
+                    {"internalType": "bytes32", "name": "s", "type": "bytes32"}
+                ],
+                "internalType": "struct IMonoCooler.Signature",
+                "name": "signature_",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {"internalType": "address", "name": "delegate", "type": "address"},
+                    {"internalType": "int256", "name": "amount", "type": "int256"}
+                ],
+                "internalType": "struct IDLGTEv1.DelegationRequest[]",
+                "name": "delegationRequests_",
+                "type": "tuple[]"
+            }
+        ],
+        "name": "consolidate",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getCoolerFactories",
+        "outputs": [{"internalType": "address[]", "name": "coolerFactories", "type": "address[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "initiator_", "type": "address"},
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "bytes", "name": "params_", "type": "bytes"}
+        ],
+        "name": "onFlashLoan",
+        "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address[]", "name": "coolers_", "type": "address[]"}],
+        "name": "previewConsolidate",
+        "outputs": [
+            {"internalType": "uint256", "name": "collateralAmount", "type": "uint256"},
+            {"internalType": "uint256", "name": "borrowAmount", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "coolerFactory_", "type": "address"}],
+        "name": "removeCoolerFactory",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "newOwner", "type": "address"}],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "coolerFactory", "type": "address"}
+        ],
+        "name": "CoolerFactoryAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "coolerFactory", "type": "address"}
+        ],
+        "name": "CoolerFactoryRemoved",
+        "type": "event"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "newOwner", "type": "address"}
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "token", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "recipient", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "TokenRefunded",
+        "type": "event"
+    },
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {"inputs": [], "name": "OnlyLender", "type": "error"},
+    {"inputs": [], "name": "OnlyThis", "type": "error"},
+    {"inputs": [], "name": "Only_CoolerOwner", "type": "error"},
+    {
+        "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+        "name": "Overflow",
+        "type": "error"
+    },
+    {"inputs": [], "name": "Params_DuplicateCooler", "type": "error"},
+    {
+        "inputs": [{"internalType": "string", "name": "reason_", "type": "string"}],
+        "name": "Params_InvalidAddress",
+        "type": "error"
+    },
+    {"inputs": [], "name": "Params_InvalidClearinghouse", "type": "error"},
+    {"inputs": [], "name": "Params_InvalidCooler", "type": "error"},
+    {"inputs": [], "name": "Params_InvalidNewOwner", "type": "error"}
+]

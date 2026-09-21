@@ -1,0 +1,270 @@
+[
+    {
+        "inputs": [
+            {"internalType": "contract Kernel", "name": "kernel_", "type": "address"},
+            {"internalType": "address", "name": "gohm_", "type": "address"},
+            {
+                "internalType": "contract DelegateEscrowFactory",
+                "name": "delegateEscrowFactory_",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "DEFAULT_MAX_DELEGATE_ADDRESSES",
+        "outputs": [{"internalType": "uint32", "name": "", "type": "uint32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "INIT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "KEYCODE",
+        "outputs": [{"internalType": "Keycode", "name": "", "type": "bytes5"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+        "name": "accountDelegationSummary",
+        "outputs": [
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "account", "type": "address"},
+            {"internalType": "uint256", "name": "startIndex", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxItems", "type": "uint256"}
+        ],
+        "name": "accountDelegationsList",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "delegate", "type": "address"},
+                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
+                    {"internalType": "address", "name": "escrow", "type": "address"}
+                ],
+                "internalType": "struct IDLGTEv1.AccountDelegation[]",
+                "name": "delegations",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {
+                "components": [
+                    {"internalType": "address", "name": "delegate", "type": "address"},
+                    {"internalType": "int256", "name": "amount", "type": "int256"}
+                ],
+                "internalType": "struct IDLGTEv1.DelegationRequest[]",
+                "name": "delegationRequests",
+                "type": "tuple[]"
+            }
+        ],
+        "name": "applyDelegations",
+        "outputs": [
+            {"internalType": "uint256", "name": "appliedDelegationAmounts", "type": "uint256"},
+            {"internalType": "uint256", "name": "appliedUndelegationAmounts", "type": "uint256"},
+            {"internalType": "uint256", "name": "undelegatedBalance", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "delegateEscrowFactory",
+        "outputs": [
+            {"internalType": "contract DelegateEscrowFactory", "name": "", "type": "address"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "depositUndelegatedGohm",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "gOHM",
+        "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+        "name": "maxDelegateAddresses",
+        "outputs": [{"internalType": "uint32", "name": "result", "type": "uint32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "policy", "type": "address"},
+            {"internalType": "address", "name": "account", "type": "address"}
+        ],
+        "name": "policyAccountBalances",
+        "outputs": [{"internalType": "uint256", "name": "gOhmBalance", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {"internalType": "uint256", "name": "requestedUndelegatedBalance", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxNumDelegates", "type": "uint256"}
+        ],
+        "name": "rescindDelegations",
+        "outputs": [
+            {"internalType": "uint256", "name": "totalRescinded", "type": "uint256"},
+            {"internalType": "uint256", "name": "newUndelegatedBalance", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "account", "type": "address"},
+            {"internalType": "uint32", "name": "maxDelegates", "type": "uint32"}
+        ],
+        "name": "setMaxDelegateAddresses",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "delegate", "type": "address"}],
+        "name": "totalDelegatedTo",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"internalType": "uint256", "name": "autoRescindMaxNumDelegates", "type": "uint256"}
+        ],
+        "name": "withdrawUndelegatedGohm",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "account", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "delegate", "type": "address"},
+            {"indexed": false, "internalType": "int256", "name": "amount", "type": "int256"}
+        ],
+        "name": "DelegationApplied",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "account", "type": "address"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "maxDelegateAddresses",
+                "type": "uint256"
+            }
+        ],
+        "name": "MaxDelegateAddressesSet",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "delegate", "type": "address"},
+            {"internalType": "uint256", "name": "balance", "type": "uint256"},
+            {"internalType": "uint256", "name": "requested", "type": "uint256"}
+        ],
+        "name": "DLGTE_ExceededDelegatedBalance",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "balance", "type": "uint256"},
+            {"internalType": "uint256", "name": "requested", "type": "uint256"}
+        ],
+        "name": "DLGTE_ExceededPolicyAccountBalance",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "balance", "type": "uint256"},
+            {"internalType": "uint256", "name": "requested", "type": "uint256"}
+        ],
+        "name": "DLGTE_ExceededUndelegatedBalance",
+        "type": "error"
+    },
+    {"inputs": [], "name": "DLGTE_InvalidAddress", "type": "error"},
+    {"inputs": [], "name": "DLGTE_InvalidAmount", "type": "error"},
+    {"inputs": [], "name": "DLGTE_InvalidDelegateEscrow", "type": "error"},
+    {"inputs": [], "name": "DLGTE_InvalidDelegationRequests", "type": "error"},
+    {"inputs": [], "name": "DLGTE_TooManyDelegates", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "policy_", "type": "address"}],
+        "name": "Module_PolicyNotPermitted",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}],
+        "name": "Overflow",
+        "type": "error"
+    }
+]

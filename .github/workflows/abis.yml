@@ -1,0 +1,40 @@
+name: ABIs
+# Check the ABI export only on release pull requests from develop to master. GitHub filters the
+# trigger by the base branch only, so the job checks the head branch. A skipped job counts as a
+# pass for a required status check, so pull requests from other branches are not blocked.
+on:
+    pull_request:
+        branches:
+            - master
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    abis:
+        if: github.head_ref == 'develop'
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 30
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+              with:
+                  persist-credentials: false
+
+            - name: Bootstrap
+              uses: ./.github/actions/bootstrap
+
+            - name: Test the ABI exporter
+              run: pnpm run test:abis
+
+            # The check compiles each linked source contract into temporary artifact and cache
+            # directories, so this job depends on neither the build cache nor the build artifacts.
+            # It makes no explorer calls and needs no secrets.
+            - name: Check the generated ABIs
+              run: pnpm run gen:abis:check

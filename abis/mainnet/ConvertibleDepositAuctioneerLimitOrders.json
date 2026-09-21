@@ -1,0 +1,485 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner_", "type": "address"},
+            {"internalType": "address", "name": "depositManager_", "type": "address"},
+            {"internalType": "address", "name": "cdAuctioneer_", "type": "address"},
+            {"internalType": "address", "name": "usds_", "type": "address"},
+            {"internalType": "address", "name": "sUsds_", "type": "address"},
+            {"internalType": "address", "name": "positionNft_", "type": "address"},
+            {"internalType": "address", "name": "yieldRecipient_", "type": "address"},
+            {"internalType": "uint8[]", "name": "depositPeriods_", "type": "uint8[]"},
+            {"internalType": "address[]", "name": "receiptTokens_", "type": "address[]"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "CD_AUCTIONEER",
+        "outputs": [
+            {
+                "internalType": "contract IConvertibleDepositAuctioneer",
+                "name": "",
+                "type": "address"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "DEPOSIT_MANAGER",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "POSITION_NFT",
+        "outputs": [{"internalType": "contract ERC721", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "SUSDS",
+        "outputs": [{"internalType": "contract ERC4626", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "USDS",
+        "outputs": [{"internalType": "contract ERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "address", "name": "receiptToken_", "type": "address"}
+        ],
+        "name": "addDepositPeriod",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "orderId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "fillAmount_", "type": "uint256"}
+        ],
+        "name": "calculateIncentive",
+        "outputs": [
+            {"internalType": "uint256", "name": "incentive", "type": "uint256"},
+            {"internalType": "uint256", "name": "incentiveRate", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "orderId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "fillAmount_", "type": "uint256"}
+        ],
+        "name": "canFillOrder",
+        "outputs": [
+            {"internalType": "bool", "name": "canFill", "type": "bool"},
+            {"internalType": "string", "name": "reason", "type": "string"},
+            {"internalType": "uint256", "name": "effectivePrice", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "orderId_", "type": "uint256"}],
+        "name": "cancelOrder",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "depositBudget_", "type": "uint256"},
+            {"internalType": "uint256", "name": "incentiveBudget_", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxPrice_", "type": "uint256"},
+            {"internalType": "uint256", "name": "minFillSize_", "type": "uint256"}
+        ],
+        "name": "createOrder",
+        "outputs": [{"internalType": "uint256", "name": "orderId", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "enableData_", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "orderId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "fillAmount_", "type": "uint256"}
+        ],
+        "name": "fillOrder",
+        "outputs": [
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getAccruedYield",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getAccruedYieldShares",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "fillAmount_", "type": "uint256"}
+        ],
+        "name": "getExecutionPrice",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "index0", "type": "uint256"},
+            {"internalType": "uint256", "name": "index1", "type": "uint256"}
+        ],
+        "name": "getFillableOrders",
+        "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"}],
+        "name": "getFillableOrders",
+        "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "orderId_", "type": "uint256"}],
+        "name": "getOrder",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "owner", "type": "address"},
+                    {"internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+                    {"internalType": "bool", "name": "active", "type": "bool"},
+                    {"internalType": "uint256", "name": "depositBudget", "type": "uint256"},
+                    {"internalType": "uint256", "name": "incentiveBudget", "type": "uint256"},
+                    {"internalType": "uint256", "name": "depositSpent", "type": "uint256"},
+                    {"internalType": "uint256", "name": "incentiveSpent", "type": "uint256"},
+                    {"internalType": "uint256", "name": "maxPrice", "type": "uint256"},
+                    {"internalType": "uint256", "name": "minFillSize", "type": "uint256"}
+                ],
+                "internalType": "struct ILimitOrders.LimitOrder",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "user_", "type": "address"}],
+        "name": "getOrdersForUser",
+        "outputs": [{"internalType": "uint256[]", "name": "", "type": "uint256[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "orderId_", "type": "uint256"}],
+        "name": "getRemaining",
+        "outputs": [
+            {"internalType": "uint256", "name": "deposit", "type": "uint256"},
+            {"internalType": "uint256", "name": "incentive", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "nextOrderId",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "address", "name": "", "type": "address"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "bytes", "name": "", "type": "bytes"}
+        ],
+        "name": "onERC721Received",
+        "outputs": [{"internalType": "bytes4", "name": "", "type": "bytes4"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "owner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "orderId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "fillAmount_", "type": "uint256"}
+        ],
+        "name": "previewFillOrder",
+        "outputs": [
+            {"internalType": "bool", "name": "canFill", "type": "bool"},
+            {"internalType": "string", "name": "reason", "type": "string"},
+            {"internalType": "uint256", "name": "effectivePrice", "type": "uint256"},
+            {"internalType": "uint256", "name": "incentive", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint8", "name": "depositPeriod", "type": "uint8"}],
+        "name": "receiptTokens",
+        "outputs": [{"internalType": "contract ERC20", "name": "receiptToken", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"}],
+        "name": "removeDepositPeriod",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "renounceOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "newRecipient_", "type": "address"}],
+        "name": "setYieldRecipient",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "sweepYield",
+        "outputs": [{"internalType": "uint256", "name": "shares", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "totalUsdsOwed",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "newOwner", "type": "address"}],
+        "name": "transferOwnership",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "yieldRecipient",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": true, "internalType": "address", "name": "receiptToken", "type": "address"}
+        ],
+        "name": "DepositPeriodAdded",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"}
+        ],
+        "name": "DepositPeriodRemoved",
+        "type": "event"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "orderId", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "usdsReturned", "type": "uint256"}
+        ],
+        "name": "OrderCancelled",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "orderId", "type": "uint256"},
+            {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "depositBudget",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "incentiveBudget",
+                "type": "uint256"
+            },
+            {"indexed": false, "internalType": "uint256", "name": "maxPrice", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "minFillSize", "type": "uint256"}
+        ],
+        "name": "OrderCreated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "orderId", "type": "uint256"},
+            {"indexed": true, "internalType": "address", "name": "filler", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "fillAmount", "type": "uint256"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "incentivePaid",
+                "type": "uint256"
+            },
+            {"indexed": false, "internalType": "uint256", "name": "ohmOut", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "positionId", "type": "uint256"}
+        ],
+        "name": "OrderFilled",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address"
+            },
+            {"indexed": true, "internalType": "address", "name": "newOwner", "type": "address"}
+        ],
+        "name": "OwnershipTransferred",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "newRecipient", "type": "address"}
+        ],
+        "name": "YieldRecipientUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "recipient", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "sUsdsAmount", "type": "uint256"}
+        ],
+        "name": "YieldSwept",
+        "type": "event"
+    },
+    {"inputs": [], "name": "ArrayLengthMismatch", "type": "error"},
+    {"inputs": [], "name": "DepositPeriodNotEnabled", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "receiver", "type": "address"}],
+        "name": "ERC721InvalidReceiver",
+        "type": "error"
+    },
+    {"inputs": [], "name": "FillBelowMinimum", "type": "error"},
+    {
+        "inputs": [{"internalType": "string", "name": "param", "type": "string"}],
+        "name": "InvalidParam",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {"inputs": [], "name": "NotOrderOwner", "type": "error"},
+    {"inputs": [], "name": "OrderFullySpent", "type": "error"},
+    {"inputs": [], "name": "OrderNotActive", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "owner", "type": "address"}],
+        "name": "OwnableInvalidOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "account", "type": "address"}],
+        "name": "OwnableUnauthorizedAccount",
+        "type": "error"
+    },
+    {"inputs": [], "name": "PriceAboveMax", "type": "error"},
+    {"inputs": [], "name": "ReceiptTokenNotConfigured", "type": "error"},
+    {"inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "token", "type": "address"}],
+        "name": "SafeERC20FailedOperation",
+        "type": "error"
+    },
+    {"inputs": [], "name": "ZeroOhmOut", "type": "error"}
+]

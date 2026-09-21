@@ -1,0 +1,285 @@
+[
+    {
+        "inputs": [
+            {"internalType": "contract Kernel", "name": "kernel_", "type": "address"},
+            {"internalType": "contract IERC20", "name": "ohmV1_", "type": "address"},
+            {"internalType": "contract IgOHM", "name": "gOHM_", "type": "address"},
+            {"internalType": "bytes32", "name": "merkleRoot_", "type": "bytes32"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "ROLES",
+        "outputs": [{"internalType": "contract ROLESv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "", "type": "uint8"},
+            {"internalType": "uint8", "name": "", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "configureDependencies",
+        "outputs": [{"internalType": "Keycode[]", "name": "dependencies", "type": "bytes5[]"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "enableData_", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "gOHM",
+        "outputs": [{"internalType": "address", "name": "gOHM_", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "merkleRoot",
+        "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "bytes32[]", "name": "proof_", "type": "bytes32[]"},
+            {"internalType": "uint256", "name": "allocatedAmount_", "type": "uint256"}
+        ],
+        "name": "migrate",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "account_", "type": "address"}],
+        "name": "migratedAmounts",
+        "outputs": [{"internalType": "uint256", "name": "migratedAmount_", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ohmV1",
+        "outputs": [{"internalType": "contract IERC20", "name": "ohmV1_", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ohmV2",
+        "outputs": [{"internalType": "contract IERC20", "name": "ohmV2_", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "amount_", "type": "uint256"}],
+        "name": "previewMigrate",
+        "outputs": [{"internalType": "uint256", "name": "ohmV2Amount_", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "remainingMintApproval",
+        "outputs": [{"internalType": "uint256", "name": "remaining_", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requestPermissions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "Keycode", "name": "keycode", "type": "bytes5"},
+                    {"internalType": "bytes4", "name": "funcSelector", "type": "bytes4"}
+                ],
+                "internalType": "struct Permissions[]",
+                "name": "requests",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract IERC20", "name": "token_", "type": "address"}],
+        "name": "rescue",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "merkleRoot_", "type": "bytes32"}],
+        "name": "setMerkleRoot",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "approval_", "type": "uint256"}],
+        "name": "setRemainingMintApproval",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "totalMigrated",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "account_", "type": "address"},
+            {"internalType": "uint256", "name": "allocatedAmount_", "type": "uint256"},
+            {"internalType": "bytes32[]", "name": "proof_", "type": "bytes32[]"}
+        ],
+        "name": "verifyClaim",
+        "outputs": [{"internalType": "bool", "name": "valid_", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "bytes32", "name": "newRoot", "type": "bytes32"},
+            {"indexed": true, "internalType": "address", "name": "updater", "type": "address"}
+        ],
+        "name": "MerkleRootUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "ohmV1Amount", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "ohmV2Amount", "type": "uint256"}
+        ],
+        "name": "Migrated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "newApproval", "type": "uint256"},
+            {"indexed": true, "internalType": "uint256", "name": "oldApproval", "type": "uint256"}
+        ],
+        "name": "RemainingMintApprovalUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "token", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "to", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "Rescued",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "requested", "type": "uint256"},
+            {"internalType": "uint256", "name": "allocated", "type": "uint256"},
+            {"internalType": "uint256", "name": "migrated", "type": "uint256"}
+        ],
+        "name": "AmountExceedsAllowance",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"internalType": "uint256", "name": "remaining", "type": "uint256"}
+        ],
+        "name": "CapExceeded",
+        "type": "error"
+    },
+    {"inputs": [], "name": "InvalidProof", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotAuthorised", "type": "error"},
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Policy_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "expected_", "type": "bytes"}],
+        "name": "Policy_WrongModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "role_", "type": "bytes32"}],
+        "name": "ROLES_RequireRole",
+        "type": "error"
+    },
+    {"inputs": [], "name": "SameMerkleRoot", "type": "error"},
+    {"inputs": [], "name": "ZeroAddress", "type": "error"},
+    {"inputs": [], "name": "ZeroAmount", "type": "error"}
+]

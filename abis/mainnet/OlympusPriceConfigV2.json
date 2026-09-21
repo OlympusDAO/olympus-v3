@@ -1,0 +1,516 @@
+[
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "kernel_", "type": "address"}],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "EXECUTION_WINDOW",
+        "outputs": [{"internalType": "uint48", "name": "", "type": "uint48"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MAX_TIMELOCK_DELAY",
+        "outputs": [{"internalType": "uint48", "name": "", "type": "uint48"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MIN_TIMELOCK_DELAY",
+        "outputs": [{"internalType": "uint48", "name": "", "type": "uint48"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "PRICE",
+        "outputs": [{"internalType": "contract PRICEv2", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ROLES",
+        "outputs": [{"internalType": "contract ROLESv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "", "type": "uint8"},
+            {"internalType": "uint8", "name": "", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "bool", "name": "storeMovingAverage_", "type": "bool"},
+            {"internalType": "bool", "name": "useMovingAverage_", "type": "bool"},
+            {"internalType": "uint32", "name": "movingAverageDuration_", "type": "uint32"},
+            {"internalType": "uint48", "name": "lastObservationTime_", "type": "uint48"},
+            {"internalType": "uint256[]", "name": "observations_", "type": "uint256[]"},
+            {
+                "components": [
+                    {"internalType": "SubKeycode", "name": "target", "type": "bytes20"},
+                    {"internalType": "bytes4", "name": "selector", "type": "bytes4"},
+                    {"internalType": "bytes", "name": "params", "type": "bytes"}
+                ],
+                "internalType": "struct IPRICEv2.Component",
+                "name": "strategy_",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {"internalType": "SubKeycode", "name": "target", "type": "bytes20"},
+                    {"internalType": "bytes4", "name": "selector", "type": "bytes4"},
+                    {"internalType": "bytes", "name": "params", "type": "bytes"}
+                ],
+                "internalType": "struct IPRICEv2.Component[]",
+                "name": "feeds_",
+                "type": "tuple[]"
+            },
+            {
+                "components": [
+                    {"internalType": "uint256", "name": "expectedPrice", "type": "uint256"},
+                    {"internalType": "uint16", "name": "toleranceBps", "type": "uint16"}
+                ],
+                "internalType": "struct IPriceConfigv2.PriceFeedExpectation[]",
+                "name": "feedExpectations_",
+                "type": "tuple[]"
+            }
+        ],
+        "name": "addAsset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "name": "cancelQueuedAction",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "configureDependencies",
+        "outputs": [{"internalType": "Keycode[]", "name": "dependencies", "type": "bytes5[]"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "enableData_", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "name": "executeQueuedAction",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "name": "getQueuedAction",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "target", "type": "address"},
+                    {"internalType": "bytes4", "name": "selector", "type": "bytes4"},
+                    {"internalType": "address", "name": "proposer", "type": "address"},
+                    {"internalType": "uint48", "name": "queuedAt", "type": "uint48"},
+                    {"internalType": "uint48", "name": "executableAt", "type": "uint48"},
+                    {"internalType": "uint48", "name": "expiresAt", "type": "uint48"},
+                    {"internalType": "bool", "name": "executed", "type": "bool"},
+                    {"internalType": "bool", "name": "cancelled", "type": "bool"},
+                    {"internalType": "bytes", "name": "payload", "type": "bytes"}
+                ],
+                "internalType": "struct ITimelockQueue.QueuedAction",
+                "name": "action_",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "submodule_", "type": "address"}],
+        "name": "installSubmodule",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "nextActionId",
+        "outputs": [{"internalType": "uint64", "name": "", "type": "uint64"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes20", "name": "subKeycode_", "type": "bytes20"},
+            {"internalType": "bytes", "name": "data_", "type": "bytes"}
+        ],
+        "name": "queueExecOnSubmodule",
+        "outputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "asset_", "type": "address"}],
+        "name": "queueRemoveAsset",
+        "outputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint48", "name": "delay_", "type": "uint48"}],
+        "name": "queueTimelockDelay",
+        "outputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {
+                "components": [
+                    {"internalType": "bool", "name": "updateFeeds", "type": "bool"},
+                    {"internalType": "bool", "name": "updateStrategy", "type": "bool"},
+                    {"internalType": "bool", "name": "updateMovingAverage", "type": "bool"},
+                    {
+                        "components": [
+                            {"internalType": "SubKeycode", "name": "target", "type": "bytes20"},
+                            {"internalType": "bytes4", "name": "selector", "type": "bytes4"},
+                            {"internalType": "bytes", "name": "params", "type": "bytes"}
+                        ],
+                        "internalType": "struct IPRICEv2.Component[]",
+                        "name": "feeds",
+                        "type": "tuple[]"
+                    },
+                    {
+                        "components": [
+                            {"internalType": "SubKeycode", "name": "target", "type": "bytes20"},
+                            {"internalType": "bytes4", "name": "selector", "type": "bytes4"},
+                            {"internalType": "bytes", "name": "params", "type": "bytes"}
+                        ],
+                        "internalType": "struct IPRICEv2.Component",
+                        "name": "strategy",
+                        "type": "tuple"
+                    },
+                    {"internalType": "bool", "name": "useMovingAverage", "type": "bool"},
+                    {"internalType": "bool", "name": "storeMovingAverage", "type": "bool"},
+                    {"internalType": "uint32", "name": "movingAverageDuration", "type": "uint32"},
+                    {"internalType": "uint48", "name": "lastObservationTime", "type": "uint48"},
+                    {"internalType": "uint256[]", "name": "observations", "type": "uint256[]"}
+                ],
+                "internalType": "struct IPRICEv2.UpdateAssetParams",
+                "name": "params_",
+                "type": "tuple"
+            },
+            {
+                "components": [
+                    {"internalType": "uint256", "name": "expectedPrice", "type": "uint256"},
+                    {"internalType": "uint16", "name": "toleranceBps", "type": "uint16"}
+                ],
+                "internalType": "struct IPriceConfigv2.PriceFeedExpectation[]",
+                "name": "feedExpectations_",
+                "type": "tuple[]"
+            }
+        ],
+        "name": "queueUpdateAsset",
+        "outputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "submodule_", "type": "address"}],
+        "name": "queueUpgradeSubmodule",
+        "outputs": [{"internalType": "uint64", "name": "actionId_", "type": "uint64"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "asset_", "type": "address"}],
+        "name": "registerNonContractAsset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requestPermissions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "Keycode", "name": "keycode", "type": "bytes5"},
+                    {"internalType": "bytes4", "name": "funcSelector", "type": "bytes4"}
+                ],
+                "internalType": "struct Permissions[]",
+                "name": "requests",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "asset_", "type": "address"}],
+        "name": "storeObservation",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "storeObservations",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "timelockDelay",
+        "outputs": [{"internalType": "uint48", "name": "", "type": "uint48"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "asset_", "type": "address"}],
+        "name": "unregisterNonContractAsset",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint64", "name": "actionId", "type": "uint64"},
+            {"indexed": true, "internalType": "address", "name": "target", "type": "address"},
+            {"indexed": true, "internalType": "bytes4", "name": "selector", "type": "bytes4"},
+            {"indexed": false, "internalType": "address", "name": "canceller", "type": "address"}
+        ],
+        "name": "TimelockActionCancelled",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint64", "name": "actionId", "type": "uint64"},
+            {"indexed": true, "internalType": "address", "name": "target", "type": "address"},
+            {"indexed": true, "internalType": "bytes4", "name": "selector", "type": "bytes4"},
+            {"indexed": false, "internalType": "address", "name": "executor", "type": "address"}
+        ],
+        "name": "TimelockActionExecuted",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint64", "name": "actionId", "type": "uint64"},
+            {"indexed": true, "internalType": "address", "name": "target", "type": "address"},
+            {"indexed": true, "internalType": "bytes4", "name": "selector", "type": "bytes4"},
+            {"indexed": false, "internalType": "address", "name": "proposer", "type": "address"},
+            {"indexed": false, "internalType": "bytes32", "name": "payloadHash", "type": "bytes32"},
+            {"indexed": false, "internalType": "uint48", "name": "executableAt", "type": "uint48"},
+            {"indexed": false, "internalType": "uint48", "name": "expiresAt", "type": "uint48"}
+        ],
+        "name": "TimelockActionQueued",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [{"indexed": false, "internalType": "uint48", "name": "delay", "type": "uint48"}],
+        "name": "TimelockDelaySet",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint256", "name": "expectationCount_", "type": "uint256"},
+            {"internalType": "uint256", "name": "feedCount_", "type": "uint256"}
+        ],
+        "name": "IPriceConfigv2_FeedExpectationCountInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint256", "name": "index_", "type": "uint256"}
+        ],
+        "name": "IPriceConfigv2_FeedExpectationInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint256", "name": "index_", "type": "uint256"}
+        ],
+        "name": "IPriceConfigv2_PriceFeedCallFailed",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint256", "name": "index_", "type": "uint256"},
+            {"internalType": "uint256", "name": "price_", "type": "uint256"},
+            {"internalType": "uint256", "name": "lowerBound_", "type": "uint256"},
+            {"internalType": "uint256", "name": "upperBound_", "type": "uint256"}
+        ],
+        "name": "IPriceConfigv2_PriceFeedOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes20", "name": "subKeycode", "type": "bytes20"},
+            {"internalType": "address", "name": "expected", "type": "address"},
+            {"internalType": "address", "name": "actual", "type": "address"}
+        ],
+        "name": "IPriceConfigv2_SubmoduleImplementationChanged",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes5", "name": "keycode", "type": "bytes5"},
+            {"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}
+        ],
+        "name": "IPriceConfigv2_UnsupportedModuleInterface",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes5", "name": "keycode", "type": "bytes5"},
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "name": "IPriceConfigv2_UnsupportedModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId", "type": "uint64"}],
+        "name": "ITimelockQueue_ActionAlreadyExecuted",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId", "type": "uint64"}],
+        "name": "ITimelockQueue_ActionCancelled",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint64", "name": "actionId", "type": "uint64"},
+            {"internalType": "uint48", "name": "expiresAt", "type": "uint48"}
+        ],
+        "name": "ITimelockQueue_ActionExpired",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "target", "type": "address"},
+            {"internalType": "bytes4", "name": "selector", "type": "bytes4"}
+        ],
+        "name": "ITimelockQueue_ActionInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint64", "name": "actionId", "type": "uint64"}],
+        "name": "ITimelockQueue_ActionNotFound",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint64", "name": "actionId", "type": "uint64"},
+            {"internalType": "uint48", "name": "executableAt", "type": "uint48"}
+        ],
+        "name": "ITimelockQueue_ActionNotReady",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint48", "name": "delay", "type": "uint48"},
+            {"internalType": "uint48", "name": "minimum", "type": "uint48"},
+            {"internalType": "uint48", "name": "maximum", "type": "uint48"}
+        ],
+        "name": "ITimelockQueue_TimelockDelayInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotAuthorised", "type": "error"},
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Policy_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "expected_", "type": "bytes"}],
+        "name": "Policy_WrongModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "role_", "type": "bytes32"}],
+        "name": "ROLES_RequireRole",
+        "type": "error"
+    }
+]

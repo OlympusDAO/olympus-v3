@@ -1,0 +1,103 @@
+[
+    {
+        "inputs": [{"internalType": "contract Module", "name": "parent_", "type": "address"}],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "INIT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "PARENT",
+        "outputs": [{"internalType": "Keycode", "name": "", "type": "bytes5"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "SUBKEYCODE",
+        "outputs": [{"internalType": "SubKeycode", "name": "", "type": "bytes20"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "outputDecimals_", "type": "uint8"},
+            {"internalType": "bytes", "name": "", "type": "bytes"}
+        ],
+        "name": "getPriceFromUnderlying",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "parent",
+        "outputs": [{"internalType": "contract Module", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "assetDecimals_", "type": "uint8"},
+            {"internalType": "uint8", "name": "maxDecimals_", "type": "uint8"}
+        ],
+        "name": "ERC4626_AssetDecimalsOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "outputDecimals_", "type": "uint8"},
+            {"internalType": "uint8", "name": "maxDecimals_", "type": "uint8"}
+        ],
+        "name": "ERC4626_OutputDecimalsOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "underlyingDecimals_", "type": "uint8"},
+            {"internalType": "uint8", "name": "maxDecimals_", "type": "uint8"}
+        ],
+        "name": "ERC4626_UnderlyingDecimalsOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "asset_", "type": "address"}],
+        "name": "ERC4626_UnderlyingNotSet",
+        "type": "error"
+    },
+    {"inputs": [], "name": "Submodule_InvalidParent", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Submodule_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "Submodule_OnlyParent",
+        "type": "error"
+    }
+]

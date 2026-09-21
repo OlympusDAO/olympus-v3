@@ -1,0 +1,665 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "kernel_", "type": "address"},
+            {"internalType": "address", "name": "depositManager_", "type": "address"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "DEPOS",
+        "outputs": [{"internalType": "contract DEPOSv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "DEPOSIT_MANAGER",
+        "outputs": [{"internalType": "contract IDepositManager", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ONE_HUNDRED_PERCENT",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ROLES",
+        "outputs": [{"internalType": "contract ROLESv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "TRSRY",
+        "outputs": [{"internalType": "contract TRSRYv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility_", "type": "address"}],
+        "name": "authorizeFacility",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}],
+        "name": "borrowAgainstRedemption",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "cancelRedemption",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user_", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}
+        ],
+        "name": "claimDefaultedLoan",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "configureDependencies",
+        "outputs": [{"internalType": "Keycode[]", "name": "dependencies", "type": "bytes5[]"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility_", "type": "address"}],
+        "name": "deauthorizeFacility",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "enableData_", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"},
+            {"internalType": "uint8", "name": "months_", "type": "uint8"}
+        ],
+        "name": "extendLoan",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}],
+        "name": "finishRedemption",
+        "outputs": [{"internalType": "uint256", "name": "actualAmount", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "address", "name": "facility_", "type": "address"}
+        ],
+        "name": "getAnnualInterestRate",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getAuthorizedFacilities",
+        "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getClaimDefaultRewardPercentage",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "address", "name": "facility_", "type": "address"}
+        ],
+        "name": "getMaxBorrowPercentage",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user_", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}
+        ],
+        "name": "getRedemptionLoan",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "uint256", "name": "initialPrincipal", "type": "uint256"},
+                    {"internalType": "uint256", "name": "principal", "type": "uint256"},
+                    {"internalType": "uint256", "name": "interest", "type": "uint256"},
+                    {"internalType": "uint48", "name": "dueDate", "type": "uint48"},
+                    {"internalType": "bool", "name": "isDefaulted", "type": "bool"}
+                ],
+                "internalType": "struct IDepositRedemptionVault.Loan",
+                "name": "",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user_", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}
+        ],
+        "name": "getUserRedemption",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "depositToken", "type": "address"},
+                    {"internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+                    {"internalType": "uint48", "name": "redeemableAt", "type": "uint48"},
+                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
+                    {"internalType": "address", "name": "facility", "type": "address"},
+                    {"internalType": "uint256", "name": "positionId", "type": "uint256"}
+                ],
+                "internalType": "struct IDepositRedemptionVault.UserRedemption",
+                "name": "redemption",
+                "type": "tuple"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "user_", "type": "address"}],
+        "name": "getUserRedemptionCount",
+        "outputs": [{"internalType": "uint16", "name": "count", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "user_", "type": "address"}],
+        "name": "getUserRedemptions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "address", "name": "depositToken", "type": "address"},
+                    {"internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+                    {"internalType": "uint48", "name": "redeemableAt", "type": "uint48"},
+                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
+                    {"internalType": "address", "name": "facility", "type": "address"},
+                    {"internalType": "uint256", "name": "positionId", "type": "uint256"}
+                ],
+                "internalType": "struct IDepositRedemptionVault.UserRedemption[]",
+                "name": "",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility_", "type": "address"}],
+        "name": "isAuthorizedFacility",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user_", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"}
+        ],
+        "name": "previewBorrowAgainstRedemption",
+        "outputs": [
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint256", "name": "", "type": "uint256"},
+            {"internalType": "uint48", "name": "", "type": "uint48"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user_", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"},
+            {"internalType": "uint8", "name": "months_", "type": "uint8"}
+        ],
+        "name": "previewExtendLoan",
+        "outputs": [
+            {"internalType": "uint48", "name": "", "type": "uint48"},
+            {"internalType": "uint256", "name": "", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint16", "name": "redemptionId_", "type": "uint16"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxSlippage_", "type": "uint256"}
+        ],
+        "name": "repayLoan",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requestPermissions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "Keycode", "name": "keycode", "type": "bytes5"},
+                    {"internalType": "bytes4", "name": "funcSelector", "type": "bytes4"}
+                ],
+                "internalType": "struct Permissions[]",
+                "name": "permissions",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "address", "name": "facility_", "type": "address"},
+            {"internalType": "uint16", "name": "rate_", "type": "uint16"}
+        ],
+        "name": "setAnnualInterestRate",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "percent_", "type": "uint16"}],
+        "name": "setClaimDefaultRewardPercentage",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "address", "name": "facility_", "type": "address"},
+            {"internalType": "uint16", "name": "percent_", "type": "uint16"}
+        ],
+        "name": "setMaxBorrowPercentage",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "startRedemption",
+        "outputs": [{"internalType": "uint16", "name": "redemptionId", "type": "uint16"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "address", "name": "facility_", "type": "address"}
+        ],
+        "name": "startRedemption",
+        "outputs": [{"internalType": "uint16", "name": "redemptionId", "type": "uint16"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "facility", "type": "address"},
+            {"indexed": false, "internalType": "uint16", "name": "rate", "type": "uint16"}
+        ],
+        "name": "AnnualInterestRateSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint16", "name": "percent", "type": "uint16"}
+        ],
+        "name": "ClaimDefaultRewardPercentageSet",
+        "type": "event"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "facility", "type": "address"}
+        ],
+        "name": "FacilityAuthorized",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "facility", "type": "address"}
+        ],
+        "name": "FacilityDeauthorized",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"indexed": false, "internalType": "address", "name": "facility", "type": "address"}
+        ],
+        "name": "LoanCreated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": false, "internalType": "uint256", "name": "principal", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "interest", "type": "uint256"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "remainingCollateral",
+                "type": "uint256"
+            }
+        ],
+        "name": "LoanDefaulted",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": false, "internalType": "uint256", "name": "newDueDate", "type": "uint256"}
+        ],
+        "name": "LoanExtended",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": false, "internalType": "uint256", "name": "principal", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "interest", "type": "uint256"}
+        ],
+        "name": "LoanRepaid",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "facility", "type": "address"},
+            {"indexed": false, "internalType": "uint16", "name": "percent", "type": "uint16"}
+        ],
+        "name": "MaxBorrowPercentageSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": true, "internalType": "address", "name": "depositToken", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "remainingAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "RedemptionCancelled",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": true, "internalType": "address", "name": "depositToken", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "RedemptionFinished",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"indexed": true, "internalType": "address", "name": "depositToken", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"},
+            {"indexed": false, "internalType": "address", "name": "facility", "type": "address"}
+        ],
+        "name": "RedemptionStarted",
+        "type": "event"
+    },
+    {
+        "inputs": [{"internalType": "string", "name": "reason_", "type": "string"}],
+        "name": "DEPOS_InvalidParams",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "DEPOS_NotOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotAuthorised", "type": "error"},
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Policy_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "expected_", "type": "bytes"}],
+        "name": "Policy_WrongModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "role_", "type": "bytes32"}],
+        "name": "ROLES_RequireRole",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"}
+        ],
+        "name": "RedemptionVault_AlreadyRedeemed",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility", "type": "address"}],
+        "name": "RedemptionVault_FacilityExists",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility", "type": "address"}],
+        "name": "RedemptionVault_FacilityNotRegistered",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset", "type": "address"},
+            {"internalType": "address", "name": "facility", "type": "address"}
+        ],
+        "name": "RedemptionVault_InterestRateNotSet",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "RedemptionVault_InvalidAmount",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "depositManager", "type": "address"}],
+        "name": "RedemptionVault_InvalidDepositManager",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "facility", "type": "address"}],
+        "name": "RedemptionVault_InvalidFacility",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"}
+        ],
+        "name": "RedemptionVault_InvalidLoan",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"}
+        ],
+        "name": "RedemptionVault_InvalidRedemptionId",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "RedemptionVault_LoanAmountExceeded",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"}
+        ],
+        "name": "RedemptionVault_LoanIncorrectState",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"internalType": "uint256", "name": "actualAmount", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxAmount", "type": "uint256"}
+        ],
+        "name": "RedemptionVault_MaxSlippageExceeded",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "rate", "type": "uint16"}],
+        "name": "RedemptionVault_OutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"},
+            {"internalType": "uint48", "name": "redeemableAt", "type": "uint48"}
+        ],
+        "name": "RedemptionVault_TooEarly",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "user", "type": "address"},
+            {"internalType": "uint16", "name": "redemptionId", "type": "uint16"}
+        ],
+        "name": "RedemptionVault_UnpaidLoan",
+        "type": "error"
+    },
+    {"inputs": [], "name": "RedemptionVault_ZeroAddress", "type": "error"},
+    {"inputs": [], "name": "RedemptionVault_ZeroAmount", "type": "error"}
+]

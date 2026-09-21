@@ -1,0 +1,2577 @@
+{
+    "deployments": [
+        {
+            "abi": "arbitrum/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0xeac3eC0CC130f4826715187805d1B50e861F2DaC",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0xeac3eC0CC130f4826715187805d1B50e861F2DaC"
+            }
+        },
+        {
+            "abi": "arbitrum/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0xf0cb2dc0db5e6c66B9a70Ac27B06b878da017028",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0xf0cb2dc0db5e6c66B9a70Ac27B06b878da017028"
+            }
+        },
+        {
+            "abi": "arbitrum/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x78f84998c73655ac2Da0Aa1e1270F6Cb985a343e",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x78f84998c73655ac2Da0Aa1e1270F6Cb985a343e"
+            }
+        },
+        {
+            "abi": "arbitrum/gOHM.json",
+            "abiHash": "c7fd13224f09afb68ed123ef09a4aca7f61384b91c1edaa25e15e8a14799c907",
+            "address": "0x8D9bA570D6cb60C7e3e0F31343Efe75AB8E65FB1",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.legacy.gOHM",
+            "source": {
+                "reason": "Bridged gOHM token (SynapseERC20). The repository does not contain this implementation, and the token does not implement IgOHM.",
+                "status": "unavailable"
+            },
+            "verification": {
+                "contractName": "SynapseERC20",
+                "implementationHint": "0x809dc529f07651bd43a172e8db6f4a7a0d771036",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x8D9bA570D6cb60C7e3e0F31343Efe75AB8E65FB1"
+            }
+        },
+        {
+            "abi": "arbitrum/OlympusLender.json",
+            "abiHash": "dbca9c0a505fae5af2772fb643a5d7379333f30bbdb9d629ee2ae7d9260e745e",
+            "address": "0x868C3ae18Fdea85bBb7a303e379c5B7e23b30F03",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.modules.OlympusLender",
+            "source": {
+                "reason": "The repository does not contain this implementation.",
+                "status": "unavailable"
+            },
+            "verification": {
+                "contractName": "OlympusLender",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x868C3ae18Fdea85bBb7a303e379c5B7e23b30F03"
+            }
+        },
+        {
+            "abi": "arbitrum/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0x8f6406eDbFA393e327822D4A08BcF15503570D87",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x8f6406eDbFA393e327822D4A08BcF15503570D87"
+            }
+        },
+        {
+            "abi": "arbitrum/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0xFF5F09D5efE13A9a424F30EC2e1af89D867834d6",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0xFF5F09D5efE13A9a424F30EC2e1af89D867834d6"
+            }
+        },
+        {
+            "abi": "arbitrum/OlympusTreasury.json",
+            "abiHash": "6cb6d45a279c4806e0936ff5eebe15f0f35eb8a0535329e99e6054cc83ea428d",
+            "address": "0x56db53e9801a6EA080569261b63925E0f1f3C81A",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.modules.OlympusTreasury",
+            "source": {
+                "contract": "src/modules/TRSRY/OlympusTreasury.sol:OlympusTreasury",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusTreasury",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x56db53e9801a6EA080569261b63925E0f1f3C81A"
+            }
+        },
+        {
+            "abi": "arbitrum/CrossChainBridge.json",
+            "abiHash": "d3a22bd8f68e474d104081575eea879df69ea96fd32a333364f6802f9161f2c9",
+            "address": "0x20B3834091f038Ce04D8686FAC99CA44A0FB285c",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x20B3834091f038Ce04D8686FAC99CA44A0FB285c"
+            }
+        },
+        {
+            "abi": "arbitrum/RolesAdmin.json",
+            "abiHash": "865949a35f70843e41bc7f089d380d3232d68de8f3b74d436c2b8ae426ea8fdf",
+            "address": "0x69168c08AcF66f002fd02E1B169f38C022c93b70",
+            "chain": "arbitrum",
+            "chainId": 42161,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "drifted"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=42161&module=contract&action=getsourcecode&address=0x69168c08AcF66f002fd02E1B169f38C022c93b70"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x13DFEff85779118136bB9826DcAD8f3bd25153a3",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0x13DFEff85779118136bB9826DcAD8f3bd25153a3"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE"
+            }
+        },
+        {
+            "abi": "arbitrum-sepolia/RolesAdmin.json",
+            "abiHash": "f1772029dce78f0bfe3e36aebe1fd4e540401333b695b1dbf843ee6eedb0c39f",
+            "address": "0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0",
+            "chain": "arbitrum-sepolia",
+            "chainId": 421614,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "exact"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=421614&module=contract&action=getsourcecode&address=0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0"
+            }
+        },
+        {
+            "abi": "base/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+            }
+        },
+        {
+            "abi": "base/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0"
+            }
+        },
+        {
+            "abi": "base/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x13DFEff85779118136bB9826DcAD8f3bd25153a3",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0x13DFEff85779118136bB9826DcAD8f3bd25153a3"
+            }
+        },
+        {
+            "abi": "base/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C"
+            }
+        },
+        {
+            "abi": "base/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE"
+            }
+        },
+        {
+            "abi": "base/CrossChainBridge.json",
+            "abiHash": "1da15f7ca14ef27ea3bc0b65e1ccfdcf9977d6f4922b7cc8a3d915057429f91f",
+            "address": "0x6CA1a916e883c7ce2BFBcF59dc70F2c1EF9dac6e",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0x6CA1a916e883c7ce2BFBcF59dc70F2c1EF9dac6e"
+            }
+        },
+        {
+            "abi": "base/RolesAdmin.json",
+            "abiHash": "f1772029dce78f0bfe3e36aebe1fd4e540401333b695b1dbf843ee6eedb0c39f",
+            "address": "0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1",
+            "chain": "base",
+            "chainId": 8453,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "exact"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=8453&module=contract&action=getsourcecode&address=0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1"
+            }
+        },
+        {
+            "abi": "base-sepolia/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C"
+            }
+        },
+        {
+            "abi": "base-sepolia/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+            }
+        },
+        {
+            "abi": "base-sepolia/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0"
+            }
+        },
+        {
+            "abi": "base-sepolia/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE"
+            }
+        },
+        {
+            "abi": "base-sepolia/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0"
+            }
+        },
+        {
+            "abi": "base-sepolia/OlympusTreasury.json",
+            "abiHash": "6cb6d45a279c4806e0936ff5eebe15f0f35eb8a0535329e99e6054cc83ea428d",
+            "address": "0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.modules.OlympusTreasury",
+            "source": {
+                "contract": "src/modules/TRSRY/OlympusTreasury.sol:OlympusTreasury",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusTreasury",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1"
+            }
+        },
+        {
+            "abi": "base-sepolia/CCIPCrossChainBridge.json",
+            "abiHash": "4f8351f779caa8ee7e4d481af29b77d16ffe76eb533991411816d0c898e45f68",
+            "address": "0xD28D3910191900699558c9d8066080DF644d9DB3",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.periphery.CCIPCrossChainBridge",
+            "source": {
+                "contract": "src/periphery/bridge/CCIPCrossChainBridge.sol:CCIPCrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CCIPCrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xD28D3910191900699558c9d8066080DF644d9DB3"
+            }
+        },
+        {
+            "abi": "base-sepolia/CCIPBurnMintTokenPool.json",
+            "abiHash": "6a48511979a034be09a1e3e0ac95fb8de46879de518936f7cc8f5916b758d7da",
+            "address": "0x6577CFD3B625A6bD0b708dA1f066855C19ac8360",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.CCIPBurnMintTokenPool",
+            "source": {
+                "contract": "src/policies/bridge/CCIPBurnMintTokenPool.sol:CCIPBurnMintTokenPool",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CCIPBurnMintTokenPool",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x6577CFD3B625A6bD0b708dA1f066855C19ac8360"
+            }
+        },
+        {
+            "abi": "base-sepolia/CrossChainBridge.json",
+            "abiHash": "1da15f7ca14ef27ea3bc0b65e1ccfdcf9977d6f4922b7cc8a3d915057429f91f",
+            "address": "0xBA42BE149e5260EbA4B82418A6306f55D532eA47",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xBA42BE149e5260EbA4B82418A6306f55D532eA47"
+            }
+        },
+        {
+            "abi": "base-sepolia/Emergency.json",
+            "abiHash": "f64dca4490d510d97051ac4ce91558d74b7489ce1c267a9e649303da79f0fc57",
+            "address": "0xCA7240A7B439c9D458B47831d38c3d69C1287469",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.Emergency",
+            "source": {"contract": "src/policies/Emergency.sol:Emergency", "status": "exact"},
+            "verification": {
+                "contractName": "Emergency",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xCA7240A7B439c9D458B47831d38c3d69C1287469"
+            }
+        },
+        {
+            "abi": "base-sepolia/Minter.json",
+            "abiHash": "230720c76a1fdfea96259669f962309abd12adbc46dc49b45f366f160b6cc617",
+            "address": "0x0f953D861347414698F34B75dbFd6e7dF1A73493",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.Minter",
+            "source": {"contract": "src/policies/Minter.sol:Minter", "status": "exact"},
+            "verification": {
+                "contractName": "Minter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x0f953D861347414698F34B75dbFd6e7dF1A73493"
+            }
+        },
+        {
+            "abi": "base-sepolia/RolesAdmin.json",
+            "abiHash": "f1772029dce78f0bfe3e36aebe1fd4e540401333b695b1dbf843ee6eedb0c39f",
+            "address": "0xe37D9a2791707BBB858012d219960D5FBD190794",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "exact"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0xe37D9a2791707BBB858012d219960D5FBD190794"
+            }
+        },
+        {
+            "abi": "base-sepolia/TreasuryCustodian.json",
+            "abiHash": "bfbf90de743fef176a035d6cf60b30ccdd2854772f697d037a9a8c566959055b",
+            "address": "0x0D33c811D0fcC711BcB388DFB3a152DE445bE66F",
+            "chain": "base-sepolia",
+            "chainId": 84532,
+            "path": "olympus.policies.TreasuryCustodian",
+            "source": {
+                "contract": "src/policies/TreasuryCustodian.sol:TreasuryCustodian",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "TreasuryCustodian",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=84532&module=contract&action=getsourcecode&address=0x0D33c811D0fcC711BcB388DFB3a152DE445bE66F"
+            }
+        },
+        {
+            "abi": "berachain/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C"
+            }
+        },
+        {
+            "abi": "berachain/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+            }
+        },
+        {
+            "abi": "berachain/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0"
+            }
+        },
+        {
+            "abi": "berachain/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE"
+            }
+        },
+        {
+            "abi": "berachain/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0"
+            }
+        },
+        {
+            "abi": "berachain/OlympusTreasury.json",
+            "abiHash": "6cb6d45a279c4806e0936ff5eebe15f0f35eb8a0535329e99e6054cc83ea428d",
+            "address": "0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.modules.OlympusTreasury",
+            "source": {
+                "contract": "src/modules/TRSRY/OlympusTreasury.sol:OlympusTreasury",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusTreasury",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1"
+            }
+        },
+        {
+            "abi": "berachain/CrossChainBridge.json",
+            "abiHash": "1da15f7ca14ef27ea3bc0b65e1ccfdcf9977d6f4922b7cc8a3d915057429f91f",
+            "address": "0xBA42BE149e5260EbA4B82418A6306f55D532eA47",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0xBA42BE149e5260EbA4B82418A6306f55D532eA47"
+            }
+        },
+        {
+            "abi": "berachain/Emergency.json",
+            "abiHash": "f64dca4490d510d97051ac4ce91558d74b7489ce1c267a9e649303da79f0fc57",
+            "address": "0xCA7240A7B439c9D458B47831d38c3d69C1287469",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.policies.Emergency",
+            "source": {"contract": "src/policies/Emergency.sol:Emergency", "status": "exact"},
+            "verification": {
+                "contractName": "Emergency",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0xCA7240A7B439c9D458B47831d38c3d69C1287469"
+            }
+        },
+        {
+            "abi": "berachain/RolesAdmin.json",
+            "abiHash": "f1772029dce78f0bfe3e36aebe1fd4e540401333b695b1dbf843ee6eedb0c39f",
+            "address": "0xe37D9a2791707BBB858012d219960D5FBD190794",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "exact"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0xe37D9a2791707BBB858012d219960D5FBD190794"
+            }
+        },
+        {
+            "abi": "berachain/TreasuryCustodian.json",
+            "abiHash": "bfbf90de743fef176a035d6cf60b30ccdd2854772f697d037a9a8c566959055b",
+            "address": "0x0D33c811D0fcC711BcB388DFB3a152DE445bE66F",
+            "chain": "berachain",
+            "chainId": 80094,
+            "path": "olympus.policies.TreasuryCustodian",
+            "source": {
+                "contract": "src/policies/TreasuryCustodian.sol:TreasuryCustodian",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "TreasuryCustodian",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=80094&module=contract&action=getsourcecode&address=0x0D33c811D0fcC711BcB388DFB3a152DE445bE66F"
+            }
+        },
+        {
+            "abi": "mainnet/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x2286d7f9639e8158FaD1169e76d1FbC38247f54b",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x2286d7f9639e8158FaD1169e76d1FbC38247f54b"
+            }
+        },
+        {
+            "abi": "mainnet/ClaimTransfer.json",
+            "abiHash": "aa1b4ea1d76485cb068f00638261976d9fd363a2148aa2ea8b302384e72ac9b4",
+            "address": "0x611B541ab1EFDeEb9665522ED3BaA406D4952546",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.claim.ClaimTransfer",
+            "source": {
+                "contract": "src/external/ClaimTransfer.sol:ClaimTransfer",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ClaimTransfer",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x611B541ab1EFDeEb9665522ED3BaA406D4952546"
+            }
+        },
+        {
+            "abi": "mainnet/GovernorBravoDelegate.json",
+            "abiHash": "02570ebb85b22fb501dec4ff576a891c51b43fcbf8791e290b20d4a94bc00b71",
+            "address": "0xdE3F82D378c3b4E3F3f848b8DF501914b3317E96",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.governance.GovernorBravoDelegate",
+            "source": {
+                "contract": "src/external/governance/GovernorBravoDelegate.sol:GovernorBravoDelegate",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "GovernorBravoDelegate",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xdE3F82D378c3b4E3F3f848b8DF501914b3317E96"
+            }
+        },
+        {
+            "abi": "mainnet/GovernorBravoDelegator.json",
+            "abiHash": "2ef0d2481070e501ff260c59245e9823965b2454165c62a572532d8d2e8ada7b",
+            "address": "0x0941233c964e7d7Efeb05D253176E5E634cEFfcD",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.governance.GovernorBravoDelegator",
+            "source": {
+                "contract": "src/external/governance/GovernorBravoDelegator.sol:GovernorBravoDelegator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "GovernorBravoDelegator",
+                "implementationHint": "0xde3f82d378c3b4e3f3f848b8df501914b3317e96",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x0941233c964e7d7Efeb05D253176E5E634cEFfcD"
+            }
+        },
+        {
+            "abi": "mainnet/Timelock.json",
+            "abiHash": "79abe4bdc55620f385bb13f79755222238125eb944a9f3fee8e318c87a370a42",
+            "address": "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.governance.Timelock",
+            "source": {
+                "contract": "src/external/governance/Timelock.sol:Timelock",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "Timelock",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39"
+            }
+        },
+        {
+            "abi": "mainnet/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x64aa3364F17a4D01c6f1751Fd97C2BD3D7e7f1D5"
+            }
+        },
+        {
+            "abi": "mainnet/Staking.json",
+            "abiHash": "c3fc5d5f8b073a2808c4332a4a2dbeb62723b3f688008ea238c19749ae661227",
+            "address": "0xB63cac384247597756545b500253ff8E607a8020",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.legacy.Staking",
+            "source": {"contract": "src/interfaces/IStaking.sol:IStaking", "status": "interface"},
+            "verification": {
+                "contractName": "OlympusStaking",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xB63cac384247597756545b500253ff8E607a8020"
+            }
+        },
+        {
+            "abi": "mainnet/gOHM.json",
+            "abiHash": "a7202b3f5c8e45c0e78a44f9d87b49ebe4643fcb0e25c302883be90a0626896d",
+            "address": "0x0ab87046fBb341D058F17CBC4c1133F25a20a52f",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.legacy.gOHM",
+            "source": {"contract": "src/interfaces/IgOHM.sol:IgOHM", "status": "interface"},
+            "verification": {
+                "contractName": "gOHM",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x0ab87046fBb341D058F17CBC4c1133F25a20a52f"
+            }
+        },
+        {
+            "abi": "mainnet/sOHM.json",
+            "abiHash": "225c68e23bf3539c7e79523edf76c8c05dbb053426cb0520e3ce66e53f2d7d02",
+            "address": "0x04906695D6D12CF5459975d7C3C03356E4Ccd460",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.legacy.sOHM",
+            "source": {"contract": "src/interfaces/IsOHM.sol:IsOHM", "status": "interface"},
+            "verification": {
+                "contractName": "sOlympus",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x04906695D6D12CF5459975d7C3C03356E4Ccd460"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusBoostedLiquidityRegistry.json",
+            "abiHash": "2962a3dfa1f960b1ba837a075c51a9bbc5df239b1e81c6079e4d9b0024282f9f",
+            "address": "0x375E06C694B5E50aF8be8FB03495A612eA3e2275",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusBoostedLiquidityRegistry",
+            "source": {
+                "contract": "src/modules/BLREG/OlympusBoostedLiquidityRegistry.sol:OlympusBoostedLiquidityRegistry",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusBoostedLiquidityRegistry",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x375E06C694B5E50aF8be8FB03495A612eA3e2275"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusClearinghouseRegistry.json",
+            "abiHash": "059e9f55f14b23d5a0b5f18bfc1e1cd2ba1f2ca07850a46f36d20b1e753a22ce",
+            "address": "0x69a3E97027d21a5984B6a543b36603fFbC6543a4",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusClearinghouseRegistry",
+            "source": {
+                "contract": "src/modules/CHREG/OlympusClearinghouseRegistry.sol:OlympusClearinghouseRegistry",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusClearinghouseRegistry",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x69a3E97027d21a5984B6a543b36603fFbC6543a4"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusContractRegistry.json",
+            "abiHash": "7889116fe01dee71a786623962b1c6836af8581a8cfe4c92428f36a7339cdbe3",
+            "address": "0x89631595649Cc6dEBa249A8012a5b2d88C8ddE48",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusContractRegistry",
+            "source": {
+                "contract": "src/modules/RGSTY/OlympusContractRegistry.sol:OlympusContractRegistry",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusContractRegistry",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x89631595649Cc6dEBa249A8012a5b2d88C8ddE48"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusDepositPositionManager.json",
+            "abiHash": "ac08762fc427d35cc807a115e0883fabf85b95094a961f698bdbcbfc50b0408b",
+            "address": "0x02331A4c97a4841084dF54d7c0eC04DD3f1A9F1c",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusDepositPositionManager",
+            "source": {
+                "contract": "src/modules/DEPOS/OlympusDepositPositionManager.sol:OlympusDepositPositionManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusDepositPositionManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x02331A4c97a4841084dF54d7c0eC04DD3f1A9F1c"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusGovDelegation.json",
+            "abiHash": "2d30cf8da945075b69bf2349ddbeb96747779b5eb70a7052d61deea82652ccc8",
+            "address": "0xD3204Ae00d6599Ba6e182c6D640A79d76CdAad74",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusGovDelegation",
+            "source": {
+                "contract": "src/modules/DLGTE/OlympusGovDelegation.sol:OlympusGovDelegation",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusGovDelegation",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xD3204Ae00d6599Ba6e182c6D640A79d76CdAad74"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0xa90bFe53217da78D900749eb6Ef513ee5b6a491e",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xa90bFe53217da78D900749eb6Ef513ee5b6a491e"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusPriceV1.json",
+            "abiHash": "e09005cdff85632022abe6e9dbb5436dee7c03a6f4bc37a5afc0391d42b9f544",
+            "address": "0x465cCc69d285415Bce199f855d3A68ea3537F8FE",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusPriceV1",
+            "source": {
+                "contract": "src/modules/PRICE/OlympusPrice.v1_2.sol:OlympusPricev1_2",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusPricev1_2",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x465cCc69d285415Bce199f855d3A68ea3537F8FE"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusRangeV1.json",
+            "abiHash": "ef64c7c5b679bdaea62c6203cd8ac7441746324b742032e3dea14cecd62e1507",
+            "address": "0xb212D9584cfc56EFf1117F412Fe0bBdc53673954",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusRangeV1",
+            "source": {"contract": "src/modules/RANGE/RANGE.v1.sol:RANGEv1", "status": "interface"},
+            "verification": {
+                "contractName": "OlympusRange",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xb212D9584cfc56EFf1117F412Fe0bBdc53673954"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusRangeV2.json",
+            "abiHash": "d1e8d1461454c28736e1458c3a4d8689193de52bfd0116bdf17808143a4de3c7",
+            "address": "0x399cD3685912bb56aAeD0949119dB6cE5Df60FB5",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusRangeV2",
+            "source": {
+                "contract": "src/modules/RANGE/OlympusRange.sol:OlympusRange",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRange",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x399cD3685912bb56aAeD0949119dB6cE5Df60FB5"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x6CAfd730Dc199Df73C16420C4fCAb18E3afbfA59"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusTreasury.json",
+            "abiHash": "6cb6d45a279c4806e0936ff5eebe15f0f35eb8a0535329e99e6054cc83ea428d",
+            "address": "0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.modules.OlympusTreasury",
+            "source": {
+                "contract": "src/modules/TRSRY/OlympusTreasury.sol:OlympusTreasury",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusTreasury",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xa8687A15D4BE32CC8F0a8a7B9704a4C3993D9613"
+            }
+        },
+        {
+            "abi": "mainnet/CCIPCrossChainBridge.json",
+            "abiHash": "4f8351f779caa8ee7e4d481af29b77d16ffe76eb533991411816d0c898e45f68",
+            "address": "0xFbf6383dC3F6010d403Ecdf12DDC1311701D143D",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.CCIPCrossChainBridge",
+            "source": {
+                "contract": "src/periphery/bridge/CCIPCrossChainBridge.sol:CCIPCrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CCIPCrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xFbf6383dC3F6010d403Ecdf12DDC1311701D143D"
+            }
+        },
+        {
+            "abi": "mainnet/CCIPLockReleaseTokenPool.json",
+            "abiHash": "9d2f8224f4b477a5e67571b97dabb7901c39fc14130a2def1a17f6d4b4996c4e",
+            "address": "0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.CCIPLockReleaseTokenPool",
+            "source": {
+                "contract": "dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/pools/LockReleaseTokenPool.sol:LockReleaseTokenPool",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "LockReleaseTokenPool",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD"
+            }
+        },
+        {
+            "abi": "mainnet/ConvertibleDepositActivator.json",
+            "abiHash": "8874d2721df3ecbc519f7d0e2142ab14c2e03a5ebbfc8197efc5dc796c3d4597",
+            "address": "0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.ConvertibleDepositActivator",
+            "source": {
+                "contract": "src/proposals/ConvertibleDepositActivator.sol:ConvertibleDepositActivator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositActivator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xA0ca0F496B6295f949EddA2DF5FcD3877d5a253E"
+            }
+        },
+        {
+            "abi": "mainnet/ConvertibleDepositAuctioneerLimitOrders.json",
+            "abiHash": "34199f2231a2f5e19ffeacb701898ebb3f093ccd257984f9aaeabe8809506971",
+            "address": "0x7d8f82A0D5B67d5FDd1B77A899FF517818FaFc2e",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.ConvertibleDepositAuctioneerLimitOrders",
+            "source": {
+                "contract": "src/policies/deposits/LimitOrders.sol:CDAuctioneerLimitOrders",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CDAuctioneerLimitOrders",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x7d8f82A0D5B67d5FDd1B77A899FF517818FaFc2e"
+            }
+        },
+        {
+            "abi": "mainnet/CoolerV2Composites.json",
+            "abiHash": "61524d57a197e79548467baa2286602539710ffeff4a69273770291b2530b9ca",
+            "address": "0x6593768feBF9C95aC857Fb7Ef244D5738D1C57Fd",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.CoolerV2Composites",
+            "source": {
+                "contract": "src/periphery/CoolerComposites.sol:CoolerComposites",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerComposites",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x6593768feBF9C95aC857Fb7Ef244D5738D1C57Fd"
+            }
+        },
+        {
+            "abi": "mainnet/CoolerV2Migrator.json",
+            "abiHash": "086e14287c846580619d5330b2c08abbbb3c5ce31bca1d88893beac40d5fa2e9",
+            "address": "0xE045BD0A0d85E980AA152064C06EAe6B6aE358D2",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.CoolerV2Migrator",
+            "source": {
+                "contract": "src/periphery/CoolerV2Migrator.sol:CoolerV2Migrator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerV2Migrator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xE045BD0A0d85E980AA152064C06EAe6B6aE358D2"
+            }
+        },
+        {
+            "abi": "mainnet/DelegateEscrowFactory.json",
+            "abiHash": "3a6d91ca78248417bee83716507939eaef12bbcdf5ef939bef9ec8cad5889856",
+            "address": "0xC84157C2306238C9330fEa14774a82A53a127A59",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.DelegateEscrowFactory",
+            "source": {
+                "contract": "src/external/cooler/DelegateEscrowFactory.sol:DelegateEscrowFactory",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DelegateEscrowFactory",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xC84157C2306238C9330fEa14774a82A53a127A59"
+            }
+        },
+        {
+            "abi": "mainnet/MigrationProposalHelper.json",
+            "abiHash": "4c0b2dd74254546612f3ef6866cd4c801c3c6b9d4f757d793b0fa06e9897fad8",
+            "address": "0x62633B567ED4FC4078Db75A5cb4B896B3d44A5D4",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.MigrationProposalHelper",
+            "source": {
+                "contract": "src/proposals/MigrationProposalHelper.sol:MigrationProposalHelper",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "MigrationProposalHelper",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x62633B567ED4FC4078Db75A5cb4B896B3d44A5D4"
+            }
+        },
+        {
+            "abi": "mainnet/PositionTokenRenderer.json",
+            "abiHash": "9a67415699c5c32cc7a45869f5e581700dac1dadad99ea8408ab5abb8a919d92",
+            "address": "0x9c859Dc91DB65bD7375660341231227336dAa134",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.PositionTokenRenderer",
+            "source": {
+                "contract": "src/modules/DEPOS/PositionTokenRenderer.sol:PositionTokenRenderer",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "PositionTokenRenderer",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x9c859Dc91DB65bD7375660341231227336dAa134"
+            }
+        },
+        {
+            "abi": "mainnet/ReceiptTokenManager.json",
+            "abiHash": "959efb39e29f7568e153dcc18d8fc28305b335b347b5cabb9b1fd6dc7ecc000d",
+            "address": "0xD98B5b2E4D5d6Cd554115DE19EfB7A9084BEddd1",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.periphery.ReceiptTokenManager",
+            "source": {
+                "contract": "src/policies/deposits/ReceiptTokenManager.sol:ReceiptTokenManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReceiptTokenManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xD98B5b2E4D5d6Cd554115DE19EfB7A9084BEddd1"
+            }
+        },
+        {
+            "abi": "mainnet/BLVaultLido.json",
+            "abiHash": "718dd38d39e750c4b03094305d0b910d50a96be9f9f82eb6e7f5cfb0af27f93e",
+            "address": "0x7fdD4e808ee9608f1b2f05157A2A8098e3D432cD",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BLVaultLido",
+            "source": {
+                "contract": "src/policies/BoostedLiquidity/BLVaultLido.sol:BLVaultLido",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "BLVaultLido",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x7fdD4e808ee9608f1b2f05157A2A8098e3D432cD"
+            }
+        },
+        {
+            "abi": "mainnet/BLVaultLusd.json",
+            "abiHash": "b37c5a31815e6da51a6d29acfa4ce3dfba02dd3e21ca3fadcd81ee92c709fe04",
+            "address": "0xfbB3742628e8D19E0E2d7D8dde208821C09dE960",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BLVaultLusd",
+            "source": {
+                "contract": "src/policies/BoostedLiquidity/BLVaultLusd.sol:BLVaultLusd",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "BLVaultLusd",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xfbB3742628e8D19E0E2d7D8dde208821C09dE960"
+            }
+        },
+        {
+            "abi": "mainnet/BLVaultManagerLido.json",
+            "abiHash": "674ef69e79c1e37f2cddedba12ea4d6edc76d162786d7b3a5ebb0f7905465f59",
+            "address": "0xafe729d57d2CC58978C2e01b4EC39C47FB7C4b23",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BLVaultManagerLido",
+            "source": {
+                "contract": "src/policies/BoostedLiquidity/BLVaultManagerLido.sol:BLVaultManagerLido",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "BLVaultManagerLido",
+                "implementationHint": "0x7fdd4e808ee9608f1b2f05157a2a8098e3d432cd",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xafe729d57d2CC58978C2e01b4EC39C47FB7C4b23"
+            }
+        },
+        {
+            "abi": "mainnet/BLVaultManagerLusd.json",
+            "abiHash": "c92e52d38ae45ac0e7a44840696c19a80e3b39c98953794adba4068186b7062f",
+            "address": "0xF451c45C7a26e2248a0EA02382579Eb4858cAdA1",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BLVaultManagerLusd",
+            "source": {
+                "contract": "src/policies/BoostedLiquidity/BLVaultManagerLusd.sol:BLVaultManagerLusd",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "BLVaultManagerLusd",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xF451c45C7a26e2248a0EA02382579Eb4858cAdA1"
+            }
+        },
+        {
+            "abi": "mainnet/BondCallback.json",
+            "abiHash": "42b0f0a93a5d2d2a6231464f7785b632f8d39ef1b0ef796a313ec6aaa5d13859",
+            "address": "0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BondCallback",
+            "source": {"contract": "src/policies/BondCallback.sol:BondCallback", "status": "exact"},
+            "verification": {
+                "contractName": "BondCallback",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x73df08CE9dcC8d74d22F23282c4d49F13b4c795E"
+            }
+        },
+        {
+            "abi": "mainnet/Burner.json",
+            "abiHash": "3c774c8fa1ef0883d9daa6ccfb52715a098c87dc6e9a44d54dc16e854c0f144f",
+            "address": "0x9f08c2603e919a46d6D98289C9ADA5250b310558",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.Burner",
+            "source": {"contract": "src/policies/Burner.sol:Burner", "status": "exact"},
+            "verification": {
+                "contractName": "Burner",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x9f08c2603e919a46d6D98289C9ADA5250b310558"
+            }
+        },
+        {
+            "abi": "mainnet/Clearinghouse.json",
+            "abiHash": "24ccab39a96eb17e9ba321d3d8310339f6cb4244a0fae79be818b8e9baa9347d",
+            "address": "0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.Clearinghouse",
+            "source": {
+                "contract": "src/policies/Clearinghouse.sol:Clearinghouse",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "Clearinghouse",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c"
+            }
+        },
+        {
+            "abi": "mainnet/ContractRegistryAdmin.json",
+            "abiHash": "4aac7272f761d7f1a13cece0072a3667a8ca65bd47c82132b26f9a737db569ab",
+            "address": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ContractRegistryAdmin",
+            "source": {
+                "contract": "src/policies/ContractRegistryAdmin.sol:ContractRegistryAdmin",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ContractRegistryAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5"
+            }
+        },
+        {
+            "abi": "mainnet/ConvertibleDepositAuctioneer.json",
+            "abiHash": "dd18deb45a8aab5ea3cc4cd19651b80ca47cb23916bb95bd098db0cdf2959b2c",
+            "address": "0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ConvertibleDepositAuctioneer",
+            "source": {
+                "contract": "src/policies/deposits/ConvertibleDepositAuctioneer.sol:ConvertibleDepositAuctioneer",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositAuctioneer",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xF35193DA8C10e44aF10853Ba5a3a1a6F7529E39a"
+            }
+        },
+        {
+            "abi": "mainnet/ConvertibleDepositFacility.json",
+            "abiHash": "6413bf65bedc11c26227fa9b19dccf0c1d48d5239eea9c71b155bdfe42520f27",
+            "address": "0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ConvertibleDepositFacility",
+            "source": {
+                "contract": "src/policies/deposits/ConvertibleDepositFacility.sol:ConvertibleDepositFacility",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositFacility",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xEBDe552D851DD6Dfd3D360C596D3F4aF6e5F9678"
+            }
+        },
+        {
+            "abi": "mainnet/CoolerV2.json",
+            "abiHash": "3ffe8404e705390cf031e5c8dde89b0519e76e5c4e0a4e1ba7c7265f0f40f884",
+            "address": "0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.CoolerV2",
+            "source": {
+                "contract": "src/policies/cooler/MonoCooler.sol:MonoCooler",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "MonoCooler",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xdb591Ea2e5Db886dA872654D58f6cc584b68e7cC"
+            }
+        },
+        {
+            "abi": "mainnet/CoolerV2LtvOracle.json",
+            "abiHash": "7c2fa73f6d5a30a6e783ba0dfb5ea0609f7958c5311e96a07643947fe20c7022",
+            "address": "0x9ee9f0c2e91E4f6B195B988a9e6e19efcf91e8dc",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.CoolerV2LtvOracle",
+            "source": {
+                "contract": "src/policies/cooler/CoolerLtvOracle.sol:CoolerLtvOracle",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerLtvOracle",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x9ee9f0c2e91E4f6B195B988a9e6e19efcf91e8dc"
+            }
+        },
+        {
+            "abi": "mainnet/CoolerV2TreasuryBorrower.json",
+            "abiHash": "c7eb960ceec8e0297b6e87202a029f7865975c9979faad634edc66f5e43a10df",
+            "address": "0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.CoolerV2TreasuryBorrower",
+            "source": {
+                "contract": "src/policies/cooler/CoolerTreasuryBorrower.sol:CoolerTreasuryBorrower",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "CoolerTreasuryBorrower",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xD58d7406E9CE34c90cf849Fc3eed3764EB3779B0"
+            }
+        },
+        {
+            "abi": "mainnet/DepositManager.json",
+            "abiHash": "2d773cea705613a44ab8b8538a80b9edeaa94e9b5f87565828bb5e72387f607f",
+            "address": "0xcb4E21Eb404d80F3e1dB781aAd9AD6A1217fbbf2",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.DepositManager",
+            "source": {
+                "contract": "src/policies/deposits/DepositManager.sol:DepositManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DepositManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xcb4E21Eb404d80F3e1dB781aAd9AD6A1217fbbf2"
+            }
+        },
+        {
+            "abi": "mainnet/DepositRedemptionVault.json",
+            "abiHash": "eb052e44b4e59c76487320cab2ee04072a908cbab90cdff3c3133e4bbba2077e",
+            "address": "0x20a3d8510f2e1176E8Db4CeA9883a8287a9029Db",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.DepositRedemptionVault",
+            "source": {
+                "contract": "src/policies/deposits/DepositRedemptionVault.sol:DepositRedemptionVault",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DepositRedemptionVault",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x20a3d8510f2e1176E8Db4CeA9883a8287a9029Db"
+            }
+        },
+        {
+            "abi": "mainnet/Distributor.json",
+            "abiHash": "7e1267af0b34273bc269c7d174ad3fb21facb14d773013bd37ec540651808be9",
+            "address": "0x27e606fdb5C922F8213dC588A434BF7583697866",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.Distributor",
+            "source": {
+                "contract": "src/policies/Distributor/Distributor.sol:Distributor",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "Distributor",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x27e606fdb5C922F8213dC588A434BF7583697866"
+            }
+        },
+        {
+            "abi": "mainnet/Emergency.json",
+            "abiHash": "368cad618e6a977a4b6ca6eb165704d84c3b4fd6e946086f99499e7c938b4f7e",
+            "address": "0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.Emergency",
+            "source": {"contract": "src/policies/Emergency.sol:Emergency", "status": "drifted"},
+            "verification": {
+                "contractName": "Emergency",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x9229b0b6FA4A58D67Eb465567DaA2c6A34714A75"
+            }
+        },
+        {
+            "abi": "mainnet/EmissionManager.json",
+            "abiHash": "7bcf063023db8b6826e9eb68c75149a781c03395f9e94ac33f6ad868728991f9",
+            "address": "0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.EmissionManager",
+            "source": {
+                "contract": "src/policies/EmissionManager.sol:EmissionManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "EmissionManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff"
+            }
+        },
+        {
+            "abi": "mainnet/LoanConsolidator.json",
+            "abiHash": "a803059195d605f809fae558e0571af64ae56c300504532c65f54d05dbe1d9fb",
+            "address": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.LoanConsolidator",
+            "source": {
+                "contract": "src/policies/LoanConsolidator.sol:LoanConsolidator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "LoanConsolidator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x784cA0C006b8651BAB183829A99fA46BeCe50dBc"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusHeart.json",
+            "abiHash": "27fa403cbb56a145dac5c35fb6186df895d7c46e9436b4e87c2c566204104393",
+            "address": "0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.OlympusHeart",
+            "source": {"contract": "src/policies/Heart.sol:OlympusHeart", "status": "exact"},
+            "verification": {
+                "contractName": "OlympusHeart",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusPriceConfig.json",
+            "abiHash": "20b21fc7b543070faf2488b00ff7e1a5c08255adbc55959ceba694b12b7f1a2b",
+            "address": "0xf6D5d06A4e8e6904E4360108749C177692F59E90",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.OlympusPriceConfig",
+            "source": {
+                "contract": "src/policies/price/PriceConfig.sol:OlympusPriceConfig",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "OlympusPriceConfig",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xf6D5d06A4e8e6904E4360108749C177692F59E90"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusPriceConfigV2.json",
+            "abiHash": "b6b0ecbea9bd125007f9a76c8a104b0ff64e76c21b826e2ae7740eb0b8d77e94",
+            "address": "0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.OlympusPriceConfigV2",
+            "source": {
+                "contract": "src/policies/price/PriceConfig.v2.sol:PriceConfigv2",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "PriceConfigv2",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5c69f61D384e41b55699C3B10523Ed81c5ef9cbd"
+            }
+        },
+        {
+            "abi": "mainnet/Operator.json",
+            "abiHash": "b9dee95f70ac67d6f39e3dec5cfeb385524d3c001ac1eb58e76e68b2040086d3",
+            "address": "0x6417F206a0a6628Da136C0Faa39026d0134D2b52",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.Operator",
+            "source": {"contract": "src/policies/Operator.sol:Operator", "status": "exact"},
+            "verification": {
+                "contractName": "Operator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x6417F206a0a6628Da136C0Faa39026d0134D2b52"
+            }
+        },
+        {
+            "abi": "mainnet/ReserveMigrator.json",
+            "abiHash": "85b8c5f82c8ec69fba14be82aa66191a2f4cebfa4e336a39dd790c2ed8a693c7",
+            "address": "0x986b99579BEc7B990331474b66CcDB94Fa2419F5",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ReserveMigrator",
+            "source": {
+                "contract": "src/policies/ReserveMigrator.sol:ReserveMigrator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReserveMigrator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x986b99579BEc7B990331474b66CcDB94Fa2419F5"
+            }
+        },
+        {
+            "abi": "mainnet/ReserveWrapper.json",
+            "abiHash": "4da0e2d44e4051ac289d51b5e1d03ea439056c784ed7c0a740beae926bb11ebc",
+            "address": "0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ReserveWrapper",
+            "source": {
+                "contract": "src/policies/ReserveWrapper.sol:ReserveWrapper",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReserveWrapper",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xcA6cd4F0a0033f8C20cF68d6dF277E7001a386f9"
+            }
+        },
+        {
+            "abi": "mainnet/RolesAdmin.json",
+            "abiHash": "865949a35f70843e41bc7f089d380d3232d68de8f3b74d436c2b8ae426ea8fdf",
+            "address": "0xb216d714d91eeC4F7120a732c11428857C659eC8",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "drifted"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xb216d714d91eeC4F7120a732c11428857C659eC8"
+            }
+        },
+        {
+            "abi": "mainnet/TreasuryCustodian.json",
+            "abiHash": "2e46c36a060d6501384d127d7efce860e9459bd36b88e8708cfa0fb791890b07",
+            "address": "0xC9518AC915e46D707585116451Dc19c164513Ccf",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.TreasuryCustodian",
+            "source": {
+                "contract": "src/policies/TreasuryCustodian.sol:TreasuryCustodian",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "TreasuryCustodian",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xC9518AC915e46D707585116451Dc19c164513Ccf"
+            }
+        },
+        {
+            "abi": "mainnet/V1Migrator.json",
+            "abiHash": "20ec23061286c55cb0ef99b074b802d71f2b6b5f2d847cf8a0fdd3b0899951c1",
+            "address": "0x5131654eFCd63f7b797e00118792e0d0dD90B8B0",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.V1Migrator",
+            "source": {"contract": "src/policies/V1Migrator.sol:V1Migrator", "status": "exact"},
+            "verification": {
+                "contractName": "V1Migrator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5131654eFCd63f7b797e00118792e0d0dD90B8B0"
+            }
+        },
+        {
+            "abi": "mainnet/YieldRepurchaseFacility.json",
+            "abiHash": "b9f5810b05e1c4f1b80e17631c5517a45236ef640efc734e893ee6b6e9eba782",
+            "address": "0x271e35a8555a62F6bA76508E85dfD76D580B0692",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.YieldRepurchaseFacility",
+            "source": {
+                "contract": "src/policies/YieldRepurchaseFacility.sol:YieldRepurchaseFacility",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "YieldRepurchaseFacility",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x271e35a8555a62F6bA76508E85dfD76D580B0692"
+            }
+        },
+        {
+            "abi": "mainnet/ZeroDistributor.json",
+            "abiHash": "8e1d4c251bdacf43114825f413f22089fe6ca91a8db1620b870aec8f33aa7d0d",
+            "address": "0x44a7a09ccddb4338e062f1a3849f9a82bdbf2aaa",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.ZeroDistributor",
+            "source": {
+                "contract": "src/policies/Distributor/ZeroDistributor.sol:ZeroDistributor",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ZeroDistributor",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x44a7a09ccddb4338e062f1a3849f9a82bdbf2aaa"
+            }
+        },
+        {
+            "abi": "mainnet/pOLY.json",
+            "abiHash": "7b6b25010e1590d2584512e53cddaaa311d135b7a66b96d73cf895c405add646",
+            "address": "0xb37796941cA55b7E4243841930C104Ee325Da5a1",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.pOLY",
+            "source": {"contract": "src/policies/pOLY.sol:pOLY", "status": "exact"},
+            "verification": {
+                "contractName": "pOLY",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xb37796941cA55b7E4243841930C104Ee325Da5a1"
+            }
+        },
+        {
+            "abi": "mainnet/ChainlinkPriceFeeds.json",
+            "abiHash": "e55818bc3d37048a64cd9f5f3eaae588c31531cb84e314bef36eb11c456bafb9",
+            "address": "0x1c22ecaCaFD35cfE997729f2880F8C23aa5A2fb2",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.submodules.PRICE.ChainlinkPriceFeeds",
+            "source": {
+                "contract": "src/modules/PRICE/submodules/feeds/ChainlinkPriceFeeds.sol:ChainlinkPriceFeeds",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ChainlinkPriceFeeds",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x1c22ecaCaFD35cfE997729f2880F8C23aa5A2fb2"
+            }
+        },
+        {
+            "abi": "mainnet/ERC4626Price.json",
+            "abiHash": "c15630ba266dd62238b405904d9fa40c5f65c12edd686cb107b562aaebce92e4",
+            "address": "0x5d23a83c9bEc7AC6acea3760BC2EEca9186F3037",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.submodules.PRICE.ERC4626Price",
+            "source": {
+                "contract": "src/modules/PRICE/submodules/feeds/ERC4626Price.sol:ERC4626Price",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ERC4626Price",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5d23a83c9bEc7AC6acea3760BC2EEca9186F3037"
+            }
+        },
+        {
+            "abi": "mainnet/SimplePriceFeedStrategy.json",
+            "abiHash": "34e69270ffcecf757bd7702da1e2421d88169fb3092b5dd72dd30a43ee7c5cec",
+            "address": "0xC8b00Cbc78fd9d43E5cDDd86099B9394C4CeF95D",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.submodules.PRICE.SimplePriceFeedStrategy",
+            "source": {
+                "contract": "src/modules/PRICE/submodules/strategies/SimplePriceFeedStrategy.sol:SimplePriceFeedStrategy",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "SimplePriceFeedStrategy",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xC8b00Cbc78fd9d43E5cDDd86099B9394C4CeF95D"
+            }
+        },
+        {
+            "abi": "mainnet/UniswapV3Price.json",
+            "abiHash": "5023edf2aa3274e674d2e0043068754b37599fd3cb8f65dc649fd6c7942d5e3e",
+            "address": "0x5F8A7a25373AEEb4cbfC281BF74EbBE6996C8099",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.submodules.PRICE.UniswapV3Price",
+            "source": {
+                "contract": "src/modules/PRICE/submodules/feeds/UniswapV3Price.sol:UniswapV3Price",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "UniswapV3Price",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5F8A7a25373AEEb4cbfC281BF74EbBE6996C8099"
+            }
+        },
+        {
+            "abi": "optimism/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x18878Df23e2a36f81e820e4b47b4A40576D3159C",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x18878Df23e2a36f81e820e4b47b4A40576D3159C"
+            }
+        },
+        {
+            "abi": "optimism/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x060cb087a9730E13aa191f31A6d86bFF8DfcdCC0"
+            }
+        },
+        {
+            "abi": "optimism/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x13DFEff85779118136bB9826DcAD8f3bd25153a3",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x13DFEff85779118136bB9826DcAD8f3bd25153a3"
+            }
+        },
+        {
+            "abi": "optimism/gOHM.json",
+            "abiHash": "c7fd13224f09afb68ed123ef09a4aca7f61384b91c1edaa25e15e8a14799c907",
+            "address": "0x0b5740c6b4a97f90eF2F0220651Cca420B868FfB",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.legacy.gOHM",
+            "source": {
+                "reason": "Bridged gOHM token (SynapseERC20). The repository does not contain this implementation, and the token does not implement IgOHM.",
+                "status": "unavailable"
+            },
+            "verification": {
+                "contractName": "SynapseERC20",
+                "implementationHint": "0x9508bf380c1e6f751d97604732ef1bae6673f299",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x0b5740c6b4a97f90eF2F0220651Cca420B868FfB"
+            }
+        },
+        {
+            "abi": "optimism/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x623164A9Ee2556D524b08f34F1d2389d7B4e1A1C"
+            }
+        },
+        {
+            "abi": "optimism/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0xbC9eE0D911739cBc72cd094ADA26F56E0C49EeAE"
+            }
+        },
+        {
+            "abi": "optimism/CrossChainBridge.json",
+            "abiHash": "d3a22bd8f68e474d104081575eea879df69ea96fd32a333364f6802f9161f2c9",
+            "address": "0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0x22AE99D07584A2AE1af748De573c83f1B9Cdb4c0"
+            }
+        },
+        {
+            "abi": "optimism/RolesAdmin.json",
+            "abiHash": "865949a35f70843e41bc7f089d380d3232d68de8f3b74d436c2b8ae426ea8fdf",
+            "address": "0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1",
+            "chain": "optimism",
+            "chainId": 10,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "drifted"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=10&module=contract&action=getsourcecode&address=0xb1fA0Ac44d399b778B14af0AAF4bCF8af3437ad1"
+            }
+        },
+        {
+            "abi": "sepolia/Kernel.json",
+            "abiHash": "4db221cb34961841903132b48b7a12986889a7bf9c8e6db051acb8f04f8e43be",
+            "address": "0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.Kernel",
+            "source": {"contract": "src/Kernel.sol:Kernel", "status": "exact"},
+            "verification": {
+                "contractName": "Kernel",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x4b0BBa51cE44175a9766f7e55e3d122a9F4BE78E"
+            }
+        },
+        {
+            "abi": "sepolia/OHM.json",
+            "abiHash": "db095255ab0e30751d090d0a8c62e0ba4680f77694f5d113d9106d3797b17c70",
+            "address": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.legacy.OHM",
+            "source": {
+                "contract": "src/external/OlympusERC20.sol:OlympusERC20Token",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "XsynERC20Token",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x784cA0C006b8651BAB183829A99fA46BeCe50dBc"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusAuthority.json",
+            "abiHash": "cce4ae4f14dad5301880aa9377fcb4049b8f7b1aab138ae1088e6fb7aef1cb1d",
+            "address": "0x81057Bef097462957B9388D8DCB7D4AB0699cADB",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.legacy.OlympusAuthority",
+            "source": {
+                "contract": "src/external/OlympusAuthority.sol:OlympusAuthority",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusAuthority",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x81057Bef097462957B9388D8DCB7D4AB0699cADB"
+            }
+        },
+        {
+            "abi": "sepolia/Staking.json",
+            "abiHash": "c3fc5d5f8b073a2808c4332a4a2dbeb62723b3f688008ea238c19749ae661227",
+            "address": "0xbC2778f2F24864D35D806AA968A1DB445988A5E9",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.legacy.Staking",
+            "source": {"contract": "src/interfaces/IStaking.sol:IStaking", "status": "interface"},
+            "verification": {
+                "contractName": "OlympusStaking",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xbC2778f2F24864D35D806AA968A1DB445988A5E9"
+            }
+        },
+        {
+            "abi": "sepolia/gOHM.json",
+            "abiHash": "a7202b3f5c8e45c0e78a44f9d87b49ebe4643fcb0e25c302883be90a0626896d",
+            "address": "0x0f7F33f915B29476ca2b2606C8A3e06A5FC7e896",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.legacy.gOHM",
+            "source": {"contract": "src/interfaces/IgOHM.sol:IgOHM", "status": "interface"},
+            "verification": {
+                "contractName": "gOHM",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x0f7F33f915B29476ca2b2606C8A3e06A5FC7e896"
+            }
+        },
+        {
+            "abi": "sepolia/sOHM.json",
+            "abiHash": "225c68e23bf3539c7e79523edf76c8c05dbb053426cb0520e3ce66e53f2d7d02",
+            "address": "0x7aEe38DbB5465a05EE809d00d1C34dB76F8c5B72",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.legacy.sOHM",
+            "source": {"contract": "src/interfaces/IsOHM.sol:IsOHM", "status": "interface"},
+            "verification": {
+                "contractName": "sOlympus",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x7aEe38DbB5465a05EE809d00d1C34dB76F8c5B72"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusClearinghouseRegistry.json",
+            "abiHash": "059e9f55f14b23d5a0b5f18bfc1e1cd2ba1f2ca07850a46f36d20b1e753a22ce",
+            "address": "0x38038bdd78602e5AA2accd0Ce07557369e21a6c1",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusClearinghouseRegistry",
+            "source": {
+                "contract": "src/modules/CHREG/OlympusClearinghouseRegistry.sol:OlympusClearinghouseRegistry",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusClearinghouseRegistry",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x38038bdd78602e5AA2accd0Ce07557369e21a6c1"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusDepositPositionManager.json",
+            "abiHash": "ac08762fc427d35cc807a115e0883fabf85b95094a961f698bdbcbfc50b0408b",
+            "address": "0xEF928e9ed1083636e34230543D4ad3B6270Fa986",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusDepositPositionManager",
+            "source": {
+                "contract": "src/modules/DEPOS/OlympusDepositPositionManager.sol:OlympusDepositPositionManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusDepositPositionManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xEF928e9ed1083636e34230543D4ad3B6270Fa986"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusGovDelegation.json",
+            "abiHash": "2d30cf8da945075b69bf2349ddbeb96747779b5eb70a7052d61deea82652ccc8",
+            "address": "0xc3FC2a67087D7f72e6255cb2fe6511ee927D3ABA",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusGovDelegation",
+            "source": {
+                "contract": "src/modules/DLGTE/OlympusGovDelegation.sol:OlympusGovDelegation",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusGovDelegation",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xc3FC2a67087D7f72e6255cb2fe6511ee927D3ABA"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusMinter.json",
+            "abiHash": "79214ef18b773413f8a03e6b8633538a7fc08dcd32f11e01dac2abcb8ca75af2",
+            "address": "0x203C46cbB4FCC18977f521a9f7fdE007E1A564f6",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusMinter",
+            "source": {
+                "contract": "src/modules/MINTR/OlympusMinter.sol:OlympusMinter",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusMinter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x203C46cbB4FCC18977f521a9f7fdE007E1A564f6"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusPriceV1.json",
+            "abiHash": "a86655ef6ed2e45e8129e9e7087dafd41aae7070aa25fe45b951dd96374b5206",
+            "address": "0x3bD25E292dC36b674BBF1EEecaAB4565bf2eF241",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusPriceV1",
+            "source": {
+                "contract": "src/modules/PRICE/OlympusPrice.sol:OlympusPrice",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusPrice",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x3bD25E292dC36b674BBF1EEecaAB4565bf2eF241"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusRangeV2.json",
+            "abiHash": "d1e8d1461454c28736e1458c3a4d8689193de52bfd0116bdf17808143a4de3c7",
+            "address": "0xb4309Cf4F876A2d18561b3fD8eeC54899dFeB962",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusRangeV2",
+            "source": {
+                "contract": "src/modules/RANGE/OlympusRange.sol:OlympusRange",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRange",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xb4309Cf4F876A2d18561b3fD8eeC54899dFeB962"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusRoles.json",
+            "abiHash": "b505ebd55f3654e86a01f004ac8c4dc8ab538b756e817e9b8798ad5d9c3dbd85",
+            "address": "0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusRoles",
+            "source": {
+                "contract": "src/modules/ROLES/OlympusRoles.sol:OlympusRoles",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusRoles",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xEdd6ebFFeD7D29947957d096dd55e82F523ceb86"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusTreasury.json",
+            "abiHash": "6cb6d45a279c4806e0936ff5eebe15f0f35eb8a0535329e99e6054cc83ea428d",
+            "address": "0xC48abD1431f17212379557397Dd603912174131E",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.modules.OlympusTreasury",
+            "source": {
+                "contract": "src/modules/TRSRY/OlympusTreasury.sol:OlympusTreasury",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusTreasury",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xC48abD1431f17212379557397Dd603912174131E"
+            }
+        },
+        {
+            "abi": "sepolia/CCIPCrossChainBridge.json",
+            "abiHash": "4f8351f779caa8ee7e4d481af29b77d16ffe76eb533991411816d0c898e45f68",
+            "address": "0xCfe75Cca2b7A9354F7c25e889b1216F977DEC6a5",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.CCIPCrossChainBridge",
+            "source": {
+                "contract": "src/periphery/bridge/CCIPCrossChainBridge.sol:CCIPCrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CCIPCrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xCfe75Cca2b7A9354F7c25e889b1216F977DEC6a5"
+            }
+        },
+        {
+            "abi": "sepolia/CCIPLockReleaseTokenPool.json",
+            "abiHash": "9d2f8224f4b477a5e67571b97dabb7901c39fc14130a2def1a17f6d4b4996c4e",
+            "address": "0xF166375E8Ee42565F93e244C606b8c09b9F67dbc",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.CCIPLockReleaseTokenPool",
+            "source": {
+                "contract": "dependencies/chainlink-ccip-1.6.0/contracts/src/v0.8/ccip/pools/LockReleaseTokenPool.sol:LockReleaseTokenPool",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "LockReleaseTokenPool",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xF166375E8Ee42565F93e244C606b8c09b9F67dbc"
+            }
+        },
+        {
+            "abi": "sepolia/ConvertibleDepositActivator.json",
+            "abiHash": "8874d2721df3ecbc519f7d0e2142ab14c2e03a5ebbfc8197efc5dc796c3d4597",
+            "address": "0x7e655891Ce813887613Ee4EEF0b9610f7A243144",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.ConvertibleDepositActivator",
+            "source": {
+                "contract": "src/proposals/ConvertibleDepositActivator.sol:ConvertibleDepositActivator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositActivator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x7e655891Ce813887613Ee4EEF0b9610f7A243144"
+            }
+        },
+        {
+            "abi": "sepolia/ConvertibleDepositAuctioneerLimitOrders.json",
+            "abiHash": "34199f2231a2f5e19ffeacb701898ebb3f093ccd257984f9aaeabe8809506971",
+            "address": "0xeF64baB08c3431BbC527B063354b95D1C5b549B0",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.ConvertibleDepositAuctioneerLimitOrders",
+            "source": {
+                "contract": "src/policies/deposits/LimitOrders.sol:CDAuctioneerLimitOrders",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CDAuctioneerLimitOrders",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xeF64baB08c3431BbC527B063354b95D1C5b549B0"
+            }
+        },
+        {
+            "abi": "sepolia/CoolerV2Composites.json",
+            "abiHash": "61524d57a197e79548467baa2286602539710ffeff4a69273770291b2530b9ca",
+            "address": "0x992ea219636777de4b99b63bbb0b08b90a3d57da",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.CoolerV2Composites",
+            "source": {
+                "contract": "src/periphery/CoolerComposites.sol:CoolerComposites",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerComposites",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x992ea219636777de4b99b63bbb0b08b90a3d57da"
+            }
+        },
+        {
+            "abi": "sepolia/CoolerV2Migrator.json",
+            "abiHash": "086e14287c846580619d5330b2c08abbbb3c5ce31bca1d88893beac40d5fa2e9",
+            "address": "0x70233D8F47042d3A5813026e2157B5181C608cD0",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.CoolerV2Migrator",
+            "source": {
+                "contract": "src/periphery/CoolerV2Migrator.sol:CoolerV2Migrator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerV2Migrator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x70233D8F47042d3A5813026e2157B5181C608cD0"
+            }
+        },
+        {
+            "abi": "sepolia/DelegateEscrowFactory.json",
+            "abiHash": "3a6d91ca78248417bee83716507939eaef12bbcdf5ef939bef9ec8cad5889856",
+            "address": "0x256a184f14ffd25D7AEecB768db473c16517e66B",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.DelegateEscrowFactory",
+            "source": {
+                "contract": "src/external/cooler/DelegateEscrowFactory.sol:DelegateEscrowFactory",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DelegateEscrowFactory",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x256a184f14ffd25D7AEecB768db473c16517e66B"
+            }
+        },
+        {
+            "abi": "sepolia/PositionTokenRenderer.json",
+            "abiHash": "9a67415699c5c32cc7a45869f5e581700dac1dadad99ea8408ab5abb8a919d92",
+            "address": "0x2c2A10aC552fd896725397e9811a2a1104Cef457",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.PositionTokenRenderer",
+            "source": {
+                "contract": "src/modules/DEPOS/PositionTokenRenderer.sol:PositionTokenRenderer",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "PositionTokenRenderer",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x2c2A10aC552fd896725397e9811a2a1104Cef457"
+            }
+        },
+        {
+            "abi": "sepolia/ReceiptTokenManager.json",
+            "abiHash": "959efb39e29f7568e153dcc18d8fc28305b335b347b5cabb9b1fd6dc7ecc000d",
+            "address": "0x95F6CfFFCbdaecB76f1cA335Ceda4247c45B45E4",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.periphery.ReceiptTokenManager",
+            "source": {
+                "contract": "src/policies/deposits/ReceiptTokenManager.sol:ReceiptTokenManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReceiptTokenManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x95F6CfFFCbdaecB76f1cA335Ceda4247c45B45E4"
+            }
+        },
+        {
+            "abi": "sepolia/BondCallback.json",
+            "abiHash": "42b0f0a93a5d2d2a6231464f7785b632f8d39ef1b0ef796a313ec6aaa5d13859",
+            "address": "0x989B93efB6e9d90c2F3632D80EC7c4d1f61D4109",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.BondCallback",
+            "source": {"contract": "src/policies/BondCallback.sol:BondCallback", "status": "exact"},
+            "verification": {
+                "contractName": "BondCallback",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x989B93efB6e9d90c2F3632D80EC7c4d1f61D4109"
+            }
+        },
+        {
+            "abi": "sepolia/Clearinghouse.json",
+            "abiHash": "9fd6821365420b5e4729e16c75b212b685742a56217d382b7751674eec0a883d",
+            "address": "0xD4aFf9B757d918Cb8a31A518F10cDaf914E57E3F",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.Clearinghouse",
+            "source": {
+                "contract": "src/policies/Clearinghouse.sol:Clearinghouse",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "Clearinghouse",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xD4aFf9B757d918Cb8a31A518F10cDaf914E57E3F"
+            }
+        },
+        {
+            "abi": "sepolia/ConvertibleDepositAuctioneer.json",
+            "abiHash": "dd18deb45a8aab5ea3cc4cd19651b80ca47cb23916bb95bd098db0cdf2959b2c",
+            "address": "0x247f1989aDc0F63D07b91Bf645De879b9de06fbB",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.ConvertibleDepositAuctioneer",
+            "source": {
+                "contract": "src/policies/deposits/ConvertibleDepositAuctioneer.sol:ConvertibleDepositAuctioneer",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositAuctioneer",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x247f1989aDc0F63D07b91Bf645De879b9de06fbB"
+            }
+        },
+        {
+            "abi": "sepolia/ConvertibleDepositFacility.json",
+            "abiHash": "b1978ce2402276b774011a21078d8f533c7c1112221e503f1e3fdb1417ac3ba0",
+            "address": "0x0bE69702E83f06A027E6841B614f6946d1265441",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.ConvertibleDepositFacility",
+            "source": {
+                "contract": "src/policies/deposits/ConvertibleDepositFacility.sol:ConvertibleDepositFacility",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "ConvertibleDepositFacility",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x0bE69702E83f06A027E6841B614f6946d1265441"
+            }
+        },
+        {
+            "abi": "sepolia/CoolerV2.json",
+            "abiHash": "3ffe8404e705390cf031e5c8dde89b0519e76e5c4e0a4e1ba7c7265f0f40f884",
+            "address": "0x8bEB701EBaf8CD68B7E8f04BFA4fC7387cF711E0",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.CoolerV2",
+            "source": {
+                "contract": "src/policies/cooler/MonoCooler.sol:MonoCooler",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "MonoCooler",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x8bEB701EBaf8CD68B7E8f04BFA4fC7387cF711E0"
+            }
+        },
+        {
+            "abi": "sepolia/CoolerV2LtvOracle.json",
+            "abiHash": "7c2fa73f6d5a30a6e783ba0dfb5ea0609f7958c5311e96a07643947fe20c7022",
+            "address": "0x1EdcEfFC669E965593E25446023B9C1f4C714Ef9",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.CoolerV2LtvOracle",
+            "source": {
+                "contract": "src/policies/cooler/CoolerLtvOracle.sol:CoolerLtvOracle",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CoolerLtvOracle",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x1EdcEfFC669E965593E25446023B9C1f4C714Ef9"
+            }
+        },
+        {
+            "abi": "sepolia/CoolerV2TreasuryBorrower.json",
+            "abiHash": "c7eb960ceec8e0297b6e87202a029f7865975c9979faad634edc66f5e43a10df",
+            "address": "0x74FeAEde88962139f4d36A2f1998BcF56088d519",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.CoolerV2TreasuryBorrower",
+            "source": {
+                "contract": "src/policies/cooler/CoolerTreasuryBorrower.sol:CoolerTreasuryBorrower",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "CoolerTreasuryBorrower",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x74FeAEde88962139f4d36A2f1998BcF56088d519"
+            }
+        },
+        {
+            "abi": "sepolia/CrossChainBridge.json",
+            "abiHash": "1da15f7ca14ef27ea3bc0b65e1ccfdcf9977d6f4922b7cc8a3d915057429f91f",
+            "address": "0x79A0D5eB7ceC7994A74a3Cc050945AA53B9Fc19A",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.CrossChainBridge",
+            "source": {
+                "contract": "src/policies/CrossChainBridge.sol:CrossChainBridge",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "CrossChainBridge",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x79A0D5eB7ceC7994A74a3Cc050945AA53B9Fc19A"
+            }
+        },
+        {
+            "abi": "sepolia/DepositManager.json",
+            "abiHash": "2d773cea705613a44ab8b8538a80b9edeaa94e9b5f87565828bb5e72387f607f",
+            "address": "0x2C9658b32E59cC4eb5aC90e2A3795C9E7fCaa644",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.DepositManager",
+            "source": {
+                "contract": "src/policies/deposits/DepositManager.sol:DepositManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DepositManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x2C9658b32E59cC4eb5aC90e2A3795C9E7fCaa644"
+            }
+        },
+        {
+            "abi": "sepolia/DepositRedemptionVault.json",
+            "abiHash": "eb052e44b4e59c76487320cab2ee04072a908cbab90cdff3c3133e4bbba2077e",
+            "address": "0x93AcaDa86ad23C85e96869D46945fA6FFb7a4036",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.DepositRedemptionVault",
+            "source": {
+                "contract": "src/policies/deposits/DepositRedemptionVault.sol:DepositRedemptionVault",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "DepositRedemptionVault",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x93AcaDa86ad23C85e96869D46945fA6FFb7a4036"
+            }
+        },
+        {
+            "abi": "sepolia/Emergency.json",
+            "abiHash": "f64dca4490d510d97051ac4ce91558d74b7489ce1c267a9e649303da79f0fc57",
+            "address": "0xDB5cb2eba141d9cc4B2d35FBbC4D2b23a88eDA52",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.Emergency",
+            "source": {"contract": "src/policies/Emergency.sol:Emergency", "status": "exact"},
+            "verification": {
+                "contractName": "Emergency",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xDB5cb2eba141d9cc4B2d35FBbC4D2b23a88eDA52"
+            }
+        },
+        {
+            "abi": "sepolia/EmissionManager.json",
+            "abiHash": "7bcf063023db8b6826e9eb68c75149a781c03395f9e94ac33f6ad868728991f9",
+            "address": "0x79cF5D3824CaBD3C7617F8470B94033EB10b28CA",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.EmissionManager",
+            "source": {
+                "contract": "src/policies/EmissionManager.sol:EmissionManager",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "EmissionManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x79cF5D3824CaBD3C7617F8470B94033EB10b28CA"
+            }
+        },
+        {
+            "abi": "sepolia/Minter.json",
+            "abiHash": "230720c76a1fdfea96259669f962309abd12adbc46dc49b45f366f160b6cc617",
+            "address": "0x556B5fA9f8aa6E38e5E8FB0AD9Cb978bcAf33913",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.Minter",
+            "source": {"contract": "src/policies/Minter.sol:Minter", "status": "exact"},
+            "verification": {
+                "contractName": "Minter",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x556B5fA9f8aa6E38e5E8FB0AD9Cb978bcAf33913"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusHeart.json",
+            "abiHash": "27fa403cbb56a145dac5c35fb6186df895d7c46e9436b4e87c2c566204104393",
+            "address": "0x1dc2c4E15189a7aa61Eff2b3DD3D5EAe8fA03377",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.OlympusHeart",
+            "source": {"contract": "src/policies/Heart.sol:OlympusHeart", "status": "exact"},
+            "verification": {
+                "contractName": "OlympusHeart",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x1dc2c4E15189a7aa61Eff2b3DD3D5EAe8fA03377"
+            }
+        },
+        {
+            "abi": "sepolia/OlympusPriceConfig.json",
+            "abiHash": "fb76975b4d0a7446e7dd726e08ea8d262a00ca72ca0f553a4a4bb0123ab93cf7",
+            "address": "0x68009f5e809C5A3438438312F8EEFB9F5C73d534",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.OlympusPriceConfig",
+            "source": {
+                "contract": "src/policies/price/PriceConfig.sol:OlympusPriceConfig",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "OlympusPriceConfig",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x68009f5e809C5A3438438312F8EEFB9F5C73d534"
+            }
+        },
+        {
+            "abi": "sepolia/Operator.json",
+            "abiHash": "b9dee95f70ac67d6f39e3dec5cfeb385524d3c001ac1eb58e76e68b2040086d3",
+            "address": "0xd5405C517631b15C5814fdb7E612ba4c86fC2f75",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.Operator",
+            "source": {"contract": "src/policies/Operator.sol:Operator", "status": "exact"},
+            "verification": {
+                "contractName": "Operator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xd5405C517631b15C5814fdb7E612ba4c86fC2f75"
+            }
+        },
+        {
+            "abi": "sepolia/ReserveMigrator.json",
+            "abiHash": "85b8c5f82c8ec69fba14be82aa66191a2f4cebfa4e336a39dd790c2ed8a693c7",
+            "address": "0x8B92A1dea210B7b7516443b52fdf5Dae677e93b0",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.ReserveMigrator",
+            "source": {
+                "contract": "src/policies/ReserveMigrator.sol:ReserveMigrator",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReserveMigrator",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x8B92A1dea210B7b7516443b52fdf5Dae677e93b0"
+            }
+        },
+        {
+            "abi": "sepolia/ReserveWrapper.json",
+            "abiHash": "4da0e2d44e4051ac289d51b5e1d03ea439056c784ed7c0a740beae926bb11ebc",
+            "address": "0x46a01AE30571855FBB5988eEd9D116aa2A3f2377",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.ReserveWrapper",
+            "source": {
+                "contract": "src/policies/ReserveWrapper.sol:ReserveWrapper",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ReserveWrapper",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x46a01AE30571855FBB5988eEd9D116aa2A3f2377"
+            }
+        },
+        {
+            "abi": "sepolia/RolesAdmin.json",
+            "abiHash": "f1772029dce78f0bfe3e36aebe1fd4e540401333b695b1dbf843ee6eedb0c39f",
+            "address": "0xf33133E5356B9534e794468dAcD424D11007f1cF",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.RolesAdmin",
+            "source": {"contract": "src/policies/RolesAdmin.sol:RolesAdmin", "status": "exact"},
+            "verification": {
+                "contractName": "RolesAdmin",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xf33133E5356B9534e794468dAcD424D11007f1cF"
+            }
+        },
+        {
+            "abi": "sepolia/TreasuryCustodian.json",
+            "abiHash": "bfbf90de743fef176a035d6cf60b30ccdd2854772f697d037a9a8c566959055b",
+            "address": "0xD031777082DD0bFBd7027af34fb306c24e6c3D97",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.TreasuryCustodian",
+            "source": {
+                "contract": "src/policies/TreasuryCustodian.sol:TreasuryCustodian",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "TreasuryCustodian",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xD031777082DD0bFBd7027af34fb306c24e6c3D97"
+            }
+        },
+        {
+            "abi": "sepolia/YieldRepurchaseFacility.json",
+            "abiHash": "938631549270a82858be9994e20e581ec63ad6c49ae8b3c344dd6fee1f3124cd",
+            "address": "0xf8ABE1D9502BbcaD4576433490D851D03c22A6B4",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.YieldRepurchaseFacility",
+            "source": {
+                "contract": "src/policies/YieldRepurchaseFacility.sol:YieldRepurchaseFacility",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "YieldRepurchaseFacility",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0xf8ABE1D9502BbcaD4576433490D851D03c22A6B4"
+            }
+        },
+        {
+            "abi": "sepolia/ZeroDistributor.json",
+            "abiHash": "8e1d4c251bdacf43114825f413f22089fe6ca91a8db1620b870aec8f33aa7d0d",
+            "address": "0x1F338C7E85C92225B00CC79F7366e585D0c8eeEb",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.ZeroDistributor",
+            "source": {
+                "contract": "src/policies/Distributor/ZeroDistributor.sol:ZeroDistributor",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "ZeroDistributor",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=11155111&module=contract&action=getsourcecode&address=0x1F338C7E85C92225B00CC79F7366e585D0c8eeEb"
+            }
+        }
+    ],
+    "exclusions": [
+        {
+            "keep": ["OHM", "OlympusAuthority", "Staking", "gOHM", "sOHM"],
+            "reason": "Pre-V3 contracts that are no longer used. The kept contracts are still live.",
+            "section": "olympus.legacy"
+        },
+        {
+            "chain": "berachain-bartio",
+            "reason": "Retired network. Etherscan V2 does not support it."
+        },
+        {"chain": "goerli", "reason": "Retired network. Etherscan V2 does not support it."},
+        {
+            "address": "0x4A8c9502A34962a2C6d73c5D181dAaeF3dcDc88D",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.legacy.OlympusAuthority",
+            "reason": "RPC eth_getCode returned no bytecode at this address; no contract ABI can be attributed to it."
+        },
+        {
+            "address": "0xf577c77ee3578c7F216327F41B5D7221EaD2B2A3",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.BondManager",
+            "reason": "Inactive policy: isActive() returned false on 2026-09-21."
+        },
+        {
+            "address": "0x45e563c39cDdbA8699A90078F42353A57509543a",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.CrossChainBridge",
+            "reason": "Inactive policy: isActive() returned false on 2026-09-21."
+        },
+        {
+            "address": "0x367149cf2d04D3114fFD1Cc6b273222664908D0B",
+            "chain": "mainnet",
+            "chainId": 1,
+            "path": "olympus.policies.LegacyBurner",
+            "reason": "Inactive policy: isActive() returned false on 2026-09-21."
+        },
+        {
+            "address": "0x3024ceabec7e120647ad585bd5836eb13d247de7",
+            "chain": "sepolia",
+            "chainId": 11155111,
+            "path": "olympus.policies.CCIPBurnMintTokenPool",
+            "reason": "Inactive policy: isActive() returned false on 2026-09-21."
+        },
+        {
+            "chain": "solana",
+            "reason": "Non-EVM chain; Solidity ABIs do not describe Solana programs."
+        },
+        {
+            "chain": "solana-devnet",
+            "reason": "Non-EVM chain; Solidity ABIs do not describe Solana programs."
+        }
+    ],
+    "provenance": "Each deployment is pinned to the hash of the ABI that was verified for its address. The ABI hash compares callable types, not bytecode or current proxy implementations. The source link names the codebase contract and reports if its current ABI still matches. Pin the same Git revision for the manifest and ABI files.",
+    "schemaVersion": 3,
+    "scope": "Current Olympus EVM entries; excludes external protocols, config, multisigs, env.last and the excluded sections and chains. See exclusions.",
+    "source": "src/scripts/env.json#current"
+}

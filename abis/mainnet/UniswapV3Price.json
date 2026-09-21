@@ -1,0 +1,219 @@
+[
+    {
+        "inputs": [
+            {"internalType": "contract Module", "name": "parent_", "type": "address"},
+            {"internalType": "uint32", "name": "averageBlockTimeSeconds_", "type": "uint32"},
+            {"internalType": "address", "name": "uniswapV3Factory_", "type": "address"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "AVERAGE_BLOCK_TIME_SECONDS",
+        "outputs": [{"internalType": "uint32", "name": "", "type": "uint32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "INIT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "PARENT",
+        "outputs": [{"internalType": "Keycode", "name": "", "type": "bytes5"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "SUBKEYCODE",
+        "outputs": [{"internalType": "SubKeycode", "name": "", "type": "bytes20"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "UNISWAP_V3_FACTORY",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "lookupToken_", "type": "address"},
+            {"internalType": "uint8", "name": "outputDecimals_", "type": "uint8"},
+            {"internalType": "bytes", "name": "params_", "type": "bytes"}
+        ],
+        "name": "getTokenPrice",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "lookupToken_", "type": "address"},
+            {"internalType": "uint8", "name": "outputDecimals_", "type": "uint8"},
+            {"internalType": "bytes", "name": "params_", "type": "bytes"}
+        ],
+        "name": "getTokenTWAP",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "parent",
+        "outputs": [{"internalType": "contract Module", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {"inputs": [], "name": "Submodule_InvalidParent", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Submodule_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "Submodule_OnlyParent",
+        "type": "error"
+    },
+    {"inputs": [], "name": "T", "type": "error"},
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "uint32", "name": "observationWindow_", "type": "uint32"}
+        ],
+        "name": "UniswapV3OracleHelper_InvalidObservation",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "uint32", "name": "observationWindow_", "type": "uint32"},
+            {"internalType": "uint32", "name": "minObservationWindow_", "type": "uint32"}
+        ],
+        "name": "UniswapV3OracleHelper_ObservationTooShort",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "int56", "name": "timeWeightedTick_", "type": "int56"},
+            {"internalType": "int24", "name": "minTick_", "type": "int24"},
+            {"internalType": "int24", "name": "maxTick_", "type": "int24"}
+        ],
+        "name": "UniswapV3OracleHelper_TickOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "assetDecimals_", "type": "uint8"},
+            {"internalType": "uint8", "name": "maxDecimals_", "type": "uint8"}
+        ],
+        "name": "UniswapV3_AssetDecimalsOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint32", "name": "averageBlockTimeSeconds_", "type": "uint32"}
+        ],
+        "name": "UniswapV3_AverageBlockTimeInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "factory_", "type": "address"}],
+        "name": "UniswapV3_FactoryInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "address", "name": "asset_", "type": "address"}
+        ],
+        "name": "UniswapV3_LookupTokenNotFound",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "uint16", "name": "observationCardinality_", "type": "uint16"},
+            {"internalType": "uint32", "name": "observationWindow_", "type": "uint32"},
+            {"internalType": "uint32", "name": "minimumCardinality_", "type": "uint32"}
+        ],
+        "name": "UniswapV3_ObservationCardinalityInsufficient",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "outputDecimals_", "type": "uint8"},
+            {"internalType": "uint8", "name": "maxDecimals_", "type": "uint8"}
+        ],
+        "name": "UniswapV3_OutputDecimalsOutOfBounds",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "params_", "type": "bytes"}],
+        "name": "UniswapV3_ParamsInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint8", "name": "paramsIndex_", "type": "uint8"},
+            {"internalType": "address", "name": "pool_", "type": "address"}
+        ],
+        "name": "UniswapV3_ParamsPoolInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "address", "name": "expectedPool_", "type": "address"},
+            {"internalType": "address", "name": "factory_", "type": "address"}
+        ],
+        "name": "UniswapV3_PoolFactoryInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "pool_", "type": "address"}],
+        "name": "UniswapV3_PoolReentrancy",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "pool_", "type": "address"},
+            {"internalType": "uint8", "name": "tokenIndex_", "type": "uint8"},
+            {"internalType": "address", "name": "token_", "type": "address"}
+        ],
+        "name": "UniswapV3_PoolTokensInvalid",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "pool_", "type": "address"}],
+        "name": "UniswapV3_PoolTypeInvalid",
+        "type": "error"
+    }
+]

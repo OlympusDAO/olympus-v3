@@ -1,0 +1,166 @@
+[
+    {
+        "inputs": [{"internalType": "address", "name": "kernel_", "type": "address"}],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "INIT",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "KEYCODE",
+        "outputs": [{"internalType": "Keycode", "name": "", "type": "bytes5"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes5", "name": "name_", "type": "bytes5"}],
+        "name": "deregisterContract",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes5", "name": "name_", "type": "bytes5"}],
+        "name": "getContract",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getContractNames",
+        "outputs": [{"internalType": "bytes5[]", "name": "", "type": "bytes5[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes5", "name": "name_", "type": "bytes5"}],
+        "name": "getImmutableContract",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getImmutableContractNames",
+        "outputs": [{"internalType": "bytes5[]", "name": "", "type": "bytes5[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "keycode",
+        "outputs": [{"internalType": "bytes5", "name": "", "type": "bytes5"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes5", "name": "name_", "type": "bytes5"},
+            {"internalType": "address", "name": "contractAddress_", "type": "address"}
+        ],
+        "name": "registerContract",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes5", "name": "name_", "type": "bytes5"},
+            {"internalType": "address", "name": "contractAddress_", "type": "address"}
+        ],
+        "name": "registerImmutableContract",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "bytes5", "name": "name_", "type": "bytes5"},
+            {"internalType": "address", "name": "contractAddress_", "type": "address"}
+        ],
+        "name": "updateContract",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [{"indexed": true, "internalType": "bytes5", "name": "name", "type": "bytes5"}],
+        "name": "ContractDeregistered",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "bytes5", "name": "name", "type": "bytes5"},
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "contractAddress",
+                "type": "address"
+            },
+            {"indexed": false, "internalType": "bool", "name": "isImmutable", "type": "bool"}
+        ],
+        "name": "ContractRegistered",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "bytes5", "name": "name", "type": "bytes5"},
+            {
+                "indexed": true,
+                "internalType": "address",
+                "name": "contractAddress",
+                "type": "address"
+            }
+        ],
+        "name": "ContractUpdated",
+        "type": "event"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "policy_", "type": "address"}],
+        "name": "Module_PolicyNotPermitted",
+        "type": "error"
+    },
+    {"inputs": [], "name": "Params_ContractAlreadyRegistered", "type": "error"},
+    {"inputs": [], "name": "Params_ContractNotRegistered", "type": "error"},
+    {"inputs": [], "name": "Params_InvalidAddress", "type": "error"},
+    {"inputs": [], "name": "Params_InvalidName", "type": "error"}
+]

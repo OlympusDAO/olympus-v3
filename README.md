@@ -12,6 +12,13 @@ Run `pnpm build` or `forge build` to run a build.
 
 Configure foundry settings in foundry.toml.
 
+Generate the contract ABI files in `abis/<chain>/` and the deployment manifest with
+`pnpm run gen:abis`. The command compiles locally and needs no API key. Run
+`pnpm run gen:abis:check` before you open a pull request to `develop`. CI runs the check on pull
+requests from `develop` to `master`. When a deployment address changes, run
+`pnpm run gen:abis:verify --chain <chain> --write` to pin its verified ABI. This command needs an
+Etherscan API key. See [abis/README.md](abis/README.md) for the design and the workflow.
+
 ## SRC Directory Structure
 
 ```ml

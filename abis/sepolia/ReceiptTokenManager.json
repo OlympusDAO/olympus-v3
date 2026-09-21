@@ -1,0 +1,423 @@
+[
+    {"inputs": [], "stateMutability": "nonpayable", "type": "constructor"},
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner", "type": "address"},
+            {"internalType": "address", "name": "spender", "type": "address"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"}
+        ],
+        "name": "allowance",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "spender", "type": "address"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "approve",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner", "type": "address"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"}
+        ],
+        "name": "balanceOf",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "from_", "type": "address"},
+            {"internalType": "uint256", "name": "tokenId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "bool", "name": "isWrapped_", "type": "bool"}
+        ],
+        "name": "burn",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "address", "name": "operator_", "type": "address"},
+            {"internalType": "string", "name": "operatorName_", "type": "string"}
+        ],
+        "name": "createToken",
+        "outputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "id", "type": "uint256"}],
+        "name": "decimals",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner_", "type": "address"},
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "address", "name": "operator_", "type": "address"}
+        ],
+        "name": "getReceiptTokenId",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenAsset",
+        "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenDecimals",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenDepositPeriod",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenName",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenOperator",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenOwner",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getTokenSymbol",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getWrappableTokens",
+        "outputs": [
+            {"internalType": "uint256[]", "name": "tokenIds", "type": "uint256[]"},
+            {"internalType": "address[]", "name": "wrappedTokens", "type": "address[]"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "getWrappedToken",
+        "outputs": [{"internalType": "address", "name": "wrappedToken", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "owner", "type": "address"},
+            {"internalType": "address", "name": "spender", "type": "address"}
+        ],
+        "name": "isOperator",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "isValidTokenId",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "to_", "type": "address"},
+            {"internalType": "uint256", "name": "tokenId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "bool", "name": "shouldWrap_", "type": "bool"}
+        ],
+        "name": "mint",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "id", "type": "uint256"}],
+        "name": "name",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "spender", "type": "address"},
+            {"internalType": "bool", "name": "approved", "type": "bool"}
+        ],
+        "name": "setOperator",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "id", "type": "uint256"}],
+        "name": "symbol",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId_", "type": "uint256"}],
+        "name": "totalSupply",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "receiver", "type": "address"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "transfer",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "sender", "type": "address"},
+            {"internalType": "address", "name": "receiver", "type": "address"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "transferFrom",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "tokenId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "unwrap",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "tokenId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "wrap",
+        "outputs": [{"internalType": "address", "name": "wrappedToken", "type": "address"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "spender", "type": "address"},
+            {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "Approval",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+            {"indexed": false, "internalType": "uint8", "name": "newDecimals", "type": "uint8"}
+        ],
+        "name": "ERC6909DecimalsUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+            {"indexed": false, "internalType": "string", "name": "newName", "type": "string"}
+        ],
+        "name": "ERC6909NameUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+            {"indexed": false, "internalType": "string", "name": "newSymbol", "type": "string"}
+        ],
+        "name": "ERC6909SymbolUpdated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "spender", "type": "address"},
+            {"indexed": false, "internalType": "bool", "name": "approved", "type": "bool"}
+        ],
+        "name": "OperatorSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256"},
+            {"indexed": true, "internalType": "address", "name": "owner", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": false, "internalType": "address", "name": "operator", "type": "address"}
+        ],
+        "name": "TokenCreated",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "address", "name": "caller", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "sender", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "receiver", "type": "address"},
+            {"indexed": true, "internalType": "uint256", "name": "id", "type": "uint256"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "Transfer",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256"},
+            {"indexed": true, "internalType": "address", "name": "wrappedToken", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "account", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "Unwrapped",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256"},
+            {"indexed": true, "internalType": "address", "name": "wrappedToken", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "account", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "Wrapped",
+        "type": "event"
+    },
+    {"inputs": [], "name": "CreateFail", "type": "error"},
+    {
+        "inputs": [
+            {"internalType": "address", "name": "spender", "type": "address"},
+            {"internalType": "uint256", "name": "allowance", "type": "uint256"},
+            {"internalType": "uint256", "name": "needed", "type": "uint256"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"}
+        ],
+        "name": "ERC6909InsufficientAllowance",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "sender", "type": "address"},
+            {"internalType": "uint256", "name": "balance", "type": "uint256"},
+            {"internalType": "uint256", "name": "needed", "type": "uint256"},
+            {"internalType": "uint256", "name": "id", "type": "uint256"}
+        ],
+        "name": "ERC6909InsufficientBalance",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "approver", "type": "address"}],
+        "name": "ERC6909InvalidApprover",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "receiver", "type": "address"}],
+        "name": "ERC6909InvalidReceiver",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "sender", "type": "address"}],
+        "name": "ERC6909InvalidSender",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "spender", "type": "address"}],
+        "name": "ERC6909InvalidSpender",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "erc20Implementation", "type": "address"}],
+        "name": "ERC6909Wrappable_InvalidERC20Implementation",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ERC6909Wrappable_InvalidTokenId",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ERC6909Wrappable_TokenIdAlreadyExists",
+        "type": "error"
+    },
+    {"inputs": [], "name": "ERC6909Wrappable_ZeroAmount", "type": "error"},
+    {
+        "inputs": [{"internalType": "string", "name": "reason", "type": "string"}],
+        "name": "ReceiptTokenManager_InvalidParams",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "caller", "type": "address"},
+            {"internalType": "address", "name": "owner", "type": "address"}
+        ],
+        "name": "ReceiptTokenManager_NotOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "tokenId", "type": "uint256"}],
+        "name": "ReceiptTokenManager_TokenExists",
+        "type": "error"
+    }
+]

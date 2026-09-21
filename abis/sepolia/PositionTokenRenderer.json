@@ -1,0 +1,42 @@
+[
+    {
+        "inputs": [],
+        "name": "DISPLAY_DECIMALS",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "OHM_DECIMALS",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId_", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "positionManager_", "type": "address"},
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"}
+        ],
+        "name": "tokenURI",
+        "outputs": [{"internalType": "string", "name": "", "type": "string"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {"inputs": [], "name": "PositionTokenRenderer_InvalidAddress", "type": "error"},
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "value", "type": "uint256"},
+            {"internalType": "uint256", "name": "length", "type": "uint256"}
+        ],
+        "name": "StringsInsufficientHexLength",
+        "type": "error"
+    }
+]

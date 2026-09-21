@@ -1,0 +1,340 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "kernel_", "type": "address"},
+            {"internalType": "address", "name": "collateralToken_", "type": "address"},
+            {"internalType": "address", "name": "debtToken_", "type": "address"},
+            {"internalType": "uint96", "name": "initialOriginationLtv_", "type": "uint96"},
+            {"internalType": "uint96", "name": "maxOriginationLtvDelta_", "type": "uint96"},
+            {
+                "internalType": "uint32",
+                "name": "minOriginationLtvTargetTimeDelta_",
+                "type": "uint32"
+            },
+            {"internalType": "uint96", "name": "maxOriginationLtvRateOfChange_", "type": "uint96"},
+            {"internalType": "uint16", "name": "maxLiquidationLtvPremiumBps_", "type": "uint16"},
+            {"internalType": "uint16", "name": "liquidationLtvPremiumBps_", "type": "uint16"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [],
+        "name": "BASIS_POINTS_DIVISOR",
+        "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "DECIMALS",
+        "outputs": [{"internalType": "uint8", "name": "", "type": "uint8"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ROLES",
+        "outputs": [{"internalType": "contract ROLESv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "collateralToken",
+        "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "configureDependencies",
+        "outputs": [{"internalType": "Keycode[]", "name": "dependencies", "type": "bytes5[]"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentLiquidationLtv",
+        "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentLtvs",
+        "outputs": [
+            {"internalType": "uint96", "name": "originationLtv", "type": "uint96"},
+            {"internalType": "uint96", "name": "liquidationLtv", "type": "uint96"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "currentOriginationLtv",
+        "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "debtToken",
+        "outputs": [{"internalType": "contract IERC20", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "liquidationLtvPremiumBps",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "maxLiquidationLtvPremiumBps",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "maxOriginationLtvDelta",
+        "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "maxOriginationLtvRateOfChange",
+        "outputs": [{"internalType": "uint96", "name": "", "type": "uint96"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "minOriginationLtvTargetTimeDelta",
+        "outputs": [{"internalType": "uint32", "name": "", "type": "uint32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "originationLtvData",
+        "outputs": [
+            {"internalType": "uint96", "name": "startingValue", "type": "uint96"},
+            {"internalType": "uint40", "name": "startTime", "type": "uint40"},
+            {"internalType": "uint96", "name": "targetValue", "type": "uint96"},
+            {"internalType": "uint40", "name": "targetTime", "type": "uint40"},
+            {"internalType": "uint96", "name": "slope", "type": "uint96"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requestPermissions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "Keycode", "name": "keycode", "type": "bytes5"},
+                    {"internalType": "bytes4", "name": "funcSelector", "type": "bytes4"}
+                ],
+                "internalType": "struct Permissions[]",
+                "name": "requests",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "premiumBps", "type": "uint16"}],
+        "name": "setLiquidationLtvPremiumBps",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint16", "name": "maxPremiumBps", "type": "uint16"}],
+        "name": "setMaxLiquidationLtvPremiumBps",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint96", "name": "maxDelta", "type": "uint96"}],
+        "name": "setMaxOriginationLtvDelta",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint96", "name": "originationLtvDelta", "type": "uint96"},
+            {"internalType": "uint32", "name": "timeDelta", "type": "uint32"}
+        ],
+        "name": "setMaxOriginationLtvRateOfChange",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "uint32", "name": "minTargetTimeDelta", "type": "uint32"}],
+        "name": "setMinOriginationLtvTargetTimeDelta",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint96", "name": "targetValue", "type": "uint96"},
+            {"internalType": "uint40", "name": "targetTime", "type": "uint40"}
+        ],
+        "name": "setOriginationLtvAt",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint96", "name": "premiumBps", "type": "uint96"}
+        ],
+        "name": "LiquidationLtvPremiumBpsSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint96", "name": "maxPremiumBps", "type": "uint96"}
+        ],
+        "name": "MaxLiquidationLtvPremiumBpsSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": false, "internalType": "uint256", "name": "maxDelta", "type": "uint256"}
+        ],
+        "name": "MaxOriginationLtvDeltaSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint96",
+                "name": "maxRateOfChange",
+                "type": "uint96"
+            }
+        ],
+        "name": "MaxOriginationLtvRateOfChangeSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint32",
+                "name": "maxTargetTimeDelta",
+                "type": "uint32"
+            }
+        ],
+        "name": "MinOriginationLtvTargetTimeDeltaSet",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {
+                "indexed": false,
+                "internalType": "uint96",
+                "name": "oldOriginationLtv",
+                "type": "uint96"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint96",
+                "name": "newOriginationLtvTarget",
+                "type": "uint96"
+            },
+            {"indexed": false, "internalType": "uint256", "name": "targetTime", "type": "uint256"}
+        ],
+        "name": "OriginationLtvSetAt",
+        "type": "event"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint96", "name": "oldOriginationLtv", "type": "uint96"},
+            {"internalType": "uint96", "name": "newOriginationLtv", "type": "uint96"},
+            {"internalType": "uint256", "name": "maxDelta", "type": "uint256"}
+        ],
+        "name": "BreachedMaxOriginationLtvDelta",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint96", "name": "targetRateOfChange", "type": "uint96"},
+            {"internalType": "uint96", "name": "maxRateOfChange", "type": "uint96"}
+        ],
+        "name": "BreachedMaxOriginationLtvRateOfChange",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint40", "name": "targetTime", "type": "uint40"},
+            {"internalType": "uint40", "name": "currentDate", "type": "uint40"},
+            {"internalType": "uint32", "name": "maxTargetTimeDelta", "type": "uint32"}
+        ],
+        "name": "BreachedMinDateDelta",
+        "type": "error"
+    },
+    {"inputs": [], "name": "CannotDecreaseLtv", "type": "error"},
+    {"inputs": [], "name": "InvalidParam", "type": "error"},
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotAuthorised", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Policy_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "expected_", "type": "bytes"}],
+        "name": "Policy_WrongModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "role_", "type": "bytes32"}],
+        "name": "ROLES_RequireRole",
+        "type": "error"
+    }
+]

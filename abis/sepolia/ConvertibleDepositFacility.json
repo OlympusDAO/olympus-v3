@@ -1,0 +1,705 @@
+[
+    {
+        "inputs": [
+            {"internalType": "address", "name": "kernel_", "type": "address"},
+            {"internalType": "address", "name": "depositManager_", "type": "address"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset", "type": "address"},
+            {"internalType": "uint256", "name": "depositAmount", "type": "uint256"},
+            {"internalType": "uint256", "name": "minimumDeposit", "type": "uint256"}
+        ],
+        "name": "AssetManager_MinimumDepositNotMet",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "CDF_InvalidAmount",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "string", "name": "reason_", "type": "string"}],
+        "name": "CDF_InvalidArgs",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "address", "name": "token_", "type": "address"},
+            {"internalType": "uint8", "name": "periodMonths_", "type": "uint8"}
+        ],
+        "name": "CDF_InvalidToken",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "CDF_NotOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "CDF_PositionExpired",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "CDF_Unsupported",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "string", "name": "reason_", "type": "string"}],
+        "name": "DEPOS_InvalidParams",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "DEPOS_NotOperator",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "uint256", "name": "positionId_", "type": "uint256"}],
+        "name": "DEPOS_NotOwner",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "operator", "type": "address"},
+            {"internalType": "uint256", "name": "requested", "type": "uint256"},
+            {"internalType": "uint256", "name": "available", "type": "uint256"}
+        ],
+        "name": "DepositFacility_InsufficientCommitment",
+        "type": "error"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "requested", "type": "uint256"},
+            {"internalType": "uint256", "name": "available", "type": "uint256"}
+        ],
+        "name": "DepositFacility_InsufficientDeposits",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "operator", "type": "address"}],
+        "name": "DepositFacility_InvalidAddress",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "operator", "type": "address"}],
+        "name": "DepositFacility_UnauthorizedOperator",
+        "type": "error"
+    },
+    {"inputs": [], "name": "DepositFacility_ZeroAmount", "type": "error"},
+    {
+        "inputs": [
+            {"internalType": "address", "name": "asset", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"internalType": "address", "name": "operator", "type": "address"}
+        ],
+        "name": "DepositManager_InvalidAssetPeriod",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "caller_", "type": "address"}],
+        "name": "KernelAdapter_OnlyKernel",
+        "type": "error"
+    },
+    {"inputs": [], "name": "NotAuthorised", "type": "error"},
+    {"inputs": [], "name": "NotDisabled", "type": "error"},
+    {"inputs": [], "name": "NotEnabled", "type": "error"},
+    {
+        "inputs": [{"internalType": "Keycode", "name": "keycode_", "type": "bytes5"}],
+        "name": "Policy_ModuleDoesNotExist",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "expected_", "type": "bytes"}],
+        "name": "Policy_WrongModuleVersion",
+        "type": "error"
+    },
+    {
+        "inputs": [{"internalType": "bytes32", "name": "role_", "type": "bytes32"}],
+        "name": "ROLES_RequireRole",
+        "type": "error"
+    },
+    {"inputs": [], "name": "ReentrancyGuardReentrantCall", "type": "error"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "operator", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "AssetCommitCancelled",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "operator", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "AssetCommitWithdrawn",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "operator", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "AssetCommitted",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {"indexed": false, "internalType": "uint16", "name": "reclaimRate", "type": "uint16"}
+        ],
+        "name": "AssetPeriodReclaimRateSet",
+        "type": "event"
+    },
+    {"anonymous": false, "inputs": [], "name": "ClaimAllYieldFailed", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}
+        ],
+        "name": "ClaimedYield",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "depositor", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "periodMonths", "type": "uint8"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "depositAmount",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "convertedAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "ConvertedDeposit",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "asset", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "depositor", "type": "address"},
+            {"indexed": true, "internalType": "uint256", "name": "positionId", "type": "uint256"},
+            {"indexed": false, "internalType": "uint8", "name": "periodMonths", "type": "uint8"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "depositAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "CreatedDeposit",
+        "type": "event"
+    },
+    {"anonymous": false, "inputs": [], "name": "Disabled", "type": "event"},
+    {"anonymous": false, "inputs": [], "name": "Enabled", "type": "event"},
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "operator", "type": "address"}
+        ],
+        "name": "OperatorAuthorized",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "operator", "type": "address"}
+        ],
+        "name": "OperatorDeauthorized",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "user", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "depositToken", "type": "address"},
+            {"indexed": false, "internalType": "uint8", "name": "depositPeriod", "type": "uint8"},
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "reclaimedAmount",
+                "type": "uint256"
+            },
+            {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "forfeitedAmount",
+                "type": "uint256"
+            }
+        ],
+        "name": "Reclaimed",
+        "type": "event"
+    },
+    {
+        "inputs": [],
+        "name": "DEPOS",
+        "outputs": [{"internalType": "contract DEPOSv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "DEPOSIT_MANAGER",
+        "outputs": [{"internalType": "contract IDepositManager", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "MINTR",
+        "outputs": [{"internalType": "contract MINTRv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ONE_HUNDRED_PERCENT",
+        "outputs": [{"internalType": "uint16", "name": "", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ROLES",
+        "outputs": [{"internalType": "contract ROLESv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "ROLE_AUCTIONEER",
+        "outputs": [{"internalType": "bytes32", "name": "", "type": "bytes32"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "TRSRY",
+        "outputs": [{"internalType": "contract TRSRYv1", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "VERSION",
+        "outputs": [
+            {"internalType": "uint8", "name": "major", "type": "uint8"},
+            {"internalType": "uint8", "name": "minor", "type": "uint8"}
+        ],
+        "stateMutability": "pure",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "operator_", "type": "address"}],
+        "name": "authorizeOperator",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract Kernel", "name": "newKernel_", "type": "address"}],
+        "name": "changeKernel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "claimAllYield",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "claimYield",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract IERC20", "name": "asset_", "type": "address"}],
+        "name": "claimYield",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "configureDependencies",
+        "outputs": [{"internalType": "Keycode[]", "name": "dependencies", "type": "bytes5[]"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256[]", "name": "positionIds_", "type": "uint256[]"},
+            {"internalType": "uint256[]", "name": "amounts_", "type": "uint256[]"},
+            {"internalType": "bool", "name": "wrappedReceipt_", "type": "bool"}
+        ],
+        "name": "convert",
+        "outputs": [
+            {"internalType": "uint256", "name": "receiptTokenIn", "type": "uint256"},
+            {"internalType": "uint256", "name": "convertedTokenOut", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "convertedToken",
+        "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {
+                "components": [
+                    {"internalType": "contract IERC20", "name": "asset", "type": "address"},
+                    {"internalType": "uint8", "name": "periodMonths", "type": "uint8"},
+                    {"internalType": "address", "name": "depositor", "type": "address"},
+                    {"internalType": "uint256", "name": "amount", "type": "uint256"},
+                    {"internalType": "uint256", "name": "conversionPrice", "type": "uint256"},
+                    {"internalType": "bool", "name": "wrapPosition", "type": "bool"},
+                    {"internalType": "bool", "name": "wrapReceipt", "type": "bool"}
+                ],
+                "internalType": "struct IConvertibleDepositFacility.CreatePositionParams",
+                "name": "params_",
+                "type": "tuple"
+            }
+        ],
+        "name": "createPosition",
+        "outputs": [
+            {"internalType": "uint256", "name": "positionId", "type": "uint256"},
+            {"internalType": "uint256", "name": "receiptTokenId", "type": "uint256"},
+            {"internalType": "uint256", "name": "actualAmount", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "operator_", "type": "address"}],
+        "name": "deauthorizeOperator",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "periodMonths_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "bool", "name": "wrapReceipt_", "type": "bool"}
+        ],
+        "name": "deposit",
+        "outputs": [
+            {"internalType": "uint256", "name": "receiptTokenId", "type": "uint256"},
+            {"internalType": "uint256", "name": "actualAmount", "type": "uint256"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "disableData_", "type": "bytes"}],
+        "name": "disable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes", "name": "enableData_", "type": "bytes"}],
+        "name": "enable",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "execute",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"}
+        ],
+        "name": "getAssetPeriodReclaimRate",
+        "outputs": [{"internalType": "uint16", "name": "reclaimRate", "type": "uint16"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract IERC20", "name": "depositToken_", "type": "address"}],
+        "name": "getAvailableDeposits",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract IERC20", "name": "depositToken_", "type": "address"}],
+        "name": "getCommittedDeposits",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "address", "name": "operator_", "type": "address"}
+        ],
+        "name": "getCommittedDeposits",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "getOperators",
+        "outputs": [{"internalType": "address[]", "name": "operators", "type": "address[]"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "address", "name": "recipient_", "type": "address"}
+        ],
+        "name": "handleBorrow",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "handleCommit",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "handleCommitCancel",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "address", "name": "recipient_", "type": "address"}
+        ],
+        "name": "handleCommitWithdraw",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "address", "name": "payer_", "type": "address"}
+        ],
+        "name": "handleLoanDefault",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "uint256", "name": "maxAmount_", "type": "uint256"},
+            {"internalType": "address", "name": "payer_", "type": "address"}
+        ],
+        "name": "handleLoanRepay",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "handlePositionCancelRedemption",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "handlePositionRedemption",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isActive",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "operator_", "type": "address"}],
+        "name": "isAuthorizedOperator",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "isEnabled",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "kernel",
+        "outputs": [{"internalType": "contract Kernel", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "contract IERC20", "name": "asset_", "type": "address"}],
+        "name": "previewClaimYield",
+        "outputs": [{"internalType": "uint256", "name": "yieldAssets", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "depositor_", "type": "address"},
+            {"internalType": "uint256[]", "name": "positionIds_", "type": "uint256[]"},
+            {"internalType": "uint256[]", "name": "amounts_", "type": "uint256[]"}
+        ],
+        "name": "previewConvert",
+        "outputs": [
+            {"internalType": "uint256", "name": "receiptTokenIn", "type": "uint256"},
+            {"internalType": "uint256", "name": "convertedTokenOut", "type": "uint256"}
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "previewReclaim",
+        "outputs": [{"internalType": "uint256", "name": "reclaimed", "type": "uint256"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "depositToken_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"}
+        ],
+        "name": "reclaim",
+        "outputs": [{"internalType": "uint256", "name": "reclaimed", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "requestPermissions",
+        "outputs": [
+            {
+                "components": [
+                    {"internalType": "Keycode", "name": "keycode", "type": "bytes5"},
+                    {"internalType": "bytes4", "name": "funcSelector", "type": "bytes4"}
+                ],
+                "internalType": "struct Permissions[]",
+                "name": "permissions",
+                "type": "tuple[]"
+            }
+        ],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "contract IERC20", "name": "asset_", "type": "address"},
+            {"internalType": "uint8", "name": "depositPeriod_", "type": "uint8"},
+            {"internalType": "uint16", "name": "reclaimRate_", "type": "uint16"}
+        ],
+        "name": "setAssetPeriodReclaimRate",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "uint256", "name": "positionId_", "type": "uint256"},
+            {"internalType": "uint256", "name": "amount_", "type": "uint256"},
+            {"internalType": "address", "name": "to_", "type": "address"},
+            {"internalType": "bool", "name": "wrap_", "type": "bool"}
+        ],
+        "name": "split",
+        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "bytes4", "name": "interfaceId", "type": "bytes4"}],
+        "name": "supportsInterface",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    }
+]

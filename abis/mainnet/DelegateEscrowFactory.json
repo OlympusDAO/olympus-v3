@@ -1,0 +1,76 @@
+[
+    {
+        "inputs": [{"internalType": "address", "name": "gohm_", "type": "address"}],
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "delegate", "type": "address"}],
+        "name": "create",
+        "outputs": [
+            {"internalType": "contract DelegateEscrow", "name": "escrow", "type": "address"}
+        ],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "name": "created",
+        "outputs": [{"internalType": "bool", "name": "", "type": "bool"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [{"internalType": "address", "name": "", "type": "address"}],
+        "name": "escrowFor",
+        "outputs": [{"internalType": "contract DelegateEscrow", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [],
+        "name": "escrowImplementation",
+        "outputs": [{"internalType": "contract DelegateEscrow", "name": "", "type": "address"}],
+        "stateMutability": "view",
+        "type": "function"
+    },
+    {
+        "inputs": [
+            {"internalType": "address", "name": "caller", "type": "address"},
+            {"internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {"internalType": "int256", "name": "delegationAmountDelta", "type": "int256"}
+        ],
+        "name": "logDelegate",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "escrow", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "caller", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "onBehalfOf", "type": "address"},
+            {
+                "indexed": false,
+                "internalType": "int256",
+                "name": "delegationAmountDelta",
+                "type": "int256"
+            }
+        ],
+        "name": "Delegate",
+        "type": "event"
+    },
+    {
+        "anonymous": false,
+        "inputs": [
+            {"indexed": true, "internalType": "address", "name": "caller", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "delegate", "type": "address"},
+            {"indexed": true, "internalType": "address", "name": "escrow", "type": "address"}
+        ],
+        "name": "DelegateEscrowCreated",
+        "type": "event"
+    },
+    {"inputs": [], "name": "CreateFail", "type": "error"},
+    {"inputs": [], "name": "NotFromFactory", "type": "error"}
+]
