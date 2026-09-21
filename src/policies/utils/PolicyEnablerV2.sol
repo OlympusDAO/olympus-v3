@@ -20,10 +20,6 @@ import {PolicyAdminOptimized} from "src/policies/utils/PolicyAdminOptimized.sol"
 ///      that target the `IEnabler` interface continue to interoperate with
 ///      policies that derive from this contract.
 abstract contract PolicyEnablerV2 is EnablerV2, PolicyAdminOptimized {
-    // ========== INITIALIZATION ========== //
-
-    constructor() {}
-
     // ========== HOOKS ========== //
 
     /// @inheritdoc EnablerV2

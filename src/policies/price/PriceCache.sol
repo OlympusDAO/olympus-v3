@@ -157,6 +157,16 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - The pair is invalid (zero address or identical tokens)
+    ///             - Either non-unit asset in the pair is not approved in PRICE
+    ///             - Either asset's decimals cannot be resolved
+    function validateAssetPair(address asset_, address quote_) external view override {
+        _validatePair(asset_, quote_);
+        _validatePairDecimals(asset_, quote_);
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
     ///             - `asset_` is not a valid non-contract asset managed by PRICE
@@ -230,10 +240,13 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) external override onlyPolicyActive onlyEnabled {
-        if (_isStale(asset_, quote_, maxAge_)) {
-            _cachePrice(asset_, quote_);
+    ) external override onlyPolicyActive onlyEnabled returns (CachedPrice memory cachedPrice) {
+        cachedPrice = _getCachedPrice(asset_, quote_);
+        if (_isStale(cachedPrice, maxAge_)) {
+            return _cachePrice(asset_, quote_);
         }
+
+        return cachedPrice;
     }
 
     /// @inheritdoc IPriceCache
@@ -262,12 +275,15 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address quote_,
         uint48 maxAge_
     ) public view override onlyPolicyActive onlyEnabled returns (bool stale) {
-        return _isStale(asset_, quote_, maxAge_);
+        return _isStale(_getCachedPrice(asset_, quote_), maxAge_);
     }
 
     // ========== INTERNAL HELPERS ========== //
 
-    function _cachePrice(address asset_, address quote_) internal {
+    function _cachePrice(
+        address asset_,
+        address quote_
+    ) internal returns (CachedPrice memory cachedPrice) {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
@@ -296,6 +312,11 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
         snapshot.updatedAt = updatedAt;
         snapshot.roundId++;
+
+        cachedPrice.assetPriceUsd = assetPriceUsd;
+        cachedPrice.quotePriceUsd = quotePriceUsd;
+        cachedPrice.updatedAt = updatedAt;
+        cachedPrice.roundId = snapshot.roundId;
     }
 
     function _getCachedPrice(
@@ -337,14 +358,12 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     }
 
     function _isStale(
-        address asset_,
-        address quote_,
+        CachedPrice memory cachedPrice_,
         uint48 maxAge_
     ) internal view returns (bool stale) {
-        CachedPrice memory cachedPrice = _getCachedPrice(asset_, quote_);
         return
-            cachedPrice.updatedAt == 0 ||
-            block.timestamp > uint256(cachedPrice.updatedAt) + uint256(maxAge_);
+            cachedPrice_.updatedAt == 0 ||
+            block.timestamp > uint256(cachedPrice_.updatedAt) + uint256(maxAge_);
     }
 
     function _isUnitOfAccount(address asset_) internal view returns (bool) {

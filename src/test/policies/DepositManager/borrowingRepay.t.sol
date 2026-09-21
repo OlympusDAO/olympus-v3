@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// Calls whose effects are asserted directly intentionally ignore return values, and test cheatcode
+// calls do not model production reentrancy.
+// forge-lint: disable-start(literal-instead-of-constant, reentrancy-no-eth, unused-return)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     event BorrowingRepayment(
@@ -98,6 +106,44 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         );
     }
 
+    // given an existing borrow and disabled asset period
+    //  [X] repayment remains available for servicing the liability
+
+    function test_givenAssetPeriodIsDisabled_repaysExistingBorrow()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenRecipientHasApprovedSpendingAsset(BORROW_AMOUNT)
+        givenAssetPeriodIsDisabled
+    {
+        asset.mint(RECIPIENT, BORROW_AMOUNT);
+        _setAssetDepositCap(0);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: BORROW_AMOUNT,
+                maxAmount: BORROW_AMOUNT
+            })
+        );
+
+        // The vault credits the assets represented by deposited shares, so the received amount
+        // can round down by one underlying unit. Debt must fall by that authoritative amount.
+        assertGt(actualAmount, 0, "repayment should transfer a positive amount");
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            BORROW_AMOUNT - actualAmount,
+            "disabled period should not prevent debt repayment"
+        );
+    }
+
     // given no funds have been borrowed
     //  [X] it transfers the assets from the payer to the deposit manager
     //  [X] it returns the actual amount of transferred assets
@@ -170,6 +216,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorDepositActualAmount,
+            "borrowing repayment should preserve utilization"
         );
     }
 
@@ -251,6 +302,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorReceiptTokenBalance,
+            "borrowing repayment should preserve utilization"
         );
     }
 
@@ -500,5 +556,86 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            firstDepositActualAmount + previousDepositorDepositActualAmount,
+            "borrowing repayment should preserve utilization"
+        );
+    }
+
+    function test_givenAsyncDepositBecomesEnabled_revertsAndRollsBackTransfer() public {
+        MockERC7540ExternalShareVault externalVault = new MockERC7540ExternalShareVault(
+            asset,
+            false,
+            false,
+            true
+        );
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(externalVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+        externalVault.setCapabilities(true, false, true, true);
+        asset.mint(RECIPIENT, 10e18);
+        uint256 payerBalanceBefore = asset.balanceOf(RECIPIENT);
+        vm.prank(RECIPIENT);
+        asset.approve(address(depositManager), 10e18);
+
+        vm.expectRevert(MockERC7540ExternalShareVault.AsyncDeposit.selector);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: 10e18,
+                maxAmount: 0
+            })
+        );
+
+        assertEq(asset.balanceOf(RECIPIENT), payerBalanceBefore, "payer balance rollback");
+        assertEq(asset.balanceOf(address(depositManager)), 0, "manager balance rollback");
+        assertEq(asset.balanceOf(address(externalVault)), 0, "vault balance unchanged");
+    }
+
+    function test_givenExternalShareToken_whenRedeemModeIsFuzzed(bool asyncRedeem_) public {
+        MockERC7540ExternalShareVault externalVault = new MockERC7540ExternalShareVault(
+            asset,
+            false,
+            asyncRedeem_,
+            true
+        );
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(externalVault)), type(uint256).max, 0);
+        vm.stopPrank();
+        asset.mint(RECIPIENT, 10e18);
+        vm.prank(RECIPIENT);
+        asset.approve(address(depositManager), 10e18);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: RECIPIENT,
+                amount: 10e18,
+                maxAmount: 0
+            })
+        );
+
+        (uint256 operatorShares, uint256 operatorAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        assertEq(actualAmount, 10e18, "repayment credit");
+        assertEq(operatorShares, 10e6, "raw external shares");
+        assertEq(operatorAssets, 10e18, "external shares in assets");
+        assertEq(
+            IERC20(externalVault.share()).balanceOf(address(depositManager)),
+            10e6,
+            "external share custody"
+        );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, reentrancy-no-eth, unused-return)

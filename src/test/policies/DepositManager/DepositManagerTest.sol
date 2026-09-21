@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
-/// forge-lint: disable-start(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
 pragma solidity ^0.8.20;
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant, mixed-case-function, mixed-case-variable, modifier-used-only-once, reentrancy-no-eth, unused-return, unwrapped-modifier-logic)
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
@@ -12,7 +14,7 @@ import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
@@ -29,8 +31,37 @@ import {stdError} from "@forge-std-1.16.2/StdError.sol";
 
 // solhint-disable max-states-count
 contract DepositManagerTest is Test {
+    struct RoundingState {
+        uint256 snapshot;
+        uint256 sharesBefore;
+        uint256 liabilitiesBefore;
+        uint256 borrowedBefore;
+        uint256 vaultSupplyBefore;
+        uint256 vaultAssetsBefore;
+        uint256 receiptId;
+        uint256 receiptsBefore;
+    }
+
+    function _snapshotRoundingState() internal returns (RoundingState memory state) {
+        state.snapshot = vm.snapshotState();
+        (state.sharesBefore, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        state.liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        state.borrowedBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        state.vaultSupplyBefore = vault.totalSupply();
+        state.vaultAssetsBefore = asset.balanceOf(address(vault));
+        state.receiptId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+        state.receiptsBefore = receiptTokenManager.balanceOf(DEPOSITOR, state.receiptId);
+    }
+
     address public ADMIN;
     address public MANAGER;
+    address public CONFIG_OPERATOR;
+    address public EMERGENCY;
+    address public DEPOSIT_MANAGER_ADMIN;
     address public DEPOSIT_OPERATOR;
     address public DEPOSITOR;
     address public RECIPIENT;
@@ -63,6 +94,9 @@ contract DepositManagerTest is Test {
     function setUp() public virtual {
         ADMIN = makeAddr("ADMIN");
         MANAGER = makeAddr("MANAGER");
+        CONFIG_OPERATOR = makeAddr("CONFIG_OPERATOR");
+        EMERGENCY = makeAddr("EMERGENCY");
+        DEPOSIT_MANAGER_ADMIN = makeAddr("DEPOSIT_MANAGER_ADMIN");
         DEPOSIT_OPERATOR = makeAddr("DEPOSIT_OPERATOR");
         DEPOSITOR = makeAddr("DEPOSITOR");
         RECIPIENT = makeAddr("RECIPIENT");
@@ -91,6 +125,8 @@ contract DepositManagerTest is Test {
         vm.startPrank(ADMIN);
         rolesAdmin.grantRole("admin", ADMIN);
         rolesAdmin.grantRole("manager", MANAGER);
+        rolesAdmin.grantRole("emergency", EMERGENCY);
+        rolesAdmin.grantRole("deposit_manager_admin", DEPOSIT_MANAGER_ADMIN);
         rolesAdmin.grantRole("deposit_operator", DEPOSIT_OPERATOR);
         vm.stopPrank();
 
@@ -124,6 +160,18 @@ contract DepositManagerTest is Test {
     }
 
     // ========== MODIFIERS ========== //
+
+    // The seeded vault has 100e18 shares and 110e18 assets. Set exact fractional-conversion
+    // fixtures before depositing so both rates begin solvent, including the below-one rate.
+    modifier givenThreeAssetsPerShare() {
+        asset.mint(address(vault), 190e18);
+        _;
+    }
+
+    modifier givenThreeFifthsAssetPerShare() {
+        asset.burn(address(vault), 50e18);
+        _;
+    }
 
     modifier givenIsEnabled() {
         vm.prank(ADMIN);
@@ -288,8 +336,23 @@ contract DepositManagerTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
     }
 
-    function _expectRevertNotManagerOrAdmin() internal {
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+    function _expectRevertNotAdmin() internal {
+        vm.expectRevert(
+            // The fixed five-byte role name cannot be truncated by conversion to bytes32.
+            /// forge-lint: disable-next-line(unsafe-typecast)
+            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, bytes32("admin"))
+        );
+    }
+
+    function _expectRevertNotConfigOperator(address caller_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unauthorized.selector, caller_)
+        );
+    }
+
+    function _setConfigOperator(address configOperator_) internal {
+        vm.prank(ADMIN);
+        depositManager.setConfigOperator(configOperator_);
     }
 
     function _expectRevertNotDepositOperator() internal {
@@ -734,5 +797,9 @@ contract DepositManagerTest is Test {
         uint256 remainder = (shares * (currentAssets - withdrawAmount_)) % (currentSupply - shares);
         return withdrawAmount_ - (remainder > 0 ? 1 : 0);
     }
+
+    function _assetDepositCapUtilization(IERC20 asset_) internal view returns (uint256) {
+        return depositManager.getAssetDepositCapStatus(asset_).utilization;
+    }
 }
-/// forge-lint: disable-end(mixed-case-variable, mixed-case-function, unwrapped-modifier-logic)
+// forge-lint: disable-end(literal-instead-of-constant, mixed-case-function, mixed-case-variable, modifier-used-only-once, reentrancy-no-eth, unused-return, unwrapped-modifier-logic)

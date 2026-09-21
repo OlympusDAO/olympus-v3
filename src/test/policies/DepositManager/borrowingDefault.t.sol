@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Tuple components not relevant to these scenarios are intentionally ignored.
+// forge-lint: disable-start(unused-return)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     event BorrowingDefault(
@@ -13,6 +19,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     );
 
     uint256 public constant BORROW_AMOUNT = 1e18;
+    uint256 internal constant _ASYNC_DEPOSIT_AMOUNT = 10e18;
+    uint256 internal constant _ASYNC_BORROW_AMOUNT = 2e18;
 
     // ========== TESTS ========== //
 
@@ -154,6 +162,10 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenDeposit(MINT_AMOUNT, false)
         givenBorrow(BORROW_AMOUNT)
     {
+        uint256 borrowedBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        uint256 liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        uint256 utilizationBefore = _assetDepositCapUtilization(iAsset);
+
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(0, previousRecipientBorrowActualAmount);
 
@@ -166,6 +178,67 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 payer: DEPOSITOR,
                 amount: previousRecipientBorrowActualAmount
             })
+        );
+
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            borrowedBefore,
+            "failed burn should preserve borrowed amount"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            liabilitiesBefore,
+            "failed burn should preserve liabilities"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            utilizationBefore,
+            "failed burn should preserve utilization"
+        );
+    }
+
+    // given an existing borrow and disabled asset period
+    //  [X] default remains available for servicing the liability
+
+    function test_givenAssetPeriodIsDisabled_defaultsExistingBorrow()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+        givenDepositorHasApprovedSpendingReceiptToken(BORROW_AMOUNT)
+        givenAssetPeriodIsDisabled
+    {
+        uint256 liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        _setAssetDepositCap(0);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingDefault(
+            IDepositManager.BorrowingDefaultParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                payer: DEPOSITOR,
+                amount: BORROW_AMOUNT
+            })
+        );
+
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "disabled period should not prevent default"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            liabilitiesBefore - BORROW_AMOUNT,
+            "default should reduce liabilities"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            liabilitiesBefore - BORROW_AMOUNT,
+            "default should release exact principal"
         );
     }
 
@@ -251,9 +324,85 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             previousDepositorDepositActualAmount - amount_,
             "asset liabilities"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorDepositActualAmount - amount_,
+            "default should release aggregate utilization"
+        );
 
         // Assert operator assets
         (, uint256 sharesInAssets) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
         assertEq(sharesInAssets, expectedAssets, "operator assets");
     }
+
+    function test_givenAsyncDepositBecomesEnabled_whenDefaultingExistingBorrow() public {
+        MockERC7540ExternalShareVault externalVault = new MockERC7540ExternalShareVault(
+            asset,
+            false,
+            true,
+            true
+        );
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(externalVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+        vm.stopPrank();
+
+        _approveSpendingAsset(DEPOSITOR, _ASYNC_DEPOSIT_AMOUNT);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: _ASYNC_DEPOSIT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: _ASYNC_BORROW_AMOUNT
+            }),
+            true
+        );
+        externalVault.setCapabilities(true, true, true, true);
+        vm.prank(DEPOSITOR);
+        receiptTokenManager.approve(address(depositManager), receiptTokenId, _ASYNC_BORROW_AMOUNT);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingDefault(
+            IDepositManager.BorrowingDefaultParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                payer: DEPOSITOR,
+                amount: _ASYNC_BORROW_AMOUNT
+            })
+        );
+
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "existing borrow should be defaulted"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            _ASYNC_DEPOSIT_AMOUNT - _ASYNC_BORROW_AMOUNT,
+            "default should reduce liabilities"
+        );
+        assertEq(
+            IERC20(externalVault.share()).balanceOf(address(depositManager)),
+            (_ASYNC_DEPOSIT_AMOUNT - _ASYNC_BORROW_AMOUNT) / 1e12,
+            "default should not move external shares"
+        );
+    }
 }
+
+// forge-lint: disable-end(unused-return)

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Scenario-specific literals remain inline for auditability, and calls whose effects are asserted
+// directly intentionally ignore return values.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
@@ -242,3 +246,5 @@ contract DepositManagerMaxClaimYieldTest is DepositManagerTest {
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

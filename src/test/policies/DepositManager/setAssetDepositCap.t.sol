@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     event AssetDepositCapSet(address indexed asset, uint256 depositCap);
@@ -19,20 +23,38 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         depositManager.setAssetDepositCap(iAsset, 100e18);
     }
 
-    // given the caller is not the admin or manager
+    // given the caller is neither admin nor config operator
     //  [X] it reverts
 
-    function test_givenCallerIsNotAdminOrManager_reverts(
+    function test_givenCallerIsNotAdminOrConfigOperator_reverts(
         address caller_
     ) public givenIsEnabled givenFacilityNameIsSetDefault {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        // Expect revert
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         // Set the deposit cap
         vm.prank(caller_);
         depositManager.setAssetDepositCap(iAsset, 100e18);
+    }
+
+    function test_givenConfigOperator_setsDepositCap()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.setAssetDepositCap(iAsset, 100e18);
+
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            100e18,
+            "config operator should set deposit cap"
+        );
     }
 
     // given the asset is not configured
@@ -153,4 +175,40 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         assertEq(config.depositCap, 0, "Deposit cap should be 0");
         assertEq(config.minimumDeposit, 0, "Minimum deposit should be 0");
     }
+
+    function test_givenOutstandingPrincipal_whenCapIsLoweredBelowUtilization()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        vm.prank(DEPOSIT_OPERATOR);
+        (, uint256 creditedAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, 0);
+
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            0,
+            "cap should be lowered below utilization"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            creditedAmount,
+            "cap change should preserve utilization"
+        );
+    }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

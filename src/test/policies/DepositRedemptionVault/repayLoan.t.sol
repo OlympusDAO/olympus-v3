@@ -512,13 +512,16 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Determine the amount to pay back
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
         uint256 repaymentAmount = loan.principal + loan.interest + LOAN_PRINCIPAL_MAX_SLIPPAGE;
+        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
+
+        // Fund the cap-check deposit and the later repayment with the same tokens
+        reserveToken.mint(recipient, repaymentAmount);
 
         // Confirm that the deposit cap is active
         {
-            (, uint256 assetAmountBefore) = depositManager.getOperatorAssets(
-                iReserveToken,
-                address(cdFacility)
-            );
+            uint256 capUtilizationBefore = depositManager
+                .getAssetDepositCapStatus(iReserveToken)
+                .utilization;
 
             // Approve deposit manager to spend the reserve tokens
             vm.startPrank(recipient);
@@ -529,7 +532,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
                 abi.encodeWithSelector(
                     IAssetManager.AssetManager_DepositCapExceeded.selector,
                     address(iReserveToken),
-                    assetAmountBefore,
+                    capUtilizationBefore,
                     depositAmount_
                 )
             );
@@ -539,10 +542,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             cdFacility.deposit(iReserveToken, PERIOD_MONTHS, repaymentAmount, false);
         }
 
-        uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
-
-        // Mint and approve
-        reserveToken.mint(recipient, repaymentAmount);
+        // Approve repayment
         vm.prank(recipient);
         reserveToken.approve(address(redemptionVault), repaymentAmount);
 
