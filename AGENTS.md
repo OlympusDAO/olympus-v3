@@ -341,6 +341,17 @@ Key standards summary:
 - Deployment scripts in `src/scripts/deploy/`
 - Saved deployments in `src/scripts/deploy/savedDeployments/`
 - See `src/scripts/DEPLOY.md` and `src/scripts/DEPLOY_L2.md` for detailed steps
+- Each deployment in `src/scripts/env.json` needs an ABI pin. Follow "Deploy a contract" in
+  `abis/README.md`:
+    - For a new label, add a `source` (or `noSource`) mapping to `shell/abis/config.json`.
+    - Run `pnpm run gen:abis:verify --chain <chain> --write` to pin the ABI and generate `abis/`.
+      It needs an Etherscan API key. If no key is available, ask the developer to run it.
+    - Never write `address`, `abiHash`, `contractName`, or `sourceUrl` in `config.json` manually.
+    - Commit `env.json`, `shell/abis/config.json`, and `abis/` together.
+- If you edit a source file that a deployment links to, and the edit changes the compiled ABI
+  (for example, the next version of a policy, or a new error in `Policy`), the deployed ABI stays
+  the same but its source status in `abis/manifest.json` changes. Run `pnpm run gen:abis` and
+  commit the result.
 
 ### Code Standards
 

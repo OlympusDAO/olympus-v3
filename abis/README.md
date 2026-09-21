@@ -56,17 +56,49 @@ The exporter never writes a file whose content does not match `abiHash`. Only
 | `pnpm run gen:abis`                              | Write the ABI files and the manifest.            | None      |
 | `pnpm run gen:abis:check`                        | Compare the committed files. Write nothing.      | None      |
 | `pnpm run test:abis`                             | Test the exporter.                               | None      |
-| `pnpm run gen:abis:verify --chain <c> [--write]` | Compare with Etherscan. `--write` pins new ABIs. | Etherscan |
+| `pnpm run gen:abis:verify [--chain <c>] [--write]` | Compare with Etherscan. See below for `--write`. | Etherscan |
 
-## What to do
+Omit `--chain` to verify all chains. `--write` pins new, changed, and mismatched deployments in
+`config.json` and writes their Etherscan ABI files. Then it runs `gen:abis`, so one command
+completes the pin.
 
-| Change                                         | Action                                                               |
-| ---------------------------------------------- | -------------------------------------------------------------------- |
-| The change does not change an ABI.             | Nothing.                                                             |
-| The source ABI of a deployed contract changes. | Run `gen:abis`. The status changes to `drifted`. Commit the result.  |
-| A linked source file moves.                    | Correct `source` in `config.json`. Run `gen:abis`.                   |
-| An address in `env.json` is new or changes.    | Run `gen:abis:verify --chain <c> --write`, then `gen:abis`. Commit.  |
-| A new label has no mapping.                    | Add `source` or `noSource` to `config.json`, then do the step above. |
+## Deploy a contract
+
+Do these steps in the pull request that updates `src/scripts/env.json`:
+
+1. Update `src/scripts/env.json` with the new address.
+2. If the label is new, add a mapping to `shell/abis/config.json`. The key is the path in
+   `env.current.<chain>.olympus`. Use a shared key to link the source on all chains, or a
+   `<chain>.` key for one chain:
+
+   ```json
+   "policies.NewPolicy": {"source": "src/policies/NewPolicy.sol:NewPolicy"}
+   ```
+
+   If the repository does not have the source, use `"noSource": "<reason>"`. If the source is an
+   interface, add `"sourceKind": "interface"`.
+
+3. If the new contract replaces a contract that the Kernel still has installed, add the old
+   address to `extraDeployments.<chain>` in `config.json` with a new label, for example
+   `"policies.NewPolicyV1_0": "0x…"`. Add a mapping for that label as in step 2.
+4. Pin the ABI and generate the export. This step needs the Etherscan API key:
+
+   ```sh
+   pnpm run gen:abis:verify --chain <chain> --write
+   ```
+
+5. Commit `src/scripts/env.json`, `shell/abis/config.json`, and `abis/` together.
+
+Do not write `address`, `abiHash`, `contractName`, or `sourceUrl` manually. Step 4 writes them.
+
+## Other changes
+
+| Change                                         | Action                                                              |
+| ---------------------------------------------- | ------------------------------------------------------------------- |
+| The change does not change an ABI.             | Nothing.                                                            |
+| You edit a linked source file, and its compiled ABI changes (the deployed ABI stays the same). | Run `gen:abis`. The status changes to `drifted`. Commit the result. |
+| A linked source file moves or is renamed.      | Correct `source` in `config.json`. Run `gen:abis`.                  |
+| A contract is removed from the Kernel.        | Add `"exclude": "<reason>"` to its `<chain>.` mapping, or remove it from `extraDeployments`. Run `gen:abis`. |
 
 Only a deployment change needs an Etherscan API key. Set `ETHERSCAN_API_KEY` in the environment or
 in `.env`. CI never needs the key.
