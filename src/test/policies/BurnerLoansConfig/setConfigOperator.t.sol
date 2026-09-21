@@ -53,13 +53,11 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
 
     // setConfigOperator
     // given the config operator address is zero
-    //  when an arbitrary non-zero, non-admin address calls a delegated setter
+    //  when an arbitrary non-admin address calls a delegated setter
     //   then every delegated action reverts with the caller address
-    function test_givenZeroConfigOperator_arbitraryCallerCannotExecuteActions(
+    function test_givenZeroConfigOperator_whenCallerIsArbitrary_cannotExecuteActions(
         address caller_
     ) public {
-        // address(0) cannot be msg.sender for a real transaction or contract call.
-        vm.assume(caller_ != address(0));
         vm.assume(caller_ != admin);
 
         vm.prank(admin);

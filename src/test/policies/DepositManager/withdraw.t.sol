@@ -1,12 +1,89 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 // Interfaces
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol";
+
 contract DepositManagerWithdrawTest is DepositManagerTest {
+    function test_givenOutgoingTokenCallback_cannotEnterAnotherWithdrawal() public {
+        ReentrantFeeToken callbackToken = new ReentrantFeeToken();
+        IERC20 callbackAsset = IERC20(address(callbackToken));
+
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "rnt");
+        depositManager.addAsset(callbackAsset, IERC4626(address(0)), type(uint256).max, 0);
+        depositManager.addAssetPeriod(callbackAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+
+        uint256 depositAmount = 100e18;
+        callbackToken.mint(DEPOSITOR, depositAmount);
+        vm.prank(DEPOSITOR);
+        callbackToken.approve(address(depositManager), depositAmount);
+        vm.prank(DEPOSIT_OPERATOR);
+        (uint256 receiptTokenId, ) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: callbackAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: depositAmount,
+                shouldWrap: false
+            })
+        );
+        vm.prank(DEPOSITOR);
+        receiptTokenManager.approve(address(depositManager), receiptTokenId, depositAmount);
+
+        IDepositManager.WithdrawParams memory nestedParams = IDepositManager.WithdrawParams({
+            asset: callbackAsset,
+            depositPeriod: DEPOSIT_PERIOD,
+            depositor: DEPOSITOR,
+            recipient: RECIPIENT,
+            amount: 1,
+            isWrapped: false
+        });
+        callbackToken.setCallbackFrom(
+            address(depositManager),
+            address(depositManager),
+            abi.encodeCall(IDepositManager.withdraw, (nestedParams))
+        );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 amountOut = depositManager.withdraw(
+            IDepositManager.WithdrawParams({
+                asset: callbackAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                recipient: RECIPIENT,
+                amount: 40e18,
+                isWrapped: false
+            })
+        );
+
+        assertEq(amountOut, 40e18, "outer withdrawal amount");
+        assertFalse(callbackToken.callbackSucceeded(), "nested withdrawal succeeded");
+        assertEq(
+            callbackToken.callbackRevertSelector(),
+            ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+            "nested withdrawal revert"
+        );
+        assertEq(callbackToken.balanceOf(RECIPIENT), 40e18, "recipient balance");
+        assertEq(
+            depositManager.getOperatorLiabilities(callbackAsset, DEPOSIT_OPERATOR),
+            60e18,
+            "liabilities debited once"
+        );
+    }
+
     // ========== TESTS ========== //
 
     // given the contract is disabled
@@ -628,3 +705,5 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

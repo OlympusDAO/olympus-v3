@@ -228,6 +228,11 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         assertEq(handler.unexpectedBorrowFailures(), 0, "eligible borrow failed");
         assertEq(handler.unexpectedWithdrawFailures(), 0, "eligible withdrawal failed");
         assertEq(handler.unexpectedExtendFailures(), 0, "eligible extension failed");
+        assertEq(
+            handler.withdrawalOutputConservationViolations(),
+            0,
+            "withdrawal output did not match preview and collateral debit"
+        );
     }
 
     // invariant
@@ -466,6 +471,11 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     //   then its collateral, debt episode, and active membership are cleared
     function invariant_SeizureClearsReusablePositionState() public view {
         assertEq(handler.seizureClosureViolations(), 0, "seizure did not clear position state");
+        assertEq(
+            handler.seizureOutputConservationViolations(),
+            0,
+            "seizure output did not reconcile"
+        );
     }
 
     // invariant

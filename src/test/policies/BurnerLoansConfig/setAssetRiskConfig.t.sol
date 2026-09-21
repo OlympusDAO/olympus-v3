@@ -414,7 +414,8 @@ contract BurnerLoansConfigSetAssetRiskConfigTest is BurnerLoansTest {
             address(otherAsset),
             uint128(otherConfig.debtCap),
             _assetRiskConfigInputFromConfig(otherConfig),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         IBurnerLoans.AssetRiskConfigInput memory config = _validRiskConfig();

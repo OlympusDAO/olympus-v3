@@ -168,6 +168,7 @@ library BurnerLoansConfigTimelockLib {
         } else if (
             actionSelector == IBurnerLoansConfig.setAssetDebtCap.selector ||
             actionSelector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector ||
+            actionSelector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector ||
             actionSelector == IBurnerLoansConfig.setYieldRepurchaseRecipient.selector ||
             actionSelector == IBurnerLoansConfig.setYieldAssetRouting.selector ||
             actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector

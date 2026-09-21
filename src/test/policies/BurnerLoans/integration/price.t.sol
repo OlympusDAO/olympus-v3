@@ -457,11 +457,12 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
             ),
             1
         );
-        (uint256 keeperReward, uint256 collateralToTreasury) = burnerLoans.seize(
+        (address tokenOut, uint256 keeperReward, uint256 collateralToTreasury) = burnerLoans.seize(
             address(usds),
             borrowers
         );
 
+        assertEq(tokenOut, address(usds), "seizure output token should be USDS");
         assertEq(keeperReward, preview.keeperReward, "keeper reward should match cached preview");
         assertEq(
             collateralToTreasury,
@@ -835,7 +836,8 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
             address(usde_),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -908,7 +910,8 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
             collateral_,
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 

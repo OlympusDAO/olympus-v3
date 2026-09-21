@@ -74,6 +74,8 @@ delegated access is enabled, the expected address is `BurnerLoansConfigTimelock`
 | `BurnerLoansConfig`       | `setAssetFeeConfig`                     | ConfigTimelock                  | >= 1 day       | Config is enabled, and the complete fee curve must be valid             |
 | `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | `admin`                         | OCG governance | Config is enabled, and enabling revalidates asset dependencies          |
 | `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | ConfigTimelock                  | >= 1 day       | Config is enabled, and enabling revalidates asset dependencies          |
+| `BurnerLoansConfig`       | `setAssetWithdrawAsShares`              | `admin`                         | OCG governance | Config is enabled, and DepositManager accepts the withdrawal mode       |
+| `BurnerLoansConfig`       | `setAssetWithdrawAsShares`              | ConfigTimelock                  | >= 1 day       | Config is enabled, and DepositManager accepts the withdrawal mode       |
 | `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
 | `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                     |
 | `BurnerLoansConfig`       | `setYieldAssetRouting`                  | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
@@ -106,15 +108,16 @@ for the complete migration procedure and rollback guarantees.
 
 ## Config Timelock Matrix
 
-| Function                  | Authorized caller               | Delay     | Main state requirements                                                             |
-| ------------------------- | ------------------------------- | --------- | ----------------------------------------------------------------------------------- |
-| `queueSetAssetFeeConfig`  | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
-| `queueSetAssetDebtCap`    | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
-| `queueSetAssetRiskConfig` | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
-| `queueSetPriceCacheMaxAge`     | `admin` or `burner_loans_admin` | >= 1 day  | Timelock and Config are enabled, and this timelock is the configured ConfigTimelock |
-| `queueBatch`              | `admin` or `burner_loans_admin` | >= 1 day  | Every sub-action must pass its queue-time checks                                    |
-| `executeQueuedAction`     | Any address                     | >= 1 day  | The action is executable and unexpired, and Timelock and Config remain enabled      |
-| `cancelQueuedAction`      | `emergency`                     | Immediate | The action exists and is not executed or cancelled                                  |
+| Function                        | Authorized caller               | Delay     | Main state requirements                                                                  |
+| ------------------------------- | ------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
+| `queueSetAssetFeeConfig`        | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueSetAssetDebtCap`          | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueSetAssetRiskConfig`       | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueSetPriceCacheMaxAge`      | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueSetAssetWithdrawAsShares` | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueBatch`                    | `admin` or `burner_loans_admin` | >= 1 day  | The same lifecycle gates apply and every sub-action passes its queue-time checks         |
+| `executeQueuedAction`           | Any address                     | >= 1 day  | Action is ready and unexpired; both policies remain Kernel-active and enabled            |
+| `cancelQueuedAction`            | `emergency`                     | Immediate | Action exists and is unfinished; policy activity and enablement are not required         |
 
 `queueBatch` supports these Config functions:
 
@@ -125,14 +128,19 @@ for the complete migration procedure and rollback guarantees.
 | `setAssetFeeConfig`           |
 | `setAssetOriginationsEnabled` |
 | `setPriceCacheMaxAge`          |
+| `setAssetWithdrawAsShares`    |
 | `setYieldRepurchaseRecipient` |
 | `setYieldAssetRouting`        |
 
-The typed queue helpers cover debt-cap, risk, fee, and PriceCache max-age changes.
-Asset-originations and yield-routing changes use `queueBatch`.
+The typed queue helpers cover debt-cap, risk, fee, PriceCache max-age, and withdrawal-output
+changes. Asset-originations and yield-routing changes use `queueBatch`.
 
 Each queued configuration key records its expected pre-state. Execution fails if that pre-state
 changes before execution. A stale action does not block an unrelated action.
+
+Kernel deactivation pauses queued actions rather than cancelling them. An unexpired action can resume
+after both policies are reactivated if the config operator and expected pre-state are unchanged.
+Emergency should cancel any action that must not survive a policy deactivation.
 
 ## Asset-Originations Control
 

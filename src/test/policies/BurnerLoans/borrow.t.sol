@@ -127,7 +127,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             address(asset_),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         asset_.mint(account_, collateralAmount_ + 100e18);
@@ -1657,7 +1658,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             address(feeToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         feeToken.mint(alice, DEFAULT_COLLATERAL_AMOUNT + 100e18);

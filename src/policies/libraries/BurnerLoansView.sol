@@ -2,8 +2,10 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -46,6 +48,17 @@ library BurnerLoansView {
             BurnerLoansConstants.DEPOSIT_PERIOD,
             true,
             address(this)
+        );
+    }
+
+    /// @notice Validates that an asset can use the requested custody output mode.
+    /// @dev Called only when an asset is added or its stored output mode changes. Runtime borrowing,
+    ///      deposits, extensions, and originations toggles do not revalidate an unrelated exit mode.
+    function validateAssetWithdrawAsShares(address asset_, bool withdrawAsShares_) public view {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        IAssetManagerV1_1(address(dependencies_.depositManager)).validateAssetWithdrawAsShares(
+            IERC20(asset_),
+            withdrawAsShares_
         );
     }
 
@@ -159,7 +172,8 @@ library BurnerLoansView {
             address(this)
         );
         depositedCollateral = BurnerLoansCustody.previewDepositAmount(
-            assetConfiguration.vault,
+            dependencies_.depositManager,
+            asset_,
             amount_
         );
         if (depositedCollateral == 0) {
@@ -264,17 +278,16 @@ library BurnerLoansView {
         uint128 amount_,
         IFLOANv1.Position memory position
     ) public view returns (IBurnerLoans.WithdrawPreview memory) {
-        _getAssetConfig(dependencies_, asset_);
+        IBurnerLoans.AssetConfig memory config = _getAssetConfig(dependencies_, asset_);
         if (amount_ == 0) revert IBurnerLoans.BurnerLoans_ZeroAmount();
 
-        IDepositManager.AssetConfiguration memory assetConfiguration = BurnerLoansCustody
-            .validateCustodySupportFor(
-                dependencies_.depositManager,
-                asset_,
-                BurnerLoansConstants.DEPOSIT_PERIOD,
-                false,
-                address(this)
-            );
+        BurnerLoansCustody.validateCustodySupportFor(
+            dependencies_.depositManager,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            false,
+            address(this)
+        );
         if (amount_ > position.collateral) {
             revert IBurnerLoans.BurnerLoans_InsufficientCollateral(amount_, position.collateral);
         }
@@ -286,13 +299,15 @@ library BurnerLoansView {
             remainingCollateral,
             position.principalDue
         );
-        uint256 returnAmount = BurnerLoansCustody.previewWithdrawAmount(
-            assetConfiguration.vault,
-            amount_
+        (address returnToken, uint256 returnAmount) = BurnerLoansCustody.previewWithdrawAmount(
+            dependencies_.depositManager,
+            asset_,
+            amount_,
+            config.withdrawAsShares
         );
         return
             IBurnerLoans.WithdrawPreview({
-                returnToken: asset_,
+                returnToken: returnToken,
                 returnAmount: returnAmount,
                 remainingDepositedCollateral: remainingCollateral,
                 resultingHealthFactor: resultingHealthFactor,

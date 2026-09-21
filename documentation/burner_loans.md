@@ -103,15 +103,15 @@ stateDiagram-v2
     CollateralOnly --> [*]: full withdrawal
 ```
 
-| Action              | Effect                                                        | Main condition                                                   |
-| ------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------- |
-| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                  |
-| Borrow              | Adds principal; a new debt episode also fixes its maturity     | Position is healthy, within both caps, and not matured           |
-| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; live PRICE unless repayment clears debt |
-| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                     |
-| Extend              | Advances the shared maturity of all debt by current terms      | Position stays healthy and maturity remains within current horizon |
-| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary                 |
-| Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                          |
+| Action              | Effect                                                        | Main condition                                                     |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Deposit collateral  | Adds DepositManager credit to the position                    | Burner Loans and asset originations are enabled                    |
+| Borrow              | Adds principal; a new debt episode also fixes its maturity    | Position is healthy, within both caps, and not matured             |
+| Repay               | Reduces principal and settles OHM into Burner Loans Inventory | Not in the borrow block; live PRICE unless repayment clears debt   |
+| Withdraw collateral | Removes credit and returns custody assets                     | Remaining debt stays healthy                                       |
+| Extend              | Advances the shared maturity of all debt by current terms     | Position stays healthy and maturity remains within current horizon |
+| Seize               | Defaults all principal and removes all collateral             | Position is matured or below the health boundary                   |
+| Claim yield         | Splits custody surplus across its complete stored route       | Custody and the live route remain valid                            |
 
 Full repayment and seizure clear the episode's financial fields and active indexes. The position
 ID remains reusable. `PositionClosed` and `PositionDefaulted` events contain the pre-clear snapshot;
@@ -304,28 +304,46 @@ approval increase is also conservative: the principal transition remains valid, 
 reported by event, and an admin may reconcile it later. Approval reductions are safety-critical;
 a reduction failure reverts the transition.
 
-## Custody And Token Assumptions
+## Collateral Custody
 
-DepositManager may route collateral into an ERC-4626 vault. FLOAN records withdrawable collateral
-credit, not vault shares. Vault yield does not increase borrower health. `claimYield` distributes
-only custody surplus and does not read or mutate Burner Loans Inventory, OHM balances, capacity, or
-MINTR approval.
+DepositManager owns the collateral held for Burner Loans and may keep it idle or route it through a
+configured vault. FLOAN records the underlying-denominated collateral credit returned by
+DepositManager, not the number of vault shares. Vault yield therefore does not increase a borrower's
+health factor. `claimYield` distributes only custody surplus and does not alter Burner Loans
+Inventory, OHM capacity, or MINTR approval.
 
-| Stage                       | Enforcement or assumption                                                   |
-| --------------------------- | --------------------------------------------------------------------------- |
-| Asset admission             | Governance verifies exact-transfer collateral and any configured vault path |
-| Collateral deposit          | Exact receipt into Burner Loans and then DepositManager custody             |
-| Provider supply / draw      | Exact receipt on supply; trusted-OHM assumption for outgoing draws          |
-| Repayment settlement        | Exact Burner Loans Inventory balance increase before settlement             |
-| Fees and outgoing transfers | Safe transfer; exact behavior follows the admitted-token assumption         |
-| Token callbacks             | Token-touching lifecycle functions use storage-backed reentrancy guards     |
+### Withdrawal Mode
+
+DepositManager V1.1 supports share output for ERC-7540 asynchronous-redemption vaults and other
+ERC-4626 vaults that cannot redeem synchronously, such as sUSDe while its cooldown is enabled.
+`BurnerLoansConfig` stores `withdrawAsShares` for each asset. The admin chooses its initial value
+when adding the asset. Later changes call `BurnerLoansConfig.setAssetWithdrawAsShares()` through
+`BurnerLoansConfigTimelock`. The setting selects underlying or share output for collateral
+withdrawals, seizures, borrowing withdrawals, and yield claims. It is independent of whether
+originations are enabled.
+
+DepositManager validates the selected mode and returns the token actually transferred. See
+[Deposit Manager](deposit_manager.md#supported-custody-configurations) for the supported vault and
+withdrawal-token combinations.
+
+### Token Requirements
+
+| Stage                        | Enforcement or assumption                                                                                                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Asset admission              | Governance reviews the collateral token and configured vault path                                                                                   |
+| Collateral deposit           | Burner Loans and DepositManager each require exact incoming underlying transfers                                                                    |
+| Vault deposit                | The vault must consume approved underlying according to ERC-4626; DepositManager requires reported shares to equal its share-token balance increase |
+| Provider supply and draw     | Supply requires exact receipt; outgoing OHM uses the trusted-token assumption                                                                       |
+| Repayment                    | Burner Loans Inventory requires its exact OHM balance increase before settlement                                                                    |
+| Outgoing collateral and fees | Safe transfers rely on the admitted token's exact-transfer behavior                                                                                 |
+| Token callbacks              | Token-moving lifecycle functions use storage-backed reentrancy guards                                                                               |
 
 Fee-on-transfer, rebasing, and otherwise balance-changing collateral is unsupported. ERC-20 has no
 reliable capability flag, and an admission-time transfer probe can be bypassed by amount-, address-,
 or upgrade-dependent behavior. Asset admission is therefore a governance-reviewed invariant.
-Exact receipt applies to the underlying token transfer at each custody boundary; it does not require
-an ERC-4626 deposit to produce collateral credit equal to the transferred amount. FLOAN credits the
-actual withdrawable amount returned by DepositManager, which may be lower because of vault rounding.
+Exact receipt applies to the underlying token at each incoming custody boundary. It does not require
+an ERC-4626 deposit to produce collateral credit equal to the transferred amount: FLOAN credits the
+actual underlying-denominated amount returned by DepositManager after vault rounding.
 
 ## Yield Routing
 
@@ -443,10 +461,13 @@ with no deposits is solvent and contributes zero without calling DepositManager'
 Each non-Treasury share is calculated independently as
 `floor(actualClaimed * bps / 10_000)`. Zero-value token transfers are skipped. Treasury receives
 `actualClaimed - sum(nonTreasuryAmounts)`, so it receives its intended share plus all rounding dust
-and Burner Loans retains no newly claimed residual. `YieldClaimed` records the asset, authoritative
-claimed amount, and one ordered `(recipient, amount)[]`. When configured, the repurchase result is
-first, followed by direct results in stored order, with Treasury last; zero-value configured legs
-remain present in the event.
+and Burner Loans retains no newly claimed residual. `YieldClaimed` records the collateral asset, the
+underlying-denominated amount requested from DepositManager, the token returned by DepositManager,
+the actual amount received in that token's units, and one ordered `(recipient, amount)[]` whose
+amounts use the same output-token units. When configured, the repurchase result is first, followed by
+direct results in stored order, with Treasury last; zero-value configured legs remain present in the
+event. Indexers must use `tokenOut` rather than assume that realized amounts use collateral-asset
+decimals.
 
 Focused gas snapshots measured Treasury-only, repurchase-only, and mixed YRF-plus-two-direct claims
 at 132,383, 140,281, and 225,365 gas. Routes containing YRF plus five, ten, and twenty-five direct

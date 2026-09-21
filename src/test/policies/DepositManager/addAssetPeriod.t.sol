@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Revert-path calls deliberately ignore return values.
+// forge-lint: disable-start(unused-return)
+
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -179,14 +182,27 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
-    // when the caller is not the manager or admin
+    // when the caller is not admin
     //  [X] it reverts
-    function test_whenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+    function test_whenCallerIsNotAdmin_reverts(address caller_) public givenIsEnabled {
+        vm.assume(caller_ != ADMIN);
 
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotAdmin();
 
         vm.prank(caller_);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function test_givenConfigOperator_whenAddingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        _expectRevertNotAdmin();
+        vm.prank(CONFIG_OPERATOR);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
@@ -446,3 +462,5 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)

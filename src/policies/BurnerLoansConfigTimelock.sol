@@ -31,11 +31,12 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 /// @notice Timelock implementation for bounded Burner Loans Config updates.
 /// @dev Burner Loans Config is the configurator of Burner Loans. This contract does not configure
 ///      Burner Loans directly; it may act as Burner Loans Config's config operator. Queue functions
-///      validate that this policy and Burner Loans Config are enabled, caller role, config-operator
-///      authorization, target asset, payload shape, and resulting configuration at queue time.
-///      Execution validates that this policy and Burner Loans Config are enabled, that this policy
-///      is still its configured operator, and that the queued sub-action's expected config pre-state
-///      still matches live Burner Loans Config state. Value invariants that can legitimately move
+///      validate that this policy and Burner Loans Config are active in their shared Kernel and
+///      internally enabled, caller role, config-operator authorization, target asset, payload shape,
+///      and resulting configuration at queue time. Execution repeats the policy activity,
+///      enablement, and config-operator checks and verifies that the queued sub-action's expected
+///      config pre-state still matches live Burner Loans Config state. Emergency cancellation stays
+///      available while either policy is inactive. Value invariants that can legitimately move
 ///      during the delay, such as active market debt, are rechecked by the Burner Loans Config
 ///      setter at execution rather than encoded into the pre-state hash.
 contract BurnerLoansConfigTimelock is
@@ -68,6 +69,8 @@ contract BurnerLoansConfigTimelock is
     bytes32 internal constant _DEBT_CAP_DOMAIN = keccak256("BURNER_LOANS_DEBT_CAP");
     bytes32 internal constant _ASSET_ORIGINATIONS_DOMAIN =
         keccak256("BURNER_LOANS_ASSET_ORIGINATIONS");
+    bytes32 internal constant _ASSET_WITHDRAW_AS_SHARES_DOMAIN =
+        keccak256("BURNER_LOANS_ASSET_WITHDRAW_AS_SHARES");
     bytes32 internal constant _YIELD_REPURCHASE_RECIPIENT_DOMAIN =
         keccak256("BURNER_LOANS_YIELD_REPURCHASE_RECIPIENT");
     bytes32 internal constant _YIELD_ASSET_ROUTING_DOMAIN =
@@ -167,8 +170,7 @@ contract BurnerLoansConfigTimelock is
 
     /// @notice Queues an asset fee-curve update.
     /// @dev Reverts if:
-    ///      - The timelock is disabled.
-    ///      - BurnerLoansConfig is disabled.
+    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
     ///      - The caller lacks both `admin` and `burner_loans_admin`.
     ///      - This contract is not the configured config operator.
     ///      - `asset_` is not configured in Burner Loans Config.
@@ -176,8 +178,9 @@ contract BurnerLoansConfigTimelock is
     ///      - Any unselected `config_` field is non-zero.
     ///      - The resulting fee curve violates Burner Loans Config fee bounds.
     ///      Execution later reverts if the asset is disabled, config pre-state changed, the
-    ///      timelock or Burner Loans Config is disabled, the config operator changed, or the
-    ///      underlying Burner Loans Config setter rejects the resulting full fee curve.
+    ///      timelock or Burner Loans Config is Kernel-inactive or disabled, the config operator
+    ///      changed, or the underlying Burner Loans Config setter rejects the resulting full fee
+    ///      curve.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Partial fee curve update.
     /// @param selection_ Fields to apply from `config_`.
@@ -197,15 +200,14 @@ contract BurnerLoansConfigTimelock is
 
     /// @notice Queues an asset active debt cap update.
     /// @dev Reverts if:
-    ///      - The timelock is disabled.
-    ///      - BurnerLoansConfig is disabled.
+    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
     ///      - The caller lacks both `admin` and `burner_loans_admin`.
     ///      - This contract is not the configured config operator.
     ///      - `asset_` is not configured in Burner Loans Config.
     ///      - `debtCapOhm_` is below current active debt for `asset_`.
     ///      Execution later reverts if the asset is disabled, config pre-state changed, the
-    ///      timelock or Burner Loans Config is disabled, the config operator changed, or the Burner
-    ///      Loans Config setter rejects the cap against live active debt.
+    ///      timelock or Burner Loans Config is Kernel-inactive or disabled, the config operator
+    ///      changed, or the Burner Loans Config setter rejects the cap against live active debt.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New active debt cap, in OHM decimals.
     /// @return actionId The queued action ID.
@@ -231,10 +233,24 @@ contract BurnerLoansConfigTimelock is
             );
     }
 
+    /// @inheritdoc IBurnerLoansConfigTimelock
+    /// @dev Reverts if queue validation fails or another output-mode transition is already pending
+    ///      for the asset. Originations transitions use an independent configuration key.
+    function queueSetAssetWithdrawAsShares(
+        address asset_,
+        bool withdrawAsShares_
+    ) external returns (uint64 actionId) {
+        return
+            _queueAction(
+                address(_BURNER_LOANS_CONFIG),
+                IBurnerLoansConfig.setAssetWithdrawAsShares.selector,
+                abi.encode(asset_, withdrawAsShares_)
+            );
+    }
+
     /// @notice Queues a partial asset risk-configuration update.
     /// @dev Reverts if:
-    ///      - The timelock is disabled.
-    ///      - BurnerLoansConfig is disabled.
+    ///      - The timelock or BurnerLoansConfig is Kernel-inactive or disabled.
     ///      - The caller lacks both `admin` and `burner_loans_admin`.
     ///      - This contract is not the configured config operator.
     ///      - `asset_` is not configured in Burner Loans Config.
@@ -242,8 +258,9 @@ contract BurnerLoansConfigTimelock is
     ///      - Any unselected `update_` field is non-zero.
     ///      - The resulting risk config violates Burner Loans Config bps or maturity bounds.
     ///      Execution later reverts if the asset is disabled, config pre-state changed, the
-    ///      timelock or Burner Loans Config is disabled, the config operator changed, or the
-    ///      underlying Burner Loans Config setter rejects the resulting full risk config.
+    ///      timelock or Burner Loans Config is Kernel-inactive or disabled, the config operator
+    ///      changed, or the underlying Burner Loans Config setter rejects the resulting full risk
+    ///      config.
     /// @param asset_ Collateral asset to update.
     /// @param update_ Partial risk and term update.
     /// @param selection_ Fields to apply from `update_`.
@@ -262,10 +279,10 @@ contract BurnerLoansConfigTimelock is
     }
 
     /// @notice Queues a batch of Burner Loans configuration updates.
-    /// @dev Reverts if the timelock or BurnerLoansConfig is disabled, or if any sub-action fails
-    ///      the same validation as the typed queue helpers. These lifecycle checks are enforced
-    ///      for every queue entrypoint through `_onSubActionQueued`. The batch is stored and
-    ///      executed atomically in array order.
+    /// @dev Reverts if the timelock or BurnerLoansConfig is Kernel-inactive or disabled, or if any
+    ///      sub-action fails the same validation as the typed queue helpers. These lifecycle checks
+    ///      are enforced for every queue entrypoint through `_onSubActionQueued`. The batch is
+    ///      stored and executed atomically in array order.
     /// @param actions_ Burner Loans configuration sub-actions.
     /// @return actionId The queued action ID.
     function queueBatch(
@@ -279,6 +296,7 @@ contract BurnerLoansConfigTimelock is
     /// @notice Validates queue-wide authorization and lifecycle requirements.
     function _validateConfigQueue(address caller_) internal view override {
         _requireEnabled();
+        _requirePoliciesActive();
         _requireRiskConfigProposer(caller_);
         _requireAuthorizedConfigOperator();
         _requireBurnerLoansConfigEnabled();
@@ -322,6 +340,8 @@ contract BurnerLoansConfigTimelock is
                 domain = _DEBT_CAP_DOMAIN;
             } else if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
                 domain = _ASSET_ORIGINATIONS_DOMAIN;
+            } else if (selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector) {
+                domain = _ASSET_WITHDRAW_AS_SHARES_DOMAIN;
             } else {
                 revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
             }
@@ -388,6 +408,9 @@ contract BurnerLoansConfigTimelock is
         if (selector == IBurnerLoansConfig.setAssetOriginationsEnabled.selector) {
             return keccak256(abi.encode(facility, asset, config.originationsEnabled));
         }
+        if (selector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector) {
+            return keccak256(abi.encode(facility, asset, config.withdrawAsShares));
+        }
         revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
     }
 
@@ -399,6 +422,7 @@ contract BurnerLoansConfigTimelock is
     ) internal view override {
         _requireEnabled();
         _requireBurnerLoansConfigEnabled();
+        _requirePoliciesActive();
         _requireAuthorizedConfigOperator();
     }
 
@@ -591,6 +615,19 @@ contract BurnerLoansConfigTimelock is
             return;
         }
 
+        if (actionSelector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector) {
+            _requirePayloadLength(
+                action_.target,
+                action_.payload,
+                _LEN_ADDRESS_UINT256,
+                actionSelector
+            );
+            (address asset, bool withdrawAsShares) = abi.decode(action_.payload, (address, bool));
+            _requireAssetConfigured(asset);
+            _yieldFacility().validateAssetWithdrawAsShares(asset, withdrawAsShares);
+            return;
+        }
+
         revert ITimelockBatchQueue_ActionInvalid(action_.target, actionSelector);
     }
 
@@ -623,6 +660,18 @@ contract BurnerLoansConfigTimelock is
     /// @dev Reverts with `IEnabler.NotEnabled` while BurnerLoansConfig is disabled.
     function _requireBurnerLoansConfigEnabled() internal view {
         if (!IEnabler(address(_BURNER_LOANS_CONFIG)).isEnabled()) revert IEnabler.NotEnabled();
+    }
+
+    function _requirePoliciesActive() internal view {
+        address timelock = address(this);
+        if (!kernel.isPolicyActive(Policy(timelock))) {
+            revert BurnerLoansConfigTimelock_PolicyInactive(timelock);
+        }
+
+        address config = address(_BURNER_LOANS_CONFIG);
+        if (!kernel.isPolicyActive(Policy(config))) {
+            revert BurnerLoansConfigTimelock_PolicyInactive(config);
+        }
     }
 
     /// @notice Requires an action payload to match the ABI length for its selector.

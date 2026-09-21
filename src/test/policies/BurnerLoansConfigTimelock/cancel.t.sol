@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -190,6 +191,22 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         vm.expectEmit(true, true, false, true, address(configTimelock));
         emit TimelockActionCancelled(actionId, emergency);
         configTimelock.cancelQueuedAction(actionId);
+    }
+
+    function test_givenPoliciesAreInactive_allowsEmergencyCancellation() public {
+        uint64 actionId = _queueMaximumLtvUpdate();
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+        vm.stopPrank();
+
+        vm.prank(emergency);
+        configTimelock.cancelQueuedAction(actionId);
+
+        assertTrue(
+            configTimelock.getQueuedAction(actionId).cancelled,
+            "emergency should cancel while policies are inactive"
+        );
     }
 
     // cancelQueuedAction

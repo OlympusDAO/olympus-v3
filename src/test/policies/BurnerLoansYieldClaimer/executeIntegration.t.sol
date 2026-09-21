@@ -114,7 +114,9 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         IBurnerLoans.AssetYieldRouting memory smallRouting = _routingWithDirectRecipients(1);
         _setYieldAssetRouting(address(vaultAsset), smallRouting);
         _addYield(10e6);
-        uint256 smallClaimableBefore = burnerLoans.previewClaimYield(address(vaultAsset)).amount;
+        uint256 smallClaimableBefore = burnerLoans
+            .previewClaimYield(address(vaultAsset))
+            .requestedAssetAmount;
 
         vm.prank(_heart);
         _claimer.execute();
@@ -125,7 +127,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
             "small route direct recipient amount"
         );
         assertLt(
-            burnerLoans.previewClaimYield(address(vaultAsset)).amount,
+            burnerLoans.previewClaimYield(address(vaultAsset)).requestedAssetAmount,
             smallClaimableBefore,
             "small route reduces claimable yield"
         );
@@ -134,7 +136,9 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         _setYieldAssetRouting(address(vaultAsset), largeRouting);
         _addYield(10e6);
 
-        uint256 claimableBefore = burnerLoans.previewClaimYield(address(vaultAsset)).amount;
+        uint256 claimableBefore = burnerLoans
+            .previewClaimYield(address(vaultAsset))
+            .requestedAssetAmount;
         uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
         uint256 repurchaseBefore = vaultAsset.balanceOf(address(_repurchaseRecipient));
         uint256[] memory directBalancesBefore = new uint256[](
@@ -154,7 +158,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         _claimer.execute();
 
         assertEq(
-            burnerLoans.previewClaimYield(address(vaultAsset)).amount,
+            burnerLoans.previewClaimYield(address(vaultAsset)).requestedAssetAmount,
             claimableBefore,
             "failed claim preserves claimable yield"
         );
@@ -178,7 +182,9 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         _depositCollateral(laterAsset);
         _addYield(10e6);
         laterAsset.mint(address(laterVault), 10e6);
-        uint256 laterClaimable = burnerLoans.previewClaimYield(address(laterAsset)).amount;
+        uint256 laterClaimable = burnerLoans
+            .previewClaimYield(address(laterAsset))
+            .requestedAssetAmount;
         uint256 failedVaultBalanceBefore = vaultAsset.balanceOf(address(vault));
         _repurchaseRecipient.setEnabled(false);
 
@@ -198,7 +204,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         assertEq(vaultAsset.balanceOf(address(trsry)), 0, "failed asset Treasury balance");
         assertGt(laterAsset.balanceOf(address(trsry)), 0, "later asset Treasury balance");
         assertLt(
-            burnerLoans.previewClaimYield(address(laterAsset)).amount,
+            burnerLoans.previewClaimYield(address(laterAsset)).requestedAssetAmount,
             laterClaimable,
             "later asset claimable yield"
         );
@@ -215,9 +221,13 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         _depositCollateral(laterAsset);
         _addYield(10e6);
         laterAsset.mint(address(laterVault), 10e6);
-        uint256 failedClaimable = burnerLoans.previewClaimYield(address(vaultAsset)).amount;
+        uint256 failedClaimable = burnerLoans
+            .previewClaimYield(address(vaultAsset))
+            .requestedAssetAmount;
         uint256 failingAmount = (failedClaimable * 2_000) / 10_000;
-        uint256 laterClaimable = burnerLoans.previewClaimYield(address(laterAsset)).amount;
+        uint256 laterClaimable = burnerLoans
+            .previewClaimYield(address(laterAsset))
+            .requestedAssetAmount;
         uint256 failedVaultBalanceBefore = vaultAsset.balanceOf(address(vault));
         vm.mockCall(
             address(vaultAsset),
@@ -242,7 +252,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         assertEq(vaultAsset.balanceOf(address(trsry)), 0, "failed asset Treasury balance");
         assertGt(laterAsset.balanceOf(address(trsry)), 0, "later asset Treasury balance");
         assertLt(
-            burnerLoans.previewClaimYield(address(laterAsset)).amount,
+            burnerLoans.previewClaimYield(address(laterAsset)).requestedAssetAmount,
             laterClaimable,
             "later asset claimable yield"
         );
@@ -252,7 +262,9 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         (MockERC20 laterAsset, MockERC4626 laterVault) = _addVaultAssetForTest();
         _depositCollateral(laterAsset);
         laterAsset.mint(address(laterVault), 10e6);
-        uint256 claimableBefore = burnerLoans.previewClaimYield(address(laterAsset)).amount;
+        uint256 claimableBefore = burnerLoans
+            .previewClaimYield(address(laterAsset))
+            .requestedAssetAmount;
 
         vm.prank(admin);
         _claimer.setExecutionGasLimit(1);
@@ -263,7 +275,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         _claimer.execute();
 
         assertEq(
-            burnerLoans.previewClaimYield(address(laterAsset)).amount,
+            burnerLoans.previewClaimYield(address(laterAsset)).requestedAssetAmount,
             claimableBefore,
             "periodic skip preserves claimable yield"
         );
@@ -271,7 +283,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         burnerLoans.claimYield(address(laterAsset));
 
         assertLt(
-            burnerLoans.previewClaimYield(address(laterAsset)).amount,
+            burnerLoans.previewClaimYield(address(laterAsset)).requestedAssetAmount,
             claimableBefore,
             "manual claim reduces claimable yield"
         );

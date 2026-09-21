@@ -77,9 +77,11 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
         _assets = assets_;
     }
 
-    function claimYield(address asset_) external override returns (uint256 claimed) {
+    function claimYield(
+        address asset_
+    ) external override returns (address tokenOut, uint256 amountOut) {
         _claimYield(asset_);
-        return 1;
+        return (asset_, 1);
     }
 
     function getAssetCount() external view returns (uint256 count) {

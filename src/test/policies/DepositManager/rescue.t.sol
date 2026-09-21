@@ -1,43 +1,120 @@
 // SPDX-License-Identifier: Unlicense
-/// forge-lint: disable-start(mixed-case-variable)
 pragma solidity ^0.8.20;
 
-import {DepositManagerTest} from "./DepositManagerTest.sol";
+// Scenario-specific literals and established test variable names remain inline for auditability.
+// Setup calls intentionally ignore return values when subsequent assertions verify their effects.
+// forge-lint: disable-start(literal-instead-of-constant, mixed-case-variable, unused-return)
+
+// Interfaces
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+
+// Contracts
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol";
+import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
+import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerRescueTest is DepositManagerTest {
     MockERC20 public randomToken;
-    address public NON_ADMIN;
 
     function setUp() public override {
         super.setUp();
 
-        NON_ADMIN = makeAddr("NON_ADMIN");
         randomToken = new MockERC20("Random", "RAND", 18);
     }
 
     // ========== rescue ==========
 
-    // given the contract is disabled
-    //  [X] it reverts
-    function test_rescue_givenContractDisabled_reverts() public {
-        randomToken.mint(address(depositManager), 100e18);
+    function test_givenRescuedTokenCallback_whenBorrowingWithdrawal() public givenIsEnabled {
+        ReentrantFeeToken callbackToken = new ReentrantFeeToken();
+        vm.startPrank(ADMIN);
+        rolesAdmin.grantRole("deposit_operator", address(callbackToken));
+        depositManager.setOperatorName(address(callbackToken), "rsc");
+        depositManager.addAsset(iAsset, IERC4626(address(0)), type(uint256).max, 0);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, address(callbackToken));
+        vm.stopPrank();
 
-        vm.expectRevert(abi.encodeWithSignature("NotEnabled()"));
+        asset.mint(DEPOSITOR, 100);
+        vm.prank(DEPOSITOR);
+        asset.approve(address(depositManager), 100);
+        vm.prank(address(callbackToken));
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 100,
+                shouldWrap: false
+            })
+        );
+        IDepositManager.BorrowingWithdrawParams memory params = IDepositManager
+            .BorrowingWithdrawParams({asset: iAsset, recipient: RECIPIENT, amount: 1});
+        callbackToken.mint(address(depositManager), 10);
+        callbackToken.setCallback(
+            address(depositManager),
+            abi.encodeCall(IDepositManager.borrowingWithdraw, (params))
+        );
+
         vm.prank(ADMIN);
-        depositManager.rescue(address(randomToken));
+        depositManager.rescue(address(callbackToken));
+
+        assertFalse(callbackToken.callbackSucceeded(), "nested borrowing must fail");
+        assertEq(
+            callbackToken.callbackRevertSelector(),
+            ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+            "guard must reject callback"
+        );
+        assertEq(callbackToken.balanceOf(address(trsry)), 10, "Treasury receives rescue once");
+        assertEq(
+            callbackToken.balanceOf(address(depositManager)),
+            0,
+            "rescue empties stray token balance"
+        );
+        assertEq(asset.balanceOf(address(depositManager)), 100, "managed custody unchanged");
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, address(callbackToken)),
+            0,
+            "no nested debt"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, address(callbackToken)),
+            100,
+            "liabilities unchanged"
+        );
+
+        // The same authorized, funded action succeeds once the outer rescue has released the guard.
+        vm.prank(address(callbackToken));
+        depositManager.borrowingWithdraw(params);
+        assertEq(asset.balanceOf(RECIPIENT), 1, "nested action is otherwise executable");
     }
 
-    // given the caller is not an admin
+    // given the contract is disabled
+    //  when the caller is admin
+    //   [X] it transfers the balance to TRSRY
+    //   [X] it emits a TokenRescued event
+    function test_givenContractDisabled_whenCallerIsAdmin() public {
+        _rescueAndAssert(ADMIN);
+    }
+
+    //  when the caller is Deposit Manager admin
+    //   [X] it transfers the balance to TRSRY
+    //   [X] it emits a TokenRescued event
+    function test_givenContractDisabled_whenCallerIsDepositManagerAdmin() public {
+        _rescueAndAssert(DEPOSIT_MANAGER_ADMIN);
+    }
+
+    // given the caller is neither admin nor Deposit Manager admin
     //  [X] it reverts
-    function test_rescue_givenCallerNotAdmin_reverts() public givenIsEnabled {
+    function test_whenCallerIsUnauthorized_reverts(address caller_) public givenIsEnabled {
+        vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
         randomToken.mint(address(depositManager), 100e18);
 
-        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
-        vm.prank(NON_ADMIN);
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(caller_);
         depositManager.rescue(address(randomToken));
     }
 
@@ -148,6 +225,27 @@ contract DepositManagerRescueTest is DepositManagerTest {
         depositManager.rescue(address(vault));
     }
 
+    function test_givenTokenIsConfiguredExternalShareToken_reverts() public givenIsEnabled {
+        MockERC7540ExternalShareVault externalVault = new MockERC7540ExternalShareVault(
+            asset,
+            false,
+            true,
+            true
+        );
+        vm.prank(ADMIN);
+        depositManager.addAsset(iAsset, IERC4626(address(externalVault)), type(uint256).max, 0);
+        IERC20 shareToken = IERC20(externalVault.share());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_CannotRescueAsset.selector,
+                address(shareToken)
+            )
+        );
+        vm.prank(ADMIN);
+        depositManager.rescue(address(shareToken));
+    }
+
     // given the token address is not a configured asset or vault
     //  given the token has zero balance
     //   [X] it does not revert
@@ -170,17 +268,38 @@ contract DepositManagerRescueTest is DepositManagerTest {
         public
         givenIsEnabled
     {
+        _rescueAndAssert(ADMIN);
+    }
+
+    // given the contract is enabled
+    //  when the caller is Deposit Manager admin
+    //   [X] it transfers the balance to TRSRY
+    //   [X] it emits a TokenRescued event
+    function test_givenContractEnabled_whenCallerIsDepositManagerAdmin() public givenIsEnabled {
+        _rescueAndAssert(DEPOSIT_MANAGER_ADMIN);
+    }
+
+    function _rescueAndAssert(address caller_) internal {
         uint256 tokenAmount = 100e18;
         randomToken.mint(address(depositManager), tokenAmount);
 
         vm.expectEmit(address(depositManager));
         emit IDepositManager.TokenRescued(address(randomToken), tokenAmount);
 
-        vm.prank(ADMIN);
+        vm.prank(caller_);
         depositManager.rescue(address(randomToken));
 
-        assertEq(randomToken.balanceOf(address(depositManager)), 0);
-        assertEq(randomToken.balanceOf(address(trsry)), tokenAmount);
+        assertEq(
+            randomToken.balanceOf(address(depositManager)),
+            0,
+            "DepositManager should not retain rescued tokens"
+        );
+        assertEq(
+            randomToken.balanceOf(address(trsry)),
+            tokenAmount,
+            "Treasury should receive the rescued tokens"
+        );
     }
 }
-/// forge-lint: disable-end(mixed-case-variable)
+
+// forge-lint: disable-end(literal-instead-of-constant, mixed-case-variable, unused-return)

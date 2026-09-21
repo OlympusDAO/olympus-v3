@@ -206,12 +206,16 @@ interface IBurnerLoansLifecycle {
     /// @dev Permissionless and available while asset originations are disabled. Reverts if Burner
     ///      Loans or custody is disabled, the asset is unavailable, the batch is empty or too large,
     ///      a borrower is duplicated or not seizable, custody is insolvent, or a transfer fails.
+    ///      A share-mode seizure that rounds to zero still defaults the positions and returns the
+    ///      share token with zero reward and Treasury output. Retained share dust becomes custody
+    ///      yield after the collateral liability is removed.
     /// @param asset_ Collateral asset seized and distributed.
     /// @param borrowers_ Borrowers whose positions are seized atomically.
-    /// @return keeperReward Keeper reward in collateral token decimals.
-    /// @return collateralToTreasury Collateral routed to Treasury.
+    /// @return tokenOut Token distributed by the seizure.
+    /// @return keeperReward Keeper reward in `tokenOut` decimals.
+    /// @return collateralToTreasury Amount routed to Treasury in `tokenOut` decimals.
     function seize(
         address asset_,
         address[] calldata borrowers_
-    ) external returns (uint256 keeperReward, uint256 collateralToTreasury);
+    ) external returns (address tokenOut, uint256 keeperReward, uint256 collateralToTreasury);
 }

@@ -14,10 +14,11 @@ library BurnerLoansMarketConfig {
     bytes16 internal constant CONFIG_ID = bytes16("Burner Loans v1");
 
     /// @dev Exact ABI-encoded length of `Data`.
-    uint256 internal constant DATA_LENGTH = 6 * 32;
+    uint256 internal constant DATA_LENGTH = 7 * 32;
 
     /// @notice Burner Loans-specific fields encoded into a FLOAN market's configuration data.
     struct Data {
+        bool withdrawAsShares;
         uint128 maxKeeperReward;
         uint16 backingMultiplierBps;
         uint16 keeperRewardBps;
@@ -95,6 +96,7 @@ library BurnerLoansMarketConfig {
         return
             IBurnerLoans.AssetConfig({
                 originationsEnabled: market_.originationsEnabled,
+                withdrawAsShares: data.withdrawAsShares,
                 collateralDecimals: market_.collateralDecimals,
                 maxLtvBps: market_.maxLtvBps,
                 backingMultiplierBps: data.backingMultiplierBps,

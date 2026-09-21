@@ -42,6 +42,8 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
 
 abstract contract BurnerLoansTest is Test {
     using SafeCast for uint256;
@@ -198,6 +200,7 @@ abstract contract BurnerLoansTest is Test {
         return
             IBurnerLoans.AssetConfig({
                 originationsEnabled: true,
+                withdrawAsShares: false,
                 collateralDecimals: collateralDecimals_,
                 maxLtvBps: 8_500,
                 backingMultiplierBps: 12_500,
@@ -263,6 +266,7 @@ abstract contract BurnerLoansTest is Test {
         asset = new MockERC20("Vault Collateral", "vCOLL", _collateralDecimals());
         vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
         _configurePrice(address(asset), 1e18);
+        vm.startPrank(admin);
         depositManager.addAsset(
             IERC20(address(asset)),
             IERC4626(address(vault)),
@@ -274,13 +278,101 @@ abstract contract BurnerLoansTest is Test {
             BurnerLoansConstants.DEPOSIT_PERIOD,
             address(burnerLoans)
         );
+        vm.stopPrank();
 
         vm.prank(admin);
         burnerLoansConfig.addAsset(
             address(asset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _addAsyncExternalShareAssetForTest()
+        internal
+        returns (
+            MockERC20 asset,
+            MockERC7540ExternalShareVault vault,
+            MockERC7540ExternalShareToken shareToken
+        )
+    {
+        asset = new MockERC20("External Share Collateral", "esCOLL", 18);
+        (vault, shareToken) = _configureAsyncExternalShareAssetForTest(asset);
+    }
+
+    function _addSameDecimalExternalShareAssetForTest()
+        internal
+        returns (MockERC20 asset, MockERC7575Vault vault, IERC20 shareToken)
+    {
+        asset = new MockERC20("External Share Collateral", "esCOLL", 18);
+        vault = new MockERC7575Vault(ERC20(address(asset)), true);
+        shareToken = IERC20(vault.share());
+        _configurePrice(address(asset), 1e18);
+
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(asset)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        burnerLoansConfig.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(asset.decimals()),
+            _defaultAssetFeeConfig(),
+            true
+        );
+        vm.stopPrank();
+    }
+
+    function _configureAsyncExternalShareAssetForTest(
+        MockERC20 asset_
+    )
+        internal
+        returns (MockERC7540ExternalShareVault vault, MockERC7540ExternalShareToken shareToken)
+    {
+        vault = new MockERC7540ExternalShareVault(ERC20(address(asset_)), false, true, true);
+        shareToken = MockERC7540ExternalShareToken(vault.share());
+        _configurePrice(address(asset_), 1e18);
+
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(asset_)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset_)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        burnerLoansConfig.addAsset(
+            address(asset_),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(asset_.decimals()),
+            _defaultAssetFeeConfig(),
+            true
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev Models an asynchronous ERC-4626 whose shares remain transferable while synchronous
+    ///      redemption is unavailable. Share-output tests use this to prove that no redemption is
+    ///      attempted accidentally.
+    function _makeVaultAsynchronous(MockERC4626 vault_) internal {
+        vm.mockCallRevert(
+            address(vault_),
+            abi.encodeWithSelector(IERC4626.redeem.selector),
+            abi.encode("asynchronous redemption")
         );
     }
 
@@ -294,7 +386,8 @@ abstract contract BurnerLoansTest is Test {
             address(asset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -325,13 +418,29 @@ abstract contract BurnerLoansTest is Test {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
     function _addDefaultUsdsVaultAsset() internal returns (MockERC4626 vault) {
+        vault = _configureUsdsVaultDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _configureUsdsVaultDependencies() internal returns (MockERC4626 vault) {
         vault = new MockERC4626(ERC20(address(usds)), "USDS Vault", "vUSDS");
         _configurePrice(address(usds), 1e18);
+        vm.startPrank(admin);
         depositManager.addAsset(
             IERC20(address(usds)),
             IERC4626(address(vault)),
@@ -343,15 +452,7 @@ abstract contract BurnerLoansTest is Test {
             BurnerLoansConstants.DEPOSIT_PERIOD,
             address(burnerLoans)
         );
-        _setDefaultGlobalDebtCap();
-
-        vm.prank(admin);
-        burnerLoansConfig.addAsset(
-            address(usds),
-            _defaultAssetDebtCap(),
-            _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
-        );
+        vm.stopPrank();
     }
 
     function _createDuplicateUsdsMarketForTest() internal returns (uint32 marketId) {
@@ -435,7 +536,8 @@ abstract contract BurnerLoansTest is Test {
             address(asset),
             type(uint128).max,
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         burnerLoans.setActiveDebtForTest(address(asset), debtOhm_);
     }
@@ -588,7 +690,8 @@ abstract contract BurnerLoansTest is Test {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         vm.stopPrank();
     }

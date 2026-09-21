@@ -26,17 +26,50 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
-    // when the caller is not the manager or admin
+    // when the caller is neither admin nor config operator
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(
+    function test_whenCallerIsNotAdminOrConfigOperator_reverts(
         address caller_
     ) public givenIsEnabled givenFacilityNameIsSetDefault {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         vm.prank(caller_);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function test_givenConfigOperator_enablesAssetPeriod()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenAssetPeriodIsDisabled
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertTrue(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "config operator should enable asset period"
+        );
+    }
+
+    function test_givenEmergency_whenEnablingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenAssetPeriodIsDisabled
+    {
+        _expectRevertNotConfigOperator(EMERGENCY);
+        vm.prank(EMERGENCY);
         depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 

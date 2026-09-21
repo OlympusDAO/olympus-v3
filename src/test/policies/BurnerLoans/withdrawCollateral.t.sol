@@ -21,6 +21,8 @@ import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
 import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Scenario-specific contracts and fixtures have no cross-file consumers.
@@ -322,6 +324,17 @@ contract BurnerLoansWithdrawCollateralSixDecimalCollateralBoundaryTest is
 }
 
 contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
+    struct ShareWithdrawalState {
+        MockERC20 asset;
+        MockERC4626 vault;
+        uint128 depositedAmount;
+        uint128 withdrawalAmount;
+        uint256 expectedShares;
+        uint256 vaultSupplyBefore;
+        uint256 vaultAssetsBefore;
+        uint256 operatorSharesBefore;
+    }
+
     address internal operator;
     address internal recipient;
 
@@ -471,16 +484,17 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
-    // - Caller: operator
-    // - Authorization state: no authorization from owner to operator
-    // - Parameters: asset is configured, recipient is operator
+    // - Caller: any address other than the owner
+    // - Authorization state: no authorization from owner to caller
+    // - Parameters: asset is configured, recipient is valid
     // - Expected branch: authorization check reverts before custody
-    function test_withdrawCollateral_givenUnauthorizedOperator_reverts() public {
+    function test_withdrawCollateral_givenUnauthorizedCaller_reverts(address caller_) public {
+        vm.assume(caller_ != alice);
         _depositForAlice(1e6);
 
-        vm.prank(operator);
+        vm.prank(caller_);
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
-        burnerLoans.withdrawCollateral(address(usds), 1e6, alice, operator);
+        burnerLoans.withdrawCollateral(address(usds), 1e6, alice, recipient);
     }
 
     // Condition tree:
@@ -671,6 +685,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Expected branch: withdrawal still succeeds because period disable only blocks new deposits
     function test_withdrawCollateral_givenDepositManagerPeriodDisabled_succeeds() public {
         _depositForAlice(1e6);
+        vm.prank(admin);
         depositManager.disableAssetPeriod(
             IERC20(address(usds)),
             BurnerLoansConstants.DEPOSIT_PERIOD,
@@ -776,12 +791,17 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Custody path: vault-backed DepositManager custody
     // - Withdrawal amount: fuzzed positive amount worth less than one vault share after yield
     // - Expected branch: preview is not executable and execution reverts without debiting credit
-    function test_givenAmountBelowOneVaultShare_reverts(uint128 amount_) public {
+    function test_givenWithdrawAsShares_givenAmountBelowOneVaultShare_reverts(
+        uint128 amount_
+    ) public {
         amount_ = uint128(bound(amount_, 1, 1_000e6));
         uint128 depositedAmount = 1_000_000e6;
         (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
         _depositVaultForAlice(vaultAsset, depositedAmount);
         vaultAsset.mint(address(vault), amount_ * depositedAmount);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(vaultAsset), true);
+        _makeVaultAsynchronous(vault);
 
         assertEq(vault.convertToShares(amount_), 0, "withdrawal shares");
 
@@ -792,6 +812,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         );
 
         assertEq(preview.returnAmount, 0, "preview amount");
+        assertEq(preview.returnToken, address(vault), "preview token");
         assertEq(
             preview.remainingDepositedCollateral,
             depositedAmount - amount_,
@@ -936,6 +957,231 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             ),
             1_000e6,
             "liabilities"
+        );
+    }
+
+    // Condition tree:
+    // - Custody implementation: real DepositManager with an asynchronous ERC4626 vault
+    // - Asset configuration: all exits return vault shares
+    // - Action: owner withdraws an underlying-denominated collateral amount
+    // - Expected branch: the recipient receives the previewed share quantity without redemption
+    function test_givenWarmupVault_whenWithdrawAsShares_succeeds() public {
+        (MockERC20 vaultAsset, WarmupVault vault) = _addWarmupVaultAsset();
+        _depositVaultForAlice(vaultAsset, 1_000e6);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(vaultAsset), true);
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(vaultAsset),
+            400e6,
+            alice
+        );
+        uint256 expectedShares = vault.convertToShares(400e6);
+
+        assertEq(preview.returnToken, address(vault), "preview token");
+        assertEq(preview.returnAmount, expectedShares, "preview shares");
+        assertTrue(preview.executable, "preview executable");
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, ) = burnerLoans.withdrawCollateral(
+            address(vaultAsset),
+            400e6,
+            alice,
+            alice
+        );
+
+        assertEq(tokenOut, address(vault), "token out");
+        assertEq(amountOut, expectedShares, "shares out");
+        assertEq(vault.balanceOf(alice), expectedShares, "recipient shares");
+        assertEq(vaultAsset.balanceOf(alice), 0, "recipient underlying");
+        assertEq(remaining, 600e6, "remaining collateral");
+        assertEq(vault.totalAssets(), 1_000e6, "vault assets unchanged");
+        assertEq(
+            depositManager.getOperatorLiabilities(
+                IERC20(address(vaultAsset)),
+                address(burnerLoans)
+            ),
+            600e6,
+            "liabilities"
+        );
+    }
+
+    // Condition tree:
+    // - Custody implementation: real DepositManager with async redemption
+    // - ERC-7575 shape: share token is distinct from the vault and uses 6 decimals
+    // - Action: owner withdraws an 18-decimal underlying-denominated collateral amount
+    // - Expected branch: preview and execution return the external token in its raw share units
+    function test_givenExternalShareTokenWithSameDecimals_whenWithdrawAsShares_routesExternalToken()
+        public
+    {
+        (
+            MockERC20 asset,
+            MockERC7575Vault externalVault,
+            IERC20 shareToken
+        ) = _addSameDecimalExternalShareAssetForTest();
+        uint128 depositedAssets = 1_000e18;
+        // withdrawn assets = 1,000e18 deposited assets * 40% = 400e18 asset units.
+        uint128 withdrawnAssets = 400e18;
+        _depositVaultForAlice(asset, depositedAssets);
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(asset),
+            withdrawnAssets,
+            alice
+        );
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, ) = burnerLoans.withdrawCollateral(
+            address(asset),
+            withdrawnAssets,
+            alice,
+            alice
+        );
+
+        assertNotEq(address(shareToken), address(externalVault), "external token should differ");
+        assertEq(asset.decimals(), shareToken.decimals(), "token decimals should match");
+        assertEq(preview.returnToken, address(shareToken), "preview external token");
+        assertEq(preview.returnAmount, withdrawnAssets, "preview external shares");
+        assertEq(tokenOut, address(shareToken), "external token out");
+        assertEq(amountOut, withdrawnAssets, "external shares out");
+        assertEq(shareToken.balanceOf(alice), withdrawnAssets, "recipient external shares");
+        assertEq(remaining, depositedAssets - withdrawnAssets, "remaining collateral");
+        assertEq(shareToken.balanceOf(address(burnerLoans)), 0, "policy share residual");
+    }
+
+    function test_givenExternalShareTokenWithDifferentDecimals_whenWithdrawAsShares_routesExternalToken()
+        public
+    {
+        (
+            MockERC20 asset,
+            MockERC7540ExternalShareVault vault,
+            MockERC7540ExternalShareToken shareToken
+        ) = _addAsyncExternalShareAssetForTest();
+        uint128 depositedAssets = 1_000e18;
+        uint128 withdrawnAssets = 400e18;
+        _depositVaultForAlice(asset, depositedAssets);
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(asset),
+            withdrawnAssets,
+            alice
+        );
+
+        // withdrawnAssets = 400e18 (asset decimals) / 1e12 = 400e6 (share decimals).
+        uint256 expectedShares = 400e6;
+        assertNotEq(address(shareToken), address(vault), "external token should differ");
+        assertEq(asset.decimals(), 18, "underlying decimals");
+        assertEq(shareToken.decimals(), 6, "share decimals");
+        assertEq(preview.returnToken, address(shareToken), "preview external token");
+        assertEq(preview.returnAmount, expectedShares, "preview raw shares");
+        assertTrue(preview.executable, "preview executable");
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, ) = burnerLoans.withdrawCollateral(
+            address(asset),
+            withdrawnAssets,
+            alice,
+            alice
+        );
+
+        assertEq(tokenOut, address(shareToken), "external token out");
+        assertEq(amountOut, expectedShares, "raw shares out");
+        assertEq(shareToken.balanceOf(alice), expectedShares, "recipient external shares");
+        assertEq(asset.balanceOf(alice), 0, "recipient underlying unchanged");
+        assertEq(remaining, depositedAssets - withdrawnAssets, "remaining collateral");
+        assertEq(shareToken.balanceOf(address(burnerLoans)), 0, "policy share residual");
+        assertEq(vault.convertToAssets(amountOut), withdrawnAssets, "share value");
+    }
+
+    // Condition tree:
+    // - Custody implementation: real DepositManager ERC4626 vault
+    // - Vault state: fuzzed non-integer asset/share exchange rate after yield
+    // - Asset configuration: all exits return vault shares
+    // - Withdrawal amount: fuzzed positive amount producing at least one share
+    // - Expected branch: preview and execution return the independently calculated share amount
+    function test_givenVaultYield_givenWithdrawAsShares_whenWithdrawing(
+        uint128 yieldSeed_,
+        uint128 amountSeed_
+    ) public {
+        uint256 yieldAmount = bound(yieldSeed_, 1, 10_000_000e6);
+        ShareWithdrawalState memory state = _createShareWithdrawalState(yieldAmount, amountSeed_);
+
+        IBurnerLoans.WithdrawPreview memory preview = burnerLoans.previewWithdrawCollateral(
+            address(state.asset),
+            state.withdrawalAmount,
+            alice
+        );
+        assertEq(preview.returnToken, address(state.vault), "preview token");
+        assertEq(preview.returnAmount, state.expectedShares, "preview shares");
+        assertEq(
+            preview.remainingDepositedCollateral,
+            state.depositedAmount - state.withdrawalAmount,
+            "preview remaining collateral"
+        );
+        assertEq(preview.resultingHealthFactor, type(uint256).max, "preview debt-free health");
+
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remaining, uint256 health) = burnerLoans
+            .withdrawCollateral(address(state.asset), state.withdrawalAmount, alice, recipient);
+
+        _assertWithdrawalMatchesPreview(preview, tokenOut, amountOut, remaining, health);
+        assertEq(state.vault.balanceOf(recipient), state.expectedShares, "recipient shares");
+        assertEq(state.asset.balanceOf(recipient), 0, "recipient underlying");
+        assertEq(
+            burnerLoans.getPosition(address(state.asset), alice).depositedCollateral,
+            state.depositedAmount - state.withdrawalAmount,
+            "position collateral"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(
+                IERC20(address(state.asset)),
+                address(burnerLoans)
+            ),
+            state.depositedAmount - state.withdrawalAmount,
+            "DepositManager liabilities"
+        );
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            IERC20(address(state.asset)),
+            address(burnerLoans)
+        );
+        assertEq(
+            state.operatorSharesBefore - operatorSharesAfter,
+            state.expectedShares,
+            "custody share debit"
+        );
+        assertEq(state.vault.totalSupply(), state.vaultSupplyBefore, "vault supply unchanged");
+        assertEq(state.vault.totalAssets(), state.vaultAssetsBefore, "vault assets unchanged");
+        assertEq(state.vault.balanceOf(address(burnerLoans)), 0, "Burner Loans share residual");
+        assertEq(state.asset.balanceOf(address(burnerLoans)), 0, "Burner Loans asset residual");
+        _assertFloanPositionMatchesBurnerLoans(address(state.asset), alice);
+    }
+
+    function _createShareWithdrawalState(
+        uint256 yieldAmount_,
+        uint128 amountSeed_
+    ) internal returns (ShareWithdrawalState memory state) {
+        state.depositedAmount = 1_000_000e6;
+        (state.asset, state.vault) = _addVaultAsset();
+        _depositVaultForAlice(state.asset, state.depositedAmount);
+        state.asset.mint(address(state.vault), yieldAmount_);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(state.asset), true);
+        _makeVaultAsynchronous(state.vault);
+
+        state.vaultSupplyBefore = state.vault.totalSupply();
+        state.vaultAssetsBefore = state.vault.totalAssets();
+        uint256 minimumAssetAmount = (state.vaultAssetsBefore + state.vaultSupplyBefore - 1) /
+            state.vaultSupplyBefore;
+        state.withdrawalAmount = uint128(
+            bound(amountSeed_, minimumAssetAmount, state.depositedAmount)
+        );
+        // withdrawalAmount (asset decimals) * vaultSupplyBefore (share decimals)
+        // / vaultAssetsBefore (asset decimals) = expectedShares (share decimals), rounded down.
+        state.expectedShares =
+            (uint256(state.withdrawalAmount) * state.vaultSupplyBefore) /
+            state.vaultAssetsBefore;
+        (state.operatorSharesBefore, ) = depositManager.getOperatorAssets(
+            IERC20(address(state.asset)),
+            address(burnerLoans)
         );
     }
 
@@ -1212,7 +1458,8 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             address(callbackToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         uint128 amount = 1_000e18;
@@ -1337,19 +1584,21 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
 
     function _configureVaultAsset(MockERC20 vaultAsset_, IERC4626 vault_) internal {
         _configurePrice(address(vaultAsset_), 1e18);
+        vm.startPrank(admin);
         depositManager.addAsset(IERC20(address(vaultAsset_)), vault_, type(uint256).max, 0);
         depositManager.addAssetPeriod(
             IERC20(address(vaultAsset_)),
             BurnerLoansConstants.DEPOSIT_PERIOD,
             address(burnerLoans)
         );
-        vm.prank(admin);
         burnerLoansConfig.addAsset(
             address(vaultAsset_),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
+        vm.stopPrank();
     }
 }
 

@@ -20,6 +20,10 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @param burnerLoans The invalid Burner Loans Config policy address.
     error BurnerLoansConfigTimelock_InvalidBurnerLoans(address burnerLoans);
 
+    /// @notice Thrown when a policy required for queueing or execution is not active in the Kernel.
+    /// @param policy Inactive policy address.
+    error BurnerLoansConfigTimelock_PolicyInactive(address policy);
+
     /// @notice Thrown when Burner Loans Config belongs to a different Kernel.
     /// @param configKernel The Kernel configured on Burner Loans Config.
     error BurnerLoansConfigTimelock_KernelMismatch(address configKernel);
@@ -103,7 +107,6 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     // ========== QUEUE FUNCTIONS ========== //
 
     /// @notice Queues an asset fee-curve update.
-    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Partial fee curve update.
     /// @param selection_ Fields to apply from `config_`.
@@ -115,7 +118,6 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues an asset active debt cap update.
-    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param debtCapOhm_ New active debt cap, in OHM decimals.
     /// @return actionId The queued action ID.
@@ -130,8 +132,16 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueSetPriceCacheMaxAge(uint48 priceCacheMaxAge_) external returns (uint64 actionId);
 
+    /// @notice Queues a change to the token form used for all DepositManager exits.
+    /// @param asset_ Collateral asset to update.
+    /// @param withdrawAsShares_ Whether future exits return the configured vault shares.
+    /// @return actionId The queued action ID.
+    function queueSetAssetWithdrawAsShares(
+        address asset_,
+        bool withdrawAsShares_
+    ) external returns (uint64 actionId);
+
     /// @notice Queues a partial asset risk-configuration update.
-    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param asset_ Collateral asset to update.
     /// @param update_ Partial risk and term update.
     /// @param selection_ Fields to apply from `update_`.
@@ -144,7 +154,6 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
 
     /// @notice Queues a batch of Burner Loans Config updates.
     /// @dev Every sub-action must target Burner Loans Config and use a supported setter.
-    ///      Reverts if the timelock or target Burner Loans Config policy is disabled.
     ///      The batch is validated and later executed atomically in array order.
     /// @param actions_ The Burner Loans Config sub-actions to queue.
     /// @return actionId The queued action ID.

@@ -372,10 +372,14 @@ contract BurnerLoansLivePriceForkGasTest is Test {
         borrowers[0] = _alice;
 
         vm.startSnapshotGas(_snapshotName("seize.single"));
-        (uint256 keeperReward, uint256 collateralToTreasury) = _burnerLoans.seize(_USDS, borrowers);
+        (address tokenOut, uint256 keeperReward, uint256 collateralToTreasury) = _burnerLoans.seize(
+            _USDS,
+            borrowers
+        );
         uint256 gasUsed = vm.stopSnapshotGas();
 
         assertEq(keeperReward, 0, "keeper reward");
+        assertEq(tokenOut, _USDS, "seizure output token");
         assertEq(collateralToTreasury, _COLLATERAL, "collateral routed to Treasury");
         IBurnerLoans.Position memory positionAfter = _burnerLoans.getPosition(_USDS, _alice);
         assertEq(positionAfter.debtOhm, 0, "position debt");
@@ -457,7 +461,8 @@ contract BurnerLoansLivePriceForkGasTest is Test {
             _USDS,
             _ASSET_DEBT_CAP,
             _defaultRiskConfig(),
-            _defaultFeeConfig()
+            _defaultFeeConfig(),
+            false
         );
     }
 

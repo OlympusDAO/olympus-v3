@@ -1,12 +1,30 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
-import {DepositManagerTest} from "./DepositManagerTest.sol";
-import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+// Vault variants exercise the same deposit action and are intentionally co-located.
+// Scenario-specific literals and ignored revert-path return values remain explicit.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
+// Interfaces
+import {IERC20 as OZIERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+
+// Libraries
+import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {TransferHelper} from "src/libraries/TransferHelper.sol";
+
+// Contracts
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
+import {ERC7540SyncDepositAsyncRedeemVault} from "src/test/policies/DepositManager/fixtures/ERC7540SyncDepositAsyncRedeemVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+
+// Test contracts
+import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 
 contract DepositManagerDepositTest is DepositManagerTest {
     // ========== EVENTS ========== //
@@ -301,8 +319,18 @@ contract DepositManagerDepositTest is DepositManagerTest {
         vm.prank(DEPOSITOR);
         asset.approve(address(depositManager), MINT_AMOUNT);
 
+        uint256 fee = (MINT_AMOUNT * asset.FEE()) / asset.FEE_DENOMINATOR();
+
         // Expect revert
-        vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_InvalidAsset.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                address(asset),
+                address(depositManager),
+                MINT_AMOUNT,
+                MINT_AMOUNT - fee
+            )
+        );
 
         // Deposit
         vm.prank(DEPOSIT_OPERATOR);
@@ -635,4 +663,288 @@ contract DepositManagerDepositTest is DepositManagerTest {
         _assertReceiptToken(expectedAssets, 0, true, true);
         _assertDepositAssetBalance(DEPOSITOR, MINT_AMOUNT - expectedAssets);
     }
+
+    // ========== ERC-7540 AND ERC-7575 TESTS ========== //
+
+    uint256 internal constant _ASSETS_PER_SHARE = 1e12;
+    uint256 internal constant _DEPOSIT_AMOUNT = 10e18;
+
+    MockERC7540ExternalShareVault internal _externalVault;
+    IERC20 internal _externalShare;
+
+    function _configureExternalVault(bool asyncRedeem_) internal {
+        _externalVault = new MockERC7540ExternalShareVault(asset, false, asyncRedeem_, true);
+        _externalShare = IERC20(_externalVault.share());
+
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(_externalVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+    }
+
+    function _deposit(uint256 amount_) internal returns (uint256 actualAmount) {
+        _approveSpendingAsset(DEPOSITOR, amount_);
+        return _executeDeposit(amount_);
+    }
+
+    function _executeDeposit(uint256 amount_) internal returns (uint256 actualAmount) {
+        vm.prank(DEPOSIT_OPERATOR);
+        (, actualAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: amount_,
+                shouldWrap: false
+            })
+        );
+    }
+
+    function _expectInexactShares(uint256 expectedShares_, uint256 receivedShares_) internal {
+        _approveSpendingAsset(DEPOSITOR, _DEPOSIT_AMOUNT);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManagerV1_1.AssetManager_InexactSharesReceived.selector,
+                address(iAsset),
+                address(_externalShare),
+                expectedShares_,
+                receivedShares_
+            )
+        );
+    }
+
+    function test_givenAsyncRedeem_whenPreviewDeposit() public {
+        _configureExternalVault(true);
+
+        (uint256 creditedAssets, uint256 custodyShares) = depositManager.previewDeposit(
+            iAsset,
+            _DEPOSIT_AMOUNT
+        );
+
+        assertEq(custodyShares, 10e6, "preview should return raw six-decimal shares");
+        assertEq(creditedAssets, _DEPOSIT_AMOUNT, "async preview should use convertToAssets");
+    }
+
+    function test_givenSynchronousRedeem_whenPreviewRedeemDiffersFromConvertToAssets() public {
+        _configureExternalVault(false);
+        _externalVault.setPreviewRedeemDiscount(1);
+
+        (uint256 creditedAssets, uint256 custodyShares) = depositManager.previewDeposit(
+            iAsset,
+            _DEPOSIT_AMOUNT
+        );
+
+        assertEq(custodyShares, 10e6, "preview should return raw six-decimal shares");
+        assertEq(
+            creditedAssets,
+            _DEPOSIT_AMOUNT - 1,
+            "synchronous preview should use previewRedeem"
+        );
+    }
+
+    function test_givenAsyncRedeem_whenDepositing(uint256 amount_) public {
+        _configureExternalVault(true);
+        amount_ = bound(amount_, _ASSETS_PER_SHARE, MINT_AMOUNT);
+        uint256 expectedShares = amount_ / _ASSETS_PER_SHARE;
+
+        uint256 actualAmount = _deposit(amount_);
+        uint256 expectedCredit = _externalVault.convertToAssets(expectedShares);
+        (uint256 operatorShares, uint256 operatorAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(actualAmount, expectedCredit, "deposit credit should use convertToAssets");
+        assertEq(asset.decimals(), 18, "underlying should use eighteen decimals");
+        assertEq(
+            ERC20(address(_externalShare)).decimals(),
+            6,
+            "external shares should use six decimals"
+        );
+        assertEq(operatorShares, expectedShares, "operator accounting should use raw shares");
+        assertEq(operatorAssets, expectedCredit, "operator value should use convertToAssets");
+        assertEq(
+            _externalShare.balanceOf(address(depositManager)),
+            expectedShares,
+            "physical external-share custody should equal operator shares"
+        );
+    }
+
+    function test_givenSynchronousRedeemExternalShareToken_whenDepositing(uint256 amount_) public {
+        _configureExternalVault(false);
+        amount_ = bound(amount_, _ASSETS_PER_SHARE, MINT_AMOUNT);
+        uint256 expectedShares = amount_ / _ASSETS_PER_SHARE;
+
+        uint256 actualAmount = _deposit(amount_);
+        (uint256 operatorShares, uint256 operatorAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(actualAmount, amount_, "deposit credit");
+        assertEq(asset.decimals(), 18, "underlying decimals");
+        assertEq(ERC20(address(_externalShare)).decimals(), 6, "external share decimals");
+        assertEq(operatorShares, expectedShares, "raw external shares");
+        assertEq(operatorAssets, amount_, "operator assets");
+        assertEq(
+            _externalShare.balanceOf(address(depositManager)),
+            expectedShares,
+            "external share custody"
+        );
+    }
+
+    function test_givenAsyncRedeemSelfShareToken_whenDepositing() public {
+        ERC7540SyncDepositAsyncRedeemVault selfShareVault = new ERC7540SyncDepositAsyncRedeemVault(
+            OZIERC20(address(asset))
+        );
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(selfShareVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+
+        uint256 actualAmount = _deposit(_DEPOSIT_AMOUNT);
+        (uint256 operatorShares, uint256 operatorAssets) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+
+        assertEq(actualAmount, _DEPOSIT_AMOUNT, "deposit credit");
+        assertEq(operatorShares, _DEPOSIT_AMOUNT, "self-share accounting");
+        assertEq(operatorAssets, _DEPOSIT_AMOUNT, "self-share assets");
+        assertEq(
+            selfShareVault.balanceOf(address(depositManager)),
+            _DEPOSIT_AMOUNT,
+            "self-share custody"
+        );
+    }
+
+    function test_givenSynchronousRedeemSelfShareToken_whenDepositing() public {
+        MockERC7575Vault selfShareVault = new MockERC7575Vault(asset, false);
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(selfShareVault)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+
+        uint256 actualAmount = _deposit(_DEPOSIT_AMOUNT);
+
+        assertEq(actualAmount, _DEPOSIT_AMOUNT, "deposit credit");
+        assertEq(
+            selfShareVault.balanceOf(address(depositManager)),
+            _DEPOSIT_AMOUNT,
+            "self-share custody"
+        );
+    }
+
+    function test_givenAsyncRedeem_whenYieldAccrues() public {
+        _configureExternalVault(true);
+        _deposit(_DEPOSIT_AMOUNT);
+        _externalVault.setAssetsPerShare(2e12);
+
+        (, uint256 operatorAssets) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        uint256 maxYield = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
+
+        assertEq(operatorAssets, 20e18, "operator value should follow live convertToAssets");
+        assertEq(maxYield, 10e18 - 1, "yield capacity should use async share valuation");
+    }
+
+    function test_givenAsyncDepositEnabled_whenPreviewing_reverts() public {
+        _configureExternalVault(false);
+        _externalVault.setCapabilities(true, false, true, true);
+
+        vm.expectRevert(MockERC7540ExternalShareVault.AsyncDeposit.selector);
+        depositManager.previewDeposit(iAsset, _DEPOSIT_AMOUNT);
+    }
+
+    function test_givenAsyncDepositEnabled_whenDepositing_revertsAndRollsBackTransfer() public {
+        _configureExternalVault(false);
+        _externalVault.setCapabilities(true, false, true, true);
+        uint256 depositorBalanceBefore = asset.balanceOf(DEPOSITOR);
+        vm.prank(DEPOSITOR);
+        asset.approve(address(depositManager), _DEPOSIT_AMOUNT);
+
+        vm.expectRevert(MockERC7540ExternalShareVault.AsyncDeposit.selector);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: _DEPOSIT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+
+        assertEq(asset.balanceOf(DEPOSITOR), depositorBalanceBefore, "depositor balance rollback");
+        assertEq(asset.balanceOf(address(depositManager)), 0, "manager balance rollback");
+        assertEq(asset.balanceOf(address(_externalVault)), 0, "vault balance unchanged");
+    }
+
+    function test_givenVaultReturnsMoreSharesThanReceived_reverts() public {
+        _configureExternalVault(false);
+        _externalVault.setDepositResults(9e6, 10e6);
+        _expectInexactShares(10e6, 9e6);
+
+        _executeDeposit(_DEPOSIT_AMOUNT);
+    }
+
+    function test_givenVaultReturnsFewerSharesThanReceived_reverts() public {
+        _configureExternalVault(false);
+        _externalVault.setDepositResults(10e6, 9e6);
+        _expectInexactShares(9e6, 10e6);
+
+        _executeDeposit(_DEPOSIT_AMOUNT);
+    }
+
+    function test_givenVaultReturnsSharesWithoutMinting_reverts() public {
+        _configureExternalVault(false);
+        _externalVault.setDepositResults(0, 10e6);
+        _expectInexactShares(10e6, 0);
+
+        _executeDeposit(_DEPOSIT_AMOUNT);
+    }
+
+    function test_givenVaultReturnsZeroShares_revertsAndRollsBackMint() public {
+        _configureExternalVault(false);
+        _externalVault.setDepositResults(1, 0);
+
+        vm.prank(DEPOSITOR);
+        asset.approve(address(depositManager), _DEPOSIT_AMOUNT);
+
+        vm.expectRevert(IAssetManager.AssetManager_ZeroAmount.selector);
+        _executeDeposit(_DEPOSIT_AMOUNT);
+
+        assertEq(
+            _externalShare.balanceOf(address(depositManager)),
+            0,
+            "zero-return deposit should roll back share mint"
+        );
+    }
+
+    function test_whenPreviewingMaximumAmount() public {
+        _configureExternalVault(true);
+
+        (uint256 creditedAssets, uint256 custodyShares) = depositManager.previewDeposit(
+            iAsset,
+            type(uint256).max
+        );
+
+        assertEq(
+            custodyShares,
+            type(uint256).max / _ASSETS_PER_SHARE,
+            "maximum preview should preserve vault share scaling"
+        );
+        assertEq(
+            creditedAssets,
+            custodyShares * _ASSETS_PER_SHARE,
+            "maximum preview credit should round down through vault conversion"
+        );
+    }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

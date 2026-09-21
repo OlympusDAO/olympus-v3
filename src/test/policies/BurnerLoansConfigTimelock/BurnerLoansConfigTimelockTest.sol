@@ -8,6 +8,7 @@ pragma solidity >=0.8.24;
 
 import {Actions} from "src/Kernel.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -75,6 +76,18 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
             selector: selector_,
             payload: payload_
         });
+    }
+
+    function _queueOriginationsEnabled(
+        address asset_,
+        bool enabled_
+    ) internal returns (uint64 actionId) {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(
+            IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
+            abi.encode(asset_, enabled_)
+        );
+        return configTimelock.queueBatch(actions);
     }
 
     function _expectSingleActionQueued(

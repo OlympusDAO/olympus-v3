@@ -51,11 +51,16 @@ dependencies/@layerzerolabs-oapp-evm-0.4.1/:solidity-bytes-utils/contracts/=depe
 @solmate-6.2.0/=dependencies/solmate-6.2.0/src/
 solmate/=dependencies/solmate-6.2.0/src/
 
+dependencies/openzeppelin-community-contracts-0.0.1/:@openzeppelin/contracts/=dependencies/openzeppelin-5-7-5.7.0/contracts/
+
 @openzeppelin-4.8.0/=dependencies/openzeppelin-4.8.0/contracts/
 @openzeppelin/contracts/=dependencies/openzeppelin-4.8.0/contracts/
 openzeppelin/=dependencies/openzeppelin-4.8.0/contracts/
 
 @openzeppelin-5.3.0/=dependencies/openzeppelin-new-5.3.0/contracts/
+@openzeppelin-5.7.0/=dependencies/openzeppelin-5-7-5.7.0/contracts/
+
+@openzeppelin-community-contracts-0.0.1/=dependencies/openzeppelin-community-contracts-0.0.1/contracts/
 
 proposal-sim/=dependencies/forge-proposal-simulator-1.0.1/
 dependencies/forge-proposal-simulator-1.0.1/:@addresses/=dependencies/forge-proposal-simulator-1.0.1/addresses/

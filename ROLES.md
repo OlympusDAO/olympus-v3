@@ -17,7 +17,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
 | admin | CoolerLtvOracle | Allows setting parameters on the CoolerLtvOracle |
 | admin | CoolerTreasuryBorrower | Allows setting parameters on the CoolerTreasuryBorrower |
-| admin | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate, enable/disable contract |
+| admin | DepositManager | Configure assets, periods, operators, and limits; rescue unmanaged ERC-20 balances to TRSRY; and manage the policy lifecycle |
 | admin | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage, authorize/deauthorize facilities, enable/disable contract |
 | admin | EmissionManager | Adjust yield, set configuration parameters, enable/disable contract |
 | admin | Heart | Reset the heartbeat, enable/disable the contract,set the distributor, set auction rewards |
@@ -48,6 +48,7 @@ This document describes the roles that are used in the Olympus protocol.
 | contract_registry_admin | ContractRegistryAdmin | Allows registering/deregistering contracts |
 | cooler_overseer | Clearinghouse | Allows activating the Clearinghouse |
 | custodian | TreasuryCustodian | Deposit/withdraw reserves and grant/revoke approvals |
+| deposit_manager_admin | DepositManager, DepositManagerConfigTimelock | Re-enable either policy during its grace period, queue timelocked mutable DepositManager configuration, and rescue unmanaged DepositManager ERC-20 balances to TRSRY |
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
@@ -80,7 +81,6 @@ This document describes the roles that are used in the Olympus protocol.
 | legacy_migration_admin | V1Migrator | Set the merkle root and rescue tokens |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
-| manager | DepositManager | Add asset definition, set asset deposit cap, add/enable/disable asset periods, set deposit reclaim rate |
 | manager | DepositRedemptionVault | Set max borrow percentage, set interest rate, set claim default reward percentage |
 | manager | LZBridgeGateway | Rescue accidentally-sent assets |
 | manager | Heart | Reset the heartbeat |

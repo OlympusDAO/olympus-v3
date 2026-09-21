@@ -7,7 +7,6 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
@@ -108,12 +107,13 @@ library BurnerLoansSeizure {
     /// @notice Defaults a homogeneous borrower batch and routes withdrawn collateral.
     /// @dev Applies the same validation as preview, then atomically defaults FLOAN positions,
     ///      withdraws collateral, pays any keeper reward, and transfers the remainder to treasury.
-    /// @return keeperReward Actual collateral paid to the keeper.
-    /// @return collateralToTreasury Actual collateral routed to Treasury.
+    /// @return tokenOut Token distributed to the keeper and Treasury.
+    /// @return keeperReward Actual `tokenOut` quantity paid to the keeper.
+    /// @return collateralToTreasury Actual `tokenOut` quantity routed to Treasury.
     function seize(
         address asset_,
         address[] memory borrowers_
-    ) public returns (uint256 keeperReward, uint256 collateralToTreasury) {
+    ) public returns (address, uint256, uint256) {
         BurnerLoansContext memory dependencies_ = _dependencies();
         bool isProtocolCaller = _isProtocolCaller(dependencies_);
         Batch memory batch = _quoteBatchForAction(
@@ -141,65 +141,86 @@ library BurnerLoansSeizure {
         }
         dependencies_.inventory.recordDefault(actualDebtOhm.toUint128());
 
-        uint256 startingBalance = IERC20(asset_).balanceOf(address(this));
+        address tokenOut;
         uint256 amountOut;
         if (actualCollateral != 0) {
-            amountOut = BurnerLoansCustody.withdraw(
+            (tokenOut, amountOut) = BurnerLoansCustody.withdraw(
                 dependencies_.depositManager,
                 asset_,
                 BurnerLoansConstants.DEPOSIT_PERIOD,
                 actualCollateral,
-                address(this)
+                address(this),
+                batch.config.withdrawAsShares
             );
-            if (amountOut == 0) revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
+        } else {
+            (tokenOut, ) = BurnerLoansCustody.previewWithdrawAmount(
+                dependencies_.depositManager,
+                asset_,
+                0,
+                batch.config.withdrawAsShares
+            );
         }
 
+        uint256 startingBalance = IERC20(tokenOut).balanceOf(address(this)) - amountOut;
         IBurnerLoans.SeizePreview memory result = _previewAmounts(
             dependencies_.ohmDecimals,
             batch.config,
             batch.pricing,
             actualDebtOhm,
+            actualCollateral,
+            tokenOut,
             amountOut,
             isProtocolCaller
         );
 
         if (result.keeperReward != 0) {
-            ERC20(asset_).safeTransfer(msg.sender, result.keeperReward);
+            ERC20(tokenOut).safeTransfer(msg.sender, result.keeperReward);
         }
         if (result.collateralToTreasury != 0) {
-            ERC20(asset_).safeTransfer(dependencies_.treasury, result.collateralToTreasury);
+            ERC20(tokenOut).safeTransfer(dependencies_.treasury, result.collateralToTreasury);
         }
 
-        uint256 finalBalance = IERC20(asset_).balanceOf(address(this));
+        uint256 finalBalance = IERC20(tokenOut).balanceOf(address(this));
         if (finalBalance != startingBalance) {
             revert IBurnerLoans.BurnerLoans_ResidualCollateralBalance(
-                asset_,
+                tokenOut,
                 finalBalance > startingBalance
                     ? finalBalance - startingBalance
                     : startingBalance - finalBalance
             );
         }
 
+        _emitSeizureEvents(asset_, borrowers_, batch, result);
+
+        return (result.tokenOut, result.keeperReward, result.collateralToTreasury);
+    }
+
+    /// @notice Emits borrower-level and token-aware aggregate settlement events.
+    function _emitSeizureEvents(
+        address asset_,
+        address[] memory borrowers_,
+        Batch memory batch_,
+        IBurnerLoans.SeizePreview memory result_
+    ) private {
         for (uint256 i; i < borrowers_.length; ++i) {
             emit IBurnerLoans.Seized(
                 msg.sender,
                 asset_,
                 borrowers_[i],
-                batch.debts[i],
-                batch.collaterals[i]
+                batch_.debts[i],
+                batch_.collaterals[i]
             );
         }
         emit IBurnerLoans.SeizureBatchSettled(
             msg.sender,
             asset_,
             borrowers_.length,
-            result.seizedDebtOhm,
-            result.seizedCollateral,
-            result.keeperReward,
-            result.collateralToTreasury
+            result_.seizedDebtOhm,
+            result_.seizedCollateral,
+            result_.tokenOut,
+            result_.keeperReward,
+            result_.collateralToTreasury
         );
-
-        return (result.keeperReward, result.collateralToTreasury);
     }
 
     /// @notice Scans active borrowers and returns a bounded set of seizable addresses.
@@ -284,26 +305,30 @@ library BurnerLoansSeizure {
         nextIndex = result_.nextIndex;
         if (borrowers.length == 0) return (borrowers, nextIndex, 0);
 
-        IDepositManager.AssetConfiguration memory custody = BurnerLoansCustody
-            .validateCustodySupportFor(
-                dependencies_.depositManager,
-                asset_,
-                BurnerLoansConstants.DEPOSIT_PERIOD,
-                false,
-                dependencies_.facility
-            );
-        uint256 amountOut = BurnerLoansCustody.previewWithdrawAmount(
-            custody.vault,
-            result_.seizedCollateral
+        BurnerLoansCustody.validateCustodySupportFor(
+            dependencies_.depositManager,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            false,
+            dependencies_.facility
         );
-        expectedKeeperReward = _keeperReward(
+        (address tokenOut, uint256 amountOut) = BurnerLoansCustody.previewWithdrawAmount(
+            dependencies_.depositManager,
+            asset_,
+            result_.seizedCollateral,
+            result_.config.withdrawAsShares
+        );
+        IBurnerLoans.SeizePreview memory preview = _previewAmounts(
             dependencies_.ohmDecimals,
             result_.config,
             result_.pricing,
             result_.seizedDebt,
+            result_.seizedCollateral,
+            tokenOut,
             amountOut,
             isProtocolCaller_
         );
+        expectedKeeperReward = preview.keeperReward;
     }
 
     /// @notice Scans active borrowers from a circular cursor until either bound is reached.
@@ -350,7 +375,9 @@ library BurnerLoansSeizure {
     }
 
     /// @notice Validates a seizure batch and calculates its expected custody output and routing.
-    /// @dev Reverts for disabled Inventory, invalid batch input, unsupported custody, or zero output.
+    /// @dev Reverts for disabled Inventory, invalid batch input, or unsupported custody.
+    ///      Zero output is accepted: execution defaults debt without a distribution, leaving
+    ///      untransferred shares in DepositManager as potential operator yield.
     function _quoteBatch(
         BurnerLoansContext memory dependencies_,
         address asset_,
@@ -416,27 +443,37 @@ library BurnerLoansSeizure {
     ) private view returns (Batch memory batch) {
         batch = _validateBatch(dependencies_, borrowers_, context_);
 
-        IDepositManager.AssetConfiguration memory custody = BurnerLoansCustody
-            .validateCustodySupportFor(
-                dependencies_.depositManager,
-                asset_,
-                BurnerLoansConstants.DEPOSIT_PERIOD,
-                false,
-                dependencies_.facility
-            );
+        BurnerLoansCustody.validateCustodySupportFor(
+            dependencies_.depositManager,
+            asset_,
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            false,
+            dependencies_.facility
+        );
+        address tokenOut;
         uint256 amountOut;
         if (batch.creditedCollateral != 0) {
-            amountOut = BurnerLoansCustody.previewWithdrawAmount(
-                custody.vault,
-                batch.creditedCollateral
+            (tokenOut, amountOut) = BurnerLoansCustody.previewWithdrawAmount(
+                dependencies_.depositManager,
+                asset_,
+                batch.creditedCollateral,
+                context_.config.withdrawAsShares
             );
-            if (amountOut == 0) revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
+        } else {
+            (tokenOut, ) = BurnerLoansCustody.previewWithdrawAmount(
+                dependencies_.depositManager,
+                asset_,
+                0,
+                context_.config.withdrawAsShares
+            );
         }
         batch.preview = _previewAmounts(
             dependencies_.ohmDecimals,
             batch.config,
             batch.pricing,
             batch.preview.seizedDebtOhm,
+            batch.creditedCollateral,
+            tokenOut,
             amountOut,
             isProtocolCaller_
         );
@@ -523,23 +560,43 @@ library BurnerLoansSeizure {
         IBurnerLoans.AssetConfig memory config_,
         Pricing memory pricing_,
         uint256 seizedDebt_,
-        uint256 seizedCollateral_,
+        uint256 seizedCollateralAssets_,
+        address tokenOut_,
+        uint256 amountOut_,
         bool isProtocolCaller_
     ) private pure returns (IBurnerLoans.SeizePreview memory preview) {
-        uint256 reward = _keeperReward(
-            ohmDecimals_,
-            config_,
-            pricing_,
-            seizedDebt_,
-            seizedCollateral_,
-            isProtocolCaller_
-        );
+        uint256 rewardOut;
+        if (config_.withdrawAsShares) {
+            uint256 rewardAssets = _keeperReward(
+                ohmDecimals_,
+                config_,
+                pricing_,
+                seizedDebt_,
+                seizedCollateralAssets_,
+                isProtocolCaller_
+            );
+            rewardOut = seizedCollateralAssets_ == 0
+                ? 0
+                : FullMath.mulDiv(amountOut_, rewardAssets, seizedCollateralAssets_);
+        } else {
+            // Underlying output is already in the configured reward denomination. Calculate the
+            // reward against actual redeemed collateral so it cannot consume required backing.
+            rewardOut = _keeperReward(
+                ohmDecimals_,
+                config_,
+                pricing_,
+                seizedDebt_,
+                amountOut_,
+                isProtocolCaller_
+            );
+        }
         return
             IBurnerLoans.SeizePreview({
                 seizedDebtOhm: seizedDebt_,
-                seizedCollateral: seizedCollateral_,
-                collateralToTreasury: seizedCollateral_ - reward,
-                keeperReward: reward,
+                seizedCollateral: seizedCollateralAssets_,
+                tokenOut: tokenOut_,
+                collateralToTreasury: amountOut_ - rewardOut,
+                keeperReward: rewardOut,
                 executable: true
             });
     }

@@ -320,7 +320,7 @@ interface IBurnerLoans {
 
     /// @notice One realized destination and amount from a yield claim.
     /// @param recipient Account that received the distributed yield.
-    /// @param amount Actual amount transferred, in collateral token decimals.
+    /// @param amount Actual amount transferred, in the claim's output-token decimals.
     struct YieldDistribution {
         address recipient;
         uint256 amount;
@@ -340,16 +340,18 @@ interface IBurnerLoans {
 
     /// @notice Complete configuration decoded from a Burner Loans FLOAN market.
     /// @param originationsEnabled Whether new debt may be originated against the asset.
+    /// @param withdrawAsShares Whether custody exits return the ERC-4626 share token.
     /// @param collateralDecimals Decimal precision of the collateral token.
     /// @param maxLtvBps Maximum loan-to-value ratio applied to collateral value.
     /// @param backingMultiplierBps Multiplier applied to the protocol backing floor.
-    /// @param keeperRewardBps Share of seized collateral awarded to the keeper.
+    /// @param keeperRewardBps Share of underlying-denominated seized collateral awarded to the keeper.
     /// @param termLength Duration added to the current timestamp for a new maturity.
     /// @param maxMaturityHorizon Maximum permitted distance between maturity and current time.
     /// @param debtCap Maximum active principal for the asset, in OHM decimals.
-    /// @param maxKeeperReward Maximum keeper reward, in collateral token decimals.
+    /// @param maxKeeperReward Maximum keeper reward, in underlying collateral decimals.
     struct AssetConfig {
         bool originationsEnabled;
+        bool withdrawAsShares;
         uint8 collateralDecimals;
         uint16 maxLtvBps;
         uint16 backingMultiplierBps;
@@ -365,10 +367,10 @@ interface IBurnerLoans {
     ///      every representable value is valid, so no separate upper-bound check is required.
     /// @param maxLtvBps Maximum loan-to-value ratio applied to collateral value.
     /// @param backingMultiplierBps Multiplier applied to the protocol backing floor.
-    /// @param keeperRewardBps Share of seized collateral awarded to the keeper.
+    /// @param keeperRewardBps Share of underlying-denominated seized collateral awarded to the keeper.
     /// @param termLength Duration added to the current timestamp for a new maturity.
     /// @param maxMaturityHorizon Maximum permitted distance between maturity and current time.
-    /// @param maxKeeperReward Maximum keeper reward, in collateral token decimals.
+    /// @param maxKeeperReward Maximum keeper reward, in underlying collateral decimals.
     struct AssetRiskConfigInput {
         uint16 maxLtvBps;
         uint16 backingMultiplierBps;
@@ -419,7 +421,7 @@ interface IBurnerLoans {
 
     /// @notice Projected result of a collateral withdrawal.
     /// @param returnToken Collateral token returned to the recipient.
-    /// @param returnAmount Collateral assets returned, in collateral token decimals.
+    /// @param returnAmount Amount returned, in `returnToken` decimals.
     /// @param remainingDepositedCollateral Withdrawable collateral credit remaining after withdrawal.
     /// @param resultingHealthFactor Health factor after withdrawal, scaled by 1e18.
     /// @param executable Whether the collateral debit is executable under current state. Always
@@ -447,22 +449,29 @@ interface IBurnerLoans {
     /// @notice Projected aggregate result of a seizure batch.
     /// @param seizedDebtOhm Principal defaulted, in OHM decimals.
     /// @param seizedCollateral Collateral seized, in collateral token decimals.
-    /// @param collateralToTreasury Collateral routed to Treasury.
-    /// @param keeperReward Collateral awarded to the keeper.
+    /// @param tokenOut Token returned by DepositManager.
+    /// @param collateralToTreasury Output-token amount routed to Treasury.
+    /// @param keeperReward Output-token amount awarded to the keeper.
     /// @param executable Whether every requested seizure is executable under current state.
     struct SeizePreview {
         uint256 seizedDebtOhm;
         uint256 seizedCollateral;
+        address tokenOut;
         uint256 collateralToTreasury;
         uint256 keeperReward;
         bool executable;
     }
 
     /// @notice Projected claimable yield for one collateral asset.
-    /// @param amount Claimable collateral yield, in collateral token decimals.
+    /// @param tokenOut Token returned by DepositManager.
+    /// @param requestedAssetAmount Claimable yield requested from DepositManager, in underlying
+    ///        collateral decimals.
+    /// @param amountOut Amount expected from DepositManager, in `tokenOut` decimals.
     /// @param executable Whether the claim is executable under current state.
     struct ClaimYieldPreview {
-        uint256 amount;
+        address tokenOut;
+        uint256 requestedAssetAmount;
+        uint256 amountOut;
         bool executable;
     }
 
@@ -471,8 +480,9 @@ interface IBurnerLoans {
     /// @param assets Assets represented by the custody shares, in collateral token decimals.
     /// @param borrowed Assets temporarily borrowed from custody, in collateral token decimals.
     /// @param liabilities Collateral owed to borrowers, in collateral token decimals.
-    /// @param claimableYield Maximum yield reported by DepositManager after borrowed assets,
-    ///        liabilities, and its one-unit solvency buffer, in collateral token decimals.
+    /// @param claimableYield Maximum underlying-output yield reported by DepositManager after
+    ///        borrowed assets, liabilities, and its one-unit redemption buffer, in collateral
+    ///        token decimals. Share-mode claims can additionally reclaim the final solvent unit.
     /// @param solvent Whether custody assets plus borrowed assets cover liabilities.
     struct AssetCollateralStatus {
         uint256 shares;
@@ -502,13 +512,17 @@ interface IBurnerLoans {
     /// @param asset Withdrawn collateral asset.
     /// @param onBehalfOf Borrower whose position was debited.
     /// @param recipient Account that received the collateral.
-    /// @param amount Asset-denominated collateral credit debited from the position.
+    /// @param requestedAssetAmount Asset-denominated collateral credit debited from the position.
+    /// @param tokenOut Token received by the recipient.
+    /// @param amountOut Amount received, in `tokenOut` decimals.
     event CollateralWithdrawn(
         address indexed caller,
         address indexed asset,
         address indexed onBehalfOf,
         address recipient,
-        uint256 amount
+        uint256 requestedAssetAmount,
+        address tokenOut,
+        uint256 amountOut
     );
 
     /// @notice Emitted when OHM principal is borrowed against collateral.
@@ -604,24 +618,34 @@ interface IBurnerLoans {
     /// @param borrowerCount Number of borrowers seized.
     /// @param seizedDebtOhm Aggregate principal defaulted, in OHM decimals.
     /// @param seizedCollateral Aggregate collateral seized.
-    /// @param keeperReward Collateral awarded to the keeper.
-    /// @param collateralToTreasury Collateral routed to Treasury.
+    /// @param tokenOut Token returned by DepositManager.
+    /// @param keeperReward Output-token amount awarded to the keeper.
+    /// @param collateralToTreasury Output-token amount routed to Treasury.
     event SeizureBatchSettled(
         address indexed caller,
         address indexed asset,
         uint256 borrowerCount,
         uint256 seizedDebtOhm,
         uint256 seizedCollateral,
+        address tokenOut,
         uint256 keeperReward,
         uint256 collateralToTreasury
     );
 
     /// @notice Emitted after custody yield is claimed and distributed atomically.
     /// @param asset Collateral asset whose yield was claimed.
-    /// @param claimed Actual collateral yield claimed.
+    /// @param requestedAssetAmount Asset-denominated yield requested from DepositManager.
+    /// @param tokenOut Token returned by DepositManager.
+    /// @param amountOut Actual yield claimed, in `tokenOut` decimals.
     /// @param distributions Ordered realized distributions: repurchase first when active, followed
     ///        by direct recipients in configured order, with the Treasury fallback last.
-    event YieldClaimed(address indexed asset, uint256 claimed, YieldDistribution[] distributions);
+    event YieldClaimed(
+        address indexed asset,
+        uint256 requestedAssetAmount,
+        address indexed tokenOut,
+        uint256 amountOut,
+        YieldDistribution[] distributions
+    );
 
     /// @notice Emitted when the canonical backing oracle changes.
     /// @param backingOracle New backing oracle address.
@@ -651,4 +675,9 @@ interface IBurnerLoans {
     /// @param asset Collateral asset whose origination state changed.
     /// @param enabled Whether new originations are enabled.
     event AssetOriginationsSet(address indexed asset, bool enabled);
+
+    /// @notice Emitted when an asset's custody output mode changes.
+    /// @param asset Collateral asset whose output mode changed.
+    /// @param withdrawAsShares Whether future custody exits return ERC-4626 shares.
+    event AssetWithdrawAsSharesSet(address indexed asset, bool withdrawAsShares);
 }

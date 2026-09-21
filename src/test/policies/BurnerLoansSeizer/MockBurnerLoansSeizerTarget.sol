@@ -88,12 +88,12 @@ contract MockBurnerLoansSeizerTarget is Policy, IERC165 {
     function seize(
         address asset_,
         address[] calldata borrowers_
-    ) external returns (uint256, uint256) {
+    ) external returns (address, uint256, uint256) {
         if (seizureReverts) revert SeizureReverted();
         ++seizureCalls;
         lastSeizedAsset = asset_;
         _lastSeizedBorrowers = borrowers_;
-        return (0, 0);
+        return (asset_, 0, 0);
     }
 
     function inventory() external pure returns (address) {

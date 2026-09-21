@@ -5,8 +5,13 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant)
 
 // Interfaces
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -17,12 +22,84 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
 // forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
+    // Vault supply = 100e6 shares and vault assets = 200e18 after the donation.
+    // yield shares = 100e18 yield * 100e6 shares / 200e18 assets = 50e6 shares.
+    uint256 internal constant _EXPECTED_EXTERNAL_SHARE_YIELD = 50e6;
+
+    function test_givenShareYieldBelowOneShare_whenRepeatedClaims(address caller_) public {
+        _depositCollateral();
+        _addYield(1);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(vaultAsset), true);
+        _makeVaultAsynchronous(vault);
+
+        // Raw asset/share units (both 6 decimals): supply = 100e6, assets = 100e6 + 1.
+        // Surplus = 1; floor(1 * 100e6 / (100e6 + 1)) = 0 shares.
+        IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
+            address(vaultAsset)
+        );
+        assertEq(preview.requestedAssetAmount, 1, "positive surplus request");
+        assertEq(preview.amountOut, 0, "surplus below one share");
+        for (uint256 i; i < 3; ++i) {
+            vm.expectEmit(true, true, true, true, address(depositManager));
+            emit IDepositManagerV1_1.AssetWithdrawn(
+                address(vaultAsset),
+                address(burnerLoans),
+                address(burnerLoans),
+                1,
+                address(vault),
+                0
+            );
+            vm.expectEmit(true, true, true, true, address(depositManager));
+            emit IDepositManagerV1_1.OperatorYieldClaimed(
+                address(vaultAsset),
+                address(burnerLoans),
+                address(burnerLoans),
+                1,
+                address(vault),
+                0
+            );
+            vm.recordLogs();
+            vm.prank(caller_);
+            (address tokenOut, uint256 amountOut) = burnerLoans.claimYield(address(vaultAsset));
+            assertEq(vm.getRecordedLogs().length, 2, "dust claim event count");
+            assertEq(tokenOut, address(vault), "dust output token");
+            assertEq(amountOut, 0, "dust output amount");
+        }
+        assertEq(vault.balanceOf(address(depositManager)), 100e6, "custody shares unchanged");
+        assertEq(vault.totalSupply(), 100e6, "no shares burned");
+        assertEq(vaultAsset.balanceOf(address(vault)), 100e6 + 1, "vault assets unchanged");
+        assertEq(
+            depositManager.getOperatorLiabilities(
+                IERC20(address(vaultAsset)),
+                address(burnerLoans)
+            ),
+            100e6,
+            "liabilities unchanged"
+        );
+        (uint256 operatorShares, ) = depositManager.getOperatorAssets(
+            IERC20(address(vaultAsset)),
+            address(burnerLoans)
+        );
+        assertEq(operatorShares, 100e6, "operator shares unchanged");
+
+        // One additional asset unit makes surplus = 2: floor(2 * 100e6 / (100e6 + 2)) = 1 share.
+        _addYield(1);
+        vm.prank(caller_);
+        (, uint256 claimedShares) = burnerLoans.claimYield(address(vaultAsset));
+        assertEq(claimedShares, 1, "retained surplus becomes claimable");
+        assertEq(vault.balanceOf(address(trsry)), 1, "Treasury receives retained yield");
+        assertEq(vault.balanceOf(address(burnerLoans)), 0, "no policy share residual");
+    }
+
     function test_givenDirectCustodyTreasuryOnlyRouting_claimsYield() public {
         _addDefaultUsdsAsset();
         _addDirectCustodyYield(101);
@@ -30,9 +107,9 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
             address(usds)
         );
-        uint256 actualClaimed = burnerLoans.claimYield(address(usds));
+        (, uint256 actualClaimed) = burnerLoans.claimYield(address(usds));
 
-        assertEq(preview.amount, 101, "preview amount");
+        assertEq(preview.requestedAssetAmount, 101, "preview amount");
         assertTrue(preview.executable, "preview executable");
         assertEq(actualClaimed, 101, "actual claimed amount");
         assertEq(usds.balanceOf(address(trsry)), 101, "Treasury amount");
@@ -52,11 +129,11 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
             address(usds)
         );
-        uint256 actualClaimed = burnerLoans.claimYield(address(usds));
+        (, uint256 actualClaimed) = burnerLoans.claimYield(address(usds));
 
         // claimed = 101 (asset decimals), direct BPS = 4,000 (4 decimals).
         // Direct amount = floor(101 * 4,000 / 10,000) = 40; Treasury receives 61.
-        assertEq(preview.amount, 101, "preview amount");
+        assertEq(preview.requestedAssetAmount, 101, "preview amount");
         assertTrue(preview.executable, "preview executable");
         assertEq(actualClaimed, 101, "actual claimed amount");
         assertEq(usds.balanceOf(recipient), 40, "direct recipient amount");
@@ -69,14 +146,13 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         address caller_
     ) public {
         claimed_ = uint128(bound(claimed_, 1, type(uint96).max));
-        vm.assume(caller_ != address(0));
         _useMockDepositManager();
         _configureYieldRouting(address(usds), address(0), 0);
         usds.mint(address(mockDepositManager), claimed_);
         mockDepositManager.setClaimableYield(claimed_);
 
         vm.prank(caller_);
-        uint256 actualClaimed = burnerLoans.claimYield(address(usds));
+        (, uint256 actualClaimed) = burnerLoans.claimYield(address(usds));
 
         assertEq(actualClaimed, claimed_, "actual claimed amount");
         assertEq(usds.balanceOf(address(trsry)), claimed_, "Treasury amount");
@@ -90,7 +166,6 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
     ) public {
         claimed_ = uint128(bound(claimed_, 1, type(uint96).max));
         bps_ = uint16(bound(bps_, 0, 10_000));
-        vm.assume(caller_ != address(0));
         _useMockVaultDepositManager();
         MockYieldRepurchaseRecipient recipient = _configureYieldRouting(
             address(usds),
@@ -151,8 +226,8 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             amount: 10
         });
         distributions[3] = IBurnerLoans.YieldDistribution({recipient: address(trsry), amount: 41});
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
-        emit IBurnerLoans.YieldClaimed(address(usds), 101, distributions);
+        vm.expectEmit(true, true, false, true, address(burnerLoans));
+        emit IBurnerLoans.YieldClaimed(address(usds), 101, address(usds), 101, distributions);
         burnerLoans.claimYield(address(usds));
 
         assertEq(usds.balanceOf(address(recipient)), 30, "repurchase amount");
@@ -213,9 +288,9 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             amount: 20
         });
         distributions[1] = IBurnerLoans.YieldDistribution({recipient: address(trsry), amount: 20});
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
-        emit IBurnerLoans.YieldClaimed(address(usds), 40, distributions);
-        uint256 actualClaimed = burnerLoans.claimYield(address(usds));
+        vm.expectEmit(true, true, false, true, address(burnerLoans));
+        emit IBurnerLoans.YieldClaimed(address(usds), 101, address(usds), 40, distributions);
+        (, uint256 actualClaimed) = burnerLoans.claimYield(address(usds));
 
         assertEq(actualClaimed, 40, "actual claimed amount");
         assertEq(usds.balanceOf(address(recipient)), 20, "repurchase amount");
@@ -301,7 +376,7 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         );
         burnerLoans.claimYield(address(usds));
 
-        assertEq(preview.amount, 100, "preview amount");
+        assertEq(preview.requestedAssetAmount, 100, "preview amount");
         assertTrue(preview.executable, "preview executable");
         assertEq(usds.balanceOf(address(recipient)), 50, "repurchase amount");
         assertEq(usds.balanceOf(address(trsry)), 50, "Treasury amount");
@@ -390,8 +465,8 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             memory distributions = new IBurnerLoans.YieldDistribution[](2);
         distributions[0] = IBurnerLoans.YieldDistribution({recipient: directRecipient, amount: 0});
         distributions[1] = IBurnerLoans.YieldDistribution({recipient: address(trsry), amount: 1});
-        vm.expectEmit(true, false, false, true, address(burnerLoans));
-        emit IBurnerLoans.YieldClaimed(address(usds), 1, distributions);
+        vm.expectEmit(true, true, false, true, address(burnerLoans));
+        emit IBurnerLoans.YieldClaimed(address(usds), 1, address(usds), 1, distributions);
 
         burnerLoans.claimYield(address(usds));
 
@@ -465,8 +540,196 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         uint256 claimed = vaultAsset.balanceOf(address(trsry)) - treasuryBefore;
 
         assertGt(claimed, 0, "claimed yield");
-        assertLe(claimed, preview.amount, "claim within theoretical maximum");
+        assertLe(claimed, preview.requestedAssetAmount, "claim within theoretical maximum");
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "policy residual");
+    }
+
+    function test_givenVaultYield_whenWithdrawAsShares_distributesShareToken() public {
+        _depositCollateral();
+        _addYield(10e6);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(vaultAsset), true);
+        _makeVaultAsynchronous(vault);
+
+        IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
+            address(vaultAsset)
+        );
+        uint256 treasurySharesBefore = vault.balanceOf(address(trsry));
+
+        (address tokenOut, uint256 amountOut) = burnerLoans.claimYield(address(vaultAsset));
+
+        assertEq(preview.tokenOut, address(vault), "preview token");
+        // deposited shares = 100e6; vault assets after yield = 110e6
+        // expected shares = floor(10e6 asset units * 100e6 shares / 110e6 asset units) = 9,090,909
+        assertEq(preview.amountOut, 9_090_909, "preview shares");
+        assertEq(tokenOut, address(vault), "token out");
+        assertEq(amountOut, preview.amountOut, "shares out");
+        assertEq(
+            vault.balanceOf(address(trsry)) - treasurySharesBefore,
+            amountOut,
+            "Treasury shares"
+        );
+        assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "underlying residual");
+        assertEq(vault.balanceOf(address(burnerLoans)), 0, "share residual");
+    }
+
+    function test_givenExternalShareTokenWithSameDecimals_whenClaimingYield_distributesExternalToken()
+        public
+    {
+        (
+            MockERC20 asset,
+            MockERC7575Vault externalVault,
+            IERC20 shareToken
+        ) = _addSameDecimalExternalShareAssetForTest();
+        uint128 depositedAssets = 100e18;
+        asset.mint(alice, depositedAssets + 10e18);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), depositedAssets);
+        burnerLoans.depositCollateral(address(asset), depositedAssets, alice);
+        asset.approve(address(depositManager), 10e18);
+        vm.stopPrank();
+        vm.prank(address(burnerLoans));
+        depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: IERC20(address(asset)),
+                payer: alice,
+                amount: 10e18,
+                maxAmount: 0
+            })
+        );
+
+        IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
+            address(asset)
+        );
+        (address tokenOut, uint256 amountOut) = burnerLoans.claimYield(address(asset));
+
+        assertNotEq(address(shareToken), address(externalVault), "external token should differ");
+        assertEq(asset.decimals(), shareToken.decimals(), "token decimals should match");
+        assertEq(preview.tokenOut, address(shareToken), "preview external token");
+        assertEq(tokenOut, address(shareToken), "external token out");
+        assertEq(amountOut, preview.amountOut, "external shares out");
+        assertEq(shareToken.balanceOf(address(trsry)), amountOut, "Treasury external shares");
+        assertEq(shareToken.balanceOf(address(burnerLoans)), 0, "policy share residual");
+    }
+
+    function test_givenExternalShareTokenWithDifferentDecimals_whenClaimingYield_distributesExternalToken()
+        public
+    {
+        (
+            MockERC20 asset,
+            MockERC7540ExternalShareVault externalVault,
+            MockERC7540ExternalShareToken shareToken
+        ) = _addAsyncExternalShareAssetForTest();
+        uint128 depositedAssets = 100e18;
+        asset.mint(alice, depositedAssets);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), depositedAssets);
+        burnerLoans.depositCollateral(address(asset), depositedAssets, alice);
+        vm.stopPrank();
+
+        // Donated underlying moves one share from 1e12 to 2e12 asset units, creating 100e18 yield.
+        asset.mint(address(externalVault), 100e18);
+        address directRecipient = makeAddr("externalShareDirectRecipient");
+        address[] memory directRecipients = new address[](1);
+        directRecipients[0] = directRecipient;
+        uint16[] memory directBps = new uint16[](1);
+        directBps[0] = 3_000;
+        MockYieldRepurchaseRecipient repurchaseRecipient = _configureYieldRouting(
+            address(asset),
+            address(externalVault),
+            2_000
+        );
+        IBurnerLoans.AssetYieldRouting memory routing = _directRouting(directRecipients, directBps);
+        routing.repurchaseRecipientBps = 2_000;
+        _setYieldAssetRouting(address(asset), routing);
+
+        IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
+            address(asset)
+        );
+        (address tokenOut, uint256 amountOut) = burnerLoans.claimYield(address(asset));
+
+        assertNotEq(address(shareToken), address(externalVault), "external token should differ");
+        assertEq(asset.decimals(), 18, "underlying decimals");
+        assertEq(shareToken.decimals(), 6, "share decimals");
+        assertEq(preview.requestedAssetAmount, 100e18, "underlying yield request");
+        assertEq(preview.tokenOut, address(shareToken), "preview external token");
+        assertEq(preview.amountOut, _EXPECTED_EXTERNAL_SHARE_YIELD, "preview raw shares");
+        assertEq(tokenOut, address(shareToken), "external token out");
+        assertEq(amountOut, _EXPECTED_EXTERNAL_SHARE_YIELD, "raw shares out");
+        assertEq(shareToken.balanceOf(address(repurchaseRecipient)), 10e6, "repurchase shares");
+        assertEq(shareToken.balanceOf(directRecipient), 15e6, "direct recipient shares");
+        assertEq(shareToken.balanceOf(address(trsry)), 25e6, "Treasury shares");
+        assertEq(shareToken.balanceOf(address(burnerLoans)), 0, "policy share residual");
+    }
+
+    function test_givenVaultYield_givenWithdrawAsShares_whenCallerIsArbitrary(
+        uint128 yieldSeed_,
+        address caller_
+    ) public {
+        uint256 yieldAmount = bound(yieldSeed_, 2, 100e6);
+        _depositCollateral();
+        _addYield(yieldAmount);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(vaultAsset), true);
+        _makeVaultAsynchronous(vault);
+
+        uint256 vaultSupplyBefore = vault.totalSupply();
+        uint256 vaultAssetsBefore = vault.totalAssets();
+        // yieldAmount (asset decimals) * vaultSupplyBefore (share decimals)
+        // / vaultAssetsBefore (asset decimals) = expectedShares (share decimals), rounded down.
+        uint256 expectedShares = (yieldAmount * vaultSupplyBefore) / vaultAssetsBefore;
+        uint256 treasurySharesBefore = vault.balanceOf(address(trsry));
+        uint256 treasuryAssetsBefore = vaultAsset.balanceOf(address(trsry));
+        (uint256 operatorSharesBefore, ) = depositManager.getOperatorAssets(
+            IERC20(address(vaultAsset)),
+            address(burnerLoans)
+        );
+
+        IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
+            address(vaultAsset)
+        );
+        assertEq(preview.requestedAssetAmount, yieldAmount, "preview asset request");
+        assertEq(preview.tokenOut, address(vault), "preview token");
+        assertEq(preview.amountOut, expectedShares, "preview shares");
+        assertTrue(preview.executable, "preview executable");
+
+        vm.prank(caller_);
+        (address tokenOut, uint256 amountOut) = burnerLoans.claimYield(address(vaultAsset));
+
+        assertEq(tokenOut, address(vault), "token out");
+        assertEq(amountOut, expectedShares, "shares out");
+        assertEq(
+            vault.balanceOf(address(trsry)) - treasurySharesBefore,
+            expectedShares,
+            "Treasury share delta"
+        );
+        assertEq(
+            vaultAsset.balanceOf(address(trsry)),
+            treasuryAssetsBefore,
+            "Treasury underlying unchanged"
+        );
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            IERC20(address(vaultAsset)),
+            address(burnerLoans)
+        );
+        assertEq(operatorSharesBefore - operatorSharesAfter, expectedShares, "custody share debit");
+        assertEq(
+            depositManager.getOperatorLiabilities(
+                IERC20(address(vaultAsset)),
+                address(burnerLoans)
+            ),
+            _COLLATERAL_AMOUNT,
+            "liabilities unchanged"
+        );
+        assertEq(
+            burnerLoans.getPosition(address(vaultAsset), alice).depositedCollateral,
+            _COLLATERAL_AMOUNT,
+            "position collateral unchanged"
+        );
+        assertEq(vault.totalSupply(), vaultSupplyBefore, "vault supply unchanged");
+        assertEq(vault.totalAssets(), vaultAssetsBefore, "vault assets unchanged");
+        assertEq(vault.balanceOf(address(burnerLoans)), 0, "share residual");
+        assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "underlying residual");
     }
 
     function test_givenTwoAssetsHaveYield_whenClaimingAssetA_doesNotClaimAssetB() public {
@@ -486,7 +749,7 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             address(assetB)
         );
 
-        uint256 assetAClaimed = burnerLoans.claimYield(address(vaultAsset));
+        (, uint256 assetAClaimed) = burnerLoans.claimYield(address(vaultAsset));
 
         IBurnerLoans.ClaimYieldPreview memory assetBPreviewAfter = burnerLoans.previewClaimYield(
             address(assetB)
@@ -502,7 +765,11 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             assetBVaultBalanceBefore,
             "asset B vault balance"
         );
-        assertEq(assetBPreviewAfter.amount, assetBPreviewBefore.amount, "asset B claimable yield");
+        assertEq(
+            assetBPreviewAfter.requestedAssetAmount,
+            assetBPreviewBefore.requestedAssetAmount,
+            "asset B claimable yield"
+        );
     }
 
     function test_givenNoSurplus_doesNotTransfer() public {
@@ -512,12 +779,35 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             address(vaultAsset)
         );
         uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
-        uint256 actualClaimed = burnerLoans.claimYield(address(vaultAsset));
+        (, uint256 actualClaimed) = burnerLoans.claimYield(address(vaultAsset));
 
         assertEq(actualClaimed, 0, "actual claimed amount");
-        assertEq(preview.amount, 0, "preview claimable yield");
+        assertEq(preview.requestedAssetAmount, 0, "preview claimable yield");
         assertTrue(preview.executable, "preview executable");
         assertEq(vaultAsset.balanceOf(address(trsry)), treasuryBefore, "treasury balance");
+    }
+
+    function test_givenNoSurplus_givenDepositManagerNowRequiresShares_reverts() public {
+        _depositCollateral();
+        address depositManagerConfigOperator = makeAddr("depositManagerConfigOperator");
+        vm.prank(admin);
+        IConfigOperator(address(depositManager)).setConfigOperator(depositManagerConfigOperator);
+        vm.prank(depositManagerConfigOperator);
+        IDepositManagerV1_1(address(depositManager)).setAssetShareWithdrawalRequired(
+            IERC20(address(vaultAsset)),
+            true
+        );
+
+        bytes memory expectedError = abi.encodeWithSelector(
+            IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares.selector,
+            address(vaultAsset),
+            address(vault)
+        );
+        vm.expectRevert(expectedError);
+        burnerLoans.previewClaimYield(address(vaultAsset));
+
+        vm.expectRevert(expectedError);
+        burnerLoans.claimYield(address(vaultAsset));
     }
 
     function test_givenEmptyMarket_doesNotTransfer() public {
@@ -528,7 +818,7 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
 
         burnerLoans.claimYield(address(vaultAsset));
 
-        assertEq(preview.amount, 0, "preview claimable yield");
+        assertEq(preview.requestedAssetAmount, 0, "preview claimable yield");
         assertTrue(preview.executable, "preview executable");
         assertEq(vaultAsset.balanceOf(address(trsry)), treasuryBefore, "treasury balance");
     }

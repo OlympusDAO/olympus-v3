@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
+import {Actions} from "src/Kernel.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -23,6 +24,54 @@ import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTime
 
 contract BurnerLoansConfigTimelockExecuteTest is BurnerLoansConfigTimelockConfigGuardsTest {
     uint16 internal constant _MAX_RETURN_DATA_BYTES = 256;
+
+    function test_givenTimelockPolicyIsInactive_reverts() public {
+        uint64 actionId = _queueMaximumLtvUpdate();
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_PolicyInactive.selector,
+                address(configTimelock)
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+    }
+
+    function test_givenBurnerLoansConfigPolicyIsInactive_reverts() public {
+        uint64 actionId = _queueMaximumLtvUpdate();
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_PolicyInactive.selector,
+                address(burnerLoansConfig)
+            )
+        );
+        configTimelock.executeQueuedAction(actionId);
+    }
+
+    function test_givenPoliciesAreReactivated_executes() public {
+        uint64 actionId = _queueMaximumLtvUpdate();
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoansConfig));
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+        vm.stopPrank();
+        vm.warp(block.timestamp + configTimelock.timelockDelay());
+
+        configTimelock.executeQueuedAction(actionId);
+
+        assertTrue(
+            configTimelock.getQueuedAction(actionId).executed,
+            "reactivated policies should permit queued execution"
+        );
+    }
 
     function test_givenYieldRecipientActionMatured_permissionlessExecutionAppliesRecipient(
         address executor_

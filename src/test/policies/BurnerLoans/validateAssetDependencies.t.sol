@@ -48,6 +48,7 @@ contract BurnerLoansValidateAssetDependenciesTest is BurnerLoansTest {
 
     function test_givenDepositPeriodIsDisabled_reverts() public {
         _configureUsdsDependencies();
+        vm.prank(admin);
         depositManager.disableAssetPeriod(
             IERC20(address(usds)),
             BurnerLoansConstants.DEPOSIT_PERIOD,

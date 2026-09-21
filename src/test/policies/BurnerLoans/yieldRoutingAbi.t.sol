@@ -29,7 +29,7 @@ contract BurnerLoansYieldRoutingAbiTest is BurnerLoansTest {
     bytes32 internal constant _YIELD_ASSET_ROUTING_SET_TOPIC =
         keccak256("YieldAssetRoutingSet(address,(uint16,(address,uint16)[]))");
     bytes32 internal constant _YIELD_CLAIMED_TOPIC =
-        keccak256("YieldClaimed(address,uint256,(address,uint256)[])");
+        keccak256("YieldClaimed(address,uint256,address,uint256,(address,uint256)[])");
 
     BurnerLoansYieldRoutingAbiHarness internal _harness;
 
@@ -74,17 +74,23 @@ contract BurnerLoansYieldRoutingAbiTest is BurnerLoansTest {
         });
 
         vm.recordLogs();
-        emit IBurnerLoans.YieldClaimed(asset, 10_000, distributions);
+        address tokenOut = makeAddr("tokenOut");
+        emit IBurnerLoans.YieldClaimed(asset, 10_000, tokenOut, 9_999, distributions);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1, "claim event count");
-        assertEq(entries[0].topics.length, 2, "claim event topic count");
+        assertEq(entries[0].topics.length, 3, "claim event topic count");
         assertEq(entries[0].topics[0], _YIELD_CLAIMED_TOPIC, "claim event signature");
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(asset))), "claim event asset");
+        assertEq(entries[0].topics[2], bytes32(uint256(uint160(tokenOut))), "claim event token");
 
-        (uint256 claimed, IBurnerLoans.YieldDistribution[] memory decodedDistributions) = abi
-            .decode(entries[0].data, (uint256, IBurnerLoans.YieldDistribution[]));
-        assertEq(claimed, 10_000, "claimed amount");
+        (
+            uint256 requestedAssetAmount,
+            uint256 amountOut,
+            IBurnerLoans.YieldDistribution[] memory decodedDistributions
+        ) = abi.decode(entries[0].data, (uint256, uint256, IBurnerLoans.YieldDistribution[]));
+        assertEq(requestedAssetAmount, 10_000, "requested amount");
+        assertEq(amountOut, 9_999, "output amount");
         assertEq(decodedDistributions.length, distributions.length, "distribution count");
         for (uint256 i; i < distributions.length; ++i) {
             _assertDistributionEq(decodedDistributions[i], distributions[i], "distribution");

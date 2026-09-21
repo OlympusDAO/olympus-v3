@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Calls whose effects are asserted directly intentionally ignore return values.
+// forge-lint: disable-start(unused-return)
+
 // Libraries
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {Vm} from "forge-std/Vm.sol";
@@ -14,6 +17,7 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Contracts
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {Actions, Module} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
@@ -117,6 +121,43 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
 
         assertEq(burnerLoans.configurator(), address(replacement), "replacement configurator");
         assertEq(floan.getMarket(marketId).manager, address(replacement), "market manager");
+    }
+
+    function test_givenShareMode_whenCompatibleReplacement_preservesModeAndWithdrawal() public {
+        MockERC4626 vault = _addDefaultUsdsVaultAsset();
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(usds), true);
+
+        uint128 depositAmount = 1_000e6;
+        usds.mint(alice, depositAmount);
+        vm.prank(alice);
+        usds.approve(address(burnerLoans), depositAmount);
+        vm.prank(alice);
+        burnerLoans.depositCollateral(address(usds), depositAmount, alice);
+
+        BurnerLoansConfig replacement = _activateReplacementConfigurator();
+        _setConfigurator(replacement);
+
+        vm.startPrank(admin);
+        inventory.disable("");
+        inventory.setConfigurator(address(replacement));
+        inventory.enable("");
+        burnerLoans.enable("");
+        vm.stopPrank();
+
+        IBurnerLoans.AssetConfig memory migratedConfig = replacement.getAssetConfig(address(usds));
+        assertTrue(migratedConfig.withdrawAsShares, "withdraw-as-shares mode");
+
+        _makeVaultAsynchronous(vault);
+        uint256 expectedShares = vault.convertToShares(depositAmount);
+        vm.prank(alice);
+        (address tokenOut, uint256 amountOut, uint256 remainingCollateral, ) = burnerLoans
+            .withdrawCollateral(address(usds), depositAmount, alice, alice);
+
+        assertEq(tokenOut, address(vault), "share token out");
+        assertEq(amountOut, expectedShares, "share amount out");
+        assertEq(remainingCollateral, 0, "remaining collateral");
+        assertEq(vault.balanceOf(alice), expectedShares, "recipient share balance");
     }
 
     function test_givenTwoRegisteredAssets_whenCompatibleReplacement() public {
@@ -556,3 +597,5 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         assertEq(after_.tokenBalancesHash, before_.tokenBalancesHash, "token balances");
     }
 }
+
+// forge-lint: disable-end(unused-return)

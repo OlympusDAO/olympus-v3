@@ -4,9 +4,11 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
+import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -46,6 +48,20 @@ contract BurnerLoansConfigTimelockQueueSetAssetDebtCapTest is BurnerLoansConfigT
             )
         );
         configTimelock.queueSetAssetDebtCap(unknownAsset, 100_000e9);
+    }
+
+    function test_givenBurnerLoansConfigPolicyIsInactive_reverts() public {
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_PolicyInactive.selector,
+                address(burnerLoansConfig)
+            )
+        );
+        vm.prank(burnerLoansAdmin);
+        configTimelock.queueSetAssetDebtCap(address(usds), 100_000e9);
     }
 
     // queueSetAssetDebtCap

@@ -4,6 +4,7 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
+import {Actions} from "src/Kernel.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
@@ -25,6 +26,25 @@ import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTime
 // forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockConfigGuardsTest {
+    function test_givenTimelockPolicyIsInactive_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            abi.encode(address(usds), uint128(100_000e9))
+        );
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoansConfigTimelock.BurnerLoansConfigTimelock_PolicyInactive.selector,
+                address(configTimelock)
+            )
+        );
+        vm.prank(burnerLoansAdmin);
+        configTimelock.queueBatch(actions);
+    }
+
     // queueBatch
     // given caller has neither admin nor burner_loans_admin
     //  when queueing a valid batch

@@ -10,13 +10,15 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
-contract MockDepositManager is IDepositManager, IERC165 {
+contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
     error MockDepositManager_TransferFailed();
 
     Kernel public kernel;
@@ -44,6 +46,9 @@ contract MockDepositManager is IDepositManager, IERC165 {
     mapping(bytes32 liabilitiesKey => uint256 liabilities) internal _operatorLiabilities;
     mapping(bytes32 periodKey => uint256 indexPlusOne) internal _assetPeriodIndexPlusOne;
     mapping(bytes32 periodKey => uint256 receiptTokenId) internal _receiptTokenIdsByPeriod;
+    mapping(IERC20 asset => IERC20 shareToken) internal _assetShareTokens;
+    mapping(IERC20 asset => bool asyncRedeem) internal _assetAsyncRedeem;
+    mapping(IERC20 asset => bool required) internal _assetShareWithdrawalRequired;
 
     constructor(Kernel kernel_, address asset_) {
         kernel = kernel_;
@@ -124,19 +129,71 @@ contract MockDepositManager is IDepositManager, IERC165 {
                 revert MockDepositManager_TransferFailed();
             }
         } else {
-            uint256 shares = IERC4626(configuration.vault).convertToShares(params.amount);
-            if (shares == 0 || IERC4626(configuration.vault).previewRedeem(shares) == 0) {
-                return 0;
+            if (isAssetShareWithdrawalRequired(params.asset)) {
+                revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                    address(params.asset),
+                    configuration.vault
+                );
             }
-            _operatorShares[operatorKey] -= shares;
-            actualAmount = IERC4626(configuration.vault).redeem(
-                shares,
-                params.recipient,
-                address(this)
-            );
+            uint256 shares = IERC4626(configuration.vault).convertToShares(params.amount);
+            if (shares != 0 && IERC4626(configuration.vault).previewRedeem(shares) != 0) {
+                _operatorShares[operatorKey] -= shares;
+                actualAmount = IERC4626(configuration.vault).redeem(
+                    shares,
+                    params.recipient,
+                    address(this)
+                );
+            }
         }
-        _operatorLiabilities[operatorKey] -= actualAmount;
+        _operatorLiabilities[operatorKey] -= params.amount;
         return actualAmount;
+    }
+
+    function withdraw(
+        WithdrawParams calldata params,
+        bool withdrawAsShares_
+    ) external override returns (IERC20 tokenOut, uint256 amountOut) {
+        if (withdrawReverts) revert MockDepositManager_TransferFailed();
+        _requireConfiguredPeriod(params.asset, params.depositPeriod, msg.sender);
+
+        AssetConfiguration memory configuration = _assetConfigurations[params.asset];
+        tokenOut = getAssetWithdrawalToken(params.asset, withdrawAsShares_);
+        bytes32 operatorKey = _getOperatorKey(params.asset, msg.sender);
+        if (withdrawAsShares_) {
+            uint256 shares = IERC4626(configuration.vault).convertToShares(params.amount);
+            amountOut = shares;
+            if (shares != 0) {
+                _operatorShares[operatorKey] -= shares;
+                if (!tokenOut.transfer(params.recipient, shares)) {
+                    revert MockDepositManager_TransferFailed();
+                }
+            }
+        } else {
+            if (configuration.vault == address(0)) {
+                _operatorShares[operatorKey] -= params.amount;
+                amountOut = params.amount;
+                if (!params.asset.transfer(params.recipient, params.amount)) {
+                    revert MockDepositManager_TransferFailed();
+                }
+            } else {
+                if (isAssetShareWithdrawalRequired(params.asset)) {
+                    revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                        address(params.asset),
+                        configuration.vault
+                    );
+                }
+                uint256 shares = IERC4626(configuration.vault).convertToShares(params.amount);
+                if (shares != 0 && IERC4626(configuration.vault).previewRedeem(shares) != 0) {
+                    _operatorShares[operatorKey] -= shares;
+                    amountOut = IERC4626(configuration.vault).redeem(
+                        shares,
+                        params.recipient,
+                        address(this)
+                    );
+                }
+            }
+        }
+        _operatorLiabilities[operatorKey] -= params.amount;
     }
 
     function maxClaimYield(IERC20, address) external view override returns (uint256) {
@@ -148,6 +205,49 @@ contract MockDepositManager is IDepositManager, IERC165 {
         address recipient_,
         uint256 amount_
     ) external override returns (uint256 actualAmount) {
+        return _claimYield(asset_, recipient_, amount_);
+    }
+
+    function claimYield(
+        IERC20 asset_,
+        address recipient_,
+        uint256 amount_,
+        bool withdrawAsShares_
+    ) external override returns (IERC20 tokenOut, uint256 amountOut) {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        tokenOut = getAssetWithdrawalToken(asset_, withdrawAsShares_);
+        if (withdrawAsShares_) {
+            claimYieldCalls++;
+            if (claimYieldCallbackTarget != address(0)) {
+                // The fixture records callback failure without reverting the claim.
+                // forge-lint: disable-start(low-level-calls)
+                (claimYieldCallbackSucceeded, ) = claimYieldCallbackTarget.call(
+                    claimYieldCallbackData
+                );
+                // forge-lint: disable-end(low-level-calls)
+            }
+            uint256 actualAssetAmount = amount_ > claimableYield ? claimableYield : amount_;
+            if (claimActualAmountOverrideEnabled && actualAssetAmount > claimActualAmountOverride) {
+                actualAssetAmount = claimActualAmountOverride;
+            }
+            amountOut = IERC4626(configuration.vault).convertToShares(actualAssetAmount);
+            if (amountOut == 0) return (tokenOut, 0);
+            // Accounting intentionally follows external calls so tests can exercise caller guards.
+            // forge-lint: disable-next-line(reentrancy-no-eth)
+            if (amountOut != 0 && !tokenOut.transfer(recipient_, amountOut)) {
+                revert MockDepositManager_TransferFailed();
+            }
+            claimableYield -= actualAssetAmount;
+            return (tokenOut, amountOut);
+        }
+        amountOut = _claimYield(asset_, recipient_, amount_);
+    }
+
+    function _claimYield(
+        IERC20 asset_,
+        address recipient_,
+        uint256 amount_
+    ) internal returns (uint256 actualAmount) {
         claimYieldCalls++;
         if (claimYieldCallbackTarget != address(0)) {
             // The fixture records callback failure without reverting the claim.
@@ -185,6 +285,24 @@ contract MockDepositManager is IDepositManager, IERC165 {
         return 0;
     }
 
+    function borrowingWithdraw(
+        BorrowingWithdrawParams calldata params_,
+        bool withdrawAsShares_
+    ) external view override returns (IERC20 tokenOut, uint256 amountOut) {
+        AssetConfiguration memory configuration = _assetConfigurations[params_.asset];
+        tokenOut = getAssetWithdrawalToken(params_.asset, withdrawAsShares_);
+        if (withdrawAsShares_) {
+            return (tokenOut, IERC4626(configuration.vault).convertToShares(params_.amount));
+        }
+        if (isAssetShareWithdrawalRequired(params_.asset)) {
+            revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                address(params_.asset),
+                configuration.vault
+            );
+        }
+        return (tokenOut, params_.amount);
+    }
+
     function borrowingRepay(
         BorrowingRepayParams calldata
     ) external pure override returns (uint256) {
@@ -217,6 +335,26 @@ contract MockDepositManager is IDepositManager, IERC165 {
         uint256 depositCap_,
         uint256 minimumDeposit_
     ) external override {
+        _configureAsset(asset_, vault_, depositCap_, minimumDeposit_);
+    }
+
+    function addAsset(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_,
+        bool requiresShareWithdrawal_
+    ) external override {
+        _configureAsset(asset_, vault_, depositCap_, minimumDeposit_);
+        _assetShareWithdrawalRequired[asset_] = requiresShareWithdrawal_;
+    }
+
+    function _configureAsset(
+        IERC20 asset_,
+        IERC4626 vault_,
+        uint256 depositCap_,
+        uint256 minimumDeposit_
+    ) internal {
         AssetConfiguration storage configuration = _assetConfigurations[asset_];
         if (!configuration.isConfigured) {
             _configuredAssets.push(asset_);
@@ -226,6 +364,14 @@ contract MockDepositManager is IDepositManager, IERC165 {
         configuration.depositCap = depositCap_;
         configuration.minimumDeposit = minimumDeposit_;
         configuration.vault = address(vault_);
+        _assetShareTokens[asset_] = address(vault_) == address(0)
+            ? asset_
+            : IERC20(address(vault_));
+    }
+
+    function setAssetShareWithdrawalRequired(IERC20 asset_, bool required_) external override {
+        validateAssetShareWithdrawalRequired(asset_, required_);
+        _assetShareWithdrawalRequired[asset_] = required_;
     }
 
     function setAssetDepositCap(IERC20 asset_, uint256 depositCap_) external override {
@@ -386,8 +532,8 @@ contract MockDepositManager is IDepositManager, IERC165 {
     ) external view override returns (uint256 shares, uint256 sharesInAssets) {
         shares = _operatorShares[_getOperatorKey(asset_, operator_)];
         AssetConfiguration memory configuration = _assetConfigurations[asset_];
-        sharesInAssets = configuration.vault == address(0)
-            ? shares
+        sharesInAssets = configuration.vault == address(0) ? shares : _assetAsyncRedeem[asset_]
+            ? IERC4626(configuration.vault).convertToAssets(shares)
             : IERC4626(configuration.vault).previewRedeem(shares);
     }
 
@@ -401,10 +547,99 @@ contract MockDepositManager is IDepositManager, IERC165 {
         return _configuredAssets;
     }
 
+    function getAssetWithdrawalToken(
+        IERC20 asset_,
+        bool withdrawAsShares_
+    ) public view override returns (IERC20 tokenOut) {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (!configuration.isConfigured) revert AssetManager_NotConfigured();
+        if (!withdrawAsShares_) return asset_;
+        if (configuration.vault == address(0)) {
+            revert IAssetManagerV1_1.AssetManager_VaultRequired(address(asset_));
+        }
+        return _assetShareTokens[asset_];
+    }
+
+    function isAssetShareWithdrawalRequired(
+        IERC20 asset_
+    ) public view override returns (bool required) {
+        if (!_assetConfigurations[asset_].isConfigured) revert AssetManager_NotConfigured();
+        return _assetShareWithdrawalRequired[asset_] || _assetAsyncRedeem[asset_];
+    }
+
+    function validateAssetShareWithdrawalRequired(
+        IERC20 asset_,
+        bool required_
+    ) public view override {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (!configuration.isConfigured) revert AssetManager_NotConfigured();
+        if (required_ && configuration.vault == address(0)) {
+            revert IAssetManagerV1_1.AssetManager_VaultRequired(address(asset_));
+        }
+        if (!required_ && _assetAsyncRedeem[asset_]) {
+            revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                address(asset_),
+                configuration.vault
+            );
+        }
+    }
+
+    function validateAssetWithdrawAsShares(
+        IERC20 asset_,
+        bool withdrawAsShares_
+    ) external view override {
+        getAssetWithdrawalToken(asset_, withdrawAsShares_);
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (!withdrawAsShares_ && isAssetShareWithdrawalRequired(asset_)) {
+            revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                address(asset_),
+                configuration.vault
+            );
+        }
+    }
+
+    function previewDeposit(
+        IERC20 asset_,
+        uint256 assetAmount_
+    ) external view override returns (uint256 estimatedCreditedAssets, uint256 shares) {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (configuration.vault == address(0)) return (assetAmount_, assetAmount_);
+        shares = IERC4626(configuration.vault).previewDeposit(assetAmount_);
+        estimatedCreditedAssets = _assetAsyncRedeem[asset_]
+            ? IERC4626(configuration.vault).convertToAssets(shares)
+            : IERC4626(configuration.vault).previewRedeem(shares);
+    }
+
+    function previewWithdraw(
+        IERC20 asset_,
+        uint256 assetAmount_,
+        bool withdrawAsShares_
+    ) external view override returns (IERC20 tokenOut, uint256 amountOut) {
+        AssetConfiguration memory configuration = _assetConfigurations[asset_];
+        if (!withdrawAsShares_ && isAssetShareWithdrawalRequired(asset_)) {
+            revert IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares(
+                address(asset_),
+                configuration.vault
+            );
+        }
+        tokenOut = getAssetWithdrawalToken(asset_, withdrawAsShares_);
+        if (configuration.vault == address(0)) {
+            return (tokenOut, assetAmount_);
+        }
+        uint256 shares = IERC4626(configuration.vault).convertToShares(assetAmount_);
+        if (withdrawAsShares_) return (tokenOut, shares);
+        amountOut = _assetAsyncRedeem[asset_]
+            ? IERC4626(configuration.vault).convertToAssets(shares)
+            : IERC4626(configuration.vault).previewRedeem(shares);
+    }
+
     function supportsInterface(bytes4 interfaceId_) external pure override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IDepositManager).interfaceId;
+            interfaceId_ == type(IAssetManager).interfaceId ||
+            interfaceId_ == type(IAssetManagerV1_1).interfaceId ||
+            interfaceId_ == type(IDepositManager).interfaceId ||
+            interfaceId_ == type(IDepositManagerV1_1).interfaceId;
     }
 
     function setDepositReverts(bool depositReverts_) external {
@@ -413,6 +648,14 @@ contract MockDepositManager is IDepositManager, IERC165 {
 
     function setWithdrawReverts(bool withdrawReverts_) external {
         withdrawReverts = withdrawReverts_;
+    }
+
+    function setAssetShareToken(IERC20 asset_, IERC20 shareToken_) external {
+        _assetShareTokens[asset_] = shareToken_;
+    }
+
+    function setAssetAsyncRedeem(IERC20 asset_, bool asyncRedeem_) external {
+        _assetAsyncRedeem[asset_] = asyncRedeem_;
     }
 
     function setDepositActualAmountOverride(bool enabled_, uint256 amount_) external {

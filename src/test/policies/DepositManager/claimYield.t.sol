@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Scenario-specific literals remain inline for auditability, and calls whose effects are asserted
+// directly intentionally ignore return values.
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
+
+// Interfaces
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+
+// Contracts
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 
 contract DepositManagerClaimYieldTest is DepositManagerTest {
@@ -156,6 +165,33 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
         _assertDepositAssetBalance(recipient, 0, 0);
+    }
+
+    function test_whenAmountLessThanOneShare_emitsLegacyYieldClaimEvent()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+    {
+        asset.mint(address(vault), 10_000e18);
+
+        // requested assets = 1 (18 decimals)
+        // shares = floor(1 * vault total supply / vault total assets) = 0 (18 decimals)
+        assertEq(vault.convertToShares(1), 0, "one asset unit should round to zero shares");
+        address recipient = makeAddr("recipient");
+
+        vm.expectEmit(true, true, true, true, address(depositManager));
+        emit IAssetManager.AssetWithdrawn(address(iAsset), recipient, DEPOSIT_OPERATOR, 0, 0);
+        vm.expectEmit(true, true, true, true, address(depositManager));
+        emit IDepositManager.OperatorYieldClaimed(address(iAsset), recipient, DEPOSIT_OPERATOR, 0);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.claimYield(iAsset, recipient, 1);
+
+        assertEq(actualAmount, 0, "actual amount mismatch");
     }
 
     // given the asset period is disabled
@@ -456,3 +492,5 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
         _assertDepositAssetBalance(recipient, maxYield, 5);
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

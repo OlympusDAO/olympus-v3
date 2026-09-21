@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant, reentrancy-no-eth, unused-return)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
+import {ReentrantShareVault} from "src/test/policies/DepositManager/fixtures/ReentrantShareVault.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     event BorrowingWithdrawal(
@@ -20,6 +25,8 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
     uint256 public constant BORROW_AMOUNT = 1e18;
 
+    ReentrantShareVault internal _reentrantVault;
+
     function _takeSnapshot(uint256 amount_) internal {
         _expectedWithdrawnShares = vault.previewWithdraw(amount_);
 
@@ -28,6 +35,27 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         (_operatorSharesBefore, _operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
             iAsset,
             DEPOSIT_OPERATOR
+        );
+    }
+
+    modifier givenReentrantVault() {
+        _reentrantVault = new ReentrantShareVault(asset);
+        vault = _reentrantVault;
+        iVault = IERC4626(address(_reentrantVault));
+        _;
+    }
+
+    function verifyBorrowingAccountingDuringCallback(
+        uint256 expectedOperatorShares_,
+        uint256 expectedBorrowedAmount_
+    ) external view {
+        assertEq(msg.sender, address(_reentrantVault), "callback caller");
+        (uint256 operatorShares, ) = depositManager.getOperatorAssets(iAsset, DEPOSIT_OPERATOR);
+        assertEq(operatorShares, expectedOperatorShares_, "callback operator shares");
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            expectedBorrowedAmount_,
+            "callback borrowed amount"
         );
     }
 
@@ -179,6 +207,45 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
     //  [X] it reduces the borrowing capacity by the actual amount withdrawn
     //  [X] it reduces the operator shares by the actual amount (in terms of shares) withdrawn
 
+    function test_givenRedeemCallback_callbackObservesUpdatedAccounting()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenReentrantVault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+    {
+        uint256 sharesToWithdraw = vault.convertToShares(BORROW_AMOUNT);
+        (uint256 operatorSharesBefore, ) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        _reentrantVault.setCallbackFrom(
+            address(depositManager),
+            address(this),
+            abi.encodeCall(
+                this.verifyBorrowingAccountingDuringCallback,
+                (operatorSharesBefore - sharesToWithdraw, BORROW_AMOUNT)
+            )
+        );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
+        );
+
+        assertTrue(
+            _reentrantVault.callbackSucceeded(),
+            "callback should observe updated accounting"
+        );
+    }
+
     function test_givenNoBorrow(
         uint256 amount_
     )
@@ -305,8 +372,54 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
     }
 
+    function test_givenVaultRedeemReverts_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenReentrantVault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+    {
+        (uint256 operatorSharesBefore, ) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        uint256 borrowedAmountBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        uint256 custodySharesBefore = vault.balanceOf(address(depositManager));
+        _reentrantVault.setRedeemShouldRevert(true);
+
+        vm.expectRevert(ReentrantShareVault.ReentrantShareVault_RedeemReverted.selector);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: BORROW_AMOUNT
+            })
+        );
+
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        assertEq(operatorSharesAfter, operatorSharesBefore, "operator shares should roll back");
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            borrowedAmountBefore,
+            "borrowed amount should roll back"
+        );
+        assertEq(
+            vault.balanceOf(address(depositManager)),
+            custodySharesBefore,
+            "custody shares should roll back"
+        );
+        assertEq(iAsset.balanceOf(RECIPIENT), 0, "recipient assets should not change");
+    }
+
     // when the borrow amount is less than one vault share
-    //  [X] it does nothing
+    //  [X] legacy borrowing records the requested debt and returns zero output
 
     function test_whenBorrowAmountIsLessThanOneShare(
         uint256 amount_
@@ -329,7 +442,6 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
 
         _takeSnapshot(amount_);
 
-        // Call function
         vm.prank(DEPOSIT_OPERATOR);
         uint256 actualAmount = depositManager.borrowingWithdraw(
             IDepositManager.BorrowingWithdrawParams({
@@ -339,7 +451,7 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             })
         );
 
-        assertEq(actualAmount, 0, "actual amount");
+        assertEq(actualAmount, 0, "actual amount should be zero");
 
         // Assert tokens
         assertEq(
@@ -351,13 +463,13 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         // Borrowed amounts
         assertEq(
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
-            BORROW_AMOUNT + amount_, // Adjusted for the amount requested
-            "borrowed amount"
+            BORROW_AMOUNT + amount_,
+            "legacy debt increases by requested amount"
         );
         assertEq(
             depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
-            previousDepositorDepositActualAmount - BORROW_AMOUNT - amount_, // Adjusted for the amount requested
-            "borrowing capacity"
+            previousDepositorDepositActualAmount - BORROW_AMOUNT - amount_,
+            "legacy capacity decreases by requested amount"
         );
 
         // Operator assets should be the same
@@ -490,3 +602,5 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant, reentrancy-no-eth, unused-return)

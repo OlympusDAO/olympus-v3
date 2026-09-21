@@ -4,7 +4,6 @@ pragma solidity >=0.8.24;
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
@@ -13,18 +12,6 @@ contract BurnerLoansConfigTimelockQueueSetAssetOriginationsEnabledTest is
     BurnerLoansConfigTimelockTest
 {
     event AssetOriginationsSet(address indexed asset, bool enabled);
-
-    function _queueOriginationsEnabled(
-        address asset_,
-        bool enabled_
-    ) internal returns (uint64 actionId) {
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = _singleAction(
-            IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
-            abi.encode(asset_, enabled_)
-        );
-        return configTimelock.queueBatch(actions);
-    }
 
     // queueSetAssetOriginationsEnabled
     // given caller has neither admin nor burner_loans_admin

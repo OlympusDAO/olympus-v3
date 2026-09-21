@@ -5,17 +5,23 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant)
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
+import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
@@ -29,6 +35,128 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     event AssetAdded(address indexed asset, IBurnerLoans.AssetConfig config);
     event AssetFeeConfigSet(address indexed asset, IBurnerLoans.AssetFeeConfig config);
     event AssetOriginationsSet(address indexed asset, bool enabled);
+
+    function _requireShareWithdrawals() internal {
+        address depositManagerConfigOperator = makeAddr("depositManagerConfigOperator");
+        vm.prank(admin);
+        IConfigOperator(address(depositManager)).setConfigOperator(depositManagerConfigOperator);
+        vm.prank(depositManagerConfigOperator);
+        IDepositManagerV1_1(address(depositManager)).setAssetShareWithdrawalRequired(
+            IERC20(address(usds)),
+            true
+        );
+    }
+
+    function _configureAsyncRedeemVault() internal returns (address vaultAddress) {
+        MockERC7540ExternalShareVault asyncVault = new MockERC7540ExternalShareVault(
+            usds,
+            false,
+            true,
+            true
+        );
+        asyncVault.setAssetsPerShare(1);
+        vaultAddress = address(asyncVault);
+
+        _configurePrice(address(usds), 1e18);
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(usds)),
+            IERC4626(vaultAddress),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        burnerLoansConfig.setGlobalDebtCap(uint128(1_000_000 * 10 ** _ohmDecimals()));
+        vm.stopPrank();
+    }
+
+    function test_givenAsyncRedeemVault_whenUnderlyingMode_reverts() public {
+        address vaultAddress = _configureAsyncRedeemVault();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares.selector,
+                address(usds),
+                vaultAddress
+            )
+        );
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+
+        assertFalse(burnerLoansConfig.isAssetConfigured(address(usds)), "asset remains absent");
+    }
+
+    function test_givenAsyncRedeemVault_whenShareMode_addsAsset() public {
+        _configureAsyncRedeemVault();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            true
+        );
+
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(usds)).withdrawAsShares,
+            "async vault should retain explicit share mode"
+        );
+    }
+
+    function test_givenExplicitShareWithdrawalRequirement_whenUnderlyingMode_reverts() public {
+        MockERC4626 configuredVault = _configureUsdsVaultDependencies();
+        _requireShareWithdrawals();
+        _setDefaultGlobalDebtCap();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManagerV1_1.AssetManager_RequiresWithdrawAsShares.selector,
+                address(usds),
+                address(configuredVault)
+            )
+        );
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+
+        assertFalse(burnerLoansConfig.isAssetConfigured(address(usds)), "asset remains absent");
+    }
+
+    function test_givenExplicitShareWithdrawalRequirement_whenShareMode_addsAsset() public {
+        _configureUsdsVaultDependencies();
+        _requireShareWithdrawals();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            true
+        );
+
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(usds)).withdrawAsShares,
+            "explicit requirement should retain share mode"
+        );
+    }
 
     function _expectAssetAdded(
         address asset_,
@@ -58,7 +186,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -76,7 +205,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -96,7 +226,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         assertFalse(burnerLoansConfig.isAssetConfigured(address(usds)), "asset not configured");
@@ -116,7 +247,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(0),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -138,7 +270,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(ohm),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -156,7 +289,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
 
         vm.prank(admin);
         _expectAssetAdded(address(usds), expected, _defaultAssetFeeConfig());
-        burnerLoansConfig.addAsset(address(usds), debtCap, input, _defaultAssetFeeConfig());
+        burnerLoansConfig.addAsset(address(usds), debtCap, input, _defaultAssetFeeConfig(), false);
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(usds)), "configured");
         assertEq(burnerLoansConfig.getAssetConfig(address(usds)).debtCap, 0, "debt cap");
@@ -187,7 +320,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -216,7 +350,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -239,7 +374,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(highDecimals),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -256,7 +392,13 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         IBurnerLoans.AssetRiskConfigInput memory config = _defaultAssetRiskConfigInput();
 
         vm.prank(admin);
-        burnerLoansConfig.addAsset(address(usds), debtCapOhm_, config, _defaultAssetFeeConfig());
+        burnerLoansConfig.addAsset(
+            address(usds),
+            debtCapOhm_,
+            config,
+            _defaultAssetFeeConfig(),
+            false
+        );
 
         assertEq(
             burnerLoansConfig.getAssetConfig(address(usds)).debtCap,
@@ -283,7 +425,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -303,7 +446,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -325,7 +469,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -347,7 +492,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -366,7 +512,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         assertEq(
@@ -397,7 +544,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -422,7 +570,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -448,7 +597,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             config,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -471,7 +621,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -492,7 +643,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -515,7 +667,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -538,7 +691,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -558,7 +712,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -576,7 +731,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(usds)), "asset configured");
@@ -601,7 +757,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
     }
 
@@ -621,7 +778,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -642,7 +800,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -671,7 +830,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
     }
 
@@ -702,7 +862,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(usds)), "asset configured");
@@ -737,7 +898,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         uint16 configDataLength_
     ) public {
         configDataLength_ = uint16(bound(configDataLength_, 0, 384));
-        vm.assume(configDataLength_ != 6 * 32);
+        vm.assume(configDataLength_ != 7 * 32);
         bytes memory configData = new bytes(configDataLength_);
         _addDefaultUsdsAsset();
         uint32 marketId = _replaceMarketConfigForTest(
@@ -801,7 +962,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             input,
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
@@ -868,6 +1030,58 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
     }
 
     // addAsset
+    // given DepositManager configures a vault
+    //  when share output is selected
+    //   then the mode is stored in the canonical market configuration
+    function test_givenVault_whenWithdrawAsShares_configuresAsset() public {
+        _configureUsdsVaultDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            true
+        );
+
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(usds)).withdrawAsShares,
+            "share output should be stored"
+        );
+    }
+
+    // addAsset
+    // given DepositManager keeps the asset idle
+    //  when share output is selected
+    //   then it reverts before creating a market
+    function test_givenIdleAsset_whenWithdrawAsShares_reverts() public {
+        _configureUsdsDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManagerV1_1.AssetManager_VaultRequired.selector,
+                address(usds)
+            )
+        );
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            true
+        );
+
+        assertFalse(
+            burnerLoansConfig.isAssetConfigured(address(usds)),
+            "failed share-mode add should not create a market"
+        );
+    }
+
+    // addAsset
     // given asset dependencies and fuzzed risk values are valid
     //  when addAsset is called by admin
     //   then the asset stores the risk values with the fixed valid fee curve
@@ -902,6 +1116,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
         });
         IBurnerLoans.AssetConfig memory expected = IBurnerLoans.AssetConfig({
             originationsEnabled: true,
+            withdrawAsShares: false,
             collateralDecimals: USDS_DECIMALS,
             maxLtvBps: maxLtvBps_,
             backingMultiplierBps: backingMultiplierBps_,
@@ -915,7 +1130,7 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
 
         vm.prank(admin);
         _expectAssetAdded(address(usds), expected, feeConfig);
-        burnerLoansConfig.addAsset(address(usds), debtCap_, input, feeConfig);
+        burnerLoansConfig.addAsset(address(usds), debtCap_, input, feeConfig, false);
 
         IBurnerLoans.AssetConfig memory stored = burnerLoansConfig.getAssetConfig(address(usds));
         assertEq(stored.originationsEnabled, expected.originationsEnabled, "enabled");
@@ -965,7 +1180,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            feeConfig
+            feeConfig,
+            false
         );
 
         IBurnerLoans.AssetFeeConfig memory storedFeeConfig = burnerLoansConfig.getAssetFeeConfig(
@@ -998,7 +1214,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         vm.prank(admin);
@@ -1007,7 +1224,8 @@ contract BurnerLoansConfigAddAssetTest is BurnerLoansTest {
             address(weth),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(18),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         assertTrue(burnerLoansConfig.isAssetConfigured(address(weth)), "configured");

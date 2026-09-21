@@ -696,6 +696,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Parameters: asset remains configured in BurnerLoans
     // - Expected branch: custody support validation reverts
     function test_depositCollateral_givenDepositManagerPeriodDisabled_reverts() public {
+        vm.prank(admin);
         depositManager.disableAssetPeriod(
             IERC20(address(usds)),
             BurnerLoansConstants.DEPOSIT_PERIOD,
@@ -794,6 +795,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Parameters: asset is configured and enabled in BurnerLoans
     // - Expected branch: preview and write reject before custody transfer
     function test_depositCollateral_givenDepositManagerMinimumDepositNotMet_reverts() public {
+        vm.prank(admin);
         depositManager.setAssetMinimumDeposit(IERC20(address(usds)), 2e6);
         _mintAndApprove(address(usds), alice, 1e6);
 
@@ -828,6 +830,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Parameters: asset is configured and enabled in BurnerLoans
     // - Expected branch: preview and write reject before custody transfer
     function test_depositCollateral_givenDepositManagerDepositCapExceeded_reverts() public {
+        vm.prank(admin);
         depositManager.setAssetDepositCap(IERC20(address(usds)), 999e6);
         _mintAndApprove(address(usds), alice, 1_000e6);
 
@@ -965,7 +968,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             address(feeToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         uint128 amount = 1_000e18;
@@ -1011,7 +1015,8 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             address(callbackToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         uint128 amount = 1_000e18;
@@ -1514,6 +1519,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vaultAsset = new MockERC20("Vault USDS", "vUSDS", USDS_DECIMALS);
         vault = new MockERC4626(ERC20(address(vaultAsset)), "Vault", "VAULT");
         _configurePrice(address(vaultAsset), 1e18);
+        vm.startPrank(admin);
         depositManager.addAsset(
             IERC20(address(vaultAsset)),
             IERC4626(address(vault)),
@@ -1525,13 +1531,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
             BurnerLoansConstants.DEPOSIT_PERIOD,
             address(burnerLoans)
         );
-        vm.prank(admin);
         burnerLoansConfig.addAsset(
             address(vaultAsset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
+        vm.stopPrank();
     }
 
     function _setActiveDebtForAlice(

@@ -40,3 +40,5 @@ bytes32 constant BURNER_LOANS_ADMIN_ROLE = "burner_loans_admin";
 bytes32 constant BURNER_LOANS_SEIZER_ROLE = "burner_loans_seizer";
 /// @dev Supplies and withdraws protocol-owned OHM held by Burner Loans Inventory.
 bytes32 constant BURNER_LOANS_INVENTORY_PROVIDER_ROLE = "burner_loans_inventory_provider";
+/// @dev Deposit Manager parameter proposer and bounded lifecycle recovery role.
+bytes32 constant DEPOSIT_MANAGER_ADMIN_ROLE = "deposit_manager_admin";

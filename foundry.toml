@@ -172,3 +172,5 @@ solidity-http = { version = "0.0.7", git = "https://github.com/Recon-Fuzz/solidi
 uniswap-v3-core = { version = "1.0.1", git = "https://github.com/Uniswap/v3-core.git", rev = "6562c52e8f75f0c10f9deaf44861847585fc8129" }
 uniswap-v3-periphery = { version = "1.4.2", git = "https://github.com/Uniswap/v3-periphery.git", rev = "b325bb0905d922ae61fcc7df85ee802e8df5e96c" }
 excessively-safe-call = { version = "0.0.1", git = "https://github.com/nomad-xyz/ExcessivelySafeCall.git", rev = "81cd99ce3e69117d665d7601c330ea03b97acce0" }
+openzeppelin-community-contracts = { version = "0.0.1", git = "https://github.com/OpenZeppelin/openzeppelin-community-contracts.git", rev = "92f252851c41449bd8417a6ebdcc8db95c8f66c9" }
+openzeppelin-5-7 = { version = "5.7.0", git = "https://github.com/OpenZeppelin/openzeppelin-contracts.git", rev = "cab19933c33c2ad1d4c7a84864a3601dddfd16f3" }

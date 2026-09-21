@@ -189,11 +189,13 @@ contract BurnerLoansConfig is
     /// @param debtCapOhm_ Initial active debt cap, in OHM decimals.
     /// @param riskConfig_ Initial risk and term configuration.
     /// @param feeConfig_ Initial utilization fee curve.
+    /// @param withdrawAsShares_ Whether all DepositManager exits return ERC-4626 shares.
     function addAsset(
         address asset_,
         uint128 debtCapOhm_,
         AssetRiskConfigInput calldata riskConfig_,
-        AssetFeeConfig calldata feeConfig_
+        AssetFeeConfig calldata feeConfig_,
+        bool withdrawAsShares_
     ) external givenEnabled onlyAdminRole {
         if (_isAssetConfigured(asset_)) {
             revert BurnerLoans_AssetAlreadyConfigured(asset_);
@@ -201,17 +203,10 @@ contract BurnerLoansConfig is
         AssetConfig memory assetConfig = _validateAndBuildAssetConfig(
             asset_,
             debtCapOhm_,
-            riskConfig_
+            riskConfig_,
+            withdrawAsShares_
         );
         _validateFeeConfig(feeConfig_);
-        BurnerLoansMarketConfig.Data memory marketData = BurnerLoansMarketConfig.Data({
-            maxKeeperReward: assetConfig.maxKeeperReward,
-            backingMultiplierBps: assetConfig.backingMultiplierBps,
-            keeperRewardBps: assetConfig.keeperRewardBps,
-            kinkBps: feeConfig_.kinkBps,
-            preKinkSlopeBps: feeConfig_.preKinkSlopeBps,
-            postKinkSlopeBps: feeConfig_.postKinkSlopeBps
-        });
 
         // Burner Loans resolves this market by its unique facility and token pair, not its ID.
         // forge-lint: disable-start(unused-return)
@@ -228,7 +223,17 @@ contract BurnerLoansConfig is
                 maxLtvBps: riskConfig_.maxLtvBps,
                 baseFeeBps: feeConfig_.baseFeeBps
             }),
-            abi.encode(marketData)
+            abi.encode(
+                BurnerLoansMarketConfig.Data({
+                    withdrawAsShares: assetConfig.withdrawAsShares,
+                    maxKeeperReward: assetConfig.maxKeeperReward,
+                    backingMultiplierBps: assetConfig.backingMultiplierBps,
+                    keeperRewardBps: assetConfig.keeperRewardBps,
+                    kinkBps: feeConfig_.kinkBps,
+                    preKinkSlopeBps: feeConfig_.preKinkSlopeBps,
+                    postKinkSlopeBps: feeConfig_.postKinkSlopeBps
+                })
+            )
         );
         // forge-lint: disable-end(unused-return)
         _FACILITY.addAsset(asset_);
@@ -317,11 +322,33 @@ contract BurnerLoansConfig is
         bool enabled_
     ) external givenEnabled onlyConfigOperatorOrAdmin {
         (uint32 marketId_, AssetConfig memory currentConfig) = _requireAssetConfigured(asset_);
+        if (enabled_) {
+            _validateAssetDependencies(asset_);
+        }
         if (currentConfig.originationsEnabled == enabled_) return;
-        if (enabled_) _validateAssetDependencies(asset_);
 
         _FLOAN.setMarketOriginationsEnabled(marketId_, enabled_);
         emit AssetOriginationsSet(asset_, enabled_);
+    }
+
+    /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if Config is disabled, the caller is unauthorized, the asset is not uniquely
+    ///      configured, or share output is requested without a configured DepositManager vault.
+    function setAssetWithdrawAsShares(
+        address asset_,
+        bool withdrawAsShares_
+    ) external givenEnabled onlyConfigOperatorOrAdmin {
+        (uint32 marketId_, AssetConfig memory currentConfig) = _requireAssetConfigured(asset_);
+        IBurnerLoansView(address(_FACILITY)).validateAssetWithdrawAsShares(
+            asset_,
+            withdrawAsShares_
+        );
+        if (currentConfig.withdrawAsShares == withdrawAsShares_) return;
+
+        BurnerLoansMarketConfig.Data memory marketData = _getMarketData(marketId_);
+        marketData.withdrawAsShares = withdrawAsShares_;
+        _FLOAN.setMarketConfigData(marketId_, abi.encode(marketData));
+        emit AssetWithdrawAsSharesSet(asset_, withdrawAsShares_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
@@ -579,7 +606,8 @@ contract BurnerLoansConfig is
     function _validateAndBuildAssetConfig(
         address asset_,
         uint128 debtCapOhm_,
-        AssetRiskConfigInput memory riskConfig_
+        AssetRiskConfigInput memory riskConfig_,
+        bool withdrawAsShares_
     ) internal view returns (AssetConfig memory assetConfig) {
         if (asset_ == address(0)) revert BurnerLoans_ZeroAddress();
         if (asset_ == address(_OHM)) revert BurnerLoans_InvalidCollateralAsset(asset_);
@@ -589,6 +617,7 @@ contract BurnerLoansConfig is
 
         assetConfig = AssetConfig({
             originationsEnabled: true,
+            withdrawAsShares: withdrawAsShares_,
             collateralDecimals: actualDecimals,
             maxLtvBps: riskConfig_.maxLtvBps,
             backingMultiplierBps: riskConfig_.backingMultiplierBps,
@@ -601,6 +630,10 @@ contract BurnerLoansConfig is
 
         _validateRiskConfig(riskConfig_);
         _validateAssetDependencies(asset_);
+        IBurnerLoansView(address(_FACILITY)).validateAssetWithdrawAsShares(
+            asset_,
+            withdrawAsShares_
+        );
     }
 
     /// @notice Validates a risk-config input.

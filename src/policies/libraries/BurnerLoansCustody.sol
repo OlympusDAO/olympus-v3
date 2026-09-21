@@ -3,13 +3,14 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
-import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -56,6 +57,16 @@ library BurnerLoansCustody {
         address onBehalfOf;
         address recipient;
         uint128 amount;
+    }
+
+    /// @notice Token-aware yield claim inputs shared by distribution and event emission.
+    struct ClaimedYield {
+        address asset;
+        address tokenOut;
+        address treasury;
+        address repurchaseRecipient;
+        uint256 requestedAssetAmount;
+        uint256 amountOut;
     }
 
     /// @notice Quotes and executes a borrow against the first borrower position.
@@ -262,7 +273,10 @@ library BurnerLoansCustody {
         )
     {
         BurnerLoansContext memory dependencies_ = _dependencies();
-        (uint32 marketId_, ) = _getAssetMarket(dependencies_, asset_);
+        (uint32 marketId_, IBurnerLoans.AssetConfig memory assetConfig) = _getAssetMarket(
+            dependencies_,
+            asset_
+        );
         _requireSenderAuthorized(onBehalfOf_);
         WithdrawParams memory params_ = WithdrawParams({
             marketId: marketId_,
@@ -301,12 +315,13 @@ library BurnerLoansCustody {
             revert IBurnerLoans.BurnerLoans_UnhealthyWithdrawal(healthFactor);
         }
 
-        amountOut = withdraw(
+        (tokenOut, amountOut) = withdraw(
             dependencies_.depositManager,
             params_.asset,
             BurnerLoansConstants.DEPOSIT_PERIOD,
             params_.amount,
-            params_.recipient
+            params_.recipient,
+            assetConfig.withdrawAsShares
         );
         if (amountOut == 0) {
             revert IBurnerLoans.BurnerLoans_ZeroCollateralWithdrawal();
@@ -316,9 +331,10 @@ library BurnerLoansCustody {
             params_.asset,
             params_.onBehalfOf,
             params_.recipient,
-            params_.amount
+            params_.amount,
+            tokenOut,
+            amountOut
         );
-        tokenOut = params_.asset;
     }
 
     /// @notice Validates custody support for an explicit operator.
@@ -387,25 +403,43 @@ library BurnerLoansCustody {
         }
     }
 
-    /// @notice Quotes withdrawable collateral credited by a vault deposit.
-    /// @param vault_ ERC-4626 vault, or zero for direct custody.
+    /// @notice Quotes withdrawable collateral credited by a DepositManager deposit.
+    /// @param depositManager_ DepositManager V1.1 implementation.
+    /// @param asset_ Underlying collateral asset.
     /// @param amount_ Underlying amount supplied.
-    /// @return Actual withdrawable credit, rounded according to the vault.
-    function previewDepositAmount(address vault_, uint128 amount_) public view returns (uint128) {
-        if (vault_ == address(0)) return amount_;
-        IERC4626 vault = IERC4626(vault_);
-        uint256 shares = vault.previewDeposit(amount_);
-        return shares == 0 ? 0 : SafeCast.toUint128(vault.previewRedeem(shares));
+    /// @return Estimated withdrawable credit, rounded according to DepositManager.
+    function previewDepositAmount(
+        IDepositManager depositManager_,
+        address asset_,
+        uint128 amount_
+    ) public view returns (uint128) {
+        // Burner Loans credits only the asset-denominated estimate; the share estimate is
+        // informational for callers that interact with DepositManager directly.
+        // forge-lint: disable-start(unused-return)
+        (uint256 estimatedCredit, ) = IDepositManagerV1_1(address(depositManager_)).previewDeposit(
+            IERC20(asset_),
+            amount_
+        );
+        // forge-lint: disable-end(unused-return)
+        return SafeCast.toUint128(estimatedCredit);
     }
 
-    /// @notice Quotes vault assets returned for a requested collateral debit.
-    /// @param vault_ ERC-4626 vault, or zero for direct custody.
+    /// @notice Quotes the DepositManager output for a requested collateral debit.
+    /// @param depositManager_ DepositManager V1.1 implementation.
+    /// @param asset_ Underlying collateral asset.
     /// @param amount_ Credited collateral amount.
-    /// @return Actual underlying amount returned by the vault.
-    function previewWithdrawAmount(address vault_, uint256 amount_) public view returns (uint256) {
-        if (vault_ == address(0)) return amount_;
-        IERC4626 vault = IERC4626(vault_);
-        return vault.previewRedeem(vault.convertToShares(amount_));
+    /// @param withdrawAsShares_ Whether DepositManager returns vault shares.
+    /// @return tokenOut Token expected from DepositManager.
+    /// @return amountOut Amount expected in `tokenOut` decimals.
+    function previewWithdrawAmount(
+        IDepositManager depositManager_,
+        address asset_,
+        uint256 amount_,
+        bool withdrawAsShares_
+    ) public view returns (address tokenOut, uint256 amountOut) {
+        (IERC20 outputToken, uint256 outputAmount) = IDepositManagerV1_1(address(depositManager_))
+            .previewWithdraw(IERC20(asset_), amount_, withdrawAsShares_);
+        return (address(outputToken), outputAmount);
     }
 
     /// @notice Transfers collateral into DepositManager custody.
@@ -452,25 +486,29 @@ library BurnerLoansCustody {
 
     /// @notice Withdraws collateral from DepositManager custody.
     /// @dev Reverts with the underlying DepositManager error when withdrawal is unavailable.
-    /// @return Actual amount transferred to the recipient.
+    /// @return tokenOut Token transferred to the recipient.
+    /// @return amountOut Actual amount transferred in `tokenOut` decimals.
     function withdraw(
         IDepositManager depositManager_,
         address asset_,
         uint8 depositPeriod_,
         uint256 amount_,
-        address recipient_
-    ) public returns (uint256) {
-        return
-            depositManager_.withdraw(
-                IDepositManager.WithdrawParams({
-                    asset: IERC20(asset_),
-                    depositPeriod: depositPeriod_,
-                    depositor: address(this),
-                    recipient: recipient_,
-                    amount: amount_,
-                    isWrapped: false
-                })
-            );
+        address recipient_,
+        bool withdrawAsShares_
+    ) public returns (address tokenOut, uint256 amountOut) {
+        IERC20 outputToken;
+        (outputToken, amountOut) = IDepositManagerV1_1(address(depositManager_)).withdraw(
+            IDepositManager.WithdrawParams({
+                asset: IERC20(asset_),
+                depositPeriod: depositPeriod_,
+                depositor: address(this),
+                recipient: recipient_,
+                amount: amount_,
+                isWrapped: false
+            }),
+            withdrawAsShares_
+        );
+        tokenOut = address(outputToken);
     }
 
     /// @notice Returns validated custody accounting for an asset and operator.
@@ -517,7 +555,7 @@ library BurnerLoansCustody {
         EnumerableSet.AddressSet storage assets_,
         BurnerLoansDependencies.YieldRoutingState storage routing_,
         address asset_
-    ) public returns (uint256 claimed) {
+    ) public returns (address tokenOut, uint256 amountOut) {
         _requireAssetRegistered(assets_, asset_);
         BurnerLoansContext memory dependencies_ = _dependencies();
         IBurnerLoans.AssetCollateralStatus memory collateralStatus = getAssetCollateralStatus(
@@ -540,26 +578,55 @@ library BurnerLoansCustody {
             asset_
         );
 
-        uint256 requestedAmount = collateralStatus.claimableYield;
-        if (requestedAmount == 0) return 0;
+        IBurnerLoans.AssetConfig memory assetConfig;
+        (, assetConfig) = _getAssetMarket(dependencies_, asset_);
+        uint256 requestedAmount = _claimableYieldRequest(
+            collateralStatus,
+            assetConfig.withdrawAsShares
+        );
+        if (requestedAmount == 0) {
+            IAssetManagerV1_1 assetManager = IAssetManagerV1_1(
+                address(dependencies_.depositManager)
+            );
+            assetManager.validateAssetWithdrawAsShares(
+                IERC20(asset_),
+                assetConfig.withdrawAsShares
+            );
+            IERC20 zeroClaimToken = assetManager.getAssetWithdrawalToken(
+                IERC20(asset_),
+                assetConfig.withdrawAsShares
+            );
+            return (address(zeroClaimToken), 0);
+        }
 
         // Snapshot the validated route before the external claim. Distribution must use one
         // coherent configuration even if a callback changes routing during claim execution.
         address repurchaseRecipient = routing_.repurchaseRecipient;
         IBurnerLoans.AssetYieldRouting memory assetRouting = routing_.assetRouting[asset_];
 
-        claimed = dependencies_.depositManager.claimYield(
-            IERC20(asset_),
-            address(this),
-            requestedAmount
-        );
+        IERC20 outputToken;
+        (outputToken, amountOut) = IDepositManagerV1_1(address(dependencies_.depositManager))
+            .claimYield(
+                IERC20(asset_),
+                address(this),
+                requestedAmount,
+                assetConfig.withdrawAsShares
+            );
+        tokenOut = address(outputToken);
+
+        // A rounded-zero claim preserves custody and must not emit a distribution event.
+        if (amountOut == 0) return (tokenOut, 0);
 
         _distributeClaimedYield(
-            asset_,
-            dependencies_.treasury,
-            repurchaseRecipient,
-            assetRouting,
-            claimed
+            ClaimedYield({
+                asset: asset_,
+                tokenOut: tokenOut,
+                treasury: dependencies_.treasury,
+                repurchaseRecipient: repurchaseRecipient,
+                requestedAssetAmount: requestedAmount,
+                amountOut: amountOut
+            }),
+            assetRouting
         );
     }
 
@@ -568,11 +635,8 @@ library BurnerLoansCustody {
     ///      residual, including all rounding dust. Zero-value token calls are skipped, while the
     ///      event retains every configured leg in deterministic route order, with Treasury last.
     function _distributeClaimedYield(
-        address asset_,
-        address treasury_,
-        address repurchaseRecipient_,
-        IBurnerLoans.AssetYieldRouting memory routing_,
-        uint256 claimed_
+        ClaimedYield memory claim_,
+        IBurnerLoans.AssetYieldRouting memory routing_
     ) private {
         uint256 repurchaseCount = routing_.repurchaseRecipientBps == 0 ? 0 : 1;
         uint256 directCount = routing_.directAllocations.length;
@@ -582,29 +646,29 @@ library BurnerLoansCustody {
         uint256 allocatedAmount;
 
         if (repurchaseCount != 0) {
-            // claimed_ (asset decimals) * repurchase BPS (4 decimals) / 10_000 (4 decimals)
-            // = amount (asset decimals), rounded down in favor of Treasury.
+            // claimed_ (output-token decimals) * repurchase BPS (4 decimals) / 10_000 (4 decimals)
+            // = amount (output-token decimals), rounded down in favor of Treasury.
             uint256 repurchaseAmount = FullMath.mulDiv(
-                claimed_,
+                claim_.amountOut,
                 routing_.repurchaseRecipientBps,
                 BurnerLoansConstants.MAX_BPS
             );
             distributions[0] = IBurnerLoans.YieldDistribution({
-                recipient: repurchaseRecipient_,
+                recipient: claim_.repurchaseRecipient,
                 amount: repurchaseAmount
             });
             allocatedAmount += repurchaseAmount;
             if (repurchaseAmount != 0) {
-                ERC20(asset_).safeTransfer(repurchaseRecipient_, repurchaseAmount);
+                ERC20(claim_.tokenOut).safeTransfer(claim_.repurchaseRecipient, repurchaseAmount);
             }
         }
 
         for (uint256 i; i < directCount; ++i) {
             IBurnerLoans.DirectYieldAllocation memory allocation = routing_.directAllocations[i];
-            // claimed_ (asset decimals) * direct BPS (4 decimals) / 10_000 (4 decimals)
-            // = amount (asset decimals), rounded down in favor of Treasury.
+            // claimed_ (output-token decimals) * direct BPS (4 decimals) / 10_000 (4 decimals)
+            // = amount (output-token decimals), rounded down in favor of Treasury.
             uint256 amount = FullMath.mulDiv(
-                claimed_,
+                claim_.amountOut,
                 allocation.bps,
                 BurnerLoansConstants.MAX_BPS
             );
@@ -614,23 +678,29 @@ library BurnerLoansCustody {
             });
             allocatedAmount += amount;
             if (amount != 0) {
-                ERC20(asset_).safeTransfer(allocation.recipient, amount);
+                ERC20(claim_.tokenOut).safeTransfer(allocation.recipient, amount);
             }
         }
 
         // Every allocation is floor(claimed * bps / MAX_BPS), and validated non-Treasury BPS cannot
         // exceed MAX_BPS. The sum of those floors therefore cannot exceed claimed, so this
         // subtraction cannot underflow. Treasury receives all unallocated yield and rounding dust.
-        uint256 treasuryAmount = claimed_ - allocatedAmount;
+        uint256 treasuryAmount = claim_.amountOut - allocatedAmount;
         distributions[nonTreasuryCount] = IBurnerLoans.YieldDistribution({
-            recipient: treasury_,
+            recipient: claim_.treasury,
             amount: treasuryAmount
         });
         if (treasuryAmount != 0) {
-            ERC20(asset_).safeTransfer(treasury_, treasuryAmount);
+            ERC20(claim_.tokenOut).safeTransfer(claim_.treasury, treasuryAmount);
         }
 
-        emit IBurnerLoans.YieldClaimed(asset_, claimed_, distributions);
+        emit IBurnerLoans.YieldClaimed(
+            claim_.asset,
+            claim_.requestedAssetAmount,
+            claim_.tokenOut,
+            claim_.amountOut,
+            distributions
+        );
     }
 
     /// @notice Quotes claimable yield and validates current custody and routing state.
@@ -647,7 +717,21 @@ library BurnerLoansCustody {
             asset_,
             address(this)
         );
-        preview.amount = collateralStatus.claimableYield;
+        IBurnerLoans.AssetConfig memory assetConfig;
+        (, assetConfig) = _getAssetMarket(dependencies_, asset_);
+        preview.requestedAssetAmount = _claimableYieldRequest(
+            collateralStatus,
+            assetConfig.withdrawAsShares
+        );
+        IERC20 outputToken;
+        (outputToken, preview.amountOut) = IDepositManagerV1_1(
+            address(dependencies_.depositManager)
+        ).previewWithdraw(
+                IERC20(asset_),
+                preview.requestedAssetAmount,
+                assetConfig.withdrawAsShares
+            );
+        preview.tokenOut = address(outputToken);
         preview.executable = collateralStatus.solvent;
         if (preview.executable) {
             BurnerLoansDependencies.validateStoredAssetYieldRouting(
@@ -657,6 +741,23 @@ library BurnerLoansCustody {
                 asset_
             );
         }
+    }
+
+    /// @notice Returns the underlying-denominated yield request for the configured output mode.
+    /// @dev Legacy underlying withdrawals retain DepositManager's one-unit redemption buffer.
+    ///      Share withdrawals do not redeem, so the solvent surplus can include that final unit.
+    ///      The request is capped by assets currently held because borrowed coverage is accounted
+    ///      for but is not presently transferable from custody.
+    function _claimableYieldRequest(
+        IBurnerLoans.AssetCollateralStatus memory status_,
+        bool withdrawAsShares_
+    ) private pure returns (uint256) {
+        if (!withdrawAsShares_) return status_.claimableYield;
+
+        uint256 coveredAssets = status_.assets + status_.borrowed;
+        if (coveredAssets <= status_.liabilities) return 0;
+        uint256 surplus = coveredAssets - status_.liabilities;
+        return surplus < status_.assets ? surplus : status_.assets;
     }
 
     /// @dev Reverts unless the asset is present in Config's append-only facility registry.

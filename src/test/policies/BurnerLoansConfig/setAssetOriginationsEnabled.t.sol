@@ -17,6 +17,22 @@ import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol
 contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
     event AssetOriginationsSet(address indexed asset, bool enabled);
 
+    function test_givenUnderlyingMode_givenAsyncRedeem_whenEnablingOriginations() public {
+        _useMockDepositManager();
+        _configureUsdsVaultDependencies();
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        mockDepositManager.setAssetAsyncRedeem(IERC20(address(usds)), true);
+
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), true);
+
+        assertTrue(
+            burnerLoansConfig.getAssetConfig(address(usds)).originationsEnabled,
+            "originations should not depend on the withdrawal mode"
+        );
+    }
+
     // setAssetOriginationsEnabled
     // given asset is not configured
     //  when setAssetOriginationsEnabled is called by admin
@@ -36,7 +52,6 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
     function test_givenNonAdminCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         vm.assume(caller_ != address(configTimelock));
-        vm.assume(caller_ != address(0));
         _addDefaultUsdsAsset();
 
         vm.prank(caller_);
@@ -259,6 +274,7 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
 
         vm.prank(admin);
         burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        vm.prank(admin);
         depositManager.disableAssetPeriod(
             IERC20(address(usds)),
             BurnerLoansConstants.DEPOSIT_PERIOD,
@@ -288,7 +304,8 @@ contract BurnerLoansConfigSetAssetOriginationsEnabledTest is BurnerLoansTest {
             address(usds),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         vm.prank(admin);

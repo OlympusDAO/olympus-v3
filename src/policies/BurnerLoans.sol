@@ -127,7 +127,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         _requireEnabled();
         // Config creates the FLOAN market first. Resolve it before extending the append-only
         // registry so every registered asset is immediately serviceable by the facility.
-        _getAssetMarket(asset_);
+        (, AssetConfig memory config) = _getAssetMarket(asset_);
+        BurnerLoansView.validateAssetWithdrawAsShares(asset_, config.withdrawAsShares);
         BurnerLoansDependencies.registerAsset(_ASSETS, asset_);
     }
 
@@ -328,13 +329,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     ///      - `borrowers_` is empty, exceeds the batch limit, or contains duplicates.
     ///      - The asset market, custody route, backing value, or PRICE data is invalid.
     ///      - Any borrower has no debt or is not currently seizable.
-    ///      - Custody is insolvent, returns zero assets, or leaves a residual facility balance.
+    ///      - Custody is insolvent or leaves a residual facility balance. A share-mode seizure may
+    ///        default debt with zero immediate output; retained share dust becomes custody yield.
     ///      - FLOAN defaulting, Inventory settlement, DepositManager withdrawal, or token transfer
     ///        fails.
     function seize(
         address asset_,
         address[] calldata borrowers_
-    ) external override nonReentrant returns (uint256, uint256) {
+    ) external override nonReentrant returns (address, uint256, uint256) {
         _requireEnabled();
         return BurnerLoansSeizure.seize(asset_, borrowers_);
     }
@@ -342,7 +344,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     /// @inheritdoc IBurnerLoansYieldClaim
     function claimYield(
         address asset_
-    ) external override nonReentrant givenEnabled returns (uint256 claimed) {
+    ) external override nonReentrant givenEnabled returns (address tokenOut, uint256 amountOut) {
         return BurnerLoansCustody.claimYield(_ASSETS, _YIELD_ROUTING, asset_);
     }
 
@@ -351,6 +353,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     /// @inheritdoc IBurnerLoansView
     function validateAssetDependencies(address asset_) external view override {
         BurnerLoansView.validateAssetDependencies(asset_);
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function validateAssetWithdrawAsShares(
+        address asset_,
+        bool withdrawAsShares_
+    ) external view override {
+        BurnerLoansView.validateAssetWithdrawAsShares(asset_, withdrawAsShares_);
     }
 
     /// @inheritdoc IBurnerLoansView

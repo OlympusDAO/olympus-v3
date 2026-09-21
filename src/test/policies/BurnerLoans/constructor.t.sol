@@ -10,6 +10,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -66,6 +67,42 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
     //   then it reverts
     function test_constructor_givenDepositManagerDoesNotSupportInterface_reverts() public {
         MockInvalidDepositManager invalidDepositManager = new MockInvalidDepositManager();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidDepositManager.selector,
+                address(invalidDepositManager)
+            )
+        );
+        new BurnerLoans(
+            kernel,
+            IERC20(address(ohm)),
+            IDepositManager(address(invalidDepositManager)),
+            IPriceCache(address(0)),
+            backingOracle
+        );
+    }
+
+    function test_constructor_givenDepositManagerSupportsOnlyV1_reverts() public {
+        MockV1OnlyDepositManager v1OnlyDepositManager = new MockV1OnlyDepositManager();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_InvalidDepositManager.selector,
+                address(v1OnlyDepositManager)
+            )
+        );
+        new BurnerLoans(
+            kernel,
+            IERC20(address(ohm)),
+            IDepositManager(address(v1OnlyDepositManager)),
+            IPriceCache(address(0)),
+            backingOracle
+        );
+    }
+
+    function test_givenDepositManagerOmitsAssetManagerV1_1_whenDeployed_reverts() public {
+        MockDepositManagerWithoutAssetManagerV1_1 invalidDepositManager = new MockDepositManagerWithoutAssetManagerV1_1();
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -342,6 +379,23 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
 contract MockInvalidDepositManager is IERC165 {
     function supportsInterface(bytes4) external pure returns (bool) {
         return false;
+    }
+}
+
+contract MockV1OnlyDepositManager is IERC165 {
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IDepositManager).interfaceId;
+    }
+}
+
+contract MockDepositManagerWithoutAssetManagerV1_1 is IERC165 {
+    function supportsInterface(bytes4 interfaceId_) external pure returns (bool) {
+        return
+            interfaceId_ == type(IERC165).interfaceId ||
+            interfaceId_ == type(IDepositManager).interfaceId ||
+            interfaceId_ == type(IDepositManagerV1_1).interfaceId;
     }
 }
 

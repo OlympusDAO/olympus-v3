@@ -3,6 +3,7 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
@@ -14,6 +15,7 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
@@ -101,12 +103,11 @@ abstract contract BurnerLoansLifecycle is
         if (address(ohm_) == address(0) || address(depositManager_) == address(0)) {
             revert BurnerLoans_ZeroAddress();
         }
-        if (
-            !ERC165Checker.supportsInterface(
-                address(depositManager_),
-                type(IDepositManager).interfaceId
-            )
-        ) {
+        bytes4[] memory interfaceIds = new bytes4[](3);
+        interfaceIds[0] = type(IDepositManager).interfaceId;
+        interfaceIds[1] = type(IDepositManagerV1_1).interfaceId;
+        interfaceIds[2] = type(IAssetManagerV1_1).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(address(depositManager_), interfaceIds)) {
             revert BurnerLoans_InvalidDepositManager(address(depositManager_));
         }
         address depositManagerKernel = address(Policy(address(depositManager_)).kernel());

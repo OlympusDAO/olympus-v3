@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
@@ -19,20 +22,38 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         depositManager.setAssetDepositCap(iAsset, 100e18);
     }
 
-    // given the caller is not the admin or manager
+    // given the caller is neither admin nor config operator
     //  [X] it reverts
 
-    function test_givenCallerIsNotAdminOrManager_reverts(
+    function test_givenCallerIsNotAdminOrConfigOperator_reverts(
         address caller_
     ) public givenIsEnabled givenFacilityNameIsSetDefault {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        // Expect revert
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         // Set the deposit cap
         vm.prank(caller_);
         depositManager.setAssetDepositCap(iAsset, 100e18);
+    }
+
+    function test_givenConfigOperator_setsDepositCap()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.setAssetDepositCap(iAsset, 100e18);
+
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            100e18,
+            "config operator should set deposit cap"
+        );
     }
 
     // given the asset is not configured
@@ -154,3 +175,5 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         assertEq(config.minimumDeposit, 0, "Minimum deposit should be 0");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

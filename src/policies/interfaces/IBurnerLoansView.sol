@@ -66,6 +66,11 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @param asset_ Collateral asset to validate.
     function validateAssetDependencies(address asset_) external view;
 
+    /// @notice Validates a proposed custody output mode for an asset.
+    /// @param asset_ Collateral asset to validate.
+    /// @param withdrawAsShares_ Proposed output mode.
+    function validateAssetWithdrawAsShares(address asset_, bool withdrawAsShares_) external view;
+
     /// @notice Returns the fixed-term loan module used by this facility.
     /// @return floan_ FLOAN module address.
     function floan() external view returns (address floan_);
@@ -115,7 +120,8 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @param maxBorrowersToReturn_ Maximum number of seizable borrowers returned.
     /// @return borrowers Seizable borrowers found in the requested scan range.
     /// @return nextIndex Next borrower index to scan.
-    /// @return expectedKeeperReward Projected aggregate keeper reward, in collateral token decimals.
+    /// @return expectedKeeperReward Projected aggregate keeper reward, in the configured
+    ///         DepositManager output-token decimals.
     function getSeizableBorrowers(
         address asset_,
         uint256 startIndex_,

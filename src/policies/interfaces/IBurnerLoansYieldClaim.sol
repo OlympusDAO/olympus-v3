@@ -8,6 +8,7 @@ interface IBurnerLoansYieldClaim {
     /// @dev Permissionless and enabled-only. Reverts without retaining the claim or any partial
     ///      distribution when custody, active repurchase routing, or a recipient transfer fails.
     /// @param asset_ Registered collateral asset to claim.
-    /// @return claimed Actual yield claimed and distributed, in collateral token decimals.
-    function claimYield(address asset_) external returns (uint256 claimed);
+    /// @return tokenOut Token claimed and distributed.
+    /// @return amountOut Actual yield claimed and distributed, in `tokenOut` decimals.
+    function claimYield(address asset_) external returns (address tokenOut, uint256 amountOut);
 }

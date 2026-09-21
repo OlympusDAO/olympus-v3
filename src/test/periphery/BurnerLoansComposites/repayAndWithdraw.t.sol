@@ -8,8 +8,10 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(unused-return)
 
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {stdError} from "forge-std/StdError.sol";
 
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 import {BurnerLoansCompositesTest} from "src/test/periphery/BurnerLoansComposites/BurnerLoansCompositesTest.sol";
@@ -214,7 +216,8 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
             address(vaultToken),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         _authorize(alice);
         uint128 collateral = 2_000e18;
@@ -253,6 +256,87 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
         assertEq(result.tokenOut, address(vaultToken), "token out");
         assertEq(vaultToken.balanceOf(recipient), collateral, "recipient vault token");
         _assertCompositeBalances(address(vaultToken));
+    }
+
+    // repayAndWithdraw
+    // given vault-backed collateral is configured to withdraw as shares at a non-integer rate
+    //  when an authorized composite withdraws a fuzzed underlying-denominated amount
+    //   then the composite returns and routes the independently calculated share quantity
+    function test_givenVaultYield_givenWithdrawAsShares_whenWithdrawing(
+        uint128 yieldSeed_,
+        uint128 amountSeed_
+    ) public {
+        (MockERC20 asset, MockERC4626 vault) = _addVaultAssetForTest();
+        uint128 collateral = 2_000e18;
+        uint256 yieldAmount = bound(yieldSeed_, 1, 20_000e18);
+        asset.mint(alice, collateral);
+        vm.startPrank(alice);
+        asset.approve(address(burnerLoans), collateral);
+        burnerLoans.depositCollateral(address(asset), collateral, alice);
+        vm.stopPrank();
+        _authorize(alice);
+        asset.mint(address(vault), yieldAmount);
+        vm.prank(admin);
+        burnerLoansConfig.setAssetWithdrawAsShares(address(asset), true);
+        _makeVaultAsynchronous(vault);
+
+        uint256 vaultSupplyBefore = vault.totalSupply();
+        uint256 vaultAssetsBefore = vault.totalAssets();
+        uint256 minimumAssetAmount = (vaultAssetsBefore + vaultSupplyBefore - 1) /
+            vaultSupplyBefore;
+        // bound() caps the result at uint128 collateral, so this cast cannot truncate.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint128 withdrawalAmount = uint128(bound(amountSeed_, minimumAssetAmount, collateral));
+        // withdrawalAmount (asset decimals) * vaultSupplyBefore (share decimals)
+        // / vaultAssetsBefore (asset decimals) = expectedShares (share decimals), rounded down.
+        uint256 expectedShares = (uint256(withdrawalAmount) * vaultSupplyBefore) /
+            vaultAssetsBefore;
+        (uint256 operatorSharesBefore, ) = depositManager.getOperatorAssets(
+            IERC20(address(asset)),
+            address(burnerLoans)
+        );
+        IBurnerLoansComposites.RepayAndWithdrawParams memory params = IBurnerLoansComposites
+            .RepayAndWithdrawParams({
+                asset: address(asset),
+                maxRepayOhm: 0,
+                collateralAmount: withdrawalAmount,
+                recipient: recipient
+            });
+
+        vm.prank(alice);
+        IBurnerLoansComposites.RepayAndWithdrawResult memory result = composites.repayAndWithdraw(
+            _emptyAuthorization(),
+            _emptySignature(),
+            params
+        );
+
+        assertEq(result.repaidOhm, 0, "repaid OHM");
+        assertEq(result.refundedOhm, 0, "refunded OHM");
+        assertEq(result.tokenOut, address(vault), "token out");
+        assertEq(result.amountOut, expectedShares, "shares out");
+        assertEq(result.remainingCollateral, collateral - withdrawalAmount, "remaining collateral");
+        assertEq(result.healthFactor, type(uint256).max, "debt-free health");
+        assertEq(vault.balanceOf(recipient), expectedShares, "recipient shares");
+        assertEq(asset.balanceOf(recipient), 0, "recipient underlying");
+        assertEq(
+            burnerLoans.getPosition(address(asset), alice).depositedCollateral,
+            collateral - withdrawalAmount,
+            "position collateral"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(IERC20(address(asset)), address(burnerLoans)),
+            collateral - withdrawalAmount,
+            "DepositManager liabilities"
+        );
+        (uint256 operatorSharesAfter, ) = depositManager.getOperatorAssets(
+            IERC20(address(asset)),
+            address(burnerLoans)
+        );
+        assertEq(operatorSharesBefore - operatorSharesAfter, expectedShares, "custody share debit");
+        assertEq(vault.totalSupply(), vaultSupplyBefore, "vault supply unchanged");
+        assertEq(vault.totalAssets(), vaultAssetsBefore, "vault assets unchanged");
+        assertEq(vault.balanceOf(address(composites)), 0, "composite share residual");
+        _assertCompositeBalances(address(asset));
     }
 
     // repayAndWithdraw

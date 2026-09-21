@@ -202,7 +202,8 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
             address(token),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         _authorize(alice);
         uint128 collateral = 2_000e18;

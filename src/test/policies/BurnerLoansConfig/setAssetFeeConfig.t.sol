@@ -323,7 +323,8 @@ contract BurnerLoansConfigSetAssetFeeConfigTest is BurnerLoansTest {
             address(otherAsset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
 
         IBurnerLoans.AssetFeeConfig memory otherFeeConfig = IBurnerLoans.AssetFeeConfig({

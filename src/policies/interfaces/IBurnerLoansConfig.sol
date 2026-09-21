@@ -107,11 +107,13 @@ interface IBurnerLoansConfig {
     /// @param debtCapOhm_ Initial market debt cap, in OHM decimals.
     /// @param riskConfig_ Initial risk configuration.
     /// @param feeConfig_ Initial utilization fee configuration.
+    /// @param withdrawAsShares_ Whether all DepositManager exits return ERC-4626 shares.
     function addAsset(
         address asset_,
         uint128 debtCapOhm_,
         IBurnerLoans.AssetRiskConfigInput calldata riskConfig_,
-        IBurnerLoans.AssetFeeConfig calldata feeConfig_
+        IBurnerLoans.AssetFeeConfig calldata feeConfig_,
+        bool withdrawAsShares_
     ) external;
 
     /// @notice Updates a configured asset's debt cap.
@@ -158,6 +160,11 @@ interface IBurnerLoansConfig {
     /// @param asset_ Collateral asset to update.
     /// @param enabled_ Whether originations should be enabled.
     function setAssetOriginationsEnabled(address asset_, bool enabled_) external;
+
+    /// @notice Selects whether future custody exits return vault shares or underlying assets.
+    /// @param asset_ Collateral asset to update.
+    /// @param withdrawAsShares_ Whether future custody exits return ERC-4626 shares.
+    function setAssetWithdrawAsShares(address asset_, bool withdrawAsShares_) external;
 
     /// @notice Updates a configured asset's risk and term fields.
     /// @dev Callable only by OCG admin or the config operator while Config is enabled. Reverts if

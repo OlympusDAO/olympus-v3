@@ -708,7 +708,8 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             address(asset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         uint256 gasUsed = vm.stopSnapshotGas();
         vm.stopPrank();
@@ -1043,7 +1044,8 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             address(asset),
             _defaultAssetDebtCap(),
             _defaultAssetRiskConfigInput(),
-            _defaultAssetFeeConfig()
+            _defaultAssetFeeConfig(),
+            false
         );
         vm.stopPrank();
     }
@@ -1220,7 +1222,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
                 logs_,
                 address(burnerLoans),
                 keccak256(
-                    "SeizureBatchSettled(address,address,uint256,uint256,uint256,uint256,uint256)"
+                    "SeizureBatchSettled(address,address,uint256,uint256,uint256,address,uint256,uint256)"
                 )
             );
         }

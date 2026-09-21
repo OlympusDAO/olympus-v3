@@ -55,7 +55,7 @@ contract BurnerLoansInventorySetGracePeriodTest is BurnerLoansInventoryTest {
     }
 
     function test_givenValidPeriod_setsPeriod(uint32 period_) public {
-        period_ = uint32(bound(period_, 1, type(uint32).max));
+        if (period_ == 0) period_ = 1;
         _initializeAndEnable();
 
         vm.prank(admin);
