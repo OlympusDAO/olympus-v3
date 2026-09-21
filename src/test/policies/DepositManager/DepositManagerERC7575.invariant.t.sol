@@ -3,7 +3,7 @@ pragma solidity ^0.8.27;
 
 // The handler intentionally catches invalid state-machine actions so arbitrary sequences continue.
 // Tuple components not relevant to aggregate custody are intentionally ignored.
-// forge-lint: disable-start(literal-instead-of-constant, multi-contract-file, unused-return)
+// forge-lint: disable-start(incorrect-strict-equality, literal-instead-of-constant, multi-contract-file, unused-return)
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -28,6 +28,9 @@ contract DepositManagerERC7575Handler {
     MockSharedERC7575Vault internal immutable _SECOND_VAULT;
     uint8 internal immutable _DEPOSIT_PERIOD;
     address internal immutable _RECIPIENT;
+
+    uint256 public settlementViolations;
+    uint256 public successfulSettlements;
 
     constructor(
         IDepositManagerV1_1 depositManager_,
@@ -177,6 +180,75 @@ contract DepositManagerERC7575Handler {
         {} catch {}
     }
 
+    function settle(uint8 routeSeed_) external {
+        (MockERC20 asset, ) = _route(routeSeed_);
+        IERC20 iAsset = IERC20(address(asset));
+        uint256 receiptTokenId = _DEPOSIT_MANAGER.getReceiptTokenId(
+            iAsset,
+            _DEPOSIT_PERIOD,
+            address(this)
+        );
+        uint256 receiptBalance = _RECEIPT_TOKEN_MANAGER.balanceOf(address(this), receiptTokenId);
+        uint256 borrowed = _DEPOSIT_MANAGER.getBorrowedAmount(iAsset, address(this));
+
+        if (borrowed != 0) {
+            uint256 defaultAmount = borrowed < receiptBalance ? borrowed : receiptBalance;
+            if (defaultAmount == 0) {
+                ++settlementViolations;
+                return;
+            }
+            _RECEIPT_TOKEN_MANAGER.approve(
+                address(_DEPOSIT_MANAGER),
+                receiptTokenId,
+                receiptBalance
+            );
+            try
+                _DEPOSIT_MANAGER.borrowingDefault(
+                    IDepositManager.BorrowingDefaultParams({
+                        asset: iAsset,
+                        depositPeriod: _DEPOSIT_PERIOD,
+                        payer: address(this),
+                        amount: defaultAmount
+                    })
+                )
+            {} catch {
+                ++settlementViolations;
+                return;
+            }
+        }
+
+        receiptBalance = _RECEIPT_TOKEN_MANAGER.balanceOf(address(this), receiptTokenId);
+        if (receiptBalance != 0) {
+            _RECEIPT_TOKEN_MANAGER.approve(
+                address(_DEPOSIT_MANAGER),
+                receiptTokenId,
+                receiptBalance
+            );
+            try
+                _DEPOSIT_MANAGER.withdraw(
+                    IDepositManager.WithdrawParams({
+                        asset: iAsset,
+                        depositPeriod: _DEPOSIT_PERIOD,
+                        depositor: address(this),
+                        recipient: _RECIPIENT,
+                        amount: receiptBalance,
+                        isWrapped: false
+                    }),
+                    true
+                )
+            returns (IERC20, uint256) {} catch {
+                ++settlementViolations;
+                return;
+            }
+        }
+
+        bool unsettled = _RECEIPT_TOKEN_MANAGER.balanceOf(address(this), receiptTokenId) != 0 ||
+            _DEPOSIT_MANAGER.getOperatorLiabilities(iAsset, address(this)) != 0 ||
+            _DEPOSIT_MANAGER.getBorrowedAmount(iAsset, address(this)) != 0;
+        if (unsettled) ++settlementViolations;
+        else ++successfulSettlements;
+    }
+
     function donateCustody(uint8 routeSeed_, uint128 amountSeed_) external {
         (MockERC20 asset, MockSharedERC7575Vault vault) = _route(routeSeed_);
         uint256 amount = _bound(amountSeed_, 1, 1_000_000e18);
@@ -243,6 +315,17 @@ contract DepositManagerERC7575InvariantTest is StdInvariant, DepositManagerTest 
         _secondHandler.deposit(0, 300e18);
         _secondHandler.deposit(1, 400e18);
 
+        // Exercise the terminal-settlement path before fuzzing so its success invariant is not
+        // vacuous even if the stateful runner does not select it later.
+        _firstHandler.settle(0);
+        _firstHandler.settle(1);
+        _secondHandler.settle(0);
+        _secondHandler.settle(1);
+        _firstHandler.deposit(0, 100e18);
+        _firstHandler.deposit(1, 200e18);
+        _secondHandler.deposit(0, 300e18);
+        _secondHandler.deposit(1, 400e18);
+
         targetContract(address(_firstHandler));
         targetContract(address(_secondHandler));
     }
@@ -272,6 +355,32 @@ contract DepositManagerERC7575InvariantTest is StdInvariant, DepositManagerTest 
         IERC20 secondIAsset = IERC20(address(_secondAsset));
         _assertSolvent(secondIAsset, address(_firstHandler));
         _assertSolvent(secondIAsset, address(_secondHandler));
+    }
+
+    function invariant_eachAssetUtilizationEqualsAggregateLiabilities() public view {
+        _assertAggregateUtilization(iAsset);
+        _assertAggregateUtilization(IERC20(address(_secondAsset)));
+    }
+
+    function invariant_eachOperatorLiabilityEqualsModeledReceiptPrincipal() public view {
+        _assertReceiptPrincipal(iAsset, address(_firstHandler));
+        _assertReceiptPrincipal(iAsset, address(_secondHandler));
+        IERC20 secondIAsset = IERC20(address(_secondAsset));
+        _assertReceiptPrincipal(secondIAsset, address(_firstHandler));
+        _assertReceiptPrincipal(secondIAsset, address(_secondHandler));
+    }
+
+    function invariant_terminalSettlementDoesNotOrphanPrincipal() public view {
+        assertGt(
+            _firstHandler.successfulSettlements() + _secondHandler.successfulSettlements(),
+            0,
+            "terminal settlement was not exercised"
+        );
+        assertEq(
+            _firstHandler.settlementViolations() + _secondHandler.settlementViolations(),
+            0,
+            "terminal settlement left receipt-backed principal"
+        );
     }
 
     function _newHandler(
@@ -318,6 +427,31 @@ contract DepositManagerERC7575InvariantTest is StdInvariant, DepositManagerTest 
         uint256 borrowed = depositManager.getBorrowedAmount(asset_, operator_);
         assertGe(assets + borrowed, liabilities, "operator is insolvent");
     }
+
+    function _assertAggregateUtilization(IERC20 asset_) private view {
+        uint256 aggregateLiabilities = depositManager.getOperatorLiabilities(
+            asset_,
+            address(_firstHandler)
+        ) + depositManager.getOperatorLiabilities(asset_, address(_secondHandler));
+        assertEq(
+            _assetDepositCapUtilization(asset_),
+            aggregateLiabilities,
+            "aggregate utilization differs from liabilities"
+        );
+    }
+
+    function _assertReceiptPrincipal(IERC20 asset_, address operator_) private view {
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            asset_,
+            DEPOSIT_PERIOD,
+            operator_
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(operator_, receiptTokenId),
+            depositManager.getOperatorLiabilities(asset_, operator_),
+            "receipt principal differs from operator liabilities"
+        );
+    }
 }
 
-// forge-lint: disable-end(literal-instead-of-constant, multi-contract-file, unused-return)
+// forge-lint: disable-end(incorrect-strict-equality, literal-instead-of-constant, multi-contract-file, unused-return)

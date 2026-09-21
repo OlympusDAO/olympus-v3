@@ -122,6 +122,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenAssetPeriodIsDisabled
     {
         asset.mint(RECIPIENT, BORROW_AMOUNT);
+        _setAssetDepositCap(0);
 
         vm.prank(DEPOSIT_OPERATOR);
         uint256 actualAmount = depositManager.borrowingRepay(
@@ -216,6 +217,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorDepositActualAmount,
+            "borrowing repayment should preserve utilization"
+        );
     }
 
     // when the repayment amount exceeds the borrowed amount
@@ -296,6 +302,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorReceiptTokenBalance,
+            "borrowing repayment should preserve utilization"
         );
     }
 
@@ -544,6 +555,11 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             vault.balanceOf(address(depositManager)),
             _depositManagerSharesBefore + _expectedDepositedShares,
             "vault balance"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            firstDepositActualAmount + previousDepositorDepositActualAmount,
+            "borrowing repayment should preserve utilization"
         );
     }
 

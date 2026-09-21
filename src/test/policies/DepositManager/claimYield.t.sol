@@ -161,6 +161,11 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             _operatorLiabilitiesBefore,
             "Asset liabilities mismatch"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            _operatorLiabilitiesBefore,
+            "yield claim should preserve utilization"
+        );
 
         _assertReceiptToken(0, 0, true, false); // Unaffected
         _assertDepositAssetBalance(DEPOSITOR, 0);
@@ -297,6 +302,7 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
     {
         // Simulate yield being accrued to the vault
         asset.mint(address(vault), 10e18);
+        _setAssetDepositCap(0);
 
         _takeSnapshot();
 
@@ -342,6 +348,11 @@ contract DepositManagerClaimYieldTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             _operatorLiabilitiesBefore,
             "Asset liabilities mismatch"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            _operatorLiabilitiesBefore,
+            "yield claim while over cap should preserve utilization"
         );
 
         _assertReceiptToken(0, 0, true, false); // Unaffected

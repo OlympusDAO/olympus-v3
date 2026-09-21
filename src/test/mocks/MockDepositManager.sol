@@ -44,6 +44,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
     mapping(IERC20 asset => AssetConfiguration config) internal _assetConfigurations;
     mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
     mapping(bytes32 liabilitiesKey => uint256 liabilities) internal _operatorLiabilities;
+    mapping(IERC20 asset => uint256 utilization) internal _assetDepositCapUtilization;
     mapping(bytes32 periodKey => uint256 indexPlusOne) internal _assetPeriodIndexPlusOne;
     mapping(bytes32 periodKey => uint256 receiptTokenId) internal _receiptTokenIdsByPeriod;
     mapping(IERC20 asset => IERC20 shareToken) internal _assetShareTokens;
@@ -76,15 +77,6 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             );
         }
 
-        (, uint256 assetAmountBefore) = this.getOperatorAssets(params.asset, msg.sender);
-        if (assetAmountBefore + params.amount > configuration.depositCap) {
-            revert IAssetManager.AssetManager_DepositCapExceeded(
-                address(params.asset),
-                assetAmountBefore,
-                configuration.depositCap
-            );
-        }
-
         // The depositor authorizes this operator-initiated pull through ERC-20 allowance.
         TransferHelper.safeTransferFromExact(
             ERC20(address(params.asset)),
@@ -106,8 +98,22 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             actualAmount = depositActualAmountOverride;
         }
 
+        uint256 utilization = _assetDepositCapUtilization[params.asset];
+        uint256 depositCap = _assetConfigurations[params.asset].depositCap;
+        if (
+            actualAmount != 0 &&
+            (utilization > depositCap || actualAmount > depositCap - utilization)
+        ) {
+            revert IAssetManager.AssetManager_DepositCapExceeded(
+                address(params.asset),
+                utilization,
+                depositCap
+            );
+        }
+
         _operatorShares[_getOperatorKey(params.asset, msg.sender)] += shares;
         _operatorLiabilities[_getOperatorKey(params.asset, msg.sender)] += actualAmount;
+        _assetDepositCapUtilization[params.asset] += actualAmount;
         receiptTokenId = _receiptTokenIdsByPeriod[
             _assetPeriodKey(params.asset, params.depositPeriod, msg.sender)
         ];
@@ -146,6 +152,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             }
         }
         _operatorLiabilities[operatorKey] -= params.amount;
+        _assetDepositCapUtilization[params.asset] -= params.amount;
         return actualAmount;
     }
 
@@ -194,6 +201,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
             }
         }
         _operatorLiabilities[operatorKey] -= params.amount;
+        _assetDepositCapUtilization[params.asset] -= params.amount;
     }
 
     function maxClaimYield(IERC20, address) external view override returns (uint256) {
@@ -275,6 +283,14 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         address operator_
     ) external view override returns (uint256) {
         return _operatorLiabilities[_getOperatorKey(asset_, operator_)];
+    }
+
+    function getAssetDepositCapStatus(
+        IERC20 asset_
+    ) external view override returns (AssetDepositCapStatus memory status) {
+        status.depositCap = _assetConfigurations[asset_].depositCap;
+        status.utilization = _assetDepositCapUtilization[asset_];
+        return status;
     }
 
     // ========== BORROWING FUNCTIONS ========== //
@@ -603,11 +619,29 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         uint256 assetAmount_
     ) external view override returns (uint256 estimatedCreditedAssets, uint256 shares) {
         AssetConfiguration memory configuration = _assetConfigurations[asset_];
-        if (configuration.vault == address(0)) return (assetAmount_, assetAmount_);
-        shares = IERC4626(configuration.vault).previewDeposit(assetAmount_);
-        estimatedCreditedAssets = _assetAsyncRedeem[asset_]
-            ? IERC4626(configuration.vault).convertToAssets(shares)
-            : IERC4626(configuration.vault).previewRedeem(shares);
+        if (!configuration.isConfigured) revert IAssetManager.AssetManager_NotConfigured();
+        if (configuration.vault == address(0)) {
+            estimatedCreditedAssets = assetAmount_;
+            shares = assetAmount_;
+        } else {
+            shares = IERC4626(configuration.vault).previewDeposit(assetAmount_);
+            estimatedCreditedAssets = _assetAsyncRedeem[asset_]
+                ? IERC4626(configuration.vault).convertToAssets(shares)
+                : IERC4626(configuration.vault).previewRedeem(shares);
+        }
+
+        uint256 utilization = _assetDepositCapUtilization[asset_];
+        uint256 depositCap = _assetConfigurations[asset_].depositCap;
+        if (
+            estimatedCreditedAssets != 0 &&
+            (utilization > depositCap || estimatedCreditedAssets > depositCap - utilization)
+        ) {
+            revert IAssetManager.AssetManager_DepositCapExceeded(
+                address(asset_),
+                utilization,
+                depositCap
+            );
+        }
     }
 
     function previewWithdraw(

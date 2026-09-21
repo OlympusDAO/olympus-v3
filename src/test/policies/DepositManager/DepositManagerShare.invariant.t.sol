@@ -346,6 +346,7 @@ contract DepositManagerShareHandler {
 
 contract DepositManagerShareInvariantTest is StdInvariant, DepositManagerTest {
     DepositManagerShareHandler internal _handler;
+    DepositManagerShareHandler internal _secondHandler;
     MockERC7540ExternalShareVault internal _externalVault;
     MockERC7540ExternalShareToken internal _externalShareToken;
 
@@ -362,13 +363,25 @@ contract DepositManagerShareInvariantTest is StdInvariant, DepositManagerTest {
             DEPOSIT_PERIOD,
             makeAddr("shareRecipient")
         );
+        _secondHandler = new DepositManagerShareHandler(
+            IDepositManagerV1_1(address(depositManager)),
+            receiptTokenManager,
+            asset,
+            _externalVault,
+            _externalShareToken,
+            DEPOSIT_PERIOD,
+            makeAddr("secondShareRecipient")
+        );
 
         vm.startPrank(ADMIN);
         depositManager.enable("");
         rolesAdmin.grantRole("deposit_operator", address(_handler));
+        rolesAdmin.grantRole("deposit_operator", address(_secondHandler));
         depositManager.setOperatorName(address(_handler), "inv");
+        depositManager.setOperatorName(address(_secondHandler), "in2");
         depositManager.addAsset(iAsset, IERC4626(address(_externalVault)), type(uint256).max, 0);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, address(_handler));
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, address(_secondHandler));
         depositManager.setConfigOperator(address(_handler));
         vm.stopPrank();
 
@@ -378,24 +391,40 @@ contract DepositManagerShareInvariantTest is StdInvariant, DepositManagerTest {
         _handler.addYield(10e18);
         _handler.borrowingWithdrawAsShares(10e18);
         _handler.toggleAssetPeriod();
+        _secondHandler.deposit(50e18);
 
         targetContract(address(_handler));
+        targetContract(address(_secondHandler));
     }
 
     function invariant_operatorSharesEqualExternalTokenCustody() public view {
         (uint256 operatorShares, ) = depositManager.getOperatorAssets(iAsset, address(_handler));
+        (uint256 secondOperatorShares, ) = depositManager.getOperatorAssets(
+            iAsset,
+            address(_secondHandler)
+        );
         assertEq(
-            operatorShares,
+            operatorShares + secondOperatorShares,
             _externalShareToken.balanceOf(address(depositManager)),
-            "operator shares differ from custody"
+            "aggregate operator shares differ from custody"
         );
     }
 
     function invariant_operatorRemainsSolvent() public view {
-        (, uint256 assets) = depositManager.getOperatorAssets(iAsset, address(_handler));
-        uint256 liabilities = depositManager.getOperatorLiabilities(iAsset, address(_handler));
-        uint256 borrowed = depositManager.getBorrowedAmount(iAsset, address(_handler));
-        assertGe(assets + borrowed, liabilities, "share operator is insolvent");
+        _assertOperatorSolvent(address(_handler));
+        _assertOperatorSolvent(address(_secondHandler));
+    }
+
+    function invariant_assetCapUtilizationEqualsAggregateLiabilities() public view {
+        uint256 aggregateLiabilities = depositManager.getOperatorLiabilities(
+            iAsset,
+            address(_handler)
+        ) + depositManager.getOperatorLiabilities(iAsset, address(_secondHandler));
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            aggregateLiabilities,
+            "asset cap utilization differs from aggregate liabilities"
+        );
     }
 
     function invariant_shareOutputNeverExceedsConversion() public view {
@@ -445,6 +474,13 @@ contract DepositManagerShareInvariantTest is StdInvariant, DepositManagerTest {
             0,
             "disabled period prevented borrowing default"
         );
+    }
+
+    function _assertOperatorSolvent(address operator_) internal view {
+        (, uint256 assets) = depositManager.getOperatorAssets(iAsset, operator_);
+        uint256 liabilities = depositManager.getOperatorLiabilities(iAsset, operator_);
+        uint256 borrowed = depositManager.getBorrowedAmount(iAsset, operator_);
+        assertGe(assets + borrowed, liabilities, "share operator is insolvent");
     }
 }
 

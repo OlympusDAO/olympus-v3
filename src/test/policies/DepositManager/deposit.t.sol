@@ -15,6 +15,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 
 // Libraries
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
 // Contracts
@@ -370,6 +371,324 @@ contract DepositManagerDepositTest is DepositManagerTest {
                 amount: MINT_AMOUNT,
                 shouldWrap: false
             })
+        );
+    }
+
+    // given another operator has consumed the shared asset cap
+    //  when a second operator deposits above the remaining headroom
+    //   [X] it reverts with the aggregate credited principal
+
+    function test_givenAnotherOperatorConsumedAssetCap_whenDepositExceedsHeadroom_reverts()
+        public
+        givenIsEnabled
+        givenAssetIsAddedWithZeroAddress
+    {
+        address secondOperator = makeAddr("SECOND_OPERATOR");
+        uint256 firstAmount = 60e18;
+        uint256 secondAmount = 40e18;
+
+        vm.startPrank(ADMIN);
+        rolesAdmin.grantRole("deposit_operator", secondOperator);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.setOperatorName(secondOperator, "cd2");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, secondOperator);
+        depositManager.setAssetDepositCap(iAsset, firstAmount + secondAmount);
+        vm.stopPrank();
+
+        _approveSpendingAsset(DEPOSITOR, firstAmount + secondAmount + 1);
+        asset.mint(DEPOSITOR, 1);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: firstAmount,
+                shouldWrap: false
+            })
+        );
+
+        vm.prank(secondOperator);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: secondAmount,
+                shouldWrap: false
+            })
+        );
+
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            firstAmount + secondAmount,
+            "aggregate utilization should include both operators"
+        );
+
+        _expectRevertDepositCapExceeded(firstAmount + secondAmount, firstAmount + secondAmount);
+        vm.prank(secondOperator);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // given all cap utilization has been lent out
+    //  when the operator deposits one more unit
+    //   [X] borrowing does not reopen headroom
+
+    function test_givenCapUtilizationIsBorrowed_whenDepositingOneMore_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
+    {
+        uint256 cap = MINT_AMOUNT;
+        _setAssetDepositCap(cap);
+        _approveSpendingAsset(DEPOSITOR, cap + 1);
+        asset.mint(DEPOSITOR, 1);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: cap,
+                shouldWrap: false
+            })
+        );
+
+        _setAssetDepositCap(cap - 1);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: RECIPIENT,
+                amount: cap / 2
+            })
+        );
+
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            cap,
+            "borrowing should preserve aggregate utilization"
+        );
+
+        _expectRevertDepositCapExceeded(cap, cap - 1);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1,
+                shouldWrap: false
+            })
+        );
+    }
+
+    function test_givenTwoDepositPeriods_whenDepositingAtExactSharedCap() public givenIsEnabled {
+        uint8 secondPeriod = DEPOSIT_PERIOD + 1;
+        uint256 firstAmount = 40e18;
+        uint256 secondAmount = 60e18;
+
+        vm.startPrank(ADMIN);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), firstAmount + secondAmount, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        depositManager.addAssetPeriod(iAsset, secondPeriod, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+        _approveSpendingAsset(DEPOSITOR, firstAmount + secondAmount);
+
+        vm.startPrank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: firstAmount,
+                shouldWrap: false
+            })
+        );
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: secondPeriod,
+                depositor: DEPOSITOR,
+                amount: secondAmount,
+                shouldWrap: false
+            })
+        );
+        vm.stopPrank();
+
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            firstAmount + secondAmount,
+            "aggregate utilization should include both periods"
+        );
+    }
+
+    function test_givenTwoAssets_whenDepositing_utilizationIsIndependent() public givenIsEnabled {
+        MockERC20 secondAsset = new MockERC20("Second Asset", "ASSET2", 18);
+        IERC20 secondIAsset = IERC20(address(secondAsset));
+        uint256 firstAmount = 10e18;
+        uint256 secondAmount = 20e18;
+
+        vm.startPrank(ADMIN);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), firstAmount, 0);
+        depositManager.addAsset(secondIAsset, IERC4626(address(0)), secondAmount, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        depositManager.addAssetPeriod(secondIAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+
+        _approveSpendingAsset(DEPOSITOR, firstAmount);
+        secondAsset.mint(DEPOSITOR, secondAmount);
+        vm.prank(DEPOSITOR);
+        secondAsset.approve(address(depositManager), secondAmount);
+
+        vm.startPrank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: firstAmount,
+                shouldWrap: false
+            })
+        );
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: secondIAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: secondAmount,
+                shouldWrap: false
+            })
+        );
+        vm.stopPrank();
+
+        assertEq(_assetDepositCapUtilization(iAsset), firstAmount, "first asset utilization");
+        assertEq(
+            _assetDepositCapUtilization(secondIAsset),
+            secondAmount,
+            "second asset utilization"
+        );
+    }
+
+    function test_whenMaximumCapIsFilled_doesNotOverflow() public givenIsEnabled {
+        MockERC20 maxAsset = new MockERC20("Maximum Asset", "MAX", 18);
+        IERC20 maxIAsset = IERC20(address(maxAsset));
+
+        vm.startPrank(ADMIN);
+        depositManager.addAsset(maxIAsset, IERC4626(address(0)), type(uint256).max, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(maxIAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+        maxAsset.mint(DEPOSITOR, type(uint256).max);
+        vm.prank(DEPOSITOR);
+        maxAsset.approve(address(depositManager), type(uint256).max);
+
+        vm.startPrank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: maxIAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1,
+                shouldWrap: false
+            })
+        );
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: maxIAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: type(uint256).max - 1,
+                shouldWrap: false
+            })
+        );
+        vm.stopPrank();
+
+        assertEq(
+            _assetDepositCapUtilization(maxIAsset),
+            type(uint256).max,
+            "maximum cap should be exactly utilized"
+        );
+    }
+
+    function test_whenDepositCapStatusCallerIsFuzzed(address caller_) public givenIsEnabled {
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iAsset).depositCap,
+            0,
+            "unconfigured asset cap should be zero"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            0,
+            "unconfigured asset utilization should be zero"
+        );
+
+        vm.startPrank(ADMIN);
+        depositManager.addAsset(iAsset, IERC4626(address(0)), MINT_AMOUNT, 0);
+        depositManager.setOperatorName(DEPOSIT_OPERATOR, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        vm.stopPrank();
+        _approveSpendingAsset(DEPOSITOR, MINT_AMOUNT);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+
+        vm.prank(caller_);
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iAsset).depositCap,
+            MINT_AMOUNT,
+            "getter should return cap while enabled"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            MINT_AMOUNT,
+            "getter should be permissionless while enabled"
+        );
+
+        vm.prank(EMERGENCY);
+        depositManager.disable("");
+        vm.prank(caller_);
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iAsset).depositCap,
+            MINT_AMOUNT,
+            "getter should return cap while disabled"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            MINT_AMOUNT,
+            "getter should be available while disabled"
+        );
+
+        vm.prank(ADMIN);
+        depositManager.reEnable();
+        vm.prank(caller_);
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            MINT_AMOUNT,
+            "getter should be available after re-enable"
         );
     }
 

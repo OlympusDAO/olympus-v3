@@ -109,6 +109,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             "seizure restores defaulted capacity"
         );
         assertEq(inventory.activePrincipalOhm(), 0, "Burner Loans Inventory active principal");
+        assertEq(
+            _assetDepositCapUtilization(IERC20(address(usds))),
+            0,
+            "seizure releases deposit-cap utilization"
+        );
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
@@ -348,6 +353,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
             0,
             "liabilities cleared"
         );
+        assertEq(
+            _assetDepositCapUtilization(IERC20(address(state.asset))),
+            0,
+            "share seizure releases deposit-cap utilization"
+        );
         assertEq(state.vault.totalSupply(), state.vaultSupplyBefore, "vault supply unchanged");
         assertEq(state.vault.totalAssets(), state.vaultAssetsBefore, "vault assets unchanged");
         assertEq(state.vault.balanceOf(address(burnerLoans)), 0, "Burner Loans share residual");
@@ -535,6 +545,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(vault.balanceOf(address(depositManager)), 1, "share dust retained");
         assertEq(vault.balanceOf(keeper), 0, "keeper receives no shares");
         assertEq(vault.balanceOf(address(trsry)), 0, "Treasury receives no shares");
+        assertEq(
+            _assetDepositCapUtilization(IERC20(address(asset))),
+            0,
+            "zero-output seizure releases deposit-cap utilization"
+        );
         _assertFloanPositionMatchesBurnerLoans(address(asset), alice);
 
         IBurnerLoans.ClaimYieldPreview memory yieldPreview = burnerLoans.previewClaimYield(

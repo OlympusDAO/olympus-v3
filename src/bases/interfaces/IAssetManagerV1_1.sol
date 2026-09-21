@@ -11,6 +11,14 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 /// @dev ERC-165 callers should check both the V1 and V1.1 interface IDs because Solidity excludes
 ///      inherited functions from an interface ID.
 interface IAssetManagerV1_1 is IAssetManager {
+    /// @notice Current aggregate deposit-cap state for an asset.
+    /// @param depositCap The configured cap in underlying-asset units.
+    /// @param utilization The outstanding credited principal consuming the cap.
+    struct AssetDepositCapStatus {
+        uint256 depositCap;
+        uint256 utilization;
+    }
+
     // ========== ERRORS ========== //
 
     /// @notice Thrown when share output is requested for an asset without a configured vault.
@@ -62,6 +70,15 @@ interface IAssetManagerV1_1 is IAssetManager {
     event AssetShareWithdrawalRequirementSet(address indexed asset, bool required);
 
     // ========== VIEW FUNCTIONS ========== //
+
+    /// @notice Returns the configured cap and outstanding credited principal consuming it.
+    /// @dev Both values are denominated in underlying-asset units. Utilization includes principal
+    ///      whose custody has been lent out. An unconfigured asset returns zero for both values.
+    /// @param asset_ The underlying asset.
+    /// @return status The asset's configured cap and aggregate utilization.
+    function getAssetDepositCapStatus(
+        IERC20 asset_
+    ) external view returns (AssetDepositCapStatus memory status);
 
     /// @notice Returns the token transferred for an asset's requested withdrawal mode.
     /// @dev This reports token identity only; use `validateAssetWithdrawAsShares` to verify whether

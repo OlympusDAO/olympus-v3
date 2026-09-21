@@ -2,9 +2,12 @@
 pragma solidity ^0.8.20;
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// forge-lint: disable-start(literal-instead-of-constant)
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
 
 // Interfaces
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Test contracts
@@ -25,6 +28,158 @@ contract DepositManagerPreviewDepositTest is DepositManagerTest {
         _assertFractionalDeposit(1e18, 333_333_333_333_333_333, 999_999_999_999_999_999);
         _assertFractionalDeposit(2e18, 666_666_666_666_666_666, 1_999_999_999_999_999_998);
         _assertFractionalDeposit(3e18, 1e18, 3e18);
+    }
+
+    function test_givenZeroCap_whenEstimatedCreditIsZero_returnsZero()
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+        givenThreeAssetsPerShare
+    {
+        _setAssetDepositCap(0);
+
+        (uint256 credit, uint256 shares) = IDepositManagerV1_1(address(depositManager))
+            .previewDeposit(iAsset, 1);
+
+        assertEq(credit, 0, "zero estimated credit should not require headroom");
+        assertEq(shares, 0, "sub-share preview should return zero shares");
+    }
+
+    function test_givenAggregateUtilization_whenPreviewingAtAndAboveHeadroom() public {
+        uint256 utilization = 60e18;
+        uint256 cap = 100e18;
+        _configureIdleAssetForPreview(cap, DEPOSIT_OPERATOR);
+        _approveSpendingAsset(DEPOSITOR, utilization);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: utilization,
+                shouldWrap: false
+            })
+        );
+
+        (uint256 credit, uint256 shares) = depositManager.previewDeposit(iAsset, cap - utilization);
+        assertEq(credit, cap - utilization, "exact headroom credit");
+        assertEq(shares, cap - utilization, "exact headroom shares");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_DepositCapExceeded.selector,
+                address(iAsset),
+                utilization,
+                cap
+            )
+        );
+        depositManager.previewDeposit(iAsset, cap - utilization + 1);
+    }
+
+    function test_givenCapLoweredBelowUtilization_whenPreviewingPositiveCredit_reverts() public {
+        uint256 utilization = 60e18;
+        uint256 loweredCap = 50e18;
+        _configureIdleAssetForPreview(100e18, DEPOSIT_OPERATOR);
+        _approveSpendingAsset(DEPOSITOR, utilization);
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: utilization,
+                shouldWrap: false
+            })
+        );
+        _setAssetDepositCap(loweredCap);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_DepositCapExceeded.selector,
+                address(iAsset),
+                utilization,
+                loweredCap
+            )
+        );
+        depositManager.previewDeposit(iAsset, 1);
+    }
+
+    function test_givenHeadroomConsumedAfterPreview_whenExecuting_revertsAndRollsBack() public {
+        address secondOperator = makeAddr("SECOND_OPERATOR");
+        uint256 firstDeposit = 60e18;
+        uint256 previewedDeposit = 40e18;
+        uint256 cap = firstDeposit + previewedDeposit;
+        _configureIdleAssetForPreview(cap, DEPOSIT_OPERATOR);
+
+        vm.startPrank(ADMIN);
+        rolesAdmin.grantRole("deposit_operator", secondOperator);
+        depositManager.setOperatorName(secondOperator, "cd2");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, secondOperator);
+        vm.stopPrank();
+        asset.mint(DEPOSITOR, 1);
+        _approveSpendingAsset(DEPOSITOR, cap + 1);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: firstDeposit,
+                shouldWrap: false
+            })
+        );
+        (uint256 previewedCredit, ) = depositManager.previewDeposit(iAsset, previewedDeposit);
+        assertEq(previewedCredit, previewedDeposit, "preview should fit current headroom");
+
+        vm.prank(secondOperator);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: previewedDeposit,
+                shouldWrap: false
+            })
+        );
+        uint256 depositorBalanceBefore = asset.balanceOf(DEPOSITOR);
+        uint256 managerBalanceBefore = asset.balanceOf(address(depositManager));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_DepositCapExceeded.selector,
+                address(iAsset),
+                cap,
+                cap
+            )
+        );
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: 1,
+                shouldWrap: false
+            })
+        );
+
+        assertEq(asset.balanceOf(DEPOSITOR), depositorBalanceBefore, "depositor rollback");
+        assertEq(
+            asset.balanceOf(address(depositManager)),
+            managerBalanceBefore,
+            "custody rollback"
+        );
+        assertEq(_assetDepositCapUtilization(iAsset), cap, "utilization rollback");
+    }
+
+    function _configureIdleAssetForPreview(uint256 cap_, address operator_) internal {
+        vm.startPrank(ADMIN);
+        depositManager.enable("");
+        depositManager.addAsset(iAsset, IERC4626(address(0)), cap_, 0);
+        depositManager.setOperatorName(operator_, "cd1");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, operator_);
+        vm.stopPrank();
     }
 
     function test_givenThreeFifthsAssetPerShare_whenFractionalRounding()
@@ -109,4 +264,4 @@ contract DepositManagerPreviewDepositTest is DepositManagerTest {
     }
 }
 
-// forge-lint: disable-end(literal-instead-of-constant)
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

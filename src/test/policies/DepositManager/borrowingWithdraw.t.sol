@@ -332,6 +332,11 @@ contract DepositManagerBorrowingWithdrawTest is DepositManagerTest {
             5,
             "vault balance"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            firstDepositActualAmount + previousDepositorDepositActualAmount,
+            "borrowing withdrawal should preserve utilization"
+        );
     }
 
     // when the borrow amount exceeds the un-borrowed deposits

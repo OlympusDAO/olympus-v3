@@ -712,6 +712,11 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
             0,
             "liabilities"
         );
+        assertEq(
+            _assetDepositCapUtilization(IERC20(address(usds))),
+            0,
+            "withdrawal releases deposit-cap utilization"
+        );
     }
 
     // Condition tree:

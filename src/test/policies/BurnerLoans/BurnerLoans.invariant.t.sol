@@ -337,6 +337,11 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
             creditedCollateral,
             "DepositManager liabilities mismatch"
         );
+        assertEq(
+            _assetDepositCapUtilization(IERC20(address(usds))),
+            creditedCollateral,
+            "DepositManager cap utilization mismatch"
+        );
         assertGe(status.assets + status.borrowed, status.liabilities, "custody is insolvent");
         assertTrue(status.solvent, "collateral status reports insolvency");
     }

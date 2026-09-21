@@ -92,6 +92,39 @@ contract DepositManagerRescueTest is DepositManagerTest {
         assertEq(asset.balanceOf(RECIPIENT), 1, "nested action is otherwise executable");
     }
 
+    function test_givenUtilizationExceedsLoweredCap_whenRescuingUnmanagedToken_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAddedWithZeroAddress
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        vm.prank(DEPOSIT_OPERATOR);
+        (, uint256 creditedAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, 0);
+        randomToken.mint(address(depositManager), 100e18);
+
+        vm.prank(ADMIN);
+        depositManager.rescue(address(randomToken));
+
+        assertEq(randomToken.balanceOf(address(trsry)), 100e18, "Treasury rescued balance");
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            creditedAmount,
+            "rescue should preserve utilization"
+        );
+    }
+
     // given the contract is disabled
     //  when the caller is admin
     //   [X] it transfers the balance to TRSRY

@@ -1218,6 +1218,38 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
+    // - Custody path: vault conversion rounds credited principal below the raw asset input
+    // - DepositManager state: the cap equals the post-conversion credited principal
+    // - Expected branch: preview and write use credited principal, not raw input, for cap accounting
+    function test_depositCollateral_givenVaultCreditFitsCap_depositsDespiteLargerRawInput() public {
+        uint128 amount = 1e6;
+        (MockERC20 vaultAsset, MockERC4626 vault) = _addVaultAsset();
+        _seedVault(vaultAsset, vault, 1_000_000e6);
+        vaultAsset.mint(address(vault), 100e6);
+        uint256 expectedCredit = _expectedVaultCredit(vault, amount);
+        assertLt(expectedCredit, amount, "vault credit should round below raw input");
+
+        vm.prank(admin);
+        depositManager.setAssetDepositCap(IERC20(address(vaultAsset)), expectedCredit);
+        _mintAndApprove(address(vaultAsset), alice, amount);
+
+        (uint256 previewedCredit, , ) = burnerLoans.previewDepositCollateral(
+            address(vaultAsset),
+            amount,
+            alice
+        );
+        vm.prank(alice);
+        (uint256 depositedCredit, , ) = burnerLoans.depositCollateral(
+            address(vaultAsset),
+            amount,
+            alice
+        );
+
+        assertEq(previewedCredit, expectedCredit, "preview credited principal");
+        assertEq(depositedCredit, expectedCredit, "deposited credited principal");
+    }
+
+    // Condition tree:
     // - Caller: owner
     // - Custody path: real DepositManager ERC4626 vault
     // - Vault state: fuzzed yield accrues after the caller reads the deposit preview

@@ -181,7 +181,7 @@ library BurnerLoansCustody {
     /// @notice Deposits collateral into custody and credits the borrower position.
     /// @dev Reverts if:
     ///      - The asset market is unavailable or originations are disabled.
-    ///      - The amount is zero, below the DepositManager minimum, or exceeds its operator cap.
+    ///      - The amount is zero, below the DepositManager minimum, or exceeds its asset cap.
     ///      - The caller is unauthorized or DepositManager has no enabled custody period.
     ///      - The incoming transfer or DepositManager receipt is inexact, custody retains a
     ///        residual balance, or ERC-4626 rounding produces zero credit.
@@ -205,13 +205,7 @@ library BurnerLoansCustody {
             true,
             address(this)
         );
-        validateDepositAmountFor(
-            dependencies_.depositManager,
-            asset_,
-            assetConfiguration,
-            amount_,
-            address(this)
-        );
+        validateMinimumDeposit(asset_, assetConfiguration, amount_);
 
         uint128 depositedCollateral_ = deposit(
             dependencies_.depositManager,
@@ -370,35 +364,19 @@ library BurnerLoansCustody {
         }
     }
 
-    /// @notice Validates a deposit amount for an explicit operator.
-    /// @dev Reverts when the amount is below the minimum or would exceed the operator deposit cap.
-    function validateDepositAmountFor(
-        IDepositManager depositManager_,
+    /// @notice Validates a deposit amount against the configured minimum.
+    /// @dev DepositManager validates its aggregate asset cap using credited principal after vault
+    ///      conversion. Repeating that check here against the raw input would reject valid deposits.
+    function validateMinimumDeposit(
         address asset_,
         IDepositManager.AssetConfiguration memory assetConfiguration_,
-        uint128 amount_,
-        address operator_
-    ) public view {
+        uint128 amount_
+    ) public pure {
         if (amount_ < assetConfiguration_.minimumDeposit) {
             revert IAssetManager.AssetManager_MinimumDepositNotMet(
                 asset_,
                 amount_,
                 assetConfiguration_.minimumDeposit
-            );
-        }
-
-        // Deposit-cap validation uses the asset-equivalent balance, not its underlying share count.
-        // forge-lint: disable-start(unused-return)
-        (, uint256 assetAmountBefore) = depositManager_.getOperatorAssets(
-            IERC20(asset_),
-            operator_
-        );
-        // forge-lint: disable-end(unused-return)
-        if (assetAmountBefore + amount_ > assetConfiguration_.depositCap) {
-            revert IAssetManager.AssetManager_DepositCapExceeded(
-                asset_,
-                assetAmountBefore,
-                assetConfiguration_.depositCap
             );
         }
     }

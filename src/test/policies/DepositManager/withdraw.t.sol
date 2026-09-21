@@ -240,6 +240,11 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             0,
             "Liabilities should be 0"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            0,
+            "full withdrawal should release all utilization"
+        );
     }
 
     // given the depositor has not approved the contract to spend the receipt token
@@ -402,6 +407,11 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             0,
             "Liabilities should be 0"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            0,
+            "withdrawal should release utilization while over cap"
         );
     }
 
@@ -702,6 +712,11 @@ contract DepositManagerWithdrawTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             previousDepositorDepositActualAmount - amount_, // Adjusted for the amount requested
             "Liabilities"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorDepositActualAmount - amount_,
+            "zero-output withdrawal should release burned principal"
         );
     }
 }

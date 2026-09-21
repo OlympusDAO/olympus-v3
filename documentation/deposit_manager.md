@@ -32,7 +32,9 @@ An asset configuration contains:
     use the token returned by `share()`.
 - An explicit share-withdrawal requirement for non-standard vaults that restrict synchronous
     redemption without advertising ERC-7540 asynchronous redemption.
-- A deposit cap measured in underlying-asset units. A zero cap prevents new deposits.
+- A shared deposit cap measured in underlying-asset units. It limits aggregate credited principal
+    for the asset across every operator and deposit period. A zero cap prevents positive-credit
+    deposits.
 - A minimum single-deposit amount measured in underlying-asset units. Zero disables the minimum.
 
 Every supported operator also needs an asset-period entry identified by
@@ -96,6 +98,13 @@ If a configured vault later enables asynchronous deposits, its synchronous `depo
 expected to revert. The authoritative returned `actualAmount` is the underlying-denominated credit
 calculated from the received custody after the vault interaction.
 
+The asset deposit cap applies to that authoritative credit, not the raw token input or current
+custody balance. Principal continues consuming capacity while it is lent out because it remains an
+outstanding depositor claim. Receipt-backed withdrawals and borrowing defaults release capacity;
+borrowing withdrawals, repayments, yield claims, rescue operations, and receipt wrapping do not.
+Governance may lower a cap below current utilization without forcing withdrawals or defaults. In
+that state, positive-credit deposits remain blocked until utilization falls within the cap.
+
 Share-to-asset accounting uses `previewRedeem` when redemption is synchronous. A standards-compliant
 ERC-7540 vault requires that preview to revert while redemption is asynchronous, so DepositManager
 uses `convertToAssets` in that live state for custody accounting. Share-output previews return the
@@ -105,8 +114,10 @@ share withdrawal.
 The receipt token may be held in ERC-6909 form or wrapped as an ERC-20. Withdrawal and default paths
 enforce the applicable ownership, approval, and balance requirements through ReceiptTokenManager.
 
-`previewDeposit` is only a current-state conversion estimate. Vault state can change during the
-deposit, so the value returned by a successful deposit is authoritative.
+`previewDeposit` is a current-state conversion and cap-headroom estimate. A positive estimated
+credit reverts when it exceeds the asset's current aggregate headroom; a zero-credit estimate
+returns zero. The preview does not reserve capacity. Vault state, the cap, or aggregate utilization
+can change before execution, so the value and cap check from a successful deposit are authoritative.
 
 ## Withdrawals
 
@@ -202,9 +213,11 @@ V1.1 preserves every V1 function selector and adds:
 - `borrowingWithdraw(BorrowingWithdrawParams,bool)`, returning `(tokenOut, amountOut)`.
 - `previewDeposit(IERC20,uint256)` and `previewWithdraw(IERC20,uint256,bool)` conversion previews.
 - The separate `IAssetManagerV1_1` surface adds `getAssetWithdrawalToken(IERC20,bool)`,
-    `isAssetShareWithdrawalRequired(IERC20)`, `validateAssetWithdrawAsShares(IERC20,bool)`, and
+    `getAssetDepositCapStatus(IERC20)`, `isAssetShareWithdrawalRequired(IERC20)`,
+    `validateAssetWithdrawAsShares(IERC20,bool)`, and
     `validateAssetShareWithdrawalRequired(IERC20,bool)` without changing the V1 asset configuration
-    struct.
+    struct. Deposit-cap utilization is aggregate credited principal across all operators and remains
+    consumed while principal is lent out.
 - A V1.1 `addAsset` overload configures the initial requirement for non-standard vaults whose
     synchronous-redemption restriction cannot be discovered through ERC-7540. Later
     `setAssetShareWithdrawalRequired` changes may be applied by admin or the config operator; the

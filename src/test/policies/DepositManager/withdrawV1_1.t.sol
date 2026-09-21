@@ -898,6 +898,7 @@ contract DepositManagerWithdrawV1_1Test is DepositManagerTest {
     function test_givenAsyncRedeem_whenWithdrawingUnderlying_revertsAndRollsBackReceipts() public {
         _configureAndDeposit();
         uint256 receiptBalanceBefore = receiptTokenManager.balanceOf(DEPOSITOR, _receiptTokenId);
+        uint256 utilizationBefore = _assetDepositCapUtilization(iAsset);
 
         vm.prank(DEPOSITOR);
         receiptTokenManager.approve(address(depositManager), _receiptTokenId, 3e18);
@@ -919,6 +920,11 @@ contract DepositManagerWithdrawV1_1Test is DepositManagerTest {
             receiptTokenManager.balanceOf(DEPOSITOR, _receiptTokenId),
             receiptBalanceBefore,
             "failed underlying exit should retain receipts"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            utilizationBefore,
+            "failed vault exit should restore utilization"
         );
     }
 
@@ -1001,6 +1007,11 @@ contract DepositManagerWithdrawV1_1Test is DepositManagerTest {
         );
         assertEq(amountOut, 0, "sub-share request should round to zero output");
         assertEq(_externalShare.balanceOf(RECIPIENT), 0, "zero output should transfer no shares");
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            _DEPOSIT_AMOUNT - (_ASSETS_PER_SHARE - 1),
+            "zero-share output should release burned principal"
+        );
     }
 
     // ========== ERC-7575 SYNC-REDEEM TESTS ========== //

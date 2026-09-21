@@ -164,6 +164,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
     {
         uint256 borrowedBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
         uint256 liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        uint256 utilizationBefore = _assetDepositCapUtilization(iAsset);
 
         // Expect revert
         _expectRevertReceiptTokenInsufficientAllowance(0, previousRecipientBorrowActualAmount);
@@ -189,6 +190,11 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             liabilitiesBefore,
             "failed burn should preserve liabilities"
         );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            utilizationBefore,
+            "failed burn should preserve utilization"
+        );
     }
 
     // given an existing borrow and disabled asset period
@@ -207,6 +213,7 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenAssetPeriodIsDisabled
     {
         uint256 liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        _setAssetDepositCap(0);
 
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingDefault(
@@ -227,6 +234,11 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             liabilitiesBefore - BORROW_AMOUNT,
             "default should reduce liabilities"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            liabilitiesBefore - BORROW_AMOUNT,
+            "default should release exact principal"
         );
     }
 
@@ -311,6 +323,11 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
             depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
             previousDepositorDepositActualAmount - amount_,
             "asset liabilities"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            previousDepositorDepositActualAmount - amount_,
+            "default should release aggregate utilization"
         );
 
         // Assert operator assets

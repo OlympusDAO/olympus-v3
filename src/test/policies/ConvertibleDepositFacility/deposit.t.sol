@@ -1,9 +1,14 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.20;
 
+// Test calls intentionally ignore return values when asserting only revert behavior or one tuple
+// component.
+// forge-lint: disable-start(unused-return)
+
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
 import {console2} from "@forge-std-1.16.2/console2.sol";
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest {
     // given the contract is disabled
@@ -166,4 +171,57 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         // Assert that the available deposits are correct
         _assertAvailableDeposits(actualDepositAmount);
     }
+
+    function test_givenTwoFacilities_whenSharedAssetCapIsFilled_rejectsFurtherDeposit() public {
+        uint256 depositCap = RESERVE_TOKEN_AMOUNT * 2;
+        vm.startPrank(admin);
+        facility.enable("");
+        depositManager.setAssetDepositCap(iReserveToken, depositCap);
+        vm.stopPrank();
+
+        reserveToken.mint(recipient, RESERVE_TOKEN_AMOUNT);
+        reserveToken.mint(recipientTwo, RESERVE_TOKEN_AMOUNT + 1);
+        vm.prank(recipient);
+        reserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT);
+        vm.prank(recipientTwo);
+        reserveToken.approve(address(depositManager), RESERVE_TOKEN_AMOUNT + 1);
+
+        vm.prank(recipient);
+        (, uint256 firstCredit) = facility.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT,
+            false
+        );
+        vm.prank(recipientTwo);
+        (, uint256 secondCredit) = facilityTwo.deposit(
+            iReserveToken,
+            PERIOD_MONTHS,
+            RESERVE_TOKEN_AMOUNT,
+            false
+        );
+
+        assertEq(firstCredit, RESERVE_TOKEN_AMOUNT, "first facility credit");
+        assertEq(secondCredit, RESERVE_TOKEN_AMOUNT, "second facility credit");
+        assertEq(
+            depositManager.getAssetDepositCapStatus(iReserveToken).utilization,
+            depositCap,
+            "shared asset-cap utilization"
+        );
+
+        vm.prank(recipientTwo);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAssetManager.AssetManager_DepositCapExceeded.selector,
+                address(iReserveToken),
+                depositCap,
+                depositCap
+            )
+        );
+        facilityTwo.deposit(iReserveToken, PERIOD_MONTHS, 1, false);
+
+        assertEq(reserveToken.balanceOf(recipientTwo), 1, "rejected deposit rolled back");
+    }
 }
+
+// forge-lint: disable-end(unused-return)

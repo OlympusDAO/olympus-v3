@@ -47,6 +47,9 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     /// @notice Mapping of assets to explicit share-withdrawal requirements for non-standard vaults.
     mapping(IERC20 asset => bool required) internal _assetShareWithdrawalRequired;
 
+    /// @notice Mapping of assets to outstanding credited principal consuming the shared cap.
+    mapping(IERC20 asset => uint256 utilization) internal _assetDepositCapUtilization;
+
     /// @notice Mapping of assets and operators to the number of shares they have deposited
     mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
 
@@ -89,18 +92,6 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
             );
         }
 
-        // Validate that adding the deposit will not exceed the deposit cap
-        if (enforceDepositChecks_) {
-            (, uint256 assetAmountBefore) = getOperatorAssets(asset_, msg.sender);
-            if (assetAmountBefore + amount_ > assetConfiguration.depositCap) {
-                revert AssetManager_DepositCapExceeded(
-                    address(asset_),
-                    assetAmountBefore,
-                    assetConfiguration.depositCap
-                );
-            }
-        }
-
         // Pull the assets from the depositor
         ERC20 asset = ERC20(address(asset_));
         // The calling operator is authorized to pull from the depositor through DepositManager's
@@ -141,6 +132,13 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
             // Credit only the assets represented by the shares actually received. Async-redeem
             // vaults must use convertToAssets because ERC-7540 requires previewRedeem to revert.
             actualAmount = _convertSharesToAssets(vault, shares);
+        }
+
+        // The credited amount after vault conversion is the authoritative principal exposure.
+        // Re-read the cap after the external vault call so a callback cannot make the check stale.
+        if (enforceDepositChecks_ && actualAmount != 0) {
+            _validateAssetDepositCap(asset_, actualAmount);
+            _assetDepositCapUtilization[asset_] += actualAmount;
         }
 
         // Update the shares deposited by the caller (operator).
@@ -233,6 +231,20 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     function _getOperatorKey(IERC20 asset_, address operator_) internal pure returns (bytes32) {
         /// forge-lint: disable-next-line(asm-keccak256)
         return keccak256(abi.encode(address(asset_), operator_));
+    }
+
+    /// @notice Validates a positive credited-principal increase against the live shared cap.
+    function _validateAssetDepositCap(IERC20 asset_, uint256 credit_) internal view {
+        uint256 utilization = _assetDepositCapUtilization[asset_];
+        uint256 depositCap = _assetConfigurations[asset_].depositCap;
+        if (utilization > depositCap || credit_ > depositCap - utilization) {
+            revert AssetManager_DepositCapExceeded(address(asset_), utilization, depositCap);
+        }
+    }
+
+    /// @notice Releases shared cap utilization when receipt-backed principal is destroyed.
+    function _decreaseAssetDepositCapUtilization(IERC20 asset_, uint256 amount_) internal {
+        _assetDepositCapUtilization[asset_] -= amount_;
     }
 
     /// @notice Returns whether the vault currently advertises asynchronous redemption.
@@ -492,6 +504,15 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         IERC20 asset_
     ) public view override returns (AssetConfiguration memory configuration) {
         return _assetConfigurations[asset_];
+    }
+
+    /// @inheritdoc IAssetManagerV1_1
+    function getAssetDepositCapStatus(
+        IERC20 asset_
+    ) public view override returns (AssetDepositCapStatus memory status) {
+        status.depositCap = _assetConfigurations[asset_].depositCap;
+        status.utilization = _assetDepositCapUtilization[asset_];
+        return status;
     }
 
     /// @notice Validates the requested withdrawal mode before action-specific external calls.

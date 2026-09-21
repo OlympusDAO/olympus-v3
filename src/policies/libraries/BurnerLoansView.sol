@@ -164,13 +164,7 @@ library BurnerLoansView {
                 true,
                 address(this)
             );
-        BurnerLoansCustody.validateDepositAmountFor(
-            dependencies_.depositManager,
-            asset_,
-            assetConfiguration,
-            amount_,
-            address(this)
-        );
+        BurnerLoansCustody.validateMinimumDeposit(asset_, assetConfiguration, amount_);
         depositedCollateral = BurnerLoansCustody.previewDepositAmount(
             dependencies_.depositManager,
             asset_,

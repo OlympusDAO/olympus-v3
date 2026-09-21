@@ -2,10 +2,11 @@
 pragma solidity ^0.8.20;
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// forge-lint: disable-start(literal-instead-of-constant)
+// forge-lint: disable-start(literal-instead-of-constant, unused-return)
 
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
     event AssetDepositCapSet(address indexed asset, uint256 depositCap);
@@ -174,6 +175,40 @@ contract DepositManagerSetAssetDepositCapTest is DepositManagerTest {
         assertEq(config.depositCap, 0, "Deposit cap should be 0");
         assertEq(config.minimumDeposit, 0, "Minimum deposit should be 0");
     }
+
+    function test_givenOutstandingPrincipal_whenCapIsLoweredBelowUtilization()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+    {
+        vm.prank(DEPOSIT_OPERATOR);
+        (, uint256 creditedAmount) = depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: DEPOSITOR,
+                amount: MINT_AMOUNT,
+                shouldWrap: false
+            })
+        );
+
+        vm.prank(ADMIN);
+        depositManager.setAssetDepositCap(iAsset, 0);
+
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            0,
+            "cap should be lowered below utilization"
+        );
+        assertEq(
+            _assetDepositCapUtilization(iAsset),
+            creditedAmount,
+            "cap change should preserve utilization"
+        );
+    }
 }
 
-// forge-lint: disable-end(literal-instead-of-constant)
+// forge-lint: disable-end(literal-instead-of-constant, unused-return)

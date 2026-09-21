@@ -84,7 +84,8 @@ interface IDepositManagerV1_1 is IDepositManager {
     /// @notice Configures an asset and records whether it requires share-token withdrawals.
     /// @param asset_ The underlying asset.
     /// @param vault_ The custody vault, or the zero address for idle custody.
-    /// @param depositCap_ The maximum underlying-denominated deposits per operator.
+    /// @param depositCap_ The maximum aggregate credited principal for the asset, denominated in
+    ///        underlying-asset units.
     /// @param minimumDeposit_ The minimum underlying-denominated deposit.
     /// @param requiresShareWithdrawal_ Whether underlying withdrawals are unsupported even when
     ///        the vault does not advertise ERC-7540 asynchronous redemption.
@@ -104,8 +105,7 @@ interface IDepositManagerV1_1 is IDepositManager {
     // ========== PREVIEW FUNCTIONS ========== //
 
     /// @notice Estimates the custody credit and shares for a deposit at the current vault state.
-    /// @dev This is a conversion-only estimate. A vault conversion may change during deposit, so
-    ///      the actual post-deposit credit returned by `deposit` remains authoritative.
+    /// @dev The result is not a reservation and may differ from the credited amount at execution.
     /// @param asset_ The configured underlying asset.
     /// @param assetAmount_ The proposed deposit amount in underlying-asset units.
     /// @return estimatedCreditedAssets Estimated receipt credit in underlying-asset units.

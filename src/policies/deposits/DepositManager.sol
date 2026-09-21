@@ -99,12 +99,7 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) internal view returns (uint256 tokenId) {
-        tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-            address(this),
-            asset_,
-            depositPeriod_,
-            operator_
-        );
+        tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
         if (address(_assetPeriods[tokenId].asset) == address(0)) {
             revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
         }
@@ -115,17 +110,8 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) internal view {
-        uint256 tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-            address(this),
-            asset_,
-            depositPeriod_,
-            operator_
-        );
-        AssetPeriod memory assetPeriod = _assetPeriods[tokenId];
-        if (assetPeriod.asset == address(0)) {
-            revert DepositManager_InvalidAssetPeriod(address(asset_), depositPeriod_, operator_);
-        }
-        if (!assetPeriod.isEnabled) {
+        uint256 tokenId = _getAssetPeriodTokenId(asset_, depositPeriod_, operator_);
+        if (!_assetPeriods[tokenId].isEnabled) {
             revert DepositManager_AssetPeriodDisabled(address(asset_), depositPeriod_, operator_);
         }
     }
@@ -186,7 +172,7 @@ contract DepositManager is
     ///             - The caller does not have the deposit operator role
     ///             - The asset/deposit period/operator combination is not enabled
     ///             - The deposit amount is below the minimum deposit requirement
-    ///             - The deposit would exceed the asset's deposit cap for the operator
+    ///             - The credited principal would exceed the asset's aggregate deposit cap
     ///             - The depositor has not approved the DepositManager to spend the asset tokens
     ///             - The depositor has insufficient asset token balance
     ///             - The asset is a fee-on-transfer token
@@ -219,12 +205,7 @@ contract DepositManager is
         );
 
         // Mint the receipt token to the caller
-        receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-            address(this),
-            params_.asset,
-            params_.depositPeriod,
-            msg.sender
-        );
+        receiptTokenId = getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender);
         _RECEIPT_TOKEN_MANAGER.mint(
             params_.depositor,
             receiptTokenId,
@@ -411,18 +392,14 @@ contract DepositManager is
         // Will revert if the asset configuration is not valid/invalid receipt token ID
         _RECEIPT_TOKEN_MANAGER.burn(
             params_.depositor,
-            _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-                address(this),
-                params_.asset,
-                params_.depositPeriod,
-                msg.sender
-            ),
+            getReceiptTokenId(params_.asset, params_.depositPeriod, msg.sender),
             params_.amount,
             params_.isWrapped
         );
 
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[_getAssetLiabilitiesKey(params_.asset, msg.sender)] -= params_.amount;
+        _decreaseAssetDepositCapUtilization(params_.asset, params_.amount);
 
         // Withdraw the funds from the vault to the recipient
         // This will revert if the asset is not configured
@@ -440,23 +417,32 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManagerV1_1
-    /// @dev Conversion estimate only, not a guarantee of credit or successful execution.
-    ///      Vault state changes during deposit can change the credited amount; permissions,
-    ///      enabled state, limits, and balances are not checked by this preview. Reverts if the
-    ///      asset is not configured.
+    /// @dev Conversion and current-cap estimate only, not a reservation or guarantee of credit or
+    ///      successful execution. A zero-credit estimate returns zero. A positive estimate is
+    ///      checked against aggregate credited principal, including lent-out principal. Vault
+    ///      state, the cap, or utilization can change before execution; permissions, enabled
+    ///      state, minimum deposits, and balances are not checked. Reverts if the asset is not
+    ///      configured or the positive estimated credit exceeds current aggregate headroom.
     function previewDeposit(
         IERC20 asset_,
         uint256 assetAmount_
     ) external view returns (uint256 estimatedCreditedAssets, uint256 estimatedCustodyShares) {
         _onlyConfiguredAsset(asset_);
         AssetConfiguration memory configuration = _assetConfigurations[asset_];
-        if (configuration.vault == address(0)) return (assetAmount_, assetAmount_);
+        if (configuration.vault == address(0)) {
+            estimatedCreditedAssets = assetAmount_;
+            estimatedCustodyShares = assetAmount_;
+        } else {
+            IERC4626 vault = IERC4626(configuration.vault);
+            estimatedCustodyShares = vault.previewDeposit(assetAmount_);
+            estimatedCreditedAssets = estimatedCustodyShares == 0
+                ? 0
+                : _convertSharesToAssets(vault, estimatedCustodyShares);
+        }
 
-        IERC4626 vault = IERC4626(configuration.vault);
-        estimatedCustodyShares = vault.previewDeposit(assetAmount_);
-        estimatedCreditedAssets = estimatedCustodyShares == 0
-            ? 0
-            : _convertSharesToAssets(vault, estimatedCustodyShares);
+        if (estimatedCreditedAssets != 0) {
+            _validateAssetDepositCap(asset_, estimatedCreditedAssets);
+        }
     }
 
     /// @inheritdoc IDepositManagerV1_1
@@ -576,11 +562,6 @@ contract DepositManager is
             revert DepositManager_OperatorNameSet(operator_);
         }
 
-        // Validate that the name is not empty
-        if (bytes(name_).length == 0) {
-            revert DepositManager_OperatorNameInvalid();
-        }
-
         // Validate that the name contains 3 characters
         if (bytes(name_).length != _OPERATOR_NAME_LENGTH) {
             revert DepositManager_OperatorNameInvalid();
@@ -617,18 +598,12 @@ contract DepositManager is
 
     /// @inheritdoc IDepositManager
     function getOperatorName(address operator_) public view returns (string memory) {
-        bytes memory nameBytes = new bytes(_OPERATOR_NAME_LENGTH);
         bytes3 operatorName = _operatorToName[operator_];
         if (operatorName == bytes3(0)) {
             return "";
         }
-
-        nameBytes[0] = bytes1(operatorName[0]);
-        nameBytes[1] = bytes1(operatorName[1]);
-        nameBytes[2] = bytes1(operatorName[2]);
-
         // Convert bytes to string
-        return string(nameBytes);
+        return string(abi.encodePacked(operatorName));
     }
 
     // ========== ASSET PERIOD ========== //
@@ -639,14 +614,10 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) public view override returns (AssetPeriodStatus memory status) {
-        uint256 receiptTokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-            address(this),
-            asset_,
-            depositPeriod_,
-            operator_
-        );
-        status.isConfigured = address(_assetPeriods[receiptTokenId].asset) != address(0);
-        status.isEnabled = _assetPeriods[receiptTokenId].isEnabled;
+        uint256 receiptTokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
+        AssetPeriod storage assetPeriod = _assetPeriods[receiptTokenId];
+        status.isConfigured = address(assetPeriod.asset) != address(0);
+        status.isEnabled = assetPeriod.isEnabled;
         return status;
     }
 
@@ -1047,6 +1018,9 @@ contract DepositManager is
 
         // Update the asset liabilities for the caller (operator)
         _assetLiabilities[borrowingKey] -= params_.amount;
+        // Default burns the matching receipt-backed claim, so this principal is no longer an
+        // outstanding deposit even though the borrowed custody is not repaid.
+        _decreaseAssetDepositCapUtilization(params_.asset, params_.amount);
 
         // Update the borrowed amount
         _borrowedAmounts[borrowingKey] -= params_.amount;
@@ -1168,12 +1142,7 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) external view override returns (uint256 tokenId, address wrappedToken) {
-        tokenId = _RECEIPT_TOKEN_MANAGER.getReceiptTokenId(
-            address(this),
-            asset_,
-            depositPeriod_,
-            operator_
-        );
+        tokenId = getReceiptTokenId(asset_, depositPeriod_, operator_);
         wrappedToken = _RECEIPT_TOKEN_MANAGER.getWrappedToken(tokenId);
         return (tokenId, wrappedToken);
     }

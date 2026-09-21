@@ -17,6 +17,7 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 
 import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
@@ -704,6 +705,11 @@ abstract contract BurnerLoansTest is Test {
     function _enableConfigTimelock() internal {
         vm.prank(admin);
         configTimelock.enable("");
+    }
+
+    function _assetDepositCapUtilization(IERC20 asset_) internal view returns (uint256) {
+        return
+            IAssetManagerV1_1(address(depositManager)).getAssetDepositCapStatus(asset_).utilization;
     }
 }
 

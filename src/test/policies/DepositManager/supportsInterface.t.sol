@@ -19,6 +19,8 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ERC165Helper} from "src/test/lib/ERC165.sol";
 
 contract DepositManagerSupportsInterfaceTest is DepositManagerTest {
+    bytes4 internal constant _IASSET_MANAGER_V1_1_INTERFACE_ID = 0x8d4d2676;
+
     // VERSION
     // given DepositManager deployed
     //  when VERSION is called
@@ -68,7 +70,11 @@ contract DepositManagerSupportsInterfaceTest is DepositManagerTest {
             true,
             "IAssetManagerV1_1 mismatch"
         );
-
+        assertEq(
+            type(IAssetManagerV1_1).interfaceId,
+            _IASSET_MANAGER_V1_1_INTERFACE_ID,
+            "IAssetManagerV1_1 interface ID changed unexpectedly"
+        );
         // Test IEnabler
         assertEq(
             depositManager.supportsInterface(type(IEnabler).interfaceId),

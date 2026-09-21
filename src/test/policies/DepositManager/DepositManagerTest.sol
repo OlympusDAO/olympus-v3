@@ -797,5 +797,9 @@ contract DepositManagerTest is Test {
         uint256 remainder = (shares * (currentAssets - withdrawAmount_)) % (currentSupply - shares);
         return withdrawAmount_ - (remainder > 0 ? 1 : 0);
     }
+
+    function _assetDepositCapUtilization(IERC20 asset_) internal view returns (uint256) {
+        return depositManager.getAssetDepositCapStatus(asset_).utilization;
+    }
 }
 // forge-lint: disable-end(literal-instead-of-constant, mixed-case-function, mixed-case-variable, modifier-used-only-once, reentrancy-no-eth, unused-return, unwrapped-modifier-logic)
