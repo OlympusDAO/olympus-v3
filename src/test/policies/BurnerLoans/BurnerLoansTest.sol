@@ -37,7 +37,7 @@ import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
-import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
@@ -251,8 +251,8 @@ abstract contract BurnerLoansTest is Test {
         vm.stopPrank();
     }
 
-    function _depositOperatorRole() internal view returns (bytes32) {
-        return DepositManager(address(depositManager)).ROLE_DEPOSIT_OPERATOR();
+    function _depositOperatorRole() internal pure returns (bytes32) {
+        return DEPOSIT_OPERATOR_ROLE;
     }
 
     function _enableDepositManager() internal {

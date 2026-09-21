@@ -73,6 +73,25 @@ contract DepositManagerEnableAssetPeriodTest is DepositManagerTest {
         depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
+    function test_givenEmergencyDisabledRoute_whenAdminReEnables_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        vm.prank(EMERGENCY);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        vm.prank(ADMIN);
+        depositManager.enableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertTrue(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "admin should be able to reverse an emergency route disable"
+        );
+    }
+
     // given there is no asset period
     //  [X] it reverts
 

@@ -27,7 +27,7 @@ import {BaseAssetManager} from "src/bases/BaseAssetManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleStep.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
-import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Deposit Manager
 /// @notice This policy manages deposits and withdrawals for Olympus protocol contracts
@@ -50,9 +50,6 @@ contract DepositManager is
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ========== CONSTANTS ========== //
-
-    /// @notice The role that is allowed to deposit and withdraw funds
-    bytes32 public constant ROLE_DEPOSIT_OPERATOR = "deposit_operator";
 
     /// @notice The required number of characters in an operator name
     uint256 internal constant _OPERATOR_NAME_LENGTH = 3;
@@ -183,7 +180,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 receiptTokenId, uint256 actualAmount)
     {
         _onlyAssetPeriodEnabled(params_.asset, params_.depositPeriod, msg.sender);
@@ -257,7 +254,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         onlyConfiguredAsset(asset_)
         returns (uint256 actualAmount)
     {
@@ -284,7 +281,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         onlyConfiguredAsset(asset_)
         returns (IERC20 tokenOut, uint256 amountOut)
     {
@@ -349,7 +346,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
         (, actualAmount) = _withdraw(params_, false);
@@ -374,7 +371,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (IERC20 tokenOut, uint256 amountOut)
     {
         return _withdraw(params_, withdrawAsShares_);
@@ -695,38 +692,26 @@ contract DepositManager is
     }
 
     /// @inheritdoc IDepositManager
-    /// @dev        This function is only callable by the admin role.
+    /// @dev        This function is only callable by the admin role or the configured config
+    ///             operator. Emergency, `deposit_manager_admin`, and deposit operators alone are
+    ///             not authorized.
     ///
     ///             This function reverts if:
     ///             - The contract is not enabled
-    ///             - The caller does not have the admin role
+    ///             - The caller is neither admin nor the configured config operator
     ///             - The asset has not been added via addAsset()
     ///             - The operator is the zero address
     ///             - The deposit period is 0
     ///             - The asset/deposit period/operator combination is already configured
     ///             - The operator name has not been set
+    ///             - The operator does not hold the deposit_operator role
     ///             - Receipt token creation fails (invalid parameters in ReceiptTokenManager)
     function addAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,
         address operator_
-    )
-        external
-        givenEnabled
-        onlyAdminRole
-        onlyConfiguredAsset(asset_)
-        returns (uint256 receiptTokenId)
-    {
-        // Validate that the operator is not the zero address
-        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
-
-        // Validate that the deposit period is not 0
-        if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
-
-        // Validate that the asset and deposit period combination is not already configured
-        if (isAssetPeriod(asset_, depositPeriod_, operator_).isConfigured) {
-            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
-        }
+    ) external givenEnabled onlyConfigAuthority(false) returns (uint256 receiptTokenId) {
+        _validateAddAssetPeriod(asset_, depositPeriod_, operator_);
 
         // Configure the ERC6909 receipt token and asset period atomically
         receiptTokenId = _setReceiptTokenData(asset_, depositPeriod_, operator_);
@@ -735,6 +720,34 @@ contract DepositManager is
         emit AssetPeriodConfigured(receiptTokenId, address(asset_), operator_, depositPeriod_);
 
         return receiptTokenId;
+    }
+
+    /// @inheritdoc IDepositManagerV1_1
+    function validateAddAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view {
+        _validateAddAssetPeriod(asset_, depositPeriod_, operator_);
+    }
+
+    function _validateAddAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) internal view {
+        _onlyConfiguredAsset(asset_);
+        if (operator_ == address(0)) revert DepositManager_ZeroAddress();
+        if (depositPeriod_ == 0) revert DepositManager_OutOfBounds();
+        if (isAssetPeriod(asset_, depositPeriod_, operator_).isConfigured) {
+            revert DepositManager_AssetPeriodExists(address(asset_), depositPeriod_, operator_);
+        }
+        if (bytes(getOperatorName(operator_)).length == 0) {
+            revert DepositManager_OperatorNameNotSet(operator_);
+        }
+        if (!_hasRole(operator_, DEPOSIT_OPERATOR_ROLE)) {
+            revert DepositManager_DepositOperatorRoleNotHeld(operator_);
+        }
     }
 
     /// @inheritdoc IDepositManager
@@ -832,7 +845,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
         (, actualAmount) = _borrowingWithdraw(params_, false);
@@ -858,7 +871,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (IERC20 tokenOut, uint256 amountOut)
     {
         (tokenOut, amountOut) = _borrowingWithdraw(params_, withdrawAsShares_);
@@ -949,7 +962,7 @@ contract DepositManager is
         external
         nonReentrant
         givenEnabled
-        onlyRole(ROLE_DEPOSIT_OPERATOR)
+        onlyRole(DEPOSIT_OPERATOR_ROLE)
         returns (uint256 actualAmount)
     {
         // Validate that the asset is configured
@@ -997,7 +1010,7 @@ contract DepositManager is
     ///             - The operator becomes insolvent after the default (assets + borrowed < liabilities)
     function borrowingDefault(
         BorrowingDefaultParams calldata params_
-    ) external nonReentrant givenEnabled onlyRole(ROLE_DEPOSIT_OPERATOR) {
+    ) external nonReentrant givenEnabled onlyRole(DEPOSIT_OPERATOR_ROLE) {
         // Validate that the asset is configured
         if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
 
@@ -1080,14 +1093,10 @@ contract DepositManager is
         uint8 depositPeriod_,
         address operator_
     ) internal returns (uint256 tokenId) {
-        // Validate that the operator name is set
         string memory operatorName = getOperatorName(operator_);
-        if (bytes(operatorName).length == 0) {
-            revert DepositManager_OperatorNameNotSet(operator_);
-        }
 
         // The immutable ReceiptTokenManager is a trusted protocol dependency, and addAssetPeriod
-        // requires admin authority. The token ID is unavailable until this call returns.
+        // requires configuration authority. The token ID is unavailable until this call returns.
         // forge-lint: disable-start(reentrancy-no-eth)
         tokenId = _RECEIPT_TOKEN_MANAGER.createToken(
             asset_,

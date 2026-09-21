@@ -2,26 +2,39 @@
 
 ## Authority Matrix
 
-| Authority               | Functions                                                                                      | Timing and limits                                                                                  |
-| ----------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `admin`                 | `enable`, `disable`, `reEnable`, `setGracePeriod`, `setConfigOperator`                         | Direct governance lifecycle control; `reEnable` is bounded by the configured grace period          |
-| `admin`                 | `addAsset`, `addAssetPeriod`, `setOperatorName`                                                | Structural custody configuration remains direct governance-only                                    |
-| `admin`                 | `rescue`                                                                                       | Available while enabled or disabled; only unmanaged ERC-20 balances can be sent to `TRSRY`         |
-| `admin`                 | `setAssetDepositCap`, `setAssetMinimumDeposit`, `setAssetShareWithdrawalRequired`, `enableAssetPeriod`, `disableAssetPeriod` | Governance can apply mutable configuration directly                                                |
-| `deposit_manager_admin` | `reEnable`                                                                                     | Immediate bounded recovery during the re-enable grace period                                       |
-| `deposit_manager_admin` | `rescue`                                                                                       | Available while enabled or disabled; only unmanaged ERC-20 balances can be sent to `TRSRY`         |
-| `deposit_manager_admin` | DepositManagerConfigTimelock queue functions                                                   | Proposes delayed mutable configuration; cannot perform structural registration                     |
-| Config operator         | `setAssetDepositCap`, `setAssetMinimumDeposit`, `setAssetShareWithdrawalRequired`, `enableAssetPeriod`, `disableAssetPeriod` | Normally the DepositManagerConfigTimelock; authority is revoked by setting another address or zero |
-| `emergency`             | `disable`, `disableAssetPeriod`                                                                | Immediate one-way shutdown; cannot enable a period or change limits                                |
-| `deposit_operator`      | `deposit`, `withdraw`, `claimYield`, `borrowingWithdraw`, `borrowingRepay`, `borrowingDefault` | Restricted to the caller's operator namespace                                                      |
-| Any address             | Views and previews                                                                             | Conversion previews do not prove authorization or successful execution                             |
+| Authority               | Functions                                                                                                                                      | Timing and limits                                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`                 | `enable`, `disable`, `reEnable`, `setGracePeriod`, `setConfigOperator`                                                                         | Direct governance lifecycle control; `reEnable` is bounded by the configured grace period                                                                                        |
+| `admin`                 | `addAsset`, `setOperatorName`                                                                                                                  | Asset onboarding and operator registration remain direct governance-only                                                                                                         |
+| `admin`                 | `rescue`                                                                                                                                       | Available while enabled or disabled; only unmanaged ERC-20 balances can be sent to `TRSRY`                                                                                       |
+| `admin`                 | `addAssetPeriod`, `setAssetDepositCap`, `setAssetMinimumDeposit`, `setAssetShareWithdrawalRequired`, `enableAssetPeriod`, `disableAssetPeriod` | Governance can bypass the configuration timelock and apply operational configuration directly                                                                                    |
+| `admin`                 | DepositManagerConfigTimelock queue functions                                                                                                   | Can also propose delayed configuration, although governance already has a timelock and can use the direct path                                                                   |
+| `deposit_manager_admin` | `reEnable`                                                                                                                                     | Immediate bounded recovery during the re-enable grace period                                                                                                                     |
+| `deposit_manager_admin` | `rescue`                                                                                                                                       | Available while enabled or disabled; only unmanaged ERC-20 balances can be sent to `TRSRY`                                                                                       |
+| `deposit_manager_admin` | DepositManagerConfigTimelock queue functions                                                                                                   | Proposes delayed mutable configuration and delayed route creation; cannot perform direct structural registration or onboarding                                                   |
+| Config operator         | `addAssetPeriod`, `setAssetDepositCap`, `setAssetMinimumDeposit`, `setAssetShareWithdrawalRequired`, `enableAssetPeriod`, `disableAssetPeriod` | Normally the DepositManagerConfigTimelock; route creation through the timelock starts the route enabled after the delay; authority is revoked by setting another address or zero |
+| `emergency`             | `disable`, `disableAssetPeriod`, timelock cancellation                                                                                         | Immediate one-way shutdown and queued-action cancellation; cannot enable a period, create a route queue, change limits, or queue any configuration                               |
+| `deposit_operator`      | `deposit`, `withdraw`, `claimYield`, `borrowingWithdraw`, `borrowingRepay`, `borrowingDefault`                                                 | Restricted to the caller's operator namespace; possession is required before a route is created for the operator                                                                 |
+| Any address             | Timelock execution after maturity; views and previews                                                                                          | Execution still requires a valid, unexpired operation and matching lifecycle and pre-state; conversion previews do not prove successful execution                                |
 
-`setConfigOperator` is intentionally single-step and admin-only. Assigning a timelock gives it only
-the mutable configuration authority listed above. The initial share-withdrawal requirement remains
-part of admin-only asset onboarding. Admin can change it directly after onboarding, while the
-config-operator route normally uses the timelock's `queueSetAssetShareWithdrawalRequired`. The
-timelock cannot add assets, add periods, set operator names, rescue tokens, or change its own
-authority.
+Route creation prerequisites are checked by DepositManager's
+`validateAddAssetPeriod` at DMCT queue time and by the same internal check at direct or timelocked
+dispatch: the asset must be configured, the deposit period must be nonzero, the operator must be
+explicitly registered through `setOperatorName`, and the operator must hold `deposit_operator` at
+dispatch. DMCT gains no ability to approve assets, register operators, or grant roles. Queued route
+creation reuses the asset-period-operator configuration key, so add, enable, and disable for the
+same tuple conflict. Direct admin route creation after queueing, or a role revocation, makes the
+queued action state-stale and non-executable. `setConfigOperator` is intentionally single-step and
+admin-only. It can appoint any address: that address receives the entire config-operator surface,
+including direct route creation. Appointing DMCT is the operational choice that imposes its delay.
+The initial share-withdrawal requirement remains part of admin-only asset onboarding. Admin can
+change it directly after onboarding, while the config-operator route normally uses the timelock's
+`queueSetAssetShareWithdrawalRequired`. The timelock cannot add assets, set operator names, rescue
+tokens, or change its own authority. There is no separate admin-owned floor for withdrawal mode or
+admin whitelist of deposit periods: the configured asset, registered operator, current role, and
+nonzero period are the route boundaries. Deposit caps remain direct-admin or config-operator
+settings; this change does not redefine their accounting semantics. Admin may directly re-enable a
+route that emergency disabled, while `deposit_manager_admin` must queue enablement through DMCT.
 
 ## Lifecycle Gates
 

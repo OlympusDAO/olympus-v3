@@ -13,6 +13,7 @@ import {DepositManagerConfigTimelock} from "src/policies/deposits/DepositManager
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 
 abstract contract DepositManagerConfigTimelockTest is DepositManagerTest {
+    uint8 internal constant SECOND_PERIOD = 2;
     DepositManagerConfigTimelock internal _configTimelock;
 
     function setUp() public virtual override {
@@ -61,6 +62,11 @@ abstract contract DepositManagerConfigTimelockTest is DepositManagerTest {
             return _configTimelock.queueEnableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
         }
         return _configTimelock.queueDisableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function _queueAddRoute() internal returns (uint64 actionId) {
+        vm.prank(DEPOSIT_MANAGER_ADMIN);
+        return _configTimelock.queueAddAssetPeriod(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR);
     }
 
     function _warpReady() internal {

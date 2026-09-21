@@ -28,6 +28,7 @@ contract DepositManagerConfigTimelockHandler {
     DepositManager internal immutable _DEPOSIT_MANAGER;
     IERC20 internal immutable _ASSET;
     uint8 internal immutable _DEPOSIT_PERIOD;
+    uint8 internal immutable _ROUTE_CREATION_PERIOD;
     address internal immutable _OPERATOR;
 
     uint64[_ACTION_SLOTS] internal _actionIds;
@@ -46,6 +47,9 @@ contract DepositManagerConfigTimelockHandler {
         _DEPOSIT_MANAGER = depositManager_;
         _ASSET = asset_;
         _DEPOSIT_PERIOD = depositPeriod_;
+        _ROUTE_CREATION_PERIOD = depositPeriod_ == type(uint8).max
+            ? depositPeriod_ - 1
+            : depositPeriod_ + 1;
         _OPERATOR = operator_;
     }
 
@@ -109,6 +113,17 @@ contract DepositManagerConfigTimelockHandler {
         }
     }
 
+    function queueAssetPeriodCreation() external {
+        if (_DEPOSIT_MANAGER.isAssetPeriod(_ASSET, _ROUTE_CREATION_PERIOD, _OPERATOR).isConfigured)
+            return;
+
+        try
+            _CONFIG_TIMELOCK.queueAddAssetPeriod(_ASSET, _ROUTE_CREATION_PERIOD, _OPERATOR)
+        returns (uint64 actionId) {
+            _recordAction(actionId);
+        } catch {}
+    }
+
     function queueShareWithdrawalRequirement(bool required_) external {
         try _CONFIG_TIMELOCK.queueSetAssetShareWithdrawalRequired(_ASSET, required_) returns (
             uint64 actionId
@@ -159,6 +174,10 @@ contract DepositManagerConfigTimelockHandler {
     function cycleDepositManagerLifecycle() external {
         _DEPOSIT_MANAGER.disable("");
         _DEPOSIT_MANAGER.reEnable();
+    }
+
+    function routeCreationPeriod() external view returns (uint8) {
+        return _ROUTE_CREATION_PERIOD;
     }
 
     function _assetPeriodEnabled() internal view returns (bool) {
@@ -214,6 +233,30 @@ contract DepositManagerConfigTimelockInvariantTest is
         );
         assertTrue(depositManager.isEnabled(), "DepositManager should remain enabled");
         assertTrue(_configTimelock.isEnabled(), "config timelock should remain enabled");
+    }
+
+    function invariant_createdRouteRetainsGovernancePrerequisites() public view {
+        IDepositManager.AssetPeriodStatus memory status = depositManager.isAssetPeriod(
+            iAsset,
+            _handler.routeCreationPeriod(),
+            DEPOSIT_OPERATOR
+        );
+        if (!status.isConfigured) return;
+
+        assertTrue(status.isEnabled, "timelocked route should start enabled");
+        assertTrue(
+            depositManager.getAssetConfiguration(iAsset).isConfigured,
+            "timelocked route should reference a configured asset"
+        );
+        assertGt(
+            bytes(depositManager.getOperatorName(DEPOSIT_OPERATOR)).length,
+            0,
+            "timelocked route should reference a registered operator"
+        );
+        assertTrue(
+            roles.hasRole(DEPOSIT_OPERATOR, "deposit_operator"),
+            "timelocked route operator should hold deposit_operator"
+        );
     }
 }
 

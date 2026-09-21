@@ -15,7 +15,9 @@ import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
 import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
-contract DepositManagerConfigTimelockQueueAssetPeriodTest is DepositManagerConfigTimelockTest {
+contract DepositManagerConfigTimelockQueueDisableAssetPeriodTest is
+    DepositManagerConfigTimelockTest
+{
     function test_whenAssetIsZero_whenDisableIsQueued_reverts() public {
         _expectInvalidAssetPeriod(IERC20(address(0)), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
 
@@ -39,19 +41,6 @@ contract DepositManagerConfigTimelockQueueAssetPeriodTest is DepositManagerConfi
 
         vm.prank(DEPOSIT_MANAGER_ADMIN);
         _configTimelock.queueDisableAssetPeriod(iAsset, DEPOSIT_PERIOD, address(0));
-    }
-
-    function test_givenAssetPeriodIsEnabled_whenEnableIsQueued_reverts() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IDepositManager.DepositManager_AssetPeriodEnabled.selector,
-                address(iAsset),
-                DEPOSIT_PERIOD,
-                DEPOSIT_OPERATOR
-            )
-        );
-        vm.prank(DEPOSIT_MANAGER_ADMIN);
-        _configTimelock.queueEnableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     function test_givenAssetPeriodIsDisabled_whenDisableIsQueued_reverts() public {
@@ -80,21 +69,6 @@ contract DepositManagerConfigTimelockQueueAssetPeriodTest is DepositManagerConfi
         assertFalse(
             depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
             "timelock should disable period"
-        );
-    }
-
-    function test_givenDisabledPeriod_queuesAndExecutesEnable(address executor_) public {
-        vm.prank(ADMIN);
-        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
-        uint64 actionId = _queuePeriod(true);
-        _warpReady();
-
-        vm.prank(executor_);
-        _configTimelock.executeQueuedAction(actionId);
-
-        assertTrue(
-            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
-            "timelock should enable period"
         );
     }
 
@@ -173,6 +147,7 @@ contract DepositManagerConfigTimelockQueueAssetPeriodTest is DepositManagerConfi
         address secondOperator = makeAddr("secondOperator");
         vm.startPrank(ADMIN);
         depositManager.setOperatorName(secondOperator, "op2");
+        rolesAdmin.grantRole("deposit_operator", secondOperator);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, secondOperator);
         vm.stopPrank();
 

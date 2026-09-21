@@ -24,12 +24,13 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ConfigTimelockBatchQueue} from "src/policies/utils/ConfigTimelockBatchQueue.sol";
 import {PolicyEnablerV2} from "src/policies/utils/PolicyEnablerV2.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
-import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {ADMIN_ROLE, DEPOSIT_MANAGER_ADMIN_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Deposit Manager Config Timelock
-/// @notice Timelocked configuration operator for mutable Deposit Manager settings.
-/// @dev Structural registration remains admin-only on Deposit Manager. This policy may only call
-///      the mutable configuration functions accepted by its action validator. Queue and execution
+/// @notice Timelocked configuration operator for mutable Deposit Manager settings, including
+///         timelocked creation of new asset-period routes.
+/// @dev Asset and operator registration remain admin-only on Deposit Manager. This policy may only
+///      call the configuration functions accepted by its action validator. Queue and execution
 ///      require both policies to remain active in their shared Kernel and internally enabled;
 ///      emergency cancellation remains available while either policy is inactive.
 contract DepositManagerConfigTimelock is
@@ -212,6 +213,25 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc IDepositManagerConfigTimelock
+    /// @dev Reverts if either policy is Kernel-inactive or disabled, this contract is not the
+    ///      target's current config operator, the caller has neither `admin` nor
+    ///      `deposit_manager_admin`, the asset is not configured, the deposit period is zero, the
+    ///      operator is zero or not registered, the operator does not hold `deposit_operator`, the
+    ///      route already exists, or the asset-period key is pending.
+    function queueAddAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external returns (uint64 actionId) {
+        return
+            _queueAction(
+                address(_DEPOSIT_MANAGER),
+                IDepositManager.addAssetPeriod.selector,
+                abi.encode(asset_, depositPeriod_, operator_)
+            );
+    }
+
+    /// @inheritdoc IDepositManagerConfigTimelock
     /// @dev Reverts if queue-wide authorization or lifecycle validation fails, the batch is empty
     ///      or too large, or any sub-action has an unsupported target, selector, payload, current
     ///      state, or already-pending configuration key. The complete queue operation is atomic.
@@ -235,7 +255,7 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @inheritdoc ConfigTimelockBatchQueue
-    // Reason: keeping the bounded five-selector validator together makes its accepted action
+    // Reason: keeping the bounded six-selector validator together makes its accepted action
     // surface auditable and avoids single-use dispatch helpers.
     // forge-lint: disable-next-line(cyclomatic-complexity)
     function _validateConfigSubAction(
@@ -276,6 +296,17 @@ contract DepositManagerConfigTimelock is
             IAssetManagerV1_1(address(_DEPOSIT_MANAGER)).validateAssetShareWithdrawalRequired(
                 asset,
                 required
+            );
+            return;
+        }
+
+        if (selector == IDepositManager.addAssetPeriod.selector) {
+            _requirePayloadLength(action_, _LEN_ASSET_PERIOD);
+            (IERC20 asset, uint8 period, address operator) = _decodeAssetPeriodPayload(action_);
+            IDepositManagerV1_1(address(_DEPOSIT_MANAGER)).validateAddAssetPeriod(
+                asset,
+                period,
+                operator
             );
             return;
         }
@@ -354,6 +385,30 @@ contract DepositManagerConfigTimelock is
         bytes32,
         ITimelockBatchQueue.BatchAction memory action_
     ) internal view override returns (bytes32 stateHash) {
+        if (action_.selector == IDepositManager.addAssetPeriod.selector) {
+            (
+                IERC20 routeAsset,
+                uint8 routePeriod,
+                address routeOperator
+            ) = _decodeAssetPeriodPayload(action_);
+            IDepositManager.AssetPeriodStatus memory routeStatus = _DEPOSIT_MANAGER.isAssetPeriod(
+                routeAsset,
+                routePeriod,
+                routeOperator
+            );
+            // Route existence/enabled state and the mutable operator-role membership are both
+            // hashed, so direct route creation or a role revocation makes the operation stale.
+            // A revoked-then-regranted role once again matches the expected state.
+            return
+                keccak256(
+                    abi.encode(
+                        routeStatus.isConfigured,
+                        routeStatus.isEnabled,
+                        _hasRole(routeOperator, DEPOSIT_OPERATOR_ROLE)
+                    )
+                );
+        }
+
         if (_isAssetLimitsSelector(action_.selector)) {
             (IERC20 limitsAsset, ) = abi.decode(action_.payload, (IERC20, uint256));
             IAssetManager.AssetConfiguration memory configuration = _DEPOSIT_MANAGER
@@ -407,6 +462,11 @@ contract DepositManagerConfigTimelock is
                 asset,
                 required
             );
+        } else if (selector == IDepositManager.addAssetPeriod.selector) {
+            (IERC20 asset, uint8 period, address operator) = _decodeAssetPeriodPayload(action_);
+            /// Reason: receiptTokenId is retrievable off-chain from AssetPeriodConfigured.
+            /// forge-lint: disable-next-line(unused-return)
+            _DEPOSIT_MANAGER.addAssetPeriod(asset, period, operator);
         } else if (_isAssetPeriodSelector(selector)) {
             (IERC20 asset, uint8 period, address operator) = abi.decode(
                 action_.payload,
@@ -527,10 +587,19 @@ contract DepositManagerConfigTimelock is
     }
 
     /// @notice Returns whether a selector changes an existing asset period's enabled state.
+    /// @dev    Does not include route creation, which is validated separately because it targets
+    ///         an absent asset-period tuple instead of an existing one.
     function _isAssetPeriodSelector(bytes4 selector_) internal pure returns (bool) {
         return
             selector_ == IDepositManager.enableAssetPeriod.selector ||
             selector_ == IDepositManager.disableAssetPeriod.selector;
+    }
+
+    /// @notice Decodes the shared asset/period/operator route payload.
+    function _decodeAssetPeriodPayload(
+        ITimelockBatchQueue.BatchAction memory action_
+    ) internal pure returns (IERC20 asset, uint8 period, address operator) {
+        return abi.decode(action_.payload, (IERC20, uint8, address));
     }
 
     function _revertInvalidAction(ITimelockBatchQueue.BatchAction memory action_) internal pure {
@@ -540,7 +609,7 @@ contract DepositManagerConfigTimelock is
     // ========== VERSION / ERC-165 ========== //
 
     /// @inheritdoc IVersioned
-    function VERSION() external pure returns (uint8 major, uint8 minor) {
+    function VERSION() external pure override returns (uint8 major, uint8 minor) {
         return (1, 0);
     }
 

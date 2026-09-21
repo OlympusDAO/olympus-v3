@@ -57,4 +57,10 @@ contract DepositManagerConfigTimelockSupportsInterfaceTest is DepositManagerConf
     function test_whenInterfaceIsUnsupported_returnsFalse() public view {
         assertFalse(_configTimelock.supportsInterface(0xffffffff), "unknown interface supported");
     }
+
+    function test_versionIsInitialDeploymentVersion() public view {
+        (uint8 major, uint8 minor) = _configTimelock.VERSION();
+        assertEq(major, 1, "config timelock major version");
+        assertEq(minor, 0, "config timelock minor version");
+    }
 }

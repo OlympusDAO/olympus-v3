@@ -13,6 +13,65 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimelockTest {
+    function test_whenRouteCreationPayloadLengthIsInvalid_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(
+            IDepositManager.addAssetPeriod.selector,
+            abi.encode(iAsset, SECOND_PERIOD)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(depositManager),
+                IDepositManager.addAssetPeriod.selector
+            )
+        );
+        vm.prank(DEPOSIT_MANAGER_ADMIN);
+        _configTimelock.queueBatch(actions);
+    }
+
+    function test_givenConflictingRouteCreations_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _singleAction(
+            IDepositManager.addAssetPeriod.selector,
+            abi.encode(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR)
+        );
+        actions[1] = _singleAction(
+            IDepositManager.addAssetPeriod.selector,
+            abi.encode(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR)
+        );
+
+        vm.expectPartialRevert(
+            IConfigTimelockBatchQueue.IConfigTimelockBatchQueue_ConfigKeyPending.selector
+        );
+        vm.prank(DEPOSIT_MANAGER_ADMIN);
+        _configTimelock.queueBatch(actions);
+    }
+
+    function test_givenRouteCreationThenEnablementOfSameTuple_reverts() public {
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
+        actions[0] = _singleAction(
+            IDepositManager.addAssetPeriod.selector,
+            abi.encode(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR)
+        );
+        actions[1] = _singleAction(
+            IDepositManager.enableAssetPeriod.selector,
+            abi.encode(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_InvalidAssetPeriod.selector,
+                address(iAsset),
+                SECOND_PERIOD,
+                DEPOSIT_OPERATOR
+            )
+        );
+        vm.prank(DEPOSIT_MANAGER_ADMIN);
+        _configTimelock.queueBatch(actions);
+    }
+
     function test_whenBatchIsAtMaximum_queues() public {
         uint256 maximum = 15;
         ITimelockBatchQueue.BatchAction[] memory actions = _buildIndependentPeriodBatch(maximum);

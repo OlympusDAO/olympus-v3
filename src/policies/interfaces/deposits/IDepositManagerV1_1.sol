@@ -24,6 +24,11 @@ interface IDepositManagerV1_1 is IDepositManager {
     /// @notice Thrown when a borrowing withdrawal would transfer no output token.
     error DepositManager_ZeroOutput();
 
+    /// @notice Error if an explicitly registered operator does not hold the deposit_operator role
+    ///         when a new asset-period route is created for it
+    /// @param operator The registered operator that lacks the deposit_operator role
+    error DepositManager_DepositOperatorRoleNotHeld(address operator);
+
     // ========== EVENTS ========== //
 
     /// @notice Emitted when DepositManager processes a share-mode withdrawal request.
@@ -101,6 +106,19 @@ interface IDepositManagerV1_1 is IDepositManager {
     /// @param asset_ The configured underlying asset.
     /// @param required_ Whether underlying withdrawals are unsupported.
     function setAssetShareWithdrawalRequired(IERC20 asset_, bool required_) external;
+
+    /// @notice Validates whether an asset-period-operator route can be created now.
+    /// @dev Reverts if the asset is not configured, the period or operator is zero, the route
+    ///      already exists, the operator is not registered, or the operator lacks the
+    ///      `deposit_operator` role. Does not check caller authorization or enabled state.
+    /// @param asset_ The configured underlying asset.
+    /// @param depositPeriod_ The deposit period, in months.
+    /// @param operator_ The registered operator holding the deposit_operator role.
+    function validateAddAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external view;
 
     // ========== PREVIEW FUNCTIONS ========== //
 

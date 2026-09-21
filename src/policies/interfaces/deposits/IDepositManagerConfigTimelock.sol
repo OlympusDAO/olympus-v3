@@ -46,6 +46,21 @@ interface IDepositManagerConfigTimelock is ITimelockBatchQueue {
 
     // ========== QUEUE FUNCTIONS ========== //
 
+    /// @notice Queues creation of a new asset-period route on the Deposit Manager.
+    /// @dev Route creation starts enabled after timelock execution. Queueing requires a
+    ///      configured asset, nonzero period, registered operator holding `deposit_operator`,
+    ///      and an absent route. Admin or deposit_manager_admin may queue; execution is
+    ///      permissionless after maturity.
+    /// @param asset_ The configured underlying asset.
+    /// @param depositPeriod_ The deposit period, in months.
+    /// @param operator_ The registered operator holding the deposit_operator role.
+    /// @return actionId Queued action identifier.
+    function queueAddAssetPeriod(
+        IERC20 asset_,
+        uint8 depositPeriod_,
+        address operator_
+    ) external returns (uint64 actionId);
+
     /// @notice Queues a deposit-cap update.
     /// @param asset_ Asset whose deposit cap will be updated.
     /// @param depositCap_ New deposit cap in underlying-asset units.

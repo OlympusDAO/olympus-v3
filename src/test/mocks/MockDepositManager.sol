@@ -425,6 +425,9 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         return receiptTokenId;
     }
 
+    /// @dev The Burner Loans mock does not model route-creation authorization.
+    function validateAddAssetPeriod(IERC20, uint8, address) external pure override {}
+
     function disableAssetPeriod(
         IERC20 asset_,
         uint8 depositPeriod_,

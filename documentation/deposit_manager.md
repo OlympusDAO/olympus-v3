@@ -208,6 +208,11 @@ quantity. They should not infer share decimals from underlying-asset decimals.
 
 V1.1 preserves every V1 function selector and adds:
 
+- `validateAddAssetPeriod(IERC20,uint8,address)` exposes the authoritative read-only route
+    prerequisite check used by DepositManager and DMCT. It checks asset configuration, nonzero
+    period and operator, route absence, explicit operator registration, and current
+    `deposit_operator` possession; it does not check caller authority or enabled state.
+
 - `withdraw(WithdrawParams,bool)`, returning `(tokenOut, amountOut)`.
 - `claimYield(IERC20,address,uint256,bool)`, returning `(tokenOut, amountOut)`.
 - `borrowingWithdraw(BorrowingWithdrawParams,bool)`, returning `(tokenOut, amountOut)`.
@@ -234,9 +239,15 @@ V1.1 preserves every V1 function selector and adds:
 - Recipient validation and transaction-scoped reentrancy protection on the affected entrypoints.
 - `PolicyEnablerV2` bounded `reEnable` support and configurable grace period.
 - A single-step config operator and separate DepositManagerConfigTimelock for delayed cap, minimum,
-    and asset-period changes.
-- `deposit_manager_admin` and `emergency` authority separation, with structural registration kept
-    admin-only.
+    route enablement, route disablement, and route-creation changes. Timelocked route creation starts the
+    route enabled after maturity, is conflict- and stale-state-aware, and remains executable
+    permissionlessly by any address; emergency can cancel queued creations or disable routes but
+    cannot create, queue, or enable them.
+- `deposit_manager_admin` and `emergency` authority separation: direct asset onboarding, operator
+    registration (`setOperatorName`), and role management remain admin-only. Direct route creation
+    stays available to admin or the current config operator and additionally requires the
+    registered operator to hold `deposit_operator`; `deposit_manager_admin` and a role-bearing
+    operator alone cannot create routes directly.
 - Kernel-activity checks on DepositManagerConfigTimelock queue and execution paths.
 
 V1.1 does not add asynchronous redemption requests. It delivers transferable vault shares so the

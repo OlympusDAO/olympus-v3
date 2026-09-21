@@ -14,6 +14,24 @@ import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockCancelTest is DepositManagerConfigTimelockTest {
+    function test_givenQueuedRoute_whenEmergencyCancels_routeIsNotCreated() public {
+        uint64 actionId = _queueAddRoute();
+        uint256 receiptTokenIdCount = depositManager.getReceiptTokenIds().length;
+
+        vm.prank(EMERGENCY);
+        _configTimelock.cancelQueuedAction(actionId);
+
+        assertFalse(
+            depositManager.isAssetPeriod(iAsset, SECOND_PERIOD, DEPOSIT_OPERATOR).isConfigured,
+            "cancelled route creation should not configure the route"
+        );
+        assertEq(
+            depositManager.getReceiptTokenIds().length,
+            receiptTokenIdCount,
+            "cancelled route creation should not mint a receipt token"
+        );
+    }
+
     function test_givenCallerIsNotEmergency_reverts(address caller_) public {
         vm.assume(caller_ != EMERGENCY);
         uint64 actionId = _queueDepositCap(iAsset, 100e18);

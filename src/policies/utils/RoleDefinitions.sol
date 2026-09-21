@@ -42,3 +42,6 @@ bytes32 constant BURNER_LOANS_SEIZER_ROLE = "burner_loans_seizer";
 bytes32 constant BURNER_LOANS_INVENTORY_PROVIDER_ROLE = "burner_loans_inventory_provider";
 /// @dev Deposit Manager parameter proposer and bounded lifecycle recovery role.
 bytes32 constant DEPOSIT_MANAGER_ADMIN_ROLE = "deposit_manager_admin";
+/// @dev Deposit Manager operator role. Holders may call operator-gated actions against their
+///      accounting namespace for configured asset periods.
+bytes32 constant DEPOSIT_OPERATOR_ROLE = "deposit_operator";
