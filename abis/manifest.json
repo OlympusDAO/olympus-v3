@@ -1272,6 +1272,40 @@
             }
         },
         {
+            "abi": "mainnet/ClearinghouseV1_0.json",
+            "abiHash": "24ccab39a96eb17e9ba321d3d8310339f6cb4244a0fae79be818b8e9baa9347d",
+            "address": "0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880",
+            "chain": "mainnet",
+            "chainId": 1,
+            "extra": true,
+            "path": "olympus.policies.ClearinghouseV1_0",
+            "source": {
+                "contract": "src/policies/Clearinghouse.sol:Clearinghouse",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "Clearinghouse",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880"
+            }
+        },
+        {
+            "abi": "mainnet/ClearinghouseV1_2.json",
+            "abiHash": "9fd6821365420b5e4729e16c75b212b685742a56217d382b7751674eec0a883d",
+            "address": "0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0",
+            "chain": "mainnet",
+            "chainId": 1,
+            "extra": true,
+            "path": "olympus.policies.ClearinghouseV1_2",
+            "source": {
+                "contract": "src/policies/Clearinghouse.sol:Clearinghouse",
+                "status": "exact"
+            },
+            "verification": {
+                "contractName": "Clearinghouse",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0"
+            }
+        },
+        {
             "abi": "mainnet/ContractRegistryAdmin.json",
             "abiHash": "4aac7272f761d7f1a13cece0072a3667a8ca65bd47c82132b26f9a737db569ab",
             "address": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
@@ -1445,6 +1479,23 @@
             }
         },
         {
+            "abi": "mainnet/EmissionManagerPrevious.json",
+            "abiHash": "6cc9cac2e3c140ac99ce4128ad0a4ec28ddcebcf1b9356cb1cc605e18e4d141b",
+            "address": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
+            "chain": "mainnet",
+            "chainId": 1,
+            "extra": true,
+            "path": "olympus.policies.EmissionManagerPrevious",
+            "source": {
+                "contract": "src/policies/EmissionManager.sol:EmissionManager",
+                "status": "drifted"
+            },
+            "verification": {
+                "contractName": "EmissionManager",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2"
+            }
+        },
+        {
             "abi": "mainnet/LoanConsolidator.json",
             "abiHash": "a803059195d605f809fae558e0571af64ae56c300504532c65f54d05dbe1d9fb",
             "address": "0x784cA0C006b8651BAB183829A99fA46BeCe50dBc",
@@ -1471,6 +1522,20 @@
             "verification": {
                 "contractName": "OlympusHeart",
                 "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB"
+            }
+        },
+        {
+            "abi": "mainnet/OlympusHeartV1_6.json",
+            "abiHash": "7324e27c6ddfbd4f6ee013c71c2a03f8169abb03f1553aba5846a0fc9b2bbfe9",
+            "address": "0xf7602C0421c283A2fc113172EBDf64C30F21654D",
+            "chain": "mainnet",
+            "chainId": 1,
+            "extra": true,
+            "path": "olympus.policies.OlympusHeartV1_6",
+            "source": {"contract": "src/policies/Heart.sol:OlympusHeart", "status": "drifted"},
+            "verification": {
+                "contractName": "OlympusHeart",
+                "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xf7602C0421c283A2fc113172EBDf64C30F21654D"
             }
         },
         {

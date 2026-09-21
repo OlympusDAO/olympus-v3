@@ -301,6 +301,57 @@ test("an excluded section keeps only the paths in its keep list", async () => {
     );
 });
 
+test("extraDeployments adds current deployments that env.json does not list", async () => {
+    const custom = {
+        ...withMappings({"mainnet.policies.KernelV1": {...evidence, address: other, source}}),
+        extraDeployments: {mainnet: {"policies.KernelV1": other}},
+    };
+    const result = await generateBundle(env({Kernel: address}), custom, loaders());
+    assert.deepEqual(
+        result.deployments.map(({path, extra, abi: file}) => [path, extra, file]),
+        [
+            ["olympus.Kernel", undefined, "mainnet/Kernel.json"],
+            ["olympus.policies.KernelV1", true, "mainnet/KernelV1.json"],
+        ],
+    );
+    // An extra deployment without a pin fails like an env.json deployment.
+    await assert.rejects(
+        generateBundle(
+            env({Kernel: address}),
+            {
+                ...withMappings({"mainnet.policies.KernelV1": {source}}),
+                extraDeployments: custom.extraDeployments,
+            },
+            loaders(),
+        ),
+        /No pinned ABI for mainnet.olympus.policies.KernelV1.*--write/,
+    );
+    // A path that env.json also lists, including an excluded path, fails.
+    await assert.rejects(
+        generateBundle(
+            env({Kernel: address, legacy: {Old: other}}),
+            {
+                ...config,
+                excludedSections: {legacy: {reason: "Pre-V3", keep: []}},
+                extraDeployments: {mainnet: {"legacy.Old": other}},
+            },
+            loaders(),
+        ),
+        /extraDeployments.mainnet.legacy.Old is also in env.json/,
+    );
+    // A chain that is not exported fails.
+    for (const chain of ["base", "solana"]) {
+        await assert.rejects(
+            generateBundle(
+                env({Kernel: address}),
+                {...config, extraDeployments: {[chain]: {"policies.X": other}}},
+                loaders(),
+            ),
+            new RegExp(`extraDeployments.${chain} is not an exported chain`),
+        );
+    }
+});
+
 test("each deployment has one file per chain and labels must be unique in a chain", async () => {
     const custom = withMappings({
         "modules.Kernel": {source},

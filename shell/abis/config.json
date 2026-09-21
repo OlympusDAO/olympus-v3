@@ -21,6 +21,14 @@
             "reason": "Pre-V3 contracts that are no longer used. The kept contracts are still live."
         }
     },
+    "extraDeployments": {
+        "mainnet": {
+            "policies.ClearinghouseV1_0": "0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880",
+            "policies.ClearinghouseV1_2": "0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0",
+            "policies.EmissionManagerPrevious": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
+            "policies.OlympusHeartV1_6": "0xf7602C0421c283A2fc113172EBDf64C30F21654D"
+        }
+    },
     "mappings": {
         "Kernel": {"source": "src/Kernel.sol:Kernel"},
         "arbitrum-sepolia.Kernel": {
@@ -550,6 +558,20 @@
             "contractName": "Clearinghouse",
             "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xE6343ad0675C9b8D3f32679ae6aDbA0766A2ab4c"
         },
+        "mainnet.policies.ClearinghouseV1_0": {
+            "abiHash": "24ccab39a96eb17e9ba321d3d8310339f6cb4244a0fae79be818b8e9baa9347d",
+            "address": "0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880",
+            "contractName": "Clearinghouse",
+            "source": "src/policies/Clearinghouse.sol:Clearinghouse",
+            "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xD6A6E8d9e82534bD65821142fcCd91ec9cF31880"
+        },
+        "mainnet.policies.ClearinghouseV1_2": {
+            "abiHash": "9fd6821365420b5e4729e16c75b212b685742a56217d382b7751674eec0a883d",
+            "address": "0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0",
+            "contractName": "Clearinghouse",
+            "source": "src/policies/Clearinghouse.sol:Clearinghouse",
+            "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x1e094fE00E13Fd06D64EeA4FB3cD912893606fE0"
+        },
         "mainnet.policies.ContractRegistryAdmin": {
             "abiHash": "4aac7272f761d7f1a13cece0072a3667a8ca65bd47c82132b26f9a737db569ab",
             "address": "0xBA05d48Fb94dC76820EB7ea1B360fd6DfDEabdc5",
@@ -620,6 +642,13 @@
             "contractName": "EmissionManager",
             "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xA61b846D5D8b757e3d541E0e4F80390E28f0B6Ff"
         },
+        "mainnet.policies.EmissionManagerPrevious": {
+            "abiHash": "6cc9cac2e3c140ac99ce4128ad0a4ec28ddcebcf1b9356cb1cc605e18e4d141b",
+            "address": "0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2",
+            "contractName": "EmissionManager",
+            "source": "src/policies/EmissionManager.sol:EmissionManager",
+            "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x50f441a3387625bDA8B8081cE3fd6C04CC48C0A2"
+        },
         "mainnet.policies.LegacyBurner": {
             "address": "0x367149cf2d04D3114fFD1Cc6b273222664908D0B",
             "exclude": "Inactive policy: isActive() returned false on 2026-09-21."
@@ -635,6 +664,13 @@
             "address": "0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB",
             "contractName": "OlympusHeart",
             "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0x5824850D8A6E46a473445a5AF214C7EbD46c5ECB"
+        },
+        "mainnet.policies.OlympusHeartV1_6": {
+            "abiHash": "7324e27c6ddfbd4f6ee013c71c2a03f8169abb03f1553aba5846a0fc9b2bbfe9",
+            "address": "0xf7602C0421c283A2fc113172EBDf64C30F21654D",
+            "contractName": "OlympusHeart",
+            "source": "src/policies/Heart.sol:OlympusHeart",
+            "sourceUrl": "https://api.etherscan.io/v2/api?chainid=1&module=contract&action=getsourcecode&address=0xf7602C0421c283A2fc113172EBDf64C30F21654D"
         },
         "mainnet.policies.OlympusPriceConfig": {
             "abiHash": "20b21fc7b543070faf2488b00ff7e1a5c08255adbc55959ceba694b12b7f1a2b",

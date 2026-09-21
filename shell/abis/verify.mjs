@@ -3,7 +3,14 @@ import {mkdir, readFile, writeFile} from "node:fs/promises";
 import {dirname, resolve} from "node:path";
 import {fileURLToPath} from "node:url";
 import {setTimeout} from "node:timers/promises";
-import {abiFile, jsonFormatter, olympusEntries, resolveMapping, stable} from "./export.mjs";
+import {
+    abiFile,
+    jsonFormatter,
+    olympusEntries,
+    resolveMapping,
+    runExport,
+    stable,
+} from "./export.mjs";
 import {abiHash, isAbi} from "./identity.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -92,12 +99,14 @@ async function main() {
     if (rest[1] && !config.chains[rest[1]]) throw new Error(`Unknown EVM chain: ${rest[1]}`);
     const format = write ? await jsonFormatter() : undefined;
     const counts = {match: 0, unmapped: 0, changed: 0, mismatch: 0, unavailable: 0, excluded: 0};
+    let written = 0;
+    let unlinked = 0;
     for (const [chain, chainId] of Object.entries(config.chains)) {
         if (rest[1] && chain !== rest[1]) continue;
         const section = env.current[chain]?.olympus;
         if (!section || typeof section !== "object" || Array.isArray(section))
             throw new Error(`Missing olympus section for ${chain}`);
-        for (const [path, address] of olympusEntries(section, config)) {
+        for (const [path, address] of olympusEntries(section, config, chain)) {
             if (!/^0x[\da-fA-F]{40}$/.test(address) || /^0x0{40}$/.test(address)) continue;
             const label = `${chain}.olympus.${path}`;
             const mapping = resolveMapping(config.mappings, chain, path);
@@ -136,23 +145,38 @@ async function main() {
             if (result.status !== "match" || (await committedHash(file)) !== result.abiHash) {
                 await mkdir(dirname(file), {recursive: true});
                 await writeFile(file, await format(verified.abi));
+                written++;
             }
             if (result.status === "match") continue;
             config.mappings[`${chain}.${path}`] = result.mapping;
             const link = resolveMapping(config.mappings, chain, path);
-            if (!link.source && !link.noSource)
+            if (!link.source && !link.noSource) {
+                unlinked++;
                 console.log(
                     `  Add a source or noSource link for ${label} to shell/abis/config.json. The explorer contract name is ${verified.contractName}.`,
                 );
+            }
         }
     }
     const pinned = counts.unmapped + counts.changed + counts.mismatch;
     if (write && pinned) {
         await writeFile(configPath, await format(stable(config)));
-        console.log(`Pinned ${pinned} deployments. Run 'pnpm run gen:abis' and commit the result.`);
+        console.log(`Pinned ${pinned} deployments.`);
     }
     console.log(JSON.stringify(counts));
     if (counts.unavailable || (!write && pinned)) process.exitCode = 1;
+    if (!written) return;
+    // Generate the manifest and replace each exact ABI with its local build, so that one command
+    // completes a new pin. A deployment without a source link cannot generate yet.
+    if (unlinked) {
+        console.log(
+            "Add the source or noSource links above, then run 'pnpm run gen:abis' and commit the result.",
+        );
+        process.exitCode = 1;
+        return;
+    }
+    await runExport();
+    console.log("Commit shell/abis/config.json and abis/.");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

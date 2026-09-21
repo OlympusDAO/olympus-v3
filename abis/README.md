@@ -24,6 +24,10 @@ The export includes each nonzero address in `env.current.<chain>.olympus`, but n
 - The retired chains `goerli` and `berachain-bartio`, and the non-EVM chains.
 - Deployments that `shell/abis/config.json` excludes with a reason.
 
+The export has only current deployments. `extraDeployments` in `shell/abis/config.json` adds
+current deployments that `env.json` does not list, for example an older policy that the Kernel
+still has installed. The manifest marks them with `extra: true`.
+
 ## How the export gets each ABI
 
 `shell/abis/config.json` records two values for each deployment:
@@ -77,7 +81,7 @@ open a pull request to `develop`, run `gen:abis:check` locally to find a stale e
 
 Each entry in `deployments` has these fields:
 
-- `chain`, `chainId`, `path`, `address`.
+- `chain`, `chainId`, `path`, `address`, and `extra` for a deployment from `extraDeployments`.
 - `abi`: the ABI file relative to `abis/`, for example `mainnet/RolesAdmin.json`.
 - `abiHash`: the hash of the deployed ABI.
 - `source`: `contract` and `status`, or `status: unavailable` and `reason`.

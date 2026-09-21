@@ -34,16 +34,28 @@ function leaves(value, path = "") {
         .flatMap((key) => leaves(value[key], path ? `${path}.${key}` : key));
 }
 
-// The deployment entries of one chain's `olympus` section, as [path, address] pairs. The
-// `config` and `multisig` sections are not deployments. An excluded section, such as the
-// pre-V3 `legacy` section, keeps only the paths in its `keep` list.
-export function olympusEntries(section, config) {
+// The deployment entries of one chain, as [path, address, extra] triples, sorted by path.
+// They come from the chain's `olympus` section in env.json, without the `config` and `multisig`
+// sections. An excluded section, such as the pre-V3 `legacy` section, keeps only the paths in its
+// `keep` list. `config.extraDeployments.<chain>` adds current deployments that env.json does not
+// list, with `extra` set to true.
+export function olympusEntries(section, config, chain) {
     const {config: ignoredConfig, multisig: ignoredMultisig, ...olympus} = section;
-    return leaves(olympus).filter(([path]) => {
+    const listed = leaves(olympus);
+    const paths = new Set(listed.map(([path]) => path));
+    const entries = listed.filter(([path]) => {
         const [name, ...rest] = path.split(".");
         const excluded = config.excludedSections?.[name];
         return !excluded || excluded.keep?.includes(rest.join("."));
     });
+    for (const [path, address] of leaves(config.extraDeployments?.[chain] ?? {})) {
+        if (paths.has(path))
+            throw new Error(
+                `extraDeployments.${chain}.${path} is also in env.json. Remove it from shell/abis/config.json.`,
+            );
+        entries.push([path, address, true]);
+    }
+    return entries.sort(([first], [second]) => (first < second ? -1 : first > second ? 1 : 0));
 }
 
 // Chain-level `source`, `sourceKind` and `noSource` replace the shared link as one unit,
@@ -92,7 +104,7 @@ export async function generateBundle(env, config, {committedAbi, sourceAbi}) {
         if (!section || typeof section !== "object" || Array.isArray(section))
             throw new Error(`Missing olympus section for ${chain}`);
         const files = {};
-        for (const [path, address] of olympusEntries(section, config)) {
+        for (const [path, address, extra] of olympusEntries(section, config, chain)) {
             const label = `${chain}.olympus.${path}`;
             if (!/^0x[\da-fA-F]{40}$/.test(address))
                 throw new Error(`Invalid address at ${label}: ${address}`);
@@ -190,6 +202,7 @@ export async function generateBundle(env, config, {committedAbi, sourceAbi}) {
                 chain,
                 chainId,
                 path: `olympus.${path}`,
+                ...(extra ? {extra: true} : {}),
                 address,
                 abi: file,
                 abiHash: hash,
@@ -204,6 +217,11 @@ export async function generateBundle(env, config, {committedAbi, sourceAbi}) {
             });
         }
     }
+    for (const chain of Object.keys(config.extraDeployments ?? {}))
+        if (!config.chains[chain] || !env.current[chain] || config.excludedChains[chain])
+            throw new Error(
+                `extraDeployments.${chain} is not an exported chain. Remove it from shell/abis/config.json.`,
+            );
     const unused = Object.keys(config.mappings).filter((key) => !used.has(key));
     if (unused.length)
         throw new Error(
@@ -293,10 +311,8 @@ export async function jsonFormatter() {
         });
 }
 
-async function main() {
-    const args = process.argv.slice(2);
-    if (args.some((arg) => arg !== "--check") || args.length > 1)
-        throw new Error("Usage: node shell/abis/export.mjs [--check]");
+// Generate the ABI files and the manifest. With `check`, compare them and write nothing.
+export async function runExport({check = false} = {}) {
     const env = JSON.parse(await readFile(resolve(root, "src/scripts/env.json"), "utf8"));
     const config = JSON.parse(await readFile(resolve(root, "shell/abis/config.json"), "utf8"));
     const temporary = await mkdtemp(resolve(tmpdir(), "olympus-abis-"));
@@ -346,7 +362,6 @@ async function main() {
         await rm(temporary, {recursive: true, force: true});
     }
     const files = await renderFiles(bundle, await jsonFormatter());
-    const check = args.includes("--check");
     await saveFiles(resolve(root, "abis"), files, check);
     const links = {};
     for (const {source} of bundle.deployments)
@@ -354,6 +369,13 @@ async function main() {
     console.log(
         `${check ? "Verified" : "Wrote"} ${Object.keys(bundle.abis).length} ABIs for ${bundle.deployments.length} deployments. Source links: ${JSON.stringify(links)}.`,
     );
+}
+
+async function main() {
+    const args = process.argv.slice(2);
+    if (args.some((arg) => arg !== "--check") || args.length > 1)
+        throw new Error("Usage: node shell/abis/export.mjs [--check]");
+    await runExport({check: args.includes("--check")});
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
