@@ -236,26 +236,44 @@ contract DepositManagerSUSDeForkTest is DepositManagerTest {
 
     function test_givenSUSDeCooldownEnabled_whenClaimingYield_transfersSUSDe() public {
         _depositSUSDe();
-        _fundAndApproveUnderlying(DEPOSITOR, _ACTION_AMOUNT);
+        _borrowSUSDeShares(_ACTION_AMOUNT);
+        address yieldRecipient = makeAddr("yieldRecipient");
+        uint256 borrowerSharesBefore = iVault.balanceOf(RECIPIENT);
+        uint256 yieldRecipientSharesBefore = iVault.balanceOf(yieldRecipient);
+        uint256 repaymentAmount = _ACTION_AMOUNT * 2;
+        _fundAndApproveUnderlying(DEPOSITOR, repaymentAmount);
         vm.prank(DEPOSIT_OPERATOR);
-        uint256 creditedYield = depositManager.borrowingRepay(
+        uint256 creditedAssets = depositManager.borrowingRepay(
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
                 payer: DEPOSITOR,
-                amount: _ACTION_AMOUNT,
-                maxAmount: 0
+                amount: repaymentAmount,
+                maxAmount: _ACTION_AMOUNT
             })
         );
-        assertGt(creditedYield, _YIELD_CLAIM_AMOUNT, "yield deposit should cover claim");
+        assertGt(
+            creditedAssets,
+            _ACTION_AMOUNT + _YIELD_CLAIM_AMOUNT,
+            "over-repayment surplus should cover claim"
+        );
 
         uint256 expectedShares = iVault.convertToShares(_YIELD_CLAIM_AMOUNT);
         vm.prank(DEPOSIT_OPERATOR);
         (IERC20 tokenOut, uint256 amountOut) = IDepositManagerV1_1(address(depositManager))
-            .claimYield(iAsset, RECIPIENT, _YIELD_CLAIM_AMOUNT, true);
+            .claimYield(iAsset, yieldRecipient, _YIELD_CLAIM_AMOUNT, true);
 
         assertEq(address(tokenOut), _SUSDE, "yield output token");
         assertEq(amountOut, expectedShares, "yield shares out");
-        assertEq(iVault.balanceOf(RECIPIENT), expectedShares, "recipient yield shares");
+        assertEq(
+            iVault.balanceOf(yieldRecipient),
+            yieldRecipientSharesBefore + expectedShares,
+            "yield recipient shares"
+        );
+        assertEq(
+            iVault.balanceOf(RECIPIENT),
+            borrowerSharesBefore,
+            "borrower recipient shares should remain unchanged"
+        );
     }
 
     function test_givenSUSDeCooldownEnabled_whenBorrowing_transfersSUSDe() public {
