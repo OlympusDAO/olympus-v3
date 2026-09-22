@@ -8,8 +8,9 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 /// @notice Reusable single-step configuration-operator storage and rotation.
 /// @dev The operator starts unset. Implementations must explicitly override
 ///      `_authorizeSetConfigOperator` to permit rotation; the default implementation denies every
-///      caller. Product setters remain responsible for composing operator authority with any other
-///      accepted authority.
+///      caller. An authorized rotation to the current operator, including an unset zero address,
+///      reverts with `ConfigOperator_Unchanged`. Product setters remain responsible for composing
+///      operator authority with any other accepted authority.
 abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE ========== //
 
@@ -19,12 +20,14 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
-    /// @dev The zero address is valid and revokes delegated configuration access.
-    // forge-lint: disable-next-line(missing-zero-check)
-    function setConfigOperator(address configOperator_) external virtual override {
+    /// @dev The zero address revokes delegated configuration access. Authorization is checked before
+    ///      rejecting an operator that is already configured.
+    function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
         }
+        if (configOperator_ == configOperator) revert ConfigOperator_Unchanged();
+
         configOperator = configOperator_;
         emit ConfigOperatorSet(configOperator_);
     }

@@ -5,6 +5,9 @@ pragma solidity >=0.8.24;
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
+// Libraries
+import {ConfigTimelockKeyLib} from "src/policies/utils/ConfigTimelockKeyLib.sol";
+
 // Contracts
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 
@@ -25,9 +28,14 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         bytes32 expectedStateHash;
     }
 
+    /// @notice The unresolved action holding a destination-scoped configuration key.
     mapping(bytes32 key => uint64 actionId) internal _pendingActionIds;
+
+    /// @notice Configuration states recorded for each sub-action at queue time, by local key.
     mapping(uint64 actionId => mapping(uint256 index => QueuedConfigState[] states))
         internal _queuedConfigStates;
+
+    /// @notice Destination recorded for each sub-action at queue time.
     mapping(uint64 actionId => mapping(uint256 index => address destination))
         internal _queuedConfigDestinations;
 
@@ -78,7 +86,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
 
         QueuedConfigState storage state = states[configStateIndex_];
         address destination = _queuedConfigDestinations[actionId_][index_];
-        return (_scopeConfigKey(destination, state.localKey), state.expectedStateHash);
+        return (ConfigTimelockKeyLib.scope(destination, state.localKey), state.expectedStateHash);
     }
 
     function _onSubActionQueued(
@@ -117,7 +125,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                 revert IConfigTimelockBatchQueue_ConfigKeyZero(actionId_, index_, i);
             }
 
-            bytes32 key = _scopeConfigKey(destination, localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(destination, localKey);
 
             uint64 owner = _pendingActionIds[key];
             if (owner != 0) {
@@ -173,7 +181,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            bytes32 key = _scopeConfigKey(expectedDestination, state.localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
             uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -222,7 +230,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             address destination = _queuedConfigDestinations[actionId_][index];
             uint256 length = states.length;
             for (uint256 i; i < length; ++i) {
-                bytes32 key = _scopeConfigKey(destination, states[i].localKey);
+                bytes32 key = ConfigTimelockKeyLib.scope(destination, states[i].localKey);
                 uint64 owner = _pendingActionIds[key];
                 if (owner != actionId_) {
                     revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -252,13 +260,6 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         for (uint256 index; index < endIndex_; ++index) {
             count += _queuedConfigStates[actionId_][index].length;
         }
-    }
-
-    function _scopeConfigKey(
-        address destination_,
-        bytes32 localKey_
-    ) private pure returns (bytes32) {
-        return keccak256(abi.encode(destination_, localKey_));
     }
 
     /// @notice Validates queue-wide authorization and lifecycle requirements.
