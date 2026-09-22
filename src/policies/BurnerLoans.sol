@@ -552,6 +552,26 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if the market or borrower position is missing, either supplied price is zero,
+    ///      or required current configuration or backing is invalid. An existing zero-principal
+    ///      position returns max uint only after both supplied prices are validated.
+    function positionHealthFactorAtPrice(
+        address asset_,
+        address borrower_,
+        uint256 collateralUsdPrice_,
+        uint256 ohmUsdPrice_
+    ) external view override returns (uint256) {
+        return
+            BurnerLoansQuote.positionHealthFactorAtPrice(
+                asset_,
+                _marketId(asset_),
+                borrower_,
+                collateralUsdPrice_,
+                ohmUsdPrice_
+            );
+    }
+
+    /// @inheritdoc IBurnerLoansView
     /// @dev Reverts if Burner Loans is disabled, the asset is unregistered, custody is unsupported,
     ///      or a solvent claim has an invalid live recipient route.
     function previewClaimYield(

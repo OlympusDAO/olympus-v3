@@ -230,6 +230,23 @@ interface IBurnerLoansView is IBurnerLoans {
         uint256 debtOhm_
     ) external view returns (uint256 healthFactor);
 
+    /// @notice Projects an existing borrower's health factor at caller-supplied USD prices.
+    /// @dev The two prices use `PRICE.decimals()`; the result uses 1e18. Reads current market
+    ///      configuration and canonical backing, but neither PriceCache nor live PRICE observations.
+    ///      This is an untrusted price scenario, not a substitute for execution, preview, or seizure
+    ///      checks. Callable while Burner Loans or originations are disabled.
+    /// @param asset_ Collateral asset securing the position.
+    /// @param borrower_ Borrower whose first position in the matching market is evaluated.
+    /// @param collateralUsdPrice_ Hypothetical collateral/USD price, in PRICE decimals.
+    /// @param ohmUsdPrice_ Hypothetical OHM/USD price, in PRICE decimals.
+    /// @return healthFactor Projected health factor, scaled by 1e18 and rounded down.
+    function positionHealthFactorAtPrice(
+        address asset_,
+        address borrower_,
+        uint256 collateralUsdPrice_,
+        uint256 ohmUsdPrice_
+    ) external view returns (uint256 healthFactor);
+
     /// @notice Projects claimable custody yield for one registered collateral asset.
     /// @dev Reverts if Burner Loans is disabled, the asset is unregistered, custody is unsupported,
     ///      or a solvent nonzero recipient allocation has an invalid live route. Insolvent custody

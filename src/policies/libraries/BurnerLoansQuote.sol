@@ -372,6 +372,36 @@ library BurnerLoansQuote {
             );
     }
 
+    /// @notice Calculates the first borrower position's health with caller-supplied PRICE-scaled prices.
+    /// @dev Validate position existence and both prices before the existing zero-principal shortcut.
+    function positionHealthFactorAtPrice(
+        address asset_,
+        uint32 marketId_,
+        address borrower_,
+        uint256 collateralUsdPrice_,
+        uint256 ohmUsdPrice_
+    ) public view returns (uint256) {
+        BurnerLoansContext memory dependencies_ = _dependencies();
+        (bool exists, , IFLOANv1.Position memory position) = BurnerLoansPositions.getWithIdOrEmpty(
+            dependencies_.floan,
+            marketId_,
+            borrower_
+        );
+        if (!exists) revert IBurnerLoans.BurnerLoans_PositionNotFound(asset_, borrower_);
+
+        if (collateralUsdPrice_ == 0) revert IPRICEv2.PRICE_PriceZero(asset_);
+        if (ohmUsdPrice_ == 0) revert IPRICEv2.PRICE_PriceZero(address(dependencies_.ohm));
+
+        return
+            positionHealthFactorWithPricePair(
+                dependencies_,
+                asset_,
+                position.collateral,
+                position.principalDue,
+                PricePair({ohmUsdPrice: ohmUsdPrice_, collateralUsdPrice: collateralUsdPrice_})
+            );
+    }
+
     /// @notice Quotes an extension using one cache refresh or direct-PRICE resolution.
     /// @return preview Extension quote calculated from the resolved pair.
     function quoteExtendForAction(

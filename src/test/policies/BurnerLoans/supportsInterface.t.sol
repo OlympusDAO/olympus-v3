@@ -54,6 +54,16 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         );
     }
 
+    function test_givenUpdatedViewInterface_whenQueried_advertisesNewSelectorSet() public view {
+        bytes4 previousViewId = type(IBurnerLoansView).interfaceId ^
+            IBurnerLoansView.positionHealthFactorAtPrice.selector;
+        assertTrue(
+            burnerLoans.supportsInterface(type(IBurnerLoansView).interfaceId),
+            "updated view interface"
+        );
+        assertFalse(burnerLoans.supportsInterface(previousViewId), "previous view interface id");
+    }
+
     function test_whenYieldRepurchaseRecipientInterfaceIsQueried_preservesSelectorSet()
         public
         pure

@@ -195,6 +195,23 @@ and resulting health. `repay` and `previewRepay` report actual or projected heal
 reduction rather than an unknown-health sentinel. A debt-free result is `type(uint256).max` and does
 not read PRICE.
 
+`positionHealthFactorAtPrice(asset, borrower, collateralUsdPrice, ohmUsdPrice)` lets any caller
+project the first existing borrower position in that collateral market at two supplied USD prices.
+Both price arguments use `PRICE.decimals()` (not the health-factor scale); the sole return value is
+the health factor scaled by `1e18` and rounded down. It uses the position's current collateral and
+outstanding OHM principal, current market risk configuration, and current canonical OHM backing.
+It does not read PriceCache or live OHM/collateral PRICE observations; `PRICE.decimals()` is read to
+scale backing when principal is positive. The view remains callable while Burner Loans or asset
+originations are disabled. A missing market reverts before position or price validation; an absent
+borrower position reverts before price validation. An existing zero-principal position returns
+`type(uint256).max`, but either zero supplied price still reverts first. Maturity does not change
+the projected number: use the existing seizure views to determine actual seizability.
+
+These are untrusted caller-supplied scenarios, not prices that borrow, preview, or seizure actions
+will execute against. For an off-chain sweep across several price pairs, pin the same block number
+in each `eth_call` so the position, configuration, and backing do not drift between samples. Do not
+substitute this view for the cache-aware execution, preview, or seizure checks.
+
 Previews expose unhealthy hypothetical outcomes instead of reverting solely because health is below
 `1e18`. Borrow, withdrawal, and extension previews set `executable` to `false`; their corresponding
 writes still revert. Deposits and repayments remain executable when they improve a position but
@@ -217,9 +234,10 @@ calculation. A failure from an operational cache propagates; Burner Loans does n
 as availability failure and retry PRICE. Full repayment and debt-free collateral operations remain
 available without either source because their health is unambiguous.
 
-Borrow and extension fees are paid in the collateral asset directly to `TRSRY`. They do not reduce
-credited collateral. The fee curve uses pre-action market utilization; the global cap is not a fee
-input.
+Borrow and extension fees are charged and paid upfront in the collateral asset directly to `TRSRY`
+when the loan is originated or extended. They do not accrue as interest due or reduce credited
+collateral; outstanding debt and health remain principal-based. The fee curve uses pre-action market
+utilization; the global cap is not a fee input.
 
 ```text
 utilization = ceil(marketPrincipalDue * 1e18 / marketPrincipalCap)

@@ -104,6 +104,11 @@ interface IBurnerLoans {
     /// @notice The borrower has no collateral position for the asset.
     error BurnerLoans_NoCollateral();
 
+    /// @notice No FLOAN position exists for this collateral asset and borrower.
+    /// @param asset Collateral asset whose market was queried.
+    /// @param borrower Borrower for whom no position exists.
+    error BurnerLoans_PositionNotFound(address asset, address borrower);
+
     /// @notice The borrower has no outstanding debt for the asset.
     error BurnerLoans_NoDebt();
 
