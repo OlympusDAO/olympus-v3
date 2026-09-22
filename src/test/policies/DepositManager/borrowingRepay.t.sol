@@ -200,7 +200,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
 
     // given the caller has no outstanding debt
     //  when max amount is zero
-    //   [X] it reverts before using the payer's balance or allowance
+    //   [X] it reverts and rolls back the payer's balance and allowance
 
     function test_givenNoBorrow_whenMaxAmountIsZero_reverts()
         public
@@ -221,7 +221,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
 
     // given the caller has outstanding debt
     //  when max amount is zero
-    //   [X] it reverts before using the payer's balance or allowance
+    //   [X] it reverts and rolls back the payer's balance and allowance
 
     function test_givenExistingBorrow_whenMaxAmountIsZero_reverts()
         public
@@ -309,6 +309,232 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
             depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
             indebtedOperatorDebt,
             "other operator debt should remain unchanged"
+        );
+    }
+
+    function _setUpOtherOperatorStandingAllowance()
+        internal
+        returns (address otherOperator, address unrelatedPayer)
+    {
+        otherOperator = makeAddr("otherOperator");
+        unrelatedPayer = makeAddr("unrelatedPayer");
+        vm.startPrank(ADMIN);
+        rolesAdmin.grantRole("deposit_operator", otherOperator);
+        depositManager.setOperatorName(otherOperator, "cd2");
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, otherOperator);
+        vm.stopPrank();
+
+        asset.mint(unrelatedPayer, 20e18);
+        vm.prank(unrelatedPayer);
+        asset.approve(address(depositManager), 20e18);
+        vm.prank(otherOperator);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: iAsset,
+                depositPeriod: DEPOSIT_PERIOD,
+                depositor: unrelatedPayer,
+                amount: 1e18,
+                shouldWrap: false
+            })
+        );
+    }
+
+    // Current design limitation, not an authorization acceptance test: DepositManager is the
+    // shared ERC-20 spender, but a payer's allowance is not scoped to the operator receiving the
+    // credit. This test shows an indebted operator using allowance left after a deposit through
+    // another operator, then claiming the resulting surplus.
+    //
+    // Exploitation requires a deposit_operator, an enabled/configured asset, and an unrelated payer
+    // with both a token balance and unused allowance to DepositManager. The production redemption
+    // vault narrows one exposure: it checks the loan/facility, approves only that repayment, and
+    // clears the allowance afterward. Those checks do not bind other standing payer approvals to
+    // an operator; a newly granted, compromised, or incorrectly exposed operator can bypass them.
+    // Once zero maxAmount is rejected, the calling operator needs outstanding debt, but any
+    // positive repayment can still consume an unrelated payer's standing allowance.
+    //
+    // A possible redesign would check revocable, amount-bounded payer consent for each
+    // (operator, asset, action) in DepositManager before pulling tokens. Tokens could still move
+    // directly from payer to DepositManager, but depositors and custody contracts such as the
+    // redemption vault would need to authorize their intended operator. Repayment must still allow
+    // actual vault credit above maxAmount for ERC-4626 rounding, with only principal capped.
+    function test_givenBorrow_whenOtherOperatorDepositorHasStandingAllowance_canClaimPayerFunds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+    {
+        (address otherOperator, address unrelatedPayer) = _setUpOtherOperatorStandingAllowance();
+        uint256 repaymentAmount = 10e18;
+
+        uint256 payerBalanceBefore = asset.balanceOf(unrelatedPayer);
+        uint256 payerAllowanceBefore = asset.allowance(unrelatedPayer, address(depositManager));
+        uint256 otherOperatorLiabilitiesBefore = depositManager.getOperatorLiabilities(
+            iAsset,
+            otherOperator
+        );
+        uint256 callerDebtBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        uint256 callerClaimableBefore = depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR);
+        assertGt(payerAllowanceBefore, repaymentAmount, "payer should retain standing allowance");
+        assertGt(callerDebtBefore, 0, "calling operator should have its own debt");
+        assertLt(callerClaimableBefore, 1e18, "caller should not be able to claim 1e18 yet");
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: unrelatedPayer,
+                amount: repaymentAmount,
+                maxAmount: callerDebtBefore
+            })
+        );
+
+        assertEq(
+            asset.balanceOf(unrelatedPayer),
+            payerBalanceBefore - repaymentAmount,
+            "unrelated payer should lose the transferred tokens"
+        );
+        assertEq(
+            asset.allowance(unrelatedPayer, address(depositManager)),
+            payerAllowanceBefore - repaymentAmount,
+            "shared spender allowance should be consumed"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, otherOperator),
+            otherOperatorLiabilitiesBefore,
+            "payer's deposit operator liabilities should remain unchanged"
+        );
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            0,
+            "calling operator debt should be reduced"
+        );
+        assertGt(actualAmount, callerDebtBefore, "repayment should create caller surplus");
+        assertGt(
+            depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR),
+            callerClaimableBefore,
+            "unrelated payer funds should increase caller claimable yield"
+        );
+        assertGe(
+            depositManager.maxClaimYield(iAsset, DEPOSIT_OPERATOR),
+            1e18,
+            "unrelated payer funds should enable the 1e18 claim"
+        );
+
+        uint256 operatorBalanceBefore = asset.balanceOf(DEPOSIT_OPERATOR);
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 claimedAmount = depositManager.claimYield(iAsset, DEPOSIT_OPERATOR, 1e18);
+        assertGt(claimedAmount, 0, "calling operator should extract positive surplus");
+        assertEq(
+            asset.balanceOf(DEPOSIT_OPERATOR),
+            operatorBalanceBefore + claimedAmount,
+            "yield claim should transfer unrelated payer value to caller"
+        );
+    }
+
+    // Security characterization: no overpayment is needed to consume another operator's payer
+    // allowance. Repaying the caller's own debt restores borrowing capacity that it can withdraw.
+    function test_givenBorrow_whenOtherOperatorDepositorHasStandingAllowance_canReborrowPayerFunds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+        givenDepositorHasApprovedSpendingAsset(MINT_AMOUNT)
+        givenDeposit(MINT_AMOUNT, false)
+        givenBorrow(BORROW_AMOUNT)
+    {
+        (address otherOperator, address unrelatedPayer) = _setUpOtherOperatorStandingAllowance();
+        uint256 callerDebtBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        uint256 callerCapacityBefore = depositManager.getBorrowingCapacity(
+            iAsset,
+            DEPOSIT_OPERATOR
+        );
+        uint256 payerBalanceBefore = asset.balanceOf(unrelatedPayer);
+        uint256 payerAllowanceBefore = asset.allowance(unrelatedPayer, address(depositManager));
+        uint256 otherOperatorLiabilitiesBefore = depositManager.getOperatorLiabilities(
+            iAsset,
+            otherOperator
+        );
+        uint256 withdrawalRequest = callerCapacityBefore + BORROW_AMOUNT / 2;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_BorrowingLimitExceeded.selector,
+                address(iAsset),
+                DEPOSIT_OPERATOR,
+                withdrawalRequest,
+                callerCapacityBefore
+            )
+        );
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: DEPOSIT_OPERATOR,
+                amount: withdrawalRequest
+            })
+        );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 actualAmount = depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: unrelatedPayer,
+                amount: BORROW_AMOUNT,
+                maxAmount: callerDebtBefore
+            })
+        );
+
+        assertLe(actualAmount, callerDebtBefore, "payment should not exceed caller debt");
+        assertEq(
+            asset.balanceOf(unrelatedPayer),
+            payerBalanceBefore - BORROW_AMOUNT,
+            "unrelated payer should lose the transferred tokens"
+        );
+        assertEq(
+            asset.allowance(unrelatedPayer, address(depositManager)),
+            payerAllowanceBefore - BORROW_AMOUNT,
+            "shared spender allowance should be consumed"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, otherOperator),
+            otherOperatorLiabilitiesBefore,
+            "payer's deposit operator liabilities should remain unchanged"
+        );
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            callerDebtBefore - actualAmount,
+            "unrelated payer funds should reduce caller debt"
+        );
+        assertGt(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            callerCapacityBefore,
+            "unrelated payer funds should restore caller borrowing capacity"
+        );
+        assertGe(
+            depositManager.getBorrowingCapacity(iAsset, DEPOSIT_OPERATOR),
+            withdrawalRequest,
+            "unrelated payer funds should enable the previously rejected withdrawal"
+        );
+
+        uint256 operatorBalanceBefore = asset.balanceOf(DEPOSIT_OPERATOR);
+        vm.prank(DEPOSIT_OPERATOR);
+        uint256 withdrawnAmount = depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: DEPOSIT_OPERATOR,
+                amount: withdrawalRequest
+            })
+        );
+        assertGt(withdrawnAmount, 0, "caller should withdraw restored borrowing capacity");
+        assertEq(
+            asset.balanceOf(DEPOSIT_OPERATOR),
+            operatorBalanceBefore + withdrawnAmount,
+            "withdrawal should transfer value funded by unrelated payer to caller"
         );
     }
 
