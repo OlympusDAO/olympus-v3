@@ -50,6 +50,20 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         assertEq(_configOperator.configOperator(), address(0), "config operator");
     }
 
+    function test_givenExistingOperator_whenUnauthorizedCallerSetsSameOperator_reverts(
+        address caller_
+    ) public givenExistingOperator {
+        vm.assume(caller_ != _authorizedCaller);
+
+        vm.prank(caller_);
+        vm.expectRevert(
+            abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unauthorized.selector, caller_)
+        );
+        _configOperator.setConfigOperator(_operator);
+
+        assertEq(_configOperator.configOperator(), _operator, "existing operator retained");
+    }
+
     // setConfigOperator
     // given the caller is authorized
     //  when the caller sets the config operator
@@ -94,5 +108,24 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
 
         assertEq(_configOperator.configOperator(), address(0), "config operator");
         assertFalse(_configOperator.isConfigOperator(_operator), "old operator unauthorized");
+    }
+
+    function test_givenExistingOperator_whenAuthorizedCallerSetsSameOperator_reverts()
+        public
+        givenExistingOperator
+    {
+        vm.prank(_authorizedCaller);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        _configOperator.setConfigOperator(_operator);
+
+        assertEq(_configOperator.configOperator(), _operator, "existing operator retained");
+    }
+
+    function test_givenNoOperator_whenAuthorizedCallerSetsZero_reverts() public {
+        vm.prank(_authorizedCaller);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        _configOperator.setConfigOperator(address(0));
+
+        assertEq(_configOperator.configOperator(), address(0), "operator remains unset");
     }
 }

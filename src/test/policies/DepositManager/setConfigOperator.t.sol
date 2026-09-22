@@ -42,4 +42,33 @@ contract DepositManagerSetConfigOperatorTest is DepositManagerTest {
 
         assertEq(depositManager.configOperator(), address(0), "config operator should be cleared");
     }
+
+    function test_givenExistingOperator_whenAdminSetsSameOperator_reverts() public givenIsEnabled {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(ADMIN);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        depositManager.setConfigOperator(CONFIG_OPERATOR);
+
+        assertEq(depositManager.configOperator(), CONFIG_OPERATOR, "existing operator retained");
+    }
+
+    function test_givenReEnabled_whenAdminSetsSameOperator_reverts() public givenIsEnabled {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(EMERGENCY);
+        depositManager.disable("");
+        vm.prank(ADMIN);
+        depositManager.reEnable();
+
+        vm.prank(ADMIN);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        depositManager.setConfigOperator(CONFIG_OPERATOR);
+
+        assertEq(
+            depositManager.configOperator(),
+            CONFIG_OPERATOR,
+            "operator retained after re-enable"
+        );
+    }
 }

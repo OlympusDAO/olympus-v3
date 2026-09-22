@@ -77,6 +77,7 @@ The single-step mix-in has these semantics:
 - `setConfigOperator(newOperator)` replaces the operator immediately after authorization. The new
     operator does not perform a separate acceptance transaction.
 - Setting `address(0)` revokes delegated access.
+- Setting the current operator, including zero when unset, reverts after caller authorization.
 - A successful change emits `ConfigOperatorSet`.
 - `_authorizeSetConfigOperator()` controls who may rotate or revoke the operator. Its base
     implementation returns false, so the setter denies every caller. A Config contract must
@@ -102,10 +103,11 @@ Each guard has four parts.
 | Scoped key  | The key that the base reserves                             | The shared base           |
 | State hash  | The canonical state that must stay unchanged               | `_currentConfigStateHash` |
 
-The base calculates the scoped key as follows:
+The base calculates the scoped key with `ConfigTimelockKeyLib.scope`. Product timelocks can use
+the same library to query reservations with `pendingActionId`:
 
 ```solidity
-bytes32 scopedKey = keccak256(abi.encode(destination, localKey));
+bytes32 scopedKey = ConfigTimelockKeyLib.scope(destination, localKey);
 ```
 
 For example, an asset fee domain can use this local key:

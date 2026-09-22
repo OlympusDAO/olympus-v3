@@ -60,8 +60,7 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
     ) public {
         vm.assume(caller_ != admin);
 
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(0));
+        assertEq(burnerLoansConfig.configOperator(), address(0), "operator starts unset");
 
         bytes memory expectedRevert = abi.encodeWithSelector(
             IBurnerLoansConfig.BurnerLoansConfig_UnauthorizedConfigOperator.selector,
@@ -85,6 +84,42 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
         vm.stopPrank();
 
         assertEq(burnerLoansConfig.configOperator(), address(0), "config operator remains cleared");
+    }
+
+    function test_givenExistingOperator_whenAdminSetsSameOperator_reverts() public {
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        vm.prank(admin);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(configTimelock),
+            "existing operator retained"
+        );
+    }
+
+    function test_givenReEnabled_whenAdminSetsSameOperator_reverts() public {
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        vm.warp(1);
+        vm.prank(emergency);
+        burnerLoansConfig.disable("");
+        vm.prank(admin);
+        burnerLoansConfig.reEnable();
+
+        vm.prank(admin);
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(configTimelock),
+            "operator retained after re-enable"
+        );
     }
 
     // setConfigOperator
