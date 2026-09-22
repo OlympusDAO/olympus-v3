@@ -9,7 +9,6 @@ import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
@@ -113,7 +112,11 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         assertTrue(preview.executable, "preview executable");
         assertEq(actualClaimed, 101, "actual claimed amount");
         assertEq(usds.balanceOf(address(trsry)), 101, "Treasury amount");
-        assertEq(usds.balanceOf(address(depositManager)), 1, "custody solvency buffer");
+        assertEq(
+            usds.balanceOf(address(depositManager)),
+            2,
+            "custody liability plus solvency buffer"
+        );
     }
 
     function test_givenDirectCustodyDirectRouting_distributesYield() public {
@@ -138,7 +141,11 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         assertEq(actualClaimed, 101, "actual claimed amount");
         assertEq(usds.balanceOf(recipient), 40, "direct recipient amount");
         assertEq(usds.balanceOf(address(trsry)), 61, "Treasury remainder");
-        assertEq(usds.balanceOf(address(depositManager)), 1, "custody solvency buffer");
+        assertEq(
+            usds.balanceOf(address(depositManager)),
+            2,
+            "custody liability plus solvency buffer"
+        );
     }
 
     function test_givenValidRouting_whenSingleAssetCallerIsArbitrary(
@@ -582,21 +589,12 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             IERC20 shareToken
         ) = _addSameDecimalExternalShareAssetForTest();
         uint128 depositedAssets = 100e18;
-        asset.mint(alice, depositedAssets + 10e18);
+        asset.mint(alice, depositedAssets);
         vm.startPrank(alice);
         asset.approve(address(burnerLoans), depositedAssets);
         burnerLoans.depositCollateral(address(asset), depositedAssets, alice);
-        asset.approve(address(depositManager), 10e18);
         vm.stopPrank();
-        vm.prank(address(burnerLoans));
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: IERC20(address(asset)),
-                payer: alice,
-                amount: 10e18,
-                maxAmount: 0
-            })
-        );
+        asset.mint(address(externalVault), 10e18);
 
         IBurnerLoans.ClaimYieldPreview memory preview = burnerLoans.previewClaimYield(
             address(asset)

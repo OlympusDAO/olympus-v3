@@ -7,7 +7,20 @@ import {IDepositRedemptionVault} from "src/policies/interfaces/deposits/IDeposit
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
+    struct FacilityAssetSnapshot {
+        uint256 shares;
+        uint256 assets;
+    }
+
     uint256 public constant LOAN_PRINCIPAL_MAX_SLIPPAGE = 5;
+    uint256 internal constant VAULT_DEPOSIT_AMOUNT = 1000e18;
+    uint256 internal constant ONE_RESERVE_TOKEN = 1e18;
+    uint256 internal constant SMALL_TEST_AMOUNT = 1e16;
+    uint256 internal constant MAX_FUZZ_AMOUNT = 50e18;
+    uint256 internal constant MAX_COMMITMENT_AMOUNT = 5e18;
+    uint256 internal constant MIN_COMMITMENT_AMOUNT = 100;
+    uint256 internal constant SMALL_PAYMENT_COUNT = 20;
+    uint256 internal constant SMALL_PAYMENT_MAX_SLIPPAGE = SMALL_PAYMENT_COUNT;
 
     event LoanRepaid(
         address indexed user,
@@ -92,11 +105,9 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     //  [X] it reverts
 
     function test_givenLoanHasExpired_reverts(
-        uint48 elapsed_
+        uint256 elapsed_
     ) public givenLocallyActive givenCommittedDefault(COMMITMENT_AMOUNT) givenLoanDefault {
-        elapsed_ = uint48(
-            bound(elapsed_, block.timestamp + PERIOD_MONTHS * 30 days, type(uint48).max)
-        );
+        elapsed_ = bound(elapsed_, block.timestamp + PERIOD_MONTHS * 30 days, type(uint48).max);
         vm.warp(elapsed_);
 
         // Expect revert
@@ -331,29 +342,24 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     function test_whenAmountIsGreaterThanInterestOwed_givenMinimumDeposit()
         public
         givenLocallyActive
-        givenMinimumDeposit(1e16)
-        givenVaultHasDeposit(1000e18)
+        givenMinimumDeposit(SMALL_TEST_AMOUNT)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
     {
-        uint256 depositAmount_ = 1e18;
-        uint256 commitmentAmount_ = 1e16; // The loan principal repayment will be less than the minimum deposit
-        uint256 yieldAmount_ = 1e16;
-        uint256 yieldAmountTwo_ = 1e16;
-
         // Accrue yield
-        _accrueYield(iVault, yieldAmount_);
+        _accrueYield(iVault, SMALL_TEST_AMOUNT);
 
         // Deposit
-        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, ONE_RESERVE_TOKEN);
 
-        // Commit funds
-        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+        // The loan principal repayment will be less than the minimum deposit.
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, SMALL_TEST_AMOUNT);
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
-        _accrueYield(iVault, yieldAmountTwo_);
+        _accrueYield(iVault, SMALL_TEST_AMOUNT);
 
         uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
 
@@ -364,7 +370,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -389,8 +398,8 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Assert receipt token balances
         _assertReceiptTokenBalances(
             recipient,
-            _previousDepositActualAmount - commitmentAmount_,
-            commitmentAmount_
+            _previousDepositActualAmount - SMALL_TEST_AMOUNT,
+            SMALL_TEST_AMOUNT
         );
 
         // Assert borrowed amount on DepositManager
@@ -403,7 +412,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Assert committed funds
         assertApproxEqAbs(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
-            commitmentAmount_,
+            SMALL_TEST_AMOUNT,
             LOAN_PRINCIPAL_MAX_SLIPPAGE,
             "committed deposits"
         );
@@ -482,32 +491,27 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     function test_whenAmountIsGreaterThanInterestOwed_givenDepositCap()
         public
         givenLocallyActive
-        givenVaultHasDeposit(1000e18)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
     {
-        uint256 depositAmount_ = 1e18;
-        uint256 commitmentAmount_ = 1e16; // The loan principal repayment will be less than the minimum deposit
-        uint256 yieldAmount_ = 1e16;
-        uint256 yieldAmountTwo_ = 1e16;
-
         // Accrue yield
-        _accrueYield(iVault, yieldAmount_);
+        _accrueYield(iVault, SMALL_TEST_AMOUNT);
 
         // Deposit
-        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, ONE_RESERVE_TOKEN);
 
         // Commit funds
-        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, SMALL_TEST_AMOUNT);
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
-        _accrueYield(iVault, yieldAmountTwo_);
+        _accrueYield(iVault, SMALL_TEST_AMOUNT);
 
         // Set the deposit cap
         vm.prank(admin);
-        depositManager.setAssetDepositCap(iReserveToken, depositAmount_);
+        depositManager.setAssetDepositCap(iReserveToken, ONE_RESERVE_TOKEN);
 
         // Determine the amount to pay back
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
@@ -519,13 +523,26 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Confirm that the deposit cap is active
         {
+            (uint256 sharesBefore, uint256 assetAmountBefore) = depositManager.getOperatorAssets(
+                iReserveToken,
+                address(cdFacility)
+            );
+            assertGt(sharesBefore, 0, "facility should have custody shares");
             uint256 capUtilizationBefore = depositManager
                 .getAssetDepositCapStatus(iReserveToken)
                 .utilization;
+            assertGt(
+                capUtilizationBefore,
+                assetAmountBefore,
+                "borrowed principal should remain in cap utilization"
+            );
 
             // Approve deposit manager to spend the reserve tokens
             vm.startPrank(recipient);
-            iReserveToken.approve(address(depositManager), repaymentAmount);
+            assertTrue(
+                iReserveToken.approve(address(depositManager), repaymentAmount),
+                "deposit approval"
+            );
             vm.stopPrank();
 
             vm.expectRevert(
@@ -533,18 +550,28 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
                     IAssetManager.AssetManager_DepositCapExceeded.selector,
                     address(iReserveToken),
                     capUtilizationBefore,
-                    depositAmount_
+                    ONE_RESERVE_TOKEN
                 )
             );
 
             // Mint the receipt token to the account
             vm.prank(recipient);
+            // The expected revert has no receipt-token return value to inspect.
+            /// forge-lint: disable-next-line(unused-return)
             cdFacility.deposit(iReserveToken, PERIOD_MONTHS, repaymentAmount, false);
         }
+        assertEq(
+            reserveToken.balanceOf(recipient),
+            recipientReserveTokenBalanceBefore + repaymentAmount,
+            "failed deposit should not consume repayment funds"
+        );
 
-        // Approve repayment
+        // Approve the redemption vault to spend the same repayment funds
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -569,8 +596,8 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Assert receipt token balances
         _assertReceiptTokenBalances(
             recipient,
-            _previousDepositActualAmount - commitmentAmount_,
-            commitmentAmount_
+            _previousDepositActualAmount - SMALL_TEST_AMOUNT,
+            SMALL_TEST_AMOUNT
         );
 
         // Assert borrowed amount on DepositManager
@@ -583,7 +610,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Assert committed funds
         assertApproxEqAbs(
             cdFacility.getCommittedDeposits(iReserveToken, address(redemptionVault)),
-            commitmentAmount_,
+            SMALL_TEST_AMOUNT,
             LOAN_PRINCIPAL_MAX_SLIPPAGE,
             "committed deposits"
         );
@@ -594,7 +621,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
     )
         public
         givenLocallyActive
-        givenVaultHasDeposit(1000e18)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
         givenAddressHasConvertibleDepositToken(
             recipientTwo,
             iReserveToken,
@@ -604,14 +631,14 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         givenAddressHasConvertibleDepositTokenDefault(RESERVE_TOKEN_AMOUNT)
         givenVaultAccruesYield(iVault, 3e18) // Ensures that there are rounding inconsistencies when depositing/withdrawing from the vault
     {
-        commitmentAmount_ = bound(commitmentAmount_, 100, 5e18);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, MAX_COMMITMENT_AMOUNT);
 
         // Commit funds
         _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         uint256 recipientReserveTokenBalanceBefore = reserveToken.balanceOf(recipient);
 
@@ -623,7 +650,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -673,11 +703,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 commitmentAmount_,
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_
-    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+    ) public givenLocallyActive givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT) {
+        depositAmount_ = bound(depositAmount_, ONE_RESERVE_TOKEN, MAX_FUZZ_AMOUNT);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
@@ -690,7 +720,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
         _accrueYield(iVault, yieldAmountTwo_);
@@ -705,7 +735,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -750,41 +783,49 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         );
     }
 
-    function test_smallPayments() public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        uint256 depositAmount_ = 1e18;
-        uint256 commitmentAmount_ = 1e16;
-        uint256 yieldAmount_ = 1e16;
-
+    function test_smallPayments()
+        public
+        givenLocallyActive
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
+    {
         // Accrue yield
-        _accrueYield(iVault, yieldAmount_);
+        _accrueYield(iVault, SMALL_TEST_AMOUNT);
 
         // Deposit
-        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, depositAmount_);
+        _createDeposit(recipient, iReserveToken, PERIOD_MONTHS, ONE_RESERVE_TOKEN);
 
         // Commit funds
-        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
+        _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, SMALL_TEST_AMOUNT);
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Determine the amount to pay back
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
 
         // Mint and approve
         // Include a buffer to ensure full repayment
-        uint256 repaymentAmount = loan.principal + loan.interest + 1e18;
+        uint256 repaymentAmount = loan.principal + loan.interest + ONE_RESERVE_TOKEN;
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Repay interest
         _repayLoan(recipient, 0, loan.interest);
 
         // Repay principal in small payments
         // Repeated small payments would exacerbate rounding errors and cause insolvency
-        for (uint256 i = 0; i < 20; i++) {
-            _repayLoan(recipient, 0, loan.principal / 20 + 1, 20);
+        for (uint256 i = 0; i < SMALL_PAYMENT_COUNT; i++) {
+            _repayLoan(
+                recipient,
+                0,
+                loan.principal / SMALL_PAYMENT_COUNT + 1,
+                SMALL_PAYMENT_MAX_SLIPPAGE
+            );
         }
 
         // Assert that the loan is fully repaid
@@ -809,11 +850,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 commitmentAmount_,
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_
-    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+    ) public givenLocallyActive givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT) {
+        depositAmount_ = bound(depositAmount_, ONE_RESERVE_TOKEN, MAX_FUZZ_AMOUNT);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
@@ -826,7 +867,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
         _accrueYield(iVault, yieldAmountTwo_);
@@ -839,7 +880,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Expect revert
         _expectRevertMaxSlippageExceededPartial();
@@ -853,11 +897,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 commitmentAmount_,
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_
-    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+    ) public givenLocallyActive givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT) {
+        depositAmount_ = bound(depositAmount_, ONE_RESERVE_TOKEN, MAX_FUZZ_AMOUNT);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
 
         // Accrue yield
         _accrueYield(iVault, yieldAmount_);
@@ -870,7 +914,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
         _accrueYield(iVault, yieldAmountTwo_);
@@ -883,7 +927,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Expect revert
         _expectRevertMaxSlippageExceededPartial();
@@ -898,15 +945,15 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_,
         uint256 maxSlippage_
-    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+    ) public givenLocallyActive givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT) {
+        depositAmount_ = bound(depositAmount_, ONE_RESERVE_TOKEN, MAX_FUZZ_AMOUNT);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
         maxSlippage_ = bound(
             maxSlippage_,
             LOAN_PRINCIPAL_MAX_SLIPPAGE, // Ensures that if repaid amount != withdrawable amount, payment is completed
-            1e18
+            ONE_RESERVE_TOKEN
         );
 
         // Accrue yield
@@ -920,7 +967,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
 
         // Borrow
         vm.prank(recipient);
-        redemptionVault.borrowAgainstRedemption(0);
+        assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
 
         // Accrue more yield
         _accrueYield(iVault, yieldAmountTwo_);
@@ -930,7 +977,6 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             iReserveToken,
             address(redemptionVault)
         );
-
         // Determine the amount to pay back
         // This includes a buffer to ensure full repayment
         IDepositRedemptionVault.Loan memory loan = redemptionVault.getRedemptionLoan(recipient, 0);
@@ -939,7 +985,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -989,15 +1038,15 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 yieldAmount_,
         uint256 yieldAmountTwo_,
         uint256 maxSlippage_
-    ) public givenLocallyActive givenVaultHasDeposit(1000e18) {
-        depositAmount_ = bound(depositAmount_, 1e18, 50e18);
-        commitmentAmount_ = bound(commitmentAmount_, 100, depositAmount_ / 2);
-        yieldAmount_ = bound(yieldAmount_, 1e16, 50e18);
-        yieldAmountTwo_ = bound(yieldAmountTwo_, 1e16, 50e18);
+    ) public givenLocallyActive givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT) {
+        depositAmount_ = bound(depositAmount_, ONE_RESERVE_TOKEN, MAX_FUZZ_AMOUNT);
+        commitmentAmount_ = bound(commitmentAmount_, MIN_COMMITMENT_AMOUNT, depositAmount_ / 2);
+        yieldAmount_ = bound(yieldAmount_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
+        yieldAmountTwo_ = bound(yieldAmountTwo_, SMALL_TEST_AMOUNT, MAX_FUZZ_AMOUNT);
         maxSlippage_ = bound(
             maxSlippage_,
             LOAN_PRINCIPAL_MAX_SLIPPAGE, // Ensures that if repaid amount != withdrawable amount, payment is completed
-            1e18
+            ONE_RESERVE_TOKEN
         );
 
         // Accrue yield
@@ -1010,7 +1059,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
 
             vm.prank(recipient);
-            redemptionVault.borrowAgainstRedemption(0);
+            assertGt(redemptionVault.borrowAgainstRedemption(0), 0, "borrowed amount");
         }
 
         // Loan two
@@ -1020,7 +1069,7 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             _startRedemption(recipient, iReserveToken, PERIOD_MONTHS, commitmentAmount_);
 
             vm.prank(recipient);
-            redemptionVault.borrowAgainstRedemption(1);
+            assertGt(redemptionVault.borrowAgainstRedemption(1), 0, "second borrowed amount");
         }
 
         // Accrue more yield
@@ -1034,6 +1083,11 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         uint256 committedDepositsBefore = cdFacility.getCommittedDeposits(
             iReserveToken,
             address(redemptionVault)
+        );
+        FacilityAssetSnapshot memory facilityBefore;
+        (facilityBefore.shares, facilityBefore.assets) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(cdFacility)
         );
 
         // Get the details of the second loan for use later
@@ -1050,7 +1104,10 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
         // Mint and approve
         reserveToken.mint(recipient, repaymentAmount);
         vm.prank(recipient);
-        reserveToken.approve(address(redemptionVault), repaymentAmount);
+        assertTrue(
+            reserveToken.approve(address(redemptionVault), repaymentAmount),
+            "repayment approval"
+        );
 
         // Call function
         // Emit event (but ignore the principal and interest amounts)
@@ -1084,6 +1141,21 @@ contract DepositRedemptionVaultRepayLoanTest is DepositRedemptionVaultTest {
             depositManager.getBorrowedAmount(iReserveToken, address(cdFacility)),
             loanTwo.principal, // Repayment does not affect the second loan outstanding
             "getBorrowedAmount"
+        );
+        FacilityAssetSnapshot memory facilityAfter;
+        (facilityAfter.shares, facilityAfter.assets) = depositManager.getOperatorAssets(
+            iReserveToken,
+            address(cdFacility)
+        );
+        assertGt(
+            facilityAfter.shares,
+            facilityBefore.shares,
+            "facility custody shares should increase with repayment"
+        );
+        assertGt(
+            facilityAfter.assets - facilityBefore.assets,
+            loan.principal,
+            "facility assets should include the accepted repayment buffer"
         );
 
         // Assert committed funds

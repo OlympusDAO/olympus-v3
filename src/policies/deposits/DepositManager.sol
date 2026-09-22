@@ -951,10 +951,12 @@ contract DepositManager is
     ///             - The contract is not enabled
     ///             - The caller does not have the deposit operator role
     ///             - The asset has not been added via addAsset()
+    ///             - The maximum principal repayment is zero
     ///             - The payer has not approved DepositManager to spend the asset tokens
     ///             - The payer has insufficient asset token balance
     ///             - The asset is a fee-on-transfer token
-    ///             - Zero shares would be deposited into the vault
+    ///             - The deposit would mint zero shares or credit zero underlying assets
+    ///             - The principal reduction exceeds the calling operator's borrowed amount
     ///             - The operator becomes insolvent after the repayment (assets + borrowed < liabilities)
     function borrowingRepay(
         BorrowingRepayParams calldata params_
@@ -967,6 +969,7 @@ contract DepositManager is
     {
         // Validate that the asset is configured
         if (!_isConfiguredAsset(params_.asset)) revert AssetManager_NotConfigured();
+        if (params_.maxAmount == 0) revert AssetManager_ZeroAmount();
 
         // Get the borrowing key
         bytes32 borrowingKey = _getAssetLiabilitiesKey(params_.asset, msg.sender);
@@ -980,13 +983,23 @@ contract DepositManager is
             params_.amount,
             false // Do not enforce minimum deposit
         );
+        if (actualAmount == 0) revert AssetManager_ZeroAmount();
 
-        // Update borrowed amount
-        // Reduce by the actual amount, to avoid leakage
-        // But cap at the max amount, to avoid an underflow for other loans
-        _borrowedAmounts[borrowingKey] -= params_.maxAmount < actualAmount
+        // Reduce by the credited amount, capped at the caller's specified principal repayment.
+        // Any excess credit remains in the calling operator's asset namespace.
+        uint256 principalReduction = params_.maxAmount < actualAmount
             ? params_.maxAmount
             : actualAmount;
+        uint256 currentBorrowed = _borrowedAmounts[borrowingKey];
+        if (principalReduction > currentBorrowed) {
+            revert DepositManager_BorrowedAmountExceeded(
+                address(params_.asset),
+                msg.sender,
+                principalReduction,
+                currentBorrowed
+            );
+        }
+        _borrowedAmounts[borrowingKey] = currentBorrowed - principalReduction;
 
         // Validate operator solvency after borrowed amount change
         _validateOperatorSolvency(params_.asset, msg.sender);

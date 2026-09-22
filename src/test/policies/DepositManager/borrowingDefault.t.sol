@@ -116,8 +116,8 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         );
     }
 
-    // given the default amount exceeds the borrowed amount
-    //  [X] it reverts
+    // given the seizure amount exceeds the borrowed amount
+    //  [X] it reverts without burning receipt tokens or changing accounting
 
     function test_whenDefaultAmountExceedsBorrowed_reverts(
         uint256 amount_
@@ -133,6 +133,17 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
         givenDepositorHasApprovedSpendingReceiptToken(previousRecipientBorrowActualAmount)
     {
         amount_ = bound(amount_, BORROW_AMOUNT + 1, BORROW_AMOUNT * 100);
+        uint256 receiptTokenId = depositManager.getReceiptTokenId(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+        uint256 borrowedBefore = depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR);
+        uint256 liabilitiesBefore = depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR);
+        uint256 payerReceiptBalanceBefore = receiptTokenManager.balanceOf(
+            DEPOSITOR,
+            receiptTokenId
+        );
 
         // Expect revert
         _expectRevertBorrowedAmountExceeded(amount_, BORROW_AMOUNT);
@@ -146,6 +157,22 @@ contract DepositManagerBorrowingDefaultTest is DepositManagerTest {
                 payer: DEPOSITOR,
                 amount: amount_
             })
+        );
+
+        assertEq(
+            depositManager.getBorrowedAmount(iAsset, DEPOSIT_OPERATOR),
+            borrowedBefore,
+            "rejected seizure should preserve borrowed amount"
+        );
+        assertEq(
+            depositManager.getOperatorLiabilities(iAsset, DEPOSIT_OPERATOR),
+            liabilitiesBefore,
+            "rejected seizure should preserve liabilities"
+        );
+        assertEq(
+            receiptTokenManager.balanceOf(DEPOSITOR, receiptTokenId),
+            payerReceiptBalanceBefore,
+            "rejected seizure should preserve payer receipt tokens"
         );
     }
 

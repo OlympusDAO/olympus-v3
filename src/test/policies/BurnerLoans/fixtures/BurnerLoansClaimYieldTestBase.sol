@@ -12,6 +12,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
 
@@ -47,22 +48,42 @@ abstract contract BurnerLoansClaimYieldTestBase is BurnerLoansTest {
         vaultAsset.mint(address(vault), amount_);
     }
 
-    /// @notice Creates claimable yield for a direct-custody asset through an over-repayment.
+    /// @notice Creates claimable yield for a direct-custody asset through a debt-backed
+    ///         over-repayment funded by the operator.
     function _addDirectCustodyYield(uint256 claimableYield_) internal {
-        uint256 repaymentAmount = claimableYield_ + 1;
-        usds.mint(alice, repaymentAmount);
-        vm.prank(alice);
-        usds.approve(address(depositManager), repaymentAmount);
+        uint256 principal = 1;
+        uint256 surplus = claimableYield_ + 1;
+        uint256 repaymentAmount = principal + surplus;
 
-        vm.prank(address(burnerLoans));
+        usds.mint(address(burnerLoans), principal + surplus);
+        vm.startPrank(address(burnerLoans));
+        usds.approve(address(depositManager), principal + repaymentAmount);
+        depositManager.deposit(
+            IDepositManager.DepositParams({
+                asset: IERC20(address(usds)),
+                depositPeriod: BurnerLoansConstants.DEPOSIT_PERIOD,
+                depositor: address(burnerLoans),
+                amount: principal,
+                shouldWrap: false
+            })
+        );
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: IERC20(address(usds)),
+                recipient: address(burnerLoans),
+                amount: principal
+            })
+        );
+
         depositManager.borrowingRepay(
             IDepositManager.BorrowingRepayParams({
                 asset: IERC20(address(usds)),
-                payer: alice,
+                payer: address(burnerLoans),
                 amount: repaymentAmount,
-                maxAmount: 0
+                maxAmount: principal
             })
         );
+        vm.stopPrank();
     }
 
     /// @notice Replaces the mock's direct USDS custody with a vault-backed route for YRF tests.

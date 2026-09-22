@@ -170,9 +170,14 @@ underlying-denominated borrowed balance. Capacity is bounded by custody and oper
 share mode reverts atomically when a positive request converts to zero output.
 
 `borrowingRepay` returns underlying assets to custody, deposits them into the configured vault when
-applicable, and reduces the borrowed balance by the actual credited amount. `borrowingDefault` burns
-receipt credit and reduces both liabilities and borrowed accounting without requiring an outgoing
-asset transfer. Repayment and default remain underlying-denominated and are unchanged by share mode.
+applicable, and reduces the calling operator's borrowed balance by the lesser of the actual credited
+amount and a nonzero `maxAmount`, never beyond that operator's outstanding debt. Credited assets
+above `maxAmount` remain in that operator's custody namespace. A deposit that credits zero
+underlying assets reverts.
+
+`borrowingDefault` burns receipt credit and reduces both liabilities and borrowed accounting without
+requiring an outgoing asset transfer. Repayment and default remain underlying-denominated and are
+unchanged by share mode.
 
 ## Events And Return Values
 

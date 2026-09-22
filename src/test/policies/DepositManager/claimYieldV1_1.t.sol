@@ -35,19 +35,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(300e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(300e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 3 assets/share: floor(request / 3) shares, then shares * 3 underlying.
         // 1e18 and 2e18 requests leave one and two raw asset units respectively.
         _assertFractionalRounding(1, true, false, 0, 0);
@@ -83,19 +71,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(300e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(300e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 3 assets/share: floor(request / 3) shares, then shares * 3 underlying.
         // 1e18 and 2e18 requests leave one and two raw asset units respectively.
         _assertFractionalRounding(1, false, false, 0, 0);
@@ -131,19 +107,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(300e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(300e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 3 assets/share: floor(request / 3) shares, then shares * 3 underlying.
         // 1e18 and 2e18 requests leave one and two raw asset units respectively.
         _assertFractionalRounding(1, false, true, 0, 0);
@@ -179,19 +143,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(60e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(60e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 0.6 assets/share: floor(request * 5 / 3) shares, then floor(shares * 3 / 5).
         // One raw share has zero underlying output; whole-token requests round at both steps.
         _assertFractionalRounding(1, true, false, 1, 1);
@@ -227,19 +179,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(60e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(60e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 0.6 assets/share: floor(request * 5 / 3) shares, then floor(shares * 3 / 5).
         // One raw share has zero underlying output; whole-token requests round at both steps.
         _assertFractionalRounding(1, false, false, 0, 0);
@@ -275,19 +215,7 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
         givenDeposit(60e18, false)
         givenDepositorHasApprovedSpendingReceiptToken(60e18)
     {
-        // Add 30e18 solvent operator surplus without changing liabilities or the share price.
-        asset.mint(DEPOSITOR, 30e18);
-        vm.prank(DEPOSITOR);
-        asset.approve(address(depositManager), 30e18);
-        vm.prank(DEPOSIT_OPERATOR);
-        depositManager.borrowingRepay(
-            IDepositManager.BorrowingRepayParams({
-                asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 30e18,
-                maxAmount: 0
-            })
-        );
+        _addOperatorSurplusViaOverRepayment(30e18);
         // 0.6 assets/share: floor(request * 5 / 3) shares, then floor(shares * 3 / 5).
         // One raw share has zero underlying output; whole-token requests round at both steps.
         _assertFractionalRounding(1, false, true, 0, 0);
@@ -309,6 +237,36 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
             3_333_333_333_333_333_333
         );
         _assertFractionalRounding(3e18, false, true, 3e18, 5e18);
+    }
+
+    /// @notice Adds operator surplus through a debt-backed over-repayment while preserving the
+    ///         configured vault exchange rate.
+    function _addOperatorSurplusViaOverRepayment(uint256 surplus_) internal {
+        uint256 principal = 30e18;
+        uint256 repaymentAmount = principal + surplus_;
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: DEPOSIT_OPERATOR,
+                amount: principal
+            })
+        );
+
+        asset.mint(DEPOSIT_OPERATOR, surplus_);
+        vm.prank(DEPOSIT_OPERATOR);
+        asset.approve(address(depositManager), repaymentAmount);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.borrowingRepay(
+            IDepositManager.BorrowingRepayParams({
+                asset: iAsset,
+                payer: DEPOSIT_OPERATOR,
+                amount: repaymentAmount,
+                maxAmount: principal
+            })
+        );
     }
 
     function _assertFractionalRounding(
@@ -631,13 +589,26 @@ contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {
                 shouldWrap: false
             })
         );
+
+        vm.prank(DEPOSIT_OPERATOR);
+        IDepositManagerV1_1(address(depositManager)).borrowingWithdraw(
+            IDepositManager.BorrowingWithdrawParams({
+                asset: iAsset,
+                recipient: DEPOSIT_OPERATOR,
+                amount: 2e18
+            }),
+            true
+        );
+        asset.mint(DEPOSIT_OPERATOR, 4e18);
+        vm.prank(DEPOSIT_OPERATOR);
+        asset.approve(address(depositManager), 4e18);
         vm.prank(DEPOSIT_OPERATOR);
         depositManager.borrowingRepay(
             IDepositManager.BorrowingRepayParams({
                 asset: iAsset,
-                payer: DEPOSITOR,
-                amount: 2e18,
-                maxAmount: 0
+                payer: DEPOSIT_OPERATOR,
+                amount: 4e18,
+                maxAmount: 2e18
             })
         );
 
