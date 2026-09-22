@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: MIT
+// Test setup must be able to model zero-address dependencies and assets.
+// forge-lint: disable-start(missing-zero-check)
 pragma solidity ^0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
@@ -190,6 +192,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
             cache.token0Epoch = quoteEpoch;
             cache.token1Epoch = assetEpoch;
         }
+        // Test timestamps are kept well below the uint48 limit.
+        // forge-lint: disable-next-line(unsafe-typecast)
         cache.updatedAt = uint48(block.timestamp);
         cache.roundId++;
 
@@ -276,6 +280,8 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
         CachedPrice memory cachedPrice = getCachedPrice(asset_, quote_);
         return
             cachedPrice.updatedAt == 0 ||
+            // Freshness is intentionally relative to the current block time.
+            // forge-lint: disable-next-line(block-timestamp)
             block.timestamp > uint256(cachedPrice.updatedAt) + uint256(maxAge_);
     }
 
@@ -295,11 +301,10 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
         address asset_,
         address quote_
     ) internal pure returns (bytes32 key_, bool assetIsToken0_) {
-        if (asset_ < quote_) {
-            return (keccak256(abi.encodePacked(asset_, quote_)), true);
-        }
-
-        return (keccak256(abi.encodePacked(quote_, asset_)), false);
+        assetIsToken0_ = asset_ < quote_;
+        key_ = assetIsToken0_
+            ? keccak256(abi.encodePacked(asset_, quote_))
+            : keccak256(abi.encodePacked(quote_, asset_));
     }
 
     function _validatePair(address asset_, address quote_) internal view {
@@ -324,3 +329,4 @@ contract MockPriceCache is IPriceCache, IEnabler, IERC165, IVersioned {
         return interfaceId_ == type(IERC165).interfaceId || _supportedInterfaces[interfaceId_];
     }
 }
+// forge-lint: disable-end(missing-zero-check)

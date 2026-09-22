@@ -223,9 +223,9 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
             })
         );
 
+        // Required to dispatch arbitrary payload and capture exact revert data.
+        // forge-lint: disable-start(low-level-calls)
         if (callThroughTarget != address(0) && action_.target == callThroughTarget) {
-            // Required to dispatch arbitrary payload and capture exact revert data.
-            // forge-lint: disable-next-line(low-level-calls)
             (bool success, bytes memory returnData) = action_.target.call(
                 abi.encodePacked(action_.selector, action_.payload)
             );
@@ -238,6 +238,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
             }
             return;
         }
+        // forge-lint: disable-end(low-level-calls)
 
         uint256 value = abi.decode(action_.payload, (uint256));
         if (value == revertExecutionValue) {

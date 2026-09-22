@@ -4,16 +4,7 @@ pragma solidity ^0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
-
-contract MockStaticMetadataTokenDecimals {
-    function symbol() external pure returns (string memory) {
-        return "LATE";
-    }
-
-    function decimals() external pure returns (uint8) {
-        return 6;
-    }
-}
+import {MockStaticMetadataToken} from "./fixtures/MockStaticMetadataToken.sol";
 
 contract PriceCacheAssetDecimalsTest is PriceCacheTest {
     function test_givenAssetIsContract_returnsERC20Decimals() public view {
@@ -37,7 +28,7 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        priceModule.setPrice(nonContractAsset, 3e18);
+        priceModule.setPrice(nonContractAsset, NON_CONTRACT_PRICE_USD);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -45,6 +36,8 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
                 nonContractAsset
             )
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.assetDecimals(nonContractAsset);
     }
 
@@ -57,6 +50,8 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
                 unregisteredNonContractAsset
             )
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.assetDecimals(unregisteredNonContractAsset);
     }
 
@@ -65,15 +60,15 @@ contract PriceCacheAssetDecimalsTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         assertEq(
             cache.assetDecimals(nonContractAsset),
-            8,
+            NON_CONTRACT_DECIMALS,
             "Registered metadata decimals should be returned before code exists"
         );
 
-        MockStaticMetadataTokenDecimals tokenWithDifferentDecimals = new MockStaticMetadataTokenDecimals();
+        MockStaticMetadataToken tokenWithDifferentDecimals = new MockStaticMetadataToken();
         vm.etch(nonContractAsset, address(tokenWithDifferentDecimals).code);
 
         assertEq(
