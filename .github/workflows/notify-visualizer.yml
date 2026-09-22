@@ -1,0 +1,43 @@
+# This workflow tells protocol-visualizer that src/scripts/env.json changed on master.
+# It sends a repository_dispatch event with the type "env-json-updated".
+# The protocol-visualizer workflow abis-sync.yml listens for this event.
+# That workflow then updates its ABI registry.
+#
+# The VISUALIZER_DISPATCH_TOKEN secret must be a fine-grained token or a GitHub App token.
+# The token must have "Contents: write" on OlympusDAO/protocol-visualizer.
+# The default GITHUB_TOKEN cannot send a dispatch event to a different repository.
+name: Notify Visualizer
+
+on:
+    push:
+        branches:
+            - master
+        paths:
+            - "src/scripts/env.json"
+
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    notify:
+        name: Notify Visualizer
+        runs-on: ubuntu-latest
+        # Cap a hung job; the GitHub default is six hours.
+        timeout-minutes: 5
+
+        steps:
+            - name: Send repository_dispatch to protocol-visualizer
+              env:
+                  GH_TOKEN: ${{ secrets.VISUALIZER_DISPATCH_TOKEN }}
+                  SOURCE_SHA: ${{ github.sha }}
+              run: |
+                  if [[ -z "${GH_TOKEN}" ]]; then
+                    echo "::error::The VISUALIZER_DISPATCH_TOKEN secret is empty or not set."
+                    exit 1
+                  fi
+                  gh api repos/OlympusDAO/protocol-visualizer/dispatches \
+                    -f event_type=env-json-updated \
+                    -f "client_payload[ref]=${SOURCE_SHA}"
+                  echo "Sent env-json-updated to OlympusDAO/protocol-visualizer for ${SOURCE_SHA}."
