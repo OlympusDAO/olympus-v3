@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Libraries
-import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 
 // Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -14,7 +14,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 /// @title Burner Loans Config Timelock Library
 /// @notice Transformations and dispatch used by Burner Loans timelocked configuration updates.
 library BurnerLoansConfigTimelockLib {
-    using ExcessivelySafeCall for address;
+    using SafeCall for address;
 
     /// @dev Caps copied return data so a callee cannot exhaust the caller's remaining gas.
     uint16 internal constant _MAX_RETURN_DATA_BYTES = 256;
@@ -181,7 +181,7 @@ library BurnerLoansConfigTimelockLib {
             );
         }
 
-        (bool success, bytes memory returnData) = action_.target.excessivelySafeCall(
+        (bool success, bytes memory returnData) = action_.target.safeCall(
             gasleft(),
             0,
             _MAX_RETURN_DATA_BYTES,

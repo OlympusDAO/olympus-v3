@@ -14,7 +14,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
-import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 import {TransferHelper} from "src/libraries/TransferHelper.sol";
 
@@ -23,7 +23,7 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 ///         This contract supports multiple assets, and can store them idle or in an ERC4626 vault (specified at the time of configuration). Once an approach is specified, it cannot be changed. This is to avoid the threat of a governance attack that shifts the deposited funds to a different vault in order to steal them.
 ///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
 abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
-    using ExcessivelySafeCall for address;
+    using SafeCall for address;
     using TransferHelper for ERC20;
 
     bytes4 internal constant _ERC7540_DEPOSIT_INTERFACE_ID = type(IERC7540Deposit).interfaceId;
@@ -376,7 +376,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
             revert AssetManager_InvalidShareToken(address(asset_), address(0));
         }
 
-        (bool succeeded, bytes memory result) = address(shareToken).excessivelySafeStaticCall(
+        (bool succeeded, bytes memory result) = address(shareToken).safeStaticCall(
             gasleft(),
             _ERC20_BALANCE_RETURN_LENGTH,
             abi.encodeCall(IERC20.balanceOf, (address(this)))

@@ -9,7 +9,7 @@ import {IBurnerLoansSeizer} from "src/policies/interfaces/IBurnerLoansSeizer.sol
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
-import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -33,7 +33,7 @@ contract BurnerLoansSeizer is
     IBurnerLoansSeizer,
     IVersioned
 {
-    using ExcessivelySafeCall for address;
+    using SafeCall for address;
     using EnumerableSet for EnumerableSet.AddressSet;
 
     /// @dev Maximum revert data copied from the gas-bounded self-call.
@@ -163,7 +163,7 @@ contract BurnerLoansSeizer is
     function execute() external override onlyRole(HEART_ROLE) {
         if (!isEnabled) return;
 
-        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
+        (bool success, bytes memory reason) = address(this).safeCall(
             executionGasLimit,
             0,
             _MAX_RETURN_DATA_BYTES,

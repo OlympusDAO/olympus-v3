@@ -9,7 +9,7 @@ import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYiel
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
-import {ExcessivelySafeCall} from "@excessively-safe-call-0.0.1/ExcessivelySafeCall.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
@@ -33,7 +33,7 @@ contract BurnerLoansYieldClaimer is
     IPeriodicTask,
     IVersioned
 {
-    using ExcessivelySafeCall for address;
+    using SafeCall for address;
 
     /// @dev Maximum revert data copied from the Burner Loans claim call.
     uint16 internal constant _MAX_RETURN_DATA_BYTES = 4;
@@ -113,7 +113,7 @@ contract BurnerLoansYieldClaimer is
     function execute() external override onlyRole(HEART_ROLE) {
         if (!isEnabled) return;
 
-        (bool success, bytes memory reason) = address(this).excessivelySafeCall(
+        (bool success, bytes memory reason) = address(this).safeCall(
             executionGasLimit,
             0,
             _MAX_RETURN_DATA_BYTES,
@@ -135,7 +135,7 @@ contract BurnerLoansYieldClaimer is
             // attempt every configured asset while isolating individual claim failures.
             // forge-lint: disable-next-line(calls-loop)
             address asset = facility.getAssetAt(i);
-            (bool success, bytes memory returnData) = _BURNER_LOANS.excessivelySafeCall(
+            (bool success, bytes memory returnData) = _BURNER_LOANS.safeCall(
                 gasleft(),
                 0,
                 _MAX_RETURN_DATA_BYTES,
@@ -143,7 +143,7 @@ contract BurnerLoansYieldClaimer is
             );
             if (success) continue;
 
-            // Casting is safe because ExcessivelySafeCall caps returnData at four bytes.
+            // Casting is safe because SafeCall caps returnData at four bytes.
             // forge-lint: disable-next-line(unsafe-typecast)
             emit YieldAssetClaimFailed(asset, bytes4(returnData));
         }
