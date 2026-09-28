@@ -36,6 +36,7 @@ import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 import {MockYieldRepurchaseFacilityV2Config} from "src/test/mocks/MockYieldRepurchaseFacilityV2Config.sol";
 
 // ============ MINIMAL MAINNET INTERFACES ============ //
@@ -626,7 +627,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // forge-lint: disable-start(boolean-cst)
         _configure(
             abi.encodeCall(
-                IYieldRepurchaseFacilityV2.addAsset,
+                IYieldRepurchaseFacilityV2Write.addAsset,
                 (
                     SUSDS,
                     SUSDS_BUYBACK_SHARE,
@@ -640,7 +641,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         );
         _configure(
             abi.encodeCall(
-                IYieldRepurchaseFacilityV2.addAsset,
+                IYieldRepurchaseFacilityV2Write.addAsset,
                 (
                     SUSDE,
                     SUSDE_BUYBACK_SHARE,
@@ -660,14 +661,17 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // 1:1 DAI->USDS migration, so they are included explicitly; the v1.1 inclusion is
         // accompanied by an offset for its phantom receivables.
         _configure(
-            abi.encodeCall(IYieldRepurchaseFacilityV2.includeClearinghouse, (CLEARINGHOUSE_V1))
-        );
-        _configure(
-            abi.encodeCall(IYieldRepurchaseFacilityV2.includeClearinghouse, (CLEARINGHOUSE_V1_1))
+            abi.encodeCall(IYieldRepurchaseFacilityV2Write.includeClearinghouse, (CLEARINGHOUSE_V1))
         );
         _configure(
             abi.encodeCall(
-                IYieldRepurchaseFacilityV2.setClearinghouseOffset,
+                IYieldRepurchaseFacilityV2Write.includeClearinghouse,
+                (CLEARINGHOUSE_V1_1)
+            )
+        );
+        _configure(
+            abi.encodeCall(
+                IYieldRepurchaseFacilityV2Write.setClearinghouseOffset,
                 (CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_INITIAL_OFFSET)
             )
         );

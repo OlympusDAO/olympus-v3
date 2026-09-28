@@ -18,8 +18,9 @@ import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
+import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 
 // Libraries
 import {CappedCall} from "src/libraries/CappedCall.sol";
@@ -104,14 +105,15 @@ contract YieldRepurchaseFacilityV2 is
     IPeriodicTask,
     IBasicRescueable,
     IVersioned,
-    IYieldRepurchaseFacilityV2
+    IYieldRepurchaseFacilityV2Write,
+    IYieldRepurchaseFacilityV2View
 {
     using SafeERC20 for IERC20;
     using FullMath for uint256;
 
     // ============ CONSTANTS ============ //
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     uint32 public constant override MAX_GRACE_PERIOD =
         YieldRepurchaseFacilityV2Constants.MAX_GRACE_PERIOD;
 
@@ -155,25 +157,25 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ STATE ============ //
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     address public override configurator;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     address public override backingOracle;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     address public override bondTeller;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     address public override bondAuctioneer;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     address public override backingVault;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     uint256 public override initialDiscount;
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     uint256 public override maxPricePremium;
 
     /// @notice Running epoch counter, in the range `[0, 21)`.
@@ -525,7 +527,7 @@ contract YieldRepurchaseFacilityV2 is
         super.setGracePeriod(period_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The function complements the `disable`, which only halts operation
     ///      and leaves the funds in place so that `reEnable` can resume the interrupted
     ///      week. Call this function after a disable when the facility is not expected to
@@ -1164,7 +1166,7 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ ADMIN FUNCTIONS ============ //
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      The asset is registered in the enabled state. The validation and the
@@ -1220,7 +1222,7 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
@@ -1270,7 +1272,7 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      The vault's tracked live bond market, if any is left, is closed best-effort:
@@ -1306,7 +1308,7 @@ contract YieldRepurchaseFacilityV2 is
         emit AssetRemoved(vault_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
@@ -1328,7 +1330,7 @@ contract YieldRepurchaseFacilityV2 is
         _setBackingOracle(backingOracle_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked. The binding is revalidated by `enable` and
     ///      `reEnable`.
@@ -1348,7 +1350,7 @@ contract YieldRepurchaseFacilityV2 is
         emit ConfiguratorSet(configurator_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      The vault's tracked live bond market is closed before the change; the
@@ -1385,7 +1387,7 @@ contract YieldRepurchaseFacilityV2 is
         emit SellSharesSet(vault_, sellShares_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
@@ -1396,7 +1398,7 @@ contract YieldRepurchaseFacilityV2 is
         _setBackingVault(vault_, _requireRegistered(vault_));
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
     ///      function is de-facto timelocked.
     ///
@@ -1484,7 +1486,7 @@ contract YieldRepurchaseFacilityV2 is
         emit BondContractsSet(bondAuctioneer_, bondTeller_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      The offset is subtracted from the Clearinghouse's principal receivables when
@@ -1504,7 +1506,7 @@ contract YieldRepurchaseFacilityV2 is
         _setClearinghouseOffset(clearinghouse_, offset_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
@@ -1521,7 +1523,7 @@ contract YieldRepurchaseFacilityV2 is
         emit YieldBuybackShareSet(vault_, newShare_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The only enforced bound is below 100% (`1e18`). A discount large enough to
     ///      overflow the market scale computation degrades to skipped markets
     ///      (`DailyCycleSkipped` or `MarketCreationFailed`) and does not block the beat.
@@ -1543,7 +1545,7 @@ contract YieldRepurchaseFacilityV2 is
         emit InitialDiscountSet(initialDiscount_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The only enforced bound is at or below 1,000% (`10e18`). The premium widens
     ///      the decay band of the markets created after the change; the markets already
     ///      live keep the band they were created with.
@@ -1565,7 +1567,7 @@ contract YieldRepurchaseFacilityV2 is
         emit MaxPricePremiumSet(maxPricePremium_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The offset is read live by the weekly reset projection, so an increase
     ///      applied only after a reset misses that projection: the following weekly
     ///      funding then overstates the yield by one week of interest on the missing
@@ -1592,7 +1594,7 @@ contract YieldRepurchaseFacilityV2 is
         );
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The function corrects a stored projection
     ///      that is known to overstate the yield, for example when a receivables offset
     ///      executed only after the weekly reset that made the projection. The stored
@@ -1622,7 +1624,7 @@ contract YieldRepurchaseFacilityV2 is
         _setNextYield(config, newNextYield_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      By default only Clearinghouses whose reserve matches the backing reserve are
@@ -1656,7 +1658,7 @@ contract YieldRepurchaseFacilityV2 is
         emit ClearinghouseIncluded(clearinghouse_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The immediate defensive lever against a misbehaving Clearinghouse is the
     ///      emergency `disable` of the facility, which freezes the cycle in place until
     ///      the exclusion is applied.
@@ -1672,7 +1674,7 @@ contract YieldRepurchaseFacilityV2 is
         emit ClearinghouseExcluded(clearinghouse_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The next yield and the unfunded carry are reset to zero and the yield
     ///      snapshots are refreshed, so a value left over from before the asset was
     ///      disabled does not enter the funding target of the weekly reset; the yield
@@ -1695,7 +1697,7 @@ contract YieldRepurchaseFacilityV2 is
         _setNextYield(config, 0);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev An immediate halt of the whole facility is available to the emergency role
     ///      through `disable`.
     ///
@@ -1721,7 +1723,7 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ VALIDATION ============ //
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The vault is not registered.
     ///      - The share exceeds 100% (`1e18`).
@@ -1733,21 +1735,21 @@ contract YieldRepurchaseFacilityV2 is
         _requireValidYieldBuybackShare(newShare_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The discount is not less than 100% (`1e18`).
     function validateSetInitialDiscount(uint256 initialDiscount_) external pure override {
         _requireValidInitialDiscount(initialDiscount_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The premium is above 1,000% (`10e18`).
     function validateSetMaxPricePremium(uint256 maxPricePremium_) external pure override {
         _requireValidMaxPricePremium(maxPricePremium_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
@@ -1755,7 +1757,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireAssetDisabled(_requireRegistered(vault_));
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The vault is not registered.
     ///      - The vault is already disabled.
@@ -1765,14 +1767,14 @@ contract YieldRepurchaseFacilityV2 is
         _requireNotBackingVault(vault_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The Clearinghouse is not included.
     function validateExcludeClearinghouse(address clearinghouse_) external view override {
         _requireClearinghouseIncluded(clearinghouse_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
@@ -1786,7 +1788,7 @@ contract YieldRepurchaseFacilityV2 is
         );
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The vault is not registered.
     ///      - The stored next yield does not equal `expectedNextYield_`.
@@ -2127,19 +2129,19 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ VIEW FUNCTIONS ============ //
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getVaults() external view override returns (address[] memory) {
         return _vaults;
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getAssetConfig(
         address vault_
     ) external view override returns (ReserveAsset memory config) {
         config = _requireRegistered(vault_);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getNextYield(address vault_) external view override returns (uint256 yield) {
         ReserveAsset storage config = _requireRegistered(vault_);
 
@@ -2154,14 +2156,14 @@ contract YieldRepurchaseFacilityV2 is
         );
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
         _requireRegistered(vault_);
         return
             YRFAssetConfigLib.protocolReserveBalance(vault_, CHREG, address(TRSRY), backingVault);
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev The lookup is scoped to the markets created on the current `bondAuctioneer`.
     function marketReserves(uint256 marketId_) external view override returns (address reserve) {
         address vault = _marketVaults[bondAuctioneer][marketId_];
@@ -2169,27 +2171,27 @@ contract YieldRepurchaseFacilityV2 is
         return _assetConfigs[vault].reserve;
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function clearinghouseOffset(address clearinghouse_) external view override returns (uint256) {
         return _receivablesOffsets[clearinghouse_];
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function isClearinghouseIncluded(address clearinghouse_) external view override returns (bool) {
         return _includedClearinghouses[clearinghouse_];
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function ohmPurchased() external view override returns (uint256) {
         return _ohmPurchased;
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function epoch() external view override returns (uint48) {
         return _epoch;
     }
 
-    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
     function isCycleSeedable() external view override returns (bool) {
         return _cycleSeedable;
     }
@@ -2238,7 +2240,8 @@ contract YieldRepurchaseFacilityV2 is
     {
         return
             interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IYieldRepurchaseFacilityV2).interfaceId ||
+            interfaceId_ == type(IYieldRepurchaseFacilityV2Write).interfaceId ||
+            interfaceId_ == type(IYieldRepurchaseFacilityV2View).interfaceId ||
             interfaceId_ == type(IBondCallback).interfaceId ||
             interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IBasicRescueable).interfaceId ||

@@ -12,6 +12,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_E2E
 /// @notice End-to-end mainnet-fork test of the YRF v2: migrates from the deployed
@@ -393,7 +394,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
         _configure(
             abi.encodeCall(
-                IYieldRepurchaseFacilityV2.increaseClearinghouseOffset,
+                IYieldRepurchaseFacilityV2Write.increaseClearinghouseOffset,
                 (CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_OFFSET_INCREASE)
             )
         );
