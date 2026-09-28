@@ -1,6 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The minimal mainnet interfaces live next to the only test base that uses them.
+// The test loops run over the scenario days, the feed mocks, the CHREG registry, and the
+// bounded purchase chunks.
+// The helpers update the mirror model after the calls whose effects they mirror.
+// The setup steps and the actions assert their effects directly, so return values are unused.
+// forge-lint: disable-start(multi-contract-file,calls-loop,reentrancy-no-eth,unused-return)
+
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {AggregatorV2V3Interface, AggregatorV3Interface} from "src/interfaces/AggregatorV2V3Interface.sol";
@@ -10,6 +17,7 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -160,6 +168,13 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         parameter: the 24-hour feed heartbeat).
     uint48 internal constant USDE_UPDATE_THRESHOLD = 86_400;
 
+    /// @notice The Heart pipeline slot of the YRF task: YRF v1.2 on the pinned block, v2
+    ///         after the swap.
+    uint256 internal constant HEART_YRF_SLOT = 4;
+
+    /// @notice The number of OHM feeds configured in the PRICE module on the pinned block.
+    uint256 internal constant OHM_FEED_COUNT = 4;
+
     // ============ DEPLOYMENT PARAMETERS ============ //
 
     /// @notice The initial backing value (18 decimals): the value hardcoded in the
@@ -187,6 +202,42 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         included into the backing yield (the governance estimate of its phantom
     ///         receivables at inclusion time).
     uint256 internal constant CLEARINGHOUSE_V1_1_INITIAL_OFFSET = 2_000_000e18;
+
+    // ============ DOMAIN CONSTANTS ============ //
+
+    /// @notice The OHM decimals.
+    uint8 internal constant OHM_DECIMALS = 9;
+    /// @notice The decimals of both reserves (USDS and USDe) and of their vault shares.
+    uint8 internal constant RESERVE_DECIMALS = 18;
+    /// @notice The decimals the PRICE module reports, pinned by the facility to the backing
+    ///         decimals.
+    uint8 internal constant PRICE_DECIMALS = YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS;
+
+    /// @notice One whole vault share, the unit of the conversion rate snapshots.
+    uint256 internal constant ONE_SHARE =
+        YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** RESERVE_DECIMALS;
+    /// @notice One USD in the PRICE module decimals.
+    uint256 internal constant ONE_USD =
+        YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** PRICE_DECIMALS;
+
+    /// @notice The basis-point denominator (`10_000` = 100%).
+    uint256 internal constant ONE_HUNDRED_PERCENT_BPS = 10_000;
+    /// @notice The weeks per year of the sUSDe annualized rate.
+    uint256 internal constant WEEKS_PER_YEAR = 52;
+    /// @notice The days per year of the sUSDe annualized rate.
+    uint256 internal constant DAYS_PER_YEAR = 365;
+
+    /// @notice The base exponent of the Bond SDA market scale: a market's `scale` is
+    ///         `10 ** (BOND_SCALE_DECIMALS + scaleAdjustment)`.
+    int8 internal constant BOND_SCALE_DECIMALS = 36;
+
+    /// @notice The epoch counter value pinned by an `enable` restart: one beat before the
+    ///         weekly reset.
+    uint48 internal constant RESTART_EPOCH = YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH - 1;
+
+    /// @notice The byte length of one ABI-encoded word, the return data of a single-value
+    ///         read.
+    uint256 internal constant WORD_SIZE = 32;
 
     // ============ MAINNET CONTRACTS ============ //
 
@@ -440,7 +491,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         IPriceConfigv2.PriceFeedExpectation[]
             memory expectations = new IPriceConfigv2.PriceFeedExpectation[](1);
         expectations[0] = IPriceConfigv2.PriceFeedExpectation({
-            expectedPrice: uint256(liveAnswer) * 10 ** (18 - feedDecimals),
+            // The live USDe/USD answer of the pinned block is positive
+            // forge-lint: disable-next-line(unsafe-typecast)
+            expectedPrice: uint256(liveAnswer) *
+                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** (PRICE_DECIMALS - feedDecimals),
             toleranceBps: 100
         });
 
@@ -536,15 +590,20 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // holding, scaled by the buyback share:
         // seed = value * SUSDE_APR_BPS / 10000 / 52 * share / 1e18 (floor at each step).
         susdeSeedBalance = susde.previewRedeem(susde.balanceOf(address(treasury)));
-        susdeSeedRate = susde.previewRedeem(1e18);
-        susdeSeedYield = ((susdeSeedBalance * SUSDE_APR_BPS) / 10_000 / 52).mulDiv(
-            SUSDE_BUYBACK_SHARE,
-            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
-        );
+        susdeSeedRate = susde.previewRedeem(ONE_SHARE);
+        susdeSeedYield = ((susdeSeedBalance * SUSDE_APR_BPS) /
+            ONE_HUNDRED_PERCENT_BPS /
+            WEEKS_PER_YEAR).mulDiv(
+                SUSDE_BUYBACK_SHARE,
+                YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+            );
 
         // The simulated Ethena reward stream: SUSDE_APR_BPS on the whole vault, fixed at
         // the setup-time total assets.
-        susdeDailyReward = (susde.totalAssets() * SUSDE_APR_BPS) / 10_000 / 365;
+        susdeDailyReward =
+            (susde.totalAssets() * SUSDE_APR_BPS) /
+            ONE_HUNDRED_PERCENT_BPS /
+            DAYS_PER_YEAR;
     }
 
     function _shutdownV1() internal {
@@ -563,6 +622,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _registerAssets() internal {
+        // The literal flags are the `sellShares` and `setAsBackingVault` arguments of `addAsset`
+        // forge-lint: disable-start(boolean-cst)
         _configure(
             abi.encodeCall(
                 IYieldRepurchaseFacilityV2.addAsset,
@@ -591,6 +652,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
                 )
             )
         );
+        // forge-lint: disable-end(boolean-cst)
     }
 
     function _configureClearinghouses() internal {
@@ -621,15 +683,15 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // YRF v1.2 occupies slot 4 of the Heart pipeline with a custom endEpoch selector;
         // v2 implements IPeriodicTask, so it is registered with the default selector.
         (address[] memory tasksBefore, ) = heart.getPeriodicTasks();
-        assertEq(tasksBefore[4], YIELD_REPO_V1, "setup: v1 heart slot");
+        assertEq(tasksBefore[HEART_YRF_SLOT], YIELD_REPO_V1, "setup: v1 heart slot");
 
         vm.startPrank(TIMELOCK);
-        heart.removePeriodicTaskAtIndex(4);
-        heart.addPeriodicTaskAtIndex(address(yieldRepo), bytes4(0), 4);
+        heart.removePeriodicTaskAtIndex(HEART_YRF_SLOT);
+        heart.addPeriodicTaskAtIndex(address(yieldRepo), bytes4(0), HEART_YRF_SLOT);
         vm.stopPrank();
 
         (address[] memory tasksAfter, ) = heart.getPeriodicTasks();
-        assertEq(tasksAfter[4], address(yieldRepo), "setup: v2 heart slot");
+        assertEq(tasksAfter[HEART_YRF_SLOT], address(yieldRepo), "setup: v2 heart slot");
         assertEq(tasksAfter.length, tasksBefore.length, "setup: task count");
     }
 
@@ -652,7 +714,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         _updateOracles();
 
-        assertEq(priceV2.getPrice(USDS), 1e18, "setup: USDS pinned to one");
+        assertEq(priceV2.getPrice(USDS), ONE_USD, "setup: USDS pinned to one");
         assertEq(priceV2.getPriceIn(OHM, USDS), ohmPriceUsd, "setup: OHM price in USDS");
         assertEq(priceV2.getPrice(OHM), ohmPriceUsd, "setup: OHM price mocked");
     }
@@ -679,7 +741,11 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
             int256 answer;
             if (pinToUnit_) {
-                answer = int256(10 ** params.feed.decimals());
+                // One feed unit is far below the int256 range
+                // forge-lint: disable-next-item(unsafe-typecast)
+                answer = int256(
+                    YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** params.feed.decimals()
+                );
             } else {
                 (, answer, , , ) = params.feed.latestRoundData();
             }
@@ -718,7 +784,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         // All OHM feeds are mocked to the same value, so the deviation-average strategy
         // resolves to that value exactly
-        assertEq(ohmFeedMocks.length, 4, "setup: OHM feed count");
+        assertEq(ohmFeedMocks.length, OHM_FEED_COUNT, "setup: OHM feed count");
     }
 
     function _initializeModel() internal {
@@ -744,7 +810,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             lastReserveBalance: susdeSeedBalance,
             trsryShares: susde.balanceOf(address(treasury))
         });
-        modelEpoch = 20;
+        modelEpoch = RESTART_EPOCH;
         modelOhmPurchased = 0;
     }
 
@@ -829,7 +895,12 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     /// @notice Applies a relative change (in signed basis points) to the steered OHM/USD
     ///         price, moving the OHM price for the subsequent beats.
     function _applyPriceDeltaBps(int256 deltaBps_) internal {
-        ohmPriceUsd = uint256((int256(ohmPriceUsd) * (10_000 + deltaBps_)) / 10_000);
+        // The price fits in int256 and the moves are far below 100%, so the result is positive
+        // forge-lint: disable-next-item(unsafe-typecast)
+        ohmPriceUsd = uint256(
+            (int256(ohmPriceUsd) * (int256(ONE_HUNDRED_PERCENT_BPS) + deltaBps_)) /
+                int256(ONE_HUNDRED_PERCENT_BPS)
+        );
     }
 
     /// @notice The oracle price of the sUSDS asset and of the price gate at the pending
@@ -899,7 +970,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         // Projection for the next week: snapshot-based vault yield plus the clearinghouse
         // yield (backing vault only), scaled by the buyback share.
-        uint256 currentRate = vault.previewRedeem(1e18);
+        uint256 currentRate = vault.previewRedeem(ONE_SHARE);
         uint256 vaultYield = 0;
         if (m.lastConversionRate != 0 && currentRate > m.lastConversionRate) {
             vaultYield = m.lastReserveBalance.mulDiv(
@@ -946,7 +1017,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
             uint256 receivables = _readPrincipalReceivables(ch);
             uint256 effective = Math.saturatingSub(receivables, yieldRepo.clearinghouseOffset(ch));
-            yield += (effective * 5) / 1000 / 52;
+            yield +=
+                (effective * YRFClearinghouseLib.CH_RATE_NUMERATOR) /
+                YRFClearinghouseLib.CH_RATE_DENOMINATOR /
+                YRFClearinghouseLib.WEEKS_PER_YEAR;
         }
     }
 
@@ -975,6 +1049,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         m.heldShares += shares;
     }
 
+    // forge-lint: disable-next-item(cyclomatic-complexity)
     function _modelDailyCycle(
         address vault_,
         uint256 daysRemaining_,
@@ -1000,12 +1075,12 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             uint256 capacityShares = Math.min(vault.previewWithdraw(bidAmount), m.heldShares);
             if (capacityShares == 0) return;
 
-            uint256 conversionRate = vault.previewRedeem(1e18);
+            uint256 conversionRate = vault.previewRedeem(ONE_SHARE);
             if (conversionRate == 0) return;
 
             // The oracle price is quoted per reserve token; a share is worth
             // `conversionRate` reserve tokens, so the per-share price scales up.
-            marketOraclePrice = oraclePrice_.mulDiv(1e18, conversionRate);
+            marketOraclePrice = oraclePrice_.mulDiv(ONE_SHARE, conversionRate);
             payoutToken = vault_;
             capacity = capacityShares;
         } else {
@@ -1035,6 +1110,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             marketOraclePrice
         );
 
+        // `scaleAdjustment` lies in [0, 18] for the 18-decimal payouts, so the scale exponent
+        // stays in [36, 54].
+        // forge-lint: disable-start(unsafe-typecast)
         market[vault_] = MarketModel({
             live: true,
             id: marketCountBefore_ + modelPendingMarkets,
@@ -1042,13 +1120,18 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             capacity: capacity,
             initialPrice: initialPrice,
             minPrice: minPrice,
-            scale: 10 ** uint8(36 + scaleAdjustment),
+            scale: YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+                uint8(BOND_SCALE_DECIMALS + scaleAdjustment),
             // maxPayout = capacity * depositInterval / duration = capacity / 6 (floor)
             maxPayout: capacity / 6
         });
+        // forge-lint: disable-end(unsafe-typecast)
         modelPendingMarkets += 1;
     }
 
+    // Mirrors the library casts: the decimals fit in int8, and with `priceDecimals` in
+    // [-18, 18] both scale exponents are non-negative.
+    // forge-lint: disable-start(unsafe-typecast)
     /// @notice Mirrors the `YRFBondMarketLib` market pricing for 18-decimal payout tokens and the
     ///         18-decimal oracle.
     function _mirrorMarketPricing(
@@ -1090,23 +1173,33 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         int8 priceDecimals = _mirrorPriceDecimals(initialPrice);
         // scaleAdjustment = reserveDecimals - ohmDecimals + priceDecimals / 2
-        scaleAdjustment = int8(18) - int8(9) + (priceDecimals / 2);
+        scaleAdjustment = int8(RESERVE_DECIMALS) - int8(OHM_DECIMALS) + (priceDecimals / 2);
 
-        uint256 oracleScale = 10 ** uint8(int8(18) - priceDecimals);
-        uint256 bondScale = 10 ** uint8(36 + scaleAdjustment + int8(9) - int8(18) - priceDecimals);
+        uint256 oracleScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+            uint8(int8(PRICE_DECIMALS) - priceDecimals);
+        uint256 bondScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+            uint8(
+                BOND_SCALE_DECIMALS +
+                    scaleAdjustment +
+                    int8(OHM_DECIMALS) -
+                    int8(RESERVE_DECIMALS) -
+                    priceDecimals
+            );
 
         formattedInitialPrice = initialPrice.mulDiv(bondScale, oracleScale);
         formattedMinimumPrice = minPrice.mulDiv(bondScale, oracleScale);
     }
 
     function _mirrorPriceDecimals(uint256 price_) internal pure returns (int8) {
-        int8 decimals;
-        while (price_ >= 10) {
-            price_ = price_ / 10;
+        int8 decimals = 0;
+        while (price_ >= YieldRepurchaseFacilityV2Constants.DECIMAL_BASE) {
+            price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
             ++decimals;
         }
-        return decimals - int8(18);
+        return decimals - int8(PRICE_DECIMALS);
     }
+
+    // forge-lint: disable-end(unsafe-typecast)
 
     // ============ ASSERTIONS ============ //
 
@@ -1234,7 +1327,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         if (!mkt.live || fractionBps_ == 0) return;
 
         AssetModel storage m = model[vault_];
-        uint256 targetPayout = (mkt.capacity * fractionBps_) / 10_000;
+        uint256 targetPayout = (mkt.capacity * fractionBps_) / ONE_HUNDRED_PERCENT_BPS;
         uint256 boughtPayout = 0;
 
         for (uint256 i = 0; i < 16 && boughtPayout < targetPayout; ++i) {
@@ -1317,19 +1410,24 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
     /// @notice Reads `reserve()` of a clearinghouse, tolerating a missing selector (the
     ///         DAI v1/v1.1 clearinghouses expose `dai()` instead).
+    // A tolerant read: the DAI Clearinghouses expose `dai()` instead of `reserve()`
+    // forge-lint: disable-next-item(low-level-calls)
     function _readReserve(address clearinghouse_) internal view returns (address) {
         (bool success, bytes memory data) = clearinghouse_.staticcall(
             abi.encodeWithSignature("reserve()")
         );
-        if (!success || data.length < 32) return address(0);
+        if (!success || data.length < WORD_SIZE) return address(0);
         return abi.decode(data, (address));
     }
 
+    // A tolerant read, mirroring `YRFClearinghouseLib.readPrincipalReceivables`
+    // forge-lint: disable-next-item(low-level-calls)
     function _readPrincipalReceivables(address clearinghouse_) internal view returns (uint256) {
         (bool success, bytes memory data) = clearinghouse_.staticcall(
             abi.encodeWithSignature("principalReceivables()")
         );
-        if (!success || data.length < 32) return 0;
+        if (!success || data.length < WORD_SIZE) return 0;
         return abi.decode(data, (uint256));
     }
 }
+// forge-lint: disable-end(multi-contract-file,calls-loop,reentrancy-no-eth,unused-return)

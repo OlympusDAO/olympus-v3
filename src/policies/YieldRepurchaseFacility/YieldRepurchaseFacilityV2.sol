@@ -2246,3 +2246,4 @@ contract YieldRepurchaseFacilityV2 is
             super.supportsInterface(interfaceId_);
     }
 }
+// forge-lint: disable-end(reentrancy-events)

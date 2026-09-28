@@ -42,6 +42,7 @@ contract MockYieldRepurchaseFacilityV2Config is Policy, IYieldRepurchaseFacility
 
     /// @notice Binds the facility reported by `facility()`.
     /// @param facility_ The facility to bind.
+    // forge-lint: disable-next-item(missing-zero-check)
     function setFacility(address facility_) external {
         facility = facility_;
     }

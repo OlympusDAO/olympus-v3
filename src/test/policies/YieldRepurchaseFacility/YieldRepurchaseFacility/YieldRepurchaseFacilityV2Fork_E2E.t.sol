@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// forge-lint: disable-start(calls-loop,reentrancy-no-eth)
+
 import {YieldRepurchaseFacilityV2ForkTestBase} from "./YieldRepurchaseFacilityV2ForkTestBase.sol";
 
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_E2E
@@ -126,6 +130,27 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     ///         configurator.
     uint256 internal constant CLEARINGHOUSE_V1_1_OFFSET_INCREASE = 2_000_000e18;
 
+    // ============ SCENARIO DAYS ============ //
+
+    /// @notice The day of the treasury revenue inflow, landed after the daily beat.
+    uint256 internal constant TRSRY_INFLOW_DAY = 2;
+
+    /// @notice The day without purchases, on which the SDA decay of both markets is observed
+    ///         at the intra-day beats.
+    uint256 internal constant PRICE_DECAY_DAY = 2;
+
+    /// @notice The day of the unauthorised offset increase attempt.
+    uint256 internal constant OFFSET_ATTEMPT_DAY = 4;
+
+    /// @notice The day of the offset increase through the configurator.
+    uint256 internal constant OFFSET_INCREASE_DAY = 5;
+
+    /// @notice The day whose daily beat runs on a stale USDe feed.
+    uint256 internal constant STALE_USDE_FEED_DAY = 8;
+
+    /// @notice The day of the treasury outflow (a Cooler V2 borrow), after the daily beat.
+    uint256 internal constant TRSRY_OUTFLOW_DAY = 9;
+
     // ============ SETUP VALIDATION ============ //
 
     function test_setup() public view {
@@ -152,7 +177,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
         // The facility configuration
         assertTrue(yieldRepo.isEnabled(), "facility enabled");
-        assertEq(yieldRepo.epoch(), 20, "initial epoch");
+        assertEq(yieldRepo.epoch(), RESTART_EPOCH, "initial epoch");
         assertEq(yieldRepo.backingVault(), SUSDS, "backing vault");
         assertEq(yieldRepo.backingOracle(), address(backingOracle), "backing oracle");
         assertEq(yieldRepo.bondTeller(), BOND_TELLER, "bondTeller");
@@ -171,7 +196,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             SUSDS
         );
         assertEq(susdsConfig.reserve, USDS, "sUSDS reserve");
-        assertEq(susdsConfig.reserveDecimals, 18, "sUSDS reserve decimals");
+        assertEq(susdsConfig.reserveDecimals, RESERVE_DECIMALS, "sUSDS reserve decimals");
         assertEq(susdsConfig.sellShares, false, "sUSDS sellShares");
         assertEq(susdsConfig.yieldBuybackShare, SUSDS_BUYBACK_SHARE, "sUSDS share");
         assertEq(susdsConfig.nextYield, susdsSeedYield, "sUSDS nextYield");
@@ -215,6 +240,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
     // ============ TWO-WEEK END-TO-END ============ //
 
+    // forge-lint: disable-next-item(cyclomatic-complexity)
     function test_e2e_twoWeeks() public {
         for (uint256 day = 0; day < 14; ++day) {
             // The daily reward stream and the daily price move land before the daily beat
@@ -225,44 +251,44 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
             // rejects the stale USDe price, the facility skips the sUSDe daily cycle
             // through its self-call isolation, and the beat and the sUSDS market
             // proceed.
-            if (day == 8) {
+            if (day == STALE_USDE_FEED_DAY) {
                 susdeReserveFeedStale = true;
                 vm.recordLogs();
             }
 
             // The daily beat: on day 0 and day 7 it also performs the weekly reset
-            bool isResetDay = day % 7 == 0;
+            bool isResetDay = day % YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK == 0;
             if (isResetDay) vm.recordLogs();
             _beat();
             if (isResetDay) _assertNoMismatchEvents();
-            if (day == 8) _assertSusdeCycleSkipped();
+            if (day == STALE_USDE_FEED_DAY) _assertSusdeCycleSkipped();
 
             if (day == 0) _assertWeekOneStart();
-            if (day == 7) _assertWeekTwoStart();
+            if (day == YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK) _assertWeekTwoStart();
 
             // Bond purchases at the freshly created markets
             _buyBonds(SUSDS, BUY_SUSDS_BPS[day]);
             _buyBonds(SUSDE, BUY_SUSDE_BPS[day]);
 
             // Scenario events
-            if (day == 2) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
+            if (day == TRSRY_INFLOW_DAY) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
             // TODO: rewrite to _queueOffsetIncrease; see `MockYieldRepurchaseFacilityV2Config`.
-            if (day == 4) _assertOffsetIncreaseUnauthorised();
+            if (day == OFFSET_ATTEMPT_DAY) _assertOffsetIncreaseUnauthorised();
             // TODO: rewrite to _executeOffsetIncreaseAndAssert; see
             // `MockYieldRepurchaseFacilityV2Config`.
-            if (day == 5) _increaseOffsetAndAssert();
-            if (day == 9) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
+            if (day == OFFSET_INCREASE_DAY) _increaseOffsetAndAssert();
+            if (day == TRSRY_OUTFLOW_DAY) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
 
             // The two intra-day beats: the facility only advances its epoch
             _beat();
-            if (day == 2) _assertMarketsInsidePriceBand();
+            if (day == PRICE_DECAY_DAY) _assertMarketsInsidePriceBand();
             _beat();
-            if (day == 2) _assertMarketsAtPriceFloor();
+            if (day == PRICE_DECAY_DAY) _assertMarketsAtPriceFloor();
         }
 
         // 42 beats total: the epoch counter sits at 20, one beat away from the third
         // weekly reset.
-        assertEq(yieldRepo.epoch(), 20, "final epoch");
+        assertEq(yieldRepo.epoch(), RESTART_EPOCH, "final epoch");
     }
 
     // ============ DAY-SPECIFIC ASSERTIONS ============ //
@@ -285,10 +311,17 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
         // Day 1 markets: capacity = pool value / 7 (floor). The sUSDS market pays the raw
         // reserve; the sUSDe market pays vault shares priced at the share conversion rate.
-        assertEq(market[SUSDS].capacity, susdsFunded / 7, "week 1: sUSDS day-1 capacity");
+        assertEq(
+            market[SUSDS].capacity,
+            susdsFunded / YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK,
+            "week 1: sUSDS day-1 capacity"
+        );
         assertEq(
             market[SUSDE].capacity,
-            IERC4626(SUSDE).previewWithdraw(IERC4626(SUSDE).previewRedeem(susdeFundedShares) / 7),
+            IERC4626(SUSDE).previewWithdraw(
+                IERC4626(SUSDE).previewRedeem(susdeFundedShares) /
+                    YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK
+            ),
             "week 1: sUSDe day-1 capacity"
         );
 
@@ -380,14 +413,15 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // delta = 192307692307692307692, equal to (2_000_000e18 * 5) / 1000 / 52 at
         // these values.
         uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_V1_1);
-        uint256 interestBefore = ((receivables - CLEARINGHOUSE_V1_1_INITIAL_OFFSET) * 5) /
-            1000 /
-            52;
+        uint256 interestBefore = ((receivables - CLEARINGHOUSE_V1_1_INITIAL_OFFSET) *
+            YRFClearinghouseLib.CH_RATE_NUMERATOR) /
+            YRFClearinghouseLib.CH_RATE_DENOMINATOR /
+            YRFClearinghouseLib.WEEKS_PER_YEAR;
         uint256 interestAfter = ((receivables -
             CLEARINGHOUSE_V1_1_INITIAL_OFFSET -
-            CLEARINGHOUSE_V1_1_OFFSET_INCREASE) * 5) /
-            1000 /
-            52;
+            CLEARINGHOUSE_V1_1_OFFSET_INCREASE) * YRFClearinghouseLib.CH_RATE_NUMERATOR) /
+            YRFClearinghouseLib.CH_RATE_DENOMINATOR /
+            YRFClearinghouseLib.WEEKS_PER_YEAR;
 
         uint256 projectionAfter = yieldRepo.getNextYield(SUSDS);
         assertEq(projectionAfter, _expectedProjectionView(SUSDS), "offset: projection view");
@@ -499,7 +533,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     function _expectedProjectionView(address vault_) internal view returns (uint256) {
         IYieldRepurchaseFacilityV2.ReserveAsset memory config = yieldRepo.getAssetConfig(vault_);
 
-        uint256 currentRate = IERC4626(vault_).previewRedeem(1e18);
+        uint256 currentRate = IERC4626(vault_).previewRedeem(ONE_SHARE);
         uint256 vaultYield = 0;
         if (config.lastConversionRate != 0 && currentRate > config.lastConversionRate) {
             vaultYield = config.lastReserveBalance.mulDiv(
@@ -509,6 +543,11 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         }
 
         uint256 clearinghouseYield = vault_ == SUSDS ? _modelClearinghouseYield() : 0;
-        return (vaultYield + clearinghouseYield).mulDiv(config.yieldBuybackShare, 1e18);
+        return
+            (vaultYield + clearinghouseYield).mulDiv(
+                config.yieldBuybackShare,
+                YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+            );
     }
 }
+// forge-lint: disable-end(calls-loop,reentrancy-no-eth)
