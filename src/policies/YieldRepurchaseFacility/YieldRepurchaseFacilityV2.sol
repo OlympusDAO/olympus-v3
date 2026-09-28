@@ -26,6 +26,7 @@ import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YRFAssetConfigLib} from "src/policies/YieldRepurchaseFacility/YRFAssetConfigLib.sol";
 import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol";
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -107,37 +108,13 @@ contract YieldRepurchaseFacilityV2 is
     // ============ CONSTANTS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    uint32 public constant override MAX_GRACE_PERIOD = 7 days;
-
-    /// @notice Number of epochs per week (3 per day * 7 days).
-    uint48 private constant _EPOCH_LENGTH = 21;
-
-    /// @notice Number of epochs per day.
-    uint48 private constant _EPOCHS_PER_DAY = 3;
-
-    /// @notice Number of days per week.
-    uint256 private constant _DAYS_PER_WEEK = 7;
-
-    /// @notice Precision denominator for the yield buyback share (`1e18` = 100%).
-    uint256 private constant _ONE_HUNDRED_PERCENT = 1e18;
-
-    /// @notice Upper bound of the max price premium (`1e18` = 100%), inclusive.
-    /// @dev The bound guards against a mis-entered value; it is not an economic limit.
-    ///      The premium caps the payout at `oraclePrice * (1 + maxPricePremium)`, so the
-    ///      bound caps that payout at 11x the oracle price, far above any usable market
-    ///      ceiling. The premium only lowers the market's minimum price, so no premium
-    ///      magnitude can overflow the market pricing.
-    uint256 private constant _MAX_PRICE_PREMIUM_LIMIT = 10e18;
+    uint32 public constant override MAX_GRACE_PERIOD =
+        YieldRepurchaseFacilityV2Constants.MAX_GRACE_PERIOD;
 
     /// @notice Minimum length of the `enable` payload.
     /// @dev Four 32-byte words: `initialDiscount`, `maxPricePremium`, the seed array
     ///      offset, and the seed array length.
     uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 128;
-
-    /// @notice Decimals of the backing value, and therefore the decimals both the
-    ///         `PRICE` module and the backing oracle must report so that the oracle
-    ///         price can be compared against the backing.
-    uint8 private constant _BACKING_DECIMALS = 18;
 
     /// @notice Keycode for the TRSRY module dependency.
     /// @dev Pre-computed to avoid the runtime cost of `toKeycode("TRSRY")`.
@@ -321,7 +298,7 @@ contract YieldRepurchaseFacilityV2 is
         // The oracle price is compared against the 18-decimal backing value, so the
         // oracle must report 18 decimals.
         _oracleDecimals = PRICE.decimals();
-        if (_oracleDecimals != _BACKING_DECIMALS)
+        if (_oracleDecimals != YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS)
             revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
         return dependencies;
@@ -436,7 +413,7 @@ contract YieldRepurchaseFacilityV2 is
             backingVault
         );
 
-        _epoch = _EPOCH_LENGTH - 1;
+        _epoch = YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH - 1;
         // The restart opens the seeding window of `seedCycle`, closed by the first beat
         _cycleSeedable = true;
     }
@@ -619,9 +596,9 @@ contract YieldRepurchaseFacilityV2 is
         if (!isEnabled) return;
         _epoch += 1;
 
-        if (_epoch % _EPOCHS_PER_DAY != 0) return;
+        if (_epoch % YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY != 0) return;
 
-        if (_epoch == _EPOCH_LENGTH) _weeklyReset();
+        if (_epoch == YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH) _weeklyReset();
 
         // The purchased OHM is processed before the price gate, so the burn continues
         // while markets are skipped.
@@ -644,7 +621,8 @@ contract YieldRepurchaseFacilityV2 is
         if (gatePrice == 0 || gatePrice < backing) return;
 
         // In the range [1, 7]: the weekly reset has wrapped the epoch to zero
-        uint256 daysRemaining = _DAYS_PER_WEEK - uint256(_epoch / _EPOCHS_PER_DAY);
+        uint256 daysRemaining = YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK -
+            uint256(_epoch / YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY);
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
@@ -988,9 +966,12 @@ contract YieldRepurchaseFacilityV2 is
         uint256 backingPerOhm = _backing();
 
         // backingAmount18 = purchased (9 dec) * backingPerOhm (18 dec) / 10^9
-        // backingAmount   = scaleFrom18(backingAmount18, reserveDecimals).
-        uint256 backingAmount18 = purchased.mulDiv(backingPerOhm, 10 ** _OHM_DECIMALS);
-        uint256 backingAmount = _scaleFrom18(
+        // backingAmount   = scaleBackingAmount(backingAmount18, reserveDecimals).
+        uint256 backingAmount18 = purchased.mulDiv(
+            backingPerOhm,
+            YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** _OHM_DECIMALS
+        );
+        uint256 backingAmount = _scaleBackingAmount(
             backingAmount18,
             _assetConfigs[backingVault_].reserveDecimals
         );
@@ -1047,7 +1028,10 @@ contract YieldRepurchaseFacilityV2 is
                 emit MarketCreationFailed(vault_, bidAmount_, "");
                 return;
             }
-            marketOraclePrice = oraclePrice_.mulDiv(10 ** config_.reserveDecimals, conversionRate);
+            marketOraclePrice = oraclePrice_.mulDiv(
+                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals,
+                conversionRate
+            );
             payoutToken = vault_;
         }
 
@@ -1250,7 +1234,8 @@ contract YieldRepurchaseFacilityV2 is
         if (!_cycleSeedable) revert IYieldRepurchaseFacilityV2_CycleNotSeedable();
         _cycleSeedable = false;
 
-        if (epoch_ >= _EPOCH_LENGTH) revert IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
+        if (epoch_ >= YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH)
+            revert IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
         _epoch = epoch_;
 
         uint256 seedsLength = budgetSeeds_.length;
@@ -1434,8 +1419,10 @@ contract YieldRepurchaseFacilityV2 is
         // The backing value is compared against the 18-decimal oracle prices and scaled
         // by the 18-decimal convention in the burn pricing, so an oracle with any other
         // scale is rejected.
-        if (IBackingOracle(backingOracle_).decimals() != _BACKING_DECIMALS)
-            revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
+        if (
+            IBackingOracle(backingOracle_).decimals() !=
+            YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS
+        ) revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
 
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
@@ -1828,7 +1815,11 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The probe amount `10 ** reserveDecimals` is one whole share because `addAsset`
     ///      requires the vault's share decimals to equal its reserve decimals.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
-        return _previewRedeem(config_.vault, 10 ** config_.reserveDecimals);
+        return
+            _previewRedeem(
+                config_.vault,
+                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals
+            );
     }
 
     /// @notice Returns the vault yield accrued since the snapshots, in reserve units.
@@ -1862,7 +1853,11 @@ contract YieldRepurchaseFacilityV2 is
         uint256 totalYield = config_.vault == backingVault
             ? vaultYield + clearinghouseYield_
             : vaultYield;
-        return totalYield.mulDiv(config_.yieldBuybackShare, _ONE_HUNDRED_PERCENT);
+        return
+            totalYield.mulDiv(
+                config_.yieldBuybackShare,
+                YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+            );
     }
 
     /// @notice Returns the reserve token of the backing vault, or the zero address when
@@ -1901,10 +1896,18 @@ contract YieldRepurchaseFacilityV2 is
             );
     }
 
-    /// @notice Scales an 18-decimal value down to the target decimals, flooring.
-    function _scaleFrom18(uint256 value18_, uint8 targetDecimals_) private pure returns (uint256) {
-        if (targetDecimals_ == 18) return value18_;
-        return value18_ / (10 ** (18 - targetDecimals_));
+    /// @notice Scales a backing amount, in the backing decimals, down to the target
+    ///         decimals, flooring.
+    function _scaleBackingAmount(
+        uint256 backingAmount_,
+        uint8 targetDecimals_
+    ) private pure returns (uint256) {
+        if (targetDecimals_ == YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS)
+            return backingAmount_;
+        return
+            backingAmount_ /
+            (YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+                (YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS - targetDecimals_));
     }
 
     /// @notice Returns the config of a registered vault, reverting with
@@ -2046,19 +2049,19 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Reverts unless the share is at most 100% (`1e18`).
     function _requireValidYieldBuybackShare(uint256 share_) private pure {
-        if (share_ > _ONE_HUNDRED_PERCENT)
+        if (share_ > YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
     }
 
     /// @notice Reverts unless the discount is less than 100% (`1e18`).
     function _requireValidInitialDiscount(uint256 initialDiscount_) private pure {
-        if (initialDiscount_ >= _ONE_HUNDRED_PERCENT)
+        if (initialDiscount_ >= YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
     }
 
     /// @notice Reverts unless the premium is at or below 1,000% (`10e18`).
     function _requireValidMaxPricePremium(uint256 maxPricePremium_) private pure {
-        if (maxPricePremium_ > _MAX_PRICE_PREMIUM_LIMIT)
+        if (maxPricePremium_ > YieldRepurchaseFacilityV2Constants.MAX_PRICE_PREMIUM_LIMIT)
             revert IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
     }
 

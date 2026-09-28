@@ -8,6 +8,7 @@ import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 // Libraries
 import {CappedCall} from "src/libraries/CappedCall.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Contracts
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
@@ -21,9 +22,6 @@ import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 ///      applies to the facility address.
 library YRFBondMarketLib {
     using FullMath for uint256;
-
-    /// @notice Precision denominator of the initial discount (`1e18` = 100%).
-    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
 
     /// @notice Bond market debt buffer (`100_000` = 100%).
     uint32 internal constant BOND_DEBT_BUFFER = 100_000;
@@ -148,19 +146,24 @@ library YRFBondMarketLib {
     {
         // discountFactor = 1e18 - initialDiscount (both 18 decimals);
         // e.g. 1e18 - 3e16 = 0.97e18.
-        uint256 discountFactor = ONE_HUNDRED_PERCENT - config_.initialDiscount;
+        uint256 discountFactor = YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT -
+            config_.initialDiscount;
         // effectivePrice = oraclePrice (oracleDecimals) * discountFactor (18 decimals)
         // / 1e18 -> oracleDecimals (floor).
-        uint256 effectivePrice = config_.oraclePrice.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        uint256 effectivePrice = config_.oraclePrice.mulDiv(
+            discountFactor,
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+        );
         // premiumFactor = 1e18 + maxPricePremium (18 decimals); e.g. 1e18 + 1e17 = 1.1e18.
         // maxPrice = oraclePrice (oracleDecimals) * premiumFactor (18 decimals)
         // / 1e18 -> oracleDecimals (floor). This is the highest payout the market can
         // reach for one quote token; a zero premium leaves it at the oracle price.
         uint256 maxPrice = config_.oraclePrice.mulDiv(
-            ONE_HUNDRED_PERCENT + config_.maxPricePremium,
-            ONE_HUNDRED_PERCENT
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT + config_.maxPricePremium,
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
         );
-        uint256 oracleSquare = 10 ** (uint256(config_.oracleDecimals) * 2);
+        uint256 oracleSquare = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+            (uint256(config_.oracleDecimals) * 2);
 
         uint256 initialPrice = oracleSquare / effectivePrice;
         uint256 minPrice = oracleSquare / maxPrice;
@@ -171,8 +174,9 @@ library YRFBondMarketLib {
             int8(config_.quoteDecimals) +
             (priceDecimals / 2);
 
-        uint256 oracleScale = 10 ** uint8(int8(config_.oracleDecimals) - priceDecimals);
-        uint256 bondScale = 10 **
+        uint256 oracleScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
+            uint8(int8(config_.oracleDecimals) - priceDecimals);
+        uint256 bondScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
             uint8(
                 36 +
                     scaleAdjustment +
@@ -191,9 +195,9 @@ library YRFBondMarketLib {
         uint256 price_,
         uint8 oracleDecimals_
     ) private pure returns (int8 relativeDecimals) {
-        int8 decimals;
-        while (price_ >= 10) {
-            price_ = price_ / 10;
+        int8 decimals = 0;
+        while (price_ >= YieldRepurchaseFacilityV2Constants.DECIMAL_BASE) {
+            price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
             ++decimals;
         }
         return decimals - int8(oracleDecimals_);

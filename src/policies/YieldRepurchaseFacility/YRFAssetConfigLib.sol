@@ -9,6 +9,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -22,12 +23,6 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 ///      `address(this)`, and the emitted events and the errors belong to the facility
 ///      interface.
 library YRFAssetConfigLib {
-    /// @notice Maximum reserve token decimals supported when adding a vault.
-    uint8 internal constant MAX_RESERVE_DECIMALS = 18;
-
-    /// @notice Precision denominator of the yield buyback share (`1e18` = 100%).
-    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
-
     /// @notice The registration inputs of `addAsset`.
     /// @param vault The ERC4626 vault to register.
     /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` =
@@ -78,7 +73,7 @@ library YRFAssetConfigLib {
     ) external {
         address vault_ = params_.vault;
         if (vault_ == address(0)) revert Errors.BadInput("vault");
-        if (params_.yieldBuybackShare > ONE_HUNDRED_PERCENT)
+        if (params_.yieldBuybackShare > YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
         if (assetConfigs_[vault_].vault != address(0))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
@@ -87,7 +82,7 @@ library YRFAssetConfigLib {
         if (reserve_ == address(0)) revert Errors.BadInput("vault.asset");
 
         uint8 reserveDecimals = IERC20Metadata(reserve_).decimals();
-        if (reserveDecimals > MAX_RESERVE_DECIMALS)
+        if (reserveDecimals > YieldRepurchaseFacilityV2Constants.MAX_RESERVE_DECIMALS)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
         // The conversion rate probe and the sell-shares market pricing both treat

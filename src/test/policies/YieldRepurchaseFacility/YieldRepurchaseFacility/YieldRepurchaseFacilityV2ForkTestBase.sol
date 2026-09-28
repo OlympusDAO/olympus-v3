@@ -10,6 +10,7 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
@@ -186,11 +187,6 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         included into the backing yield (the governance estimate of its phantom
     ///         receivables at inclusion time).
     uint256 internal constant CLEARINGHOUSE_V1_1_INITIAL_OFFSET = 2_000_000e18;
-
-    uint256 internal constant ONE_HUNDRED_PERCENT = 1e18;
-    uint48 internal constant EPOCH_LENGTH = 21;
-    uint48 internal constant EPOCHS_PER_DAY = 3;
-    uint256 internal constant DAYS_PER_WEEK = 7;
 
     // ============ MAINNET CONTRACTS ============ //
 
@@ -543,7 +539,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         susdeSeedRate = susde.previewRedeem(1e18);
         susdeSeedYield = ((susdeSeedBalance * SUSDE_APR_BPS) / 10_000 / 52).mulDiv(
             SUSDE_BUYBACK_SHARE,
-            ONE_HUNDRED_PERCENT
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
         );
 
         // The simulated Ethena reward stream: SUSDE_APR_BPS on the whole vault, fixed at
@@ -862,9 +858,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         market[SUSDE].live = false;
 
         modelEpoch += 1;
-        if (modelEpoch % EPOCHS_PER_DAY != 0) return;
+        if (modelEpoch % YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY != 0) return;
 
-        if (modelEpoch == EPOCH_LENGTH) {
+        if (modelEpoch == YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH) {
             modelEpoch = 0;
             _modelWeeklyReset();
         }
@@ -877,7 +873,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         uint256 gatePrice = _expectedOraclePrice();
         if (gatePrice < BACKING) return;
 
-        uint256 daysRemaining = DAYS_PER_WEEK - uint256(modelEpoch / EPOCHS_PER_DAY);
+        uint256 daysRemaining = YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK -
+            uint256(modelEpoch / YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY);
         _modelDailyCycle(SUSDS, daysRemaining, gatePrice, marketCountBefore_);
         // A stale USDe feed reverts the sUSDe price resolution; the facility skips the
         // sUSDe daily cycle through its self-call isolation and the beat continues.
@@ -912,7 +909,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         }
         m.nextYield = (vaultYield + clearinghouseYield_).mulDiv(
             m.yieldBuybackShare,
-            ONE_HUNDRED_PERCENT
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
         );
 
         m.lastConversionRate = currentRate;
@@ -1063,10 +1060,14 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     {
         // discountFactor = 1e18 - INITIAL_DISCOUNT (both 18 decimals);
         // e.g. 1e18 - 3e16 = 0.97e18.
-        uint256 discountFactor = ONE_HUNDRED_PERCENT - INITIAL_DISCOUNT;
+        uint256 discountFactor = YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT -
+            INITIAL_DISCOUNT;
         // effectivePrice = oraclePrice (18 decimals) * discountFactor (18 decimals)
         // / 1e18 -> 18 decimals (floor). This is the price a market opens at.
-        uint256 effectivePrice = oraclePrice_.mulDiv(discountFactor, ONE_HUNDRED_PERCENT);
+        uint256 effectivePrice = oraclePrice_.mulDiv(
+            discountFactor,
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+        );
         // The premium is measured from the oracle price, not from the discounted price,
         // so the two parameters do not compound.
         //
@@ -1074,8 +1075,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // / 1e18 -> 18 decimals (floor); e.g. 1e18 + 1e17 = 1.1e18 gives 1.1x the oracle
         // price. This is the highest payout the market can reach for one OHM.
         uint256 maxPrice = oraclePrice_.mulDiv(
-            ONE_HUNDRED_PERCENT + MAX_PRICE_PREMIUM,
-            ONE_HUNDRED_PERCENT
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT + MAX_PRICE_PREMIUM,
+            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
         );
         // The market quotes OHM per payout unit, so both prices invert the oracle price
         // across the 18-decimal oracle scale squared: 1e18 * 1e18 = 1e36.
