@@ -48,6 +48,8 @@ library YRFClearinghouseLib {
 
         uint256 len = chreg_.registryCount();
         for (uint256 i = 0; i < len; ++i) {
+            // The CHREG registry is append-only and grows only through permissioned activations
+            // forge-lint: disable-next-line(calls-loop)
             address ch = chreg_.registry(i);
             if (!_countsTowardBackingYield(ch, backingReserve_, includedClearinghouses_)) continue;
             yield += _clearinghouseInterest(readPrincipalReceivables(ch), receivablesOffsets_[ch]);
@@ -71,6 +73,8 @@ library YRFClearinghouseLib {
 
         uint256 len = chreg_.registryCount();
         for (uint256 i = 0; i < len; ++i) {
+            // The CHREG registry is append-only and grows only through permissioned activations
+            // forge-lint: disable-next-line(calls-loop)
             address ch = chreg_.registry(i);
             if (!_countsTowardBackingYield(ch, backingReserve_, includedClearinghouses_))
                 emit IYieldRepurchaseFacilityV2.ClearinghouseDebtTokenMismatch(ch);
@@ -93,6 +97,8 @@ library YRFClearinghouseLib {
         bool registered = false;
         uint256 len = chreg_.registryCount();
         for (uint256 i = 0; i < len; ++i) {
+            // The CHREG registry is append-only and grows only through permissioned activations
+            // forge-lint: disable-next-line(calls-loop)
             if (chreg_.registry(i) == clearinghouse_) {
                 registered = true;
                 break;
@@ -116,6 +122,8 @@ library YRFClearinghouseLib {
     /// @param clearinghouse_ The Clearinghouse address.
     /// @return The current `principalReceivables`, or zero when the read reverts.
     function readPrincipalReceivables(address clearinghouse_) public view returns (uint256) {
+        // Called once per entry of the governance-bounded registry scan
+        // forge-lint: disable-next-line(calls-loop)
         try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
             uint256 receivables
         ) {
@@ -152,6 +160,8 @@ library YRFClearinghouseLib {
     /// @notice Reads the Clearinghouse's reserve token, treating a revert as the zero
     ///         address.
     function _readClearinghouseReserve(address clearinghouse_) private view returns (address) {
+        // Called once per entry of the governance-bounded registry scans
+        // forge-lint: disable-next-line(calls-loop)
         try IClearinghouseReserve(clearinghouse_).reserve() returns (address reserve) {
             return reserve;
         } catch {

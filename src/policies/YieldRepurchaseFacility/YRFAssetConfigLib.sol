@@ -64,6 +64,8 @@ library YRFAssetConfigLib {
     /// @param price_ The PRICE module used for the reserve price probe.
     /// @param ohm_ The OHM token address.
     /// @param params_ The registration inputs.
+    // The registration checks stay in one sequence, in the order of the documented revert list
+    // forge-lint: disable-next-item(cyclomatic-complexity)
     function addAsset(
         mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
         address[] storage vaults_,
@@ -99,6 +101,8 @@ library YRFAssetConfigLib {
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
 
         uint256 vaultsLength = vaults_.length;
+        // A pool collision with any registered asset must reject the registration
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address registeredVault = vaults_[i];
             address registeredReserve = assetConfigs_[registeredVault].reserve;
@@ -111,6 +115,7 @@ library YRFAssetConfigLib {
                     vault_
                 );
         }
+        // forge-lint: disable-end(require-revert-in-loop)
 
         // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
         // reserve must resolve against OHM at registration; a PRICE revert (for example
@@ -173,6 +178,8 @@ library YRFAssetConfigLib {
         }
 
         uint256 seedsLength = nextYieldSeeds_.length;
+        // An unregistered or disabled seed must reject the whole reset rather than be skipped
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < seedsLength; ++i) {
             IYieldRepurchaseFacilityV2.NextYieldSeed memory seed = nextYieldSeeds_[i];
             IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[seed.vault];
@@ -184,6 +191,7 @@ library YRFAssetConfigLib {
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetDisabled();
             config.nextYield = seed.nextYield;
         }
+        // forge-lint: disable-end(require-revert-in-loop)
 
         for (uint256 i = 0; i < vaultsLength; ++i) {
             IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[vaults_[i]];
@@ -252,6 +260,8 @@ library YRFAssetConfigLib {
         }
 
         uint256 vaultsLength = vaults_.length;
+        // A registered share or reserve token must reject the rescue
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults_[i];
             if (token_ == vault || token_ == assetConfigs_[vault].reserve)
@@ -259,9 +269,14 @@ library YRFAssetConfigLib {
                     token_
                 );
         }
+        // forge-lint: disable-end(require-revert-in-loop)
         return balance;
     }
 
+    // The loops here and in `resetCycle` run over the registered vaults, added only by the
+    // configurator, and the active Clearinghouses, activated only through the permissioned
+    // CHREG module.
+    // forge-lint: disable-start(calls-loop)
     /// @notice Refreshes the snapshots of a vault configuration in place.
     function _refreshSnapshots(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
@@ -294,4 +309,5 @@ library YRFAssetConfigLib {
 
         balance = IERC4626(vault_).previewRedeem(totalShares);
     }
+    // forge-lint: disable-end(calls-loop)
 }

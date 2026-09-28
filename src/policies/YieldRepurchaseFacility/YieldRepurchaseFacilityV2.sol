@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0
+// Every emitting path is gated on a role, the configurator, or the facility itself, and the
+// beat, the callback, and the seeding hold the reentrancy guard, so a callee without a
+// privileged role cannot re-enter to reorder or fabricate the logs.
+// forge-lint: disable-start(reentrancy-events)
 pragma solidity >=0.8.24;
 
 // Interfaces
@@ -285,9 +289,15 @@ contract YieldRepurchaseFacilityV2 is
         CHREG = CHREGv1(getModuleAddress(dependencies[2]));
         ROLES = ROLESv1(getModuleAddress(dependencies[3]));
 
+        // TRSRY compatibility depends only on its major version
+        // forge-lint: disable-next-line(unused-return)
         (uint8 trsryMajor, ) = TRSRY.VERSION();
         (uint8 priceMajor, uint8 priceMinor) = PRICE.VERSION();
+        // CHREG compatibility depends only on its major version
+        // forge-lint: disable-next-line(unused-return)
         (uint8 chregMajor, ) = CHREG.VERSION();
+        // ROLES compatibility depends only on its major version
+        // forge-lint: disable-next-line(unused-return)
         (uint8 rolesMajor, ) = ROLES.VERSION();
         if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
             revert Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
@@ -333,6 +343,8 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ROLE GATES ============ //
 
     /// @notice Reverts unless the caller holds the yrf_admin role or the admin role.
+    // The gate is kept as a named modifier
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier onlyYrfAdminOrAdminRole() {
         _requireAuthorized(!_hasRole(msg.sender, YRF_ADMIN_ROLE) && !_isAdmin(msg.sender));
         _;
@@ -864,6 +876,8 @@ contract YieldRepurchaseFacilityV2 is
         uint256 expected = IERC4626(vault_).previewDeposit(amount_);
         uint256 sharesBefore = _selfBalance(vault_);
         IERC20(reserve_).forceApprove(vault_, amount_);
+        // The received shares are measured as the share balance delta below
+        // forge-lint: disable-next-line(unused-return)
         IERC4626(vault_).deposit(amount_, address(this));
         uint256 received = _selfBalance(vault_) - sharesBefore;
 
@@ -919,6 +933,8 @@ contract YieldRepurchaseFacilityV2 is
 
         uint256 expected = _previewRedeem(vault_, shares_);
         uint256 reserveBefore = _selfBalance(reserve_);
+        // The received reserve is measured as the reserve balance delta below
+        // forge-lint: disable-next-line(unused-return)
         IERC4626(vault_).redeem(shares_, address(this), address(this));
         received = _selfBalance(reserve_) - reserveBefore;
 
@@ -1038,6 +1054,8 @@ contract YieldRepurchaseFacilityV2 is
         _closeVaultMarket(vault_);
 
         address auctioneer = bondAuctioneer;
+        // The market is created under the guard held by `execute`, and the auctioneer is admin-set
+        // forge-lint: disable-next-item(reentrancy-no-eth)
         (bool success, uint256 marketId, bytes memory reason) = YRFBondMarketLib.createMarket(
             YRFBondMarketLib.MarketConfig({
                 auctioneer: IBondSDA(auctioneer),
@@ -1912,6 +1930,8 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Returns the config of a registered vault, reverting with
     ///         `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered one.
+    // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
+    // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireRegistered(
         address vault_
     ) private view returns (ReserveAsset storage config_) {
@@ -1926,18 +1946,26 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Reverts with `Errors.BadInput` when the amount is zero.
+    // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
+    // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireNonzeroAmount(uint256 amount_) private pure {
         if (amount_ == 0) revert Errors.BadInput("amount");
     }
 
     /// @notice Returns the vault's share amount for an exact `assets_` withdrawal
     ///         (rounded up by the vault).
+    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
+    // only through the isolating self-calls.
+    // forge-lint: disable-next-item(calls-loop)
     function _previewWithdraw(address vault_, uint256 assets_) private view returns (uint256) {
         return IERC4626(vault_).previewWithdraw(assets_);
     }
 
     /// @notice Returns the vault's reserve amount for a `shares_` redemption (rounded
     ///         down by the vault).
+    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
+    // only through the isolating self-calls.
+    // forge-lint: disable-next-item(calls-loop)
     function _previewRedeem(address vault_, uint256 shares_) private view returns (uint256) {
         return IERC4626(vault_).previewRedeem(shares_);
     }
@@ -2000,6 +2028,8 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Reverts unless the asset is enabled.
+    // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
+    // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireAssetEnabled(ReserveAsset storage config_) private view {
         if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
     }
@@ -2028,6 +2058,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Returns the `token_` balance of `account_`.
+    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
+    // only through the isolating self-calls.
+    // forge-lint: disable-next-item(calls-loop)
     function _balanceOf(address token_, address account_) private view returns (uint256) {
         return IERC20(token_).balanceOf(account_);
     }
@@ -2084,6 +2117,9 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @notice Withdraws vault shares from the treasury under a just-in-time approval.
+    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
+    // only through the isolating self-calls.
+    // forge-lint: disable-next-item(calls-loop)
     function _withdrawShares(address vault_, uint256 shares_) private {
         TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(vault_), shares_);
         TRSRY.withdrawReserves(address(this), SolmateERC20(vault_), shares_);

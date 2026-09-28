@@ -95,6 +95,8 @@ library YRFBondMarketLib {
                         formattedMinimumPrice: formattedMinimumPrice,
                         debtBuffer: BOND_DEBT_BUFFER,
                         vesting: uint48(0),
+                        // One day past block.timestamp fits in uint48 for about 8.9 million years
+                        // forge-lint: disable-next-line(unsafe-typecast)
                         conclusion: uint48(block.timestamp + BOND_MARKET_DURATION),
                         depositInterval: BOND_DEPOSIT_INTERVAL,
                         scaleAdjustment: scaleAdjustment
@@ -108,8 +110,11 @@ library YRFBondMarketLib {
         bytes memory returned;
         (success, returned) = CappedCall.tryCall(address(config_.auctioneer), callData);
 
+        // The literals make the failure and the success return shapes explicit
+        // forge-lint: disable-start(boolean-cst)
         if (!success) return (false, 0, returned);
         return (true, abi.decode(returned, (uint256)), "");
+        // forge-lint: disable-end(boolean-cst)
     }
 
     /// @notice Computes the Bond SDA price parameters for a market quoted in OHM.
@@ -169,6 +174,11 @@ library YRFBondMarketLib {
         uint256 minPrice = oracleSquare / maxPrice;
 
         int8 priceDecimals = _getPriceDecimals(initialPrice, config_.oracleDecimals);
+        // The payout decimals are validated at most 18, OHM has 9 decimals, and the facility
+        // pins the oracle decimals at 18, so no int8 cast truncates; `priceDecimals` lies in
+        // [-18, 18] because `initialPrice` is at most 10 ** 36, so neither uint8 exponent is
+        // negative.
+        // forge-lint: disable-start(unsafe-typecast)
         scaleAdjustment =
             int8(config_.payoutDecimals) -
             int8(config_.quoteDecimals) +
@@ -184,6 +194,7 @@ library YRFBondMarketLib {
                     int8(config_.payoutDecimals) -
                     priceDecimals
             );
+        // forge-lint: disable-end(unsafe-typecast)
 
         formattedInitialPrice = initialPrice.mulDiv(bondScale, oracleScale);
         formattedMinimumPrice = minPrice.mulDiv(bondScale, oracleScale);
@@ -200,6 +211,8 @@ library YRFBondMarketLib {
             price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
             ++decimals;
         }
+        // The facility pins the oracle decimals at 18, which fits in int8
+        // forge-lint: disable-next-line(unsafe-typecast)
         return decimals - int8(oracleDecimals_);
     }
 }
