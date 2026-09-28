@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {YieldRepurchaseFacilityV2ForkTestBase} from "./YieldRepurchaseFacilityV2ForkTestBase.sol";
 
@@ -123,12 +123,9 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     ///         shares.
     uint256 internal constant TRSRY_OUTFLOW_SUSDS_SHARES = 1_400_000e18;
 
-    /// @notice The additional receivables offset queued by the yrf_admin through the
-    ///         config timelock on day 5 and executed on day 6, one timelock delay later.
+    /// @notice The additional receivables offset applied on day 5 through the facility's
+    ///         pinned config timelock.
     uint256 internal constant CLEARINGHOUSE_V1_1_OFFSET_INCREASE = 2_000_000e18;
-
-    /// @notice The queued offset increase, pending between day 5 and day 6.
-    uint64 internal offsetActionId;
 
     // ============ SETUP VALIDATION ============ //
 
@@ -250,8 +247,10 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
             // Scenario events
             if (day == 2) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
-            if (day == 4) _queueOffsetIncrease();
-            if (day == 5) _executeOffsetIncreaseAndAssert();
+            // TODO: rewrite to _queueOffsetIncrease; see `MockYRFConfigTimelock`.
+            if (day == 4) _assertOffsetIncreaseUnauthorised();
+            // TODO: rewrite to _executeOffsetIncreaseAndAssert; see `MockYRFConfigTimelock`.
+            if (day == 5) _increaseOffsetAndAssert();
             if (day == 9) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
 
             // The two intra-day beats: the facility only advances its epoch
@@ -331,31 +330,36 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
     }
 
-    /// @notice Day 5: the yrf_admin queues the Clearinghouse v1.1 offset increase through the
-    ///         config timelock; the direct facility path is closed for the yrf_admin.
-    function _queueOffsetIncrease() internal {
+    /// @notice Day 4: the direct facility path of the offset increase is closed for the
+    ///         yrf_admin, which holds no configuration authority over the facility.
+    /// @dev TODO: the yrf_admin queues the Clearinghouse v1.1 offset increase through the
+    ///      config timelock.
+    function _assertOffsetIncreaseUnauthorised() internal {
         vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
         vm.prank(yrfAdmin);
         yieldRepo.increaseClearinghouseOffset(
             CLEARINGHOUSE_V1_1,
             CLEARINGHOUSE_V1_1_OFFSET_INCREASE
         );
-
-        vm.prank(yrfAdmin);
-        offsetActionId = configTimelock.queueIncreaseClearinghouseOffset(
-            CLEARINGHOUSE_V1_1,
-            CLEARINGHOUSE_V1_1_OFFSET_INCREASE
-        );
     }
 
-    /// @notice Day 6: the queued offset increase executes (the day-5 queueing is exactly
-    ///         one timelock delay in the past) and is applied to the projection
-    ///         immediately, and therefore to the next weekly reset, reducing it by the
+    /// @notice Day 5: the Clearinghouse v1.1 offset increase is applied through the address
+    ///         the facility pins as its config timelock, and lands in the projection
+    ///         immediately, and therefore in the next weekly reset, reducing it by the
     ///         interest on the offset delta.
-    function _executeOffsetIncreaseAndAssert() internal {
+    /// @dev TODO: the config timelock policy does not exist yet, so the increase is applied
+    ///      in one call from the pinned address. Rewrite to the queue-and-execute path, one
+    ///      timelock delay apart.
+    function _increaseOffsetAndAssert() internal {
         uint256 projectionBefore = yieldRepo.getNextYield(SUSDS);
 
-        configTimelock.executeQueuedAction(offsetActionId);
+        configTimelock.forward(
+            address(yieldRepo),
+            abi.encodeCall(
+                IYieldRepurchaseFacilityV2.increaseClearinghouseOffset,
+                (CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_OFFSET_INCREASE)
+            )
+        );
 
         assertEq(
             yieldRepo.clearinghouseOffset(CLEARINGHOUSE_V1_1),

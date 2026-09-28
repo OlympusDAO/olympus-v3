@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
@@ -27,7 +27,7 @@ import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {YieldRepurchaseFacilityConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityConfigTimelock.sol";
+import {MockYRFConfigTimelock} from "src/test/mocks/MockYRFConfigTimelock.sol";
 
 // ============ MINIMAL MAINNET INTERFACES ============ //
 
@@ -172,7 +172,6 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         `(1 + MAX_PRICE_PREMIUM) / (1 - INITIAL_DISCOUNT)`.
     uint256 internal constant MAX_PRICE_PREMIUM = 10e16;
     uint32 internal constant GRACE_PERIOD = 5 days;
-    uint48 internal constant CONFIG_TIMELOCK_DELAY = 1 days;
 
     /// @notice The sUSDS yield buyback share (100%, matching the v1.2 behaviour).
     uint256 internal constant SUSDS_BUYBACK_SHARE = 1e18;
@@ -219,7 +218,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // ============ DEPLOYED V2 STACK ============ //
 
     BackingOracle internal backingOracle;
-    YieldRepurchaseFacilityConfigTimelock internal configTimelock;
+    /// @dev TODO: replace with the config timelock policy; see `MockYRFConfigTimelock`.
+    MockYRFConfigTimelock internal configTimelock;
     YieldRepurchaseFacilityV2 internal yieldRepo;
 
     // ============ TEST ACCOUNTS ============ //
@@ -468,14 +468,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         backingOracle = new BackingOracle(kernel);
         vm.label(address(backingOracle), "BackingOracle");
 
-        // The facility pins the config timelock as an immutable address, so the timelock is
-        // deployed first and wired to the facility afterwards.
-        configTimelock = new YieldRepurchaseFacilityConfigTimelock(
-            kernel,
-            CONFIG_TIMELOCK_DELAY,
-            GRACE_PERIOD
-        );
-        vm.label(address(configTimelock), "YieldRepurchaseFacilityConfigTimelock");
+        // The facility pins the config timelock as an immutable address, so the stand-in is
+        // deployed first.
+        configTimelock = new MockYRFConfigTimelock(kernel);
+        vm.label(address(configTimelock), "MockYRFConfigTimelock");
 
         // The teller is resolved by the facility from the auctioneer
         yieldRepo = new YieldRepurchaseFacilityV2(
@@ -493,7 +489,6 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // Kernel actions are performed by the kernel executor (the DAO MS)
         vm.startPrank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
-        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
         vm.stopPrank();
 
@@ -509,13 +504,10 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         vm.prank(BOND_OWNER);
         auctioneer.setCallbackAuthStatus(address(yieldRepo), true);
 
-        // Wire and enable the config timelock, enable the backing oracle (before the
-        // facility, so that the price gate never sees a zero backing), and enable the
-        // facility itself. `enable` is called before the assets are registered, so that
-        // its cycle reset does not overwrite the migration seeds below.
+        // Enable the backing oracle (before the facility, so that the price gate never sees
+        // a zero backing) and the facility itself. `enable` is called before the assets are
+        // registered, so that its cycle reset does not overwrite the migration seeds below.
         vm.startPrank(TIMELOCK);
-        configTimelock.setFacility(address(yieldRepo));
-        configTimelock.enable("");
         backingOracle.enable(abi.encode(BACKING));
         yieldRepo.enable(
             abi.encode(
