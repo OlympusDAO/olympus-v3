@@ -15,6 +15,7 @@ import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 
 // Libraries
 import {CappedCall} from "src/libraries/CappedCall.sol";
@@ -82,6 +83,9 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      - `seedCycle` (admin, once per `enable` restart, before its first beat) sets the
 ///        epoch counter and seeds the running week's buyback pools with treasury
 ///        withdrawals.
+///
+///      The configuration setters are callable only by the configurator, the
+///      configuration policy bound through `setConfigurator`.
 ///
 ///      The admin role is expected to be held only by the OCG timelock, so every
 ///      admin-gated function of this contract is de-facto timelocked.
@@ -159,15 +163,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice The cached OHM decimals (9 on mainnet).
     uint8 private immutable _OHM_DECIMALS;
 
-    /// @notice The config timelock authorized for the timelocked operational functions.
-    /// @dev The functions `setYieldBuybackShare`, `setInitialDiscount`,
-    ///      `setMaxPricePremium`, `enableAsset`, `disableAsset`, `excludeClearinghouse`,
-    ///      `increaseClearinghouseOffset`, and `decreaseNextYield` trust only this
-    ///      address for the timelocked path, so the yrf_admin reaches them through the
-    ///      timelock's queue.
-    ///      The admin (expected to be held only by the OCG timelock) keeps a direct path to them.
-    address private immutable _TIMELOCK;
-
     // ============ MODULES ============ //
 
     TRSRYv1 internal TRSRY;
@@ -178,6 +173,9 @@ contract YieldRepurchaseFacilityV2 is
     uint8 internal _oracleDecimals;
 
     // ============ STATE ============ //
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    address public override configurator;
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     address public override backingOracle;
@@ -259,9 +257,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      consistent by construction.
     ///
     ///      Reverts if:
-    ///      - `kernel_`, `ohm_`, `timelock_`, `backingOracle_`, or `bondAuctioneer_` is
-    ///        the zero address.
-    ///      - The timelock does not report `kernel_` as its kernel.
+    ///      - `kernel_`, `ohm_`, `backingOracle_`, or `bondAuctioneer_` is the zero
+    ///        address.
     ///      - The backing oracle does not report `kernel_` as its kernel.
     ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - The auctioneer reports the zero address as its teller.
@@ -270,31 +267,20 @@ contract YieldRepurchaseFacilityV2 is
     /// @param ohm_ The OHM token address.
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
-    /// @param timelock_ The config timelock policy authorized for the operational functions.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
     constructor(
         Kernel kernel_,
         address ohm_,
         address backingOracle_,
         address bondAuctioneer_,
-        address timelock_,
         uint32 gracePeriod_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(ohm_, "ohm");
-        _requireNonzeroAddress(timelock_, "timelock");
         _requireValidGracePeriod(gracePeriod_);
-
-        // The timelock is pinned immutably, so a timelock wired to a different kernel is
-        // rejected at deployment. The timelock's reported kernel is read directly: the
-        // timelock policy does not have to be active yet. The registry-side check of the
-        // pairing runs in the timelock's `setFacility`.
-        if (address(Policy(timelock_).kernel()) != address(kernel_))
-            revert IYieldRepurchaseFacilityV2_TimelockKernelMismatch(timelock_);
 
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
-        _TIMELOCK = timelock_;
 
         _setBackingOracle(backingOracle_);
         _setBondContracts(bondAuctioneer_);
@@ -375,9 +361,10 @@ contract YieldRepurchaseFacilityV2 is
         _;
     }
 
-    /// @notice Reverts unless the caller is the config timelock or holds the admin role.
-    modifier onlyTimelockOrAdminRole() {
-        _requireAuthorized(msg.sender != _TIMELOCK && !_isAdmin(msg.sender));
+    /// @notice Reverts unless the caller is the configurator and the reentrancy guard is not
+    ///         held.
+    modifier onlyConfigurator() {
+        _requireConfigurator();
         _;
     }
 
@@ -398,6 +385,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The payload is shorter than the minimum
     ///        `abi.encode(uint256, uint256, NextYieldSeed[])`.
     ///      - The payload does not `abi.decode` as `(uint256, uint256, NextYieldSeed[])`.
+    ///      - The configurator is unset, is not an active policy of the facility's
+    ///        kernel, does not report the facility's kernel as its own, does not
+    ///        advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
+    ///        facility as its `facility()`.
     ///      - The facility is not authorized as a market callback on the bond
     ///        auctioneer.
     ///      - The initial discount is not less than 100% (`1e18`).
@@ -408,6 +399,7 @@ contract YieldRepurchaseFacilityV2 is
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
+        _requireValidConfigurator(configurator);
         _requireCallbackAuthorized();
 
         (
@@ -508,9 +500,18 @@ contract YieldRepurchaseFacilityV2 is
     ///      `nextYield` is withdrawn into the buyback pool exactly once per reset
     ///      regardless of the downtime. The grace-window check runs through `super`. The
     ///      callback authorization is not re-checked: a missing authorization degrades
-    ///      to market submissions the auctioneer rejects.
+    ///      to market submissions the auctioneer rejects. The configurator binding is
+    ///      re-checked with the conditions of `setConfigurator`.
+    ///
+    ///      Reverts if:
+    ///      - The grace window since the disable has elapsed.
+    ///      - The configurator is unset, is not an active policy of the facility's
+    ///        kernel, does not report the facility's kernel as its own, does not
+    ///        advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
+    ///        facility as its `facility()`.
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
+        _requireValidConfigurator(configurator);
     }
 
     /// @inheritdoc ReEnablerGracePeriod
@@ -1162,14 +1163,14 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ADMIN FUNCTIONS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
+    /// @dev Callable only by the configurator.
     ///
     ///      The asset is registered in the enabled state. The validation and the
     ///      registration are performed by the linked `YRFAssetConfigLib`.
     ///
     ///      The function reverts if:
-    ///      - The caller does not hold the admin role.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault address is the zero address.
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset.
@@ -1192,7 +1193,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 nextYield_,
         bool sellShares_,
         bool setAsBackingVault_
-    ) external override onlyAdminRole {
+    ) external override onlyConfigurator {
         YRFAssetConfigLib.addAsset(
             _assetConfigs,
             _vaults,
@@ -1267,19 +1268,19 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
+    /// @dev Callable only by the configurator.
     ///
     ///      The vault's tracked live bond market, if any is left, is closed best-effort:
     ///      a revert of the auctioneer is absorbed and the market is left to expire, its
     ///      purchases reverting in `callback` for the de-registered asset.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the admin role.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The vault is currently enabled.
     ///      - The vault is currently set as the `backingVault`.
-    function removeAsset(address vault_) external override onlyAdminRole {
+    function removeAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireAssetDisabled(config);
         _requireNotBackingVault(vault_);
@@ -1326,7 +1327,26 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
     /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
+    ///      function is de-facto timelocked. The binding is revalidated by `enable` and
+    ///      `reEnable`.
+    ///
+    ///      Reverts if:
+    ///      - The contract is enabled.
+    ///      - The caller does not hold the admin role.
+    ///      - `configurator_` is the zero address, is not an active policy of the
+    ///        facility's kernel, does not report the facility's kernel as its own, does
+    ///        not advertise `IYieldRepurchaseFacilityV2Config`, or does not report this
+    ///        facility as its `facility()`.
+    // forge-lint: disable-next-item(missing-zero-check)
+    function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
+        _requireValidConfigurator(configurator_);
+
+        configurator = configurator_;
+        emit ConfiguratorSet(configurator_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2
+    /// @dev Callable only by the configurator.
     ///
     ///      The vault's tracked live bond market is closed before the change; the
     ///      close is not isolated, so a revert of the auctioneer reverts the change.
@@ -1340,12 +1360,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      bid opens no market.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the admin role.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The stored mode already equals `sellShares_`.
     ///      - `sellShares_` is set while the vault is the backing vault.
     ///      - The close of the vault's tracked live bond market reverts.
-    function setSellShares(address vault_, bool sellShares_) external override onlyAdminRole {
+    function setSellShares(address vault_, bool sellShares_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (config.sellShares == sellShares_)
             revert IYieldRepurchaseFacilityV2_SellSharesUnchanged();
@@ -1362,9 +1383,13 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
-    function setBackingVault(address vault_) external override onlyAdminRole {
+    /// @dev Reverts if:
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The vault is not registered.
+    ///      - The asset is disabled.
+    ///      - The asset sells vault shares.
+    function setBackingVault(address vault_) external override onlyConfigurator {
         _setBackingVault(vault_, _requireRegistered(vault_));
     }
 
@@ -1455,8 +1480,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
+    /// @dev Callable only by the configurator.
     ///
     ///      The offset is subtracted from the Clearinghouse's principal receivables when
     ///      the weekly reset projects the next yield, so it is expected that a correction
@@ -1464,28 +1488,27 @@ contract YieldRepurchaseFacilityV2 is
     ///      the projected yield.
     ///
     ///      Reverts if:
-    ///      - The caller does not hold the admin role.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The Clearinghouse is the zero address.
     ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
     function setClearinghouseOffset(
         address clearinghouse_,
         uint256 offset_
-    ) external override onlyAdminRole {
+    ) external override onlyConfigurator {
         _setClearinghouseOffset(clearinghouse_, offset_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a change is
-    ///      de-facto timelocked.
-    ///
-    ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    /// @dev Reverts if:
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The share exceeds 100% (`1e18`).
     function setYieldBuybackShare(
         address vault_,
         uint256 newShare_
-    ) external override onlyTimelockOrAdminRole {
+    ) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireValidYieldBuybackShare(newShare_);
 
@@ -1494,19 +1517,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a change is
-    ///      de-facto timelocked.
-    ///
-    ///      The only enforced bound is below 100% (`1e18`). A discount large enough to
+    /// @dev The only enforced bound is below 100% (`1e18`). A discount large enough to
     ///      overflow the market scale computation degrades to skipped markets
     ///      (`DailyCycleSkipped` or `MarketCreationFailed`) and does not block the beat.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The initial discount is not less than 100% (`1e18`).
-    function setInitialDiscount(
-        uint256 initialDiscount_
-    ) external override onlyTimelockOrAdminRole {
+    function setInitialDiscount(uint256 initialDiscount_) external override onlyConfigurator {
         _setInitialDiscount(initialDiscount_);
     }
 
@@ -1520,19 +1539,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a change is
-    ///      de-facto timelocked.
-    ///
-    ///      The only enforced bound is at or below 1,000% (`10e18`). The premium widens
+    /// @dev The only enforced bound is at or below 1,000% (`10e18`). The premium widens
     ///      the decay band of the markets created after the change; the markets already
     ///      live keep the band they were created with.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The max price premium is above 1,000% (`10e18`).
-    function setMaxPricePremium(
-        uint256 maxPricePremium_
-    ) external override onlyTimelockOrAdminRole {
+    function setMaxPricePremium(uint256 maxPricePremium_) external override onlyConfigurator {
         _setMaxPricePremium(maxPricePremium_);
     }
 
@@ -1546,26 +1561,26 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so an
-    ///      increase is de-facto timelocked. The offset is read live by the weekly reset
-    ///      projection, so an increase that executes only after a reset misses that
-    ///      projection: the following weekly funding then overstates the yield by one week
-    ///      of interest on the missing offset. When that matters, the emergency role can
-    ///      `disable` the facility before the reset beat (the cycle freezes in place),
-    ///      let the queued increase execute, and have the yrf_admin `reEnable`; the reset
-    ///      then runs with the offset applied.
+    /// @dev The offset is read live by the weekly reset projection, so an increase
+    ///      applied only after a reset misses that projection: the following weekly
+    ///      funding then overstates the yield by one week of interest on the missing
+    ///      offset. When that matters, the emergency role can `disable` the facility
+    ///      before the reset beat (the cycle freezes in place), the increase can be
+    ///      applied while the facility is disabled, and the yrf_admin can `reEnable`; the
+    ///      reset then runs with the offset applied.
     ///
-    ///      The caller can only increase the offset, which reduces the projected yield;
-    ///      lowering the offset requires the admin, via `setClearinghouseOffset`.
+    ///      The function only increases the offset, which reduces the projected yield;
+    ///      the offset is lowered through `setClearinghouseOffset`.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The Clearinghouse is the zero address.
     ///      - The resulting offset exceeds the current `principalReceivables`.
     function increaseClearinghouseOffset(
         address clearinghouse_,
         uint256 additionalOffset_
-    ) external override onlyTimelockOrAdminRole {
+    ) external override onlyConfigurator {
         _setClearinghouseOffset(
             clearinghouse_,
             _receivablesOffsets[clearinghouse_] + additionalOffset_
@@ -1573,8 +1588,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a
-    ///      correction is de-facto timelocked. The function corrects a stored projection
+    /// @dev The function corrects a stored projection
     ///      that is known to overstate the yield, for example when a receivables offset
     ///      executed only after the weekly reset that made the projection. The stored
     ///      value is consumed by the following weekly reset, so the correction can be
@@ -1584,7 +1598,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      reverts instead of cutting the fresh value.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The stored next yield does not equal `expectedNextYield_`.
     ///      - `newNextYield_` is not lower than the stored value.
@@ -1592,7 +1607,7 @@ contract YieldRepurchaseFacilityV2 is
         address vault_,
         uint256 expectedNextYield_,
         uint256 newNextYield_
-    ) external override onlyTimelockOrAdminRole {
+    ) external override onlyConfigurator {
         ReserveAsset storage config = _validateDecreaseNextYield(
             vault_,
             expectedNextYield_,
@@ -1603,8 +1618,7 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev The admin role is expected to be held only by the OCG timelock, so the
-    ///      function is de-facto timelocked.
+    /// @dev Callable only by the configurator.
     ///
     ///      By default only Clearinghouses whose reserve matches the backing reserve are
     ///      counted. Inclusion is meant for Clearinghouses whose receivables accrue to the
@@ -1622,11 +1636,12 @@ contract YieldRepurchaseFacilityV2 is
     ///      to a zero contribution instead of blocking the reset.
     ///
     ///      The function reverts if:
-    ///      - The caller does not hold the admin role.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The Clearinghouse is already included.
     ///      - `clearinghouse_` is not present in the CHREG registry.
     ///      - The `principalReceivables()` read reverts.
-    function includeClearinghouse(address clearinghouse_) external override onlyAdminRole {
+    function includeClearinghouse(address clearinghouse_) external override onlyConfigurator {
         if (_includedClearinghouses[clearinghouse_])
             revert IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
 
@@ -1637,17 +1652,15 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so an
-    ///      exclusion is de-facto timelocked. The immediate defensive lever against a
-    ///      misbehaving Clearinghouse is the emergency `disable` of the facility, which
-    ///      freezes the cycle in place until the queued correction executes.
+    /// @dev The immediate defensive lever against a misbehaving Clearinghouse is the
+    ///      emergency `disable` of the facility, which freezes the cycle in place until
+    ///      the exclusion is applied.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The Clearinghouse is not included.
-    function excludeClearinghouse(
-        address clearinghouse_
-    ) external override onlyTimelockOrAdminRole {
+    function excludeClearinghouse(address clearinghouse_) external override onlyConfigurator {
         _requireClearinghouseIncluded(clearinghouse_);
 
         _includedClearinghouses[clearinghouse_] = false;
@@ -1655,19 +1668,17 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a re-enable is
-    ///      de-facto timelocked.
-    ///
-    ///      The next yield and the unfunded carry are reset to zero and the yield
+    /// @dev The next yield and the unfunded carry are reset to zero and the yield
     ///      snapshots are refreshed, so a value left over from before the asset was
     ///      disabled does not enter the funding target of the weekly reset; the yield
     ///      projection resumes at the following weekly reset.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
-    function enableAsset(address vault_) external override onlyTimelockOrAdminRole {
+    function enableAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireAssetDisabled(config);
 
@@ -1680,20 +1691,20 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2
-    /// @dev Reachable through the config timelock or directly by the admin, so a
-    ///      per-asset halt is de-facto timelocked. An immediate halt of the whole
-    ///      facility remains available to the emergency role through `disable`.
+    /// @dev An immediate halt of the whole facility is available to the emergency role
+    ///      through `disable`.
     ///
     ///      The vault's tracked live bond market is closed, best-effort: a revert of the
     ///      auctioneer is absorbed and the market is left to expire, its purchases
     ///      reverting in `callback` for the disabled asset.
     ///
     ///      Reverts if:
-    ///      - The caller is neither the config timelock nor the admin.
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
     ///      - The vault is already disabled.
     ///      - The vault is the backing vault.
-    function disableAsset(address vault_) external override onlyTimelockOrAdminRole {
+    function disableAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireAssetEnabled(config);
         _requireNotBackingVault(vault_);
@@ -1962,6 +1973,29 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
     }
 
+    /// @notice Reverts unless `configurator_` is a configuration policy bound to this
+    ///         facility.
+    /// @dev Reverts with `IYieldRepurchaseFacilityV2_InvalidConfigurator` if:
+    ///      - `configurator_` is the zero address.
+    ///      - `configurator_` is not an active policy of the facility's kernel.
+    ///      - `configurator_` does not report the facility's kernel as its own.
+    ///      - `supportsInterface` returns `false` for `IYieldRepurchaseFacilityV2Config`.
+    ///      - `facility()` does not return this facility.
+    ///
+    ///      An active policy that does not implement `supportsInterface` or `facility()`
+    ///      reverts in the call itself.
+    function _requireValidConfigurator(address configurator_) private view {
+        if (
+            configurator_ == address(0) ||
+            !kernel.isPolicyActive(Policy(configurator_)) ||
+            address(Policy(configurator_).kernel()) != address(kernel) ||
+            !IERC165(configurator_).supportsInterface(
+                type(IYieldRepurchaseFacilityV2Config).interfaceId
+            ) ||
+            IYieldRepurchaseFacilityV2Config(configurator_).facility() != address(this)
+        ) revert IYieldRepurchaseFacilityV2_InvalidConfigurator(configurator_);
+    }
+
     /// @notice Reverts unless the asset is enabled.
     function _requireAssetEnabled(ReserveAsset storage config_) private view {
         if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
@@ -1993,6 +2027,16 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Returns the `token_` balance of `account_`.
     function _balanceOf(address token_, address account_) private view returns (uint256) {
         return IERC20(token_).balanceOf(account_);
+    }
+
+    /// @notice Reverts unless the caller is the configurator and the reentrancy guard is not
+    ///         held.
+    /// @dev The guard is held by `execute`, `callback`, and `seedCycle`, so a configurator
+    ///      call made during one of them reverts with `ReentrancyGuardReentrantCall`.
+    function _requireConfigurator() private view {
+        if (msg.sender != configurator)
+            revert IYieldRepurchaseFacilityV2_OnlyConfigurator(msg.sender);
+        if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
     }
 
     /// @notice Reverts unless the caller is `caller_`.
@@ -2109,11 +2153,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2
     function isCycleSeedable() external view override returns (bool) {
         return _cycleSeedable;
-    }
-
-    /// @inheritdoc IYieldRepurchaseFacilityV2
-    function timelock() external view override returns (address) {
-        return _TIMELOCK;
     }
 
     // ============ RESCUE ============ //

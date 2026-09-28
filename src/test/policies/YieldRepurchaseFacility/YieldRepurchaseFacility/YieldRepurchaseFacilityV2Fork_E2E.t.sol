@@ -7,7 +7,6 @@ import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_E2E
@@ -124,7 +123,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     uint256 internal constant TRSRY_OUTFLOW_SUSDS_SHARES = 1_400_000e18;
 
     /// @notice The additional receivables offset applied on day 5 through the facility's
-    ///         pinned config timelock.
+    ///         configurator.
     uint256 internal constant CLEARINGHOUSE_V1_1_OFFSET_INCREASE = 2_000_000e18;
 
     // ============ SETUP VALIDATION ============ //
@@ -158,7 +157,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.backingOracle(), address(backingOracle), "backing oracle");
         assertEq(yieldRepo.bondTeller(), BOND_TELLER, "bondTeller");
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
-        assertEq(yieldRepo.timelock(), address(configTimelock), "timelock");
+        assertEq(yieldRepo.configurator(), address(yieldRepoConfig), "configurator");
         assertEq(yieldRepo.initialDiscount(), INITIAL_DISCOUNT, "initial discount");
         assertEq(yieldRepo.maxPricePremium(), MAX_PRICE_PREMIUM, "max price premium");
         assertEq(backingOracle.backing(), BACKING, "backing value");
@@ -247,9 +246,10 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
             // Scenario events
             if (day == 2) _trsryUsdsInflow(TRSRY_INFLOW_USDS);
-            // TODO: rewrite to _queueOffsetIncrease; see `MockYRFConfigTimelock`.
+            // TODO: rewrite to _queueOffsetIncrease; see `MockYieldRepurchaseFacilityV2Config`.
             if (day == 4) _assertOffsetIncreaseUnauthorised();
-            // TODO: rewrite to _executeOffsetIncreaseAndAssert; see `MockYRFConfigTimelock`.
+            // TODO: rewrite to _executeOffsetIncreaseAndAssert; see
+            // `MockYieldRepurchaseFacilityV2Config`.
             if (day == 5) _increaseOffsetAndAssert();
             if (day == 9) _trsrySusdsOutflow(TRSRY_OUTFLOW_SUSDS_SHARES);
 
@@ -335,7 +335,12 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     /// @dev TODO: the yrf_admin queues the Clearinghouse v1.1 offset increase through the
     ///      config timelock.
     function _assertOffsetIncreaseUnauthorised() internal {
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_OnlyConfigurator.selector,
+                yrfAdmin
+            )
+        );
         vm.prank(yrfAdmin);
         yieldRepo.increaseClearinghouseOffset(
             CLEARINGHOUSE_V1_1,
@@ -343,18 +348,17 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         );
     }
 
-    /// @notice Day 5: the Clearinghouse v1.1 offset increase is applied through the address
-    ///         the facility pins as its config timelock, and lands in the projection
+    /// @notice Day 5: the Clearinghouse v1.1 offset increase is applied through the
+    ///         facility's configurator, and lands in the projection
     ///         immediately, and therefore in the next weekly reset, reducing it by the
     ///         interest on the offset delta.
-    /// @dev TODO: the config timelock policy does not exist yet, so the increase is applied
-    ///      in one call from the pinned address. Rewrite to the queue-and-execute path, one
-    ///      timelock delay apart.
+    /// @dev TODO: the config policy and its timelock do not exist yet, so the increase is
+    ///      applied in one call from the configurator stand-in. Rewrite to the
+    ///      queue-and-execute path, one timelock delay apart.
     function _increaseOffsetAndAssert() internal {
         uint256 projectionBefore = yieldRepo.getNextYield(SUSDS);
 
-        configTimelock.forward(
-            address(yieldRepo),
+        _configure(
             abi.encodeCall(
                 IYieldRepurchaseFacilityV2.increaseClearinghouseOffset,
                 (CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_OFFSET_INCREASE)

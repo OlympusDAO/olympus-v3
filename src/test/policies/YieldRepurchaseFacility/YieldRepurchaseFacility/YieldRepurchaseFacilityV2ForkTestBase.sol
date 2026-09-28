@@ -27,7 +27,7 @@ import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
-import {MockYRFConfigTimelock} from "src/test/mocks/MockYRFConfigTimelock.sol";
+import {MockYieldRepurchaseFacilityV2Config} from "src/test/mocks/MockYieldRepurchaseFacilityV2Config.sol";
 
 // ============ MINIMAL MAINNET INTERFACES ============ //
 
@@ -218,8 +218,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // ============ DEPLOYED V2 STACK ============ //
 
     BackingOracle internal backingOracle;
-    /// @dev TODO: replace with the config timelock policy; see `MockYRFConfigTimelock`.
-    MockYRFConfigTimelock internal configTimelock;
+    /// @dev TODO: replace with the config policy; see `MockYieldRepurchaseFacilityV2Config`.
+    MockYieldRepurchaseFacilityV2Config internal yieldRepoConfig;
     YieldRepurchaseFacilityV2 internal yieldRepo;
 
     // ============ TEST ACCOUNTS ============ //
@@ -468,10 +468,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         backingOracle = new BackingOracle(kernel);
         vm.label(address(backingOracle), "BackingOracle");
 
-        // The facility pins the config timelock as an immutable address, so the stand-in is
-        // deployed first.
-        configTimelock = new MockYRFConfigTimelock(kernel);
-        vm.label(address(configTimelock), "MockYRFConfigTimelock");
+        yieldRepoConfig = new MockYieldRepurchaseFacilityV2Config(kernel);
+        vm.label(address(yieldRepoConfig), "MockYieldRepurchaseFacilityV2Config");
 
         // The teller is resolved by the facility from the auctioneer
         yieldRepo = new YieldRepurchaseFacilityV2(
@@ -479,7 +477,6 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             OHM,
             address(backingOracle),
             BOND_AUCTIONEER,
-            address(configTimelock),
             GRACE_PERIOD
         );
         vm.label(address(yieldRepo), "YieldRepoV2");
@@ -489,8 +486,13 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // Kernel actions are performed by the kernel executor (the DAO MS)
         vm.startPrank(DAO_MS);
         kernel.executeAction(Actions.ActivatePolicy, address(backingOracle));
+        kernel.executeAction(Actions.ActivatePolicy, address(yieldRepoConfig));
         kernel.executeAction(Actions.ActivatePolicy, address(yieldRepo));
         vm.stopPrank();
+
+        // The config policy is bound to the facility before the facility binds it as the
+        // configurator, which requires the reverse link.
+        yieldRepoConfig.setFacility(address(yieldRepo));
 
         // Roles are granted by the RolesAdmin admin (the OCG timelock). The admin,
         // emergency, and heart roles already exist on the live actors.
@@ -508,6 +510,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // a zero backing) and the facility itself. `enable` is called before the assets are
         // registered, so that its cycle reset does not overwrite the migration seeds below.
         vm.startPrank(TIMELOCK);
+        yieldRepo.setConfigurator(address(yieldRepoConfig));
         backingOracle.enable(abi.encode(BACKING));
         yieldRepo.enable(
             abi.encode(
@@ -564,37 +567,58 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _registerAssets() internal {
-        vm.startPrank(TIMELOCK);
-        yieldRepo.addAsset(
-            SUSDS,
-            SUSDS_BUYBACK_SHARE,
-            susdsSeedBalance,
-            susdsSeedRate,
-            susdsSeedYield,
-            false, // sellShares
-            true // setAsBackingVault
+        _configure(
+            abi.encodeCall(
+                IYieldRepurchaseFacilityV2.addAsset,
+                (
+                    SUSDS,
+                    SUSDS_BUYBACK_SHARE,
+                    susdsSeedBalance,
+                    susdsSeedRate,
+                    susdsSeedYield,
+                    false, // sellShares
+                    true // setAsBackingVault
+                )
+            )
         );
-        yieldRepo.addAsset(
-            SUSDE,
-            SUSDE_BUYBACK_SHARE,
-            susdeSeedBalance,
-            susdeSeedRate,
-            susdeSeedYield,
-            true, // sellShares: sUSDe redeem reverts while the cooldown is active
-            false
+        _configure(
+            abi.encodeCall(
+                IYieldRepurchaseFacilityV2.addAsset,
+                (
+                    SUSDE,
+                    SUSDE_BUYBACK_SHARE,
+                    susdeSeedBalance,
+                    susdeSeedRate,
+                    susdeSeedYield,
+                    true, // sellShares: sUSDe redeem reverts while the cooldown is active
+                    false
+                )
+            )
         );
-        vm.stopPrank();
     }
 
     function _configureClearinghouses() internal {
         // The DAI-denominated clearinghouses accrue to the backing reserve through the
         // 1:1 DAI->USDS migration, so they are included explicitly; the v1.1 inclusion is
         // accompanied by an offset for its phantom receivables.
-        vm.startPrank(TIMELOCK);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1);
-        yieldRepo.includeClearinghouse(CLEARINGHOUSE_V1_1);
-        yieldRepo.setClearinghouseOffset(CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_INITIAL_OFFSET);
-        vm.stopPrank();
+        _configure(
+            abi.encodeCall(IYieldRepurchaseFacilityV2.includeClearinghouse, (CLEARINGHOUSE_V1))
+        );
+        _configure(
+            abi.encodeCall(IYieldRepurchaseFacilityV2.includeClearinghouse, (CLEARINGHOUSE_V1_1))
+        );
+        _configure(
+            abi.encodeCall(
+                IYieldRepurchaseFacilityV2.setClearinghouseOffset,
+                (CLEARINGHOUSE_V1_1, CLEARINGHOUSE_V1_1_INITIAL_OFFSET)
+            )
+        );
+    }
+
+    /// @notice Applies a configurator-restricted call to the facility.
+    /// @dev TODO: route through the config policy once it replaces the stand-in.
+    function _configure(bytes memory data_) internal {
+        yieldRepoConfig.forward(address(yieldRepo), data_);
     }
 
     function _swapHeartTask() internal {

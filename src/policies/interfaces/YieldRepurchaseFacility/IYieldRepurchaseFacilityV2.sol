@@ -27,10 +27,10 @@ pragma solidity >=0.8.24;
 ///      from the balance-based convention: purchased OHM is tracked by a counter and
 ///      donated OHM is never burned against a treasury withdrawal.
 ///
-///      Role restrictions are stated per function. Functions restricted to the YRF
-///      timelock and the admin role are callable by the policy returned by `timelock()`
-///      or by an admin role holder; the yrf_admin role reaches them through the
-///      timelock's queue. The facility also implements: `IPeriodicTask.execute`,
+///      Role restrictions are stated per function. Functions restricted to the
+///      configurator are callable only by the configuration policy returned by
+///      `configurator()`, and revert while `execute`, `callback`, or `seedCycle` is
+///      executing. The facility also implements: `IPeriodicTask.execute`,
 ///      restricted to the heart role; `IBondCallback.callback`, restricted to the
 ///      configured teller; `IEnabler.enable`, restricted to the admin role, and
 ///      `IEnabler.disable`, restricted to the emergency and admin roles;
@@ -84,6 +84,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when the backing oracle is set.
     /// @param backingOracle The backing oracle policy.
     event BackingOracleSet(address indexed backingOracle);
+
+    /// @notice Emitted when the configurator is set.
+    /// @param configurator The configuration policy.
+    event ConfiguratorSet(address indexed configurator);
 
     /// @notice Emitted when the backing vault is set.
     /// @param backingVault The vault designated as the backing vault.
@@ -389,10 +393,15 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the seeded epoch is not below the weekly epoch count of 21.
     error IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
 
-    /// @notice Thrown by the constructor when the supplied timelock does not report the
-    ///         facility's kernel as its own.
-    /// @param timelock The rejected timelock address.
-    error IYieldRepurchaseFacilityV2_TimelockKernelMismatch(address timelock);
+    /// @notice Thrown when a configurator-restricted function is called by any other caller.
+    /// @param caller The rejected caller.
+    error IYieldRepurchaseFacilityV2_OnlyConfigurator(address caller);
+
+    /// @notice Thrown when the configurator is unset, is not an active policy of the
+    ///         facility's kernel, does not advertise `IYieldRepurchaseFacilityV2Config`, or
+    ///         is not bound to the facility.
+    /// @param configurator The rejected configurator address.
+    error IYieldRepurchaseFacilityV2_InvalidConfigurator(address configurator);
 
     /// @notice Thrown when a proposed backing oracle does not report the facility's
     ///         kernel as its own or, on the admin setter path, is not an active policy
@@ -466,7 +475,7 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
     ///         yield and designating it as the backing vault.
-    /// @dev Callable by the admin role. The asset is registered in the enabled state. The
+    /// @dev Callable by the configurator. The asset is registered in the enabled state. The
     ///      vault's share decimals must equal its reserve decimals, the reserve decimals
     ///      must not exceed 18, the reserve must resolve to a non-zero OHM price through
     ///      the PRICE module, and a sell-shares vault cannot be designated as the backing
@@ -533,7 +542,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         best-effort basis, transferring the facility's balances of the vault
     ///         shares and its reserve to the treasury, and deleting the per-vault
     ///         configuration and accounting.
-    /// @dev Callable by the admin role. The vault must be disabled and must not be the
+    /// @dev Callable by the configurator. The vault must be disabled and must not be the
     ///      backing vault. Emits `AssetRemoved`.
     /// @param vault_ The vault to de-register.
     function removeAsset(address vault_) external;
@@ -547,9 +556,19 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param backingOracle_ The backing oracle policy; must not be the zero address.
     function setBackingOracle(address backingOracle_) external;
 
+    /// @notice Sets the configurator: the configuration policy that is the only caller of
+    ///         the configurator-restricted functions.
+    /// @dev Callable by the admin role, only while the facility is disabled. The
+    ///      configurator must be an active policy of the facility's kernel, advertise
+    ///      `IYieldRepurchaseFacilityV2Config` through ERC165, and report this facility as
+    ///      its `facility()`. `enable` and `reEnable` check the same conditions. Emits
+    ///      `ConfiguratorSet`.
+    /// @param configurator_ The configuration policy.
+    function setConfigurator(address configurator_) external;
+
     /// @notice Sets whether the vault's bond markets pay out the vault shares instead of
     ///         the reserve.
-    /// @dev Callable by the admin role. The backing vault cannot sell shares. The
+    /// @dev Callable by the configurator. The backing vault cannot sell shares. The
     ///      vault's tracked live bond market is closed before the change, and a failing
     ///      close reverts the change. The per-vault accounting is denominated in
     ///      reserve units in both modes and is not affected; the held balances are
@@ -567,7 +586,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         includes the Clearinghouse interest, its protocol balance includes the
     ///         active Clearinghouses, and the purchased OHM is burned against
     ///         withdrawals from it.
-    /// @dev Callable by the admin role. The vault must be registered, enabled, and not
+    /// @dev Callable by the configurator. The vault must be registered, enabled, and not
     ///      sell-shares. The backing vault cannot be disabled or removed while
     ///      designated, and the designation can only be replaced, not cleared. Emits
     ///      `BackingVaultSet`.
@@ -593,7 +612,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         subtracted from the Clearinghouse's `principalReceivables` when the weekly
     ///         reset projects the yield, neutralizing receivables that do not accrue
     ///         interest to the treasury.
-    /// @dev Callable by the admin role. The offset is validated against the current
+    /// @dev Callable by the configurator. The offset is validated against the current
     ///      `principalReceivables` and may be set in both directions. Emits
     ///      `ClearinghouseOffsetSet`.
     /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
@@ -601,9 +620,9 @@ interface IYieldRepurchaseFacilityV2 {
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
 
     /// @notice Sets the yield buyback share of a registered vault.
-    /// @dev Callable by the config timelock and the admin role. The share multiplies the
-    ///      yield projected at the weekly reset; the stored next yield is not affected.
-    ///      Emits `YieldBuybackShareSet`.
+    /// @dev Callable by the configurator. The share multiplies the yield projected at the
+    ///      weekly reset; the stored next yield is not affected. Emits
+    ///      `YieldBuybackShareSet`.
     /// @param vault_ The registered vault.
     /// @param newShare_ The new share (`1e18` = 100%); must not exceed `1e18`.
     function setYieldBuybackShare(address vault_, uint256 newShare_) external;
@@ -611,7 +630,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Sets the discount applied to the oracle price when a bond market opens:
     ///         the market's initial price corresponds to the oracle price reduced by the
     ///         discount.
-    /// @dev Callable by the config timelock and the admin role. Emits `InitialDiscountSet`.
+    /// @dev Callable by the configurator. Emits `InitialDiscountSet`.
     /// @param initialDiscount_ The new discount (`1e18` = 100%); must be less than `1e18`.
     function setInitialDiscount(uint256 initialDiscount_) external;
 
@@ -619,8 +638,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///         price is placed: the market decays from its initial price down to that
     ///         minimum, so the premium caps the reserve paid for one OHM at
     ///         `oraclePrice * (1 + maxPricePremium)`.
-    /// @dev Callable by the config timelock and the admin role. Emits
-    ///      `MaxPricePremiumSet`.
+    /// @dev Callable by the configurator. Emits `MaxPricePremiumSet`.
     ///
     ///      The premium is measured from the oracle price and is therefore independent
     ///      of the initial discount: the discount sets where a market opens, and the
@@ -637,10 +655,10 @@ interface IYieldRepurchaseFacilityV2 {
     function setMaxPricePremium(uint256 maxPricePremium_) external;
 
     /// @notice Increases the cumulative receivables offset of a Clearinghouse.
-    /// @dev Callable by the config timelock and the admin role. The resulting offset is
-    ///      validated against the current `principalReceivables`. This path can only
-    ///      increase the offset, which reduces the projected yield; lowering the offset
-    ///      requires the admin role, via `setClearinghouseOffset`. Emits
+    /// @dev Callable by the configurator. The resulting offset is validated against the
+    ///      current `principalReceivables`. This path can only increase the offset, which
+    ///      reduces the projected yield; the offset is lowered through
+    ///      `setClearinghouseOffset`. Emits
     ///      `ClearinghouseOffsetSet`.
     /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
     /// @param additionalOffset_ The amount added to the existing offset, in the
@@ -653,7 +671,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Lowers the stored next yield of a registered vault, correcting a
     ///         projection that overstates the yield before the next weekly reset
     ///         withdraws it into the buyback pool.
-    /// @dev Callable by the config timelock and the admin role. The expected current value
+    /// @dev Callable by the configurator. The expected current value
     ///      guards against a weekly reset replacing the stored value between the
     ///      correction being prepared and applied: on a mismatch the correction reverts
     ///      instead of cutting the fresh projection. The function lowers only the stored
@@ -672,7 +690,7 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Includes a Clearinghouse in the backing vault's yield projection
     ///         regardless of its reserve token.
-    /// @dev Callable by the admin role. By default only Clearinghouses whose reserve
+    /// @dev Callable by the configurator. By default only Clearinghouses whose reserve
     ///      matches the backing reserve are counted; inclusion is meant for
     ///      Clearinghouses whose receivables accrue to the backing reserve, so the
     ///      receivables must be denominated in a token with the same decimals as the
@@ -688,16 +706,14 @@ interface IYieldRepurchaseFacilityV2 {
 
     /// @notice Removes a Clearinghouse from the backing vault's yield projection,
     ///         restoring the default reserve-token filter for it.
-    /// @dev Callable by the config timelock and the admin role. Emits
-    ///      `ClearinghouseExcluded`.
+    /// @dev Callable by the configurator. Emits `ClearinghouseExcluded`.
     /// @param clearinghouse_ The included Clearinghouse address.
     function excludeClearinghouse(address clearinghouse_) external;
 
     /// @notice Enables a disabled registered vault. The stored next yield and the
     ///         unfunded carry are reset to zero and the yield snapshots are refreshed,
     ///         so the yield projection resumes at the following weekly reset.
-    /// @dev Callable by the config timelock and the admin role. Emits `AssetEnabled` and
-    ///      `NextYieldSet`.
+    /// @dev Callable by the configurator. Emits `AssetEnabled` and `NextYieldSet`.
     /// @param vault_ The vault to enable.
     function enableAsset(address vault_) external;
 
@@ -706,8 +722,8 @@ interface IYieldRepurchaseFacilityV2 {
     ///         basis (a revert of the auctioneer leaves the market to expire), and
     ///         purchases on any remaining market of the vault revert; its buyback pool
     ///         and accounting stay in place.
-    /// @dev Callable by the config timelock and the admin role. The backing vault cannot be
-    ///      disabled. Emits `AssetDisabled`.
+    /// @dev Callable by the configurator. The backing vault cannot be disabled. Emits
+    ///      `AssetDisabled`.
     /// @param vault_ The vault to disable.
     function disableAsset(address vault_) external;
 
@@ -900,10 +916,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @return Whether `seedCycle` is callable.
     function isCycleSeedable() external view returns (bool);
 
-    /// @notice Returns the address of the config timelock policy authorized to call the
-    ///         timelocked operational functions.
-    /// @return The config timelock address.
-    function timelock() external view returns (address);
+    /// @notice Returns the configurator: the configuration policy that is the only caller
+    ///         of the configurator-restricted functions.
+    /// @return The configurator address, or the zero address while none is set.
+    function configurator() external view returns (address);
 
     /// @notice Returns the exclusive upper bound of the re-enable grace window, in
     ///         seconds: the window must be strictly shorter than one weekly cycle.
