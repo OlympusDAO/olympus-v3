@@ -1010,9 +1010,9 @@ contract YieldRepurchaseFacilityV2 is
             : purchased.mulDiv(funded, backingAmount);
         if (ohmToBurn == 0) return;
 
-        _withdrawShares(backingVault_, shares);
-
         _ohmPurchased = purchased - ohmToBurn;
+
+        _withdrawShares(backingVault_, shares);
         IBurnableERC20(address(_OHM)).burn(ohmToBurn);
 
         emit OhmPurchasesProcessed(ohmToBurn, funded);
