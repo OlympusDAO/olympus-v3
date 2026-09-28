@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
+// forge-lint: disable-start(reentrancy-events)
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 import {MockTimelockBatchQueue} from "src/test/policies/utils/TimelockBatchQueue/fixtures/MockTimelockBatchQueue.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
     function test_queueBatchAction_givenEmptyBatch_reverts() public {
@@ -68,7 +78,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         uint48 executableAt = queuedAt + TIMELOCK_DELAY;
         uint48 expiresAt = executableAt + EXECUTION_WINDOW;
 
-        for (uint256 i; i < actions.length; ++i) {
+        for (uint256 i = 0; i < actions.length; ++i) {
             vm.expectEmit(true, true, true, true);
             emit ITimelockBatchQueue.TimelockSubActionQueued(
                 actionId,
@@ -92,7 +102,7 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
 
         ITimelockBatchQueue.QueuedAction memory queued = queue.getQueuedAction(actionId);
         assertEq(queued.actions.length, actions.length, "stored action count");
-        for (uint256 i; i < actions.length; ++i) {
+        for (uint256 i = 0; i < actions.length; ++i) {
             assertEq(queued.actions[i].target, actions[i].target, "stored target");
             assertEq(queued.actions[i].selector, actions[i].selector, "stored selector");
             assertEq(queued.actions[i].payload, actions[i].payload, "stored payload");
@@ -132,3 +142,9 @@ contract TimelockBatchQueueQueueBatchActionTest is TimelockBatchQueueTest {
         queue.getQueuedAction(actionId_);
     }
 }
+
+// forge-lint: disable-end(unused-return,unsafe-typecast,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)
+
+// forge-lint: disable-end(reentrancy-events)

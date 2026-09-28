@@ -7,6 +7,8 @@ import {ConfigOperatorSingleStep} from "src/policies/utils/ConfigOperatorSingleS
 contract ConfigOperatorSingleStepHarness is ConfigOperatorSingleStep {
     address internal immutable _AUTHORIZED_CALLER;
 
+    // Zero selects the base contract's default-deny authorization behavior in tests.
+    // forge-lint: disable-next-line(missing-zero-check)
     constructor(address authorizedCaller_) {
         _AUTHORIZED_CALLER = authorizedCaller_;
     }
@@ -22,5 +24,3 @@ contract ConfigOperatorSingleStepHarness is ConfigOperatorSingleStep {
         return true;
     }
 }
-
-contract ConfigOperatorSingleStepDefaultDenyHarness is ConfigOperatorSingleStep {}

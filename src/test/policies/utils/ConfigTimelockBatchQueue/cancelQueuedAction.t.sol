@@ -6,9 +6,17 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {ConfigTimelockBatchQueueTest} from "src/test/policies/utils/ConfigTimelockBatchQueue/ConfigTimelockBatchQueueTest.sol";
 
 contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQueueTest {
+    uint256 internal constant _CONFIG_VALUE_A = 11;
+    uint256 internal constant _CONFIG_VALUE_B = 22;
+    uint64 internal constant _CORRUPT_OWNER = 99;
+
     function test_givenQueuedBatch_releasesEveryKeyAndClearsEveryGuard() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](2);
-        actions[0] = _queue.makeAction(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        actions[0] = _queue.makeAction(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
         actions[1] = _queue.makeAction(_keys(_KEY_C), _values(33), 2);
         uint64 actionId = _queue.queueBatch(actions);
 
@@ -22,7 +30,7 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
     }
 
     function test_givenReleasedKey_allowsKeyToBeQueuedAgain() public {
-        uint64 cancelledActionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
+        uint64 cancelledActionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
         _queue.cancelQueuedAction(cancelledActionId);
 
         uint64 replacementActionId = _queue.queueConfig(_keys(_KEY_A), _values(12), 2);
@@ -36,7 +44,11 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
     }
 
     function test_givenExpiredAction_releasesRetainedKeys() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
+        uint64 actionId = _queue.queueConfig(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
         ITimelockBatchQueue.QueuedAction memory action = _queue.getQueuedAction(actionId);
         vm.warp(uint256(action.expiresAt) + 1);
 
@@ -57,8 +69,8 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
     }
 
     function test_givenOwnershipMismatch_revertsWithoutDeletingForeignLock() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(11), 1);
-        uint64 corruptOwner = 99;
+        uint64 actionId = _queue.queueConfig(_keys(_KEY_A), _values(_CONFIG_VALUE_A), 1);
+        uint64 corruptOwner = _CORRUPT_OWNER;
         bytes32 scopedKey = _scopedKey(_KEY_A);
         _corruptPendingActionId(scopedKey, actionId, corruptOwner);
 
@@ -81,8 +93,12 @@ contract ConfigTimelockBatchQueueCancelQueuedActionTest is ConfigTimelockBatchQu
     }
 
     function test_givenLaterOwnershipMismatch_rollsBackEarlierRelease() public {
-        uint64 actionId = _queue.queueConfig(_keys(_KEY_A, _KEY_B), _values(11, 22), 1);
-        uint64 corruptOwner = 99;
+        uint64 actionId = _queue.queueConfig(
+            _keys(_KEY_A, _KEY_B),
+            _values(_CONFIG_VALUE_A, _CONFIG_VALUE_B),
+            1
+        );
+        uint64 corruptOwner = _CORRUPT_OWNER;
         bytes32 scopedKeyB = _scopedKey(_KEY_B);
         _corruptPendingActionId(scopedKeyB, actionId, corruptOwner);
 

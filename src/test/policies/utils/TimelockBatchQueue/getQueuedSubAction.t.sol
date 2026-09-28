@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test actions assert their effects directly; return values are intentionally unused.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(unused-return,calls-loop)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 
 contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
     function test_getQueuedSubAction_givenBatchQueued() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
-        for (uint256 i; i < actions.length; ++i) {
+        for (uint256 i = 0; i < actions.length; ++i) {
             (address target, bytes4 selector, bytes memory payload) = queue.getQueuedSubAction(
                 actionId,
                 i
@@ -88,3 +95,7 @@ contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
         queue.getQueuedSubAction(actionId, index_);
     }
 }
+
+// forge-lint: disable-end(unused-return,calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)
