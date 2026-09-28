@@ -1,9 +1,9 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0-only
 // Every emitting path is gated on a role, the configurator, or the facility itself, and the
 // beat, the callback, and the seeding hold the reentrancy guard, so a callee without a
 // privileged role cannot re-enter to reorder or fabricate the logs.
 // forge-lint: disable-start(reentrancy-events)
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
