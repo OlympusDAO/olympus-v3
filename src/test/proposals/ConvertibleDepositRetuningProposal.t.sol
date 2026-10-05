@@ -2,6 +2,8 @@
 pragma solidity ^0.8.0;
 
 // Libraries
+import {Test} from "forge-std/Test.sol";
+import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {console2} from "forge-std/console2.sol";
 
 // Interfaces
@@ -185,5 +187,161 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
             .getAuctionParameters();
         assertEq(params.tickSize, expectedTick, "Auction tick updated");
         assertEq(params.target, expectedTick == 0 ? 0 : expectedTarget, "Auction target updated");
+    }
+}
+
+/// @notice Builder-only regressions: mocked getter responses model drift at one pinned block.
+/// @dev Uses the public build entry point; never executes the synthetic actions on the fork.
+contract ConvertibleDepositRetuningBuilderTest is Test {
+    Addresses internal _addresses;
+    ConvertibleDepositRetuningProposal internal _proposal;
+    address internal _manager;
+    address internal _auctioneer;
+    address internal _facility;
+    address internal _deposits;
+    IERC20 internal _usds;
+
+    function setUp() public {
+        vm.createSelectFork(vm.envOr("RPC_URL", string("mainnet")), 26_127_004);
+        _addresses = new Addresses("./src/proposals/addresses.json");
+        _proposal = new ConvertibleDepositRetuningProposal();
+        _manager = _addresses.getAddress("olympus-policy-emissionmanager-1_2");
+        _auctioneer = _addresses.getAddress("olympus-policy-convertible-deposit-auctioneer-1_0");
+        _facility = _addresses.getAddress("olympus-policy-convertible-deposit-facility-1_0");
+        _deposits = _addresses.getAddress("olympus-policy-deposit-manager-1_0");
+        _usds = IERC20(_addresses.getAddress("external-tokens-USDS"));
+    }
+
+    function _build() internal {
+        _proposal.run(_addresses, address(this), false, true, false, false, false, false);
+    }
+
+    function test_whenUnchangedControlDrifts_reverts(uint8 control, uint256 value) public {
+        control = uint8(bound(control, 0, 3));
+        uint256 expected = control == 0 ? 1.1e18 : control == 1 ? 0.5e18 : control == 2
+            ? 2e18
+            : 60_000_000e18;
+        vm.assume(value != expected);
+        string memory reason;
+        if (control == 3) {
+            IAssetManager.AssetConfiguration memory config = IAssetManager(_deposits)
+                .getAssetConfiguration(_usds);
+            config.depositCap = value;
+            vm.mockCall(
+                _deposits,
+                abi.encodeWithSelector(IAssetManager.getAssetConfiguration.selector, _usds),
+                abi.encode(config)
+            );
+            reason = "USDS deposit cap changed";
+        } else {
+            address target = control == 2 ? _auctioneer : _manager;
+            bytes4 selector = control == 0 ? bytes4(keccak256("minPriceScalar()")) : control == 1
+                ? bytes4(keccak256("minimumPremium()"))
+                : IConvertibleDepositAuctioneer.getTickSizeBase.selector;
+            vm.mockCall(target, abi.encodeWithSelector(selector), abi.encode(value));
+            reason = control == 0 ? "Minimum price scalar changed" : control == 1
+                ? "Minimum premium changed"
+                : "Tick-size base changed";
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ConvertibleDepositRetuningProposal.ValidationFailed.selector,
+                reason
+            )
+        );
+        _build();
+    }
+
+    function test_whenLegacyReclaimDrifts_reverts(uint16 value) public {
+        vm.assume(value != 9900);
+        vm.mockCall(
+            _facility,
+            abi.encodeWithSelector(
+                IDepositFacility.getAssetPeriodReclaimRate.selector,
+                _usds,
+                uint8(6)
+            ),
+            abi.encode(value)
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ConvertibleDepositRetuningProposal.ValidationFailed.selector,
+                "6-month reclaim rate changed"
+            )
+        );
+        _build();
+    }
+
+    function _rate(uint256 current, uint256 change, uint48 remaining, bool addition) internal {
+        vm.mockCall(_manager, abi.encodeWithSignature("baseEmissionRate()"), abi.encode(current));
+        vm.mockCall(
+            _manager,
+            abi.encodeWithSignature("rateChange()"),
+            abi.encode(change, remaining, addition)
+        );
+    }
+
+    function _assertRateAction(
+        bool expected,
+        uint256 change,
+        uint48 duration,
+        bool addition
+    ) internal {
+        _build();
+        (address[] memory targets, uint256[] memory values, bytes[] memory data) = _proposal
+            .getProposalActions();
+        uint256 count;
+        for (uint256 i; i < targets.length; ++i) {
+            if (
+                targets[i] == _manager && bytes4(data[i]) == EmissionManager.changeBaseRate.selector
+            ) {
+                ++count;
+                assertEq(values[i], 0, "Rate action sends no ETH");
+                assertEq(
+                    data[i],
+                    abi.encodeWithSelector(
+                        EmissionManager.changeBaseRate.selector,
+                        change,
+                        duration,
+                        addition
+                    ),
+                    "Exact rate action"
+                );
+            }
+        }
+        assertEq(count, expected ? 1 : 0, "Rate action count");
+    }
+
+    function test_givenTargetRate_whenNoPendingChange() public {
+        _rate(1_000_000, 0, 0, false);
+        _assertRateAction(false, 0, 0, false);
+    }
+
+    function test_givenTargetRate_whenPendingChange() public {
+        _rate(1_000_000, 10, 2, true);
+        _assertRateAction(true, 0, 0, false);
+    }
+
+    function test_givenMatchingPendingChange(bool addition) public {
+        _rate(addition ? 900_000 : 1_100_000, 100_000, 1, addition);
+        _assertRateAction(false, 0, 0, false);
+    }
+
+    function test_whenCurrentRateDiffers(uint256 current) public {
+        vm.assume(current != 1_000_000);
+        _rate(current, 0, 0, false);
+        bool addition = current < 1_000_000;
+        _assertRateAction(true, addition ? 1_000_000 - current : current - 1_000_000, 1, addition);
+    }
+
+    function test_whenCurrentRateIsMaximum() public {
+        _rate(type(uint256).max, 0, 0, false);
+        _assertRateAction(true, type(uint256).max - 1_000_000, 1, false);
+    }
+
+    function test_givenConflictingPendingChange(uint8 mismatch) public {
+        mismatch = uint8(bound(mismatch, 0, 2));
+        _rate(1_100_000, mismatch == 0 ? 1 : 100_000, mismatch == 1 ? 2 : 1, mismatch == 2);
+        _assertRateAction(true, 100_000, 1, false);
     }
 }

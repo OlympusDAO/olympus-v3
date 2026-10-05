@@ -74,6 +74,17 @@ Run the repository's full build, lint and test gates before publication. Preserv
 individual test-suite exit statuses: `shell/test_all.sh` currently runs its stages
 without fail-fast behavior, so its final exit status alone is insufficient evidence.
 
+## Builder regression coverage
+
+Builder-only tests call the public proposal runner with only construction enabled.
+Mocked getter responses at the pinned fork model drift in the four unchanged
+controls and the six-month reclaim rate. Exact custom-error reasons are checked.
+Rate tests cover no pending change, cancellation at target, matching schedules,
+conflicting delta/duration/direction, increasing/decreasing deltas and the maximum
+representable current rate. Five parameterized tests each run 256 fuzz cases.
+They inspect exact generated calldata and zero ETH value; they do not execute
+synthetic rate configurations or prove live-state freshness.
+
 ## State-dependent construction
 
 The builder reads current values and skips already-satisfied changes. It derives
@@ -90,16 +101,16 @@ before submission and revalidate pending changes before execution.
 - Repository lint and lint check: passed.
 - Unit suite: 4,888 passed, zero failures.
 - Invariant suite: one passed, 32,768 calls, zero reverts.
-- Focused proposal fork at block 26,127,004: six passed, zero failed. Governance
+- Focused proposal tests at block 26,127,004: 14 passed, zero failed (six
+  lifecycle/holder checks and eight builder regressions). Governance
   lifecycle and holder/parameter regression checks passed without oracle stubs;
   the deferred-update component check uses the scoped price fixture described above.
 - Infura throttling: resolved for the focused run with real pinned history-state
   prefetch and serialized reads. No EVM-version downgrade or synthetic history.
-- Repository-wide fork suite: retry in progress with Infura aliases and serialized
-  Ethereum reads: 231 tests passed so far, with one cross-chain setup failure
-  caused by Infura HTTP 429. That setup is being retried with serialized L2 reads.
-  The earlier LayerZero activator setup now passes all 23 tests without source
-  changes. The earlier Foundry panic has not yet been isolated.
+- Repository-wide fork run: 264 passed, with one Infura HTTP 429 setup failure
+  (exit status 1). The affected cross-chain suite subsequently passed all six tests
+  under paced Infura reads. Combined fork coverage is 270 passing tests, not a
+  single clean full-suite run. The earlier Foundry panic did not reproduce.
 - Local CodeRabbit review: explicitly waived by the requester on October 5, 2026;
   no local account is available. This is not a completed review.
 
