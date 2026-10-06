@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity >=0.8.20;
 
 // Libraries
+import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
 import {Test} from "forge-std/Test.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
 import {console2} from "forge-std/console2.sol";
@@ -25,6 +26,13 @@ interface IReceiptSupply {
 }
 
 contract ConvertibleDepositRetuningProposalTest is ProposalTest {
+    uint8 internal constant _TARGET_PERIOD = 3;
+    uint8 internal constant _LEGACY_PERIOD = 6;
+    uint256 internal constant _FIXTURE_RECEIPTS = 300e18;
+    uint256 internal constant _DEPOSIT_AMOUNT = 100e18;
+    uint256 internal constant _MINIMUM_BID = 100e18;
+    uint256 internal constant _ROUNDING_TOLERANCE = 5;
+    uint256 internal constant _AUCTION_UPDATE_BEATS = 3;
     IERC20 internal _usds;
     IDepositFacility internal _facility;
     IDepositManager internal _depositManager;
@@ -41,10 +49,11 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
 
     function setUp() public virtual {
         // Fixed mainnet fixture; RPC_URL can point to an archive provider without changing repo config.
-        vm.createSelectFork(
+        uint256 forkId = vm.createSelectFork(
             vm.envOr("RPC_URL", _RPC_ALIAS),
             vm.envOr("FORK_BLOCK", uint256(26_127_004))
         );
+        assertEq(vm.activeFork(), forkId, "Pinned fork selected");
         console2.log("Fork block", block.number);
         _setupSuite(address(new ConvertibleDepositRetuningProposal()));
         hasBeenSubmitted = false;
@@ -67,22 +76,37 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
         );
         _currentPriceBeforeGovernance = _emissionManager.PRICE().getCurrentPrice();
         assertGt(_currentPriceBeforeGovernance, 0, "Pinned oracle price is nonzero");
-        _receiptId = _depositManager.getReceiptTokenId(_usds, 3, address(_facility));
+        _receiptId = _depositManager.getReceiptTokenId(_usds, _TARGET_PERIOD, address(_facility));
         _supplyBefore = IReceiptSupply(address(_receipts)).totalSupply(_receiptId);
 
         // Move existing receipts on the fork only; no minting or balance storage overrides.
-        address holder = address(bytes20(hex"f3dcaeb909d3d17318c0908a1ec0ca31321e1672"));
+        address holder = 0xF3DCaeb909d3D17318C0908A1eC0Ca31321E1672;
         _user = makeAddr("redemption-regression-user");
-        assertGe(_receipts.balanceOf(holder, _receiptId), 300e18, "Fixture holder lacks receipts");
+        assertGe(
+            _receipts.balanceOf(holder, _receiptId),
+            _FIXTURE_RECEIPTS,
+            "Fixture holder lacks receipts"
+        );
         vm.prank(holder);
-        _receipts.transfer(_user, _receiptId, 300e18);
+        assertTrue(
+            _receipts.transfer(_user, _receiptId, _FIXTURE_RECEIPTS),
+            "Fixture transfer succeeded"
+        );
         vm.startPrank(_user);
-        _receipts.approve(address(_vault), _receiptId, 100e18);
-        _redemptionId = _vault.startRedemption(_usds, 3, 100e18, address(_facility));
+        assertTrue(
+            _receipts.approve(address(_vault), _receiptId, _DEPOSIT_AMOUNT),
+            "Redemption approval succeeded"
+        );
+        _redemptionId = _vault.startRedemption(
+            _usds,
+            _TARGET_PERIOD,
+            _DEPOSIT_AMOUNT,
+            address(_facility)
+        );
         vm.stopPrank();
         _redemptionBefore = _vault.getUserRedemption(_user, _redemptionId);
         assertEq(
-            _facility.getAssetPeriodReclaimRate(_usds, 3),
+            _facility.getAssetPeriodReclaimRate(_usds, _TARGET_PERIOD),
             9750,
             "Fixture reclaim rate changed"
         );
@@ -90,13 +114,21 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
     }
 
     function test_givenProposalExecuted_parametersAndReceiptsPreserved() public view {
-        assertEq(_facility.getAssetPeriodReclaimRate(_usds, 3), 9000, "3-month reclaim target");
-        assertEq(_facility.getAssetPeriodReclaimRate(_usds, 6), 9900, "6-month reclaim unchanged");
-        (, bool threeMonthPending) = _auctioneer.isDepositPeriodEnabled(3);
-        (, bool sixMonthPending) = _auctioneer.isDepositPeriodEnabled(6);
+        assertEq(
+            _facility.getAssetPeriodReclaimRate(_usds, _TARGET_PERIOD),
+            9000,
+            "3-month reclaim target"
+        );
+        assertEq(
+            _facility.getAssetPeriodReclaimRate(_usds, _LEGACY_PERIOD),
+            9900,
+            "6-month reclaim unchanged"
+        );
+        (, bool threeMonthPending) = _auctioneer.isDepositPeriodEnabled(_TARGET_PERIOD);
+        (, bool sixMonthPending) = _auctioneer.isDepositPeriodEnabled(_LEGACY_PERIOD);
         assertTrue(threeMonthPending, "3-month period queued");
         assertFalse(sixMonthPending, "6-month period queued off");
-        assertEq(_auctioneer.getMinimumBid(), 100e18, "Minimum bid target");
+        assertEq(_auctioneer.getMinimumBid(), _MINIMUM_BID, "Minimum bid target");
         assertEq(_auctioneer.getTickStep(), 10010, "0.10% tick increment");
         assertEq(_emissionManager.tickSize(), 10_000e9, "Standard tick target");
         assertEq(_emissionManager.minPriceScalar(), 1.1e18, "Price scalar unchanged");
@@ -128,7 +160,12 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
         uint256 balanceBefore = _usds.balanceOf(_user);
         vm.prank(_user);
         uint256 paid = _vault.finishRedemption(_redemptionId);
-        assertApproxEqAbs(paid, 100e18, 5, "Full principal, not 90% reclaim");
+        assertApproxEqAbs(
+            paid,
+            _DEPOSIT_AMOUNT,
+            _ROUNDING_TOLERANCE,
+            "Full principal, not 90% reclaim"
+        );
         assertEq(_usds.balanceOf(_user) - balanceBefore, paid, "Actual redemption transfer");
         assertEq(_vault.getUserRedemption(_user, _redemptionId).amount, 0, "Redemption consumed");
     }
@@ -139,21 +176,29 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
 
     function test_givenCancelledRedemption_reclaimUsesNewRate() public {
         vm.prank(_user);
-        _vault.cancelRedemption(_redemptionId, 100e18);
+        _vault.cancelRedemption(_redemptionId, _DEPOSIT_AMOUNT);
         assertEq(_vault.getUserRedemption(_user, _redemptionId).amount, 0, "Redemption cancelled");
-        assertEq(_receipts.balanceOf(_user, _receiptId), 300e18, "Receipts returned");
+        assertEq(_receipts.balanceOf(_user, _receiptId), _FIXTURE_RECEIPTS, "Receipts returned");
         _assertReclaim();
     }
 
     function _assertReclaim() internal {
-        uint256 preview = _facility.previewReclaim(_usds, 3, 100e18);
+        uint256 preview = _facility.previewReclaim(_usds, _TARGET_PERIOD, _DEPOSIT_AMOUNT);
         assertEq(preview, 90e18, "New reclaim rate is 90%");
         uint256 balanceBefore = _usds.balanceOf(_user);
         vm.startPrank(_user);
-        _receipts.approve(address(_depositManager), _receiptId, 100e18);
-        uint256 paid = _facility.reclaim(_usds, 3, 100e18);
+        assertTrue(
+            _receipts.approve(address(_depositManager), _receiptId, _DEPOSIT_AMOUNT),
+            "Reclaim approval succeeded"
+        );
+        uint256 paid = _facility.reclaim(_usds, _TARGET_PERIOD, _DEPOSIT_AMOUNT);
         vm.stopPrank();
-        assertApproxEqAbs(paid, preview, 5, "Reclaim matches preview within vault rounding");
+        assertApproxEqAbs(
+            paid,
+            preview,
+            _ROUNDING_TOLERANCE,
+            "Reclaim matches preview within vault rounding"
+        );
         assertEq(_usds.balanceOf(_user) - balanceBefore, paid, "Actual reclaim transfer");
     }
 
@@ -170,15 +215,15 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
             abi.encode(_currentPriceBeforeGovernance)
         );
         address heart = addresses.getAddress("olympus-policy-heart-1_7");
-        for (uint256 i; i < 3; ++i) {
+        for (uint256 i = 0; i < _AUCTION_UPDATE_BEATS; ++i) {
             vm.prank(heart);
             _emissionManager.execute();
         }
         assertEq(_emissionManager.baseEmissionRate(), 1_000_000, "0.10% base rate active");
         (, uint48 daysLeft, ) = _emissionManager.rateChange();
         assertEq(daysLeft, 0, "Scheduled rate change consumed");
-        (bool threeMonthActive, ) = _auctioneer.isDepositPeriodEnabled(3);
-        (bool sixMonthActive, ) = _auctioneer.isDepositPeriodEnabled(6);
+        (bool threeMonthActive, ) = _auctioneer.isDepositPeriodEnabled(_TARGET_PERIOD);
+        (bool sixMonthActive, ) = _auctioneer.isDepositPeriodEnabled(_LEGACY_PERIOD);
         assertTrue(threeMonthActive, "3-month auction active");
         assertFalse(sixMonthActive, "6-month auction inactive");
         (, , uint256 expectedTarget) = _emissionManager.getNextEmission();
@@ -193,6 +238,11 @@ contract ConvertibleDepositRetuningProposalTest is ProposalTest {
 /// @notice Builder-only regressions: mocked getter responses model drift at one pinned block.
 /// @dev Uses the public build entry point; never executes the synthetic actions on the fork.
 contract ConvertibleDepositRetuningBuilderTest is Test {
+    uint8 internal constant _TARGET_PERIOD = 3;
+    uint8 internal constant _LEGACY_PERIOD = 6;
+    uint8 internal constant _LAST_CONTROL = 3;
+    uint256 internal constant _TARGET_BASE_RATE = 1_000_000;
+    uint256 internal constant _RATE_CHANGE = 100_000;
     Addresses internal _addresses;
     ConvertibleDepositRetuningProposal internal _proposal;
     address internal _manager;
@@ -202,7 +252,8 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
     IERC20 internal _usds;
 
     function setUp() public {
-        vm.createSelectFork(vm.envOr("RPC_URL", string("mainnet")), 26_127_004);
+        uint256 forkId = vm.createSelectFork(vm.envOr("RPC_URL", string("mainnet")), 26_127_004);
+        assertEq(vm.activeFork(), forkId, "Pinned fork selected");
         _addresses = new Addresses("./src/proposals/addresses.json");
         _proposal = new ConvertibleDepositRetuningProposal();
         _manager = _addresses.getAddress("olympus-policy-emissionmanager-1_2");
@@ -216,14 +267,117 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
         _proposal.run(_addresses, address(this), false, true, false, false, false, false);
     }
 
+    function _mockPeriodState(uint8 period, bool current, bool pending) internal {
+        vm.mockCall(
+            _auctioneer,
+            abi.encodeWithSelector(
+                IConvertibleDepositAuctioneer.isDepositPeriodEnabled.selector,
+                period
+            ),
+            abi.encode(current, pending)
+        );
+    }
+
+    function _mockPeriodInterface() internal {
+        vm.mockCall(
+            _auctioneer,
+            abi.encodeWithSelector(IConvertibleDepositAuctioneer.isDepositPeriodEnabled.selector),
+            abi.encode(false, false)
+        );
+        // The proposal must work with the existing interface, without the raw queue getter.
+        vm.mockCallRevert(
+            _auctioneer,
+            abi.encodeWithSignature("getPendingDepositPeriodChanges()"),
+            abi.encodeWithSelector(
+                ConvertibleDepositRetuningProposal.ValidationFailed.selector,
+                "Raw queue getter unavailable"
+            )
+        );
+    }
+
+    function _selector(bytes memory callData) internal pure returns (bytes4) {
+        assertGe(callData.length, 4, "Action calldata includes a selector");
+        // Deliberately extract the four-byte selector, excluding encoded arguments.
+        return bytes4(callData);
+    }
+
+    function _assertPeriodActions(uint8 period, bool enableTarget, bool disablePeriod) internal {
+        _build();
+        (address[] memory targets, uint256[] memory values, bytes[] memory data) = _proposal
+            .getProposalActions();
+        uint256 enables = 0;
+        uint256 disables = 0;
+        for (uint256 i = 0; i < targets.length; ++i) {
+            if (targets[i] != _auctioneer) continue;
+            if (_selector(data[i]) == IConvertibleDepositAuctioneer.enableDepositPeriod.selector) {
+                ++enables;
+                assertEq(values[i], 0, "Period enable sends no ETH");
+                assertEq(
+                    data[i],
+                    abi.encodeWithSelector(
+                        IConvertibleDepositAuctioneer.enableDepositPeriod.selector,
+                        _TARGET_PERIOD
+                    ),
+                    "Only enable target period"
+                );
+            }
+            if (_selector(data[i]) == IConvertibleDepositAuctioneer.disableDepositPeriod.selector) {
+                ++disables;
+                assertEq(values[i], 0, "Period disable sends no ETH");
+                assertEq(
+                    data[i],
+                    abi.encodeWithSelector(
+                        IConvertibleDepositAuctioneer.disableDepositPeriod.selector,
+                        period
+                    ),
+                    "Exact non-target period disable"
+                );
+            }
+        }
+        assertEq(enables, enableTarget ? 1 : 0, "Target enable count");
+        assertEq(disables, disablePeriod ? 1 : 0, "Non-target disable count");
+    }
+
+    function test_givenTargetPeriodState(bool current, bool pending) public {
+        _mockPeriodInterface();
+        _mockPeriodState(_TARGET_PERIOD, current, pending);
+        _assertPeriodActions(_LEGACY_PERIOD, !pending, false);
+    }
+
+    function test_givenNonTargetPeriodState(uint8 period, bool current, bool pending) public {
+        vm.assume(period != _TARGET_PERIOD);
+        _mockPeriodInterface();
+        _mockPeriodState(_TARGET_PERIOD, false, true);
+        _mockPeriodState(period, current, pending);
+        _assertPeriodActions(period, false, pending);
+    }
+
+    function test_givenPendingOnlyPeriod_whenZero() public {
+        _mockPeriodInterface();
+        _mockPeriodState(0, false, true);
+        _assertPeriodActions(0, true, true);
+    }
+
+    function test_givenPendingOnlyPeriod_whenOne() public {
+        _mockPeriodInterface();
+        _mockPeriodState(1, false, true);
+        _assertPeriodActions(1, true, true);
+    }
+
+    function test_givenPendingOnlyPeriod_whenMaximum() public {
+        _mockPeriodInterface();
+        _mockPeriodState(type(uint8).max, false, true);
+        _assertPeriodActions(type(uint8).max, true, true);
+    }
+
     function test_whenUnchangedControlDrifts_reverts(uint8 control, uint256 value) public {
-        control = uint8(bound(control, 0, 3));
+        control = SafeCast.toUint8(bound(control, 0, _LAST_CONTROL));
         uint256 expected = control == 0 ? 1.1e18 : control == 1 ? 0.5e18 : control == 2
             ? 2e18
             : 60_000_000e18;
         vm.assume(value != expected);
         string memory reason;
-        if (control == 3) {
+        if (control == _LAST_CONTROL) {
             IAssetManager.AssetConfiguration memory config = IAssetManager(_deposits)
                 .getAssetConfiguration(_usds);
             config.depositCap = value;
@@ -235,10 +389,12 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
             reason = "USDS deposit cap changed";
         } else {
             address target = control == 2 ? _auctioneer : _manager;
-            bytes4 selector = control == 0 ? bytes4(keccak256("minPriceScalar()")) : control == 1
-                ? bytes4(keccak256("minimumPremium()"))
-                : IConvertibleDepositAuctioneer.getTickSizeBase.selector;
-            vm.mockCall(target, abi.encodeWithSelector(selector), abi.encode(value));
+            bytes memory getter = control == 0
+                ? abi.encodeWithSignature("minPriceScalar()")
+                : control == 1
+                ? abi.encodeWithSignature("minimumPremium()")
+                : abi.encodeWithSelector(IConvertibleDepositAuctioneer.getTickSizeBase.selector);
+            vm.mockCall(target, getter, abi.encode(value));
             reason = control == 0 ? "Minimum price scalar changed" : control == 1
                 ? "Minimum premium changed"
                 : "Tick-size base changed";
@@ -259,7 +415,7 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
             abi.encodeWithSelector(
                 IDepositFacility.getAssetPeriodReclaimRate.selector,
                 _usds,
-                uint8(6)
+                _LEGACY_PERIOD
             ),
             abi.encode(value)
         );
@@ -290,10 +446,11 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
         _build();
         (address[] memory targets, uint256[] memory values, bytes[] memory data) = _proposal
             .getProposalActions();
-        uint256 count;
-        for (uint256 i; i < targets.length; ++i) {
+        uint256 count = 0;
+        for (uint256 i = 0; i < targets.length; ++i) {
             if (
-                targets[i] == _manager && bytes4(data[i]) == EmissionManager.changeBaseRate.selector
+                targets[i] == _manager &&
+                _selector(data[i]) == EmissionManager.changeBaseRate.selector
             ) {
                 ++count;
                 assertEq(values[i], 0, "Rate action sends no ETH");
@@ -313,35 +470,50 @@ contract ConvertibleDepositRetuningBuilderTest is Test {
     }
 
     function test_givenTargetRate_whenNoPendingChange() public {
-        _rate(1_000_000, 0, 0, false);
+        _rate(_TARGET_BASE_RATE, 0, 0, false);
         _assertRateAction(false, 0, 0, false);
     }
 
     function test_givenTargetRate_whenPendingChange() public {
-        _rate(1_000_000, 10, 2, true);
+        _rate(_TARGET_BASE_RATE, 10, 2, true);
         _assertRateAction(true, 0, 0, false);
     }
 
     function test_givenMatchingPendingChange(bool addition) public {
-        _rate(addition ? 900_000 : 1_100_000, 100_000, 1, addition);
+        _rate(
+            addition ? (_TARGET_BASE_RATE - _RATE_CHANGE) : (_TARGET_BASE_RATE + _RATE_CHANGE),
+            _RATE_CHANGE,
+            1,
+            addition
+        );
         _assertRateAction(false, 0, 0, false);
     }
 
     function test_whenCurrentRateDiffers(uint256 current) public {
-        vm.assume(current != 1_000_000);
+        vm.assume(current != _TARGET_BASE_RATE);
         _rate(current, 0, 0, false);
-        bool addition = current < 1_000_000;
-        _assertRateAction(true, addition ? 1_000_000 - current : current - 1_000_000, 1, addition);
+        bool addition = current < _TARGET_BASE_RATE;
+        _assertRateAction(
+            true,
+            addition ? _TARGET_BASE_RATE - current : current - _TARGET_BASE_RATE,
+            1,
+            addition
+        );
     }
 
     function test_whenCurrentRateIsMaximum() public {
         _rate(type(uint256).max, 0, 0, false);
-        _assertRateAction(true, type(uint256).max - 1_000_000, 1, false);
+        _assertRateAction(true, type(uint256).max - _TARGET_BASE_RATE, 1, false);
     }
 
     function test_givenConflictingPendingChange(uint8 mismatch) public {
-        mismatch = uint8(bound(mismatch, 0, 2));
-        _rate(1_100_000, mismatch == 0 ? 1 : 100_000, mismatch == 1 ? 2 : 1, mismatch == 2);
-        _assertRateAction(true, 100_000, 1, false);
+        mismatch = SafeCast.toUint8(bound(mismatch, 0, 2));
+        _rate(
+            (_TARGET_BASE_RATE + _RATE_CHANGE),
+            mismatch == 0 ? 1 : _RATE_CHANGE,
+            mismatch == 1 ? 2 : 1,
+            mismatch == 2
+        );
+        _assertRateAction(true, _RATE_CHANGE, 1, false);
     }
 }

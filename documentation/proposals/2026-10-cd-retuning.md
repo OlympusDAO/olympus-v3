@@ -81,7 +81,7 @@ Mocked getter responses at the pinned fork model drift in the four unchanged
 controls and the six-month reclaim rate. Exact custom-error reasons are checked.
 Rate tests cover no pending change, cancellation at target, matching schedules,
 conflicting delta/duration/direction, increasing/decreasing deltas and the maximum
-representable current rate. Five parameterized tests each run 256 fuzz cases.
+representable current rate. Seven parameterized tests each run 256 fuzz cases.
 They inspect exact generated calldata and zero ETH value; they do not execute
 synthetic rate configurations or prove live-state freshness.
 
@@ -98,10 +98,10 @@ before submission and revalidate pending changes before execution.
 
 The clean full-suite run below verified revision
 `3727ee3b15917869daf123a771d73c197732503f`; source hashes matched that commit.
-The subsequent documentation cleanup removes only redundant Solidity comments
-and updates this record. It does not change executable source or tests. The
-full-suite results remain attributed to that verified revision, not a new run
-of the cleanup commit.
+The documentation-only follow-up at `261816466` removed five redundant comments
+and synchronized this record without changing executable source or tests. The
+results below remain attributed to `3727ee3b1`. The later maintainer-review changes
+and their validation are recorded separately below.
 
 - Repository toolchain: Foundry 1.8.1, Solidity 0.8.36, Node 24 and pnpm 11.13.0.
 - Full build: passed.
@@ -137,12 +137,54 @@ injects proposer voting power and may temporarily replace the Kernel executor on
 the fork. This proposal contains no Kernel actions. Those simulation conveniences
 are not proof of real proposer eligibility or additional execution authority.
 
+## Maintainer-review follow-up: October 6, 2026
+
+- Moved this note into `documentation/proposals/` with a `2026-10` date prefix.
+- Removed the custom pending-queue interface. Period discovery now uses
+  `IConvertibleDepositAuctioneer.isDepositPeriodEnabled()` across the bounded
+  `uint8` domain, preserving checks for periods that are queued but not active.
+  This scan runs during construction and validation, not as an on-chain guard.
+- Replaced the test fixture's address cast with the same checksummed address.
+- Foundry 1.8.1 lint review corrected the address and bounded numeric casts,
+  explicit counter initialization, repeated fixture constants, pragma alignment
+  and a redundant empty hook. Selector extraction checks calldata length; tests
+  assert the selected fork and receipt transfer/approval results.
+  No lint suppressions were added. Remaining diagnostics are classified below;
+  a successful exit status is not a claim of zero diagnostics.
+- Foundry 1.8.1 focused fork tests: 19 passed, zero failed or skipped at
+  block 26,127,004.
+  The five added tests cover current/pending period states, pending-only periods
+  and the zero, one and maximum `uint8` boundaries. The raw queue getter is made
+  unavailable in those regressions. All six lifecycle/holder tests pass.
+- The seven target/calldata pairs at the pinned block match the earlier verified
+  proposal. Repository-wide validation of this follow-up passed under Foundry
+  1.8.1: 4,888 unit tests, one invariant campaign (32,768 calls, zero reverts)
+  and all 270 fork tests, with zero failures or skips in every stage.
+  `pnpm run lint`, `pnpm build`, `pnpm run lint:check` and `git diff --check`
+  passed. Source hashes were checked before publication.
+
+The remaining lint diagnostics are intentional harness or construction patterns,
+not ignored exit codes:
+
+| Diagnostic | Disposition |
+| --- | --- |
+| `unused-return` | Tuple omissions deliberately select the relevant field from multi-return getters: current/pending period state, remaining rate-change duration or the next emission target. |
+| `reentrancy-no-eth` | Reported in test setup around cheatcodes and fork-only receipt transfers before the inherited harness updates its registry reference. This setup is not deployed protocol code. |
+| `multi-contract-file` | The proposal and its script wrapper follow the repository template; related lifecycle/builder tests and their receipt-supply interface remain together. |
+| `calls-loop` | Bounded period discovery uses view calls; the three-call Heart fixture exercises the documented update cadence. No new loop is added to deployed protocol execution. |
+| `require-revert-in-loop` | The simulator rejects unexpected effective period states during validation. |
+| `unsafe-typecast` | `_selector` intentionally extracts four bytes from calldata after asserting its length, excluding ABI arguments; complete action calldata is asserted separately. |
+
+Jem requested these changes; maintainer re-review of the changes and these
+lint dispositions remains outstanding.
+
 ## Submission readiness
 
 - [x] Executable implementation and focused regression tests included.
 - [x] Description includes the existing-redemption clarification.
 - [x] Record clean fork, build, lint and full-suite verification for `3727ee3b1`.
 - [x] Record upstream CodeRabbit review through `3727ee3b1`.
+- [x] Verify the October 6 review follow-up: 19 focused tests and a clean full suite.
 - [ ] Complete upstream/community review (local CodeRabbit waived).
 - [x] Insert implementation PR #343 URL into `description()`.
 - [ ] Verify description rendering in the voting frontend.

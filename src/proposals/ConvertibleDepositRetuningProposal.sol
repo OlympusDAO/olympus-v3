@@ -17,6 +17,8 @@ import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacilit
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
+import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
+
 // Modules
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
@@ -25,18 +27,6 @@ import {EmissionManager} from "src/policies/EmissionManager.sol";
 
 // Kernel
 import {Kernel} from "src/Kernel.sol";
-
-interface IConvertibleDepositAuctioneerPendingChanges {
-    struct PendingDepositPeriodChange {
-        uint8 depositPeriod;
-        bool enable;
-    }
-
-    function getPendingDepositPeriodChanges()
-        external
-        view
-        returns (PendingDepositPeriodChange[] memory);
-}
 
 /// @notice OCG proposal that configures the retuned USDS convertible deposit market.
 contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
@@ -94,8 +84,6 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
     function _deploy(Addresses addresses, address) internal override {
         _kernel = Kernel(addresses.getAddress("olympus-kernel"));
     }
-
-    function _afterDeploy(Addresses addresses, address deployer) internal override {}
 
     function _build(Addresses addresses) internal override {
         address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
@@ -190,45 +178,23 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
     function _getAuctioneerKnownPeriods(
         address cdAuctioneer
     ) internal view returns (uint8[] memory knownPeriods) {
-        uint8[] memory currentEnabledPeriods = IConvertibleDepositAuctioneer(cdAuctioneer)
-            .getDepositPeriods();
-        IConvertibleDepositAuctioneerPendingChanges.PendingDepositPeriodChange[]
-            memory pendingChanges = IConvertibleDepositAuctioneerPendingChanges(cdAuctioneer)
-                .getPendingDepositPeriodChanges();
-
-        uint256 knownPeriodCount;
-        uint8[] memory knownPeriodsBuffer = new uint8[](
-            currentEnabledPeriods.length + pendingChanges.length
-        );
-
-        for (uint256 i = 0; i < currentEnabledPeriods.length; i++) {
-            uint8 period = currentEnabledPeriods[i];
-            if (_containsPeriod(knownPeriodsBuffer, period)) continue;
-
-            knownPeriodsBuffer[knownPeriodCount] = period;
-            knownPeriodCount++;
-        }
-
-        for (uint256 i = 0; i < pendingChanges.length; i++) {
-            uint8 period = pendingChanges[i].depositPeriod;
-            if (_containsPeriod(knownPeriodsBuffer, period)) continue;
-
-            knownPeriodsBuffer[knownPeriodCount] = period;
-            knownPeriodCount++;
+        // Scan the bounded uint8 domain so pending-only periods cannot be missed.
+        uint8[] memory knownPeriodsBuffer = new uint8[](uint256(type(uint8).max) + 1);
+        uint256 knownPeriodCount = 0;
+        for (uint256 i = 0; i <= type(uint8).max; ++i) {
+            uint8 period = SafeCast.toUint8(i);
+            (bool isEnabled, bool isPendingEnabled) = IConvertibleDepositAuctioneer(cdAuctioneer)
+                .isDepositPeriodEnabled(period);
+            if (isEnabled || isPendingEnabled) {
+                knownPeriodsBuffer[knownPeriodCount] = period;
+                ++knownPeriodCount;
+            }
         }
 
         knownPeriods = new uint8[](knownPeriodCount);
-        for (uint256 i = 0; i < knownPeriodCount; i++) {
+        for (uint256 i = 0; i < knownPeriodCount; ++i) {
             knownPeriods[i] = knownPeriodsBuffer[i];
         }
-    }
-
-    function _containsPeriod(uint8[] memory periods, uint8 period) internal pure returns (bool) {
-        for (uint256 i = 0; i < periods.length; i++) {
-            if (periods[i] == period) return true;
-        }
-
-        return false;
     }
 
     function _requireUnchangedLegacyReclaimRate(address cdFacility, address usds) internal view {
