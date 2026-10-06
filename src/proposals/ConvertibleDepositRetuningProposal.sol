@@ -57,12 +57,10 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
     uint256 internal constant TICK_SIZE = 10_000_000_000_000;
     uint24 internal constant TICK_STEP = 10010;
 
-    // Returns the id of the proposal.
     function id() public pure override returns (uint256) {
         return 0;
     }
 
-    // Returns the name of the proposal.
     function name() public pure override returns (string memory) {
         return "Convertible Deposit Retuning";
     }
@@ -99,7 +97,6 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
 
     function _afterDeploy(Addresses addresses, address deployer) internal override {}
 
-    // Sets up actions for the proposal.
     function _build(Addresses addresses) internal override {
         address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
         address cdFacility = addresses.getAddress(
@@ -359,7 +356,6 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
         }
     }
 
-    // Executes the proposal actions.
     function _run(Addresses addresses, address) internal override {
         _simulateActions(
             address(_kernel),
@@ -369,7 +365,6 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
         );
     }
 
-    // Validates the post-execution state.
     function _validate(Addresses addresses, address) internal view override {
         address depositManager = addresses.getAddress("olympus-policy-deposit-manager-1_0");
         address cdFacility = addresses.getAddress(

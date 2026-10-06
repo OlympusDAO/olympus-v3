@@ -2,7 +2,7 @@
 
 ## Scope
 
-This draft changes the USDS Convertible Deposit auction to a three-month term, a
+This proposal changes the USDS Convertible Deposit auction to a three-month term, a
 100 USDS minimum bid, a 10,000 OHM standard tick, a 0.10% price increment and a
 0.10% base emission rate. Three-month early reclaim becomes 90%.
 
@@ -94,7 +94,14 @@ These checks run during construction/simulation, not as additional on-chain guar
 at eventual governance execution. Rebuild and compare the exact action payload
 before submission and revalidate pending changes before execution.
 
-## Verification status: October 5, 2026
+## Verification status: October 6, 2026 (UTC)
+
+The clean full-suite run below verified revision
+`3727ee3b15917869daf123a771d73c197732503f`; source hashes matched that commit.
+The subsequent documentation cleanup removes only redundant Solidity comments
+and updates this record. It does not change executable source or tests. The
+full-suite results remain attributed to that verified revision, not a new run
+of the cleanup commit.
 
 - Repository toolchain: Foundry 1.8.1, Solidity 0.8.36, Node 24 and pnpm 11.13.0.
 - Full build: passed.
@@ -107,12 +114,23 @@ before submission and revalidate pending changes before execution.
   the deferred-update component check uses the scoped price fixture described above.
 - Infura throttling: resolved for the focused run with real pinned history-state
   prefetch and serialized reads. No EVM-version downgrade or synthetic history.
-- Repository-wide fork run: 264 passed, with one Infura HTTP 429 setup failure
-  (exit status 1). The affected cross-chain suite subsequently passed all six tests
-  under paced Infura reads. Combined fork coverage is 270 passing tests, not a
-  single clean full-suite run. The earlier Foundry panic did not reproduce.
+- Clean `pnpm run test`: exit 0; all 4,888 unit tests, one invariant campaign and
+  all 270 fork tests passed, with zero failures or skips. Each stage summary was
+  checked independently. The run used paced, read-only Infura access with
+  `ETH_RPC_TIMEOUT=300`; no tracked tooling changes or weakened assertions.
+- This clean run supersedes the earlier 264-pass fork run plus six-test retry.
+  A separate final-source attempt hit an intermittent LayerZero configuration-test
+  revert and was stopped; isolated reproduction passed. The subsequent complete
+  run passed all six LayerZero tests. A timeout interaction is suspected, not a
+  proven root cause. Verification does not combine failed-run and retry results.
 - Local CodeRabbit review: explicitly waived by the requester on October 5, 2026;
   no local account is available. This is not a completed review.
+- Upstream CodeRabbit reviewed all three files through `3727ee3b1` and reported
+  no actionable comments, minimal merge risk and low architecture risk. It also
+  flagged `redundant_comments` and `description_diff_mismatch` without line-specific
+  examples. The cleanup addresses the identified documentation inconsistencies
+  and boilerplate; it does not establish the detector's rationale or clearance.
+  Automated review is not maintainer approval or a security guarantee.
 
 The simulator constructs seven actions at the pinned block. Its standard harness
 injects proposer voting power and may temporarily replace the Kernel executor on
@@ -123,7 +141,8 @@ are not proof of real proposer eligibility or additional execution authority.
 
 - [x] Executable implementation and focused regression tests included.
 - [x] Description includes the existing-redemption clarification.
-- [ ] Record successful final-head fork, build, lint and full-suite verification.
+- [x] Record clean fork, build, lint and full-suite verification for `3727ee3b1`.
+- [x] Record upstream CodeRabbit review through `3727ee3b1`.
 - [ ] Complete upstream/community review (local CodeRabbit waived).
 - [x] Insert implementation PR #343 URL into `description()`.
 - [ ] Verify description rendering in the voting frontend.
@@ -142,18 +161,21 @@ exact description into ten parameter rows, headings and the PR link using
 `react-markdown` and `remark-gfm`. This is a component render check, not a visual
 approval of the deployed app. Visual preview remains unverified.
 
-At the October 5 review, Socket and Snyk checks passed. Five GitHub Actions
-workflows reported `action_required`; an upstream maintainer must approve them.
+At revision `3727ee3b1`, Socket checks passed and Snyk reported no manifest changes.
+Five GitHub Actions workflows reported `action_required`; an upstream maintainer
+must approve them.
 The build workflow intentionally excludes fork/proposal/cross-chain RPC jobs for
 external fork PRs. Workflow approval alone therefore does not run those jobs;
 maintainers should review the local evidence or run the tests in a trusted context.
-CodeRabbit's successful status was a draft-skip notice, not a completed review.
-No maintainer review has been recorded yet.
+CodeRabbit subsequently reviewed all three files through `3727ee3b1`, as recorded
+above. The PR is open for review, no longer a draft. No maintainer approval has
+been recorded. CI and automated-review statuses on that revision do not establish
+the status of later commits.
 
 Peer reviewers should confirm the seven actions, units, delayed auction effects,
 unchanged controls, holder-impact wording and documented simulation assumptions.
 Fresh state/payload, proposer eligibility, live oracle/keeper checks and human
-signing remain separate pre-submission gates, not claims made by this draft.
+signing remain separate pre-submission gates, not claims made by this proposal.
 
 ## Governance references
 
