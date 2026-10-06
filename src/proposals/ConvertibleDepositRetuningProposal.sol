@@ -67,7 +67,7 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
         return "Convertible Deposit Retuning";
     }
 
-    // Draft: replace the review-link notice with the assigned implementation PR URL before submission.
+    // Implementation review link is included in the exact on-chain description.
     function description() public pure override returns (string memory) {
         return
             string.concat(
@@ -88,7 +88,7 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
                 "The three-month early reclaim rate applies to existing receipts reclaimed after implementation. This change does not alter the amount or redemption date of redemptions already underway, nor apply an early-reclaim discount to full redemption. Existing six-month positions and their 99% reclaim setting remain unchanged.\n\n",
                 "The base emission rate controls auction pacing; it is not a hard issuance cap. Auction-period changes and the scheduled base-rate adjustment take effect at the next EmissionManager auction update, which occurs every third heartbeat.\n\n",
                 "## Implementation review\n\n",
-                "Draft only: the implementation PR link must be inserted before on-chain submission."
+                "Implementation and tests: [OlympusDAO/olympus-v3 PR #343](https://github.com/OlympusDAO/olympus-v3/pull/343)."
             );
     }
 

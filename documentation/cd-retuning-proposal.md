@@ -125,14 +125,35 @@ are not proof of real proposer eligibility or additional execution authority.
 - [x] Description includes the existing-redemption clarification.
 - [ ] Record successful final-head fork, build, lint and full-suite verification.
 - [ ] Complete upstream/community review (local CodeRabbit waived).
-- [ ] Insert the assigned implementation PR URL into `description()`.
+- [x] Insert implementation PR #343 URL into `description()`.
 - [ ] Verify description rendering in the voting frontend.
 - [ ] Refresh proposer eligibility and exact-payload simulation before signing.
 
-The draft description explicitly identifies the missing PR link. No proposal ID is
-assigned and no on-chain submission is included in this change. The simulator uses
+The description links to implementation PR #343. No proposal ID is assigned and
+no on-chain submission is included in this change. The simulator uses
 the upstream registry's proposer fixture; its success is not an eligibility check
 for the eventual submitting EOA.
+
+## Peer-review handoff
+
+Implementation review: [PR #343](https://github.com/OlympusDAO/olympus-v3/pull/343).
+The frontend source's `ProposalDescription` component successfully renders the
+exact description into ten parameter rows, headings and the PR link using
+`react-markdown` and `remark-gfm`. This is a component render check, not a visual
+approval of the deployed app. Visual preview remains unverified.
+
+At the October 5 review, Socket and Snyk checks passed. Five GitHub Actions
+workflows reported `action_required`; an upstream maintainer must approve them.
+The build workflow intentionally excludes fork/proposal/cross-chain RPC jobs for
+external fork PRs. Workflow approval alone therefore does not run those jobs;
+maintainers should review the local evidence or run the tests in a trusted context.
+CodeRabbit's successful status was a draft-skip notice, not a completed review.
+No maintainer review has been recorded yet.
+
+Peer reviewers should confirm the seven actions, units, delayed auction effects,
+unchanged controls, holder-impact wording and documented simulation assumptions.
+Fresh state/payload, proposer eligibility, live oracle/keeper checks and human
+signing remain separate pre-submission gates, not claims made by this draft.
 
 ## Governance references
 
