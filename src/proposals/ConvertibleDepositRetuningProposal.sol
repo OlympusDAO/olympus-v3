@@ -17,8 +17,6 @@ import {IDepositFacility} from "src/policies/interfaces/deposits/IDepositFacilit
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IConvertibleDepositAuctioneer} from "src/policies/interfaces/deposits/IConvertibleDepositAuctioneer.sol";
 
-import {SafeCast} from "@openzeppelin-4.8.0/utils/math/SafeCast.sol";
-
 // Modules
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
@@ -141,10 +139,11 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
     }
 
     function _reconcileAuctioneerDepositPeriods(address cdAuctioneer) internal {
-        uint8[] memory knownPeriods = _getAuctioneerKnownPeriods(cdAuctioneer);
+        uint8[] memory enabledPeriods = IConvertibleDepositAuctioneer(cdAuctioneer)
+            .getDepositPeriods();
 
-        for (uint256 i = 0; i < knownPeriods.length; i++) {
-            uint8 period = knownPeriods[i];
+        for (uint256 i = 0; i < enabledPeriods.length; i++) {
+            uint8 period = enabledPeriods[i];
             (, bool isPendingEnabled) = IConvertibleDepositAuctioneer(cdAuctioneer)
                 .isDepositPeriodEnabled(period);
 
@@ -172,28 +171,6 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
                 ),
                 "Enable 3-month CD auctioneer deposit period"
             );
-        }
-    }
-
-    function _getAuctioneerKnownPeriods(
-        address cdAuctioneer
-    ) internal view returns (uint8[] memory knownPeriods) {
-        // Scan the bounded uint8 domain so pending-only periods cannot be missed.
-        uint8[] memory knownPeriodsBuffer = new uint8[](uint256(type(uint8).max) + 1);
-        uint256 knownPeriodCount = 0;
-        for (uint256 i = 0; i <= type(uint8).max; ++i) {
-            uint8 period = SafeCast.toUint8(i);
-            (bool isEnabled, bool isPendingEnabled) = IConvertibleDepositAuctioneer(cdAuctioneer)
-                .isDepositPeriodEnabled(period);
-            if (isEnabled || isPendingEnabled) {
-                knownPeriodsBuffer[knownPeriodCount] = period;
-                ++knownPeriodCount;
-            }
-        }
-
-        knownPeriods = new uint8[](knownPeriodCount);
-        for (uint256 i = 0; i < knownPeriodCount; ++i) {
-            knownPeriods[i] = knownPeriodsBuffer[i];
         }
     }
 
@@ -378,10 +355,11 @@ contract ConvertibleDepositRetuningProposal is GovernorBravoProposal {
     }
 
     function _validateAuctioneerDepositPeriods(address cdAuctioneer) internal view {
-        uint8[] memory knownPeriods = _getAuctioneerKnownPeriods(cdAuctioneer);
+        uint8[] memory enabledPeriods = IConvertibleDepositAuctioneer(cdAuctioneer)
+            .getDepositPeriods();
 
-        for (uint256 i = 0; i < knownPeriods.length; i++) {
-            uint8 period = knownPeriods[i];
+        for (uint256 i = 0; i < enabledPeriods.length; i++) {
+            uint8 period = enabledPeriods[i];
             (, bool isPendingEnabled) = IConvertibleDepositAuctioneer(cdAuctioneer)
                 .isDepositPeriodEnabled(period);
 
