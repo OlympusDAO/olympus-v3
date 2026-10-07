@@ -5,12 +5,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  brace-expansion@>=2.0.0 <2.1.4: ^2.1.4
-  brace-expansion@>=4.0.0 <5.0.9: ^5.0.9
-  fast-uri@>=3.0.0 <3.1.6: ^3.1.6
+  brace-expansion@>=2.0.0 <2.1.7: 2.1.7
+  brace-expansion@>=4.0.0 <5.0.12: 5.0.12
+  fast-uri@>=3.0.0 <3.1.8: 3.1.8
   cross-spawn@>=7.0.0 <7.0.5: ^7.0.5
   glob@>=11.0.0 <11.1.0: ^11.1.0
   js-yaml@>=4.0.0 <4.3.2: ^4.3.2
+  js-yaml@>=5.0.0 <5.4.1: 5.4.1
   linkify-it@<=5.0.1: ^5.0.2
   lodash@<=4.17.23: ^4.18.0
   markdown-it@>=13.0.0 <14.2.0: ^14.2.0
@@ -18,7 +19,7 @@ overrides:
   minimatch@>=5.0.0 <5.1.8: ^5.1.8
   picomatch@<2.3.2: ^2.3.2
   semver@>=7.0.0 <7.5.2: ^7.5.2
-  smol-toml@<1.7.1: ^1.7.1
+  smol-toml@<1.9.0: 1.9.0
   ajv@>=6.0.0 <6.14.0: 6.14.0
 
 importers:
@@ -110,11 +111,11 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
-  brace-expansion@2.1.4:
-    resolution: {integrity: sha512-hGfVzPxthbf3+2yjg/RBs60cB0FhqBS/zvdV/4wn4/BmN0bNMMHPc4V/BbFieqf1TKAGGAHnY4eSjajCl0f2Xg==}
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
-  brace-expansion@5.0.9:
-    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
   c3-linearization@0.3.0:
@@ -201,8 +202,8 @@ packages:
   fast-deep-equal@3.1.3:
     resolution: {integrity: sha512-f3qQ9oQy9j2AhBe/H9VC91wLmKBCCU/gDOnKNAYG5hswO7BLKj09Hc5HYNz9cGI++xlpDCIgDaitVs03ATR84Q==}
 
-  fast-uri@3.1.6:
-    resolution: {integrity: sha512-7Ical1vFEMr0onbVzEDIreM22I4khW+fzyQPwvAFWBp1iwdshSZRsL4jjRvPG9JP1uiqMHRto+YU6R2/CzDz5Q==}
+  fast-uri@3.1.8:
+    resolution: {integrity: sha512-GZMtZUTNRpOVIECoXwLNZS5xUGE+mVNbTB8h/7Rwh2TFWcBQiPzTgyZi05BF9UMZKkLJv8XBRJTlU7zg8+ZfMg==}
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -276,8 +277,8 @@ packages:
     resolution: {integrity: sha512-hFoiJiTl63nn+kstHGBtewWSKnQLpyb155KHheA1l39uvtO9nWIop1p3udqPcUd/xbF1VLMO4n7OI6p7RbngDg==}
     engines: {node: '>=8'}
 
-  js-yaml@5.2.3:
-    resolution: {integrity: sha512-n+mUVyUX5bVv7G/G2zyIHOhdxfuU1dY2NOFzTQUWiMUbFss8b57NFlgCCaggU78wSw5KVS9cllzeLyzyR+n5nw==}
+  js-yaml@5.4.1:
+    resolution: {integrity: sha512-28R/k+NAjeuf7+CKlTxWZVExJGwVVLwY06DgEnOMz2gEpfNkDcD7QvyiVPT0xy0XXhU8vHsd4Ot42OOPdJG7dQ==}
     hasBin: true
 
   json-schema-traverse@1.0.0:
@@ -498,8 +499,8 @@ packages:
     resolution: {integrity: sha512-tnB+gi6TiFpt3qmCGfaV+78dfKwLiH5HRohkW+PnJYHNAcEdk408uxWG+F/3pu4w1eyCO2NC5CpZKuiyMac5GQ==}
     hasBin: true
 
-  smol-toml@1.8.0:
-    resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
+  smol-toml@1.9.0:
+    resolution: {integrity: sha512-hpd+HLON7HdZXqYchMM/+LaTTbdK0AU3NngIJ4KVyWbY9bfQqdL9cD+4yf6dUoU2Ap4VsU0JkQi6FxAI1B2mXQ==}
     engines: {node: '>= 18'}
 
   solidity-code-metrics@0.0.25:
@@ -606,7 +607,7 @@ snapshots:
   ajv@8.20.0:
     dependencies:
       fast-deep-equal: 3.1.3
-      fast-uri: 3.1.6
+      fast-uri: 3.1.8
       json-schema-traverse: 1.0.0
       require-from-string: 2.0.2
 
@@ -628,11 +629,11 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  brace-expansion@2.1.4:
+  brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
 
-  brace-expansion@5.0.9:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -694,7 +695,7 @@ snapshots:
 
   fast-deep-equal@3.1.3: {}
 
-  fast-uri@3.1.6: {}
+  fast-uri@3.1.8: {}
 
   fdir@6.5.0(picomatch@4.0.4):
     optionalDependencies:
@@ -755,7 +756,7 @@ snapshots:
 
   is-stream@2.0.1: {}
 
-  js-yaml@5.2.3:
+  js-yaml@5.4.1:
     dependencies:
       argparse: 2.0.1
 
@@ -789,14 +790,14 @@ snapshots:
       commander: 15.0.0
       deep-extend: 0.6.0
       ignore: 7.0.8
-      js-yaml: 5.2.3
+      js-yaml: 5.4.1
       jsonc-parser: 3.3.1
       jsonpointer: 5.0.1
       markdown-it: 14.3.1
       markdownlint: 0.41.1
       minimatch: 10.2.5
       run-con: 1.3.3
-      smol-toml: 1.8.0
+      smol-toml: 1.9.0
       tinyglobby: 0.2.17
     transitivePeerDependencies:
       - supports-color
@@ -991,11 +992,11 @@ snapshots:
 
   minimatch@10.2.5:
     dependencies:
-      brace-expansion: 5.0.9
+      brace-expansion: 5.0.12
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 2.1.7
 
   minimist@1.2.8: {}
 
@@ -1086,7 +1087,7 @@ snapshots:
       commander: 11.1.0
       readdirp: 3.6.0
 
-  smol-toml@1.8.0: {}
+  smol-toml@1.9.0: {}
 
   solidity-code-metrics@0.0.25:
     dependencies:
