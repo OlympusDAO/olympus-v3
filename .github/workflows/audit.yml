@@ -31,6 +31,8 @@ jobs:
                   install-solidity-dependencies: "false"
 
             - name: Audit pnpm dependencies (fail on moderate+)
+              # Fork PR tokens cannot write comments. Manual runs have no PR to comment on.
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: JamesRobertWiseman/pnpm-audit@a6a8cc297d146014c029926e49d43571e776f85e # v3.2.0
               with:
                   package_json_path: ./
@@ -38,3 +40,7 @@ jobs:
                   level: moderate
                   fails: true
                   single_comment: true
+
+            - name: Audit pnpm dependencies without PR comments (fail on moderate+)
+              if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+              run: pnpm audit --audit-level moderate
