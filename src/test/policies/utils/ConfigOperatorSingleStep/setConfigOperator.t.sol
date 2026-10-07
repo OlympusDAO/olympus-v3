@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
+// forge-lint: disable-start(reentrancy-events)
+
 // Interfaces
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Contracts
 import {ConfigOperatorSingleStepTest} from "src/test/policies/utils/ConfigOperatorSingleStep/ConfigOperatorSingleStepTest.sol";
-import {ConfigOperatorSingleStepDefaultDenyHarness} from "src/test/policies/utils/ConfigOperatorSingleStep/fixtures/ConfigOperatorSingleStepHarness.sol";
+import {ConfigOperatorSingleStepDefaultDenyHarness} from "src/test/policies/utils/ConfigOperatorSingleStep/fixtures/ConfigOperatorSingleStepDefaultDenyHarness.sol";
 
 contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleStepTest {
     // configOperator
@@ -147,3 +150,5 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         assertEq(_configOperator.configOperator(), address(0), "config operator");
     }
 }
+
+// forge-lint: disable-end(reentrancy-events)

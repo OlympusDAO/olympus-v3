@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
+// forge-lint: disable-start(reentrancy-events)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
 import {MockTimelockBatchQueue} from "src/test/policies/utils/TimelockBatchQueue/fixtures/MockTimelockBatchQueue.sol";
@@ -57,3 +60,5 @@ contract TimelockBatchQueueConstructorTest is TimelockBatchQueueTest {
         new MockTimelockBatchQueue(delay);
     }
 }
+
+// forge-lint: disable-end(reentrancy-events)

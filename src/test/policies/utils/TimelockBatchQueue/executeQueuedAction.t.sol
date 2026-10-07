@@ -1,6 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
+// forge-lint: disable-start(reentrancy-events)
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// forge-lint: disable-start(calls-loop)
+
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue/TimelockBatchQueueTest.sol";
@@ -110,7 +119,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
         _warpReady(actionId);
 
-        for (uint256 i; i < actions.length; ++i) {
+        for (uint256 i = 0; i < actions.length; ++i) {
             vm.expectEmit(true, true, true, true);
             emit ITimelockBatchQueue.TimelockSubActionExecuted(
                 actionId,
@@ -135,7 +144,7 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         MockTimelockBatchQueue.ExecuteSubActionCall[] memory calls = queue
             .getExecuteSubActionCalls();
         assertEq(calls.length, 3, "execution call count");
-        for (uint256 i; i < calls.length; ++i) {
+        for (uint256 i = 0; i < calls.length; ++i) {
             assertEq(calls[i].actionId, actionId, "execution action ID");
             assertEq(calls[i].index, i, "execution index");
             assertEq(calls[i].target, actions[i].target, "execution target");
@@ -270,3 +279,9 @@ contract TimelockBatchQueueExecuteQueuedActionTest is TimelockBatchQueueTest {
         assertEq(queue.nextActionId(), newActionId + 1, "next action ID advanced");
     }
 }
+
+// forge-lint: disable-end(calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)
+
+// forge-lint: disable-end(reentrancy-events)

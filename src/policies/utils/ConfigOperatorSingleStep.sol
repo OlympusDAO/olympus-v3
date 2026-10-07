@@ -27,6 +27,7 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     ///      - `_authorizeSetConfigOperator` denies the caller (`ConfigOperator_Unauthorized`).
     ///      - `configOperator_` is the operator already configured (`ConfigOperator_Unchanged`),
     ///        the zero address over an unset operator included.
+    // forge-lint: disable-next-line(missing-zero-check)
     function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
