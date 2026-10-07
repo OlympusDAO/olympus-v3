@@ -2,6 +2,9 @@
 description: Guide for reviewing deployment, activation and governance steps.
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Governance Review
 
 This guide advises on how to perform the rollout of new policies and modules in the Olympus protocol.

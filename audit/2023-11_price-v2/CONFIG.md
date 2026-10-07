@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Configuration
 
 This file contains details on how the PRICE module will be configured. It should help auditors in assessing risks.

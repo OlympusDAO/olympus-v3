@@ -2,6 +2,9 @@
 description: Check contract bytecode sizes and find optimal optimizer runs
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Contract Size Checker
 
 Check contract bytecode sizes against EIP limits and find optimal optimizer settings.

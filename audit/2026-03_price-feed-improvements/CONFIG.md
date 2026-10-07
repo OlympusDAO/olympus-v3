@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # PRICE v1.2 Configuration
 
 This file contains detailed configuration information for the PRICE v1.2 module upgrade. It should help auditors in assessing risks related to price feed configuration.

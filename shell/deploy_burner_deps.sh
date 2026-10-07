@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # Load environment variables
 source .env
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # =====================================================================
 # LZ Bridge Migration: Bridged Supply Calculator
 # =====================================================================

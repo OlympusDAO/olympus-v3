@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # End-to-end Ethereum (canonical) rollout of the LayerZero bridge on a mainnet
 # Anvil fork.
 #

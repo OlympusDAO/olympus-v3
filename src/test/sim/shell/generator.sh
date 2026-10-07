@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # Simulation test file generator script
 
 # Load environment variables

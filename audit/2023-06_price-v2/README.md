@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # OlympusDAO Oracle System (PRICEv2) Audit
 
 The purpose of this audit is to review the security of a new infrastructure system for the Olympus protocol: a generalized price oracle system to be used across Olympus products. The first product to be migrated to use the new oracle system is the Range-Bound Stability (RBS) mechanism. Minor updates have been made to the RBS policies and are included in this audit. Additionally, we introduce a new primitive in Default Framework to have additional abstraction needed for the oracle system: Submodules.

@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # OCG Proposals
 
 This directory contains scripts for submitting proposals to the Olympus Governor.

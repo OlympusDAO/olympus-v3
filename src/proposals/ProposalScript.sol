@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.15;
 
 import {ScriptSuite} from "proposal-sim/script/ScriptSuite.s.sol";

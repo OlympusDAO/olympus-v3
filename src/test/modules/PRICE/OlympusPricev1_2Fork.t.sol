@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 // solhint-disable contract-name-camelcase
 /// forge-lint: disable-start(mixed-case-function,mixed-case-variable,unwrapped-modifier-logic)
 pragma solidity ^0.8.20;

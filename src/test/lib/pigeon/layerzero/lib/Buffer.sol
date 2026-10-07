@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2018 Ethereum Name Service
+// SPDX-FileCopyrightText: 2022 LayerZero Labs Ltd
+// SPDX-License-Identifier: BSD-2-Clause AND LicenseRef-LayerZero-BUSL-1.1
+
 // https://github.com/ensdomains/buffer
 
 pragma solidity >=0.7.0 <0.9.0;

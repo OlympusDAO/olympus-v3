@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-function)
 pragma solidity ^0.8.15;
 

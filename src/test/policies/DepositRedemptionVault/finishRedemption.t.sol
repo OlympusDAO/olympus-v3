@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Unlicensed
+// SPDX-FileCopyrightText: Contributors to OlympusDAO
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(unwrapped-modifier-logic)
 pragma solidity ^0.8.20;
 

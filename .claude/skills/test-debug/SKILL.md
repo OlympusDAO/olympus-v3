@@ -2,6 +2,9 @@
 description: Guide for debugging tests in the Olympus V3 codebase
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Test Debugging Guide
 
 This guide covers how to run and debug unit tests, fork tests, and proposal tests in the Olympus V3 codebase.

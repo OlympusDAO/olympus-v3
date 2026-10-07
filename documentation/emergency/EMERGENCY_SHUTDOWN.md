@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Emergency Shutdown Instructions
 
 This document provides comprehensive information on how to shut down the Olympus protocol in the event of an emergency.

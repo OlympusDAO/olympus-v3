@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # LZ bridge Anvil deployment harness
 
 Deploys the LayerZero bridge from scratch on a local Anvil fork and runs the real deploy / batch / OCG-proposal scripts against it. Deploys are signed with an Anvil dev key; DAO MS and timelock actions are sent from the real on-chain owners via Anvil impersonation.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.15;
 
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";

@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # LayerZero OHM bridge — testnet deployment
 
 Deploys and wires the full LayerZero V2 OHM bridge across three testnets so you can test cross-chain OHM transfers end to end:

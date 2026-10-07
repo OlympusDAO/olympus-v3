@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Overview
 
 Before creating a new proposal, it's essential to understand Olympus' On-Chain Governance (OCG) system. Please review the details in the [OCG Implementation Document](./OCG.md).

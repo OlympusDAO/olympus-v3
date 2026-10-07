@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: AGPL-3.0
+// SPDX-License-Identifier: Unlicense
 /// forge-lint: disable-start(mixed-case-variable)
 // solhint-disable use-natspec
 // solhint-disable gas-small-strings

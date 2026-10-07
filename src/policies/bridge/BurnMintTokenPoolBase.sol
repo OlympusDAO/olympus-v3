@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: BUSL-1.1
+// SPDX-FileCopyrightText: 2023 SmartContract Chainlink Limited SEZC
+// SPDX-License-Identifier: LicenseRef-Chainlink-CCIP-1.6
 pragma solidity ^0.8.24;
 
 import {IPoolV1} from "@chainlink-ccip-1.6.0/ccip/interfaces/IPool.sol";

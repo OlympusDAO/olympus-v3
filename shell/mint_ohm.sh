@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # mint_ohm.sh - Script to mint testnet OHM for testing Bophades Range System on Testnet
 # Load environment variables
 source .env
