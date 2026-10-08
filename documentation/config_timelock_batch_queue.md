@@ -75,16 +75,16 @@ The single-step mix-in has these semantics:
 
 - `configOperator` starts at `address(0)`, so delegated configuration is denied by default.
 - `setConfigOperator(newOperator)` replaces the operator immediately after authorization. The new
-    operator does not perform a separate acceptance transaction.
+  operator does not perform a separate acceptance transaction.
 - Setting `address(0)` revokes delegated access.
 - A successful change emits `ConfigOperatorSet`.
 - `_authorizeSetConfigOperator()` controls who may rotate or revoke the operator. Its base
-    implementation returns false, so the setter denies every caller. A Config contract must
-    explicitly override the hook to grant authority and may apply product roles, enabled-state
-    requirements, or other lifecycle checks. The hook authorizes the caller rather than validating
-    the new operator address.
+  implementation returns false, so the setter denies every caller. A Config contract must
+  explicitly override the hook to grant authority and may apply product roles, enabled-state
+  requirements, or other lifecycle checks. The hook authorizes the caller rather than validating
+  the new operator address.
 - Product setters decide whether the configured operator is their only delegated caller or is
-    accepted alongside another authority such as `admin`.
+  accepted alongside another authority such as `admin`.
 - Products that implement ERC-165 should advertise `IConfigOperator` explicitly.
 
 This separation keeps target ownership independent from queue mechanics. A product can use
@@ -102,7 +102,9 @@ Each guard has four parts.
 | Scoped key  | The key that the base reserves                             | The shared base           |
 | State hash  | The canonical state that must stay unchanged               | `_currentConfigStateHash` |
 
-The base calculates the scoped key as follows:
+The base calculates the scoped key with `ConfigTimelockKeyLib.scope`
+(`src/policies/utils/ConfigTimelockKeyLib.sol`), the one formula that the base, the product
+timelocks and the tooling that reads `pendingActionId` share:
 
 ```solidity
 bytes32 scopedKey = keccak256(abi.encode(destination, localKey));

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
@@ -60,7 +60,7 @@ abstract contract TimelockBatchQueueTest is Test {
         uint256 size_
     ) internal pure returns (ITimelockBatchQueue.BatchAction[] memory actions) {
         actions = new ITimelockBatchQueue.BatchAction[](size_);
-        for (uint256 i; i < size_; ++i) {
+        for (uint256 i = 0; i < size_; ++i) {
             actions[i] = ITimelockBatchQueue.BatchAction({
                 target: address(uint160(0x1000 + i)),
                 selector: bytes4(uint32(0xa000_0000 + i)),

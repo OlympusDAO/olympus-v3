@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
@@ -14,7 +14,7 @@ import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue
 contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
     function test_getQueuedSubAction_givenBatchQueued() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
-        for (uint256 i; i < actions.length; ++i) {
+        for (uint256 i = 0; i < actions.length; ++i) {
             (address target, bytes4 selector, bytes memory payload) = queue.getQueuedSubAction(
                 actionId,
                 i

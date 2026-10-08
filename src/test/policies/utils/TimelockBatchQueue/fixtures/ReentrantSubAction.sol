@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Test fixtures accept zero addresses to model unset, cleared, and invalid states.
 // forge-lint: disable-start(missing-zero-check)

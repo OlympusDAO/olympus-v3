@@ -223,6 +223,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         stored.expiresAt = expiresAt;
         for (uint256 i = 0; i < len; ++i) {
             stored.actions.push(actions_[i]);
+            // The queue hook of the subclass has already run; the events describe the stored
+            // action.
+            // forge-lint: disable-next-item(reentrancy-events)
             emit TimelockSubActionQueued(
                 actionId,
                 actions_[i].target,
@@ -232,6 +235,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
             );
         }
 
+        // forge-lint: disable-next-item(reentrancy-events)
         emit TimelockActionQueued(
             actionId,
             msg.sender,
