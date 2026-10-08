@@ -27,6 +27,9 @@ same tuple conflict. Direct admin route creation after queueing, or a role revoc
 queued action state-stale and non-executable. `setConfigOperator` is intentionally single-step and
 admin-only. It can appoint any address: that address receives the entire config-operator surface,
 including direct route creation. Appointing DMCT is the operational choice that imposes its delay.
+Setting the operator that is already configured reverts with `ConfigOperator_Unchanged`, and that
+includes the zero address while no operator is configured. The check runs after the enabled-state
+and admin-role checks, so a disabled contract or a non-admin caller sees those errors first.
 The initial share-withdrawal requirement remains part of admin-only asset onboarding. Admin can
 change it directly after onboarding, while the config-operator route normally uses the timelock's
 `queueSetAssetShareWithdrawalRequired`. The timelock cannot add assets, set operator names, rescue

@@ -11,6 +11,11 @@ import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
 
 contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
+    modifier givenConfigOperatorIsSet() {
+        _setDefaultConfigOperator();
+        _;
+    }
+
     // setConfigOperator
     // given caller does not have the admin role
     //  when setConfigOperator is called
@@ -37,6 +42,94 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
     }
 
     // setConfigOperator
+    // given a config operator is configured
+    //  given the policy is disabled
+    //   when setConfigOperator is called by admin with the configured operator
+    //    then it reverts with NotEnabled
+    // The enabled-state check answers before the unchanged check
+    function test_givenConfigOperatorIsSet_givenDisabled_whenConfigOperatorIsUnchanged_reverts()
+        public
+        givenConfigOperatorIsSet
+    {
+        vm.prank(admin);
+        burnerLoansConfig.disable("");
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IEnabler.NotEnabled.selector));
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(configTimelock),
+            "config operator should be unchanged"
+        );
+    }
+
+    // setConfigOperator
+    // given a config operator is configured
+    //  when setConfigOperator is called by a non-admin caller with the configured operator
+    //   then it reverts with ROLES_RequireRole
+    // The admin-role check answers before the unchanged check
+    function test_givenConfigOperatorIsSet_whenCallerIsNotAdmin_whenConfigOperatorIsUnchanged_reverts(
+        address caller_
+    ) public givenConfigOperatorIsSet {
+        vm.assume(caller_ != admin);
+
+        vm.prank(caller_);
+        vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(configTimelock),
+            "config operator should be unchanged"
+        );
+    }
+
+    // setConfigOperator
+    // given a config operator is configured
+    //  when setConfigOperator is called by admin with the configured operator
+    //   then it reverts with ConfigOperator_Unchanged and keeps the operator
+    function test_givenConfigOperatorIsSet_whenConfigOperatorIsUnchanged_reverts()
+        public
+        givenConfigOperatorIsSet
+    {
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector));
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(configTimelock),
+            "config operator should be unchanged"
+        );
+    }
+
+    // setConfigOperator
+    // given no config operator is configured
+    //  when setConfigOperator is called by admin with the zero address
+    //   then it reverts with ConfigOperator_Unchanged
+    // Zero is a value in its own right: clearing an operator that is already unset is an
+    // unchanged write, not a no-op
+    function test_givenConfigOperatorIsUnset_whenConfigOperatorIsZero_reverts() public {
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(0),
+            "config operator should start unset"
+        );
+
+        vm.prank(admin);
+        vm.expectRevert(abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector));
+        burnerLoansConfig.setConfigOperator(address(0));
+
+        assertEq(
+            burnerLoansConfig.configOperator(),
+            address(0),
+            "config operator should stay unset"
+        );
+    }
+
+    // setConfigOperator
     // given the config operator address is zero
     //  when setConfigOperator is called by admin
     //   then it revokes delegated access
@@ -60,6 +153,9 @@ contract BurnerLoansConfigSetConfigOperatorTest is BurnerLoansTest {
     ) public {
         vm.assume(caller_ != admin);
 
+        // The operator starts unset, and clearing an unset operator reverts with
+        // ConfigOperator_Unchanged, so the zero state is reached by revoking a configured operator.
+        _setDefaultConfigOperator();
         vm.prank(admin);
         burnerLoansConfig.setConfigOperator(address(0));
 
