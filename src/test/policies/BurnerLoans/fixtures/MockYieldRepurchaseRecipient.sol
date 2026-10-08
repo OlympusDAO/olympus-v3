@@ -24,6 +24,7 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
 
     EnumerableSet.AddressSet internal _vaults;
     mapping(address vault => IYieldRepurchaseRecipient.VaultConfig) internal _vaultConfigs;
+    mapping(address asset => address vault) internal _assetVaults;
 
     constructor(Kernel kernel_) Policy(kernel_) {}
 
@@ -54,11 +55,14 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
 
     function setVaultConfig(address vault_, address asset_, bool enabled_) external {
         _vaults.add(vault_);
+        // The mock models an ordinary ERC4626 vault, which is its own share token
         _vaultConfigs[vault_] = IYieldRepurchaseRecipient.VaultConfig({
             vault: vault_,
+            shareToken: vault_,
             asset: asset_,
             enabled: enabled_
         });
+        _assetVaults[asset_] = vault_;
     }
 
     function setReturnedVault(address lookupVault_, address returnedVault_) external {
@@ -99,5 +103,9 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
         if (_revertGetVaultConfig) revert MockYieldRepurchaseRecipient_GetVaultConfigFailed();
         if (!_vaults.contains(vault_)) revert YieldRepurchaseRecipient_VaultNotRegistered(vault_);
         return _vaultConfigs[vault_];
+    }
+
+    function getAssetVault(address asset_) external view override returns (address vault) {
+        return _assetVaults[asset_];
     }
 }
