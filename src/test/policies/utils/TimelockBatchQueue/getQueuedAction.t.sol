@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)

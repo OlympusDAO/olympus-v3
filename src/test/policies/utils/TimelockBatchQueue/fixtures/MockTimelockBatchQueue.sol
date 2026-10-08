@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Test fixtures accept zero addresses to model unset, cleared, and invalid states.
 // forge-lint: disable-start(missing-zero-check)
@@ -225,7 +225,7 @@ contract MockTimelockBatchQueue is TimelockBatchQueue {
 
         if (callThroughTarget != address(0) && action_.target == callThroughTarget) {
             // Required to dispatch arbitrary payload and capture exact revert data.
-            // forge-lint: disable-next-line(low-level-calls)
+            // forge-lint: disable-next-item(low-level-calls)
             (bool success, bytes memory returnData) = action_.target.call(
                 abi.encodePacked(action_.selector, action_.payload)
             );

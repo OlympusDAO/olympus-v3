@@ -652,8 +652,9 @@ circular enablement dependency.
    Inventory are globally disabled, but both linked policies must remain active and all reverse
    links must agree.
 9. Optionally call `Config.setConfigOperator(ConfigTimelock)` and enable ConfigTimelock. Setting the
-   operator to zero disables delegated execution. Delayed execution requires Config and
-   ConfigTimelock to remain enabled and ConfigTimelock to remain the configured operator.
+   operator to zero disables delegated execution; setting the operator already configured reverts
+   with `ConfigOperator_Unchanged`. Delayed execution requires Config and ConfigTimelock to remain
+   enabled and ConfigTimelock to remain the configured operator.
 10. Through Config, set the Burner Loans Inventory global cap. Its cap setter remains available
     while Burner Loans Inventory is globally disabled so deployment can reconcile MINTR approval
     before user operations begin.

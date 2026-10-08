@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
@@ -8,8 +8,10 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 /// @notice Reusable single-step configuration-operator storage and rotation.
 /// @dev The operator starts unset. Implementations must explicitly override
 ///      `_authorizeSetConfigOperator` to permit rotation; the default implementation denies every
-///      caller. Product setters remain responsible for composing operator authority with any other
-///      accepted authority.
+///      caller. A rotation to the operator already configured, the zero address included, reverts
+///      with `ConfigOperator_Unchanged` once the caller is authorized, so a call that lands always
+///      changes the operator. Product setters remain responsible for composing operator authority
+///      with any other accepted authority.
 abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE ========== //
 
@@ -19,12 +21,19 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
-    /// @dev The zero address is valid and revokes delegated configuration access.
+    /// @dev The zero address is a valid value: it revokes delegated access.
+    ///
+    ///      Reverts if:
+    ///      - `_authorizeSetConfigOperator` denies the caller (`ConfigOperator_Unauthorized`).
+    ///      - `configOperator_` is the operator already configured (`ConfigOperator_Unchanged`),
+    ///        the zero address over an unset operator included.
     // forge-lint: disable-next-line(missing-zero-check)
-    function setConfigOperator(address configOperator_) external virtual override {
+    function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
         }
+        if (configOperator_ == configOperator) revert ConfigOperator_Unchanged();
+
         configOperator = configOperator_;
         emit ConfigOperatorSet(configOperator_);
     }

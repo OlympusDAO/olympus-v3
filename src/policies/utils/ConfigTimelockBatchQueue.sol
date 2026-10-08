@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 // Interfaces
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Libraries
+import {ConfigTimelockKeyLib} from "src/policies/utils/ConfigTimelockKeyLib.sol";
 
 // Contracts
 import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
@@ -25,9 +28,16 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         bytes32 expectedStateHash;
     }
 
+    /// @notice The unresolved action holding a configuration key, or zero when the key is free.
+    /// @dev    Keyed by the destination-scoped key (`ConfigTimelockKeyLib.scope`) that
+    ///         `pendingActionId` and `getQueuedConfigState` report.
     mapping(bytes32 key => uint64 actionId) internal _pendingActionIds;
+
+    /// @notice The configuration states recorded for a sub-action at queue time, by local key.
     mapping(uint64 actionId => mapping(uint256 index => QueuedConfigState[] states))
         internal _queuedConfigStates;
+
+    /// @notice The destination recorded for a sub-action at queue time.
     mapping(uint64 actionId => mapping(uint256 index => address destination))
         internal _queuedConfigDestinations;
 
@@ -78,7 +88,7 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
 
         QueuedConfigState storage state = states[configStateIndex_];
         address destination = _queuedConfigDestinations[actionId_][index_];
-        return (_scopeConfigKey(destination, state.localKey), state.expectedStateHash);
+        return (ConfigTimelockKeyLib.scope(destination, state.localKey), state.expectedStateHash);
     }
 
     function _onSubActionQueued(
@@ -111,13 +121,13 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // Queueing is intentionally atomic: any invalid or already-owned key must reject the
         // complete bounded configuration action.
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i; i < keyLength; ++i) {
+        for (uint256 i = 0; i < keyLength; ++i) {
             bytes32 localKey = keys[i];
             if (localKey == bytes32(0)) {
                 revert IConfigTimelockBatchQueue_ConfigKeyZero(actionId_, index_, i);
             }
 
-            bytes32 key = _scopeConfigKey(destination, localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(destination, localKey);
 
             uint64 owner = _pendingActionIds[key];
             if (owner != 0) {
@@ -133,7 +143,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             _queuedConfigStates[actionId_][index_].push(
                 QueuedConfigState({localKey: localKey, expectedStateHash: expectedStateHash})
             );
-            // Aggregate configuration keys are capped at 15, and each key must reserve its owner.
+            // The aggregate key count of a batch is bounded by `_maxConfigKeysPerBatch()`, and
+            // each key must reserve its owner.
             // forge-lint: disable-next-line(costly-loop)
             _pendingActionIds[key] = actionId_;
 
@@ -171,9 +182,9 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // Execution is intentionally atomic: any ownership or expected-state mismatch must reject
         // the complete bounded batch before its configuration sub-action executes.
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i; i < length; ++i) {
+        for (uint256 i = 0; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            bytes32 key = _scopeConfigKey(expectedDestination, state.localKey);
+            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
             uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -217,12 +228,12 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // Terminal cleanup is intentionally atomic: an ownership mismatch must prevent partial
         // release of the bounded action's configuration keys.
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 index; index < subActionCount_; ++index) {
+        for (uint256 index = 0; index < subActionCount_; ++index) {
             QueuedConfigState[] storage states = _queuedConfigStates[actionId_][index];
             address destination = _queuedConfigDestinations[actionId_][index];
             uint256 length = states.length;
-            for (uint256 i; i < length; ++i) {
-                bytes32 key = _scopeConfigKey(destination, states[i].localKey);
+            for (uint256 i = 0; i < length; ++i) {
+                bytes32 key = ConfigTimelockKeyLib.scope(destination, states[i].localKey);
                 uint64 owner = _pendingActionIds[key];
                 if (owner != actionId_) {
                     revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -232,11 +243,13 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
                         owner
                     );
                 }
-                // At most 15 aggregate configuration keys are released for one terminal action.
+                // One terminal action releases the keys it reserved, bounded at queue time by
+                // `_maxConfigKeysPerBatch()`.
                 // forge-lint: disable-next-line(costly-loop)
                 delete _pendingActionIds[key];
             }
-            // Batches are capped at 15 sub-actions, whose terminal state must be fully removed.
+            // The sub-action count of a batch is bounded at queue time by `_maxBatchSize()`, and
+            // the terminal state of each sub-action must be fully removed.
             // forge-lint: disable-start(costly-loop)
             delete _queuedConfigStates[actionId_][index];
             delete _queuedConfigDestinations[actionId_][index];
@@ -249,16 +262,9 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         uint64 actionId_,
         uint256 endIndex_
     ) private view returns (uint256 count) {
-        for (uint256 index; index < endIndex_; ++index) {
+        for (uint256 index = 0; index < endIndex_; ++index) {
             count += _queuedConfigStates[actionId_][index].length;
         }
-    }
-
-    function _scopeConfigKey(
-        address destination_,
-        bytes32 localKey_
-    ) private pure returns (bytes32) {
-        return keccak256(abi.encode(destination_, localKey_));
     }
 
     /// @notice Validates queue-wide authorization and lifecycle requirements.

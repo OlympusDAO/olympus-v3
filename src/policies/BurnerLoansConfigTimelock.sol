@@ -15,6 +15,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {BurnerLoansConfigTimelockLib} from "src/policies/libraries/BurnerLoansConfigTimelockLib.sol";
+import {ConfigTimelockKeyLib} from "src/policies/utils/ConfigTimelockKeyLib.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -725,7 +726,7 @@ contract BurnerLoansConfigTimelock is
     /// @notice Requires a destination-local configuration key to have no pending owner.
     /// @dev Reverts with the same pending-key error used by `ConfigTimelockBatchQueue`.
     function _requireConfigKeyAvailable(bytes32 localKey_) internal view {
-        bytes32 key = keccak256(abi.encode(address(_BURNER_LOANS_CONFIG), localKey_));
+        bytes32 key = ConfigTimelockKeyLib.scope(address(_BURNER_LOANS_CONFIG), localKey_);
         uint64 owner = _pendingActionIds[key];
         if (owner != 0) {
             // A registry-wide availability check is intentionally atomic: any pending route key
