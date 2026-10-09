@@ -22,7 +22,7 @@ library BurnerLoansConfigTimelockLib {
     /// @dev Complete target errors below the return-data cap are bubbled verbatim. Empty or
     ///      potentially truncated errors use a descriptive fallback. Reverts if:
     ///      - The selector is unsupported or the payload cannot be decoded.
-    ///      - The target rejects the configuration.
+    ///      - The target rejects the configuration or rescue.
     function executeSubAction(
         IBurnerLoansConfig burnerLoans_,
         ITimelockBatchQueue.BatchAction memory action_
@@ -73,7 +73,9 @@ library BurnerLoansConfigTimelockLib {
             actionSelector == IBurnerLoansConfig.setAssetWithdrawAsShares.selector ||
             actionSelector == IBurnerLoansConfig.setSendFeesToDistributor.selector ||
             actionSelector == IBurnerLoansConfig.setSendYieldToDistributor.selector ||
-            actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector
+            actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector ||
+            actionSelector == IBurnerLoansConfig.rescue.selector ||
+            actionSelector == IBurnerLoansConfig.rescuePendingPayout.selector
         ) {
             callData = abi.encodePacked(actionSelector, action_.payload);
         } else {

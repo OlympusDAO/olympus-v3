@@ -13,11 +13,86 @@ import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
 import {Actions} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {MockRevertingTransferToken} from "src/test/mocks/MockRevertingTransferToken.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
+    /// @notice The frozen cancellation gate also preserves surplus and pending-rescue conflict keys.
+    // Finite rescue selector and timelock lifecycle combinations; quantities are token base units.
+    // forge-lint: disable-start(calls-loop,literal-instead-of-constant)
+    // Scenarios: BLCT-C01.
+    function test_givenTimelockUnavailable_whenEmergencyCancelsRescue_reverts() public {
+        address destination = makeAddr("rescue destination");
+        for (uint256 pending; pending < 2; ++pending) {
+            for (uint256 inactive; inactive < 2; ++inactive) {
+                uint256 snapshot = vm.snapshotState();
+                MockRevertingTransferToken asset = new MockRevertingTransferToken(18);
+                asset.mint(address(burnerLoans), 11);
+                if (pending != 0) {
+                    asset.setTransferReverts(alice, true);
+                    burnerLoans.recordPendingSeizureRewardForTest(address(asset), alice, 10);
+                }
+                vm.prank(admin);
+                uint64 id = pending == 0
+                    ? configTimelock.queueRescue(address(asset), destination)
+                    : configTimelock.queueRescuePendingPayout(
+                        address(asset),
+                        alice,
+                        destination,
+                        4
+                    );
+                bytes32 actionBefore = keccak256(abi.encode(configTimelock.getQueuedAction(id)));
+                (bytes32 key, bytes32 stateHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+                vm.prank(admin);
+                if (inactive == 0) configTimelock.disable("");
+                else kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+                bytes memory failure = inactive == 0
+                    ? abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+                    : abi.encodeWithSelector(
+                        IBurnerLoansConfigTimelock
+                            .BurnerLoansConfigTimelock_PolicyInactive
+                            .selector,
+                        address(configTimelock)
+                    );
+                vm.expectRevert(failure);
+                vm.prank(emergency);
+                configTimelock.cancelQueuedAction(id);
+                assertEq(
+                    keccak256(abi.encode(configTimelock.getQueuedAction(id))),
+                    actionBefore,
+                    "frozen rescue cancellation retains action"
+                );
+                assertEq(
+                    configTimelock.pendingActionId(key),
+                    id,
+                    "frozen rescue cancellation retains key"
+                );
+                (, bytes32 afterHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+                assertEq(afterHash, stateHash, "frozen rescue cancellation retains guard");
+                assertEq(
+                    asset.balanceOf(address(burnerLoans)),
+                    11,
+                    "frozen rescue cancellation retains custody"
+                );
+                assertEq(
+                    asset.balanceOf(destination),
+                    0,
+                    "frozen rescue cancellation pays nothing"
+                );
+                assertEq(
+                    burnerLoans.pendingPayout(address(asset), alice),
+                    pending == 0 ? 0 : 10,
+                    "frozen cancellation retains entitlement"
+                );
+                assertTrue(vm.revertToState(snapshot), "restore frozen rescue cancellation");
+            }
+        }
+    }
+
+    // forge-lint: disable-end(calls-loop,literal-instead-of-constant)
+
     // cancelQueuedAction
     // given caller does not have emergency role
     //  when cancelling a queued action

@@ -194,6 +194,16 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         );
     }
 
+    // queueAction
+    // given a surplus-rescue payload is not exactly two ABI words
+    //  when the action is queued
+    //   then validation rejects the new rescue selector before preview
+    // Scenarios: I-04
+    function test_whenSurplusRescuePayloadLengthIsInvalid_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.rescue.selector, 63);
+        _expectInvalidPayloadLength(IBurnerLoansConfig.rescue.selector, 65);
+    }
+
     function _expectInvalidPayloadLength(bytes4 selector_, uint256 payloadLength_) internal {
         _expectInvalidPayload(selector_, new bytes(payloadLength_));
     }

@@ -15,6 +15,23 @@ interface IBurnerLoansConfig {
     /// @dev Admin or selected config operator, while Config is enabled.
     function setSendYieldToDistributor(bool enabled_) external;
 
+    /// @notice Forwards an unreserved token rescue to the facility.
+    /// @param token_ Token to rescue.
+    /// @param destination_ Rescue recipient.
+    function rescue(address token_, address destination_) external;
+
+    /// @notice Redirects an exact amount owed to one payout recipient.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient currently owed the pending payout.
+    /// @param destination_ Recipient of the rescued tokens.
+    /// @param amount_ Exact positive amount, at most pendingPayout(token_, recipient_).
+    function rescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external;
+
     /// @notice The Config policy is not active in its Kernel.
     error BurnerLoansConfig_PolicyInactive();
 

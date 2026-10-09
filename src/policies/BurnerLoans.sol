@@ -6,6 +6,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
 import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/interfaces/IBurnerLoansSeizureContext.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
@@ -13,7 +14,10 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
+import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
@@ -35,6 +39,7 @@ import {BurnerLoansLifecycle} from "src/policies/abstracts/BurnerLoansLifecycle.
 ///      All token-touching lifecycle entry points share one storage-backed reentrancy guard.
 contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizureContext {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeERC20 for ERC20;
 
     /// @notice Oracle supplying the canonical backing value per OHM.
     address public backingOracle;
@@ -61,6 +66,11 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     ///      - the caller is not the currently bound Config policy.
     function _requireConfigurator() internal view {
         if (msg.sender != address(_CONFIGURATOR)) revert BurnerLoans_OnlyConfigurator(msg.sender);
+    }
+
+    /// @dev Rescue authority belongs to the bound Config or a current admin; other configuration stays Config-only.
+    function _requireRescueCaller() internal view {
+        if (msg.sender != address(_CONFIGURATOR) && !_isAdmin(msg.sender)) revert NotAuthorised();
     }
 
     // ========== CONSTRUCTOR ========== //
@@ -427,10 +437,168 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         );
     }
 
+    /// @inheritdoc IBurnerLoansRescue
+    /// @dev Reverts if:
+    ///      - The caller is neither the bound Config nor admin, or this policy is Kernel-inactive.
+    ///      - A guarded operation is already in progress.
+    ///      - The token has no code or cannot report its balance, or the destination is zero.
+    ///      - The destination is this facility, the token, the bound Configurator, or the Kernel.
+    ///      - The token transfer fails.
+    ///      Callable while locally disabled.
+    function rescue(address token_, address destination_) external override nonReentrant {
+        _requireRescueCaller();
+        _requirePolicyActive();
+        uint256 amount = _previewRescue(token_, destination_);
+        if (amount == 0) return;
+        ERC20(token_).safeTransfer(destination_, amount);
+        emit AssetRescued(token_, destination_, amount);
+    }
+
+    /// @inheritdoc IBurnerLoansRescue
+    /// @dev Callable while locally disabled; resolves role recipients at execution.
+    ///      Debits keeper reward, fee, then seized collateral.
+    ///      Emits one per-kind event for each nonzero debit and transfers the total once.
+    ///      Reverts if:
+    ///      - The caller is neither the bound Config nor admin.
+    ///      - This policy is Kernel-inactive or a guarded operation is in progress.
+    ///      - The token has no code, or the recipient or destination is zero.
+    ///      - The destination is this facility, the token, the bound Configurator, or the Kernel.
+    ///      - The amount is zero or exceeds the recipient's current combined entitlement.
+    ///      - The token transfer fails.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient currently owed the pending payout.
+    /// @param destination_ Recipient of the rescued tokens.
+    /// @param amount_ Exact positive amount, at most pendingPayout(token_, recipient_).
+    function rescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external override nonReentrant {
+        _requireRescueCaller();
+        _requirePolicyActive();
+        // Validates that amount_ is positive and fits the recipient's combined pending payout.
+        _previewRescuePendingPayout(token_, recipient_, destination_, amount_);
+        uint256 seizureReward = Math.min(
+            amount_,
+            _PAYOUTS.pendingKeeperRewards[token_][recipient_]
+        );
+        uint256 fee;
+        if (recipient_ == _feeRecipient()) {
+            fee = Math.min(amount_ - seizureReward, _PAYOUTS.pendingFees[token_]);
+        }
+        uint256 seizure = amount_ - seizureReward - fee;
+
+        if (seizureReward != 0) {
+            _PAYOUTS.pendingKeeperRewards[token_][recipient_] -= seizureReward;
+            if (_PAYOUTS.pendingKeeperRewards[token_][recipient_] == 0)
+                _PAYOUTS.pendingKeeperRecipients[token_].remove(recipient_);
+            emit PendingSeizureRewardRescued(token_, recipient_, destination_, seizureReward);
+        }
+        if (fee != 0) {
+            _PAYOUTS.pendingFees[token_] -= fee;
+            emit PendingFeeRescued(token_, destination_, fee);
+        }
+        if (seizure != 0) {
+            // The validated entitlement includes seized collateral only for the current Treasury.
+            _PAYOUTS.pendingSeizedCollateral[token_] -= seizure;
+            emit PendingSeizureRescued(token_, destination_, seizure);
+        }
+        _decreasePending(token_, amount_);
+        ERC20(token_).safeTransfer(destination_, amount_);
+    }
+
+    /// @inheritdoc IBurnerLoansRescue
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - The token has no code or cannot report a balance, or the destination is zero.
+    ///      - the destination is this facility, the token, the bound Configurator, or the Kernel.
+    function previewRescue(
+        address token_,
+        address destination_
+    ) external view override returns (uint256) {
+        _requirePolicyActive();
+        return _previewRescue(token_, destination_);
+    }
+
+    /// @inheritdoc IBurnerLoansRescue
+    /// @dev Reverts if:
+    ///      - This policy is Kernel-inactive.
+    ///      - Token, recipient or destination is zero.
+    ///      - The destination is this facility, the token, the bound Configurator, or the Kernel.
+    ///      - The amount is zero or exceeds the recipient's current combined entitlement.
+    function previewRescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external view override returns (uint256) {
+        _requirePolicyActive();
+        return _previewRescuePendingPayout(token_, recipient_, destination_, amount_);
+    }
+
+    /// @dev Reverts if:
+    ///      - the token has no code or the destination is zero.
+    ///      - the destination is this facility, the token, the bound Configurator, or the Kernel.
+    /// @param token_ Token to check.
+    /// @param destination_ Proposed rescue recipient.
+    function _validateRescueAddresses(address token_, address destination_) internal view {
+        if (token_.code.length == 0) revert BurnerLoans_InvalidAsset(token_);
+        if (
+            destination_ == address(0) ||
+            destination_ == address(this) ||
+            destination_ == token_ ||
+            destination_ == address(_CONFIGURATOR) ||
+            destination_ == address(kernel)
+        ) revert BurnerLoans_InvalidRescueDestination(destination_);
+    }
+
     /// @dev Reverts if:
     ///      - this policy is no longer active in the Kernel.
     function _requirePolicyActive() internal view {
         if (!kernel.isPolicyActive(Policy(address(this)))) revert BurnerLoans_PolicyInactive();
+    }
+
+    /// @dev Reverts if:
+    ///      - The token has no code or cannot report its balance, or the destination is zero.
+    ///      - The destination is this facility, the token, the bound Configurator, or the Kernel.
+    /// @param token_ Token to inspect.
+    /// @param destination_ Proposed rescue recipient.
+    /// @return Full unreserved token balance.
+    function _previewRescue(address token_, address destination_) internal view returns (uint256) {
+        _validateRescueAddresses(token_, destination_);
+        uint256 balance = ERC20(token_).balanceOf(address(this));
+        uint256 reserved = _PAYOUTS.totalPending[token_];
+        if (balance <= reserved) return 0;
+        return balance - reserved;
+    }
+
+    /// @dev Reverts if:
+    ///      - Token, recipient or destination is zero.
+    ///      - The destination is this facility, the token, the bound Configurator, or the Kernel.
+    ///      - The amount is zero or exceeds the recipient's current combined entitlement.
+    function _previewRescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) internal view returns (uint256 available) {
+        _validateRescueAddresses(token_, destination_);
+        if (recipient_ == address(0)) revert BurnerLoans_ZeroAddress();
+        if (amount_ == 0) revert BurnerLoans_ZeroAmount();
+        available = _pendingAmount(token_, recipient_);
+        if (amount_ > available)
+            revert BurnerLoans_InsufficientPendingPayout(token_, amount_, available);
+    }
+
+    /// @dev Updates the reserve and removes a token once every pending bucket is empty.
+    ///      Reverts if:
+    ///      - the decrease exceeds the aggregate reserve.
+    /// @param token_ Token whose reserve decreases.
+    /// @param amount_ Amount paid from the reserve.
+    function _decreasePending(address token_, uint256 amount_) internal {
+        _PAYOUTS.totalPending[token_] -= amount_;
+        if (_PAYOUTS.totalPending[token_] == 0) _PAYOUTS.pendingTokens.remove(token_);
     }
 
     /// @inheritdoc IBurnerLoansView
@@ -441,7 +609,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         return _pendingAmount(token_, recipient_);
     }
 
-    /// @dev Combines liabilities currently owed to this address.
+    /// @dev Combines liabilities currently owed to this address, matching rescue validation.
     function _pendingAmount(
         address token_,
         address recipient_

@@ -7,6 +7,7 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
@@ -57,6 +58,8 @@ contract BurnerLoansConfigTimelock is
 
     /// @dev ABI-encoded byte length of an address followed by one static value.
     uint256 internal constant _LEN_ADDRESS_UINT256 = 64;
+    /// @dev Length of four static ABI-encoded arguments.
+    uint256 internal constant _LEN_FOUR_WORDS = 128;
 
     /// @dev ABI-encoded byte length of one static value.
     uint256 internal constant _LEN_UINT256 = 32;
@@ -74,6 +77,8 @@ contract BurnerLoansConfigTimelock is
         keccak256("BURNER_LOANS_SEND_FEES_TO_DISTRIBUTOR");
     bytes32 internal constant _SEND_YIELD_TO_DISTRIBUTOR_DOMAIN =
         keccak256("BURNER_LOANS_SEND_YIELD_TO_DISTRIBUTOR");
+    /// @dev Rescue keys are separated by operation and payout bucket.
+    bytes32 internal constant _RESCUE_DOMAIN = keccak256("BURNER_LOANS_RESCUE");
 
     /// @inheritdoc IBurnerLoansConfigTimelock
     uint48 public constant override MIN_TIMELOCK_DELAY = 1 days;
@@ -254,6 +259,49 @@ contract BurnerLoansConfigTimelock is
 
     /// @inheritdoc IBurnerLoansConfigTimelock
     /// @dev Reverts if:
+    ///      - The caller lacks admin or burner_loans_admin authority.
+    ///      - This timelock or Config is disabled, either policy is inactive, or this operator is no longer selected.
+    ///      - The preview rejects the token or destination, or a surplus rescue for the token is
+    ///        already queued.
+    function queueRescue(address token_, address destination_) external returns (uint64 actionId) {
+        return
+            _queueAction(
+                address(_BURNER_LOANS_CONFIG),
+                IBurnerLoansConfig.rescue.selector,
+                abi.encode(token_, destination_)
+            );
+    }
+
+    /// @inheritdoc IBurnerLoansConfigTimelock
+    /// @dev Validates the current combined entitlement; execution rechecks current routing.
+    ///      Reverts if:
+    ///      - The caller lacks admin or burner_loans_admin authority.
+    ///      - The timelock is disabled, Kernel-inactive, or no longer the selected operator.
+    ///      - The bound Config is disabled or Kernel-inactive. The facility may be locally disabled.
+    ///      - The token, recipient, or destination is zero.
+    ///      - The amount is zero or exceeds the recipient's current combined entitlement.
+    ///      - A conflicting action is pending, the payload is malformed, or queue bounds fail.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient currently owed the pending payout.
+    /// @param destination_ Recipient of the rescued tokens.
+    /// @param amount_ Exact positive amount, at most pendingPayout(token_, recipient_).
+    /// @return actionId Queued action identifier.
+    function queueRescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external override returns (uint64) {
+        return
+            _queueAction(
+                address(_BURNER_LOANS_CONFIG),
+                IBurnerLoansConfig.rescuePendingPayout.selector,
+                abi.encode(token_, recipient_, destination_, amount_)
+            );
+    }
+
+    /// @inheritdoc IBurnerLoansConfigTimelock
+    /// @dev Reverts if:
     ///      - queue validation fails or another output-mode transition is already pending
     ///      for the asset. Originations transitions use an independent configuration key.
     function queueSetAssetWithdrawAsShares(
@@ -345,12 +393,29 @@ contract BurnerLoansConfigTimelock is
             key = keccak256(abi.encode(_SEND_FEES_TO_DISTRIBUTOR_DOMAIN));
         } else if (selector == IBurnerLoansConfig.setSendYieldToDistributor.selector) {
             key = keccak256(abi.encode(_SEND_YIELD_TO_DISTRIBUTOR_DOMAIN));
+        } else if (_isRescueSelector(selector)) {
+            key = _rescueConfigKey(action_);
         } else {
             key = _assetConfigKey(action_);
         }
 
         keys = new bytes32[](1);
         keys[0] = key;
+    }
+
+    /// @dev Pending rescues share a token/recipient key; surplus rescues use a token key.
+    function _rescueConfigKey(
+        ITimelockBatchQueue.BatchAction memory action_
+    ) private pure returns (bytes32) {
+        if (action_.selector == IBurnerLoansConfig.rescue.selector) {
+            (address surplusToken, ) = abi.decode(action_.payload, (address, address));
+            return keccak256(abi.encode(_RESCUE_DOMAIN, action_.selector, surplusToken));
+        }
+        (address token, address recipient, , ) = abi.decode(
+            action_.payload,
+            (address, address, address, uint256)
+        );
+        return keccak256(abi.encode(_RESCUE_DOMAIN, action_.selector, token, recipient));
     }
 
     /// @dev Derives the conflict key for an asset configuration action.
@@ -418,6 +483,12 @@ contract BurnerLoansConfigTimelock is
                         flagsFacility.revenueDistributor()
                     )
                 );
+        }
+
+        if (_isRescueSelector(selector)) {
+            // Recoveries use the selected facility as pre-state. Live balances and pending amounts
+            // may change during the delay; the facility checks the requested amount at execution.
+            return keccak256(abi.encode(_BURNER_LOANS_CONFIG.facility()));
         }
 
         address asset = abi.decode(action_.payload, (address));
@@ -544,6 +615,10 @@ contract BurnerLoansConfigTimelock is
         }
 
         bytes4 actionSelector = action_.selector;
+        if (_isRescueSelector(actionSelector)) {
+            _validateQueuedRescueAction(action_);
+            return;
+        }
 
         if (
             actionSelector == IBurnerLoansConfig.setPriceCacheMaxAge.selector ||
@@ -694,6 +769,36 @@ contract BurnerLoansConfigTimelock is
         }
 
         return false;
+    }
+
+    /// @dev Returns true for every supported rescue selector.
+    function _isRescueSelector(bytes4 selector_) private pure returns (bool) {
+        return
+            selector_ == IBurnerLoansConfig.rescue.selector ||
+            selector_ == IBurnerLoansConfig.rescuePendingPayout.selector;
+    }
+
+    /// @dev Reverts if:
+    ///      - The payload is malformed or the live facility preview rejects its inputs.
+    function _validateQueuedRescueAction(
+        ITimelockBatchQueue.BatchAction memory action_
+    ) internal view {
+        bytes4 selector = action_.selector;
+        IBurnerLoansRescue facility = IBurnerLoansRescue(_BURNER_LOANS_CONFIG.facility());
+        if (selector == IBurnerLoansConfig.rescue.selector) {
+            _requirePayloadLength(action_.target, action_.payload, _LEN_ADDRESS_UINT256, selector);
+            (address token, address destination) = abi.decode(action_.payload, (address, address));
+            // forge-lint: disable-next-line(unused-return)
+            facility.previewRescue(token, destination);
+        } else {
+            _requirePayloadLength(action_.target, action_.payload, _LEN_FOUR_WORDS, selector);
+            (address token, address recipient, address destination, uint256 amount) = abi.decode(
+                action_.payload,
+                (address, address, address, uint256)
+            );
+            // forge-lint: disable-next-line(unused-return)
+            facility.previewRescuePendingPayout(token, recipient, destination, amount);
+        }
     }
 
     /// @notice Requires this timelock to remain the Config policy's authorized operator.

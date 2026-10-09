@@ -8,6 +8,7 @@ import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 contract MockBurnerLoansPolicy is Policy, IERC165 {
@@ -35,6 +36,7 @@ contract MockBurnerLoansPolicy is Policy, IERC165 {
         return
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IBurnerLoansLifecycle).interfaceId ||
+            interfaceId_ == type(IBurnerLoansRescue).interfaceId ||
             interfaceId_ == type(IBurnerLoansView).interfaceId;
     }
 

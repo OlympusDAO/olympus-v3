@@ -10,10 +10,12 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
+import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 
@@ -37,7 +39,13 @@ contract BurnerLoansConfig is
     IBurnerLoansConfig,
     IVersioned
 {
+    using SafeCallDecoder for address;
+
     // ========== CONSTANTS ========== //
+
+    // The selector is the leading four bytes of the signature hash by ABI definition.
+    // forge-lint: disable-next-line(unsafe-typecast)
+    bytes4 internal constant _KERNEL_SELECTOR = bytes4(keccak256("kernel()"));
 
     uint256 internal constant _BPS = BurnerLoansConstants.MAX_BPS;
     uint256 internal constant _WAD = 1e18;
@@ -122,7 +130,13 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - Config is enabled or the caller lacks the admin role.
+    ///      - Config is inactive in its Kernel.
+    ///      - A facility is already bound.
+    ///      - The new facility is inactive, incompatible, or belongs to another Kernel.
     function setFacility(address facility_) external givenDisabled onlyAdminRole {
+        _requirePolicyActive();
         if (address(_FACILITY) != address(0)) revert BurnerLoansConfig_FacilityAlreadySet();
         _requireFacilityActive(facility_);
         _validateFacilityCompatibility(IBurnerLoansLifecycle(facility_));
@@ -316,6 +330,43 @@ contract BurnerLoansConfig is
         _FACILITY.setSendYieldToDistributor(enabled_);
     }
 
+    /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - The caller is neither admin nor the selected config operator.
+    ///      - Config is locally disabled or inactive in its Kernel.
+    ///      - The facility rejects the rescue. The facility may be locally disabled.
+    function rescue(address token_, address destination_) external onlyConfigOperatorOrAdmin {
+        _requirePolicyActive();
+        _requireEnabled();
+        IBurnerLoansRescue(address(_FACILITY)).rescue(token_, destination_);
+    }
+
+    /// @inheritdoc IBurnerLoansConfig
+    /// @dev Admin or selected operator may forward only while Config is locally enabled.
+    ///      Reverts if:
+    ///      - The caller is neither admin nor the selected config operator.
+    ///      - Config is inactive in its Kernel.
+    ///      - The bound facility rejects the rescue.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient currently owed the pending payout.
+    /// @param destination_ Recipient of the rescued tokens.
+    /// @param amount_ Exact positive amount, at most pendingPayout(token_, recipient_).
+    function rescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external override onlyConfigOperatorOrAdmin {
+        _requirePolicyActive();
+        _requireEnabled();
+        IBurnerLoansRescue(address(_FACILITY)).rescuePendingPayout(
+            token_,
+            recipient_,
+            destination_,
+            amount_
+        );
+    }
+
     /// @dev Returns the Burner Loans Inventory contract currently bound by Burner Loans.
     ///      Reverts if:
     ///      - The facility is unset or reports no Inventory.
@@ -475,7 +526,7 @@ contract BurnerLoansConfig is
         }
     }
 
-    /// @dev Kernel deactivation revokes distributor-flag forwarding authority independently of local disablement.
+    /// @dev Kernel deactivation revokes rescue forwarding authority independently of local disablement.
     function _requirePolicyActive() internal view {
         if (!kernel.isPolicyActive(Policy(address(this))))
             revert BurnerLoansConfig_PolicyInactive();
@@ -491,16 +542,21 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates the interface and token compatibility of a Burner Loans facility.
-    ///      Reverts with `BurnerLoansConfig_InvalidFacility` when validation fails.
+    /// @dev Reverts if:
+    ///      - The facility lacks the required interfaces or uses another OHM token.
     /// @param facility_ Facility policy to validate.
     function _validateFacilityCompatibility(IBurnerLoansLifecycle facility_) internal view {
-        bytes4[] memory interfaceIds = new bytes4[](2);
+        bytes4[] memory interfaceIds = new bytes4[](3);
         interfaceIds[0] = type(IBurnerLoansLifecycle).interfaceId;
         interfaceIds[1] = type(IBurnerLoansView).interfaceId;
-        if (
-            !ERC165Checker.supportsAllInterfaces(address(facility_), interfaceIds) ||
-            IBurnerLoansView(address(facility_)).ohm() != address(_OHM)
-        ) {
+        interfaceIds[2] = type(IBurnerLoansRescue).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(address(facility_), interfaceIds)) {
+            revert BurnerLoansConfig_InvalidFacility(address(facility_));
+        }
+        (bool ohmRead, address facilityOhm) = address(facility_).safeReadAddress(
+            IBurnerLoansView.ohm.selector
+        );
+        if (!ohmRead || facilityOhm != address(_OHM)) {
             revert BurnerLoansConfig_InvalidFacility(address(facility_));
         }
     }
@@ -515,11 +571,8 @@ contract BurnerLoansConfig is
 
     /// @dev Returns whether `policy_` reports this policy's Kernel.
     function _reportsKernel(address policy_) internal view returns (bool) {
-        try Policy(policy_).kernel() returns (Kernel reportedKernel) {
-            return address(reportedKernel) == address(kernel);
-        } catch {
-            return false;
-        }
+        (bool success, address reportedKernel) = policy_.safeReadAddress(_KERNEL_SELECTOR);
+        return success && reportedKernel == address(kernel);
     }
 
     /// @notice Validates the complete Burner Loans Config relationship before activation.

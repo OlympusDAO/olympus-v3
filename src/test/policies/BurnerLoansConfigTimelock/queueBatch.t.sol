@@ -22,6 +22,41 @@ import {Actions} from "src/Kernel.sol";
 // forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansConfigTimelockQueueBatchTest is BurnerLoansConfigTimelockConfigGuardsTest {
+    /// @notice Rescue's four static ABI words must have exactly 128 bytes, before any preview call.
+    /// @dev Retains the legacy truncated/trailing-payload proofs in the owning batch suite.
+    // Scenarios: BLCT-I02
+    function test_whenPendingRescuePayloadIsTruncatedOrHasTrailingWord_reverts() public {
+        bytes memory canonical = abi.encode(address(usds), alice, emergency, uint256(4));
+        bytes[2] memory invalid = [
+            abi.encode(address(usds)),
+            bytes.concat(canonical, abi.encode(uint256(0)))
+        ];
+        for (uint256 i; i < invalid.length; ++i) {
+            ITimelockBatchQueue.BatchAction[]
+                memory actions = new ITimelockBatchQueue.BatchAction[](1);
+            actions[0] = ITimelockBatchQueue.BatchAction(
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.rescuePendingPayout.selector,
+                invalid[i]
+            );
+            uint64 next = configTimelock.nextActionId();
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                    address(burnerLoansConfig),
+                    IBurnerLoansConfig.rescuePendingPayout.selector
+                )
+            );
+            vm.prank(admin);
+            configTimelock.queueBatch(actions);
+            assertEq(
+                configTimelock.nextActionId(),
+                next,
+                "invalid static payload consumes no action ID"
+            );
+        }
+    }
+
     function test_givenTimelockPolicyIsInactive_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(

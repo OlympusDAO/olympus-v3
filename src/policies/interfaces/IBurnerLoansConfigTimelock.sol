@@ -141,6 +141,26 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     /// @return actionId The queued action ID.
     function queueSetSendYieldToDistributor(bool enabled_) external returns (uint64 actionId);
 
+    /// @notice Queues rescue of all unreserved tokens at execution time.
+    /// @param token_ Token to rescue.
+    /// @param destination_ Rescue recipient.
+    /// @return actionId Queued action identifier.
+    function queueRescue(address token_, address destination_) external returns (uint64 actionId);
+
+    /// @notice Queues a delayed rescue of an exact amount owed to one payout recipient.
+    /// @dev Validates the current combined entitlement; execution rechecks current routing.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient currently owed the pending payout.
+    /// @param destination_ Recipient of the rescued tokens.
+    /// @param amount_ Exact positive amount, at most pendingPayout(token_, recipient_).
+    /// @return actionId Queued action identifier.
+    function queueRescuePendingPayout(
+        address token_,
+        address recipient_,
+        address destination_,
+        uint256 amount_
+    ) external returns (uint64 actionId);
+
     /// @notice Queues a change to the token form used for all DepositManager exits.
     /// @param asset_ Collateral asset to update.
     /// @param withdrawAsShares_ Whether future exits return the configured vault shares.

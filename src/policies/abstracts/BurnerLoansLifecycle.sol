@@ -12,6 +12,7 @@ import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IBurnerLoansRescue} from "src/policies/interfaces/IBurnerLoansRescue.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
@@ -41,6 +42,7 @@ abstract contract BurnerLoansLifecycle is
     PolicyEnablerV2,
     OperatorAuth,
     IBurnerLoansLifecycle,
+    IBurnerLoansRescue,
     IBurnerLoansYieldClaim,
     IBurnerLoansView,
     IVersioned
@@ -280,6 +282,7 @@ abstract contract BurnerLoansLifecycle is
     ) public view virtual override(EnablerV2, ReEnablerGracePeriod) returns (bool) {
         return
             interfaceId_ == type(IBurnerLoansLifecycle).interfaceId ||
+            interfaceId_ == type(IBurnerLoansRescue).interfaceId ||
             interfaceId_ == type(IBurnerLoansView).interfaceId ||
             interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId ||
             interfaceId_ == type(IOperatorAuth).interfaceId ||
