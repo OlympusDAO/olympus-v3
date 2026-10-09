@@ -61,6 +61,11 @@ contract MockYieldRepurchaseRecipient is Policy, IYieldRepurchaseRecipient, IEna
         });
     }
 
+    function removeVaultConfig(address vault_) external {
+        _vaults.remove(vault_);
+        delete _vaultConfigs[vault_];
+    }
+
     function setReturnedVault(address lookupVault_, address returnedVault_) external {
         _vaultConfigs[lookupVault_].vault = returnedVault_;
     }

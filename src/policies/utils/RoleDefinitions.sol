@@ -36,6 +36,9 @@ bytes32 constant BRIDGE_CHANNEL_MANAGER_ROLE = "bridge_channel_manager";
 bytes32 constant ORACLE_MANAGER_ROLE = "oracle_manager";
 /// @dev Burner Loans parameter manager role, e.g. managing bounded operational parameters.
 bytes32 constant BURNER_LOANS_ADMIN_ROLE = "burner_loans_admin";
+/// @dev Revenue Distributor configuration proposer role. Proposals execute through its selected
+///      config timelock after the configured delay.
+bytes32 constant REVENUE_DISTRIBUTOR_ADMIN_ROLE = "revenue_distributor_admin";
 /// @dev Burner Loans protocol seizer role, e.g. performing periodic seizure without keeper rewards.
 bytes32 constant BURNER_LOANS_SEIZER_ROLE = "burner_loans_seizer";
 /// @dev Supplies and withdraws protocol-owned OHM held by Burner Loans Inventory.

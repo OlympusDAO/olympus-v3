@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.27;
+pragma solidity >=0.8.24;
 
 // Test fixtures accept zero addresses to model unset, cleared, and invalid states.
 // forge-lint: disable-start(missing-zero-check)
@@ -16,6 +16,11 @@ contract ReentrantFeeToken is MockERC20 {
     bool public callbackEnabled;
     bool public callbackSucceeded;
     bool public bubbleCallbackFailure;
+    bool public callbackOnTransfer = true;
+    bool public callbackOnTransferFrom = true;
+    address public callbackTransferRecipient;
+    uint256 public transferCallCount;
+    uint256 public callbackOnTransferCall;
     bytes4 public callbackRevertSelector;
     bytes public callbackRevertData;
 
@@ -26,6 +31,8 @@ contract ReentrantFeeToken is MockERC20 {
         _callbackTarget = target_;
         _callbackData = data_;
         callbackEnabled = true;
+        callbackOnTransfer = true;
+        callbackOnTransferFrom = true;
     }
 
     function setCallbackFrom(address invoker_, address target_, bytes calldata data_) external {
@@ -33,15 +40,36 @@ contract ReentrantFeeToken is MockERC20 {
         _callbackTarget = target_;
         _callbackData = data_;
         callbackEnabled = true;
+        callbackOnTransfer = true;
+        callbackOnTransferFrom = true;
     }
 
     function setBubbleCallbackFailure(bool enabled_) external {
         bubbleCallbackFailure = enabled_;
     }
 
-    function transfer(address to_, uint256 amount_) public override returns (bool) {
+    function setCallbackPhases(bool onTransfer_, bool onTransferFrom_) external {
+        callbackOnTransfer = onTransfer_;
+        callbackOnTransferFrom = onTransferFrom_;
+    }
+
+    function setCallbackTransferRecipient(address recipient_) external {
+        callbackTransferRecipient = recipient_;
+    }
+
+    function setCallbackOnTransferCall(uint256 call_) external {
+        transferCallCount = 0;
+        callbackOnTransferCall = call_;
+    }
+
+    function transfer(address to_, uint256 amount_) public virtual override returns (bool) {
+        ++transferCallCount;
         bool success = super.transfer(to_, amount_);
-        _invokeCallback();
+        if (
+            callbackOnTransfer &&
+            (callbackOnTransferCall == 0 || callbackOnTransferCall == transferCallCount) &&
+            (callbackTransferRecipient == address(0) || callbackTransferRecipient == to_)
+        ) _invokeCallback();
         return success;
     }
 
@@ -51,7 +79,10 @@ contract ReentrantFeeToken is MockERC20 {
         uint256 amount_
     ) public override returns (bool) {
         bool success = super.transferFrom(from_, to_, amount_);
-        _invokeCallback();
+        if (
+            callbackOnTransferFrom &&
+            (callbackTransferRecipient == address(0) || callbackTransferRecipient == to_)
+        ) _invokeCallback();
         return success;
     }
 
