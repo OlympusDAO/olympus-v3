@@ -1,10 +1,10 @@
 {
-    "BurnerLoans.livePrice.borrow.first": "1428838",
-    "BurnerLoans.livePrice.depositCollateral.existingDebtPosition": "1249475",
-    "BurnerLoans.livePrice.depositCollateral.newPosition": "507615",
+    "BurnerLoans.livePrice.borrow.first": "1428845",
+    "BurnerLoans.livePrice.depositCollateral.existingDebtPosition": "1249438",
+    "BurnerLoans.livePrice.depositCollateral.newPosition": "507582",
     "BurnerLoans.livePrice.extend.oneTerm": "1180664",
-    "BurnerLoans.livePrice.repay.partial": "1223170",
-    "BurnerLoans.livePrice.seize.single": "1317360",
-    "BurnerLoans.livePrice.withdrawCollateral.allWithoutDebt": "253877",
-    "BurnerLoans.livePrice.withdrawCollateral.partialWithDebt": "1229310"
+    "BurnerLoans.livePrice.repay.partial": "1223155",
+    "BurnerLoans.livePrice.seize.single": "1317450",
+    "BurnerLoans.livePrice.withdrawCollateral.allWithoutDebt": "253822",
+    "BurnerLoans.livePrice.withdrawCollateral.partialWithDebt": "1229251"
 }
