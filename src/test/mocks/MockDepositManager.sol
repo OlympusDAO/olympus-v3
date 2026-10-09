@@ -5,15 +5,15 @@ pragma solidity ^0.8.20;
 // empty-block: Unsupported interface hooks are intentional no-ops in this focused test mock.
 // forge-lint: disable-start(missing-zero-check, empty-block)
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 import {Kernel, Keycode, Permissions} from "src/Kernel.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
@@ -78,7 +78,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         }
 
         // The depositor authorizes this operator-initiated pull through ERC-20 allowance.
-        TransferHelper.safeTransferFromExact(
+        SafeERC20Exact.safeTransferFromExact(
             ERC20(address(params.asset)),
             params.depositor,
             address(this),

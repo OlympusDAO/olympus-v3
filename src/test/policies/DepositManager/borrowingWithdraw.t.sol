@@ -5,7 +5,7 @@ pragma solidity ^0.8.20;
 // forge-lint: disable-start(literal-instead-of-constant, reentrancy-no-eth, unused-return)
 
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {ReentrantShareVault} from "src/test/policies/DepositManager/fixtures/ReentrantShareVault.sol";
+import {ReentrantShareVault} from "src/test/mocks/ReentrantShareVault.sol";
 
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";

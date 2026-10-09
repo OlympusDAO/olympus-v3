@@ -5,8 +5,8 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant)
 
 import {Actions} from "src/Kernel.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -17,7 +17,7 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 

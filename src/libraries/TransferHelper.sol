@@ -6,18 +6,8 @@ import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 /// @notice Safe ERC20 and ETH transfer library that safely handles missing return values.
 /// @author Modified from Uniswap & old Solmate (https://github.com/Uniswap/uniswap-v3-periphery/blob/main/contracts/libraries/TransferHelper.sol)
 library TransferHelper {
-    /// @notice A transfer delivered a different amount than requested.
-    /// @param token Token transferred.
-    /// @param recipient Account expected to receive the transfer.
-    /// @param expectedAmount Amount requested from the sender.
-    /// @param receivedAmount Increase in the recipient's balance, or zero if its balance decreased.
-    error TransferHelper_InexactTransferFrom(
-        address token,
-        address recipient,
-        uint256 expectedAmount,
-        uint256 receivedAmount
-    );
-
+    // Legacy helper compatibility requires optional ERC-20 return handling and existing errors.
+    // forge-lint: disable-start(low-level-calls,custom-errors)
     /// @notice Safely transfers tokens from one account to another.
     /// @dev Reverts when the token call fails or returns false.
     function safeTransferFrom(ERC20 token, address from, address to, uint256 amount) internal {
@@ -28,31 +18,6 @@ library TransferHelper {
         require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FROM_FAILED");
     }
 
-    /// @notice Safely transfers tokens and verifies the recipient's exact balance increase.
-    /// @dev Reverts when the token call fails, returns false, decreases the recipient's balance, or
-    ///      delivers an amount different from `amount`.
-    /// @return recipientBalanceBefore Recipient balance immediately before the transfer.
-    function safeTransferFromExact(
-        ERC20 token,
-        address from,
-        address to,
-        uint256 amount
-    ) internal returns (uint256 recipientBalanceBefore) {
-        recipientBalanceBefore = token.balanceOf(to);
-        safeTransferFrom(token, from, to, amount);
-        uint256 recipientBalanceAfter = token.balanceOf(to);
-        if (recipientBalanceAfter < recipientBalanceBefore) {
-            revert TransferHelper_InexactTransferFrom(address(token), to, amount, 0);
-        }
-        uint256 receivedAmount;
-        unchecked {
-            receivedAmount = recipientBalanceAfter - recipientBalanceBefore;
-        }
-        if (receivedAmount != amount) {
-            revert TransferHelper_InexactTransferFrom(address(token), to, amount, receivedAmount);
-        }
-    }
-
     /// @notice Safely transfers tokens to an account.
     /// @dev Reverts when the token call fails or returns false.
     function safeTransfer(ERC20 token, address to, uint256 amount) internal {
@@ -60,6 +25,8 @@ library TransferHelper {
             abi.encodeWithSelector(ERC20.transfer.selector, to, amount)
         );
 
+        // Preserve the legacy failure ABI, including when callers transfer inside a loop.
+        // forge-lint: disable-next-line(require-revert-in-loop)
         require(success && (data.length == 0 || abi.decode(data, (bool))), "TRANSFER_FAILED");
     }
 
@@ -72,4 +39,5 @@ library TransferHelper {
 
         require(success && (data.length == 0 || abi.decode(data, (bool))), "APPROVE_FAILED");
     }
+    // forge-lint: disable-end(low-level-calls,custom-errors)
 }

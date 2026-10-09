@@ -12,7 +12,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
-import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
 contract DepositManagerWithdrawTest is DepositManagerTest {
     function test_givenOutgoingTokenCallback_cannotEnterAnotherWithdrawal() public {

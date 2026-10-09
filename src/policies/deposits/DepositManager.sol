@@ -13,10 +13,10 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 
 // Bophades
 import {Kernel, Keycode, Permissions, Policy, toKeycode} from "src/Kernel.sol";
@@ -46,7 +46,7 @@ contract DepositManager is
     BaseAssetManager,
     ReentrancyGuardTransient
 {
-    using TransferHelper for ERC20;
+    using SafeERC20 for ERC20;
     using EnumerableSet for EnumerableSet.UintSet;
 
     // ========== CONSTANTS ========== //

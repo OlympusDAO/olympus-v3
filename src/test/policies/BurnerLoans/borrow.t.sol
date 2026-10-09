@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -21,7 +23,7 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {CallbackMinter} from "./fixtures/CallbackMinter.sol";
-import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
@@ -1559,7 +1561,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Fee approval: removed after collateral deposit
     // - Fee balance: sufficient
-    // - Expected branch: transfer helper reverts and all borrow effects roll back
+    // - Expected branch: the token error bubbles and all borrow effects roll back
     function test_givenMissingFeeApproval_borrowRevertsAndRollsBack() public {
         _depositDefaultCollateral(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
@@ -1573,7 +1575,14 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(burnerLoans),
+                0,
+                preview.fee
+            )
+        );
         burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
 
         _assertBorrowRolledBack(aliceBalanceBefore, treasuryBalanceBefore);
@@ -1582,7 +1591,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Fee approval: sufficient
     // - Fee balance: one unit below the previewed fee
-    // - Expected branch: transfer helper reverts and all borrow effects roll back
+    // - Expected branch: the token error bubbles and all borrow effects roll back
     function test_givenInsufficientFeeBalance_borrowRevertsAndRollsBack() public {
         _depositDefaultCollateral(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
@@ -1596,7 +1605,14 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientBalance.selector,
+                alice,
+                aliceBalanceBefore,
+                preview.fee
+            )
+        );
         burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
 
         _assertBorrowRolledBack(aliceBalanceBefore, treasuryBalanceBefore);

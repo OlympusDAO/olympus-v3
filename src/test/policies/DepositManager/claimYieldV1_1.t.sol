@@ -19,7 +19,7 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Test contracts
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 import {ERC7540SyncDepositAsyncRedeemVault} from "src/test/policies/DepositManager/fixtures/ERC7540SyncDepositAsyncRedeemVault.sol";
 
 contract DepositManagerClaimYieldV1_1Test is DepositManagerTest {

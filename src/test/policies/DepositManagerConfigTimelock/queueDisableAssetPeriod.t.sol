@@ -11,8 +11,8 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueDisableAssetPeriodTest is

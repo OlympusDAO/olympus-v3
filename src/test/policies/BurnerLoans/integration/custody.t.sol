@@ -13,7 +13,7 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.

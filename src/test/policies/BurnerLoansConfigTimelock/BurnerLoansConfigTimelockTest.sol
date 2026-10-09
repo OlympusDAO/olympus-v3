@@ -12,9 +12,9 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {BurnerLoansConfigTimelockHarness} from "src/test/policies/BurnerLoansConfigTimelock/fixtures/BurnerLoansConfigTimelockHarness.sol";
 
 abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
@@ -62,6 +62,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
 
         vm.startPrank(admin);
         configTimelockHarness = new BurnerLoansConfigTimelockHarness(kernel, burnerLoansConfig);
+        vm.label(address(configTimelockHarness), "Burner Loans config timelock harness");
         kernel.executeAction(Actions.ActivatePolicy, address(configTimelockHarness));
         configTimelockHarness.enable("");
         vm.stopPrank();

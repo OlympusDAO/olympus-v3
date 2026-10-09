@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";

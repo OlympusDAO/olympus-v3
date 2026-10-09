@@ -17,14 +17,14 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {ERC7540SyncDepositAsyncRedeemVault} from "src/test/policies/DepositManager/fixtures/ERC7540SyncDepositAsyncRedeemVault.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault, MockIncompatibleShareToken, MockRevertingShareToken, MockSharedERC7575ShareToken, MockSharedERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault, MockIncompatibleShareToken, MockRevertingShareToken, MockSharedERC7575ShareToken, MockSharedERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 // Test contracts
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";

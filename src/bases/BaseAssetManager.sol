@@ -13,10 +13,11 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 
 /// @title  BaseAssetManager
 /// @notice This is a base contract for managing asset deposits and withdrawals. It is designed to be inherited by another contract.
@@ -24,7 +25,8 @@ import {TransferHelper} from "src/libraries/TransferHelper.sol";
 ///         Future versions of the contract could add support for more complex strategies and/or strategy migration, while addressing the concern of funds theft.
 abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
     using SafeCall for address;
-    using TransferHelper for ERC20;
+    using SafeERC20 for ERC20;
+    using SafeERC20Exact for ERC20;
 
     bytes4 internal constant _ERC7540_DEPOSIT_INTERFACE_ID = type(IERC7540Deposit).interfaceId;
     bytes4 internal constant _ERC7540_OPERATOR_INTERFACE_ID = type(IERC7540Operator).interfaceId;
@@ -111,7 +113,7 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
             IERC4626 vault = IERC4626(vaultAddress);
             IERC20 shareToken = _assetShareTokens[asset_];
             uint256 shareBalanceBefore = shareToken.balanceOf(address(this));
-            asset.safeApprove(vaultAddress, amount_);
+            asset.forceApprove(vaultAddress, amount_);
 
             // DepositManager guards every entry point that reaches this call. The shares cannot be
             // recorded before the vault returns their authoritative amount.
@@ -491,6 +493,8 @@ abstract contract BaseAssetManager is IAssetManagerV1_1, IERC165 {
         if (!_isConfiguredAsset(asset_)) revert AssetManager_NotConfigured();
     }
 
+    // DepositManager also uses this inherited modifier on its deposit and borrowing entry points.
+    // forge-lint: disable-next-line(modifier-used-only-once)
     modifier onlyConfiguredAsset(IERC20 asset_) {
         _onlyConfiguredAsset(asset_);
         _;

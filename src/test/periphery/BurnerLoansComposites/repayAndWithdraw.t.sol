@@ -7,10 +7,10 @@ pragma solidity >=0.8.24;
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {stdError} from "forge-std/StdError.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
@@ -194,7 +194,14 @@ contract BurnerLoansCompositesRepayAndWithdrawTest is BurnerLoansCompositesTest 
     function test_givenMissingOhmApproval_reverts() public {
         _openPosition();
 
-        vm.expectRevert(stdError.arithmeticError);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(composites),
+                0,
+                50e9
+            )
+        );
         vm.prank(alice);
         composites.repayAndWithdraw(
             _emptyAuthorization(),

@@ -28,6 +28,7 @@ abstract contract BurnerLoansCompositesTest is BurnerLoansBorrowTestBase {
     function setUp() public virtual override {
         super.setUp();
         composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
+        vm.label(address(composites), "Burner Loans composites");
         recipient = makeAddr("recipient");
     }
 

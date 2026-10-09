@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Contracts
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 /// @notice Mutates the live redemption capability during Burner Loans invariant runs.
 contract BurnerLoansERC7540CapabilityHandler {

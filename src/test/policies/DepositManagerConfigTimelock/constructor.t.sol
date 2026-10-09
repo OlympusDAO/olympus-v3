@@ -6,7 +6,7 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant, multi-contract-file)
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerConfigTimelock} from "src/policies/interfaces/deposits/IDepositManagerConfigTimelock.sol";

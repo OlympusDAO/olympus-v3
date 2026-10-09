@@ -11,8 +11,8 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Contracts
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626DifferentDecimals} from "src/test/mocks/MockERC4626DifferentDecimals.sol";
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
 

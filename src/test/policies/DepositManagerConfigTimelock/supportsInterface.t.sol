@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";

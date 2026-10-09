@@ -6,7 +6,7 @@ import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";

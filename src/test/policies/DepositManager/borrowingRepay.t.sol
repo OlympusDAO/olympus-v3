@@ -12,7 +12,9 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
 
 contract DepositManagerBorrowingRepayTest is DepositManagerTest {
     struct RejectedRepaymentState {
@@ -1033,7 +1035,14 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         givenBorrow(BORROW_AMOUNT)
     {
         // Expect revert
-        _expectRevertERC20InsufficientAllowance();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(depositManager),
+                0,
+                previousRecipientBorrowActualAmount
+            )
+        );
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);
@@ -1068,7 +1077,7 @@ contract DepositManagerBorrowingRepayTest is DepositManagerTest {
         amount_ = bound(amount_, 1, oneShareInAssets - 1);
 
         // Expect revert
-        vm.expectRevert("ZERO_SHARES");
+        vm.expectRevert(MockERC4626.ZeroShares.selector);
 
         // Call function
         vm.prank(DEPOSIT_OPERATOR);

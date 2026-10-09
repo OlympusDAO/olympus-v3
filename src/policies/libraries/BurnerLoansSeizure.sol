@@ -10,10 +10,10 @@ import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/inter
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
@@ -25,7 +25,7 @@ import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefin
 /// @title Burner Loans Seizure Library
 /// @notice Separately linked batch validation, scanning, default settlement, and reward routing.
 library BurnerLoansSeizure {
-    using TransferHelper for ERC20;
+    using SafeERC20 for ERC20;
     using SafeCast for uint256;
 
     /// @notice Maximum number of positions in one seizure batch.

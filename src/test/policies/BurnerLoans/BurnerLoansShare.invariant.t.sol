@@ -17,8 +17,8 @@ import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol
 import {MinterAdminPolicy} from "src/test/policies/BurnerLoans/fixtures/MinterAdminPolicy.sol";
 import {BurnerLoansERC7540CapabilityHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansERC7540CapabilityHandler.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
     uint256 internal constant _WAD = 1e18;

@@ -11,10 +11,10 @@ pragma solidity >=0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
@@ -39,12 +39,11 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 abstract contract BurnerLoansTest is Test {
     using SafeCast for uint256;
@@ -69,7 +68,7 @@ abstract contract BurnerLoansTest is Test {
     OlympusTreasury internal trsry;
     RolesAdmin internal rolesAdmin;
     MockPrice internal price;
-    MockOhm internal ohm;
+    MockERC20 internal ohm;
     MockERC20 internal usds;
     ReceiptTokenManager internal receiptTokenManager;
     IDepositManager internal depositManager;
@@ -102,7 +101,7 @@ abstract contract BurnerLoansTest is Test {
         vm.startPrank(admin);
 
         kernel = new Kernel();
-        ohm = new MockOhm("OHM", "OHM", _ohmDecimals());
+        ohm = new MockERC20("OHM", "OHM", _ohmDecimals());
         usds = new MockERC20("USDS", "USDS", _collateralDecimals());
         mintr = new OlympusMinter(kernel, address(ohm));
         floan = new OlympusFixedTermLoan(kernel);
@@ -137,6 +136,22 @@ abstract contract BurnerLoansTest is Test {
 
         configTimelock = new BurnerLoansConfigTimelock(kernel, burnerLoansConfig);
         kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(ohm), "OHM");
+        vm.label(address(usds), "USDS collateral");
+        vm.label(address(mintr), "MINTR");
+        vm.label(address(floan), "FLOAN");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(trsry), "TRSRY");
+        vm.label(address(price), "Price oracle");
+        vm.label(address(receiptTokenManager), "Receipt token manager");
+        vm.label(address(depositManager), "Deposit manager");
+        vm.label(address(backingOracle), "Backing oracle");
+        vm.label(address(burnerLoans), "Burner Loans");
+        vm.label(address(inventory), "Burner Loans inventory");
+        vm.label(address(burnerLoansConfig), "Burner Loans config");
+        vm.label(address(configTimelock), "Burner Loans config timelock");
 
         rolesAdmin.grantRole(ADMIN_ROLE, admin);
         rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, burnerLoansAdmin);
@@ -266,6 +281,8 @@ abstract contract BurnerLoansTest is Test {
     function _addVaultAssetForTest() internal returns (MockERC20 asset, MockERC4626 vault) {
         asset = new MockERC20("Vault Collateral", "vCOLL", _collateralDecimals());
         vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
+        vm.label(address(asset), "Vault collateral");
+        vm.label(address(vault), "Collateral vault");
         _configurePrice(address(asset), 1e18);
         vm.startPrank(admin);
         depositManager.addAsset(
@@ -300,6 +317,7 @@ abstract contract BurnerLoansTest is Test {
         )
     {
         asset = new MockERC20("External Share Collateral", "esCOLL", 18);
+        vm.label(address(asset), "Async external share collateral");
         (vault, shareToken) = _configureAsyncExternalShareAssetForTest(asset);
     }
 
@@ -310,6 +328,9 @@ abstract contract BurnerLoansTest is Test {
         asset = new MockERC20("External Share Collateral", "esCOLL", 18);
         vault = new MockERC7575Vault(ERC20(address(asset)), true);
         shareToken = IERC20(vault.share());
+        vm.label(address(asset), "External share collateral");
+        vm.label(address(vault), "ERC-7575 vault");
+        vm.label(address(shareToken), "ERC-7575 share token");
         _configurePrice(address(asset), 1e18);
 
         vm.startPrank(admin);
@@ -342,6 +363,8 @@ abstract contract BurnerLoansTest is Test {
     {
         vault = new MockERC7540ExternalShareVault(ERC20(address(asset_)), false, true, true);
         shareToken = MockERC7540ExternalShareToken(vault.share());
+        vm.label(address(vault), "ERC-7540 external share vault");
+        vm.label(address(shareToken), "ERC-7540 share token");
         _configurePrice(address(asset_), 1e18);
 
         vm.startPrank(admin);
@@ -379,6 +402,7 @@ abstract contract BurnerLoansTest is Test {
 
     function _addDirectAssetForTest() internal returns (MockERC20 asset) {
         asset = new MockERC20("Direct Collateral", "dCOLL", _collateralDecimals());
+        vm.label(address(asset), "Direct collateral");
         _configurePrice(address(asset), 1e18);
         _configureDepositManagerAsset(address(asset));
 
@@ -440,6 +464,7 @@ abstract contract BurnerLoansTest is Test {
 
     function _configureUsdsVaultDependencies() internal returns (MockERC4626 vault) {
         vault = new MockERC4626(ERC20(address(usds)), "USDS Vault", "vUSDS");
+        vm.label(address(vault), "USDS vault");
         _configurePrice(address(usds), 1e18);
         vm.startPrank(admin);
         depositManager.addAsset(
@@ -529,6 +554,7 @@ abstract contract BurnerLoansTest is Test {
 
     function _setOtherMarketDebtForTest(uint128 debtOhm_) internal returns (MockERC20 asset) {
         asset = new MockERC20("Other Collateral", "OTHER", 18);
+        vm.label(address(asset), "Other collateral");
         _configurePrice(address(asset), 1e18);
         _configureDepositManagerAsset(address(asset));
 

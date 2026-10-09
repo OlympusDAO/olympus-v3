@@ -15,10 +15,10 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueSetAssetShareWithdrawalRequiredTest is

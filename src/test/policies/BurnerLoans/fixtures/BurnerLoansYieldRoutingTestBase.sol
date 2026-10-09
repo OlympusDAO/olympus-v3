@@ -4,14 +4,14 @@ pragma solidity >=0.8.24;
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
 // forge-lint: disable-start(calls-loop)
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 import {BurnerLoansTest} from "../BurnerLoansTest.sol";
-import {MockYieldRepurchaseRecipient} from "./MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 abstract contract BurnerLoansYieldRoutingTestBase is BurnerLoansTest {
     MockYieldRepurchaseRecipient internal yieldRecipient;

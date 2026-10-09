@@ -6,9 +6,9 @@ pragma solidity >=0.8.24;
 
 import {Vm} from "forge-std/Vm.sol";
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -24,7 +24,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 

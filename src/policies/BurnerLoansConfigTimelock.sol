@@ -13,7 +13,7 @@ import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTi
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {BurnerLoansConfigTimelockLib} from "src/policies/libraries/BurnerLoansConfigTimelockLib.sol";
 import {ConfigTimelockKeyLib} from "src/policies/utils/ConfigTimelockKeyLib.sol";
 

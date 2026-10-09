@@ -15,11 +15,12 @@ import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTok
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
@@ -35,7 +36,7 @@ import {Policy} from "src/Kernel.sol";
 /// @dev Library delegatecalls preserve BurnerLoans as the DepositManager operator and receipt holder.
 library BurnerLoansCustody {
     using EnumerableSet for EnumerableSet.AddressSet;
-    using TransferHelper for ERC20;
+    using SafeERC20 for ERC20;
 
     /// @dev Fixed-point scale used for withdrawal health validation.
     uint256 private constant _WAD = 1e18;
@@ -431,8 +432,13 @@ library BurnerLoansCustody {
         uint128 amount_
     ) public returns (uint128 depositedCollateral) {
         ERC20 asset = ERC20(asset_);
-        uint256 startingBalance = asset.safeTransferFromExact(msg.sender, address(this), amount_);
-        asset.safeApprove(address(depositManager_), amount_);
+        uint256 startingBalance = SafeERC20Exact.safeTransferFromExact(
+            asset,
+            msg.sender,
+            address(this),
+            amount_
+        );
+        asset.forceApprove(address(depositManager_), amount_);
 
         uint256 depositedCollateralRaw;
         // Burner Loans accounts for credited collateral, not the DepositManager receipt-token ID.
@@ -786,7 +792,8 @@ library BurnerLoansCustody {
         );
         // Pull repayment OHM directly from the payer into Burner Loans Inventory. Burner Loans
         // never takes temporary custody and records settlement only after exact receipt.
-        ERC20(address(dependencies_.ohm)).safeTransferFromExact(
+        SafeERC20Exact.safeTransferFromExact(
+            ERC20(address(dependencies_.ohm)),
             msg.sender,
             address(dependencies_.inventory),
             repayOhm_

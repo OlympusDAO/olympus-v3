@@ -11,7 +11,7 @@ import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/inter
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansCustodyAccounting} from "src/policies/libraries/BurnerLoansCustodyAccounting.sol";

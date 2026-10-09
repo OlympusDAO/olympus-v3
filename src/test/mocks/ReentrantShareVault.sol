@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.27;
 
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 contract ReentrantShareVault is MockERC4626 {
     error ReentrantShareVault_RedeemReverted();
@@ -16,7 +17,7 @@ contract ReentrantShareVault is MockERC4626 {
     bytes4 public callbackRevertSelector;
     bool public redeemShouldRevert;
 
-    constructor(ERC20 asset_) MockERC4626(asset_, "Reentrant Share Vault", "rSHARE") {}
+    constructor(IERC20 asset_) MockERC4626(asset_, "Reentrant Share Vault", "rSHARE") {}
 
     // The fixture accepts arbitrary callback endpoints; zero addresses make the callback inert.
     // forge-lint: disable-next-line(missing-zero-check)
@@ -31,7 +32,7 @@ contract ReentrantShareVault is MockERC4626 {
         redeemShouldRevert = shouldRevert_;
     }
 
-    function transfer(address to_, uint256 amount_) public override returns (bool) {
+    function transfer(address to_, uint256 amount_) public override(ERC20, IERC20) returns (bool) {
         bool success = super.transfer(to_, amount_);
         _executeCallback();
         return success;

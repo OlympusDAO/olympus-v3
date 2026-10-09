@@ -7,11 +7,11 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Contracts
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {Actions} from "src/Kernel.sol";
 import {BurnerLoansYieldRoutingTestBase} from "./fixtures/BurnerLoansYieldRoutingTestBase.sol";
-import {MockYieldRepurchaseRecipient} from "./fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 contract BurnerLoansSetYieldRepurchaseRecipientTest is BurnerLoansYieldRoutingTestBase {
     function test_whenCallerIsNotConfigurator_reverts(address caller_) public {

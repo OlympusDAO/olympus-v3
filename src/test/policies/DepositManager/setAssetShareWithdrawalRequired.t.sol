@@ -8,7 +8,7 @@ import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Test contracts
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerSetAssetShareWithdrawalRequiredTest is DepositManagerTest {
     function test_givenContractIsDisabled_reverts() public {

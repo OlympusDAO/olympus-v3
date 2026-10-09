@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
@@ -19,7 +19,7 @@ import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositMana
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";

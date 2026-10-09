@@ -8,11 +8,14 @@ pragma solidity ^0.8.27;
 // Interfaces
 import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7575.sol";
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+
+// Contracts
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 interface IMockMintableShareToken {
     function mint(address recipient_, uint256 amount_) external;
@@ -25,7 +28,7 @@ contract MockERC7575ShareToken is ERC20, IMockMintableShareToken {
 
     address internal immutable _MINTER;
 
-    constructor() ERC20("ERC-7575 Share", "E75S", 18) {
+    constructor() ERC20("ERC-7575 Share", "E75S") {
         _MINTER = msg.sender;
     }
 
@@ -58,7 +61,7 @@ contract MockSharedERC7575ShareToken is ERC20 {
     address internal immutable _ADMIN;
     mapping(address vault_ => bool) internal _authorizedVaults;
 
-    constructor() ERC20("Shared ERC-7575 Share", "SE75", 18) {
+    constructor() ERC20("Shared ERC-7575 Share", "SE75") {
         _ADMIN = msg.sender;
     }
 
@@ -80,17 +83,17 @@ contract MockSharedERC7575ShareToken is ERC20 {
 
 /// @notice One synchronous ERC-7575 entry point backed by a shared external share token.
 contract MockSharedERC7575Vault is IERC165 {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for IERC20;
 
     error UnauthorizedOwner();
 
     bytes4 internal constant _ERC7575_INTERFACE_ID =
         type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
 
-    ERC20 internal immutable _ASSET;
+    IERC20 internal immutable _ASSET;
     MockSharedERC7575ShareToken internal immutable _SHARE;
 
-    constructor(ERC20 asset_, MockSharedERC7575ShareToken share_) {
+    constructor(IERC20 asset_, MockSharedERC7575ShareToken share_) {
         _ASSET = asset_;
         _SHARE = share_;
     }
@@ -143,7 +146,7 @@ contract MockSharedERC7575Vault is IERC165 {
 
 /// @notice Mutable synchronous ERC-4626 plus ERC-7575 fixture.
 contract MockERC7575Vault is ERC20, IERC165 {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for IERC20;
 
     error ShareQueryReverted();
     error UnauthorizedOwner();
@@ -151,11 +154,11 @@ contract MockERC7575Vault is ERC20, IERC165 {
     bytes4 internal constant _ERC7575_INTERFACE_ID =
         type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
 
-    ERC20 internal immutable _ASSET;
+    IERC20 internal immutable _ASSET;
     address internal _reportedShare;
     bool internal _shareQueryReverts;
 
-    constructor(ERC20 asset_, bool externalShare_) ERC20("ERC-7575 Vault", "E75V", 18) {
+    constructor(IERC20 asset_, bool externalShare_) ERC20("ERC-7575 Vault", "E75V") {
         _ASSET = asset_;
         _reportedShare = externalShare_ ? address(new MockERC7575ShareToken()) : address(this);
     }

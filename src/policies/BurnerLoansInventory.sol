@@ -8,10 +8,10 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 
 // Libraries
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
@@ -37,7 +37,7 @@ contract BurnerLoansInventory is
     IBurnerLoansInventory,
     IVersioned
 {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for ERC20;
 
     /// @notice OHM token funded and custodied by Burner Loans Inventory.
     IERC20 internal immutable _OHM;
@@ -125,9 +125,9 @@ contract BurnerLoansInventory is
         // MINTR accounting and is reconciled to the global-cap-derived target below.
         ERC20 token = ERC20(address(_OHM));
         if (address(priorMintr) != address(0) && priorMintr != _MINTR) {
-            token.safeApprove(address(priorMintr), 0);
+            token.forceApprove(address(priorMintr), 0);
         }
-        token.safeApprove(address(_MINTR), type(uint256).max);
+        token.forceApprove(address(_MINTR), type(uint256).max);
         if (address(priorMintr) != address(0) && priorMintr != _MINTR) {
             _restoreApproval(_globalDebtCapOhm);
         }
@@ -182,7 +182,7 @@ contract BurnerLoansInventory is
         _providerClaimOhm[msg.sender] += amount_;
         _suppliedIdleOhm += amount_;
         _suppliedOhm += amount_;
-        TransferHelper.safeTransferFromExact(
+        SafeERC20Exact.safeTransferFromExact(
             ERC20(address(_OHM)),
             msg.sender,
             address(this),

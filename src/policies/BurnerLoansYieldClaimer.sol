@@ -10,7 +10,7 @@ import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
 // Libraries
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts

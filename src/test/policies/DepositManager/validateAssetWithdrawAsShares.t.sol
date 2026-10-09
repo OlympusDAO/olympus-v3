@@ -8,7 +8,7 @@ import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 
 // Test contracts
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerValidateAssetWithdrawAsSharesTest is DepositManagerTest {
     MockERC7540ExternalShareVault internal _externalVault;

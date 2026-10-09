@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";

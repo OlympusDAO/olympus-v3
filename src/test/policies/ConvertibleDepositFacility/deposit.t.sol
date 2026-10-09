@@ -5,6 +5,7 @@ pragma solidity ^0.8.20;
 // component.
 // forge-lint: disable-start(unused-return)
 
+import {stdError} from "@forge-std-1.16.2/StdError.sol";
 import {ConvertibleDepositFacilityTest} from "./ConvertibleDepositFacilityTest.sol";
 
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -44,7 +45,7 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         givenRecipientHasReserveToken
     {
         // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);
@@ -65,7 +66,7 @@ contract ConvertibleDepositFacilityDepositTest is ConvertibleDepositFacilityTest
         )
     {
         // Expect revert
-        vm.expectRevert("TRANSFER_FROM_FAILED");
+        vm.expectRevert(stdError.arithmeticError);
 
         // Call function
         vm.prank(recipient);

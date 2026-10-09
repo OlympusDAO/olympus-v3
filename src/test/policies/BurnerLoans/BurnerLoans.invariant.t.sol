@@ -15,7 +15,7 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {BurnerLoansSeizureTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {

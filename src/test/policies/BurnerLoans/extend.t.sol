@@ -2,13 +2,17 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -732,7 +736,14 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         usds.approve(address(burnerLoans), 0);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(burnerLoans),
+                0,
+                preview.fee
+            )
+        );
         burnerLoans.extend(address(usds), alice, 1, preview.fee);
         assertEq(
             burnerLoans.getPosition(address(usds), alice).maturity,
@@ -755,10 +766,17 @@ contract BurnerLoansExtendTest is BurnerLoansBorrowTestBase {
         );
         uint256 aliceBalance = usds.balanceOf(alice);
         vm.prank(alice);
-        TransferHelper.safeTransfer(usds, operator, aliceBalance);
+        SafeERC20.safeTransfer(IERC20(address(usds)), operator, aliceBalance);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientBalance.selector,
+                alice,
+                0,
+                preview.fee
+            )
+        );
         burnerLoans.extend(address(usds), alice, 1, preview.fee);
         assertEq(
             burnerLoans.getPosition(address(usds), alice).maturity,

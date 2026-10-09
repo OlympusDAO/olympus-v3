@@ -1,24 +1,24 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// This mock structurally implements IERC4626 but uses Solmate ERC20 for configurable share decimals.
-// Explicit IERC4626 inheritance conflicts with the ERC20 base's public getters.
+// This mock structurally implements IERC4626 with independently configurable share decimals.
 // forge-lint: disable-start(missing-inheritance)
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 
 /// @notice Minimal 1:1-value ERC-4626 test vault with independently configurable share decimals.
 contract MockERC4626DifferentDecimals is ERC20 {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for ERC20;
 
     uint256 internal constant _DECIMAL_BASE = 10;
 
     ERC20 internal immutable _ASSET;
     uint256 internal immutable _ASSET_SCALE;
     uint256 internal immutable _SHARE_SCALE;
+    uint8 internal immutable _SHARE_DECIMALS;
 
     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
     event Withdraw(
@@ -29,13 +29,15 @@ contract MockERC4626DifferentDecimals is ERC20 {
         uint256 shares
     );
 
-    constructor(
-        ERC20 asset_,
-        uint8 shareDecimals_
-    ) ERC20("Different Decimals Vault", "DDV", shareDecimals_) {
+    constructor(ERC20 asset_, uint8 shareDecimals_) ERC20("Different Decimals Vault", "DDV") {
         _ASSET = asset_;
         _ASSET_SCALE = _DECIMAL_BASE ** asset_.decimals();
         _SHARE_SCALE = _DECIMAL_BASE ** shareDecimals_;
+        _SHARE_DECIMALS = shareDecimals_;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return _SHARE_DECIMALS;
     }
 
     function asset() external view returns (address) {
@@ -85,7 +87,7 @@ contract MockERC4626DifferentDecimals is ERC20 {
     }
 
     function maxWithdraw(address owner_) external view returns (uint256) {
-        return convertToAssets(balanceOf[owner_]);
+        return convertToAssets(balanceOf(owner_));
     }
 
     function previewWithdraw(uint256 assets_) external view returns (uint256) {
@@ -104,7 +106,7 @@ contract MockERC4626DifferentDecimals is ERC20 {
     }
 
     function maxRedeem(address owner_) external view returns (uint256) {
-        return balanceOf[owner_];
+        return balanceOf(owner_);
     }
 
     function previewRedeem(uint256 shares_) external view returns (uint256) {
@@ -124,8 +126,7 @@ contract MockERC4626DifferentDecimals is ERC20 {
 
     function _spendAndBurn(address owner_, uint256 shares_) internal {
         if (msg.sender != owner_) {
-            uint256 allowed = allowance[owner_][msg.sender];
-            if (allowed != type(uint256).max) allowance[owner_][msg.sender] = allowed - shares_;
+            _spendAllowance(owner_, msg.sender, shares_);
         }
         _burn(owner_, shares_);
     }

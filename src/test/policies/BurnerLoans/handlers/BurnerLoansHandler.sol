@@ -23,15 +23,14 @@ import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {Test} from "forge-std/Test.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
@@ -50,7 +49,7 @@ contract BurnerLoansHandler is Test {
     OlympusFixedTermLoan internal immutable _FLOAN;
     BurnerLoansSeizer internal immutable _SEIZER;
     MockPrice internal immutable _PRICE;
-    MockOhm internal immutable _OHM;
+    MockERC20 internal immutable _OHM;
     MockERC20 internal immutable _COLLATERAL;
     uint256 internal immutable _COLLATERAL_SCALE;
     IDepositManager internal immutable _DEPOSIT_MANAGER;
@@ -110,7 +109,7 @@ contract BurnerLoansHandler is Test {
         OlympusFixedTermLoan floan;
         BurnerLoansSeizer seizer;
         MockPrice price;
-        MockOhm ohm;
+        MockERC20 ohm;
         MockERC20 collateral;
         IDepositManager depositManager;
         address admin;

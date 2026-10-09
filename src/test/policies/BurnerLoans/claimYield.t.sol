@@ -13,16 +13,17 @@ import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositMana
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
@@ -324,7 +325,9 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             abi.encode(false)
         );
 
-        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(usds))
+        );
         burnerLoans.claimYield(address(usds));
 
         assertEq(usds.balanceOf(firstRecipient), 0, "first direct amount");
@@ -462,7 +465,7 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
         mockDepositManager.setClaimableYield(1);
 
         // If the implementation makes this zero-value token call, the mocked false return makes
-        // TransferHelper revert. Success therefore proves that zero-value legs are skipped.
+        // SafeERC20 revert. Success therefore proves that zero-value legs are skipped.
         vm.mockCall(
             address(usds),
             abi.encodeWithSelector(ERC20.transfer.selector, directRecipient, 0),
@@ -498,8 +501,9 @@ contract BurnerLoansClaimYieldTest is BurnerLoansClaimYieldTestBase {
             abi.encode(false)
         );
 
-        // TransferHelper exposes only a legacy Error(string), so no custom selector is available.
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(SafeERC20.SafeERC20FailedOperation.selector, address(usds))
+        );
         burnerLoans.claimYield(address(usds));
 
         assertEq(mockDepositManager.claimYieldCalls(), 0, "claim calls rolled back");

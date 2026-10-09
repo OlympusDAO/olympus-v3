@@ -39,6 +39,11 @@ abstract contract BurnerLoansYieldClaimerTest is Test {
         rolesAdmin = new RolesAdmin(kernel);
         target = new MockBurnerLoansYieldClaimerTarget(kernel);
         claimer = new BurnerLoansYieldClaimer(kernel, address(target), _EXECUTION_GAS_LIMIT);
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(rolesAdmin), "Roles admin");
+        vm.label(address(target), "Burner Loans yield target");
+        vm.label(address(claimer), "Burner Loans yield claimer");
 
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));

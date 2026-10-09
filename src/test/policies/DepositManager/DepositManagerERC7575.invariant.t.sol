@@ -13,11 +13,11 @@ import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositMana
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 // Contracts
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {MockSharedERC7575ShareToken, MockSharedERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {MockSharedERC7575ShareToken, MockSharedERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 contract DepositManagerERC7575Handler {
     IDepositManagerV1_1 internal immutable _DEPOSIT_MANAGER;

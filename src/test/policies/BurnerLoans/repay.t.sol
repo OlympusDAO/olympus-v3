@@ -2,6 +2,8 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
@@ -11,10 +13,10 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 // Libraries
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
@@ -247,7 +249,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                SafeERC20Exact.SafeERC20Exact_InexactTransferFrom.selector,
                 address(ohm),
                 address(inventory),
                 repayment,
@@ -693,7 +695,14 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
 
         vm.prank(alice);
-        vm.expectRevert(abi.encodeWithSignature("Error(string)", "TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(burnerLoans),
+                0,
+                1e9
+            )
+        );
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
@@ -708,7 +717,9 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _approveOhm(bob, 1e9);
 
         vm.prank(bob);
-        vm.expectRevert(abi.encodeWithSignature("Error(string)", "TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, bob, 0, 1e9)
+        );
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }

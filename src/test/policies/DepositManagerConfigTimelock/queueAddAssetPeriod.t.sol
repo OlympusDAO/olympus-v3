@@ -16,7 +16,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueAddAssetPeriodTest is DepositManagerConfigTimelockTest {

@@ -9,7 +9,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {BURNER_LOANS_INVENTORY_PROVIDER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 // Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.
 // forge-lint: disable-start(unsafe-typecast)
@@ -67,7 +67,7 @@ contract BurnerLoansInventoryWithdrawTest is BurnerLoansInventoryTest {
             failure
         );
 
-        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.expectRevert(failure);
         vm.prank(provider);
         inventory.withdraw(amount_, recipient);
 

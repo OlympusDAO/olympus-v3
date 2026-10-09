@@ -14,7 +14,7 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 import {Vm} from "forge-std/Vm.sol";
 
 // Contracts
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {BurnerLoansYieldRoutingTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansYieldRoutingTestBase.sol";
 
 // Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.

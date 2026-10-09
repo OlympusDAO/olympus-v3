@@ -10,14 +10,15 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
 
 // Contracts
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {Actions} from "src/Kernel.sol";
 import {BurnerLoansYieldClaimer} from "src/policies/BurnerLoansYieldClaimer.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
@@ -238,7 +239,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         vm.expectEmit(true, false, false, true, address(_claimer));
         emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
             address(vaultAsset),
-            bytes4(keccak256("Error(string)"))
+            SafeERC20.SafeERC20FailedOperation.selector
         );
         vm.prank(_heart);
         _claimer.execute();

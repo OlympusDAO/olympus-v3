@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";

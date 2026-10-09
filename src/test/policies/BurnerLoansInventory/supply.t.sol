@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {stdError} from "@forge-std-1.16.2/StdError.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
@@ -10,7 +12,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BURNER_LOANS_INVENTORY_PROVIDER_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Libraries
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 
 // Contracts
 import {BurnerLoansInventoryTest} from "./BurnerLoansInventoryTest.sol";
@@ -81,7 +83,7 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
     function test_givenMissingAllowance_reverts(uint128 amount_) public {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         ohm.mint(provider, amount_);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(stdError.arithmeticError);
         vm.prank(provider);
         inventory.supply(amount_);
     }
@@ -92,7 +94,7 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
         amount_ = uint128(bound(amount_, 1, type(uint128).max));
         vm.prank(provider);
         ohm.approve(address(inventory), amount_);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(stdError.arithmeticError);
         vm.prank(provider);
         inventory.supply(amount_);
     }
@@ -114,7 +116,7 @@ contract BurnerLoansInventorySupplyTest is BurnerLoansInventoryTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                SafeERC20Exact.SafeERC20Exact_InexactTransferFrom.selector,
                 address(ohm),
                 address(inventory),
                 amount,

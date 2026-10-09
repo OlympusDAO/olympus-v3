@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IEnablerV2} from "src/bases/interfaces/IEnablerV2.sol";
@@ -17,7 +17,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
-import {MockYieldRepurchaseRecipient} from "./fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
     // supportsInterface

@@ -13,8 +13,8 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 // Libraries
-import {ReentrancyGuard} from "@openzeppelin-5.3.0/utils/ReentrancyGuard.sol";
-import {EnumerableSet} from "@openzeppelin-5.3.0/utils/structs/EnumerableSet.sol";
+import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";

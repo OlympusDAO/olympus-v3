@@ -8,20 +8,29 @@ pragma solidity ^0.8.27;
 import {IERC7540Deposit, IERC7540Operator, IERC7540Redeem} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
 import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7575.sol";
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
 // Libraries
 import {Math} from "@openzeppelin-5.7.0/utils/math/Math.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
+
+// Contracts
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 contract MockERC7540ExternalShareToken is ERC20 {
     error OnlyVault();
 
     address internal immutable _VAULT;
+    uint8 internal immutable _TOKEN_DECIMALS;
 
-    constructor() ERC20("External Vault Share", "EVS", 6) {
+    constructor(uint8 decimals_) ERC20("External Vault Share", "EVS") {
         _VAULT = msg.sender;
+        _TOKEN_DECIMALS = decimals_;
+    }
+
+    function decimals() public view override returns (uint8) {
+        return _TOKEN_DECIMALS;
     }
 
     function mint(address recipient_, uint256 amount_) external {
@@ -39,7 +48,7 @@ contract MockERC7540ExternalShareToken is ERC20 {
 /// @dev The underlying uses 18 decimals and shares use 6 decimals. Redemption previews and direct
 ///      redemption revert when asynchronous redemption is enabled.
 contract MockERC7540ExternalShareVault is IERC165 {
-    using SafeTransferLib for ERC20;
+    using SafeERC20 for IERC20;
 
     error AsyncRedeem();
     error AsyncDeposit();
@@ -47,9 +56,11 @@ contract MockERC7540ExternalShareVault is IERC165 {
 
     bytes4 internal constant _ERC7575_INTERFACE_ID =
         type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
-    uint256 internal _assetsPerShare = 1e12;
+    uint8 internal constant _ASSET_DECIMALS = 18;
+    uint8 internal constant _SHARE_DECIMALS = 6;
+    uint256 internal _assetsPerShare = 10 ** (_ASSET_DECIMALS - _SHARE_DECIMALS);
 
-    ERC20 internal immutable _ASSET;
+    IERC20 internal immutable _ASSET;
     MockERC7540ExternalShareToken internal immutable _SHARE;
     bool internal _asyncDeposit;
     bool internal _asyncRedeem;
@@ -62,7 +73,7 @@ contract MockERC7540ExternalShareVault is IERC165 {
     uint256 internal _previewRedeemDiscount;
 
     constructor(
-        ERC20 asset_,
+        IERC20 asset_,
         bool asyncDeposit_,
         bool asyncRedeem_,
         bool reportRequiredInterfaces_
@@ -72,7 +83,7 @@ contract MockERC7540ExternalShareVault is IERC165 {
         _asyncRedeem = asyncRedeem_;
         _supportsOperator = reportRequiredInterfaces_;
         _supportsERC7575 = reportRequiredInterfaces_;
-        _SHARE = new MockERC7540ExternalShareToken();
+        _SHARE = new MockERC7540ExternalShareToken(_SHARE_DECIMALS);
     }
 
     function asset() external view returns (address) {

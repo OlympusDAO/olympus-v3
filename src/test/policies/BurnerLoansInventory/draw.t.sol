@@ -6,7 +6,7 @@ pragma solidity >=0.8.24;
 
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {BurnerLoansInventoryTest} from "src/test/policies/BurnerLoansInventory/BurnerLoansInventoryTest.sol";
 
@@ -104,7 +104,7 @@ contract BurnerLoansInventoryDrawTest is BurnerLoansInventoryTest {
             failure
         );
 
-        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.expectRevert(failure);
         vm.prank(address(facility));
         inventory.draw(recipient, 100e9);
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 contract MockOlympusBackingOracle is IOlympusBackingOracle, IERC165 {

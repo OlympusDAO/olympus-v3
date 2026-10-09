@@ -20,7 +20,7 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-import {MockOhm} from "src/test/mocks/MockOhm.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
@@ -292,7 +292,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     function test_givenInventoryOhmMismatch_reverts() public {
         vm.prank(admin);
         burnerLoans.disable("");
-        MockOhm otherOhm = new MockOhm("Other OHM", "OHM2", OHM_DECIMALS);
+        MockERC20 otherOhm = new MockERC20("Other OHM", "OHM2", OHM_DECIMALS);
         vm.mockCall(
             address(inventory),
             abi.encodeCall(IBurnerLoansInventory.ohm, ()),

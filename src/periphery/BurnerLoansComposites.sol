@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
+import {IERC20} from "@openzeppelin-5.7.0/token/ERC20/IERC20.sol";
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansLifecycle} from "src/policies/interfaces/IBurnerLoansLifecycle.sol";
@@ -11,12 +11,12 @@ import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
+import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 
 // Contracts
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
+import {ERC165} from "@openzeppelin-5.7.0/utils/introspection/ERC165.sol";
 
 /// @title Burner Loans Composites
 /// @notice One-transaction borrower flows composed from Burner Loans primitives.

@@ -20,7 +20,7 @@ import {PriceCacher} from "src/policies/PriceCacher.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockPeriodicTaskManager} from "src/test/bases/PeriodicTaskManager/MockPeriodicTaskManager.sol";
 import {toSubKeycode} from "src/Submodules.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockPriceFeed} from "test/mocks/MockPriceFeed.sol";
 import {BurnerLoansPriceIntegrationTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansPriceIntegrationTestBase.sol";
 

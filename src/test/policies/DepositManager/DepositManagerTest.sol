@@ -21,10 +21,10 @@ import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {ERC6909} from "@openzeppelin-5.3.0/token/ERC6909/draft-ERC6909.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {ERC6909} from "@openzeppelin-5.7.0/token/ERC6909/ERC6909.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IERC6909Wrappable} from "src/interfaces/IERC6909Wrappable.sol";
 import {stdError} from "@forge-std-1.16.2/StdError.sol";
@@ -135,6 +135,14 @@ contract DepositManagerTest is Test {
         vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
         iAsset = IERC20(address(asset));
         iVault = IERC4626(address(vault));
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(trsry), "TRSRY");
+        vm.label(address(rolesAdmin), "Roles admin");
+        vm.label(address(receiptTokenManager), "Receipt token manager");
+        vm.label(address(depositManager), "Deposit manager");
+        vm.label(address(asset), "Deposit asset");
+        vm.label(address(vault), "Deposit vault");
 
         // Simulate the asset vault having earned yield
         {
@@ -421,14 +429,6 @@ contract DepositManagerTest is Test {
 
     function _expectRevertZeroAmount() internal {
         vm.expectRevert(abi.encodeWithSelector(IAssetManager.AssetManager_ZeroAmount.selector));
-    }
-
-    function _expectRevertERC20InsufficientAllowance() internal {
-        vm.expectRevert("TRANSFER_FROM_FAILED");
-    }
-
-    function _expectRevertERC20InsufficientBalance() internal {
-        vm.expectRevert("TRANSFER_FROM_FAILED");
     }
 
     function _expectRevertERC20CloneInsufficientAllowance() internal {

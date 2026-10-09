@@ -4,13 +4,13 @@ pragma solidity >=0.8.24;
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)
 
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {stdError} from "forge-std/StdError.sol";
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 
 import {IBurnerLoansComposites} from "src/periphery/interfaces/IBurnerLoansComposites.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
-import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 import {BurnerLoansCompositesTest} from "src/test/periphery/BurnerLoansComposites/BurnerLoansCompositesTest.sol";
 
 contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest {
@@ -132,7 +132,14 @@ contract BurnerLoansCompositesDepositAndBorrowTest is BurnerLoansCompositesTest 
         _authorize(alice);
         usds.mint(alice, _COLLATERAL + _MAX_FEE);
 
-        vm.expectRevert(stdError.arithmeticError);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(composites),
+                0,
+                _COLLATERAL + _MAX_FEE
+            )
+        );
         vm.prank(alice);
         composites.depositAndBorrow(
             _emptyAuthorization(),

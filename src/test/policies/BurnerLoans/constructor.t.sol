@@ -2,7 +2,7 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";

@@ -12,7 +12,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {BurnerLoansYieldRoutingTestBase} from "./fixtures/BurnerLoansYieldRoutingTestBase.sol";
 
 // Test inputs prove numeric casts fit; fixture casts intentionally select fixed-width values.

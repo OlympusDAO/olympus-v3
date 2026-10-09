@@ -4,8 +4,8 @@ pragma solidity >=0.8.24;
 // Test actions assert their effects directly; return values are intentionally unused.
 // forge-lint: disable-start(unused-return)
 
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -14,7 +14,7 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/policies/BurnerLoans/fixtures/MockYieldRepurchaseRecipient.sol";
+import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 abstract contract BurnerLoansClaimYieldTestBase is BurnerLoansTest {
     uint128 internal constant _COLLATERAL_AMOUNT = 100e6;

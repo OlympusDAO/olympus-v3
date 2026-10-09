@@ -4,10 +4,10 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -20,9 +20,9 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
-import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Scenario-specific contracts and fixtures have no cross-file consumers.
@@ -1425,7 +1425,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // Condition tree:
     // - Token behavior: transfer returns false without reverting
     // - Position state: borrower has sufficient debt-free collateral
-    // - Expected branch: TransferHelper reverts and both FLOAN and custody accounting roll back
+    // - Expected branch: SafeERC20 reverts and both FLOAN and custody accounting roll back
     function test_givenTransferReturnsFalse_revertsWithoutRemovingCollateral() public {
         uint128 amount = 1_000e6;
         uint128 withdrawal = 400e6;
@@ -1437,7 +1437,9 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
         );
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSignature("SafeERC20FailedOperation(address)", address(usds))
+        );
         burnerLoans.withdrawCollateral(address(usds), withdrawal, alice, alice);
 
         _assertPositionAndActiveDebt(address(usds), alice, amount, 0, 0);

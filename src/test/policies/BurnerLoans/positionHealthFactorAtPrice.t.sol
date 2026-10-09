@@ -11,7 +11,7 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 
 // Libraries
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 
 // Contracts
 import {PriceCache} from "src/policies/price/PriceCache.sol";

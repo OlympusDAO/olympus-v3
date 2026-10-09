@@ -41,6 +41,11 @@ abstract contract BurnerLoansSeizerTest is Test {
         rolesAdmin = new RolesAdmin(kernel);
         target = new MockBurnerLoansSeizerTarget(kernel);
         seizer = new BurnerLoansSeizer(kernel, address(target), 10, 5, _EXECUTION_GAS_LIMIT);
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(rolesAdmin), "Roles admin");
+        vm.label(address(target), "Burner Loans seizer target");
+        vm.label(address(seizer), "Burner Loans seizer");
 
         kernel.executeAction(Actions.InstallModule, address(roles));
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));

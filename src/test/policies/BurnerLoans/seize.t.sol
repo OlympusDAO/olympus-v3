@@ -16,9 +16,9 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 
 // Libraries
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -26,8 +26,8 @@ import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 // Contracts
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
-import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
@@ -118,6 +118,8 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     }
 
     function test_givenUnhealthyPosition_whenCallerIsArbitrary(address caller_) public {
+        // A real transaction cannot originate from zero, and the OZ token rejects that payee.
+        vm.assume(caller_ != address(0));
         vm.assume(caller_ != protocolSeizer);
         vm.assume(caller_ != address(burnerLoans));
         _makeUnhealthy(alice);

@@ -5,7 +5,7 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(unused-return)
 
 // Libraries
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 // Interfaces
@@ -17,7 +17,7 @@ import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Contracts
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {Actions, Module} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";

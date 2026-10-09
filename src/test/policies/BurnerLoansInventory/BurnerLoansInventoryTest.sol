@@ -58,6 +58,15 @@ abstract contract BurnerLoansInventoryTest is Test {
         facility = new BurnerLoansInventoryPrincipal(kernel, address(0));
         config = new BurnerLoansInventoryPrincipal(kernel, address(facility));
         inventory = new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(facility));
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(ohm), "OHM");
+        vm.label(address(mintr), "MINTR");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(trsry), "TRSRY");
+        vm.label(address(rolesAdmin), "Roles admin");
+        vm.label(address(facility), "Burner Loans facility fixture");
+        vm.label(address(config), "Burner Loans config fixture");
+        vm.label(address(inventory), "Burner Loans inventory");
 
         kernel.executeAction(Actions.InstallModule, address(mintr));
         kernel.executeAction(Actions.InstallModule, address(roles));

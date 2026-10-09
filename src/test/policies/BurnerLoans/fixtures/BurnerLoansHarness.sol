@@ -13,7 +13,7 @@ import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOrac
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
-import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+// Contracts
+import {ERC20Mock} from "@openzeppelin-5.7.0/mocks/token/ERC20Mock.sol";
+
+contract MockERC20FalseAfterTransfer is ERC20Mock {
+    function transferFrom(
+        address sender_,
+        address recipient_,
+        uint256 amount_
+    ) public override returns (bool) {
+        super.transferFrom(sender_, recipient_, amount_);
+        return false;
+    }
+}

@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
 // Interfaces
-import {IERC6909} from "@openzeppelin-5.3.0/interfaces/draft-IERC6909.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
+import {IERC6909} from "@openzeppelin-5.7.0/interfaces/IERC6909.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
@@ -17,18 +19,18 @@ import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
-import {ReentrancyGuardTransient} from "@openzeppelin-5.3.0/utils/ReentrancyGuardTransient.sol";
-import {TransferHelper} from "src/libraries/TransferHelper.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 
 // Contracts
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {MockERC4626} from "@solmate-6.2.0/test/utils/mocks/MockERC4626.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
 import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 import {BurnerLoansTest} from "./BurnerLoansTest.sol";
-import {ReentrantFeeToken} from "./fixtures/ReentrantFeeToken.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
@@ -605,6 +607,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     function test_depositCollateral_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != alice);
         vm.assume(caller_ != _operator);
+        vm.assume(caller_ != address(0));
 
         _setAuthorizationAndExpectEvent(alice, _operator, uint48(block.timestamp + 1 days));
         _mintAndApprove(address(usds), caller_, 1e6);
@@ -868,7 +871,14 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         usds.mint(alice, 1e6);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(burnerLoans),
+                0,
+                1e6
+            )
+        );
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
 
         assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
@@ -884,7 +894,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         usds.approve(address(burnerLoans), 1e6);
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, alice, 0, 1e6)
+        );
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
 
         assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
@@ -893,7 +905,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // Condition tree:
     // - Token behavior: transferFrom returns false without reverting
     // - Parameters: asset is configured and the caller has sufficient balance and allowance
-    // - Expected branch: TransferHelper reverts and no collateral is credited
+    // - Expected branch: SafeERC20 reverts and no collateral is credited
     function test_givenTransferFromReturnsFalse_revertsWithoutCredit() public {
         _mintAndApprove(address(usds), alice, 1e6);
         vm.mockCall(
@@ -903,7 +915,9 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         );
 
         vm.prank(alice);
-        vm.expectRevert(bytes("TRANSFER_FROM_FAILED"));
+        vm.expectRevert(
+            abi.encodeWithSignature("SafeERC20FailedOperation(address)", address(usds))
+        );
         burnerLoans.depositCollateral(address(usds), 1e6, alice);
 
         assertEq(burnerLoans.getPosition(address(usds), alice).depositedCollateral, 0, "position");
@@ -934,7 +948,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                SafeERC20Exact.SafeERC20Exact_InexactTransferFrom.selector,
                 address(usds),
                 address(burnerLoans),
                 amount,
@@ -982,7 +996,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                TransferHelper.TransferHelper_InexactTransferFrom.selector,
+                SafeERC20Exact.SafeERC20Exact_InexactTransferFrom.selector,
                 address(feeToken),
                 address(burnerLoans),
                 amount,

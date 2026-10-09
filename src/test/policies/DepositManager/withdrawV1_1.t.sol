@@ -19,12 +19,12 @@ import {FullMath} from "src/libraries/FullMath.sol";
 
 // Contracts
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
-import {ERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {ERC7540SyncDepositAsyncRedeemVault} from "src/test/policies/DepositManager/fixtures/ERC7540SyncDepositAsyncRedeemVault.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
-import {MockERC7575Vault} from "src/test/policies/DepositManager/fixtures/MockERC7575Vault.sol";
-import {ReentrantShareVault} from "src/test/policies/DepositManager/fixtures/ReentrantShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
+import {ReentrantShareVault} from "src/test/mocks/ReentrantShareVault.sol";
 
 // Test contracts
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";

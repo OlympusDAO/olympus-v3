@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Test fixtures accept zero addresses to model unset, cleared, and invalid states.
 // forge-lint: disable-start(missing-zero-check)
 
-import {IERC165} from "@openzeppelin-5.3.0/interfaces/IERC165.sol";
+import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";

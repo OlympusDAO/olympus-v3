@@ -13,10 +13,10 @@ import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
-import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
-import {ReentrantFeeToken} from "src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {MockERC7540ExternalShareVault} from "src/test/policies/DepositManager/fixtures/MockERC7540ExternalShareVault.sol";
+import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 contract DepositManagerRescueTest is DepositManagerTest {
     MockERC20 public randomToken;
