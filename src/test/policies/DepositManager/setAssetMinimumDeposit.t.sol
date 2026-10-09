@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {DepositManagerTest} from "src/test/policies/DepositManager/DepositManagerTest.sol";
-import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 
 contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
@@ -12,18 +14,32 @@ contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
 
     // ========== TESTS ========== //
 
-    // when the caller is not the manager or admin
+    // when the caller is neither admin nor config operator
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(
+    function test_whenCallerIsNotAdminOrConfigOperator_reverts(
         address caller_
     ) public givenIsEnabled givenAssetIsAdded {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        vm.expectRevert(abi.encodeWithSelector(IPolicyAdmin.NotAuthorised.selector));
+        _expectRevertNotConfigOperator(caller_);
 
         vm.prank(caller_);
         depositManager.setAssetMinimumDeposit(iAsset, 1e18);
+    }
+
+    function test_givenConfigOperator_setsMinimumDeposit() public givenIsEnabled givenAssetIsAdded {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.setAssetMinimumDeposit(iAsset, 1e18);
+
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).minimumDeposit,
+            1e18,
+            "config operator should set minimum deposit"
+        );
     }
 
     // given the contract is disabled
@@ -94,3 +110,5 @@ contract DepositManagerSetAssetMinimumDepositTest is DepositManagerTest {
         assertEq(configuration.minimumDeposit, minimumDeposit_, "minimumDeposit mismatch");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

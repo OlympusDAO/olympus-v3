@@ -26,18 +26,53 @@ contract DepositManagerDisableAssetPeriodTest is DepositManagerTest {
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
-    // when the caller is not the manager or admin
+    // when the caller is neither admin, config operator, nor emergency
     //  [X] it reverts
 
-    function test_givenCallerIsNotManagerOrAdmin_reverts(
+    function test_whenCallerIsUnauthorized_reverts(
         address caller_
     ) public givenIsEnabled givenFacilityNameIsSetDefault {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+        vm.assume(caller_ != ADMIN && caller_ != CONFIG_OPERATOR && caller_ != EMERGENCY);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         vm.prank(caller_);
         depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function test_givenConfigOperator_disablesAssetPeriod()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertFalse(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "config operator should disable asset period"
+        );
+    }
+
+    function test_givenEmergency_disablesAssetPeriod()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+        givenAssetPeriodIsAdded
+    {
+        vm.prank(EMERGENCY);
+        depositManager.disableAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        assertFalse(
+            depositManager.isAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR).isEnabled,
+            "emergency should disable asset period"
+        );
     }
 
     // given there is no asset period

@@ -5,15 +5,18 @@ import {ConvertibleDepositFacilityTest} from "src/test/policies/ConvertibleDepos
 
 contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFacilityTest {
     uint256 internal _recipientBalanceBefore;
+    uint256 internal _operatorSharesBefore;
     uint256 internal _operatorSharesInAssetsBefore;
     uint256 internal _availableDepositsBefore;
     uint256 internal _committedDepositsBefore;
     uint256 internal _committedDepositsOperatorBefore;
     uint256 public constant BORROW_AMOUNT = 1e18;
+    uint256 internal constant VAULT_DEPOSIT_AMOUNT = 1000e18;
+    uint256 internal constant SHARE_AMOUNT_TOLERANCE = 5;
 
     function _takeSnapshot() internal {
         _recipientBalanceBefore = iReserveToken.balanceOf(recipient);
-        (, _operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
+        (_operatorSharesBefore, _operatorSharesInAssetsBefore) = depositManager.getOperatorAssets(
             iReserveToken,
             address(facility)
         );
@@ -33,7 +36,16 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, BORROW_AMOUNT, recipient);
+        // This call must revert; there is no return value to inspect.
+        // forge-lint: disable-start(unused-return)
+        facility.handleLoanRepay(
+            iReserveToken,
+            PERIOD_MONTHS,
+            BORROW_AMOUNT,
+            BORROW_AMOUNT,
+            recipient
+        );
+        // forge-lint: disable-end(unused-return)
     }
 
     // given the caller is not authorized
@@ -49,7 +61,16 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(caller_);
-        facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, 1e18, BORROW_AMOUNT, recipient);
+        // This call must revert; there is no return value to inspect.
+        // forge-lint: disable-start(unused-return)
+        facility.handleLoanRepay(
+            iReserveToken,
+            PERIOD_MONTHS,
+            BORROW_AMOUNT,
+            BORROW_AMOUNT,
+            recipient
+        );
+        // forge-lint: disable-end(unused-return)
     }
 
     // when the amount is less than one share
@@ -61,7 +82,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
-        givenVaultHasDeposit(1000e18)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
@@ -75,30 +96,37 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
+        // The expected revert has no return value to inspect.
+        /// forge-lint: disable-next-line(unused-return)
         facility.handleLoanRepay(iReserveToken, PERIOD_MONTHS, amount_, BORROW_AMOUNT, recipient);
     }
 
-    // when the amount is greater than the borrowed amount
+    // when the amount is greater than the first loan's principal
     //  given there is a second loan
-    //   [X] _committedDeposits is increased by the amount repaid, capped at the principal amount of the first loan
+    //   [X] it accepts the overpayment as facility assets
+    //   [X] it restores commitments by the first loan's principal without affecting the second loan
 
     function test_whenAmountGreaterThanBorrowed_givenSecondLoan(
         uint256 amount_
-    ) public givenLocallyActive givenOperatorAuthorized(OPERATOR) givenVaultHasDeposit(1000e18) {
+    )
+        public
+        givenLocallyActive
+        givenOperatorAuthorized(OPERATOR)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
+    {
         amount_ = bound(amount_, BORROW_AMOUNT + 1, RESERVE_TOKEN_AMOUNT);
 
         // First loan
         {
             _mintReserveToken(recipient, RESERVE_TOKEN_AMOUNT);
             _approveReserveTokenSpendingByDepositManager(recipient, RESERVE_TOKEN_AMOUNT);
-            previousDepositActual = _mintReceiptToken(recipient, RESERVE_TOKEN_AMOUNT);
-            _commitReceiptToken(OPERATOR, previousDepositActual);
+            uint256 receiptAmount = _mintReceiptToken(recipient, RESERVE_TOKEN_AMOUNT);
+            _commitReceiptToken(OPERATOR, receiptAmount);
             vm.prank(OPERATOR);
-            previousBorrowActual = facility.handleBorrow(
-                iReserveToken,
-                PERIOD_MONTHS,
-                BORROW_AMOUNT,
-                recipient
+            assertGt(
+                facility.handleBorrow(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient),
+                0,
+                "first loan should disburse assets"
             );
         }
 
@@ -106,14 +134,13 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         {
             _mintReserveToken(recipient, RESERVE_TOKEN_AMOUNT);
             _approveReserveTokenSpendingByDepositManager(recipient, RESERVE_TOKEN_AMOUNT);
-            previousDepositActual = _mintReceiptToken(recipient, RESERVE_TOKEN_AMOUNT);
-            _commitReceiptToken(OPERATOR, previousDepositActual);
+            uint256 receiptAmount = _mintReceiptToken(recipient, RESERVE_TOKEN_AMOUNT);
+            _commitReceiptToken(OPERATOR, receiptAmount);
             vm.prank(OPERATOR);
-            previousBorrowActual = facility.handleBorrow(
-                iReserveToken,
-                PERIOD_MONTHS,
-                BORROW_AMOUNT,
-                recipient
+            assertGt(
+                facility.handleBorrow(iReserveToken, PERIOD_MONTHS, BORROW_AMOUNT, recipient),
+                0,
+                "second loan should disburse assets"
             );
         }
 
@@ -134,6 +161,12 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             BORROW_AMOUNT,
             recipient
         );
+        assertGt(actualAmount, BORROW_AMOUNT, "actual repayment should include overpayment");
+        assertEq(
+            depositManager.getBorrowedAmount(iReserveToken, address(facility)),
+            BORROW_AMOUNT,
+            "repayment should leave the second loan outstanding"
+        );
 
         // Assert that the recipient's balance has decreased by the amount
         assertEq(
@@ -143,14 +176,13 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         );
 
         // Assert that the operator's shares in assets have increased by the amount
-        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
-            iReserveToken,
-            address(facility)
-        );
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iReserveToken, address(facility));
+        assertGt(operatorSharesAfter, _operatorSharesBefore, "operator shares should increase");
         assertApproxEqAbs(
             operatorSharesInAssetsAfter,
             _operatorSharesInAssetsBefore + actualAmount,
-            5,
+            SHARE_AMOUNT_TOLERANCE,
             "operator shares in assets"
         );
 
@@ -179,10 +211,9 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         );
     }
 
-    //  [X] it transfers the tokens from the payer to the deposit manager
-    //  [X] it updates the operator shares
-    //  [X] it updates the committed deposits
-    //  [X] it updates the committed deposits for the operator
+    // when the amount is greater than the loan principal
+    //  [X] it accepts the overpayment as facility assets
+    //  [X] it caps commitment restoration at the loan principal
 
     function test_whenAmountGreaterThanBorrowed(
         uint256 amount_
@@ -190,7 +221,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
-        givenVaultHasDeposit(1000e18)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
@@ -210,6 +241,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             BORROW_AMOUNT,
             recipient
         );
+        assertGt(actualAmount, BORROW_AMOUNT, "actual repayment should include overpayment");
 
         // Assert that the recipient's balance has decreased by the amount
         assertEq(
@@ -219,14 +251,13 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         );
 
         // Assert that the operator's shares in assets have increased by the amount
-        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
-            iReserveToken,
-            address(facility)
-        );
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iReserveToken, address(facility));
+        assertGt(operatorSharesAfter, _operatorSharesBefore, "operator shares should increase");
         assertApproxEqAbs(
             operatorSharesInAssetsAfter,
             _operatorSharesInAssetsBefore + actualAmount,
-            5,
+            SHARE_AMOUNT_TOLERANCE,
             "operator shares in assets"
         );
 
@@ -276,6 +307,8 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
 
         // Call function
         vm.prank(OPERATOR);
+        // This call must revert; there is no return value to inspect.
+        // forge-lint: disable-start(unused-return)
         facility.handleLoanRepay(
             iReserveToken,
             PERIOD_MONTHS,
@@ -283,6 +316,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
             BORROW_AMOUNT,
             recipient
         );
+        // forge-lint: disable-end(unused-return)
     }
 
     // [X] it transfers the tokens from the payer to the deposit manager
@@ -297,7 +331,7 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         public
         givenLocallyActive
         givenOperatorAuthorized(OPERATOR)
-        givenVaultHasDeposit(1000e18)
+        givenVaultHasDeposit(VAULT_DEPOSIT_AMOUNT)
         givenAddressHasConvertibleDepositTokenDefault(recipient)
         givenCommitted(OPERATOR, previousDepositActual)
         givenBorrowed(OPERATOR, BORROW_AMOUNT, recipient)
@@ -334,14 +368,13 @@ contract ConvertibleDepositFacilityHandleLoanRepayTest is ConvertibleDepositFaci
         );
 
         // Assert that the operator's shares in assets have increased by the amount
-        (, uint256 operatorSharesInAssetsAfter) = depositManager.getOperatorAssets(
-            iReserveToken,
-            address(facility)
-        );
+        (uint256 operatorSharesAfter, uint256 operatorSharesInAssetsAfter) = depositManager
+            .getOperatorAssets(iReserveToken, address(facility));
+        assertGt(operatorSharesAfter, _operatorSharesBefore, "operator shares should increase");
         assertApproxEqAbs(
             operatorSharesInAssetsAfter,
             _operatorSharesInAssetsBefore + actualAmount,
-            5,
+            SHARE_AMOUNT_TOLERANCE,
             "operator shares in assets"
         );
 

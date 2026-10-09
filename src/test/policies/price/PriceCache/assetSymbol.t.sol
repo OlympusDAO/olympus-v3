@@ -3,19 +3,38 @@
 pragma solidity ^0.8.15;
 
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {Actions} from "src/Kernel.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
-
-contract MockStaticMetadataTokenSymbol {
-    function symbol() external pure returns (string memory) {
-        return "LATE";
-    }
-
-    function decimals() external pure returns (uint8) {
-        return 6;
-    }
-}
+import {MockStaticMetadataToken} from "./fixtures/MockStaticMetadataToken.sol";
 
 contract PriceCacheAssetSymbolTest is PriceCacheTest {
+    function test_whenConstructorSymbolIsEmpty_reverts() public {
+        vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
+        new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS, "");
+    }
+
+    function test_whenConstructorSymbolExceedsMaximumLength_reverts() public {
+        vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
+        new PriceCache(kernel, UNIT_OF_ACCOUNT_DECIMALS, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567");
+    }
+
+    function test_whenConstructorSymbolHasMaximumLength_returnsEntireSymbol() public {
+        string memory maximumSymbol = "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
+        PriceCache maximumSymbolCache = new PriceCache(
+            kernel,
+            UNIT_OF_ACCOUNT_DECIMALS,
+            maximumSymbol
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(maximumSymbolCache));
+
+        assertEq(
+            maximumSymbolCache.assetSymbol(_unitOfAccount()),
+            maximumSymbol,
+            "maximum-length constructor symbol should round-trip"
+        );
+    }
+
     function test_givenAssetIsContract_returnsERC20Symbol() public view {
         assertEq(
             cache.assetSymbol(address(assetToken)),
@@ -37,7 +56,7 @@ contract PriceCacheAssetSymbolTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        priceModule.setPrice(nonContractAsset, 3e18);
+        priceModule.setPrice(nonContractAsset, NON_CONTRACT_PRICE_USD);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -45,6 +64,8 @@ contract PriceCacheAssetSymbolTest is PriceCacheTest {
                 nonContractAsset
             )
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.assetSymbol(nonContractAsset);
     }
 
@@ -53,9 +74,9 @@ contract PriceCacheAssetSymbolTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
-        MockStaticMetadataTokenSymbol tokenWithDifferentMetadata = new MockStaticMetadataTokenSymbol();
+        MockStaticMetadataToken tokenWithDifferentMetadata = new MockStaticMetadataToken();
         vm.etch(nonContractAsset, address(tokenWithDifferentMetadata).code);
 
         assertEq(

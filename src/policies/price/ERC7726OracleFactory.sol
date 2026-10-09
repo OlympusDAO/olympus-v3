@@ -349,6 +349,8 @@ contract ERC7726OracleFactory is
     ) external override onlyPolicyActive onlyEnabled nonReentrant {
         _validateCachingCaller(msg.sender);
         uint48 configuredMaxAge = _oracleToMaxAge[msg.sender];
+        // The factory caller only needs the cache freshness side effect.
+        // forge-lint: disable-next-line(unused-return)
         priceCache.cachePriceIfNecessary(base_, quote_, configuredMaxAge);
     }
 

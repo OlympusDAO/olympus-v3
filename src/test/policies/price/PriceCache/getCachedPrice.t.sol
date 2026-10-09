@@ -13,6 +13,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         cache.disable("");
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
@@ -23,15 +25,23 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
             address(assetToken),
             address(quoteToken)
         );
-        assertEq(assetQuote.assetPriceUsd, 2e18, "Asset leg should remain asset/USD");
-        assertEq(assetQuote.quotePriceUsd, 1e18, "Quote leg should remain quote/USD");
+        assertEq(assetQuote.assetPriceUsd, ASSET_PRICE_USD, "Asset leg should remain asset/USD");
+        assertEq(assetQuote.quotePriceUsd, QUOTE_PRICE_USD, "Quote leg should remain quote/USD");
 
         IPriceCache.CachedPrice memory quoteAsset = cache.getCachedPrice(
             address(quoteToken),
             address(assetToken)
         );
-        assertEq(quoteAsset.assetPriceUsd, 1e18, "Reversed asset leg should flip orientation");
-        assertEq(quoteAsset.quotePriceUsd, 2e18, "Reversed quote leg should flip orientation");
+        assertEq(
+            quoteAsset.assetPriceUsd,
+            QUOTE_PRICE_USD,
+            "Reversed asset leg should flip orientation"
+        );
+        assertEq(
+            quoteAsset.quotePriceUsd,
+            ASSET_PRICE_USD,
+            "Reversed quote leg should flip orientation"
+        );
         assertEq(quoteAsset.updatedAt, assetQuote.updatedAt, "Pair timestamp should be shared");
         assertEq(quoteAsset.roundId, assetQuote.roundId, "Pair roundId should be shared");
     }
@@ -57,6 +67,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(assetToken))
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
@@ -67,6 +79,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         vm.expectRevert(
             abi.encodeWithSelector(IPRICEv2.PRICE_AssetNotApproved.selector, address(quoteToken))
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 
@@ -109,8 +123,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        priceModule.setPrice(nonContractAsset, 3e18);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        priceModule.setPrice(nonContractAsset, NON_CONTRACT_PRICE_USD);
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         cache.cachePrice(address(assetToken), nonContractAsset);
 
@@ -120,7 +134,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         );
         assertEq(beforeUpdate.roundId, 1, "Pair should be cached before invalidation");
 
-        _setNonContractAssetMetadata(nonContractAsset, 9, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, UPDATED_NON_CONTRACT_DECIMALS, "NCA");
 
         IPriceCache.CachedPrice memory forward = cache.getCachedPrice(
             address(assetToken),
@@ -147,9 +161,9 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         address otherNonContractAsset = makeAddr("OTHER_NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(otherNonContractAsset);
-        priceModule.setPrice(otherNonContractAsset, 3e18);
+        priceModule.setPrice(otherNonContractAsset, NON_CONTRACT_PRICE_USD);
         _setNonContractAssetMetadata(unitOfAccount, 2, "NCA");
-        _setNonContractAssetMetadata(otherNonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(otherNonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         cache.cachePrice(address(assetToken), unitOfAccount);
 
@@ -158,7 +172,7 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
             unitOfAccount
         );
 
-        _setNonContractAssetMetadata(otherNonContractAsset, 9, "NCA");
+        _setNonContractAssetMetadata(otherNonContractAsset, UPDATED_NON_CONTRACT_DECIMALS, "NCA");
 
         IPriceCache.CachedPrice memory afterUpdate = cache.getCachedPrice(
             address(assetToken),
@@ -191,6 +205,8 @@ contract PriceCacheGetCachedPriceTest is PriceCacheTest {
         _deactivateCachePolicy();
 
         vm.expectRevert(IPriceCache.PriceCache_PolicyNotActive.selector);
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.getCachedPrice(address(assetToken), address(quoteToken));
     }
 }

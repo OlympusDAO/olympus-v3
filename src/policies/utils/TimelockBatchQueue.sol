@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
-
+// Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
+import {ERC165} from "@openzeppelin-5.3.0/utils/introspection/ERC165.sol";
 
 /// @title  TimelockBatchQueue
 /// @notice Reusable queue implementation for atomic batched timelocked actions.
@@ -28,8 +30,8 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///           the action executed, and runs the execution loop in the base contract: each
 ///           iteration calls `_executeSubAction` and then emits `TimelockSubActionExecuted`,
 ///           interleaving the per-sub event with any events emitted by the sub-action target.
-///           After the loop the stored sub-actions are cleared and a single
-///           `TimelockActionExecuted` event is emitted.
+///           After the loop `_onActionExecuted` runs once, the stored sub-actions are
+///           cleared, and a single `TimelockActionExecuted` event is emitted.
 ///         - `cancelQueuedAction` validates standard cancellable state, delegates
 ///           implementation-specific cancellation authorization to `_validateCancellation`,
 ///           clears the stored sub-actions, calls `_onActionCancelled` so derived contracts
@@ -120,6 +122,7 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action has expired
     ///             - `_validateExecution` reverts
     ///             - `_executeSubAction` reverts for any sub-action
+    ///             - `_onActionExecuted` reverts
     ///
     ///             In both `_queueAction` and execution the per-sub-action events precede the
     ///             single action-level event that closes the batch. At execution time each
@@ -144,6 +147,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
             _executeSubAction(actionId_, i, subAction);
             emit TimelockSubActionExecuted(actionId_, subAction.target, subAction.selector, i);
         }
+
+        _onActionExecuted(actionId_, len);
 
         delete action.actions;
 
@@ -201,6 +206,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         }
         _onBatchQueued(msg.sender, actionId, actions_);
 
+        // uint48 timestamps cover roughly 8.9 million years, beyond any supported chain lifetime.
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 queuedAt = uint48(block.timestamp);
         uint48 executableAt = queuedAt + timelockDelay;
         uint48 expiresAt = executableAt + _executionWindow();
@@ -280,10 +287,14 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view {
         _requireActionAccessible(actionId_, action_);
+
+        // Timelock readiness and expiry intentionally follow wall-clock timestamps.
+        // forge-lint: disable-start(block-timestamp)
         if (block.timestamp < action_.executableAt)
             revert ITimelockBatchQueue_ActionNotReady(actionId_, action_.executableAt);
         if (block.timestamp > action_.expiresAt)
             revert ITimelockBatchQueue_ActionExpired(actionId_, action_.expiresAt);
+        // forge-lint: disable-end(block-timestamp)
     }
 
     /// @notice Validate standard cancellable state for a queued action.
@@ -382,6 +393,16 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     /// @param  actionId_       The cancelled action ID.
     /// @param  subActionCount_ The number of sub-actions the action held before clearing.
     function _onActionCancelled(uint64 actionId_, uint256 subActionCount_) internal virtual {}
+
+    /// @notice Hook invoked once after every sub-action has executed successfully and before the
+    ///         stored sub-actions are cleared.
+    /// @dev    Default implementation is a no-op. A revert rolls back the complete batch,
+    ///         including target state changes and the action's executed flag. Derived contracts
+    ///         may use this hook to clear state that must remain available throughout execution.
+    ///
+    /// @param  actionId_       The executed action ID.
+    /// @param  subActionCount_ The number of successfully executed sub-actions.
+    function _onActionExecuted(uint64 actionId_, uint256 subActionCount_) internal virtual {}
 
     /// @notice Execute a single sub-action of a batched queued action.
     /// @dev    Derived contracts must revert on failure. Called by the base contract once per

@@ -7,23 +7,14 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {PolicyAdmin} from "src/policies/utils/PolicyAdmin.sol";
 
 import {PriceCacheTest} from "./PriceCacheTest.sol";
-
-contract MockStaticMetadataTokenRemove {
-    function symbol() external pure returns (string memory) {
-        return "LATE";
-    }
-
-    function decimals() external pure returns (uint8) {
-        return 6;
-    }
-}
+import {MockStaticMetadataToken} from "./fixtures/MockStaticMetadataToken.sol";
 
 contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
     function test_givenPolicyDisabled_reverts() public {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         vm.prank(admin);
         cache.disable("");
@@ -40,7 +31,7 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         vm.prank(unauthorised);
         vm.expectRevert(PolicyAdmin.NotAuthorised.selector);
@@ -53,7 +44,7 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
 
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         vm.prank(usePriceAdmin_ ? priceManager : admin);
         cache.removeNonContractAssetMetadata(nonContractAsset);
@@ -64,6 +55,8 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
                 nonContractAsset
             )
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.assetDecimals(nonContractAsset);
 
         vm.expectRevert(
@@ -72,6 +65,8 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
                 nonContractAsset
             )
         );
+        // The expected revert makes the return value unreachable.
+        // forge-lint: disable-next-line(unused-return)
         cache.assetSymbol(nonContractAsset);
     }
 
@@ -116,9 +111,9 @@ contract PriceCacheRemoveNonContractAssetDecimalsTest is PriceCacheTest {
     {
         address nonContractAsset = makeAddr("NON_CONTRACT_ASSET");
         _registerNonContractAsset(nonContractAsset);
-        _setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        _setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
-        MockStaticMetadataTokenRemove tokenWithDifferentDecimals = new MockStaticMetadataTokenRemove();
+        MockStaticMetadataToken tokenWithDifferentDecimals = new MockStaticMetadataToken();
         vm.etch(nonContractAsset, address(tokenWithDifferentDecimals).code);
 
         vm.prank(admin);

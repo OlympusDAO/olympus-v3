@@ -114,6 +114,15 @@ interface IPriceCache {
     /// @return symbol_     Symbol for `asset_`
     function assetSymbol(address asset_) external view returns (string memory symbol_);
 
+    /// @notice Validate that an asset/quote pair can be served by this cache
+    /// @dev This check is independent of the policy's active and enabled states.
+    ///      Reverts when either address is zero, both addresses are identical, a non-unit asset is
+    ///      not approved by PRICE, or an asset's decimals cannot be resolved.
+    ///
+    /// @param asset_   Asset in requested orientation
+    /// @param quote_   Quote in requested orientation
+    function validateAssetPair(address asset_, address quote_) external view;
+
     /// @notice Set the metadata for a registered non-contract asset
     ///
     /// @param asset_       Non-contract asset identifier
@@ -135,7 +144,12 @@ interface IPriceCache {
     /// @param asset_   Asset in requested orientation
     /// @param quote_   Quote in requested orientation
     /// @param maxAge_  Maximum acceptable snapshot age in seconds
-    function cachePriceIfNecessary(address asset_, address quote_, uint48 maxAge_) external;
+    /// @return cachedPrice Final cached pair snapshot in requested orientation
+    function cachePriceIfNecessary(
+        address asset_,
+        address quote_,
+        uint48 maxAge_
+    ) external returns (CachedPrice memory cachedPrice);
 
     /// @notice Get the last cached snapshot for a pair in requested orientation
     /// @dev    Returns a zeroed snapshot for valid pairs when no snapshot exists in the current cache epoch

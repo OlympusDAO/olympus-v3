@@ -4,6 +4,7 @@ pragma solidity ^0.8.15;
 
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockERC20} from "@solmate-6.2.0/test/utils/mocks/MockERC20.sol";
+import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 
 import {Actions, Kernel} from "src/Kernel.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
@@ -18,6 +19,17 @@ abstract contract PriceCacheTest is Test {
     uint8 internal constant UNIT_OF_ACCOUNT_DECIMALS = 18;
     string internal constant UNIT_OF_ACCOUNT_SYMBOL = "USD";
     uint32 internal constant OBSERVATION_FREQUENCY = 8 hours;
+    uint256 internal constant ASSET_PRICE_USD = 2e18;
+    uint256 internal constant QUOTE_PRICE_USD = 1e18;
+    uint256 internal constant NON_CONTRACT_PRICE_USD = 3e18;
+    uint8 internal constant NON_CONTRACT_DECIMALS = 8;
+    uint8 internal constant UPDATED_NON_CONTRACT_DECIMALS = 9;
+    uint8 internal constant UPDATED_PRICE_DECIMALS = 9;
+    uint48 internal constant LONG_MAX_AGE = 365 days;
+    uint48 internal constant SHORT_MAX_AGE = 1 hours;
+    uint256 internal constant UPGRADED_ASSET_PRICE_FACTOR = 4;
+    uint256 internal constant UPGRADED_QUOTE_PRICE_FACTOR = 2;
+    uint256 internal constant DECIMAL_BASE = 10;
 
     Kernel internal kernel;
     MockPrice internal priceModule;
@@ -55,16 +67,20 @@ abstract contract PriceCacheTest is Test {
         vm.prank(admin);
         cache.enable("");
 
-        assetToken = new MockERC20("Asset Token", "AST", 18);
-        quoteToken = new MockERC20("Quote Token", "QTE", 18);
+        assetToken = new MockERC20("Asset Token", "AST", PRICE_DECIMALS);
+        quoteToken = new MockERC20("Quote Token", "QTE", PRICE_DECIMALS);
 
         // Configure approved assets in PRICE mock.
-        priceModule.setPrice(address(assetToken), 2e18);
-        priceModule.setPrice(address(quoteToken), 1e18);
+        priceModule.setPrice(address(assetToken), ASSET_PRICE_USD);
+        priceModule.setPrice(address(quoteToken), QUOTE_PRICE_USD);
     }
 
     function _cachePair() internal {
         cache.cachePrice(address(assetToken), address(quoteToken));
+    }
+
+    function _setPriceTimestampAtCurrentBlock() internal {
+        priceModule.setTimestamp(SafeCast.toUint48(block.timestamp));
     }
 
     function _deactivateCachePolicy() internal {
@@ -77,6 +93,16 @@ abstract contract PriceCacheTest is Test {
 
     function _cachedPair() internal view returns (IPriceCache.CachedPrice memory cachedPrice_) {
         return cache.getCachedPrice(address(assetToken), address(quoteToken));
+    }
+
+    function _assertCachedPriceEq(
+        IPriceCache.CachedPrice memory actual_,
+        IPriceCache.CachedPrice memory expected_
+    ) internal pure {
+        assertEq(actual_.assetPriceUsd, expected_.assetPriceUsd, "asset price");
+        assertEq(actual_.quotePriceUsd, expected_.quotePriceUsd, "quote price");
+        assertEq(actual_.updatedAt, expected_.updatedAt, "updated at");
+        assertEq(actual_.roundId, expected_.roundId, "round id");
     }
 
     function _registerNonContractAsset(address asset_) internal {
@@ -101,8 +127,14 @@ abstract contract PriceCacheTest is Test {
         uint8 decimals_
     ) internal returns (MockPrice newPrice_) {
         newPrice_ = new MockPrice(kernel, decimals_, OBSERVATION_FREQUENCY);
-        newPrice_.setPrice(address(assetToken), 4 * 10 ** decimals_);
-        newPrice_.setPrice(address(quoteToken), 2 * 10 ** decimals_);
+        newPrice_.setPrice(
+            address(assetToken),
+            UPGRADED_ASSET_PRICE_FACTOR * DECIMAL_BASE ** decimals_
+        );
+        newPrice_.setPrice(
+            address(quoteToken),
+            UPGRADED_QUOTE_PRICE_FACTOR * DECIMAL_BASE ** decimals_
+        );
 
         kernel.executeAction(Actions.UpgradeModule, address(newPrice_));
     }

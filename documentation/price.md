@@ -40,7 +40,10 @@ The following actions are not timelocked:
 
 ## Non-Contract Assets and ERC-7726
 
-The `PriceCache` policy supports non-contract assets in addition to normal ERC-20 addresses. This is relevant for standards such as ERC-7726, which explicitly allows special asset identifiers such as:
+The `PriceCache` policy supports non-contract assets in addition to normal ERC-20 addresses. See
+[Price Cache](./price_cache.md) for pair validation, snapshot freshness, lifecycle behavior, and
+access control. This is relevant for standards such as ERC-7726, which explicitly allows special
+asset identifiers such as:
 
 - the ERC-7528 ETH sentinel `0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE`
 - ISO-4217 code addresses such as `address(840)` for USD
