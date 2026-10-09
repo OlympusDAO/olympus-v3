@@ -69,7 +69,8 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
         pure
     {
         bytes4 expectedInterfaceId = IYieldRepurchaseRecipient.getVaults.selector ^
-            IYieldRepurchaseRecipient.getVaultConfig.selector;
+            IYieldRepurchaseRecipient.getVaultConfig.selector ^
+            IYieldRepurchaseRecipient.getAssetVault.selector;
 
         assertEq(
             type(IYieldRepurchaseRecipient).interfaceId,
