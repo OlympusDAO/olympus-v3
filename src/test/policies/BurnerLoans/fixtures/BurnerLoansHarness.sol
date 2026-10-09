@@ -1,28 +1,35 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
-import {Kernel} from "src/Kernel.sol";
-import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
-import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
-import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
-import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 
-import {FullMath} from "src/libraries/FullMath.sol";
+// Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
+import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
+import {BurnerLoansPayouts} from "src/policies/libraries/BurnerLoansPayouts.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";
+
+// Contracts
+import {Kernel} from "src/Kernel.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
+import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
+import {BurnerLoans} from "src/policies/BurnerLoans.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansHarness is BurnerLoans {
     using SafeCast for uint256;
+    using EnumerableSet for EnumerableSet.AddressSet;
 
     struct RequiredCollateralUsdInputs {
         uint256 debtValueUsd;
@@ -57,8 +64,64 @@ contract BurnerLoansHarness is BurnerLoans {
         IOlympusBackingOracle backingOracle_
     ) BurnerLoans(kernel_, ohm_, depositManager_, priceCache_, backingOracle_) {}
 
+    /// @notice Creates a pending fee using the same library as a borrower fee collection.
+    function recordPendingFeeForTest(
+        address token_,
+        address payer_,
+        address recipient_,
+        uint256 amount_
+    ) external {
+        BurnerLoansPayouts.collectFee(_PAYOUTS, token_, payer_, recipient_, amount_);
+    }
+
+    /// @notice Creates pending seizure collateral using production payout accounting.
+    function recordPendingSeizedCollateralForTest(
+        address token_,
+        address treasury_,
+        uint256 amount_
+    ) external {
+        BurnerLoansPayouts.queueSeizedCollateral(_PAYOUTS, token_, treasury_, amount_);
+    }
+
+    /// @notice Creates a pending keeper reward using production payout accounting.
+    function recordPendingSeizureRewardForTest(
+        address token_,
+        address keeper_,
+        uint256 amount_
+    ) external {
+        BurnerLoansPayouts.queueSeizureReward(_PAYOUTS, token_, keeper_, amount_);
+    }
+
     function floanForTest() external view returns (IFLOANv1) {
         return _FLOAN;
+    }
+
+    /// @notice Exposes the aggregate reserve for independent test accounting.
+    function totalPendingForTest(address token_) external view returns (uint256) {
+        return _PAYOUTS.totalPending[token_];
+    }
+
+    function pendingFeeForTest(address token_) external view returns (uint256) {
+        return _PAYOUTS.pendingFees[token_];
+    }
+
+    function pendingSeizureForTest(address token_) external view returns (uint256) {
+        return _PAYOUTS.pendingSeizedCollateral[token_];
+    }
+
+    function pendingSeizureRewardForTest(
+        address token_,
+        address keeper_
+    ) external view returns (uint256) {
+        return _PAYOUTS.pendingKeeperRewards[token_][keeper_];
+    }
+
+    /// @notice Exposes keeper-index membership independently of fee and seizure entitlement.
+    function pendingKeeperMemberForTest(
+        address token_,
+        address keeper_
+    ) external view returns (bool) {
+        return _PAYOUTS.pendingKeeperRecipients[token_].contains(keeper_);
     }
 
     function debtValueUsd(

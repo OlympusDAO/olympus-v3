@@ -4,18 +4,16 @@ pragma solidity >=0.8.24;
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
 // forge-lint: disable-start(calls-loop)
 
-import {StdInvariant} from "forge-std/StdInvariant.sol";
+import {StdInvariant} from "@forge-std-1.16.2/StdInvariant.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {BurnerLoansSeizureTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansSeizureTestBase.sol";
 
 contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
@@ -27,7 +25,6 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
     PriceCache internal primaryPriceCache;
     PriceCache internal secondaryPriceCache;
     address[] internal invariantActors;
-    MockYieldRepurchaseRecipient internal yieldRecipient;
 
     function setUp() public override {
         super.setUp();
@@ -38,13 +35,10 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         composites = new BurnerLoansComposites(address(burnerLoans), address(ohm));
 
         vm.startPrank(admin);
-        yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
         primaryPriceCache = new PriceCache(kernel, price.decimals(), "USD");
         secondaryPriceCache = new PriceCache(kernel, price.decimals(), "USD");
-        kernel.executeAction(Actions.ActivatePolicy, address(yieldRecipient));
         kernel.executeAction(Actions.ActivatePolicy, address(primaryPriceCache));
         kernel.executeAction(Actions.ActivatePolicy, address(secondaryPriceCache));
-        burnerLoansConfig.setYieldRepurchaseRecipient(address(yieldRecipient));
         seizer = new BurnerLoansSeizer(kernel, address(burnerLoans), 8, 4, 10_000_000);
         kernel.executeAction(Actions.ActivatePolicy, address(seizer));
         rolesAdmin.grantRole(BURNER_LOANS_SEIZER_ROLE, address(seizer));
@@ -67,7 +61,6 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
                 admin: admin,
                 treasury: address(trsry),
                 inventoryProvider: protocolProvider,
-                yieldRecipient: yieldRecipient,
                 primaryPriceCache: primaryPriceCache,
                 secondaryPriceCache: secondaryPriceCache,
                 actors: invariantActors
@@ -91,7 +84,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         handler.extend(0, 1);
         handler.moveOhmPrice(10e18);
 
-        bytes4[] memory selectors = new bytes4[](22);
+        bytes4[] memory selectors = new bytes4[](19);
         selectors[0] = handler.deposit.selector;
         selectors[1] = handler.borrow.selector;
         selectors[2] = handler.repay.selector;
@@ -110,10 +103,7 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
         selectors[15] = handler.reuseDebtFreePosition.selector;
         selectors[16] = handler.supplyInventory.selector;
         selectors[17] = handler.withdrawInventory.selector;
-        selectors[18] = handler.setYieldAssetRouting.selector;
-        selectors[19] = handler.toggleYieldRecipient.selector;
-        selectors[20] = handler.setYieldRepurchaseRecipient.selector;
-        selectors[21] = handler.configurePriceCache.selector;
+        selectors[18] = handler.configurePriceCache.selector;
         targetContract(address(handler));
         targetSelector(FuzzSelector({addr: address(handler), selectors: selectors}));
     }
@@ -368,89 +358,6 @@ contract BurnerLoansInvariantTest is StdInvariant, BurnerLoansSeizureTestBase {
             handler.cumulativeDistributedYield(),
             handler.cumulativeClaimedYield(),
             "cumulative claim distributions do not conserve yield"
-        );
-    }
-
-    // invariant
-    // given any sequence of complete route and global-recipient transitions
-    //  when every registered asset route is inspected
-    //   then each route is exact, unique, and excludes every reserved destination
-    function invariant_AssetYieldRoutingIsStructurallyValid() public view {
-        address repurchaseRecipient = burnerLoans.getYieldRepurchaseRecipient();
-        uint256 activeRepurchaseRouteCount;
-        uint256 assetCount = burnerLoans.getAssetCount();
-        for (uint256 i; i < assetCount; ++i) {
-            address asset = burnerLoans.getAssetAt(i);
-            IBurnerLoans.AssetYieldRouting memory routing = burnerLoans.getYieldAssetRouting(asset);
-            uint256 directCount = routing.directAllocations.length;
-            uint256 totalBps = routing.repurchaseRecipientBps;
-            if (routing.repurchaseRecipientBps != 0) {
-                ++activeRepurchaseRouteCount;
-                assertNotEq(
-                    repurchaseRecipient,
-                    address(0),
-                    "active repurchase route has no global recipient"
-                );
-            }
-
-            for (uint256 j; j < directCount; ++j) {
-                IBurnerLoans.DirectYieldAllocation memory allocation = routing.directAllocations[j];
-                assertNotEq(allocation.recipient, address(0), "direct recipient is zero");
-                assertNotEq(
-                    allocation.recipient,
-                    address(burnerLoans),
-                    "direct recipient is facility"
-                );
-                assertNotEq(allocation.recipient, address(trsry), "direct recipient is Treasury");
-                assertNotEq(
-                    allocation.recipient,
-                    repurchaseRecipient,
-                    "direct recipient is global repurchase recipient"
-                );
-                assertGt(allocation.bps, 0, "direct allocation bps is zero");
-                totalBps += allocation.bps;
-                for (uint256 k; k < j; ++k) {
-                    assertNotEq(
-                        allocation.recipient,
-                        routing.directAllocations[k].recipient,
-                        "direct recipient is duplicated"
-                    );
-                }
-            }
-
-            assertLe(totalBps, BurnerLoansConstants.MAX_BPS, "non-Treasury BPS exceed maximum");
-            uint256 implicitTreasuryBps = BurnerLoansConstants.MAX_BPS - totalBps;
-            assertEq(
-                totalBps + implicitTreasuryBps,
-                BurnerLoansConstants.MAX_BPS,
-                "effective asset yield routing total is not exact"
-            );
-        }
-
-        assertEq(
-            activeRepurchaseRouteCount,
-            handler.modelActiveRepurchaseRouteCount(),
-            "active repurchase route count differs from model"
-        );
-        assertEq(
-            burnerLoans.getYieldRepurchaseRecipient(),
-            handler.modelYieldRepurchaseRecipient(),
-            "global repurchase recipient differs from model"
-        );
-        assertEq(
-            keccak256(abi.encode(burnerLoans.getYieldAssetRouting(address(usds)))),
-            handler.modelAssetYieldRoutingHash(),
-            "asset route differs from successful-transition model"
-        );
-        assertEq(
-            handler.routingFailureMutationViolations(),
-            0,
-            "failed routing action mutated state"
-        );
-        assertEq(
-            handler.repurchaseRecipientClearViolations(),
-            0,
-            "global recipient clear behavior violated active-route rule"
         );
     }
 

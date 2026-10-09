@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
-import {Vm} from "forge-std/Vm.sol";
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
@@ -24,7 +24,6 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 
@@ -411,113 +410,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         _assertGasRecorded(gasUsed);
     }
 
-    // claimYield
-    // given a vault-backed market routes all yield to a compatible repurchase recipient
-    //  when a keeper claims the surplus
-    //   then it records recipient validation and one non-Treasury transfer
-    function test_gasSnapshot_claimYield_repurchaseOnly() public {
-        (MockERC20 asset, MockERC4626 vault) = _configureVaultMarket();
-        MockYieldRepurchaseRecipient recipient = _configureYieldRecipient(asset, vault, 10_000);
-        uint128 collateral = 100e18;
-        asset.mint(alice, collateral);
-        vm.startPrank(alice);
-        asset.approve(address(burnerLoans), collateral);
-        burnerLoans.depositCollateral(address(asset), collateral, alice);
-        vm.stopPrank();
-        asset.mint(address(vault), 10e18);
-        uint256 treasuryBefore = asset.balanceOf(address(trsry));
-        uint256 recipientBefore = asset.balanceOf(address(recipient));
-
-        vm.startSnapshotGas("BurnerLoans.claimYield.repurchaseOnly");
-        burnerLoans.claimYield(address(asset));
-        uint256 gasUsed = vm.stopSnapshotGas();
-        uint256 recipientAmount = asset.balanceOf(address(recipient)) - recipientBefore;
-        uint256 claimed = recipientAmount + asset.balanceOf(address(trsry)) - treasuryBefore;
-
-        assertGt(claimed, 0, "claimed yield");
-        assertEq(recipientAmount, claimed, "repurchase recipient");
-        _assertGasRecorded(gasUsed);
-    }
-
-    // claimYield
-    // given a vault-backed market routes yield to repurchase, two direct recipients, and Treasury
-    //  when a keeper claims the surplus
-    //   then it records validation and all mixed distribution legs
-    function test_gasSnapshot_claimYield_mixed() public {
-        (MockERC20 asset, MockERC4626 vault) = _configureVaultMarket();
-        MockYieldRepurchaseRecipient recipient = _configureYieldRecipient(asset, vault, 3_000);
-        address directRecipientOne = makeAddr("gasDirectRecipientOne");
-        address directRecipientTwo = makeAddr("gasDirectRecipientTwo");
-        IBurnerLoans.AssetYieldRouting memory routing;
-        routing.repurchaseRecipientBps = 3_000;
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](2);
-        routing.directAllocations[0] = IBurnerLoans.DirectYieldAllocation({
-            recipient: directRecipientOne,
-            bps: 2_000
-        });
-        routing.directAllocations[1] = IBurnerLoans.DirectYieldAllocation({
-            recipient: directRecipientTwo,
-            bps: 1_000
-        });
-        vm.prank(admin);
-        burnerLoansConfig.setYieldAssetRouting(address(asset), routing);
-
-        uint128 collateral = 100e18;
-        asset.mint(alice, collateral);
-        vm.startPrank(alice);
-        asset.approve(address(burnerLoans), collateral);
-        burnerLoans.depositCollateral(address(asset), collateral, alice);
-        vm.stopPrank();
-        asset.mint(address(vault), 10e18);
-
-        vm.startSnapshotGas("BurnerLoans.claimYield.mixed");
-        burnerLoans.claimYield(address(asset));
-        uint256 gasUsed = vm.stopSnapshotGas();
-
-        uint256 claimed = asset.balanceOf(address(recipient)) +
-            asset.balanceOf(directRecipientOne) +
-            asset.balanceOf(directRecipientTwo) +
-            asset.balanceOf(address(trsry));
-        assertGt(claimed, 0, "claimed yield");
-        assertEq(asset.balanceOf(address(recipient)), (claimed * 3_000) / 10_000, "repurchase");
-        assertEq(asset.balanceOf(directRecipientOne), (claimed * 2_000) / 10_000, "direct one");
-        assertEq(asset.balanceOf(directRecipientTwo), (claimed * 1_000) / 10_000, "direct two");
-        _assertGasRecorded(gasUsed);
-    }
-
-    // claimYield
-    // given a vault-backed market routes yield to YRF and five direct recipients
-    //  when a keeper claims the surplus
-    //   then it records the six-recipient distribution gas cost
-    function test_gasSnapshot_claimYield_yrfPlusFiveDirect() public {
-        _snapshotClaimYieldWithYrfAndDirectRecipients(
-            5,
-            "BurnerLoans.claimYield.yrfPlusFiveDirect"
-        );
-    }
-
-    // claimYield
-    // given a vault-backed market routes yield to YRF and ten direct recipients
-    //  when a keeper claims the surplus
-    //   then it records the eleven-recipient distribution gas cost
-    function test_gasSnapshot_claimYield_yrfPlusTenDirect() public {
-        _snapshotClaimYieldWithYrfAndDirectRecipients(
-            10,
-            "BurnerLoans.claimYield.yrfPlusTenDirect"
-        );
-    }
-
-    // claimYield
-    // given a vault-backed market routes yield to YRF and twenty-five direct recipients
-    //  when a keeper claims the surplus
-    //   then it records the twenty-six-recipient distribution gas cost
-    function test_gasSnapshot_claimYield_yrfPlusTwentyFiveDirect() public {
-        _snapshotClaimYieldWithYrfAndDirectRecipients(
-            25,
-            "BurnerLoans.claimYield.yrfPlusTwentyFiveDirect"
-        );
-    }
-
     // setGlobalDebtCap
     // given Burner Loans is enabled
     //  when governance updates the global active-debt cap
@@ -756,8 +648,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
     function test_gasSnapshot_setConfigurator_oneAsset() public {
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.startPrank(admin);
         vm.startSnapshotGas("BurnerLoans.setConfigurator.oneAsset");
         burnerLoans.setConfigurator(address(replacement));
@@ -781,8 +672,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         uint32 secondMarketId = _createDuplicateUsdsMarketForTest();
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.startPrank(admin);
         vm.startSnapshotGas("BurnerLoans.setConfigurator.oneAssetTwoMarkets");
         burnerLoans.setConfigurator(address(replacement));
@@ -803,8 +693,7 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         address thirdAsset = address(_addDirectAssetForTest());
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.startPrank(admin);
         vm.startSnapshotGas("BurnerLoans.setConfigurator.threeAssets");
         burnerLoans.setConfigurator(address(replacement));
@@ -879,27 +768,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
 
         assertEq(burnerLoansConfig.getAssetFeeConfig(address(usds)).baseFeeBps, 30, "base fee");
-        _assertGasRecorded(gasUsed);
-    }
-
-    // setYieldAssetRouting
-    // given an existing Burner Loans market has its default Treasury-only route
-    //  when governance installs a route with twenty-five direct recipients
-    //   then it records complete route validation, replacement, and event gas
-    function test_gasSnapshot_config_setYieldAssetRouting_twentyFiveDirect() public {
-        IBurnerLoans.AssetYieldRouting memory routing = _directOnlyRouting(25);
-
-        vm.startPrank(admin);
-        vm.startSnapshotGas("BurnerLoansConfig.admin.setYieldAssetRouting.twentyFiveDirect");
-        burnerLoansConfig.setYieldAssetRouting(address(usds), routing);
-        uint256 gasUsed = vm.stopSnapshotGas();
-        vm.stopPrank();
-
-        assertEq(
-            burnerLoans.getYieldAssetRouting(address(usds)).directAllocations.length,
-            25,
-            "direct allocation count"
-        );
         _assertGasRecorded(gasUsed);
     }
 
@@ -978,28 +846,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         _assertGasRecorded(gasUsed);
     }
 
-    // executeQueuedAction
-    // given a twenty-five-recipient direct route has passed the timelock delay
-    //  when a keeper executes the dynamic route payload
-    //   then it records canonical decoding, route validation, storage, and queue cleanup gas
-    function test_gasSnapshot_timelock_executeYieldAssetRouting() public {
-        ITimelockBatchQueue.BatchAction[] memory actions = _yieldAssetRoutingBatch();
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelock.queueBatch(actions);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-
-        vm.startSnapshotGas("BurnerLoansConfigTimelock.executeYieldAssetRouting.twentyFiveDirect");
-        configTimelock.executeQueuedAction(actionId);
-        uint256 gasUsed = vm.stopSnapshotGas();
-
-        assertEq(
-            burnerLoans.getYieldAssetRouting(address(usds)).directAllocations.length,
-            25,
-            "direct allocation count"
-        );
-        _assertGasRecorded(gasUsed);
-    }
-
     function _fundAndApproveCollateral(address account_, uint128 amount_) internal {
         usds.mint(account_, amount_ + 100e18);
         vm.prank(account_);
@@ -1050,77 +896,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
         vm.stopPrank();
     }
 
-    function _configureYieldRecipient(
-        MockERC20 asset_,
-        MockERC4626 vault_,
-        uint16 bps_
-    ) internal returns (MockYieldRepurchaseRecipient recipient) {
-        vm.startPrank(admin);
-        recipient = new MockYieldRepurchaseRecipient(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
-        recipient.setVaultConfig(address(vault_), address(asset_), true);
-        burnerLoansConfig.setYieldRepurchaseRecipient(address(recipient));
-        IBurnerLoans.AssetYieldRouting memory routing;
-        routing.repurchaseRecipientBps = bps_;
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](0);
-        burnerLoansConfig.setYieldAssetRouting(address(asset_), routing);
-        vm.stopPrank();
-    }
-
-    function _directOnlyRouting(
-        uint16 directCount_
-    ) internal returns (IBurnerLoans.AssetYieldRouting memory routing) {
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](directCount_);
-        for (uint256 i; i < routing.directAllocations.length; ++i) {
-            routing.directAllocations[i] = IBurnerLoans.DirectYieldAllocation({
-                recipient: makeAddr(string.concat("gasDirectRecipient", vm.toString(i))),
-                bps: 1
-            });
-        }
-    }
-
-    function _yieldRoutingWithDirectRecipients(
-        uint16 directCount_
-    ) internal returns (IBurnerLoans.AssetYieldRouting memory routing) {
-        routing = _directOnlyRouting(directCount_);
-        routing.repurchaseRecipientBps = 1_000;
-    }
-
-    function _snapshotClaimYieldWithYrfAndDirectRecipients(
-        uint16 directCount_,
-        string memory snapshotName_
-    ) internal {
-        (MockERC20 asset, MockERC4626 vault) = _configureVaultMarket();
-        MockYieldRepurchaseRecipient recipient = _configureYieldRecipient(asset, vault, 1_000);
-        IBurnerLoans.AssetYieldRouting memory routing = _yieldRoutingWithDirectRecipients(
-            directCount_
-        );
-        vm.prank(admin);
-        burnerLoansConfig.setYieldAssetRouting(address(asset), routing);
-
-        uint128 collateral = 100e18;
-        asset.mint(alice, collateral);
-        vm.startPrank(alice);
-        asset.approve(address(burnerLoans), collateral);
-        burnerLoans.depositCollateral(address(asset), collateral, alice);
-        vm.stopPrank();
-        asset.mint(address(vault), 10e18);
-
-        vm.startSnapshotGas(snapshotName_);
-        burnerLoans.claimYield(address(asset));
-        uint256 gasUsed = vm.stopSnapshotGas();
-
-        assertGt(asset.balanceOf(address(recipient)), 0, "repurchase recipient amount");
-        for (uint256 i; i < routing.directAllocations.length; ++i) {
-            assertGt(
-                asset.balanceOf(routing.directAllocations[i].recipient),
-                0,
-                "direct recipient amount"
-            );
-        }
-        _assertGasRecorded(gasUsed);
-    }
-
     function _supplyOhm(uint128 amount_) internal {
         ohm.mint(protocolProvider, amount_);
         vm.startPrank(protocolProvider);
@@ -1154,18 +929,6 @@ contract BurnerLoansEndToEndGasTest is BurnerLoansSeizureTestBase {
             target: address(burnerLoansConfig),
             selector: IBurnerLoansConfig.setAssetFeeConfig.selector,
             payload: abi.encode(address(usds), feeUpdate, feeSelection)
-        });
-    }
-
-    function _yieldAssetRoutingBatch()
-        internal
-        returns (ITimelockBatchQueue.BatchAction[] memory actions)
-    {
-        actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoansConfig),
-            selector: IBurnerLoansConfig.setYieldAssetRouting.selector,
-            payload: abi.encode(address(usds), _directOnlyRouting(25))
         });
     }
 

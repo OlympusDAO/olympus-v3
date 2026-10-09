@@ -9,15 +9,18 @@ import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC20FeeOnTransfer} from "src/test/mocks/MockERC20FeeOnTransfer.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeERC20Exact} from "src/libraries/SafeERC20Exact.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
@@ -45,6 +48,77 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     uint128 internal constant DEFAULT_COLLATERAL_AMOUNT = 2_000e18;
     uint256 internal constant HEALTH_FACTOR_SCALE = 1e18;
 
+    // given sendFeesToDistributor is true
+    //   given the distributor is active
+    //     when the borrower originates debt
+    //       [X] the fee reaches the selected distributor
+    // Scenarios: BOR-P04
+    function test_givenSendFeesToDistributorIsTrue_paysDistributor() public {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
+        uint256 fee = burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee;
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, fee);
+
+        assertGt(fee, 0, "borrow charges positive fee");
+        assertEq(usds.balanceOf(address(trsry)), 0, "Treasury receives no fee");
+        assertEq(usds.balanceOf(address(distributor)), fee, "distributor receives fee");
+    }
+
+    // given sendFeesToDistributor is false
+    //   when the borrower originates debt
+    //     [X] the fee reaches Treasury and the borrow remains active
+    // Scenarios: BOR-P01
+    function test_givenSendFeesToDistributorIsFalse_paysTreasury() public {
+        _depositDefaultCollateral(alice);
+        uint256 fee = burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee;
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, fee);
+
+        assertGt(fee, 0, "borrow fee is positive");
+        assertEq(usds.balanceOf(address(trsry)) - treasuryBefore, fee, "Treasury receives fee");
+        assertEq(burnerLoans.pendingPayout(address(usds), address(trsry)), 0, "no fee is pending");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "debt is originated"
+        );
+    }
+
+    // given sendFeesToDistributor is false
+    //   given the token transfer to Treasury reverts
+    //     when the borrower originates debt
+    //       [X] the borrow succeeds and the fee remains pending
+    // Scenarios: BOR-T02
+    function test_givenSendFeesToDistributorIsFalse_whenTokenTransferReverts_recordsPendingFee()
+        public
+    {
+        _depositDefaultCollateral(alice);
+        uint256 fee = burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee;
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(trsry)),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, fee);
+
+        assertEq(usds.balanceOf(address(trsry)), 0, "rejected Treasury receives nothing");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(trsry)),
+            fee,
+            "fee remains pending"
+        );
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "borrow succeeds despite rejected fee transfer"
+        );
+    }
+
     function _collateralDecimals() internal pure override returns (uint8) {
         return 18;
     }
@@ -52,6 +126,639 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     function setUp() public override {
         super.setUp();
         operator = makeAddr("operator");
+    }
+
+    // Scenarios: BOR-P01, BOR-P04, BOR-N01
+    function test_givenValidPositiveFeeBorrow_routesExactFeeForEveryAuthorizedCaller(
+        bool sendFeesToDistributor_,
+        bool useOperator_,
+        bool useMaximumFeeCap_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 recipientBefore = usds.balanceOf(recipient);
+        uint256 maxFee = useMaximumFeeCap_ ? type(uint256).max : preview.fee;
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            address(usds),
+            recipient,
+            IBurnerLoans.PayoutKind.Fee,
+            preview.fee
+        );
+        vm.prank(caller);
+        (, uint256 fee, uint256 debt, uint48 maturity, uint256 health) = burnerLoans.borrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice,
+            alice,
+            maxFee
+        );
+
+        assertGt(preview.fee, 0, "fixture charges a positive fee");
+        assertEq(fee, preview.fee, "execution fee matches preview");
+        assertEq(debt, preview.resultingDebtOhm, "execution debt matches preview");
+        assertEq(maturity, preview.maturity, "execution maturity matches preview");
+        assertEq(health, preview.resultingHealthFactor, "execution health matches preview");
+        assertEq(payerBefore - usds.balanceOf(caller), preview.fee, "caller pays exact fee");
+        assertEq(
+            usds.balanceOf(recipient) - recipientBefore,
+            preview.fee,
+            "live destination receives exact fee"
+        );
+        assertEq(burnerLoans.pendingPayout(address(usds), recipient), 0, "no fee remains owed");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no fee reserve remains");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "no token is indexed");
+    }
+
+    // Scenarios: BOR-L01, BOR-L02, BOR-L03
+    function test_givenDistributorUnavailableOrTokenUnlisted_borrowStillPaysExactFee(
+        uint8 destinationState_,
+        bool useOperator_
+    ) public {
+        uint8 destinationState = uint8(bound(destinationState_, 0, 2));
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+        address[] memory tokens = new address[](destinationState == 2 ? 0 : 1);
+        if (tokens.length != 0) tokens[0] = address(usds);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(tokens);
+        _setSendFeesToDistributor(true);
+        if (destinationState == 0) {
+            vm.prank(admin);
+            distributor.disable("");
+        } else if (destinationState == 1) {
+            _deactivatePolicy(address(distributor));
+        }
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 distributorBefore = usds.balanceOf(address(distributor));
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            address(usds),
+            address(distributor),
+            IBurnerLoans.PayoutKind.Fee,
+            preview.fee
+        );
+
+        vm.prank(caller);
+        (, uint256 fee, uint256 debt, uint48 maturity, ) = burnerLoans.borrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice,
+            alice,
+            preview.fee
+        );
+
+        assertEq(fee, preview.fee, "exact fee returned");
+        assertEq(debt, preview.resultingDebtOhm, "exact debt returned");
+        assertEq(maturity, preview.maturity, "exact maturity returned");
+        assertEq(payerBefore - usds.balanceOf(caller), preview.fee, "caller pays exact fee");
+        assertEq(
+            usds.balanceOf(address(distributor)) - distributorBefore,
+            preview.fee,
+            "selected distributor receives exact fee"
+        );
+        assertEq(usds.balanceOf(address(trsry)), treasuryBefore, "Treasury remains unchanged");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no pending reserve");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "no pending token index");
+    }
+
+    // Scenarios: BOR-L04
+    function test_givenLocallyDisabled_borrowAndPreviewRollbackEveryRoute(
+        bool sendFeesToDistributor_,
+        bool useOperator_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 allowanceBefore = usds.allowance(caller, address(burnerLoans));
+        uint256 recipientBefore = usds.balanceOf(recipient);
+        _disableBurnerLoans(emergency);
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice);
+        vm.prank(caller);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
+
+        assertEq(usds.balanceOf(caller), payerBefore, "payer balance unchanged");
+        assertEq(
+            usds.allowance(caller, address(burnerLoans)),
+            allowanceBefore,
+            "payer allowance unchanged"
+        );
+        assertEq(usds.balanceOf(recipient), recipientBefore, "recipient unchanged");
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "debt unchanged");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "global debt unchanged");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no pending reserve");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "no pending index");
+    }
+
+    // Scenarios: BOR-I01, BOR-I03, BOR-I04
+    function test_givenRejectedFeeInput_borrowRollsBackEveryRouteAndCaller(
+        uint8 failureMode_,
+        bool sendFeesToDistributor_,
+        bool useOperator_,
+        uint128 maxFeeSeed_
+    ) public {
+        uint8 failureMode = uint8(bound(failureMode_, 0, 2));
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 maxFee = preview.fee;
+        bytes memory expectedError;
+        if (failureMode == 0) {
+            maxFee = bound(maxFeeSeed_, 0, preview.fee - 1);
+            expectedError = abi.encodeWithSelector(
+                IBurnerLoans.BurnerLoans_FeeExceedsMax.selector,
+                preview.fee,
+                maxFee
+            );
+        } else if (failureMode == 1) {
+            vm.prank(caller);
+            usds.approve(address(burnerLoans), 0);
+            expectedError = abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientAllowance.selector,
+                address(burnerLoans),
+                0,
+                preview.fee
+            );
+        } else {
+            uint256 balance = usds.balanceOf(caller);
+            usds.burn(caller, balance - (preview.fee - 1));
+            expectedError = abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientBalance.selector,
+                caller,
+                preview.fee - 1,
+                preview.fee
+            );
+        }
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 allowanceBefore = usds.allowance(caller, address(burnerLoans));
+        uint256 recipientBefore = usds.balanceOf(recipient);
+
+        vm.prank(caller);
+        vm.expectRevert(expectedError);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, maxFee);
+
+        assertEq(usds.balanceOf(caller), payerBefore, "payer balance rolls back");
+        assertEq(
+            usds.allowance(caller, address(burnerLoans)),
+            allowanceBefore,
+            "allowance rolls back"
+        );
+        assertEq(usds.balanceOf(recipient), recipientBefore, "recipient remains unchanged");
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "debt rolls back");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 0, "index rolls back");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "global debt rolls back");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "reserve rolls back");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "pending index rolls back");
+        assertEq(ohm.balanceOf(alice), 0, "OHM mint rolls back");
+        assertEq(
+            burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee,
+            preview.fee,
+            "preview remains available"
+        );
+    }
+
+    // Scenarios: BOR-T02, BOR-T04
+    function test_givenFeeDestinationRejects_borrowDefersCombinedFeeExactly(
+        bool sendFeesToDistributor_,
+        bool useOperator_,
+        uint96 priorPendingSeed_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+        uint256 priorPending = bound(priorPendingSeed_, 0, 10e18);
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, recipient),
+            abi.encodeWithSignature("Error(string)", "blocked")
+        );
+        if (priorPending != 0) {
+            burnerLoans.recordPendingFeeForTest(address(usds), alice, recipient, priorPending);
+        }
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 recipientBefore = usds.balanceOf(recipient);
+        uint256 combinedFee = priorPending + preview.fee;
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            address(usds),
+            recipient,
+            IBurnerLoans.PayoutKind.Fee,
+            combinedFee
+        );
+
+        vm.prank(caller);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
+
+        assertEq(payerBefore - usds.balanceOf(caller), preview.fee, "new fee collected exactly");
+        assertEq(usds.balanceOf(recipient), recipientBefore, "recipient receives nothing");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), recipient),
+            combinedFee,
+            "combined fee remains owed"
+        );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), combinedFee, "reserve is exact");
+        assertEq(usds.balanceOf(address(burnerLoans)), combinedFee, "custody is exact");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 1, "token indexed once");
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(address(usds));
+        assertEq(recipients.length, 1, "recipient indexed once");
+        assertEq(recipients[0], recipient, "live recipient indexed");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "borrow remains committed"
+        );
+    }
+
+    // Scenarios: BOR-P02
+    function test_givenDeferredFee_secondBorrowSweepsToLiveDestination(
+        bool priorSendFeesToDistributor_,
+        bool currentSendFeesToDistributor_
+    ) public {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(address(usds));
+        _setSendFeesToDistributor(priorSendFeesToDistributor_);
+        address priorRecipient = priorSendFeesToDistributor_
+            ? address(distributor)
+            : address(trsry);
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        uint256 distributorBefore = usds.balanceOf(address(distributor));
+        uint256 firstFee = burnerLoans.previewBorrow(address(usds), 50e9, alice).fee;
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, priorRecipient),
+            abi.encodeWithSignature("Error(string)", "blocked")
+        );
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 50e9, alice, alice, firstFee);
+        vm.clearMockedCalls();
+
+        _setSendFeesToDistributor(currentSendFeesToDistributor_);
+        address currentRecipient = currentSendFeesToDistributor_
+            ? address(distributor)
+            : address(trsry);
+        uint256 secondFee = burnerLoans.previewBorrow(address(usds), 50e9, alice).fee;
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            address(usds),
+            currentRecipient,
+            IBurnerLoans.PayoutKind.Fee,
+            firstFee + secondFee
+        );
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 50e9, alice, alice, secondFee);
+
+        uint256 expectedTreasury = currentRecipient == address(trsry) ? firstFee + secondFee : 0;
+        uint256 expectedDistributor = currentRecipient == address(distributor)
+            ? firstFee + secondFee
+            : 0;
+        assertEq(
+            usds.balanceOf(address(trsry)) - treasuryBefore,
+            expectedTreasury,
+            "Treasury receives only live-routed fees"
+        );
+        assertEq(
+            usds.balanceOf(address(distributor)) - distributorBefore,
+            expectedDistributor,
+            "distributor receives only live-routed fees"
+        );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "reserve clears");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "token index clears");
+    }
+
+    // Scenarios: BOR-N02
+    function test_givenZeroConfiguredFee_borrowDoesNotTouchExistingFeeReserve(
+        bool sendFeesToDistributor_,
+        bool useOperator_,
+        bool seedPendingFee_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+        }
+
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+
+        uint256 pending = seedPendingFee_ ? 7 : 0;
+        if (pending != 0) {
+            vm.mockCallRevert(
+                address(usds),
+                abi.encodeWithSelector(usds.transfer.selector, recipient),
+                abi.encodeWithSignature("Error(string)", "blocked")
+            );
+            burnerLoans.recordPendingFeeForTest(address(usds), alice, recipient, pending);
+            vm.clearMockedCalls();
+        }
+        vm.prank(admin);
+        burnerLoansConfig.setAssetFeeConfig(
+            address(usds),
+            IBurnerLoans.AssetFeeConfig({
+                baseFeeBps: 0,
+                kinkBps: 0,
+                preKinkSlopeBps: 0,
+                postKinkSlopeBps: 0
+            })
+        );
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        uint256 callerBefore = usds.balanceOf(caller);
+        uint256 recipientBefore = usds.balanceOf(recipient);
+
+        vm.prank(caller);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, 0);
+
+        assertEq(preview.fee, 0, "preview fee is zero");
+        assertEq(usds.balanceOf(caller), callerBefore, "no fee is collected");
+        assertEq(usds.balanceOf(recipient), recipientBefore, "no fee is paid");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), recipient),
+            pending,
+            "existing fee remains untouched"
+        );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), pending, "reserve is unchanged");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "borrow still succeeds"
+        );
+    }
+
+    // Scenarios: BOR-I02
+    function test_givenInexactIncomingFee_borrowRevertsAndRollsBack(
+        bool sendFeesToDistributor_,
+        bool useOperator_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+        if (sendFeesToDistributor_) {
+            _installFeeDistributorForTest(address(usds));
+        }
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(usds),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        IBurnerLoans.Position memory positionBefore = burnerLoans.getPosition(address(usds), alice);
+        uint256 payerBefore = usds.balanceOf(caller);
+        uint256 allowanceBefore = usds.allowance(caller, address(burnerLoans));
+        address feeRecipient = makeAddr("transfer fee recipient");
+        MockERC20FeeOnTransfer implementation = new MockERC20FeeOnTransfer(
+            "Fee token",
+            "FEE",
+            feeRecipient
+        );
+        vm.etch(address(usds), address(implementation).code);
+        uint256 transferFee = (preview.fee * implementation.FEE()) /
+            implementation.FEE_DENOMINATOR();
+
+        vm.prank(caller);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                SafeERC20Exact.SafeERC20Exact_InexactTransferFrom.selector,
+                address(usds),
+                address(burnerLoans),
+                preview.fee,
+                preview.fee - transferFee
+            )
+        );
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
+
+        IBurnerLoans.Position memory positionAfter = burnerLoans.getPosition(address(usds), alice);
+        assertEq(positionAfter.debtOhm, positionBefore.debtOhm, "debt rolls back");
+        assertEq(positionAfter.maturity, positionBefore.maturity, "maturity rolls back");
+        assertEq(usds.balanceOf(caller), payerBefore, "payer balance rolls back");
+        assertEq(
+            usds.allowance(caller, address(burnerLoans)),
+            allowanceBefore,
+            "allowance rolls back"
+        );
+        assertEq(usds.balanceOf(feeRecipient), 0, "transfer fee rolls back");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no fee reserve remains");
+    }
+
+    // given sendFeesToDistributor is true
+    //   given the distributor is locally disabled
+    //     when a positive-fee borrow executes
+    //       [X] the exact fee reaches that distributor
+    //       [X] Treasury's fee-token balance is unchanged
+    // Scenarios: BOR-L01
+    function test_givenSendFeesToDistributorIsTrue_givenDistributorDisabled_paysDistributor()
+        public
+    {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
+        vm.prank(admin);
+        distributor.disable("");
+
+        uint256 expectedFee = burnerLoans
+            .previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice)
+            .fee;
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, expectedFee);
+
+        assertGt(expectedFee, 0, "borrow charges positive fee");
+        assertEq(
+            usds.balanceOf(address(distributor)),
+            expectedFee,
+            "disabled distributor receives fee"
+        );
+        assertEq(usds.balanceOf(address(trsry)), treasuryBefore, "Treasury receives no borrow fee");
+    }
+
+    // given sendFeesToDistributor is true
+    //   given the distributor is Kernel-inactive
+    //     when a positive-fee borrow executes
+    //       [X] the exact fee reaches that distributor
+    //       [X] Treasury's fee-token balance is unchanged
+    // Scenarios: BOR-L02
+    function test_givenSendFeesToDistributorIsTrue_givenDistributorKernelInactive_paysDistributor()
+        public
+    {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
+        _deactivatePolicy(address(distributor));
+
+        uint256 expectedFee = burnerLoans
+            .previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice)
+            .fee;
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, expectedFee);
+
+        assertGt(expectedFee, 0, "borrow charges positive fee");
+        assertEq(
+            usds.balanceOf(address(distributor)),
+            expectedFee,
+            "inactive distributor receives fee"
+        );
+        assertEq(usds.balanceOf(address(trsry)), treasuryBefore, "Treasury receives no borrow fee");
+    }
+
+    // given sendFeesToDistributor is true
+    //   given the distributor has not listed the token
+    //     when the borrower originates debt
+    //       [X] the full fee reaches the distributor without an asset-route check
+    // Scenarios: BOR-L03
+    function test_givenSendFeesToDistributorIsTrue_givenFeeTokenUnlisted_paysDistributor() public {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(new address[](0));
+        _setSendFeesToDistributor(true);
+        uint256 fee = burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee;
+
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, fee);
+
+        assertGt(fee, 0, "borrow fee is positive");
+        assertEq(usds.balanceOf(address(distributor)), fee, "unlisted fee reaches distributor");
+        assertEq(usds.balanceOf(address(trsry)), 0, "Treasury receives no fee");
+    }
+
+    // given sendFeesToDistributor is true
+    //   given the token transfer to the distributor reverts
+    //     when the borrower pays the fee and originates debt
+    //       [X] the borrow succeeds and the fee remains pending
+    // Scenarios: BOR-T04
+    function test_givenSendFeesToDistributorIsTrue_whenTokenTransferReverts_recordsPendingFee()
+        public
+    {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
+        uint256 fee = burnerLoans.previewBorrow(address(usds), DEFAULT_BORROW_AMOUNT, alice).fee;
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(distributor)),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), DEFAULT_BORROW_AMOUNT, alice, alice, fee);
+
+        assertEq(usds.balanceOf(address(burnerLoans)), fee, "fee remains in Burner Loans");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(distributor)),
+            fee,
+            "full fee is owed to distributor"
+        );
+        assertEq(usds.balanceOf(address(distributor)), 0, "rejected destination gets nothing");
+        assertEq(
+            burnerLoans.getPosition(address(usds), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "borrow succeeds despite rejected fee transfer"
+        );
+    }
+
+    // Condition tree:
+    // - First borrow: destination rejects and fee accrues to the original recipient
+    // - Second borrow: destination accepts again
+    // - Settlement: second send sweeps both fees without changing the first obligation
+    // Scenarios: BOR-P02
+    function test_givenPriorFeeDeferred_whenLaterBorrowSucceeds_sweepsBothFees() public {
+        _depositDefaultCollateral(alice);
+        RevenueDistributor distributor = _installFeeDistributorForTest(address(usds));
+        uint256 firstFee = burnerLoans.previewBorrow(address(usds), 50e9, alice).fee;
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(distributor)),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 50e9, alice, alice, firstFee);
+        vm.clearMockedCalls();
+
+        uint256 secondFee = burnerLoans.previewBorrow(address(usds), 50e9, alice).fee;
+        vm.prank(alice);
+        burnerLoans.borrow(address(usds), 50e9, alice, alice, secondFee);
+
+        assertEq(usds.balanceOf(address(distributor)), firstFee + secondFee, "both fees swept");
+        assertEq(usds.balanceOf(address(burnerLoans)), 0, "no fee left in custody");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(distributor)),
+            0,
+            "original obligation is fully paid"
+        );
     }
 
     // Condition tree:
@@ -868,12 +1575,12 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 existingGlobalDebt = inventory.globalDebtCapOhm() - availableRoom;
         _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded.selector,
             amount,
             availableRoom
         );
-        _expectBorrowAndPreviewRevert(error, amount);
+        _expectBorrowAndPreviewRevert(revertData, amount);
     }
 
     // Condition tree:
@@ -891,22 +1598,84 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         uint256 existingAssetDebt = assetCap - availableRoom;
         burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt);
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetDebtCapExceeded.selector,
             address(usds),
             amount,
             availableRoom
         );
-        _expectBorrowAndPreviewRevert(error, amount);
+        _expectBorrowAndPreviewRevert(revertData, amount);
     }
 
     // Condition tree:
     // - Policy state: globally disabled
     // - Expected branch: preview and write are blocked by the emergency pause
+    // Scenarios: BOR-L04
     function test_givenGlobalDisabled_borrowAndPreviewRevert() public {
         _depositDefaultCollateral(alice);
-        vm.prank(emergency);
-        burnerLoans.disable("");
+        _disableBurnerLoans(emergency);
+
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(alice);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
+    }
+
+    // Scenarios: BOR-L05
+    function test_givenPolicyInactive_whenBorrowIsPreviewedOrExecuted_reverts(
+        bool sendFeesToDistributor_,
+        bool useOperator_
+    ) public {
+        _depositDefaultCollateral(alice);
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            usds.mint(operator, 100e18);
+            vm.prank(operator);
+            usds.approve(address(burnerLoans), type(uint256).max);
+        }
+
+        address feeRecipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
+
+        uint256 maxFee = burnerLoans.previewBorrow(address(usds), 1e9, alice).fee;
+        IBurnerLoans.Position memory positionBefore = burnerLoans.getPosition(address(usds), alice);
+        uint256 payerBalanceBefore = usds.balanceOf(caller);
+        uint256 payerAllowanceBefore = usds.allowance(caller, address(burnerLoans));
+        uint256 recipientBalanceBefore = usds.balanceOf(feeRecipient);
+
+        _deactivatePolicy(address(burnerLoans));
+        bytes memory revertData = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_PolicyInactive.selector
+        );
+
+        vm.expectRevert(revertData);
+        burnerLoans.previewBorrow(address(usds), 1e9, alice);
+
+        vm.prank(caller);
+        vm.expectRevert(revertData);
+        burnerLoans.borrow(address(usds), 1e9, alice, alice, maxFee);
+
+        IBurnerLoans.Position memory positionAfter = burnerLoans.getPosition(address(usds), alice);
+        assertEq(positionAfter.debtOhm, positionBefore.debtOhm, "debt unchanged");
+        assertEq(positionAfter.maturity, positionBefore.maturity, "maturity unchanged");
+        assertEq(usds.balanceOf(caller), payerBalanceBefore, "fee payer balance unchanged");
+        assertEq(
+            usds.allowance(caller, address(burnerLoans)),
+            payerAllowanceBefore,
+            "fee payer allowance unchanged"
+        );
+        assertEq(usds.balanceOf(feeRecipient), recipientBalanceBefore, "recipient unchanged");
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no pending fee");
+    }
+
+    // Scenarios: BOR-L06
+    function test_givenDisabledAndPolicyInactive_borrowAndPreviewUseLocalGuard() public {
+        _depositDefaultCollateral(alice);
+        _disableBurnerLoans(emergency);
+        _deactivatePolicy(address(burnerLoans));
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.previewBorrow(address(usds), 1e9, alice);
@@ -924,15 +1693,15 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         vm.prank(admin);
         burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetOriginationsDisabled.selector,
             address(usds)
         );
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewBorrow(address(usds), 1e9, alice);
 
         vm.prank(alice);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 
@@ -958,12 +1727,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         ohm.approve(address(inventory), DEFAULT_BORROW_AMOUNT);
         inventory.supply(DEFAULT_BORROW_AMOUNT);
         vm.stopPrank();
-        vm.prank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+        _deactivatePolicy(address(inventory));
 
         _expectBorrowAndPreviewRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(inventory)
             ),
             DEFAULT_BORROW_AMOUNT
@@ -990,15 +1758,15 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         burnerLoans.setActiveDebtForTest(address(usds), 10e9);
         vm.warp(maturity);
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_PositionMatured.selector,
             maturity
         );
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewBorrow(address(usds), 1e9, alice);
 
         vm.prank(alice);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.borrow(address(usds), 1e9, alice, alice, type(uint256).max);
     }
 
@@ -1415,6 +2183,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Fee quote: greater than a fuzzed caller maxFee
     // - Other eligibility: valid
     // - Expected branch: write rejects the fee cap and leaves preview available
+    // Scenarios: BOR-I03
     function test_givenFeeAboveMax_borrowReverts(uint96 ohmAmount_, uint96 maxFee_) public {
         uint128 amount = uint128(bound(uint256(ohmAmount_), 1, DEFAULT_BORROW_AMOUNT));
         _depositDefaultCollateral(alice);
@@ -1441,10 +2210,12 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - Incremental required collateral: two raw 18-decimal USDS units
     // - Fee: 25 bps of two units rounds up from a nonzero fraction to one unit
     // - Expected branch: preview and execution charge one raw collateral unit, preventing free debt
-    function test_givenOneUnitDebt_borrowChargesOneUnitFee() public {
+    // Scenarios: BOR-N03, BOR-N04
+    function test_givenOneUnitDebt_borrowChargesOneUnitFee(bool sendFeesToDistributor_) public {
         _configurePrice(address(ohm), 1);
         backingOracle.setBacking(1);
         _depositCollateral(alice, 2);
+        address recipient = _configureFeeRecipientForTest(sendFeesToDistributor_, address(usds));
 
         // debtValueUsd = ceil(1 OHM unit * 1 price unit / 1e9 OHM scale) = 1 USD unit.
         // marketRequiredUsd = ceil(1 * 10,000 / 8,500) = 2 USD units.
@@ -1457,7 +2228,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             1,
             alice
         );
-        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+        uint256 recipientBalanceBefore = usds.balanceOf(recipient);
 
         vm.prank(alice);
         (
@@ -1477,10 +2248,11 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         assertEq(healthFactor, preview.resultingHealthFactor, "one-unit preview health");
         assertEq(ohm.balanceOf(alice), 1, "one OHM unit minted");
         assertEq(
-            usds.balanceOf(address(trsry)),
-            treasuryBalanceBefore + 1,
-            "treasury receives one collateral unit fee"
+            usds.balanceOf(recipient),
+            recipientBalanceBefore + 1,
+            "selected recipient receives one collateral unit fee"
         );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no fee remains pending");
     }
 
     // Condition tree:
@@ -1561,7 +2333,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Fee approval: removed after collateral deposit
     // - Fee balance: sufficient
-    // - Expected branch: the token error bubbles and all borrow effects roll back
+    // - Expected branch: transfer helper reverts and all borrow effects roll back
+    // Scenarios: BOR-I01
     function test_givenMissingFeeApproval_borrowRevertsAndRollsBack() public {
         _depositDefaultCollateral(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
@@ -1591,7 +2364,8 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // Condition tree:
     // - Fee approval: sufficient
     // - Fee balance: one unit below the previewed fee
-    // - Expected branch: the token error bubbles and all borrow effects roll back
+    // - Expected branch: transfer helper reverts and all borrow effects roll back
+    // Scenarios: BOR-I04
     function test_givenInsufficientFeeBalance_borrowRevertsAndRollsBack() public {
         _depositDefaultCollateral(alice);
         IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
@@ -1609,7 +2383,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
             abi.encodeWithSelector(
                 IERC20Errors.ERC20InsufficientBalance.selector,
                 alice,
-                aliceBalanceBefore,
+                preview.fee - 1,
                 preview.fee
             )
         );
@@ -1665,6 +2439,7 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
     // - External interaction: collateral fee token attempts a nested borrow during transferFrom
     // - Authorization: callback token is an authorized operator for the same owner
     // - Expected branch: nested borrow hits the transient guard; outer borrow mints and indexes once
+    // Scenarios: BOR-C01
     function test_givenReentrantFeeToken_borrowCannotMintOrIndexTwice() public {
         ReentrantFeeToken feeToken = new ReentrantFeeToken();
         _configurePrice(address(feeToken), 1e18);
@@ -1731,10 +2506,119 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         );
     }
 
+    // Scenarios: BOR-C01, BOR-C02, BOR-C03, BOR-C04
+    function test_givenFeeTokenCallback_borrowHandlesIncomingAndOutgoingReentrancy(
+        bool outgoingCallback_,
+        bool bubbleFailure_,
+        bool sendFeesToDistributor_,
+        bool useOperator_
+    ) public {
+        ReentrantFeeToken feeToken = new ReentrantFeeToken();
+        _configurePrice(address(feeToken), 1e18);
+        _configureDepositManagerAsset(address(feeToken));
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(feeToken),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+        feeToken.mint(alice, DEFAULT_COLLATERAL_AMOUNT + 100e18);
+        vm.startPrank(alice);
+        feeToken.approve(address(burnerLoans), type(uint256).max);
+        burnerLoans.depositCollateral(address(feeToken), DEFAULT_COLLATERAL_AMOUNT, alice);
+        burnerLoans.setAuthorization(address(feeToken), uint48(block.timestamp + 1 days));
+        vm.stopPrank();
+
+        address caller = alice;
+        if (useOperator_) {
+            caller = operator;
+            _setAuthorizationAndExpectEvent(alice, operator, uint48(block.timestamp + 1 days));
+            feeToken.mint(operator, 100e18);
+            vm.prank(operator);
+            feeToken.approve(address(burnerLoans), type(uint256).max);
+        }
+        address recipient = _configureFeeRecipientForTest(
+            sendFeesToDistributor_,
+            address(feeToken)
+        );
+
+        IBurnerLoans.BorrowPreview memory preview = burnerLoans.previewBorrow(
+            address(feeToken),
+            DEFAULT_BORROW_AMOUNT,
+            alice
+        );
+        feeToken.setCallbackFrom(
+            address(burnerLoans),
+            address(burnerLoans),
+            abi.encodeCall(burnerLoans.transferPendingPayout, (address(feeToken), recipient))
+        );
+        feeToken.setCallbackPhases(outgoingCallback_, !outgoingCallback_);
+        feeToken.setBubbleCallbackFailure(bubbleFailure_);
+        uint256 payerBefore = feeToken.balanceOf(caller);
+        uint256 recipientBefore = feeToken.balanceOf(recipient);
+
+        if (!outgoingCallback_ && bubbleFailure_) {
+            vm.prank(caller);
+            vm.expectRevert(ReentrantFeeToken.CallbackFailed.selector);
+            burnerLoans.borrow(address(feeToken), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
+            assertEq(
+                burnerLoans.getPosition(address(feeToken), alice).debtOhm,
+                0,
+                "incoming callback failure rolls debt back"
+            );
+            assertEq(feeToken.balanceOf(caller), payerBefore, "incoming fee rolls back");
+            assertEq(feeToken.balanceOf(recipient), recipientBefore, "recipient stays unchanged");
+            assertEq(
+                burnerLoans.totalPendingForTest(address(feeToken)),
+                0,
+                "incoming failure creates no reserve"
+            );
+            return;
+        }
+
+        vm.prank(caller);
+        burnerLoans.borrow(address(feeToken), DEFAULT_BORROW_AMOUNT, alice, alice, preview.fee);
+
+        assertEq(
+            burnerLoans.getPosition(address(feeToken), alice).debtOhm,
+            DEFAULT_BORROW_AMOUNT,
+            "outer borrow executes once"
+        );
+        assertEq(payerBefore - feeToken.balanceOf(caller), preview.fee, "fee collected once");
+        if (outgoingCallback_ && bubbleFailure_) {
+            assertEq(
+                burnerLoans.pendingPayout(address(feeToken), recipient),
+                preview.fee,
+                "propagated outgoing callback defers the fee"
+            );
+            assertEq(feeToken.balanceOf(recipient), recipientBefore, "failed payout moves nothing");
+        } else {
+            assertFalse(feeToken.callbackSucceeded(), "nested guarded call is rejected");
+            assertEq(
+                feeToken.callbackRevertSelector(),
+                ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+                "nested call reaches the shared guard"
+            );
+            assertEq(
+                feeToken.balanceOf(recipient) - recipientBefore,
+                preview.fee,
+                "caught callback still pays once"
+            );
+            assertEq(
+                burnerLoans.pendingPayout(address(feeToken), recipient),
+                0,
+                "caught callback leaves no debt"
+            );
+        }
+    }
+
     // Condition tree:
     // - External interaction: injected MINTR attempts a nested borrow before minting
     // - Authorization: callback MINTR is authorized for the same owner
     // - Expected branch: nested borrow hits the transient guard; trusted outer mint occurs once
+    // Scenarios: BOR-C05
     function test_givenReentrantMintr_borrowCannotMintOrIndexTwice() public {
         _depositDefaultCollateral(alice);
         CallbackMinter callbackMinter = new CallbackMinter(kernel, address(ohm));
@@ -1832,13 +2716,13 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _depositDefaultCollateral(alice);
         burnerLoans.setActiveDebtForTest(address(usds), existingAssetDebt);
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetDebtCapExceeded.selector,
             address(usds),
             borrowAmount,
             remainingCapacity
         );
-        _expectBorrowAndPreviewRevert(error, borrowAmount);
+        _expectBorrowAndPreviewRevert(revertData, borrowAmount);
     }
 
     // Condition tree:
@@ -1878,12 +2762,12 @@ contract BurnerLoansBorrowTest is BurnerLoansBorrowTestBase {
         _depositDefaultCollateral(alice);
         _setOtherMarketDebtForTest(uint128(existingGlobalDebt));
 
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_GlobalDebtCapExceeded.selector,
             borrowAmount,
             remainingCapacity
         );
-        _expectBorrowAndPreviewRevert(error, borrowAmount);
+        _expectBorrowAndPreviewRevert(revertData, borrowAmount);
     }
 
     // Condition tree:

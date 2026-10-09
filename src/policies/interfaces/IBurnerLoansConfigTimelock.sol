@@ -127,10 +127,19 @@ interface IBurnerLoansConfigTimelock is ITimelockBatchQueue {
     ) external returns (uint64 actionId);
 
     /// @notice Queues a facility-wide maximum cached-price age update.
-    /// @dev Reverts if the timelock or target Burner Loans Config policy is disabled.
     /// @param priceCacheMaxAge_ New maximum cached-price age, in seconds.
     /// @return actionId The queued action ID.
     function queueSetPriceCacheMaxAge(uint48 priceCacheMaxAge_) external returns (uint64 actionId);
+
+    /// @notice Queues the independent fee destination flag.
+    /// @param enabled_ Whether future fees should route to Revenue Distributor.
+    /// @return actionId The queued action ID.
+    function queueSetSendFeesToDistributor(bool enabled_) external returns (uint64 actionId);
+
+    /// @notice Queues the independent yield destination flag.
+    /// @param enabled_ Whether future yield should route to Revenue Distributor.
+    /// @return actionId The queued action ID.
+    function queueSetSendYieldToDistributor(bool enabled_) external returns (uint64 actionId);
 
     /// @notice Queues a change to the token form used for all DepositManager exits.
     /// @param asset_ Collateral asset to update.

@@ -3,7 +3,6 @@ pragma solidity >=0.8.24;
 
 // Interfaces
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IPriceCache} from "src/interfaces/IPriceCache.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
@@ -13,13 +12,12 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansInventory} from "src/policies/interfaces/IBurnerLoansInventory.sol";
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
-import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
-import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.7.0/utils/introspection/ERC165Checker.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {SafeCallDecoder} from "src/libraries/SafeCallDecoder.sol";
 
 // Contracts
 import {Kernel, Keycode, Module, Permissions, Policy} from "src/Kernel.sol";
@@ -30,14 +28,7 @@ import {TRSRYv1} from "src/modules/TRSRY/TRSRY.v1.sol";
 /// @notice Validates module interfaces and versions when the policy is activated.
 library BurnerLoansDependencies {
     using EnumerableSet for EnumerableSet.AddressSet;
-
-    /// @notice Burner Loans-owned yield-routing storage passed to linked-library operations.
-    /// @param repurchaseRecipient Facility-wide recipient of repurchase-directed yield shares.
-    /// @param assetRouting Complete declarative route for each registered collateral asset.
-    struct YieldRoutingState {
-        address repurchaseRecipient;
-        mapping(address asset => IBurnerLoans.AssetYieldRouting routing) assetRouting;
-    }
+    using SafeCallDecoder for address;
 
     /// @dev FLOAN module keycode.
     // Each literal is exactly five bytes, so wrapping cannot truncate data.
@@ -52,9 +43,38 @@ library BurnerLoansDependencies {
     /// @dev TRSRY module keycode.
     // forge-lint: disable-next-line(unsafe-typecast)
     Keycode internal constant _TRSRY_KEYCODE = Keycode.wrap(bytes5("TRSRY"));
+    // The selector is the leading four bytes of the signature hash by ABI definition.
+    // forge-lint: disable-next-line(unsafe-typecast)
+    bytes4 internal constant _KERNEL_SELECTOR = bytes4(keccak256("kernel()"));
+
+    /// @notice Validates the distributor binding before a revenue route is configured.
+    /// @dev Reverts if:
+    ///      - The address lacks the distributor or enabler interface.
+    ///      - The distributor's Kernel or enabled-state getter cannot be read canonically.
+    ///      - The distributor belongs to another Kernel, is inactive, or is locally disabled.
+    function validateRevenueDistributor(Kernel kernel_, address distributor_) public view {
+        bytes4[] memory interfaceIds = new bytes4[](2);
+        interfaceIds[0] = type(IRevenueDistributor).interfaceId;
+        interfaceIds[1] = type(IEnabler).interfaceId;
+        if (!ERC165Checker.supportsAllInterfaces(distributor_, interfaceIds)) {
+            revert IBurnerLoans.BurnerLoans_InvalidRevenueDistributor(distributor_);
+        }
+        (bool kernelRead, address reportedKernel) = distributor_.safeReadAddress(_KERNEL_SELECTOR);
+        if (!kernelRead || reportedKernel != address(kernel_)) {
+            revert IBurnerLoans.BurnerLoans_InvalidRevenueDistributor(distributor_);
+        }
+        if (!kernel_.isPolicyActive(Policy(distributor_))) {
+            revert IBurnerLoans.BurnerLoans_InvalidRevenueDistributor(distributor_);
+        }
+        (bool enabledRead, bool enabled) = distributor_.safeReadBool(IEnabler.isEnabled.selector);
+        if (!enabledRead || !enabled) {
+            revert IBurnerLoans.BurnerLoans_InvalidRevenueDistributor(distributor_);
+        }
+    }
 
     /// @notice Validates that an address implements the backing-oracle interface.
-    /// @dev Reverts for a zero address, an EOA, or a contract that reports no interface support.
+    /// @dev Reverts if:
+    ///      - The address is zero, has no code, or lacks the backing-oracle interface.
     function validateBackingOracle(address backingOracle_) public view {
         if (backingOracle_ == address(0)) revert IBurnerLoans.BurnerLoans_ZeroAddress();
         if (
@@ -68,6 +88,9 @@ library BurnerLoansDependencies {
     /// @notice Validates an optional PriceCache dependency.
     /// @dev Zero selects direct PRICE mode. A configured cache is validated without requiring it
     ///      to be active or enabled so governance can stage and repair the dependency separately.
+    ///      Reverts if:
+    ///      - A nonzero cache lacks a required interface or supported major version.
+    ///      - The cache belongs to another Kernel.
     function validatePriceCache(Kernel kernel_, address priceCache_) public view {
         if (priceCache_ == address(0)) return;
 
@@ -86,7 +109,8 @@ library BurnerLoansDependencies {
 
         address priceCacheKernel = address(Policy(priceCache_).kernel());
         if (priceCacheKernel != address(kernel_)) {
-            revert IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch(
+            revert IBurnerLoans.BurnerLoans_DependencyKernelMismatch(
+                priceCache_,
                 address(kernel_),
                 priceCacheKernel
             );
@@ -96,342 +120,26 @@ library BurnerLoansDependencies {
     /// @notice Validates a PriceCache and requires a configured cache to be an active policy.
     /// @dev Zero remains valid and selects direct PRICE mode. Enabled state is intentionally not
     ///      required because an active disabled cache falls back to PRICE at runtime.
+    ///      Reverts if:
+    ///      - A nonzero cache fails compatibility validation or is Kernel-inactive.
     function validateActivePriceCache(Kernel kernel_, address priceCache_) public view {
         validatePriceCache(kernel_, priceCache_);
         if (priceCache_ != address(0) && !kernel_.isPolicyActive(Policy(priceCache_))) {
-            revert IBurnerLoans.BurnerLoans_PriceCacheNotActive(priceCache_);
+            revert IBurnerLoans.BurnerLoans_DependencyNotActive(priceCache_);
         }
     }
 
-    /// @notice Validates a yield repurchase recipient against reserved destinations and live state.
-    /// @dev Reserved-address checks precede interface calls so self and Treasury are rejected with
-    ///      the routing-specific error even when they do not implement ERC-165.
-    function validateYieldRepurchaseRecipient(address treasury_, address recipient_) public view {
-        if (recipient_ == address(0) || recipient_ == address(this) || recipient_ == treasury_)
-            revert IBurnerLoans.BurnerLoans_InvalidYieldRepurchaseRecipient(recipient_);
-
-        bytes4[] memory interfaceIds = new bytes4[](2);
-        interfaceIds[0] = type(IYieldRepurchaseRecipient).interfaceId;
-        interfaceIds[1] = type(IEnabler).interfaceId;
-        if (!ERC165Checker.supportsAllInterfaces(recipient_, interfaceIds)) {
-            revert IBurnerLoans.BurnerLoans_InvalidYieldRepurchaseRecipient(recipient_);
-        }
-        Kernel kernel_ = Policy(address(this)).kernel();
-        if (!kernel_.isPolicyActive(Policy(recipient_))) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientNotActivePolicy(recipient_);
-        }
-        if (!IEnabler(recipient_).isEnabled()) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientNotEnabled(recipient_);
-        }
-    }
-
-    /// @notice Validates one exact DepositManager asset-vault pair for a repurchase recipient.
-    function validateYieldRepurchaseRecipientAsset(
-        IDepositManager depositManager_,
-        address treasury_,
-        address recipient_,
-        address asset_
-    ) public view {
-        validateYieldRepurchaseRecipient(treasury_, recipient_);
-        _validateYieldRepurchaseRecipientAsset(depositManager_, recipient_, asset_);
-    }
-
-    /// @notice Validates one recipient route against DepositManager's exact asset-vault pair.
-    function _validateYieldRepurchaseRecipientAsset(
-        IDepositManager depositManager_,
-        address recipient_,
-        address asset_
-    ) private view {
-        // Facility-wide recipient validation is intentionally atomic: any incompatible asset-vault
-        // route must reject the complete recipient update.
-        // forge-lint: disable-start(require-revert-in-loop)
-        // The governance-controlled asset registry is expected to remain small, and every
-        // configured asset must be checked before a facility-wide recipient change.
-        // forge-lint: disable-next-line(calls-loop)
-        address vault = depositManager_.getAssetConfiguration(IERC20(asset_)).vault;
-        if (vault == address(0)) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientVaultRequired(asset_);
-        }
-        // Each configured asset may map to a different vault, so recipient compatibility requires
-        // one view call per vault.
-        // forge-lint: disable-start(calls-loop)
-        IYieldRepurchaseRecipient.VaultConfig memory config = IYieldRepurchaseRecipient(recipient_)
-            .getVaultConfig(vault);
-        // forge-lint: disable-end(calls-loop)
-
-        if (config.vault != vault) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientAssetVaultMismatch(
-                vault,
-                config.vault
-            );
-        }
-        if (config.asset != asset_) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientAssetMismatch(
-                asset_,
-                config.asset
-            );
-        }
-        if (!config.enabled) {
-            revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientAssetNotEnabled(
-                recipient_,
-                asset_,
-                vault
-            );
-        }
-        // forge-lint: disable-end(require-revert-in-loop)
-    }
-
-    /// @notice Adds an asset to the append-only registry with implicit Treasury-only routing.
+    /// @notice Adds an asset to the append-only registry.
+    /// @dev Reverts if:
+    ///      - The asset is already registered.
     function registerAsset(EnumerableSet.AddressSet storage assets_, address asset_) public {
         if (!assets_.add(asset_)) revert IBurnerLoans.BurnerLoans_AssetAlreadyConfigured(asset_);
         emit IBurnerLoans.AssetRegistered(asset_);
     }
 
-    /// @notice Applies a validated facility-wide yield-repurchase-recipient transition.
-    function setYieldRepurchaseRecipient(
-        YieldRoutingState storage state_,
-        EnumerableSet.AddressSet storage assets_,
-        IDepositManager depositManager_,
-        address treasury_,
-        address recipient_
-    ) public {
-        if (recipient_ == address(0)) {
-            uint256 assetCount = assets_.length();
-            uint256 activeAssetCount;
-            for (uint256 i; i < assetCount; ++i) {
-                if (state_.assetRouting[assets_.at(i)].repurchaseRecipientBps != 0) {
-                    ++activeAssetCount;
-                }
-            }
-            if (activeAssetCount != 0) {
-                revert IBurnerLoans.BurnerLoans_YieldRepurchaseAllocationsActive(activeAssetCount);
-            }
-            if (state_.repurchaseRecipient == address(0)) return;
-        } else {
-            validateYieldRepurchaseRecipient(treasury_, recipient_);
-            uint256 assetCount = assets_.length();
-            for (uint256 i; i < assetCount; ++i) {
-                address asset = assets_.at(i);
-                IBurnerLoans.AssetYieldRouting storage routing = state_.assetRouting[asset];
-                uint256 directCount = routing.directAllocations.length;
-                for (uint256 j; j < directCount; ++j) {
-                    if (routing.directAllocations[j].recipient == recipient_) {
-                        // The recipient transition is intentionally atomic: a conflicting direct
-                        // allocation must reject the complete facility-wide update.
-                        // forge-lint: disable-next-line(require-revert-in-loop)
-                        revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(recipient_);
-                    }
-                }
-                if (routing.repurchaseRecipientBps != 0) {
-                    _validateYieldRepurchaseRecipientAsset(depositManager_, recipient_, asset);
-                }
-            }
-            if (state_.repurchaseRecipient == recipient_) return;
-        }
-
-        state_.repurchaseRecipient = recipient_;
-        emit IBurnerLoans.YieldRepurchaseRecipientSet(recipient_);
-    }
-
-    /// @notice Atomically replaces one registered asset's complete yield route.
-    function setYieldAssetRouting(
-        YieldRoutingState storage state_,
-        EnumerableSet.AddressSet storage assets_,
-        IDepositManager depositManager_,
-        address treasury_,
-        address asset_,
-        IBurnerLoans.AssetYieldRouting calldata routing_
-    ) public {
-        validateAssetYieldRoutingInput(
-            state_,
-            assets_,
-            depositManager_,
-            treasury_,
-            asset_,
-            routing_
-        );
-
-        IBurnerLoans.AssetYieldRouting storage current = state_.assetRouting[asset_];
-        if (_assetYieldRoutingEquals(current, routing_)) return;
-
-        current.repurchaseRecipientBps = routing_.repurchaseRecipientBps;
-        delete current.directAllocations;
-        uint256 directCount = routing_.directAllocations.length;
-        for (uint256 i; i < directCount; ++i) {
-            current.directAllocations.push(routing_.directAllocations[i]);
-        }
-
-        emit IBurnerLoans.YieldAssetRoutingSet(asset_, routing_);
-    }
-
-    /// @notice Validates a proposed complete yield route without changing storage.
-    function validateAssetYieldRoutingInput(
-        YieldRoutingState storage state_,
-        EnumerableSet.AddressSet storage assets_,
-        IDepositManager depositManager_,
-        address treasury_,
-        address asset_,
-        IBurnerLoans.AssetYieldRouting calldata routing_
-    ) public view {
-        if (!assets_.contains(asset_)) {
-            revert IBurnerLoans.BurnerLoans_AssetNotConfigured(asset_);
-        }
-        _validateAssetYieldRoutingInput(
-            state_.repurchaseRecipient,
-            depositManager_,
-            treasury_,
-            asset_,
-            routing_
-        );
-    }
-
-    /// @notice Returns a complete stored route including its dynamic allocation array.
-    function getYieldAssetRouting(
-        YieldRoutingState storage state_,
-        address asset_
-    ) public view returns (IBurnerLoans.AssetYieldRouting memory routing) {
-        return state_.assetRouting[asset_];
-    }
-
-    /// @notice Validates a complete stored route against current reserved destinations and state.
-    function validateStoredAssetYieldRouting(
-        YieldRoutingState storage state_,
-        IDepositManager depositManager_,
-        address treasury_,
-        address asset_
-    ) public view {
-        IBurnerLoans.AssetYieldRouting storage routing = state_.assetRouting[asset_];
-        _validateStoredDirectAllocations(routing, treasury_, state_.repurchaseRecipient);
-        if (routing.repurchaseRecipientBps != 0) {
-            if (state_.repurchaseRecipient == address(0)) {
-                revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientNotConfigured();
-            }
-            validateYieldRepurchaseRecipientAsset(
-                depositManager_,
-                treasury_,
-                state_.repurchaseRecipient,
-                asset_
-            );
-        }
-    }
-
-    /// @dev Direct allocations intentionally have no explicit count cap. Nonzero BPS and the
-    ///      10,000-BPS maximum impose a theoretical maximum of 10,000 entries, while storage and
-    ///      claim gas grow with the configured length.
-    function _validateAssetYieldRoutingInput(
-        address repurchaseRecipient_,
-        IDepositManager depositManager_,
-        address treasury_,
-        address asset_,
-        IBurnerLoans.AssetYieldRouting calldata routing_
-    ) private view {
-        uint256 directCount = routing_.directAllocations.length;
-        uint256 totalBps = routing_.repurchaseRecipientBps;
-        // Route replacement is intentionally atomic: any invalid or duplicate allocation must
-        // reject the complete route rather than apply a partial configuration.
-        // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i; i < directCount; ++i) {
-            IBurnerLoans.DirectYieldAllocation calldata allocation = routing_.directAllocations[i];
-            if (
-                allocation.recipient == address(0) ||
-                allocation.recipient == address(this) ||
-                allocation.recipient == treasury_ ||
-                allocation.recipient == repurchaseRecipient_
-            ) {
-                revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(allocation.recipient);
-            }
-            if (allocation.bps == 0) {
-                revert IBurnerLoans.BurnerLoans_InvalidDirectYieldAllocationBps(
-                    allocation.recipient
-                );
-            }
-            for (uint256 j; j < i; ++j) {
-                if (routing_.directAllocations[j].recipient == allocation.recipient) {
-                    revert IBurnerLoans.BurnerLoans_DuplicateDirectYieldRecipient(
-                        allocation.recipient
-                    );
-                }
-            }
-            totalBps += allocation.bps;
-        }
-        // forge-lint: disable-end(require-revert-in-loop)
-        if (totalBps > BurnerLoansConstants.MAX_BPS) {
-            revert IBurnerLoans.BurnerLoans_InvalidAssetYieldRoutingTotal(totalBps);
-        }
-
-        if (routing_.repurchaseRecipientBps != 0) {
-            if (repurchaseRecipient_ == address(0)) {
-                revert IBurnerLoans.BurnerLoans_YieldRepurchaseRecipientNotConfigured();
-            }
-            validateYieldRepurchaseRecipientAsset(
-                depositManager_,
-                treasury_,
-                repurchaseRecipient_,
-                asset_
-            );
-        }
-    }
-
-    /// @dev Revalidates conditions that can drift after storage. Recipient uniqueness is enforced
-    ///      once by the only route-writing path and cannot change independently afterward.
-    function _validateStoredDirectAllocations(
-        IBurnerLoans.AssetYieldRouting storage routing_,
-        address treasury_,
-        address repurchaseRecipient_
-    ) private view {
-        uint256 directCount = routing_.directAllocations.length;
-        uint256 totalBps = routing_.repurchaseRecipientBps;
-        // Stored-route validation is intentionally atomic: any invalid allocation must reject the
-        // complete operation that consumes the route.
-        // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i; i < directCount; ++i) {
-            IBurnerLoans.DirectYieldAllocation storage allocation = routing_.directAllocations[i];
-            if (
-                allocation.recipient == address(0) ||
-                allocation.recipient == address(this) ||
-                allocation.recipient == treasury_ ||
-                allocation.recipient == repurchaseRecipient_
-            ) {
-                revert IBurnerLoans.BurnerLoans_InvalidDirectYieldRecipient(allocation.recipient);
-            }
-            if (allocation.bps == 0) {
-                revert IBurnerLoans.BurnerLoans_InvalidDirectYieldAllocationBps(
-                    allocation.recipient
-                );
-            }
-            totalBps += allocation.bps;
-        }
-        // forge-lint: disable-end(require-revert-in-loop)
-        if (totalBps > BurnerLoansConstants.MAX_BPS) {
-            revert IBurnerLoans.BurnerLoans_InvalidAssetYieldRoutingTotal(totalBps);
-        }
-    }
-
-    function _assetYieldRoutingEquals(
-        IBurnerLoans.AssetYieldRouting storage stored_,
-        IBurnerLoans.AssetYieldRouting calldata candidate_
-    ) private view returns (bool) {
-        if (
-            stored_.repurchaseRecipientBps != candidate_.repurchaseRecipientBps ||
-            stored_.directAllocations.length != candidate_.directAllocations.length
-        ) return false;
-
-        uint256 directCount = candidate_.directAllocations.length;
-        for (uint256 i; i < directCount; ++i) {
-            IBurnerLoans.DirectYieldAllocation storage storedAllocation = stored_.directAllocations[
-                i
-            ];
-            IBurnerLoans.DirectYieldAllocation calldata candidateAllocation = candidate_
-                .directAllocations[i];
-            if (
-                storedAllocation.recipient != candidateAllocation.recipient ||
-                storedAllocation.bps != candidateAllocation.bps
-            ) return false;
-        }
-        return true;
-    }
-
     /// @notice Validates an active Burner Loans Inventory link before it is stored.
+    /// @dev Reverts if:
+    ///      - Inventory is zero, inactive, or bound to a different facility, OHM, or Kernel.
     function validateInventoryLink(
         Kernel kernel_,
         address facility_,
@@ -444,6 +152,8 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Validates an active Burner Loans Config link before it is stored.
+    /// @dev Reverts if:
+    ///      - Config is inactive, incompatible, or bound to a different facility, OHM, or Kernel.
     function validateConfiguratorLink(
         Kernel kernel_,
         address facility_,
@@ -457,6 +167,9 @@ library BurnerLoansDependencies {
     /// @notice Transfers every matching registered facility market from one Config manager to another.
     /// @dev Each asset must resolve to at least one market and every matching market must still name
     ///      `outgoingConfigurator_` as manager. A later failure reverts every earlier rotation.
+    ///      Reverts if:
+    ///      - A registered asset has no matching market or a market has another manager.
+    ///      - FLOAN rejects a manager update.
     function migrateMarketManagers(
         EnumerableSet.AddressSet storage assets_,
         IFLOANv1 floan_,
@@ -494,6 +207,9 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Validates every linked Burner Loans policy before operational enablement.
+    /// @dev Reverts if:
+    ///      - DepositManager, Inventory, or Config is inactive or incompatible.
+    ///      - Inventory is disabled or its Config binding is inconsistent.
     function validateConfiguration(
         Kernel kernel_,
         address facility_,
@@ -568,6 +284,8 @@ library BurnerLoansDependencies {
 
     /// @notice Validates dependency interfaces and supported major versions during activation.
     /// @dev PRICE supports v1.2 or any v2 release; every other dependency requires major v1.
+    ///      Reverts if:
+    ///      - PRICE lacks its required interface or any module has an unsupported version.
     function validate(
         IFLOANv1 floan_,
         address priceAddress_,
@@ -600,6 +318,8 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Validates the Inventory interface and immutable OHM/facility bindings.
+    /// @dev Reverts if:
+    ///      - Inventory lacks the required interface or reports another OHM token or facility.
     function _validateInventoryCompatibility(
         address facility_,
         address ohm_,
@@ -622,6 +342,8 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Validates the Config interface and immutable OHM/facility bindings.
+    /// @dev Reverts if:
+    ///      - Config is zero, lacks its interface, or reports another OHM token or facility.
     function _validateConfigurator(
         address facility_,
         address ohm_,
@@ -636,9 +358,11 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Requires Inventory to be an active, same-Kernel policy.
+    /// @dev Reverts if:
+    ///      - Inventory is Kernel-inactive or reports another Kernel.
     function _requireInventoryActive(Kernel kernel_, address inventory_) private view {
         if (!kernel_.isPolicyActive(Policy(inventory_))) {
-            revert IBurnerLoans.BurnerLoans_InventoryNotActive(inventory_);
+            revert IBurnerLoans.BurnerLoans_DependencyNotActive(inventory_);
         }
         if (!_reportsKernel(inventory_, kernel_)) {
             revert IBurnerLoans.BurnerLoans_InvalidInventory(inventory_);
@@ -646,6 +370,8 @@ library BurnerLoansDependencies {
     }
 
     /// @notice Requires Config to be an active, same-Kernel policy.
+    /// @dev Reverts if:
+    ///      - Config is Kernel-inactive or reports another Kernel.
     function _requireConfiguratorActive(Kernel kernel_, address configurator_) private view {
         if (
             !kernel_.isPolicyActive(Policy(configurator_)) ||

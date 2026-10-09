@@ -2,7 +2,6 @@
 pragma solidity >=0.8.24;
 
 // Interfaces
-import {IERC20} from "src/interfaces/IERC20.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -10,9 +9,7 @@ import {BurnerLoansContext, IBurnerLoansSeizureContext} from "src/policies/inter
 import {IOlympusBackingOracle} from "src/policies/interfaces/IOlympusBackingOracle.sol";
 
 // Libraries
-import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
-import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {BurnerLoansCalculator} from "src/policies/libraries/BurnerLoansCalculator.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
@@ -20,12 +17,12 @@ import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol"
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 import {BurnerLoansMarketConfig} from "src/policies/libraries/BurnerLoansMarketConfig.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
+import {BurnerLoansPayouts} from "src/policies/libraries/BurnerLoansPayouts.sol";
 import {BURNER_LOANS_SEIZER_ROLE, HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 /// @title Burner Loans Seizure Library
 /// @notice Separately linked batch validation, scanning, default settlement, and reward routing.
 library BurnerLoansSeizure {
-    using SafeERC20 for ERC20;
     using SafeCast for uint256;
 
     /// @notice Maximum number of positions in one seizure batch.
@@ -108,9 +105,10 @@ library BurnerLoansSeizure {
     /// @dev Applies the same validation as preview, then atomically defaults FLOAN positions,
     ///      withdraws collateral, pays any keeper reward, and transfers the remainder to treasury.
     /// @return tokenOut Token distributed to the keeper and Treasury.
-    /// @return keeperReward Actual `tokenOut` quantity paid to the keeper.
-    /// @return collateralToTreasury Actual `tokenOut` quantity routed to Treasury.
+    /// @return keeperReward `tokenOut` quantity allocated to the keeper.
+    /// @return collateralToTreasury `tokenOut` quantity allocated to Treasury.
     function seize(
+        BurnerLoansPayouts.State storage pending_,
         address asset_,
         address[] memory borrowers_
     ) public returns (address, uint256, uint256) {
@@ -161,7 +159,6 @@ library BurnerLoansSeizure {
             );
         }
 
-        uint256 startingBalance = IERC20(tokenOut).balanceOf(address(this)) - amountOut;
         IBurnerLoans.SeizePreview memory result = _previewAmounts(
             dependencies_.ohmDecimals,
             batch.config,
@@ -173,26 +170,26 @@ library BurnerLoansSeizure {
             isProtocolCaller
         );
 
-        if (result.keeperReward != 0) {
-            ERC20(tokenOut).safeTransfer(msg.sender, result.keeperReward);
-        }
-        if (result.collateralToTreasury != 0) {
-            ERC20(tokenOut).safeTransfer(dependencies_.treasury, result.collateralToTreasury);
-        }
-
-        uint256 finalBalance = IERC20(tokenOut).balanceOf(address(this));
-        if (finalBalance != startingBalance) {
-            revert IBurnerLoans.BurnerLoans_ResidualCollateralBalance(
-                tokenOut,
-                finalBalance > startingBalance
-                    ? finalBalance - startingBalance
-                    : startingBalance - finalBalance
-            );
-        }
+        _settleSeizure(pending_, tokenOut, dependencies_.treasury, result);
 
         _emitSeizureEvents(asset_, borrowers_, batch, result);
 
         return (result.tokenOut, result.keeperReward, result.collateralToTreasury);
+    }
+
+    function _settleSeizure(
+        BurnerLoansPayouts.State storage pending_,
+        address token_,
+        address treasury_,
+        IBurnerLoans.SeizePreview memory result_
+    ) private {
+        BurnerLoansPayouts.queueSeizureReward(pending_, token_, msg.sender, result_.keeperReward);
+        BurnerLoansPayouts.queueSeizedCollateral(
+            pending_,
+            token_,
+            treasury_,
+            result_.collateralToTreasury
+        );
     }
 
     /// @notice Emits borrower-level and token-aware aggregate settlement events.

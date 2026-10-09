@@ -17,6 +17,7 @@ import {ReentrancyGuard} from "@openzeppelin-5.7.0/utils/ReentrancyGuard.sol";
 import {EnumerableSet} from "@openzeppelin-5.7.0/utils/structs/EnumerableSet.sol";
 import {BurnerLoansCustody} from "src/policies/libraries/BurnerLoansCustody.sol";
 import {BurnerLoansDependencies} from "src/policies/libraries/BurnerLoansDependencies.sol";
+import {BurnerLoansPayouts} from "src/policies/libraries/BurnerLoansPayouts.sol";
 import {BurnerLoansQuote} from "src/policies/libraries/BurnerLoansQuote.sol";
 import {BurnerLoansSeizure} from "src/policies/libraries/BurnerLoansSeizure.sol";
 import {BurnerLoansView} from "src/policies/libraries/BurnerLoansView.sol";
@@ -38,30 +39,35 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     /// @notice Oracle supplying the canonical backing value per OHM.
     address public backingOracle;
 
-    /// @dev Facility-owned recipient and per-asset allocations.
-    BurnerLoansDependencies.YieldRoutingState internal _YIELD_ROUTING;
+    /// @inheritdoc IBurnerLoansView
+    address public override revenueDistributor;
+    /// @inheritdoc IBurnerLoansView
+    bool public override sendFeesToDistributor;
+    /// @inheritdoc IBurnerLoansView
+    bool public override sendYieldToDistributor;
+
+    /// @dev Related balances and enumerable retry keys passed together to the payout library.
+    BurnerLoansPayouts.State internal _PAYOUTS;
 
     /// @dev Append-only collateral assets registered by Config after market creation.
     EnumerableSet.AddressSet internal _ASSETS;
 
     modifier onlyConfigurator() {
-        _onlyConfigurator();
+        _requireConfigurator();
         _;
     }
 
-    /// @notice Requires the caller to be the currently bound Config policy outside a protected
-    ///         lifecycle call.
-    /// @dev Configurator operations make only static external validation calls, so they do not
-    ///      need to acquire the guard. Rejecting an already-entered guard prevents a claim or token
-    ///      callback from changing configuration while retaining one shared guard for lifecycle
-    ///      state transitions.
-    function _onlyConfigurator() internal view {
+    /// @dev Reverts if:
+    ///      - the caller is not the currently bound Config policy.
+    function _requireConfigurator() internal view {
         if (msg.sender != address(_CONFIGURATOR)) revert BurnerLoans_OnlyConfigurator(msg.sender);
-        if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
     }
 
     // ========== CONSTRUCTOR ========== //
 
+    /// @dev Reverts if:
+    ///      - The inherited lifecycle constructor rejects a required dependency.
+    ///      - The backing oracle is zero, has no code, or lacks the required interface.
     constructor(
         Kernel kernel_,
         IERC20 ohm_,
@@ -77,6 +83,9 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     // ========== POLICY SETUP ========== //
 
     /// @inheritdoc Policy
+    /// @dev Reverts if:
+    ///      - A required module is missing.
+    ///      - A module version or dependency is incompatible.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = BurnerLoansDependencies.keycodes();
 
@@ -96,22 +105,97 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     // ========== ADMIN FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller lacks the admin role or Burner Loans is enabled.
+    ///      - The inventory is incompatible, bound elsewhere, or inactive.
     function setInventory(address inventory_) external override givenDisabled onlyAdminRole {
         _setInventory(inventory_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller lacks the admin role or Burner Loans is enabled.
+    ///      - The configurator is invalid or bound to another facility.
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
         _setConfigurator(_ASSETS, configurator_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller lacks the admin role.
+    ///      - The price cache is invalid.
     function setPriceCache(address priceCache_) external override onlyAdminRole {
         _setPriceCache(priceCache_);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
-    function setPriceCacheMaxAge(uint48 priceCacheMaxAge_) external override onlyConfigurator {
+    /// @dev Reverts if:
+    ///      - The caller lacks the admin role.
+    ///      - Burner Loans is inactive or locally disabled.
+    ///      - A nonzero distributor is invalid or belongs to another Kernel.
+    ///      - The distributor is cleared while either send flag is enabled.
+    function setRevenueDistributor(address distributor_) external override onlyAdminRole {
+        _requirePolicyActive();
+        _requireEnabled();
+        if (distributor_ == address(0) && (sendFeesToDistributor || sendYieldToDistributor)) {
+            revert BurnerLoans_RevenueDistributorRequired();
+        }
+        if (distributor_ == revenueDistributor) return;
+        if (distributor_ != address(0)) {
+            BurnerLoansDependencies.validateRevenueDistributor(kernel, distributor_);
+        }
+        revenueDistributor = distributor_;
+        emit RevenueDistributorSet(distributor_);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller is not the configurator or Burner Loans is inactive or disabled.
+    ///      - Enabling selects an invalid distributor or one bound to another Kernel.
+    function setSendFeesToDistributor(
+        bool enabled_
+    ) external override nonReentrant onlyConfigurator {
+        _requirePolicyActive();
+        _requireEnabled();
+        if (enabled_ == sendFeesToDistributor) return;
+        _validateSendFlag(enabled_);
+        sendFeesToDistributor = enabled_;
+        emit SendFeesToDistributorSet(enabled_);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller is not the configurator or Burner Loans is inactive or disabled.
+    ///      - Enabling selects an invalid distributor or one bound to another Kernel.
+    function setSendYieldToDistributor(
+        bool enabled_
+    ) external override nonReentrant onlyConfigurator {
+        _requirePolicyActive();
+        _requireEnabled();
+        if (enabled_ == sendYieldToDistributor) return;
+        _validateSendFlag(enabled_);
+        sendYieldToDistributor = enabled_;
+        emit SendYieldToDistributorSet(enabled_);
+    }
+
+    /// @dev Disabling needs no destination. Enabling must revalidate the currently selected
+    ///      distributor because the pointer or its policy state may have changed since setup.
+    ///      Reverts if:
+    ///      - Enabling has no selected distributor.
+    ///      - The selected distributor is incompatible or belongs to another Kernel.
+    function _validateSendFlag(bool enabled_) internal view {
+        if (!enabled_) return;
+        if (revenueDistributor == address(0)) revert BurnerLoans_RevenueDistributorRequired();
+        BurnerLoansDependencies.validateRevenueDistributor(kernel, revenueDistributor);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - The caller is not the configurator.
+    ///      - Burner Loans is disabled.
+    function setPriceCacheMaxAge(
+        uint48 priceCacheMaxAge_
+    ) external override nonReentrant onlyConfigurator {
         _requireEnabled();
         _priceCacheMaxAge = priceCacheMaxAge_;
         emit PriceCacheMaxAgeSet(priceCacheMaxAge_);
@@ -123,73 +207,13 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     ///      - The caller is not the bound Config policy.
     ///      - The FLOAN market is missing, ambiguous, or has incompatible configuration data.
     ///      - The asset is already registered.
-    function addAsset(address asset_) external override onlyConfigurator {
+    function addAsset(address asset_) external override nonReentrant onlyConfigurator {
         _requireEnabled();
         // Config creates the FLOAN market first. Resolve it before extending the append-only
         // registry so every registered asset is immediately serviceable by the facility.
         (, AssetConfig memory config) = _getAssetMarket(asset_);
         BurnerLoansView.validateAssetWithdrawAsShares(asset_, config.withdrawAsShares);
         BurnerLoansDependencies.registerAsset(_ASSETS, asset_);
-    }
-
-    /// @inheritdoc IBurnerLoansLifecycle
-    /// @dev Reverts if:
-    ///      - Burner Loans is disabled.
-    ///      - The caller is not the bound Config policy.
-    ///      - A nonzero recipient is Burner Loans or Treasury, lacks required interfaces, is not an
-    ///        active Kernel policy, or is disabled.
-    ///      - A nonzero recipient collides with a direct allocation or lacks a required live asset
-    ///        route.
-    ///      - The recipient is zero while any repurchase allocation remains nonzero.
-    function setYieldRepurchaseRecipient(address recipient_) external override onlyConfigurator {
-        _requireEnabled();
-        BurnerLoansDependencies.setYieldRepurchaseRecipient(
-            _YIELD_ROUTING,
-            _ASSETS,
-            _DEPOSIT_MANAGER,
-            address(_TRSRY),
-            recipient_
-        );
-    }
-
-    /// @inheritdoc IBurnerLoansLifecycle
-    /// @dev Reverts if:
-    ///      - Burner Loans is disabled.
-    ///      - The caller is not the bound Config policy.
-    ///      - `asset_` is not registered or non-Treasury allocations exceed 10,000 BPS.
-    ///      - A direct recipient is zero, duplicated, or reserved.
-    ///      - For nonzero repurchase BPS, the global recipient is unset or its live interface,
-    ///        policy, enabled-state, or vault route is invalid. Zero repurchase BPS remains
-    ///        available to repair a route after recipient drift.
-    function setYieldAssetRouting(
-        address asset_,
-        AssetYieldRouting calldata routing_
-    ) external override onlyConfigurator {
-        _requireEnabled();
-        BurnerLoansDependencies.setYieldAssetRouting(
-            _YIELD_ROUTING,
-            _ASSETS,
-            _DEPOSIT_MANAGER,
-            address(_TRSRY),
-            asset_,
-            routing_
-        );
-    }
-
-    /// @inheritdoc IBurnerLoansView
-    function validateYieldAssetRouting(
-        address asset_,
-        AssetYieldRouting calldata routing_
-    ) external view override {
-        _requireEnabled();
-        BurnerLoansDependencies.validateAssetYieldRoutingInput(
-            _YIELD_ROUTING,
-            _ASSETS,
-            _DEPOSIT_MANAGER,
-            address(_TRSRY),
-            asset_,
-            routing_
-        );
     }
 
     /// @notice Sets the oracle supplying canonical OHM backing.
@@ -260,14 +284,14 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     /// @inheritdoc IBurnerLoansLifecycle
     /// @dev Uses pre-borrow asset utilization for the fee curve and charges the fee on the
     ///      incremental required collateral. Reverts if:
-    ///      - Burner Loans is disabled, asset originations are disabled, or the asset market is
-    ///        unavailable.
+    ///      - Burner Loans is disabled or Kernel-inactive, asset originations are disabled, or the
+    ///        asset market is unavailable.
     ///      - The caller is not the owner or an authorized operator.
     ///      - `ohmAmount_` or `recipient_` is zero, or the position has no credited collateral.
     ///      - OHM or collateral PRICE is unsupported, zero, or stale.
     ///      - The resulting global or asset active debt exceeds its cap.
     ///      - The position is seized, matured, currently unhealthy, or unhealthy after borrowing.
-    ///      - The collateral fee exceeds `maxFee_` or cannot be transferred from the caller.
+    ///      - The collateral fee exceeds `maxFee_` or cannot be collected from the caller.
     ///      - Burner Loans Inventory cannot fund or transfer exactly `ohmAmount_` to `recipient_`.
     function borrow(
         address asset_,
@@ -275,9 +299,21 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         address onBehalfOf_,
         address recipient_,
         uint256 maxFee_
-    ) external nonReentrant returns (uint256, uint256, uint256, uint48, uint256) {
+    )
+        external
+        nonReentrant
+        returns (uint256 borrowed, uint256 fee, uint256 debt, uint48 maturity, uint256 health)
+    {
         _requireEnabled();
-        return BurnerLoansCustody.borrow(asset_, onBehalfOf_, recipient_, ohmAmount_, maxFee_);
+        _requirePolicyActive();
+        (borrowed, fee, debt, maturity, health) = BurnerLoansCustody.borrow(
+            asset_,
+            onBehalfOf_,
+            recipient_,
+            ohmAmount_,
+            maxFee_
+        );
+        _collectFee(asset_, fee);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
@@ -304,11 +340,11 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
 
     /// @inheritdoc IBurnerLoansLifecycle
     /// @dev Reverts if:
-    ///      - Burner Loans or asset originations are disabled.
+    ///      - Burner Loans is disabled or Kernel-inactive, or asset originations are disabled.
     ///      - The caller is not the owner or an authorized operator.
     ///      - The asset market or borrower debt position is unavailable.
     ///      - The term count, current health, maturity, or resulting horizon is invalid.
-    ///      - The collateral fee exceeds `maxFee_` or cannot be transferred to Treasury.
+    ///      - The collateral fee exceeds `maxFee_` or cannot be collected from the caller.
     ///      - FLOAN rejects the maturity mutation.
     ///      Returns the fee plus FLOAN's actual resulting maturity and health factor.
     function extend(
@@ -318,44 +354,152 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
         uint256 maxFee_
     ) external override nonReentrant returns (uint256 fee, uint48 maturity, uint256 healthFactor) {
         _requireEnabled();
+        _requirePolicyActive();
         _requireSenderAuthorized(msg.sender, onBehalfOf_);
-        return
-            BurnerLoansCustody.extend(_marketId(asset_), asset_, onBehalfOf_, termCount_, maxFee_);
+        (fee, maturity, healthFactor) = BurnerLoansCustody.extend(
+            _marketId(asset_),
+            asset_,
+            onBehalfOf_,
+            termCount_,
+            maxFee_
+        );
+        _collectFee(asset_, fee);
     }
 
     /// @inheritdoc IBurnerLoansLifecycle
     /// @dev Reverts if:
-    ///      - Burner Loans, DepositManager, or Burner Loans Inventory is disabled.
+    ///      - Burner Loans is disabled or Kernel-inactive, or DepositManager or Burner Loans
+    ///        Inventory is disabled.
     ///      - `borrowers_` is empty, exceeds the batch limit, or contains duplicates.
     ///      - The asset market, custody route, backing value, or PRICE data is invalid.
     ///      - Any borrower has no debt or is not currently seizable.
-    ///      - Custody is insolvent or leaves a residual facility balance. A share-mode seizure may
-    ///        default debt with zero immediate output; retained share dust becomes custody yield.
-    ///      - FLOAN defaulting, Inventory settlement, DepositManager withdrawal, or token transfer
-    ///        fails.
+    ///      - Custody is insolvent.
+    ///      - FLOAN defaulting, Inventory settlement, or DepositManager withdrawal fails.
+    ///        Rejected keeper or Treasury payouts remain pending.
+    ///      A share-mode seizure may default debt with zero immediate output; retained share dust
+    ///      becomes custody yield.
     function seize(
         address asset_,
         address[] calldata borrowers_
     ) external override nonReentrant returns (address, uint256, uint256) {
         _requireEnabled();
-        return BurnerLoansSeizure.seize(asset_, borrowers_);
+        _requirePolicyActive();
+        return BurnerLoansSeizure.seize(_PAYOUTS, asset_, borrowers_);
     }
 
     /// @inheritdoc IBurnerLoansYieldClaim
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or Kernel-inactive, the asset is unregistered, or custody
+    ///        is unsupported.
+    ///      - DepositManager cannot release claimable yield or transfer it to the current recipient.
     function claimYield(
         address asset_
     ) external override nonReentrant givenEnabled returns (address tokenOut, uint256 amountOut) {
-        return BurnerLoansCustody.claimYield(_ASSETS, _YIELD_ROUTING, asset_);
+        _requirePolicyActive();
+        return BurnerLoansCustody.claimYield(_ASSETS, asset_);
+    }
+
+    /// @inheritdoc IBurnerLoansLifecycle
+    /// @dev Reverts if:
+    ///      - Burner Loans is Kernel-inactive or locally disabled.
+    ///      - A guarded operation is already in progress.
+    ///      A failed token transfer leaves that payout owed.
+    function transferPendingPayout(
+        address token_,
+        address recipient_
+    ) external override nonReentrant returns (uint256 transferred) {
+        _requirePolicyActive();
+        _requireEnabled();
+        if (recipient_ == _feeRecipient()) {
+            transferred += BurnerLoansPayouts.transferPendingFee(_PAYOUTS, token_, recipient_);
+        }
+        if (recipient_ == address(_TRSRY)) {
+            transferred += BurnerLoansPayouts.transferPendingSeizedCollateral(
+                _PAYOUTS,
+                token_,
+                recipient_
+            );
+        }
+        transferred += BurnerLoansPayouts.transferPendingSeizureReward(
+            _PAYOUTS,
+            token_,
+            recipient_
+        );
+    }
+
+    /// @dev Reverts if:
+    ///      - this policy is no longer active in the Kernel.
+    function _requirePolicyActive() internal view {
+        if (!kernel.isPolicyActive(Policy(address(this)))) revert BurnerLoans_PolicyInactive();
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function pendingPayout(
+        address token_,
+        address recipient_
+    ) external view override returns (uint256) {
+        return _pendingAmount(token_, recipient_);
+    }
+
+    /// @dev Combines liabilities currently owed to this address.
+    function _pendingAmount(
+        address token_,
+        address recipient_
+    ) internal view returns (uint256 amount) {
+        amount = _PAYOUTS.pendingKeeperRewards[token_][recipient_];
+        if (recipient_ == _feeRecipient()) amount += _PAYOUTS.pendingFees[token_];
+        if (recipient_ == address(_TRSRY)) amount += _PAYOUTS.pendingSeizedCollateral[token_];
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function getPendingPayoutTokens() external view override returns (address[] memory) {
+        return BurnerLoansPayouts.tokens(_PAYOUTS);
+    }
+
+    /// @inheritdoc IBurnerLoansView
+    function getPendingPayoutRecipients(
+        address token_
+    ) external view override returns (address[] memory) {
+        return BurnerLoansPayouts.recipients(_PAYOUTS, token_, _feeRecipient(), address(_TRSRY));
+    }
+
+    /// @dev Collects the caller's fee, records any deferred outgoing payout, and selects its
+    ///      current destination. Failure to send the collected fee onward leaves it pending.
+    ///      Reverts if:
+    ///      - The caller's fee cannot be collected exactly.
+    function _collectFee(address asset_, uint256 fee_) internal {
+        BurnerLoansPayouts.collectFee(_PAYOUTS, asset_, msg.sender, _feeRecipient(), fee_);
+    }
+
+    /// @dev Returns the distributor when fee routing is enabled, otherwise the cached Treasury.
+    function _feeRecipient() internal view returns (address) {
+        return
+            sendFeesToDistributor && revenueDistributor != address(0)
+                ? revenueDistributor
+                : address(_TRSRY);
+    }
+
+    /// @dev Returns the distributor when yield routing is enabled, otherwise the cached Treasury.
+    function _yieldRecipient() internal view returns (address) {
+        return
+            sendYieldToDistributor && revenueDistributor != address(0)
+                ? revenueDistributor
+                : address(_TRSRY);
     }
 
     // ========== VIEW FUNCTIONS ========== //
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset is invalid.
+    ///      - A required module configuration for the asset is invalid.
     function validateAssetDependencies(address asset_) external view override {
         BurnerLoansView.validateAssetDependencies(asset_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset's custody configuration does not match `withdrawAsShares_`.
     function validateAssetWithdrawAsShares(
         address asset_,
         bool withdrawAsShares_
@@ -389,29 +533,16 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
-    /// @dev Reads facility-owned routing storage and does not perform live recipient validation.
-    function getYieldRepurchaseRecipient() external view override returns (address recipient) {
-        return _YIELD_ROUTING.repurchaseRecipient;
-    }
-
-    /// @inheritdoc IBurnerLoansView
     /// @dev Returns the append-only registry length maintained by `addAsset`.
     function getAssetCount() external view override returns (uint256 count) {
         return _ASSETS.length();
     }
 
     /// @inheritdoc IBurnerLoansView
-    /// @dev Reverts with OpenZeppelin's enumerable-set bounds error for an invalid index.
+    /// @dev Reverts if:
+    ///      - `index_` is outside the registered-asset set; OpenZeppelin supplies the bounds error.
     function getAssetAt(uint256 index_) external view override returns (address asset) {
         return _ASSETS.at(index_);
-    }
-
-    /// @inheritdoc IBurnerLoansView
-    /// @dev Returns an empty, all-zero route for an unregistered asset.
-    function getYieldAssetRouting(
-        address asset_
-    ) external view override returns (AssetYieldRouting memory routing) {
-        return BurnerLoansDependencies.getYieldAssetRouting(_YIELD_ROUTING, asset_);
     }
 
     /// @inheritdoc IBurnerLoansView
@@ -434,6 +565,8 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset has no compatible FLOAN market.
     function getPosition(
         address asset_,
         address borrower_
@@ -442,25 +575,37 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset has no compatible FLOAN market.
     function getActiveBorrowers(address asset_) external view override returns (address[] memory) {
         return _FLOAN.getActiveBorrowers(_marketId(asset_));
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset has no compatible FLOAN market.
+    ///      - Required price data is invalid.
     function isSeizable(address asset_, address borrower_) external view override returns (bool) {
         return BurnerLoansView.isBorrowerSeizable(asset_, _marketId(asset_), borrower_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or Kernel-inactive, or the asset or borrower set is invalid.
+    ///      - Required custody, backing, or price data is unavailable.
     function previewSeize(
         address asset_,
         address[] calldata borrowers_
     ) external view override returns (SeizePreview memory) {
         _requireEnabled();
+        _requirePolicyActive();
         return BurnerLoansSeizure.previewSeize(asset_, borrowers_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or the asset market is unavailable.
+    ///      - A scan parameter or required backing or price data is invalid.
     function getSeizableBorrowers(
         address asset_,
         uint256 startIndex_,
@@ -480,6 +625,9 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or the asset market or custody route is invalid.
+    ///      - The deposit amount cannot be credited.
     function previewDepositCollateral(
         address asset_,
         uint128 amount_,
@@ -496,6 +644,9 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or the asset market or custody route is invalid.
+    ///      - The withdrawal exceeds credited collateral or makes the position unhealthy.
     function previewWithdrawCollateral(
         address asset_,
         uint128 amount_,
@@ -512,17 +663,25 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or Kernel-inactive, or Inventory is disabled.
+    ///      - The asset market, position, requested amount, collateral, cap, or required price
+    ///        data is invalid.
     function previewBorrow(
         address asset_,
         uint128 ohmAmount_,
         address onBehalfOf_
     ) external view override returns (BorrowPreview memory) {
         _requireEnabled();
+        _requirePolicyActive();
         _requireInventoryActive(address(_INVENTORY));
         return BurnerLoansQuote.previewBorrow(asset_, ohmAmount_, _marketId(asset_), onBehalfOf_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or the asset or borrower debt is unavailable.
+    ///      - The requested repayment is invalid.
     function previewRepay(
         address asset_,
         uint128 repayOhm_,
@@ -533,16 +692,23 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or Kernel-inactive.
+    ///      - The asset market, borrower debt, requested term count, maturity, health, or required
+    ///        price data is invalid.
     function previewExtend(
         address asset_,
         address onBehalfOf_,
         uint16 termCount_
     ) external view override returns (ExtendPreview memory) {
         _requireEnabled();
+        _requirePolicyActive();
         return BurnerLoansQuote.previewExtend(asset_, termCount_, _marketId(asset_), onBehalfOf_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - Required configuration or price data is unavailable for nonzero debt.
     function positionHealthFactor(
         address asset_,
         uint256 collateral_,
@@ -552,9 +718,11 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
-    /// @dev Reverts if the market or borrower position is missing, either supplied price is zero,
-    ///      or required current configuration or backing is invalid. An existing zero-principal
-    ///      position returns max uint only after both supplied prices are validated.
+    /// @dev Reverts if:
+    ///      - The market or borrower position is missing.
+    ///      - Either supplied price is zero or required current configuration or backing is invalid.
+    ///      An existing zero-principal position returns max uint only after both supplied prices
+    ///      are validated.
     function positionHealthFactorAtPrice(
         address asset_,
         address borrower_,
@@ -572,16 +740,21 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
     }
 
     /// @inheritdoc IBurnerLoansView
-    /// @dev Reverts if Burner Loans is disabled, the asset is unregistered, custody is unsupported,
-    ///      or a solvent claim has an invalid live recipient route.
+    /// @dev Reverts if:
+    ///      - Burner Loans is disabled or Kernel-inactive, or the asset is not registered.
+    ///      - The configured custody route is unsupported or DepositManager cannot quote yield.
     function previewClaimYield(
         address asset_
     ) external view override returns (ClaimYieldPreview memory) {
         _requireEnabled();
-        return BurnerLoansCustody.previewClaimYield(_ASSETS, asset_, _YIELD_ROUTING);
+        _requirePolicyActive();
+        return BurnerLoansCustody.previewClaimYield(_ASSETS, asset_);
     }
 
     /// @inheritdoc IBurnerLoansView
+    /// @dev Reverts if:
+    ///      - The asset is not registered.
+    ///      - DepositManager cannot report its custody.
     function getAssetCollateralStatus(
         address asset_
     ) external view override returns (AssetCollateralStatus memory) {
@@ -608,6 +781,7 @@ contract BurnerLoans is BurnerLoansLifecycle, ReentrancyGuard, IBurnerLoansSeizu
                 priceCache: _PRICE_CACHE,
                 priceCacheMaxAge: _priceCacheMaxAge,
                 treasury: address(_TRSRY),
+                yieldRecipient: _yieldRecipient(),
                 roles: ROLES
             });
     }

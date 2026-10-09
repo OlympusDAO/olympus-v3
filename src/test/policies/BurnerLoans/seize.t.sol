@@ -17,6 +17,7 @@ import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositMana
 
 // Libraries
 import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {ReentrancyGuardTransient} from "@openzeppelin-5.7.0/utils/ReentrancyGuardTransient.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
@@ -24,10 +25,12 @@ import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.
 import {HEART_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
+import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
 import {BurnerLoansBorrowTestBase} from "./fixtures/BurnerLoansBorrowTestBase.sol";
 import {BurnerLoansSeizureTestBase} from "./fixtures/BurnerLoansSeizureTestBase.sol";
 import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
+import {ReentrantFeeToken} from "src/test/mocks/ReentrantFeeToken.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
@@ -35,6 +38,617 @@ import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
 // forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop,multi-contract-file)
 
 contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
+    function _setupSeizureOutput(
+        bool shareOutput_
+    )
+        internal
+        returns (address asset, address outputToken, IBurnerLoans.SeizePreview memory preview)
+    {
+        if (!shareOutput_) {
+            _makeUnhealthy(alice);
+            asset = address(usds);
+            outputToken = address(usds);
+        } else {
+            ShareSeizureState memory state = _createShareSeizureState(100e18);
+            asset = address(state.asset);
+            outputToken = address(state.vault);
+        }
+        preview = burnerLoans.previewSeize(asset, _single(alice));
+    }
+
+    // Scenarios: SEZ-C01, SEZ-C02, SEZ-C03
+    function test_givenSeizureRecipientCallback_outerDefaultExecutesOnce(
+        bool callbackKeeper_,
+        bool bubbleFailure_,
+        address caller_
+    ) public {
+        // The zero keeper is covered separately because standard ERC-20 transfers reject it.
+        vm.assume(caller_ != address(0));
+        vm.assume(caller_ != address(trsry));
+        vm.assume(caller_ != address(burnerLoans));
+        vm.assume(caller_ != address(usds));
+        vm.assume(caller_ != protocolSeizer);
+        vm.assume(caller_ != address(depositManager));
+        _makeUnhealthy(alice);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        address callbackRecipient = callbackKeeper_ ? caller_ : address(trsry);
+        uint256 callbackAmount = callbackKeeper_
+            ? preview.keeperReward
+            : preview.collateralToTreasury;
+        address otherRecipient = callbackKeeper_ ? address(trsry) : caller_;
+        uint256 otherAmount = callbackKeeper_ ? preview.collateralToTreasury : preview.keeperReward;
+        uint256 callbackRecipientBefore = usds.balanceOf(callbackRecipient);
+        uint256 otherRecipientBefore = usds.balanceOf(otherRecipient);
+        ReentrantFeeToken implementation = new ReentrantFeeToken();
+        vm.etch(address(usds), address(implementation).code);
+        ReentrantFeeToken liveToken = ReentrantFeeToken(address(usds));
+        liveToken.setCallbackFrom(
+            address(burnerLoans),
+            address(burnerLoans),
+            abi.encodeCall(burnerLoans.transferPendingPayout, (address(usds), callbackRecipient))
+        );
+        liveToken.setCallbackPhases(true, false);
+        liveToken.setCallbackTransferRecipient(callbackRecipient);
+        liveToken.setBubbleCallbackFailure(bubbleFailure_);
+
+        vm.prank(caller_);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "debt defaults exactly once");
+        assertEq(
+            liveToken.balanceOf(otherRecipient) - otherRecipientBefore,
+            otherAmount,
+            "unaffected recipient is paid once"
+        );
+        if (bubbleFailure_) {
+            assertEq(
+                liveToken.balanceOf(callbackRecipient),
+                callbackRecipientBefore,
+                "propagated callback moves no tokens"
+            );
+            assertEq(
+                burnerLoans.pendingPayout(address(usds), callbackRecipient),
+                callbackAmount,
+                "failed callback payout is deferred"
+            );
+            assertEq(
+                burnerLoans.totalPendingForTest(address(usds)),
+                callbackAmount,
+                "reserve retains only failed payout"
+            );
+        } else {
+            assertFalse(liveToken.callbackSucceeded(), "nested guarded call is rejected");
+            assertEq(
+                liveToken.callbackRevertSelector(),
+                ReentrancyGuardTransient.ReentrancyGuardReentrantCall.selector,
+                "nested retry reaches shared guard"
+            );
+            assertEq(
+                liveToken.balanceOf(callbackRecipient) - callbackRecipientBefore,
+                callbackAmount,
+                "caught callback recipient is paid once"
+            );
+            assertEq(
+                burnerLoans.pendingPayout(address(usds), callbackRecipient),
+                0,
+                "caught callback leaves no payout debt"
+            );
+        }
+    }
+
+    // given sendFeesToDistributor is true
+    //   given sendYieldToDistributor is true
+    //     when collateral is seized
+    //       [X] the keeper receives its reward
+    //       [X] Treasury receives the remainder instead of the distributor
+    // Scenarios: SEZ-P01
+    function test_givenSendFeesToDistributorIsTrue_givenSendYieldToDistributorIsTrue_sendsRemainderToTreasury(
+        bool sendFeesToDistributor_,
+        bool sendYieldToDistributor_
+    ) public {
+        _makeUnhealthy(alice);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(address(usds));
+        _setSendFeesToDistributor(sendFeesToDistributor_);
+        _setSendYieldToDistributor(sendYieldToDistributor_);
+
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(
+            usds.balanceOf(address(trsry)) - treasuryBefore,
+            preview.collateralToTreasury,
+            "all non-keeper seized collateral reaches Treasury"
+        );
+        assertEq(usds.balanceOf(address(distributor)), 0, "distributor receives no backing");
+        assertEq(usds.balanceOf(keeper), preview.keeperReward, "keeper receives its incentive");
+    }
+
+    // given sendFeesToDistributor is true
+    //   given sendYieldToDistributor is true
+    //     when the seized-token transfer to Treasury reverts
+    //       [X] Treasury's share remains pending
+    //       [X] the keeper receives its reward
+    // Scenarios: SEZ-T02
+    function test_givenSendFeesToDistributorIsTrue_givenSendYieldToDistributorIsTrue_whenTreasuryTransferReverts_recordsTreasuryObligation()
+        public
+    {
+        _makeUnhealthy(alice);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(address(usds));
+        _setSendFeesToDistributor(true);
+        _setSendYieldToDistributor(true);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(trsry)),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(trsry)),
+            preview.collateralToTreasury,
+            "remainder stays owed to Treasury"
+        );
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBefore,
+            "rejected Treasury receives no backing"
+        );
+        assertEq(usds.balanceOf(address(distributor)), 0, "distributor receives no backing");
+    }
+
+    // given the seized-token transfer to the keeper reverts
+    //   when the keeper seizes collateral
+    //     [X] the original keeper remains owed its reward
+    //     [X] Treasury receives its separate collateral allocation
+    // Scenarios: SEZ-T01
+    function test_givenKeeperRejectsCollateral_recordsKeeperReward() public {
+        _makeUnhealthy(alice);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, keeper),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(
+            usds.balanceOf(address(trsry)) - treasuryBefore,
+            preview.collateralToTreasury,
+            "Treasury receives its allocation"
+        );
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), keeper),
+            preview.keeperReward,
+            "keeper reward remains owed"
+        );
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(address(usds));
+        assertEq(recipients.length, 1, "one keeper recipient is discoverable");
+        assertEq(recipients[0], keeper, "original keeper is discoverable");
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(trsry)),
+            0,
+            "Treasury has no pending payout"
+        );
+        assertEq(
+            usds.balanceOf(address(burnerLoans)),
+            preview.keeperReward,
+            "facility holds only keeper reward"
+        );
+        assertEq(usds.balanceOf(keeper), 0, "rejected keeper receives no reward");
+    }
+
+    // given the seized-token transfer to Treasury reverts
+    //   when the keeper seizes collateral
+    //     [X] the keeper receives its reward and debt defaults
+    //     [X] Treasury's collateral remains pending
+    // Scenarios: SEZ-T02
+    function test_givenTreasuryRejectsCollateral_recordsSeizedCollateral() public {
+        _makeUnhealthy(alice);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        uint256 treasuryBefore = usds.balanceOf(address(trsry));
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(trsry)),
+            abi.encodeWithSignature("Error(string)", "blacklisted")
+        );
+
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(trsry)),
+            preview.collateralToTreasury,
+            "Treasury collateral remains owed"
+        );
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(address(usds));
+        assertEq(recipients.length, 1, "one remainder recipient is discoverable");
+        assertEq(recipients[0], address(trsry), "current Treasury is discoverable");
+        assertEq(
+            usds.balanceOf(address(burnerLoans)),
+            preview.collateralToTreasury,
+            "seized collateral remains in Burner Loans"
+        );
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "seizure still clears debt");
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBefore,
+            "rejected Treasury receives no collateral"
+        );
+    }
+
+    // Scenarios: SEZ-T06
+    function test_givenKeeperAndTreasuryRejectCollateral_recordsBothPayouts() public {
+        _makeUnhealthy(alice);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, keeper),
+            abi.encodeWithSignature("Error(string)", "keeper blocked")
+        );
+        vm.mockCallRevert(
+            address(usds),
+            abi.encodeWithSelector(usds.transfer.selector, address(trsry)),
+            abi.encodeWithSignature("Error(string)", "Treasury blocked")
+        );
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            address(usds),
+            keeper,
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
+        );
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            address(usds),
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(keeper);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), keeper),
+            preview.keeperReward,
+            "keeper reward remains owed"
+        );
+        assertEq(
+            burnerLoans.pendingPayout(address(usds), address(trsry)),
+            preview.collateralToTreasury,
+            "Treasury collateral remains owed"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(address(usds)),
+            preview.keeperReward + preview.collateralToTreasury,
+            "aggregate reserve equals both payouts"
+        );
+        assertEq(
+            usds.balanceOf(address(burnerLoans)),
+            preview.keeperReward + preview.collateralToTreasury,
+            "facility retains both payouts"
+        );
+        assertEq(
+            burnerLoans.getPendingPayoutRecipients(address(usds)).length,
+            2,
+            "both recipients remain discoverable"
+        );
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 1, "token remains indexed");
+        assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "debt still defaults");
+    }
+
+    // Scenarios: SEZ-T01
+    function test_givenKeeperTransferFails_seizureDefersExactRewardForEveryOutput(
+        bool shareOutput_,
+        address caller_
+    ) public {
+        (
+            address asset,
+            address outputToken,
+            IBurnerLoans.SeizePreview memory preview
+        ) = _setupSeizureOutput(shareOutput_);
+        vm.assume(caller_ != address(trsry));
+        vm.assume(caller_ != address(burnerLoans));
+        vm.assume(caller_ != outputToken);
+        vm.assume(caller_ != protocolSeizer);
+        vm.assume(caller_ != address(depositManager));
+        uint256 callerBefore = IERC20(outputToken).balanceOf(caller_);
+        uint256 treasuryBefore = IERC20(outputToken).balanceOf(address(trsry));
+        vm.mockCallRevert(
+            outputToken,
+            abi.encodeWithSelector(IERC20.transfer.selector, caller_, preview.keeperReward),
+            abi.encodeWithSignature("Error(string)", "keeper blocked")
+        );
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            outputToken,
+            caller_,
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
+        );
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            outputToken,
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(caller_);
+        burnerLoans.seize(asset, _single(alice));
+
+        assertEq(IERC20(outputToken).balanceOf(caller_), callerBefore, "keeper receives nothing");
+        assertEq(
+            IERC20(outputToken).balanceOf(address(trsry)) - treasuryBefore,
+            preview.collateralToTreasury,
+            "Treasury receives exact remainder"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(outputToken, caller_),
+            preview.keeperReward,
+            "exact keeper reward remains pending"
+        );
+        assertEq(burnerLoans.pendingSeizureForTest(outputToken), 0, "no seizure debt remains");
+        assertEq(
+            burnerLoans.totalPendingForTest(outputToken),
+            preview.keeperReward,
+            "aggregate reserve equals keeper reward"
+        );
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(outputToken);
+        assertEq(recipients.length, 1, "one recipient remains indexed");
+        assertEq(recipients[0], caller_, "original keeper remains indexed");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 1, "output token remains indexed");
+        assertEq(burnerLoans.getPosition(asset, alice).debtOhm, 0, "debt defaults");
+    }
+
+    // Scenarios: SEZ-T02
+    function test_givenTreasuryTransferFails_seizureDefersExactBackingForEveryOutput(
+        bool shareOutput_,
+        address caller_
+    ) public {
+        (
+            address asset,
+            address outputToken,
+            IBurnerLoans.SeizePreview memory preview
+        ) = _setupSeizureOutput(shareOutput_);
+        // The zero keeper is covered separately because this row requires a successful reward.
+        vm.assume(caller_ != address(0));
+        vm.assume(caller_ != address(trsry));
+        vm.assume(caller_ != address(burnerLoans));
+        vm.assume(caller_ != outputToken);
+        vm.assume(caller_ != protocolSeizer);
+        vm.assume(caller_ != address(depositManager));
+        uint256 callerBefore = IERC20(outputToken).balanceOf(caller_);
+        uint256 treasuryBefore = IERC20(outputToken).balanceOf(address(trsry));
+        vm.mockCallRevert(
+            outputToken,
+            abi.encodeWithSelector(
+                IERC20.transfer.selector,
+                address(trsry),
+                preview.collateralToTreasury
+            ),
+            abi.encodeWithSignature("Error(string)", "Treasury blocked")
+        );
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            outputToken,
+            caller_,
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
+        );
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            outputToken,
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(caller_);
+        burnerLoans.seize(asset, _single(alice));
+
+        assertEq(
+            IERC20(outputToken).balanceOf(caller_) - callerBefore,
+            preview.keeperReward,
+            "keeper receives exact reward"
+        );
+        assertEq(
+            IERC20(outputToken).balanceOf(address(trsry)),
+            treasuryBefore,
+            "Treasury receives nothing"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(outputToken),
+            preview.collateralToTreasury,
+            "exact seized backing remains pending"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(outputToken, caller_),
+            0,
+            "no keeper debt remains"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(outputToken),
+            preview.collateralToTreasury,
+            "aggregate reserve equals seized backing"
+        );
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(outputToken);
+        assertEq(recipients.length, 1, "one recipient remains indexed");
+        assertEq(recipients[0], address(trsry), "Treasury remains indexed");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 1, "output token remains indexed");
+        assertEq(burnerLoans.getPosition(asset, alice).debtOhm, 0, "debt defaults");
+    }
+
+    // Scenarios: SEZ-T06
+    function test_givenBothTransfersFail_seizureDefersBothOutputs(
+        bool shareOutput_,
+        address caller_
+    ) public {
+        (
+            address asset,
+            address outputToken,
+            IBurnerLoans.SeizePreview memory preview
+        ) = _setupSeizureOutput(shareOutput_);
+        vm.assume(caller_ != address(trsry));
+        vm.assume(caller_ != address(burnerLoans));
+        vm.assume(caller_ != outputToken);
+        vm.assume(caller_ != protocolSeizer);
+        vm.assume(caller_ != address(depositManager));
+        uint256 facilityBefore = IERC20(outputToken).balanceOf(address(burnerLoans));
+        uint256 callerBefore = IERC20(outputToken).balanceOf(caller_);
+        uint256 treasuryBefore = IERC20(outputToken).balanceOf(address(trsry));
+        vm.mockCallRevert(
+            outputToken,
+            abi.encodeWithSelector(IERC20.transfer.selector, caller_, preview.keeperReward),
+            abi.encodeWithSignature("Error(string)", "keeper blocked")
+        );
+        vm.mockCallRevert(
+            outputToken,
+            abi.encodeWithSelector(
+                IERC20.transfer.selector,
+                address(trsry),
+                preview.collateralToTreasury
+            ),
+            abi.encodeWithSignature("Error(string)", "Treasury blocked")
+        );
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            outputToken,
+            caller_,
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
+        );
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            outputToken,
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(caller_);
+        burnerLoans.seize(asset, _single(alice));
+
+        uint256 totalPayout = preview.keeperReward + preview.collateralToTreasury;
+        assertEq(IERC20(outputToken).balanceOf(caller_), callerBefore, "keeper receives nothing");
+        assertEq(
+            IERC20(outputToken).balanceOf(address(trsry)),
+            treasuryBefore,
+            "Treasury receives nothing"
+        );
+        assertEq(
+            IERC20(outputToken).balanceOf(address(burnerLoans)) - facilityBefore,
+            totalPayout,
+            "facility retains both payouts"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(outputToken, caller_),
+            preview.keeperReward,
+            "keeper debt retained"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(outputToken),
+            preview.collateralToTreasury,
+            "Treasury debt retained"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(outputToken),
+            totalPayout,
+            "full reserve retained"
+        );
+        assertEq(
+            burnerLoans.getPendingPayoutRecipients(outputToken).length,
+            2,
+            "both recipients indexed"
+        );
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 1, "output token indexed");
+        assertEq(burnerLoans.getPosition(asset, alice).debtOhm, 0, "debt defaults");
+    }
+
+    // Scenarios: SEZ-T07
+    function test_givenZeroAddressKeeper_seizureDefersUnsendableReward(bool shareOutput_) public {
+        (
+            address asset,
+            address outputToken,
+            IBurnerLoans.SeizePreview memory preview
+        ) = _setupSeizureOutput(shareOutput_);
+        uint256 facilityBefore = IERC20(outputToken).balanceOf(address(burnerLoans));
+        uint256 treasuryBefore = IERC20(outputToken).balanceOf(address(trsry));
+
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutDeferred(
+            outputToken,
+            address(0),
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
+        );
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            outputToken,
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(address(0));
+        burnerLoans.seize(asset, _single(alice));
+
+        assertEq(
+            IERC20(outputToken).balanceOf(address(trsry)) - treasuryBefore,
+            preview.collateralToTreasury,
+            "Treasury receives exact seized backing"
+        );
+        assertEq(
+            IERC20(outputToken).balanceOf(address(burnerLoans)) - facilityBefore,
+            preview.keeperReward,
+            "facility retains the zero keeper reward"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(outputToken, address(0)),
+            preview.keeperReward,
+            "zero keeper reward remains pending"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(outputToken),
+            0,
+            "Treasury payout is not deferred"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(outputToken),
+            preview.keeperReward,
+            "aggregate reserve equals zero keeper reward"
+        );
+        address[] memory recipients = burnerLoans.getPendingPayoutRecipients(outputToken);
+        assertEq(recipients.length, 1, "zero keeper is indexed");
+        assertEq(recipients[0], address(0), "zero keeper identity is retained");
+        assertEq(burnerLoans.getPosition(asset, alice).debtOhm, 0, "debt defaults");
+    }
+
     // keeper reward = 2,000e18 seized collateral * 1% = 20e18 share units because this
     // external share token has the same decimals and one-to-one conversion as the asset.
     uint256 internal constant _SAME_DECIMAL_KEEPER_REWARD = 20e18;
@@ -117,9 +731,12 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         _assertFloanPositionMatchesBurnerLoans(address(usds), alice);
     }
 
+    // given an unhealthy position
+    //   given an arbitrary non-protocol caller
+    //     when the caller seizes the position
+    //       [X] the caller receives the previewed reward and the debt clears
+    // Scenarios: SEZ-P01, SEZ-P02
     function test_givenUnhealthyPosition_whenCallerIsArbitrary(address caller_) public {
-        // A real transaction cannot originate from zero, and the OZ token rejects that payee.
-        vm.assume(caller_ != address(0));
         vm.assume(caller_ != protocolSeizer);
         vm.assume(caller_ != address(burnerLoans));
         _makeUnhealthy(alice);
@@ -140,7 +757,15 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 0, "debt cleared");
     }
 
-    function test_givenVaultYield_whenWithdrawAsShares_routesShareToken() public {
+    // given vault yield
+    //   given withdrawal as shares
+    //     when the keeper seizes the position
+    //       [X] the keeper and Treasury receive vault shares in the previewed amounts
+    // Scenarios: SEZ-P02
+    function test_givenVaultYield_whenWithdrawAsShares_routesShareToken(
+        bool sendFeesToDistributor_,
+        bool sendYieldToDistributor_
+    ) public {
         (MockERC20 asset, MockERC4626 vault) = _addVaultAssetForTest();
         uint128 collateral = 2_000e18;
         asset.mint(alice, collateral + 100e18);
@@ -161,6 +786,9 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         vm.prank(admin);
         burnerLoansConfig.setAssetWithdrawAsShares(address(asset), true);
         _makeVaultAsynchronous(vault);
+        RevenueDistributor distributor = _installRevenueDistributorForTest(address(vault));
+        _setSendFeesToDistributor(sendFeesToDistributor_);
+        _setSendYieldToDistributor(sendYieldToDistributor_);
 
         vm.prank(keeper);
         IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
@@ -186,11 +814,15 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(treasuryAmount, preview.collateralToTreasury, "Treasury output");
         assertEq(vault.balanceOf(keeper), keeperReward, "keeper share balance");
         assertEq(vault.balanceOf(address(trsry)), treasuryAmount, "Treasury share balance");
+        assertEq(vault.balanceOf(address(distributor)), 0, "distributor receives no seized shares");
         assertEq(asset.balanceOf(keeper), 0, "keeper underlying balance");
         assertEq(burnerLoans.getPosition(address(asset), alice).debtOhm, 0, "debt defaulted");
     }
 
-    function test_givenExternalShareTokenWithSameDecimals_whenSeizing_routesExternalToken() public {
+    // given an external share token with the same decimals as the underlying
+    //   when the keeper seizes the position
+    //     [X] the keeper and Treasury receive the external share token
+    function test_givenExternalShareTokenWithSameDecimals_routesExternalToken() public {
         (
             MockERC20 asset,
             MockERC7575Vault externalVault,
@@ -233,9 +865,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getPosition(address(asset), alice).debtOhm, 0, "debt defaulted");
     }
 
-    function test_givenExternalShareTokenWithDifferentDecimals_whenSeizing_routesExternalToken()
-        public
-    {
+    // given an external share token with fewer decimals than the underlying
+    //   when the keeper seizes the position
+    //     [X] the preview and payouts use correctly scaled external shares
+    function test_givenExternalShareTokenWithDifferentDecimals_routesExternalToken() public {
         (
             MockERC20 asset,
             MockERC7540ExternalShareVault vault,
@@ -289,9 +922,11 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(burnerLoans.getPosition(address(asset), alice).debtOhm, 0, "debt defaulted");
     }
 
-    function test_givenVaultYield_givenWithdrawAsShares_whenKeeperSeizes(
-        uint128 yieldSeed_
-    ) public {
+    // given vault yield
+    //   given withdrawal as shares
+    //     when the keeper seizes the position for a fuzzed yield amount
+    //       [X] preview and execution agree on the keeper and Treasury shares
+    function test_givenVaultYield_givenWithdrawAsShares(uint128 yieldSeed_) public {
         uint256 yieldAmount = bound(yieldSeed_, 1, 20_000e18);
         ShareSeizureState memory state = _createShareSeizureState(yieldAmount);
 
@@ -425,6 +1060,9 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         state.treasuryAssetsBefore = state.asset.balanceOf(address(trsry));
     }
 
+    // given an underlying redemption fee that leaves less than required backing
+    //   when the keeper seizes the position
+    //     [X] Treasury receives the actual output and the keeper receives no reward
     function test_givenUnderlyingRedemptionFee_seizureDoesNotPayRewardFromRequiredBacking() public {
         MockERC20 asset = new MockERC20("Fee Collateral", "fCOLL", _collateralDecimals());
         MutableRedeemFeeVault vault = new MutableRedeemFeeVault(ERC20(address(asset)));
@@ -492,6 +1130,10 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         assertEq(treasuryAmount, 1_800e18, "executed Treasury output");
     }
 
+    // given withdrawal as shares
+    //   given seizure output that rounds to zero
+    //     when the keeper seizes the position
+    //       [X] debt defaults and the remaining share is claimable as yield
     function test_givenWithdrawAsShares_givenSeizureRoundsToZero_defaultsDebtAndLeavesYield()
         public
     {
@@ -690,17 +1332,17 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
         _borrow(bob, 4_000e18, 100e9);
         _configurePrice(address(ohm), 20e18);
         uint256 activeDebtBefore = burnerLoans.totalActiveDebtOhm();
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_PositionNotSeizable.selector,
             bob
         );
 
         vm.prank(keeper);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewSeize(address(usds), _pair(alice, bob));
 
         vm.prank(keeper);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.seize(address(usds), _pair(alice, bob));
 
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "alice debt");
@@ -754,55 +1396,97 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     }
 
     // seize
-    // given collateral transfers report success without moving the withdrawn collateral
+    // given the admitted token reports successful payouts without moving the withdrawn collateral
     //  when seize is called
-    //   then the residual-balance guard reverts and rolls back all seizure state
-    function test_givenCollateralTransferLeavesResidualBalance_seizeRevertsAndRollsBack() public {
-        _makeUnhealthy(alice);
-        uint256 burnerLoansBalanceBefore = usds.balanceOf(address(burnerLoans));
-        uint256 keeperBalanceBefore = usds.balanceOf(keeper);
-        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+    //   then the default succeeds and the residual remains in Burner Loans custody
+    // Scenarios: SEZ-T03
+    function test_givenCollateralTransferLeavesResidualBalance_seizeStillDefaults(
+        bool shareOutput_,
+        address caller_
+    ) public {
+        (
+            address asset,
+            address outputToken,
+            IBurnerLoans.SeizePreview memory preview
+        ) = _setupSeizureOutput(shareOutput_);
+        vm.assume(caller_ != address(0));
+        vm.assume(caller_ != address(trsry));
+        vm.assume(caller_ != address(burnerLoans));
+        vm.assume(caller_ != outputToken);
+        vm.assume(caller_ != protocolSeizer);
+        vm.assume(caller_ != address(depositManager));
+        uint256 burnerLoansBalanceBefore = IERC20(outputToken).balanceOf(address(burnerLoans));
+        uint256 keeperBalanceBefore = IERC20(outputToken).balanceOf(caller_);
+        uint256 treasuryBalanceBefore = IERC20(outputToken).balanceOf(address(trsry));
         vm.mockCall(
-            address(usds),
-            abi.encodeCall(ERC20.transfer, (keeper, 20e18)),
+            outputToken,
+            abi.encodeCall(ERC20.transfer, (caller_, preview.keeperReward)),
             abi.encode(true)
         );
         vm.mockCall(
-            address(usds),
-            abi.encodeCall(ERC20.transfer, (address(trsry), 1_980e18)),
+            outputToken,
+            abi.encodeCall(ERC20.transfer, (address(trsry), preview.collateralToTreasury)),
             abi.encode(true)
         );
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_ResidualCollateralBalance.selector,
-                address(usds),
-                2_000e18
-            )
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            outputToken,
+            caller_,
+            IBurnerLoans.PayoutKind.SeizureReward,
+            preview.keeperReward
         );
-        vm.prank(keeper);
-        burnerLoans.seize(address(usds), _single(alice));
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit IBurnerLoans.PayoutTransferred(
+            outputToken,
+            address(trsry),
+            IBurnerLoans.PayoutKind.Seizure,
+            preview.collateralToTreasury
+        );
+        vm.prank(caller_);
+        burnerLoans.seize(asset, _single(alice));
 
-        IBurnerLoans.Position memory position = burnerLoans.getPosition(address(usds), alice);
-        assertEq(position.debtOhm, 100e9, "position debt rolled back");
-        assertEq(position.depositedCollateral, 2_000e18, "position collateral rolled back");
-        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt rolled back");
-        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "active set rolled back");
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(asset, alice);
+        assertEq(position.debtOhm, 0, "position debt is defaulted");
+        assertEq(position.depositedCollateral, 0, "position collateral is seized");
+        assertEq(burnerLoans.totalActiveDebtOhm(), 0, "active debt clears");
+        assertEq(burnerLoans.getActiveBorrowers(asset).length, 0, "active set clears");
         assertEq(
-            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),
-            0,
-            "defaulted principal rolled back"
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(asset)),
+            100e9,
+            "principal default is recorded"
         );
         assertEq(
-            usds.balanceOf(address(burnerLoans)),
-            burnerLoansBalanceBefore,
-            "Burner Loans balance rolled back"
+            IERC20(outputToken).balanceOf(address(burnerLoans)),
+            burnerLoansBalanceBefore + preview.keeperReward + preview.collateralToTreasury,
+            "unmoved collateral remains in Burner Loans"
         );
-        assertEq(usds.balanceOf(keeper), keeperBalanceBefore, "keeper balance rolled back");
         assertEq(
-            usds.balanceOf(address(trsry)),
+            IERC20(outputToken).balanceOf(caller_),
+            keeperBalanceBefore,
+            "keeper was not actually paid"
+        );
+        assertEq(
+            IERC20(outputToken).balanceOf(address(trsry)),
             treasuryBalanceBefore,
-            "treasury balance rolled back"
+            "Treasury was not actually paid"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(outputToken, caller_),
+            0,
+            "successful return clears keeper debt"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(outputToken),
+            0,
+            "successful return clears Treasury debt"
+        );
+        assertEq(burnerLoans.totalPendingForTest(outputToken), 0, "no aggregate payout debt");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "no payout token indexed");
+        assertEq(
+            burnerLoans.getPendingPayoutRecipients(outputToken).length,
+            0,
+            "no payout recipient indexed"
         );
     }
 
@@ -866,20 +1550,116 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     // given policy disabled
     //  when seize is called
     //   then it reverts
-    function test_givenPolicyDisabled_seizeReverts() public {
+    // Scenarios: SEZ-L02
+    function test_givenPolicyDisabled_seizeReverts(address caller_) public {
         _makeUnhealthy(alice);
-        vm.prank(emergency);
-        burnerLoans.disable(bytes(""));
+        _disableBurnerLoans(emergency);
 
-        vm.prank(keeper);
+        IBurnerLoans.Position memory positionBefore = burnerLoans.getPosition(address(usds), alice);
+        IBurnerLoans.AssetCollateralStatus memory custodyBefore = burnerLoans
+            .getAssetCollateralStatus(address(usds));
+        uint256 callerBalanceBefore = usds.balanceOf(caller_);
+        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+        uint256 facilityBalanceBefore = usds.balanceOf(address(burnerLoans));
+
+        vm.prank(caller_);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.recordLogs();
+        vm.prank(caller_);
+        vm.expectRevert(IEnabler.NotEnabled.selector);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        assertEq(vm.getRecordedLogs().length, 0, "reverted seizure commits no events");
+        IBurnerLoans.Position memory positionAfter = burnerLoans.getPosition(address(usds), alice);
+        assertEq(positionAfter.debtOhm, positionBefore.debtOhm, "position debt unchanged");
+        assertEq(
+            positionAfter.depositedCollateral,
+            positionBefore.depositedCollateral,
+            "position collateral unchanged"
+        );
+        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt unchanged");
+        assertEq(burnerLoans.getActiveBorrowers(address(usds)).length, 1, "active set unchanged");
+        assertEq(
+            floan.getMarketPrincipalDefaulted(burnerLoansConfig.marketId(address(usds))),
+            0,
+            "no principal defaulted"
+        );
+        IBurnerLoans.AssetCollateralStatus memory custodyAfter = burnerLoans
+            .getAssetCollateralStatus(address(usds));
+        assertEq(custodyAfter.shares, custodyBefore.shares, "custody shares unchanged");
+        assertEq(custodyAfter.assets, custodyBefore.assets, "custody assets unchanged");
+        assertEq(custodyAfter.liabilities, custodyBefore.liabilities, "liabilities unchanged");
+        assertEq(usds.balanceOf(caller_), callerBalanceBefore, "caller balance unchanged");
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBalanceBefore,
+            "Treasury balance unchanged"
+        );
+        assertEq(
+            usds.balanceOf(address(burnerLoans)),
+            facilityBalanceBefore,
+            "facility balance unchanged"
+        );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no pending payout");
+        assertEq(burnerLoans.getPendingPayoutTokens().length, 0, "no payout token indexed");
+    }
+
+    // Scenarios: SEZ-L01
+    function test_givenPolicyInactive_whenSeizureIsPreviewedOrExecuted_reverts(
+        address caller_
+    ) public {
+        _makeUnhealthy(alice);
+        IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
+            address(usds),
+            _single(alice)
+        );
+        IBurnerLoans.Position memory positionBefore = burnerLoans.getPosition(address(usds), alice);
+        uint256 callerBalanceBefore = usds.balanceOf(caller_);
+        uint256 treasuryBalanceBefore = usds.balanceOf(address(trsry));
+
+        _deactivatePolicy(address(burnerLoans));
+        bytes memory revertData = abi.encodeWithSelector(
+            IBurnerLoans.BurnerLoans_PolicyInactive.selector
+        );
+
+        vm.expectRevert(revertData);
+        burnerLoans.previewSeize(address(usds), _single(alice));
+
+        vm.prank(caller_);
+        vm.expectRevert(revertData);
+        burnerLoans.seize(address(usds), _single(alice));
+
+        IBurnerLoans.Position memory positionAfter = burnerLoans.getPosition(address(usds), alice);
+        assertGt(preview.seizedDebtOhm, 0, "fixture has seizable debt");
+        assertEq(positionAfter.debtOhm, positionBefore.debtOhm, "debt unchanged");
+        assertEq(
+            positionAfter.depositedCollateral,
+            positionBefore.depositedCollateral,
+            "collateral unchanged"
+        );
+        assertEq(usds.balanceOf(caller_), callerBalanceBefore, "keeper balance unchanged");
+        assertEq(
+            usds.balanceOf(address(trsry)),
+            treasuryBalanceBefore,
+            "Treasury balance unchanged"
+        );
+        assertEq(burnerLoans.totalPendingForTest(address(usds)), 0, "no payout pending");
+    }
+
+    // Scenarios: SEZ-L03
+    function test_givenDisabledAndPolicyInactive_seizeAndPreviewUseLocalGuard() public {
+        _makeUnhealthy(alice);
+        _disableBurnerLoans(emergency);
+        _deactivatePolicy(address(burnerLoans));
+
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.previewSeize(address(usds), _single(alice));
 
         vm.prank(keeper);
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.seize(address(usds), _single(alice));
-
-        assertEq(burnerLoans.totalActiveDebtOhm(), 100e9, "active debt unchanged");
     }
 
     // seize
@@ -904,8 +1684,7 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     //   then it still succeeds
     function test_givenAssetOriginationsDisabled_seizeStillSucceeds() public {
         _makeUnhealthy(alice);
-        vm.prank(admin);
-        burnerLoansConfig.setAssetOriginationsEnabled(address(usds), false);
+        _setAssetOriginationsEnabled(address(usds), false);
         vm.prank(keeper);
         IBurnerLoans.SeizePreview memory preview = burnerLoans.previewSeize(
             address(usds),
@@ -1044,15 +1823,15 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     //   then both revert
     function test_givenDuplicateBorrower_seizeReverts() public {
         _makeUnhealthy(alice);
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_DuplicateBorrower.selector,
             alice
         );
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewSeize(address(usds), _pair(alice, alice));
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.seize(address(usds), _pair(alice, alice));
     }
 
@@ -1074,15 +1853,15 @@ contract BurnerLoansSeizeTest is BurnerLoansSeizureTestBase {
     //   then both revert
     function test_givenHealthyPosition_seizeReverts() public {
         _borrow(alice, 2_000e18, 100e9);
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_PositionNotSeizable.selector,
             alice
         );
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewSeize(address(usds), _single(alice));
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.seize(address(usds), _single(alice));
     }
 
@@ -1244,8 +2023,7 @@ contract BurnerLoansGetSeizableBorrowersTest is BurnerLoansSeizureTestBase {
     //  when getSeizableBorrowers is called
     //   then it reverts
     function test_givenPolicyDisabled_getSeizableBorrowers_reverts() public {
-        vm.prank(emergency);
-        burnerLoans.disable(bytes(""));
+        _disableBurnerLoans(emergency);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.getSeizableBorrowers(address(usds), 0, 10, 10);

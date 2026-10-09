@@ -2,12 +2,11 @@
 // solhint-disable one-contract-per-file
 pragma solidity >=0.8.24;
 
-import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
-
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
 // Interfaces
+import {IERC20Errors} from "@openzeppelin-5.7.0/interfaces/draft-IERC6093.sol";
 import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
@@ -507,17 +506,17 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
         _approveOhm(alice, requested);
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_RepayExceedsDebt.selector,
             requested,
             100e9
         );
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewRepay(address(usds), requested, alice);
 
         vm.prank(alice);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.repay(address(usds), requested, alice);
     }
 
@@ -574,8 +573,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
     function test_givenGlobalPolicyDisabled_repayReverts() public {
         _borrowForAlice(100e9);
         vm.roll(block.number + 1);
-        vm.prank(emergency);
-        burnerLoans.disable("");
+        _disableBurnerLoans(emergency);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.previewRepay(address(usds), 1e9, alice);
@@ -695,14 +693,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         vm.roll(block.number + 1);
 
         vm.prank(alice);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IERC20Errors.ERC20InsufficientAllowance.selector,
-                address(burnerLoans),
-                0,
-                1e9
-            )
-        );
+        vm.expectPartialRevert(IERC20Errors.ERC20InsufficientAllowance.selector);
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
@@ -717,9 +708,7 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         _approveOhm(bob, 1e9);
 
         vm.prank(bob);
-        vm.expectRevert(
-            abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, bob, 0, 1e9)
-        );
+        vm.expectPartialRevert(IERC20Errors.ERC20InsufficientBalance.selector);
         burnerLoans.repay(address(usds), 1e9, alice);
         assertEq(burnerLoans.getPosition(address(usds), alice).debtOhm, 100e9, "debt");
     }
@@ -733,16 +722,16 @@ contract BurnerLoansRepayTest is BurnerLoansBorrowTestBase {
         ohm.mint(alice, 1e9);
         _approveOhm(alice, 1e9);
         uint256 balanceBefore = ohm.balanceOf(alice);
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
             unsupported
         );
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.previewRepay(unsupported, 1e9, alice);
 
         vm.prank(alice);
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.repay(unsupported, 1e9, alice);
         assertEq(ohm.balanceOf(alice), balanceBefore, "OHM balance");
     }

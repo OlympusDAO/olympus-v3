@@ -34,8 +34,7 @@ contract BurnerLoansSetBackingOracleTest is BurnerLoansTest {
     //  when setBackingOracle is called by admin
     //   then it reverts
     function test_givenDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.prank(admin);
         vm.expectRevert(IEnabler.NotEnabled.selector);

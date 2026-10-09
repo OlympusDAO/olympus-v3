@@ -79,9 +79,9 @@ Unchanged means balances, liabilities, route configuration, membership indexes a
 
 | ID | Caller | RDTask state | RD state/receipts | BL state | BL pending bucket | Expected result | Effects and events | Test |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| TASK-P06 | Heart with role retained | Active/enabled | Active/enabled; positive receipts | Independently active or inactive | Deferred fee | Task settles RD custody only; BL fee remains owed until explicit BL retry | No call to BL.transferPendingPayout; BL buckets/indexes unchanged by task; later retry delivers fee once | Deferred: BurnerLoans integration batch |
+| TASK-P06 | Heart with role retained | Active/enabled | Active/enabled; positive receipts | Independently active or inactive | Deferred fee | Task settles RD custody only; BL fee remains owed until explicit BL retry | No call to BL.transferPendingPayout; BL buckets/indexes unchanged by task; later retry delivers fee once | Covered: [test][test_givenBurnerLoansPendingFee_taskSettlesOnlyDistributorCustody] |
 
-The BurnerLoans separation test lands with the BurnerLoans routing integration batch.
+Existing [Heart/BL regression](../BurnerLoans/transferPendingPayout.t.sol#L1290) exercises BurnerLoansYieldClaimer and cannot establish RDTask behavior. RDT is the configuration timelock; RDTask is the Heart execution task.
 
 [test_whenCallerLacksHeartRole_revertsBeforeLifecycleChecks]: ./execute.t.sol#L58
 [test_givenTaskDisabled_executeDoesNotQueryDistributor]: ./execute.t.sol#L80
@@ -102,5 +102,5 @@ The BurnerLoans separation test lands with the BurnerLoans routing integration b
 [test_givenInsufficientSelfCallGas_executeEmitsFailureAndRollsBack]: ./execute.t.sol#L515
 [test_givenAssetCountGetterReverts_executeEmitsFailure]: ./execute.t.sol#L541
 [test_givenLaterAssetGetterReverts_executeRollsBackEarlierSettlement]: ./execute.t.sol#L559
-
+[test_givenBurnerLoansPendingFee_taskSettlesOnlyDistributorCustody]: ./executeBurnerLoansSeparation.t.sol#L16
 [test_givenIndexedLookupConsumesReserve_executePausesThenResumes]: ./execute.t.sol#L334

@@ -6,6 +6,37 @@ pragma solidity >=0.8.24;
 /// @dev This declarations-only interface keeps tuple types consistent without forcing lifecycle,
 ///      view, and configuration contracts to implement each other's selectors.
 interface IBurnerLoans {
+    /// @notice Source of a deferred token payout.
+    enum PayoutKind {
+        Fee,
+        Seizure,
+        SeizureReward
+    }
+
+    /// @notice A token transfer failed, leaving this amount owed by payout type.
+    /// @param token Token held by Burner Loans.
+    /// @param recipient Destination selected for the attempted payout.
+    /// @param kind Accounting bucket that remains owed.
+    /// @param amount Amount still owed in token units.
+    event PayoutDeferred(
+        address indexed token,
+        address indexed recipient,
+        PayoutKind indexed kind,
+        uint256 amount
+    );
+
+    /// @notice A payout was delivered to the current recipient selected for its type.
+    /// @param token Token transferred from Burner Loans.
+    /// @param recipient Destination that received the payout.
+    /// @param kind Accounting bucket cleared by the transfer.
+    /// @param amount Amount transferred in token units.
+    event PayoutTransferred(
+        address indexed token,
+        address indexed recipient,
+        PayoutKind indexed kind,
+        uint256 amount
+    );
+
     /// @notice A required address is zero.
     error BurnerLoans_ZeroAddress();
 
@@ -22,6 +53,23 @@ interface IBurnerLoans {
 
     /// @notice A supplied configuration parameter violates its required bounds.
     error BurnerLoans_InvalidParam();
+
+    /// @notice A dependency reports a Kernel different from Burner Loans' Kernel.
+    /// @param dependency Dependency that reports another Kernel.
+    /// @param expectedKernel Burner Loans' Kernel.
+    /// @param actualKernel Kernel reported by the dependency.
+    error BurnerLoans_DependencyKernelMismatch(
+        address dependency,
+        address expectedKernel,
+        address actualKernel
+    );
+
+    /// @notice A required dependency is not an active Kernel policy.
+    /// @param dependency Inactive dependency.
+    error BurnerLoans_DependencyNotActive(address dependency);
+
+    /// @notice A payout retry was attempted while Burner Loans is Kernel-inactive.
+    error BurnerLoans_PolicyInactive();
 
     /// @notice A basis-point value exceeds the permitted range.
     /// @param bps Invalid basis-point value.
@@ -48,10 +96,6 @@ interface IBurnerLoans {
     /// @param actualFacility Facility reported by the Inventory contract.
     error BurnerLoans_InventoryFacilityMismatch(address expectedFacility, address actualFacility);
 
-    /// @notice The supplied Burner Loans Inventory is not an active policy in Burner Loans' Kernel.
-    /// @param inventory Inactive Burner Loans Inventory address.
-    error BurnerLoans_InventoryNotActive(address inventory);
-
     /// @notice The supplied Burner Loans Inventory is globally disabled.
     /// @param inventory Disabled Burner Loans Inventory address.
     error BurnerLoans_InventoryNotEnabled(address inventory);
@@ -60,28 +104,22 @@ interface IBurnerLoans {
     /// @param backingOracle Invalid backing oracle address.
     error BurnerLoans_InvalidBackingOracle(address backingOracle);
 
-    /// @notice The configured DepositManager belongs to a different Kernel.
-    /// @param expectedKernel Kernel supplied to Burner Loans.
-    /// @param actualKernel Kernel reported by DepositManager.
-    error BurnerLoans_DepositManagerKernelMismatch(address expectedKernel, address actualKernel);
-
     /// @notice The supplied PriceCache does not implement the required interfaces.
     /// @param priceCache Invalid PriceCache address.
     error BurnerLoans_InvalidPriceCache(address priceCache);
+
+    /// @notice The proposed distributor is incompatible, belongs to another Kernel, inactive,
+    ///         or unconfigured.
+    error BurnerLoans_InvalidRevenueDistributor(address distributor);
+
+    /// @notice The distributor cannot be cleared while either send flag remains enabled.
+    error BurnerLoans_RevenueDistributorRequired();
 
     /// @notice The supplied PriceCache version is incompatible with Burner Loans.
     /// @param priceCache Incompatible PriceCache address.
     /// @param major Reported major version.
     /// @param minor Reported minor version.
     error BurnerLoans_UnsupportedPriceCacheVersion(address priceCache, uint8 major, uint8 minor);
-
-    /// @notice The supplied PriceCache belongs to a different Kernel.
-    /// @param expectedKernel Kernel governing Burner Loans.
-    /// @param actualKernel Kernel reported by PriceCache.
-    error BurnerLoans_PriceCacheKernelMismatch(address expectedKernel, address actualKernel);
-
-    /// @notice Thrown when a configured PriceCache is not an active Kernel policy at enablement.
-    error BurnerLoans_PriceCacheNotActive(address priceCache);
 
     /// @notice An operation was requested with a zero token amount.
     error BurnerLoans_ZeroAmount();
@@ -96,10 +134,6 @@ interface IBurnerLoans {
     /// @param requested Requested collateral credit, in collateral token decimals.
     /// @param available Available collateral credit, in collateral token decimals.
     error BurnerLoans_InsufficientCollateral(uint256 requested, uint256 available);
-
-    /// @notice A collateral withdrawal would leave the position below its required health factor.
-    /// @param healthFactor Resulting health factor, scaled by 1e18.
-    error BurnerLoans_UnhealthyWithdrawal(uint256 healthFactor);
 
     /// @notice The borrower has no collateral position for the asset.
     error BurnerLoans_NoCollateral();
@@ -131,8 +165,8 @@ interface IBurnerLoans {
     /// @param currentTimestamp Current block timestamp.
     error BurnerLoans_ExtensionMaturityNotFuture(uint256 requested, uint256 currentTimestamp);
 
-    /// @notice An operation requires a healthy position but the position is unhealthy.
-    /// @param healthFactor Current health factor, scaled by 1e18.
+    /// @notice An operation requires a healthy position but the current or resulting position is unhealthy.
+    /// @param healthFactor Current or resulting health factor, scaled by 1e18.
     error BurnerLoans_UnhealthyPosition(uint256 healthFactor);
 
     /// @notice A borrow would leave the position below its required health factor.
@@ -241,95 +275,6 @@ interface IBurnerLoans {
     /// @notice A yield-configuration mutation was not called by the bound Config policy.
     /// @param caller Unauthorized caller.
     error BurnerLoans_OnlyConfigurator(address caller);
-
-    /// @notice The proposed yield repurchase recipient is invalid.
-    /// @param recipient Rejected recipient.
-    error BurnerLoans_InvalidYieldRepurchaseRecipient(address recipient);
-
-    /// @notice The proposed yield repurchase recipient is not active in the facility Kernel.
-    /// @param recipient Inactive recipient.
-    error BurnerLoans_YieldRepurchaseRecipientNotActivePolicy(address recipient);
-
-    /// @notice The proposed yield repurchase recipient is globally disabled.
-    /// @param recipient Disabled recipient.
-    error BurnerLoans_YieldRepurchaseRecipientNotEnabled(address recipient);
-
-    /// @notice A direct-custody asset cannot route yield to the repurchase recipient.
-    /// @param asset Asset whose DepositManager configuration has no ERC4626 vault.
-    error BurnerLoans_YieldRepurchaseRecipientVaultRequired(address asset);
-
-    /// @notice The repurchase-recipient entry reports a vault different from DepositManager's vault.
-    /// @param expectedVault DepositManager vault used as the lookup key.
-    /// @param actualVault Vault returned by the recipient.
-    error BurnerLoans_YieldRepurchaseRecipientAssetVaultMismatch(
-        address expectedVault,
-        address actualVault
-    );
-
-    /// @notice The repurchase-recipient entry reports a different underlying collateral asset.
-    /// @param expectedAsset Collateral asset being configured.
-    /// @param actualAsset Underlying asset returned by the recipient.
-    error BurnerLoans_YieldRepurchaseRecipientAssetMismatch(
-        address expectedAsset,
-        address actualAsset
-    );
-
-    /// @notice The repurchase-recipient entry for an exact asset-vault pair is disabled.
-    /// @param recipient Yield repurchase recipient queried.
-    /// @param asset Collateral asset being configured.
-    /// @param vault DepositManager vault used as the lookup key.
-    error BurnerLoans_YieldRepurchaseRecipientAssetNotEnabled(
-        address recipient,
-        address asset,
-        address vault
-    );
-
-    /// @notice The global repurchase recipient cannot be cleared while active routes remain.
-    /// @param count Number of assets with nonzero repurchase-recipient BPS.
-    error BurnerLoans_YieldRepurchaseAllocationsActive(uint256 count);
-
-    /// @notice A route assigns yield to the repurchase recipient before one is configured.
-    error BurnerLoans_YieldRepurchaseRecipientNotConfigured();
-
-    /// @notice A direct allocation contains an invalid recipient address.
-    /// @param recipient Rejected direct recipient.
-    error BurnerLoans_InvalidDirectYieldRecipient(address recipient);
-
-    /// @notice A direct allocation contains zero BPS.
-    /// @param recipient Direct recipient whose BPS are invalid.
-    error BurnerLoans_InvalidDirectYieldAllocationBps(address recipient);
-
-    /// @notice A direct recipient appears more than once in an asset route.
-    /// @param recipient Duplicated direct recipient.
-    error BurnerLoans_DuplicateDirectYieldRecipient(address recipient);
-
-    /// @notice An asset route allocates more than 10,000 BPS outside Treasury.
-    /// @param totalBps Sum of repurchase-recipient and direct-allocation BPS.
-    error BurnerLoans_InvalidAssetYieldRoutingTotal(uint256 totalBps);
-
-    /// @notice One ordinary recipient and its share of an asset's claimed yield.
-    /// @param recipient Account that receives the configured direct share.
-    /// @param bps Direct share in basis points.
-    struct DirectYieldAllocation {
-        address recipient;
-        uint16 bps;
-    }
-
-    /// @notice Complete declarative routing for one collateral asset.
-    /// @param repurchaseRecipientBps Share routed to the global yield repurchase recipient.
-    /// @param directAllocations Ordered direct-recipient shares.
-    struct AssetYieldRouting {
-        uint16 repurchaseRecipientBps;
-        DirectYieldAllocation[] directAllocations;
-    }
-
-    /// @notice One realized destination and amount from a yield claim.
-    /// @param recipient Account that received the distributed yield.
-    /// @param amount Actual amount transferred, in the claim's output-token decimals.
-    struct YieldDistribution {
-        address recipient;
-        uint256 amount;
-    }
 
     /// @notice A borrower's collateral and debt position for one collateral asset.
     /// @param depositedCollateral Withdrawable collateral credit, in collateral token decimals.
@@ -472,11 +417,13 @@ interface IBurnerLoans {
     /// @param requestedAssetAmount Claimable yield requested from DepositManager, in underlying
     ///        collateral decimals.
     /// @param amountOut Amount expected from DepositManager, in `tokenOut` decimals.
+    /// @param recipient Destination selected by the current yield flag and distributor pointer.
     /// @param executable Whether the claim is executable under current state.
     struct ClaimYieldPreview {
         address tokenOut;
         uint256 requestedAssetAmount;
         uint256 amountOut;
+        address recipient;
         bool executable;
     }
 
@@ -558,18 +505,18 @@ interface IBurnerLoans {
     /// @param priceCache New PriceCache policy, or zero for direct PRICE mode.
     event PriceCacheSet(address indexed priceCache);
 
+    /// @notice Emitted when the revenue destination policy is changed.
+    event RevenueDistributorSet(address indexed distributor);
+
+    /// @notice Emitted when fee receipts are redirected to or from the distributor.
+    event SendFeesToDistributorSet(bool enabled);
+
+    /// @notice Emitted when claimed yield is redirected to or from the distributor.
+    event SendYieldToDistributorSet(bool enabled);
+
     /// @notice Emitted when the maximum accepted cached-price age changes.
     /// @param priceCacheMaxAge New maximum cached-price age, in seconds.
     event PriceCacheMaxAgeSet(uint48 priceCacheMaxAge);
-
-    /// @notice Emitted when the facility-wide yield repurchase recipient changes.
-    /// @param recipient New recipient, or zero after every repurchase allocation is cleared.
-    event YieldRepurchaseRecipientSet(address indexed recipient);
-
-    /// @notice Emitted when an asset's complete declarative yield route is replaced.
-    /// @param asset Collateral asset whose route changed.
-    /// @param routing Complete replacement route in stored order.
-    event YieldAssetRoutingSet(address indexed asset, AssetYieldRouting routing);
 
     /// @notice Emitted when Config registers a newly created collateral market.
     /// @param asset Collateral asset added to the append-only registry.
@@ -635,21 +582,6 @@ interface IBurnerLoans {
         address tokenOut,
         uint256 keeperReward,
         uint256 collateralToTreasury
-    );
-
-    /// @notice Emitted after custody yield is claimed and distributed atomically.
-    /// @param asset Collateral asset whose yield was claimed.
-    /// @param requestedAssetAmount Asset-denominated yield requested from DepositManager.
-    /// @param tokenOut Token returned by DepositManager.
-    /// @param amountOut Actual yield claimed, in `tokenOut` decimals.
-    /// @param distributions Ordered realized distributions: repurchase first when active, followed
-    ///        by direct recipients in configured order, with the Treasury fallback last.
-    event YieldClaimed(
-        address indexed asset,
-        uint256 requestedAssetAmount,
-        address indexed tokenOut,
-        uint256 amountOut,
-        YieldDistribution[] distributions
     );
 
     /// @notice Emitted when the canonical backing oracle changes.

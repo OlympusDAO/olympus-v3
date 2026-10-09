@@ -107,22 +107,22 @@ contract BurnerLoansPriceIntegrationTest is BurnerLoansPriceIntegrationTestBase 
         burnerLoans.borrow(address(usds), _BORROW_AMOUNT, alice, alice, borrowPreview.fee);
         IBurnerLoans.Position memory beforePosition = burnerLoans.getPosition(address(usds), alice);
         _ohmUsdFeed.setTimestamp(block.timestamp - _FEED_UPDATE_THRESHOLD - 1);
-        bytes memory error = abi.encodeWithSelector(
+        bytes memory revertData = abi.encodeWithSelector(
             IPRICEv2.PRICE_PriceZero.selector,
             address(ohm)
         );
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         vm.prank(alice);
         burnerLoans.withdrawCollateral(address(usds), 1e6, alice, alice);
 
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         vm.prank(alice);
         burnerLoans.extend(address(usds), alice, 1, type(uint256).max);
 
         address[] memory borrowers = new address[](1);
         borrowers[0] = alice;
-        vm.expectRevert(error);
+        vm.expectRevert(revertData);
         burnerLoans.seize(address(usds), borrowers);
 
         IBurnerLoans.Position memory afterPosition = burnerLoans.getPosition(address(usds), alice);

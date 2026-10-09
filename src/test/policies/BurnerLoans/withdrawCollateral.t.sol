@@ -169,7 +169,7 @@ abstract contract BurnerLoansWithdrawCollateralBoundaryTestBase is BurnerLoansTe
         vm.prank(alice);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_UnhealthyWithdrawal.selector,
+                IBurnerLoans.BurnerLoans_UnhealthyPosition.selector,
                 scenario.belowHealth
             )
         );
@@ -596,8 +596,7 @@ contract BurnerLoansWithdrawCollateralTest is BurnerLoansTest {
     // - Expected branch: withdrawal reverts because global disable blocks state changes
     function test_withdrawCollateral_givenGlobalDisabledAndZeroDebt_reverts() public {
         _depositForAlice(1e6);
-        vm.prank(emergency);
-        burnerLoans.disable("");
+        _disableBurnerLoans(emergency);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         burnerLoans.previewWithdrawCollateral(address(usds), 1e6, alice);

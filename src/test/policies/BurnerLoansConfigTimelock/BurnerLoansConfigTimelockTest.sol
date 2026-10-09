@@ -13,11 +13,10 @@ import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansCo
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
-import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
+import {BurnerLoansDistributorConfigTest} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansDistributorConfigTest.sol";
 import {BurnerLoansConfigTimelockHarness} from "src/test/policies/BurnerLoansConfigTimelock/fixtures/BurnerLoansConfigTimelockHarness.sol";
 
-abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
+abstract contract BurnerLoansConfigTimelockTest is BurnerLoansDistributorConfigTest {
     event AssetRiskConfigUpdateQueued(
         address indexed asset,
         IBurnerLoansConfigTimelock.AssetRiskConfigUpdate update,
@@ -91,6 +90,8 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         return configTimelock.queueBatch(actions);
     }
 
+    // Fixed boundary drivers intentionally invoke these assertions/setup once per scenario.
+    // forge-lint: disable-start(calls-loop)
     function _expectSingleActionQueued(
         uint64 actionId_,
         address proposer_,
@@ -119,6 +120,8 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
             expiresAt
         );
     }
+
+    // forge-lint: disable-end(calls-loop)
 
     function _expectSingleActionExecuted(
         uint64 actionId_,
@@ -230,6 +233,8 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         });
     }
 
+    // Fixed boundary drivers intentionally invoke these assertions/setup once per scenario.
+    // forge-lint: disable-start(calls-loop)
     function _queueMaximumLtvUpdate() internal returns (uint64 actionId) {
         (
             IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
@@ -239,55 +244,7 @@ abstract contract BurnerLoansConfigTimelockTest is BurnerLoansTest {
         vm.prank(burnerLoansAdmin);
         actionId = configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
     }
-
-    function _deployUsdsYieldRecipient() internal returns (MockYieldRepurchaseRecipient recipient) {
-        vm.startPrank(admin);
-        recipient = new MockYieldRepurchaseRecipient(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
-        vm.stopPrank();
-        recipient.setVaultConfig(address(usdsVault), address(usds), true);
-    }
-
-    function _treasuryOnlyRouting()
-        internal
-        pure
-        returns (IBurnerLoans.AssetYieldRouting memory routing)
-    {
-        return routing;
-    }
-
-    function _repurchaseRouting(
-        uint16 repurchaseRecipientBps_
-    ) internal pure returns (IBurnerLoans.AssetYieldRouting memory routing) {
-        routing.repurchaseRecipientBps = repurchaseRecipientBps_;
-    }
-
-    function _directRouting(
-        uint256 directAllocationCount_
-    ) internal pure returns (IBurnerLoans.AssetYieldRouting memory routing) {
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](
-            directAllocationCount_
-        );
-        for (uint256 i; i < directAllocationCount_; ++i) {
-            routing.directAllocations[i] = IBurnerLoans.DirectYieldAllocation({
-                recipient: address(uint160(10_000 + i)),
-                bps: 1_000
-            });
-        }
-    }
-
-    function _assertRepurchaseRouting(address asset_, uint16 expectedBps_) internal view {
-        IBurnerLoans.AssetYieldRouting memory routing = burnerLoans.getYieldAssetRouting(asset_);
-        assertEq(routing.repurchaseRecipientBps, expectedBps_, "repurchase recipient bps");
-        assertEq(routing.directAllocations.length, 0, "direct allocation count");
-    }
-
-    function _yieldAction(
-        bytes4 selector_,
-        bytes memory payload_
-    ) internal view returns (ITimelockBatchQueue.BatchAction memory) {
-        return _singleAction(selector_, payload_);
-    }
+    // forge-lint: disable-end(calls-loop)
 }
 // forge-lint: disable-end(unwrapped-modifier-logic,unsafe-typecast)
 

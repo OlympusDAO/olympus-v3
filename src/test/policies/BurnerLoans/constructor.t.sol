@@ -133,7 +133,8 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_DepositManagerKernelMismatch.selector,
+                IBurnerLoans.BurnerLoans_DependencyKernelMismatch.selector,
+                address(otherDepositManager),
                 address(kernel),
                 address(otherKernel)
             )
@@ -274,7 +275,8 @@ contract BurnerLoansConstructorTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch.selector,
+                IBurnerLoans.BurnerLoans_DependencyKernelMismatch.selector,
+                address(candidate),
                 address(kernel),
                 address(otherKernel)
             )

@@ -87,9 +87,11 @@ abstract contract BurnerLoansLifecycle is
     TRSRYv1 internal _TRSRY;
 
     /// @notice Initializes the facility's Kernel, OHM, custody, and optional cache dependencies.
-    /// @dev Reverts with `BurnerLoans_ZeroAddress` for a zero token or DepositManager,
-    ///      `BurnerLoans_InvalidDepositManager` for an incompatible DepositManager, or
-    ///      `BurnerLoans_DepositManagerKernelMismatch` when it belongs to another Kernel.
+    /// @dev Reverts if:
+    ///      - The OHM token or DepositManager address is zero.
+    ///      - The DepositManager does not implement the required interfaces.
+    ///      - The DepositManager belongs to a different Kernel.
+    ///      - The optional PriceCache is incompatible or belongs to a different Kernel.
     /// @param kernel_ Kernel governing this policy.
     /// @param ohm_ OHM debt token used by the facility.
     /// @param depositManager_ DepositManager that custodies collateral.
@@ -112,7 +114,11 @@ abstract contract BurnerLoansLifecycle is
         }
         address depositManagerKernel = address(Policy(address(depositManager_)).kernel());
         if (depositManagerKernel != address(kernel_)) {
-            revert BurnerLoans_DepositManagerKernelMismatch(address(kernel_), depositManagerKernel);
+            revert BurnerLoans_DependencyKernelMismatch(
+                address(depositManager_),
+                address(kernel_),
+                depositManagerKernel
+            );
         }
         _OHM = ohm_;
         _OHM_DECIMALS = ohm_.decimals();
@@ -177,7 +183,7 @@ abstract contract BurnerLoansLifecycle is
     /// @dev Reverts unless the configured Burner Loans Inventory is an active policy.
     function _requireInventoryActive(address inventory_) internal view {
         if (!kernel.isPolicyActive(Policy(inventory_))) {
-            revert BurnerLoans_InventoryNotActive(inventory_);
+            revert BurnerLoans_DependencyNotActive(inventory_);
         }
     }
 

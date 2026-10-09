@@ -24,7 +24,8 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
     // given interface ids are expected for BurnerLoans
     //  when supportsInterface is called
     //   then supported ids return true and unrelated ids return false
-    function test_supportsInterface_givenSupportedInterfaces_returnsTrue() public view {
+    function test_supportsInterface_givenSupportedInterfaces_returnsTrue(address caller_) public {
+        vm.startPrank(caller_);
         assertTrue(burnerLoans.supportsInterface(type(IERC165).interfaceId), "IERC165");
         assertTrue(burnerLoans.supportsInterface(type(IEnabler).interfaceId), "IEnabler");
         assertTrue(burnerLoans.supportsInterface(type(IEnablerV2).interfaceId), "IEnablerV2");
@@ -52,6 +53,7 @@ contract BurnerLoansSupportsInterfaceTest is BurnerLoansTest {
             burnerLoans.supportsInterface(type(ITimelockBatchQueue).interfaceId),
             "BurnerLoans ITimelockBatchQueue"
         );
+        vm.stopPrank();
     }
 
     function test_givenUpdatedViewInterface_whenQueried_advertisesNewSelectorSet() public view {

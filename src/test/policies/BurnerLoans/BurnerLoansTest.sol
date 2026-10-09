@@ -9,7 +9,7 @@ pragma solidity >=0.8.24;
 // Test helpers update expected-model state after successful calls to controlled fixtures.
 // forge-lint: disable-start(unwrapped-modifier-logic,unused-return,calls-loop,reentrancy-no-eth)
 
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
@@ -33,12 +33,16 @@ import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
 import {DepositManager} from "src/policies/deposits/DepositManager.sol";
 import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
+import {RevenueDistributorConfigTimelock} from "src/policies/RevenueDistributorConfigTimelock.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
@@ -172,6 +176,143 @@ abstract contract BurnerLoansTest is Test {
         burnerLoans.enable("");
 
         vm.stopPrank();
+    }
+
+    /// @notice Asserts each pending liability and their aggregate for a single-keeper fixture.
+    function _assertPendingPayouts(
+        address token_,
+        address keeper_,
+        uint256 expectedFee_,
+        uint256 expectedSeizure_,
+        uint256 expectedSeizureReward_
+    ) internal view {
+        assertEq(
+            burnerLoans.pendingFeeForTest(token_),
+            expectedFee_,
+            "pending fee matches expected balance"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(token_),
+            expectedSeizure_,
+            "pending seizure matches expected balance"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(token_, keeper_),
+            expectedSeizureReward_,
+            "pending seizure reward matches expected balance"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(token_),
+            expectedFee_ + expectedSeizure_ + expectedSeizureReward_,
+            "aggregate pending matches expected balance"
+        );
+    }
+
+    /// @notice Installs a Treasury-only distributor for the exact output tokens under test.
+    function _installRevenueDistributorForTest(
+        address[] memory tokens_
+    ) internal returns (RevenueDistributor distributor) {
+        vm.startPrank(admin);
+        distributor = new RevenueDistributor(kernel);
+        RevenueDistributorConfigTimelock timelock = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        distributor.enable("");
+        timelock.enable("");
+        distributor.setConfigOperator(address(timelock));
+        vm.stopPrank();
+
+        IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
+        for (uint256 i; i < tokens_.length; ++i) {
+            vm.prank(address(timelock));
+            distributor.setAssetRoutes(tokens_[i], 0, routes);
+        }
+        vm.prank(admin);
+        burnerLoans.setRevenueDistributor(address(distributor));
+    }
+
+    function _installRevenueDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        address[] memory tokens = new address[](1);
+        tokens[0] = token_;
+        return _installRevenueDistributorForTest(tokens);
+    }
+
+    function _installFeeDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        distributor = _installRevenueDistributorForTest(token_);
+        _setSendFeesToDistributor(true);
+    }
+
+    function _installYieldDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        distributor = _installRevenueDistributorForTest(token_);
+        _setSendYieldToDistributor(true);
+    }
+
+    function _configureFeeRecipientForTest(
+        bool sendToDistributor_,
+        address token_
+    ) internal returns (address recipient) {
+        if (!sendToDistributor_) return address(trsry);
+        return address(_installFeeDistributorForTest(token_));
+    }
+
+    function _configureYieldRecipientForTest(
+        bool sendToDistributor_,
+        address token_
+    ) internal returns (address recipient) {
+        if (!sendToDistributor_) return address(trsry);
+        return address(_installYieldDistributorForTest(token_));
+    }
+
+    function _setSendFeesToDistributor(bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setSendFeesToDistributor(enabled_);
+    }
+
+    function _setSendYieldToDistributor(bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setSendYieldToDistributor(enabled_);
+    }
+
+    function _setAssetOriginationsEnabled(address asset_, bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(asset_, enabled_);
+    }
+
+    function _activatePolicy(address policy_) internal {
+        vm.prank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, policy_);
+    }
+
+    function _deactivatePolicy(address policy_) internal {
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, policy_);
+    }
+
+    function _deactivatePolicyIf(address policy_, bool deactivate_) internal {
+        if (deactivate_) _deactivatePolicy(policy_);
+    }
+
+    function _disableBurnerLoans(address caller_) internal {
+        vm.prank(caller_);
+        burnerLoans.disable("");
+    }
+
+    function _disableBurnerLoansIf(bool disabled_) internal {
+        if (disabled_) _disableBurnerLoans(admin);
+    }
+
+    function _enableBurnerLoans(address caller_) internal {
+        vm.prank(caller_);
+        burnerLoans.enable("");
     }
 
     function _defaultAssetDebtCap() internal pure returns (uint128) {

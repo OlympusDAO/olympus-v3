@@ -19,6 +19,7 @@ import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositMana
 import {IReceiptTokenManager} from "src/policies/interfaces/deposits/IReceiptTokenManager.sol";
 
 contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
+    error MockDepositManager_CallbackFailed();
     error MockDepositManager_TransferFailed();
 
     Kernel public kernel;
@@ -40,6 +41,8 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
     address public claimYieldCallbackTarget;
     bytes public claimYieldCallbackData;
     bool public claimYieldCallbackSucceeded;
+    bool public claimYieldBubbleCallbackFailure;
+    bytes4 public claimYieldCallbackRevertSelector;
 
     mapping(IERC20 asset => AssetConfiguration config) internal _assetConfigurations;
     mapping(bytes32 operatorKey => uint256 shares) internal _operatorShares;
@@ -226,14 +229,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         tokenOut = getAssetWithdrawalToken(asset_, withdrawAsShares_);
         if (withdrawAsShares_) {
             claimYieldCalls++;
-            if (claimYieldCallbackTarget != address(0)) {
-                // The fixture records callback failure without reverting the claim.
-                // forge-lint: disable-start(low-level-calls)
-                (claimYieldCallbackSucceeded, ) = claimYieldCallbackTarget.call(
-                    claimYieldCallbackData
-                );
-                // forge-lint: disable-end(low-level-calls)
-            }
+            _invokeClaimYieldCallback();
             uint256 actualAssetAmount = amount_ > claimableYield ? claimableYield : amount_;
             if (claimActualAmountOverrideEnabled && actualAssetAmount > claimActualAmountOverride) {
                 actualAssetAmount = claimActualAmountOverride;
@@ -257,11 +253,7 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         uint256 amount_
     ) internal returns (uint256 actualAmount) {
         claimYieldCalls++;
-        if (claimYieldCallbackTarget != address(0)) {
-            // The fixture records callback failure without reverting the claim.
-            // forge-lint: disable-next-line(low-level-calls)
-            (claimYieldCallbackSucceeded, ) = claimYieldCallbackTarget.call(claimYieldCallbackData);
-        }
+        _invokeClaimYieldCallback();
 
         actualAmount = amount_ > claimableYield ? claimableYield : amount_;
         if (claimActualAmountOverrideEnabled && actualAmount > claimActualAmountOverride) {
@@ -270,6 +262,27 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
         claimableYield -= actualAmount;
         if (!asset_.transfer(recipient_, actualAmount)) {
             revert MockDepositManager_TransferFailed();
+        }
+    }
+
+    function _invokeClaimYieldCallback() internal {
+        if (claimYieldCallbackTarget != address(0)) {
+            // The fixture records callback failure without reverting the claim.
+            bytes memory callbackReturnData;
+            // A low-level call is required to observe a nested revert without immediately bubbling.
+            // forge-lint: disable-start(low-level-calls)
+            (claimYieldCallbackSucceeded, callbackReturnData) = claimYieldCallbackTarget.call(
+                claimYieldCallbackData
+            );
+            // forge-lint: disable-end(low-level-calls)
+            if (!claimYieldCallbackSucceeded && callbackReturnData.length >= 4) {
+                // The length check proves the selector exists; trailing revert data is ignored.
+                // forge-lint: disable-next-line(unsafe-typecast)
+                claimYieldCallbackRevertSelector = bytes4(callbackReturnData);
+            }
+            if (!claimYieldCallbackSucceeded && claimYieldBubbleCallbackFailure) {
+                revert MockDepositManager_CallbackFailed();
+            }
         }
     }
 
@@ -707,6 +720,10 @@ contract MockDepositManager is IDepositManagerV1_1, IAssetManagerV1_1, IERC165 {
     function setClaimYieldCallback(address target_, bytes calldata data_) external {
         claimYieldCallbackTarget = target_;
         claimYieldCallbackData = data_;
+    }
+
+    function setClaimYieldBubbleCallbackFailure(bool enabled_) external {
+        claimYieldBubbleCallbackFailure = enabled_;
     }
 
     function _requireConfiguredPeriod(

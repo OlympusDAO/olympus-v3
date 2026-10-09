@@ -1,17 +1,18 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
+// Interfaces
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Contracts
+import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
+
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // Reverting queue calls intentionally leave their return values unused.
 // forge-lint: disable-start(literal-instead-of-constant,unused-return)
-
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
-import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
-import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-
-import {BurnerLoansConfigTimelockConfigGuardsTest} from "./BurnerLoansConfigTimelockConfigGuardsTest.sol";
 
 contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is
     BurnerLoansConfigTimelockConfigGuardsTest
@@ -22,9 +23,7 @@ contract BurnerLoansConfigTimelockQueueSetPriceCacheMaxAgeTest is
         vm.assume(caller_ != admin);
         vm.assume(caller_ != burnerLoansAdmin);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BURNER_LOANS_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         configTimelock.queueSetPriceCacheMaxAge(1);
     }

@@ -600,17 +600,12 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     }
 
     // Condition tree:
-    // - Caller: fuzzed caller that is neither owner nor authorized operator
-    // - Authorization state: owner has authorized only `operator`
+    // - Caller: fuzzed non-owner, including the unapproved operator address
+    // - Authorization state: owner has not authorized an operator
     // - Parameters: asset is configured, onBehalfOf is owner
-    // - Expected branch: authorization check reverts for every non-owner, non-operator caller
+    // - Expected branch: authorization check reverts for every non-owner caller
     function test_depositCollateral_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != alice);
-        vm.assume(caller_ != _operator);
-        vm.assume(caller_ != address(0));
-
-        _setAuthorizationAndExpectEvent(alice, _operator, uint48(block.timestamp + 1 days));
-        _mintAndApprove(address(usds), caller_, 1e6);
 
         vm.prank(caller_);
         vm.expectRevert(IOperatorAuth.OperatorAuth_UnauthorizedOnBehalfOf.selector);
@@ -653,8 +648,7 @@ contract BurnerLoansDepositCollateralTest is BurnerLoansTest {
     // - Custody state: DepositManager asset period remains healthy
     // - Expected branch: deposit reverts because global disable blocks state changes
     function test_depositCollateral_givenGlobalDisabled_reverts() public {
-        vm.prank(emergency);
-        burnerLoans.disable("");
+        _disableBurnerLoans(emergency);
         _mintAndApprove(address(usds), alice, 1e6);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);

@@ -18,10 +18,6 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
     bytes32 internal constant _RISK_DOMAIN = keccak256("BURNER_LOANS_RISK_CONFIG");
     bytes32 internal constant _DEBT_CAP_DOMAIN = keccak256("BURNER_LOANS_DEBT_CAP");
     bytes32 internal constant _ORIGINATIONS_DOMAIN = keccak256("BURNER_LOANS_ASSET_ORIGINATIONS");
-    bytes32 internal constant _YIELD_REPURCHASE_RECIPIENT_DOMAIN =
-        keccak256("BURNER_LOANS_YIELD_REPURCHASE_RECIPIENT");
-    bytes32 internal constant _YIELD_ASSET_ROUTING_DOMAIN =
-        keccak256("BURNER_LOANS_YIELD_ASSET_ROUTING");
     bytes32 internal constant _PRICE_CACHE_MAX_AGE_DOMAIN =
         keccak256("BURNER_LOANS_PRICE_CACHE_MAX_AGE");
 
@@ -92,50 +88,9 @@ abstract contract BurnerLoansConfigTimelockConfigGuardsTest is BurnerLoansConfig
         return keccak256(abi.encode(address(burnerLoansConfig), localKey));
     }
 
-    function _scopedYieldRepurchaseRecipientKey() internal view returns (bytes32 key) {
-        bytes32 localKey = keccak256(abi.encode(_YIELD_REPURCHASE_RECIPIENT_DOMAIN));
-        return keccak256(abi.encode(address(burnerLoansConfig), localKey));
-    }
-
-    function _scopedYieldAssetRoutingKey(address asset_) internal view returns (bytes32 key) {
-        bytes32 localKey = keccak256(abi.encode(_YIELD_ASSET_ROUTING_DOMAIN, asset_));
-        return keccak256(abi.encode(address(burnerLoansConfig), localKey));
-    }
-
     function _scopedPriceCacheMaxAgeKey() internal view returns (bytes32 key) {
         bytes32 localKey = keccak256(abi.encode(_PRICE_CACHE_MAX_AGE_DOMAIN));
         return keccak256(abi.encode(address(burnerLoansConfig), localKey));
-    }
-
-    function _yieldRoutingStateHash() internal view returns (bytes32 stateHash) {
-        bytes32 routesHash;
-        uint256 assetCount = burnerLoans.getAssetCount();
-        for (uint256 i; i < assetCount; ++i) {
-            address asset = burnerLoans.getAssetAt(i);
-            routesHash = keccak256(
-                abi.encode(routesHash, asset, burnerLoans.getYieldAssetRouting(asset))
-            );
-        }
-        return
-            keccak256(
-                abi.encode(
-                    address(burnerLoans),
-                    burnerLoans.getYieldRepurchaseRecipient(),
-                    routesHash
-                )
-            );
-    }
-
-    function _yieldAssetRoutingStateHash(address asset_) internal view returns (bytes32 stateHash) {
-        return
-            keccak256(
-                abi.encode(
-                    address(burnerLoans),
-                    burnerLoans.getYieldRepurchaseRecipient(),
-                    asset_,
-                    burnerLoans.getYieldAssetRouting(asset_)
-                )
-            );
     }
 
     function _feeUpdate(

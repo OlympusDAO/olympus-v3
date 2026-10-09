@@ -6,7 +6,7 @@ pragma solidity >=0.8.24;
 
 // Libraries
 import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
-import {Vm} from "forge-std/Vm.sol";
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 // Interfaces
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -39,14 +39,12 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         uint256 marketPrincipalDefaulted;
         uint256 facilityPrincipalDue;
         bytes32 assetRegistryHash;
-        bytes32 yieldRoutingHash;
         address inventoryConfigurator;
         bytes32 tokenBalancesHash;
     }
 
     function test_givenZeroAddress_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -89,8 +87,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     function test_givenCurrentConfigurator_whenSameAddress() public {
         _addDefaultUsdsAsset();
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.expectEmit(true, false, false, true, address(burnerLoans));
         emit IBurnerLoans.ConfiguratorSet(address(burnerLoansConfig));
@@ -167,8 +164,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         uint32 secondMarketId = burnerLoansConfig.marketId(secondAsset);
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectEmit(true, true, true, true, address(floan));
         emit IFLOANv1.MarketManagerSet(
             firstMarketId,
@@ -200,8 +196,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         _setMarketFacilityForTest(marketId, makeAddr("differentFacility"));
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_AssetNotConfigured.selector,
@@ -235,8 +230,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         _setMarketManagerForTest(secondMarketId, unexpectedManager);
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_MarketManagerMismatch.selector,
@@ -264,8 +258,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         _setMarketManagerForTest(marketId, unexpectedManager);
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_MarketManagerMismatch.selector,
@@ -287,8 +280,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
         _setMarketManagerForTest(marketId, address(replacement));
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_MarketManagerMismatch.selector,
@@ -313,8 +305,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         _setMarketManagerForTest(secondMarketId, unexpectedManager);
         BurnerLoansConfig replacement = _activateReplacementConfigurator();
 
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IBurnerLoans.BurnerLoans_MarketManagerMismatch.selector,
@@ -358,17 +349,9 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         assertEq(burnerLoans.configurator(), address(burnerLoansConfig), "configurator rollback");
     }
 
-    function test_givenPositionAndRouting_whenCompatibleReplacement_preservesState() public {
+    function test_givenPosition_whenCompatibleReplacement_preservesState() public {
         _addDefaultUsdsAsset();
         uint32 marketId = burnerLoansConfig.marketId(address(usds));
-        IBurnerLoans.AssetYieldRouting memory routing;
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](1);
-        routing.directAllocations[0] = IBurnerLoans.DirectYieldAllocation({
-            recipient: makeAddr("directRecipient"),
-            bps: 1_000
-        });
-        vm.prank(admin);
-        burnerLoansConfig.setYieldAssetRouting(address(usds), routing);
 
         burnerLoans.setPositionForTest(
             address(usds),
@@ -447,8 +430,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     }
 
     function test_givenActiveConfiguratorReportsDifferentKernel_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.mockCall(
             address(burnerLoansConfig),
             abi.encodeWithSignature("kernel()"),
@@ -466,8 +448,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     }
 
     function test_givenActiveConfiguratorKernelCallReverts_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.mockCallRevert(
             address(burnerLoansConfig),
             abi.encodeWithSignature("kernel()"),
@@ -492,8 +473,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
 
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin);
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
@@ -523,8 +503,7 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
     }
 
     function _setConfigurator(BurnerLoansConfig replacement_) internal {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.prank(admin);
         burnerLoans.setConfigurator(address(replacement_));
     }
@@ -553,9 +532,6 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         );
         snapshot.assetRegistryHash = keccak256(
             abi.encode(burnerLoans.getAssetCount(), burnerLoans.getAssetAt(0))
-        );
-        snapshot.yieldRoutingHash = keccak256(
-            abi.encode(burnerLoans.getYieldAssetRouting(address(usds)))
         );
         snapshot.inventoryConfigurator = inventory.configurator();
         snapshot.tokenBalancesHash = keccak256(
@@ -588,7 +564,6 @@ contract BurnerLoansSetConfiguratorTest is BurnerLoansTest {
         );
         assertEq(after_.facilityPrincipalDue, before_.facilityPrincipalDue, "facility principal");
         assertEq(after_.assetRegistryHash, before_.assetRegistryHash, "asset registry");
-        assertEq(after_.yieldRoutingHash, before_.yieldRoutingHash, "yield routing");
         assertEq(
             after_.inventoryConfigurator,
             before_.inventoryConfigurator,

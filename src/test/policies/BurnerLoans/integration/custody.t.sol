@@ -4,16 +4,12 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
-import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
-import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansClaimYieldTestBase.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // Test loops call assertions, cheatcodes, or fixtures over bounded collections.
@@ -285,11 +281,6 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
     //  when yield is claimed and all credited collateral is withdrawn
     //   then accounting reconciles and BurnerLoans retains no underlying or vault shares
     function test_depositClaimWithdraw_reconcilesCustodyWithoutPolicyResiduals() public {
-        MockYieldRepurchaseRecipient recipient = _configureYieldRouting(
-            address(vaultAsset),
-            address(vault),
-            7_000
-        );
         _depositCollateral();
         IBurnerLoans.AssetCollateralStatus memory depositedStatus = burnerLoans
             .getAssetCollateralStatus(address(vaultAsset));
@@ -299,22 +290,18 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         assertEq(vault.balanceOf(address(burnerLoans)), 0, "deposit vault residual");
 
         _addYield(10e6);
-        uint256 recipientBefore = vaultAsset.balanceOf(address(recipient));
         uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
         uint128 activePrincipalBefore = inventory.activePrincipalOhm();
         uint256 capacityBefore = inventory.availableCapacity();
         uint256 inventoryOhmBefore = ohm.balanceOf(address(inventory));
         uint256 mintApprovalBefore = mintr.mintApproval(address(inventory));
         burnerLoans.claimYield(address(vaultAsset));
-        uint256 recipientIncrease = vaultAsset.balanceOf(address(recipient)) - recipientBefore;
         uint256 treasuryIncrease = vaultAsset.balanceOf(address(trsry)) - treasuryBefore;
-        uint256 claimed = recipientIncrease + treasuryIncrease;
+        uint256 claimed = treasuryIncrease;
         // A 100e6 deposit plus 10e6 yield loses two native units across the vault share
         // conversion and withdrawal round-downs, so the exact executable claim is 9_999_998.
         assertEq(claimed, 9_999_998, "claimed yield");
-        assertEq(recipientIncrease, (claimed * 7_000) / 10_000, "recipient yield");
-        assertEq(treasuryIncrease, claimed - recipientIncrease, "treasury yield");
-        assertEq(recipientIncrease + treasuryIncrease, claimed, "yield conservation");
+        assertEq(treasuryIncrease, claimed, "treasury receives claimed yield");
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "claim asset residual");
         assertEq(vault.balanceOf(address(burnerLoans)), 0, "claim vault residual");
         assertEq(inventory.activePrincipalOhm(), activePrincipalBefore, "active principal");
@@ -346,51 +333,6 @@ contract BurnerLoansCustodyIntegrationTest is BurnerLoansClaimYieldTestBase {
         );
         assertEq(vaultAsset.balanceOf(address(burnerLoans)), 0, "withdraw asset residual");
         assertEq(vault.balanceOf(address(burnerLoans)), 0, "withdraw vault residual");
-    }
-
-    function test_timelockedRoutingConfiguration_thenClaimsEndToEnd() public {
-        vm.startPrank(admin);
-        MockYieldRepurchaseRecipient recipient = new MockYieldRepurchaseRecipient(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(recipient));
-        recipient.setVaultConfig(address(vault), address(vaultAsset), true);
-        vm.stopPrank();
-        _setDefaultConfigOperator();
-        _enableConfigTimelock();
-
-        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
-        actions[0] = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoansConfig),
-            selector: IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
-            payload: abi.encode(address(recipient))
-        });
-        vm.prank(burnerLoansAdmin);
-        uint64 recipientActionId = configTimelock.queueBatch(actions);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-        configTimelock.executeQueuedAction(recipientActionId);
-
-        IBurnerLoans.AssetYieldRouting memory routing = _repurchaseRouting(6_000);
-        actions[0] = ITimelockBatchQueue.BatchAction({
-            target: address(burnerLoansConfig),
-            selector: IBurnerLoansConfig.setYieldAssetRouting.selector,
-            payload: abi.encode(address(vaultAsset), routing)
-        });
-        vm.prank(burnerLoansAdmin);
-        uint64 bpsActionId = configTimelock.queueBatch(actions);
-        vm.warp(block.timestamp + configTimelock.timelockDelay());
-        configTimelock.executeQueuedAction(bpsActionId);
-
-        _depositCollateral();
-        _addYield(10e6);
-        uint256 recipientBefore = vaultAsset.balanceOf(address(recipient));
-        uint256 treasuryBefore = vaultAsset.balanceOf(address(trsry));
-        burnerLoans.claimYield(address(vaultAsset));
-        uint256 recipientAmount = vaultAsset.balanceOf(address(recipient)) - recipientBefore;
-        uint256 treasuryAmount = vaultAsset.balanceOf(address(trsry)) - treasuryBefore;
-        uint256 claimed = recipientAmount + treasuryAmount;
-
-        assertGt(claimed, 0, "claimed yield");
-        assertEq(recipientAmount, (claimed * 6_000) / 10_000, "recipient yield");
-        assertEq(treasuryAmount, claimed - recipientAmount, "treasury yield");
     }
 
     // integration

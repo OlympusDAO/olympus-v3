@@ -31,8 +31,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it
     //   then Burner Loans and Config resolve the replacement
     function test_givenDisabledAndCompatibleInventory_setsReplacement() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = _deployEnabledInventory(address(burnerLoans));
 
         vm.expectEmit(true, false, false, true, address(burnerLoans));
@@ -58,8 +57,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when Config tries to administer it after Burner Loans accepts the pointer
     //   then Config rejects the incompatible link
     function test_givenReplacementUsesDifferentConfig_configWriteReverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansConfig otherConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
         BurnerLoansInventory replacement = new BurnerLoansInventory(
             kernel,
@@ -105,8 +103,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
         burnerLoansConfig.setGlobalDebtCap(1e9);
         vm.prank(address(burnerLoans));
         inventory.draw(address(this), 1e9);
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = _deployEnabledInventory(address(burnerLoans));
 
         vm.prank(admin);
@@ -126,8 +123,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
         ohm.approve(address(inventory), 1e9);
         inventory.supply(1e9);
         vm.stopPrank();
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = _deployEnabledInventory(address(burnerLoans));
 
         vm.prank(admin);
@@ -143,8 +139,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //   then it reverts
     function test_givenCallerIsNotAdmin_reverts(address caller_) public {
         vm.assume(caller_ != admin);
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.prank(caller_);
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
@@ -156,8 +151,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it while disabled
     //   then it reverts as an invalid Burner Loans Inventory
     function test_givenZeroInventory_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.prank(admin);
         vm.expectRevert(
@@ -171,8 +165,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it while Burner Loans is disabled
     //   then it reverts because Kernel activation is the authoritative trust boundary
     function test_givenInventoryIsInactive_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = new BurnerLoansInventory(
             kernel,
             IERC20(address(ohm)),
@@ -181,7 +174,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(replacement)
             )
         );
@@ -194,8 +187,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it while Burner Loans is disabled
     //   then staged wiring succeeds
     function test_givenInventoryIsDisabled_setsInventory() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = new BurnerLoansInventory(
             kernel,
             IERC20(address(ohm)),
@@ -215,8 +207,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it
     //   then it reverts
     function test_givenInventoryFacilityMismatch_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         BurnerLoansInventory replacement = new BurnerLoansInventory(
             kernel,
             IERC20(address(ohm)),
@@ -243,8 +234,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it
     //   then it reverts
     function test_givenActiveInventoryReportsDifferentKernel_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         Kernel otherKernel = new Kernel();
         vm.mockCall(
             address(inventory),
@@ -267,8 +257,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it
     //   then it reverts
     function test_givenActiveInventoryKernelCallReverts_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.mockCallRevert(
             address(inventory),
             abi.encodeWithSignature("kernel()"),
@@ -290,8 +279,7 @@ contract BurnerLoansSetInventoryTest is BurnerLoansTest {
     //  when admin sets it
     //   then it reverts
     function test_givenInventoryOhmMismatch_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         MockERC20 otherOhm = new MockERC20("Other OHM", "OHM2", OHM_DECIMALS);
         vm.mockCall(
             address(inventory),

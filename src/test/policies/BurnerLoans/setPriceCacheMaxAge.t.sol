@@ -27,8 +27,7 @@ contract BurnerLoansSetPriceCacheMaxAgeTest is BurnerLoansTest {
     //  when the maximum cache age is set
     //   then the call reverts
     function test_givenPolicyIsDisabled_reverts() public {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.expectRevert(IEnabler.NotEnabled.selector);
         vm.prank(address(burnerLoansConfig));

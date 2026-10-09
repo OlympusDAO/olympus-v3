@@ -18,7 +18,7 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
     uint48 internal constant _TRANSITION_TIMESTAMP = 1234;
 
     event Enabled();
-    event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
+    event Transition(address indexed by, bool indexed enable, bytes data, uint48 timestamp);
 
     // enable
     // given caller has the admin role
@@ -103,7 +103,7 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(replacement)
             )
         );
@@ -215,7 +215,7 @@ contract BurnerLoansEnableTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_PriceCacheNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(candidate)
             )
         );

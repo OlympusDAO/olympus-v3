@@ -60,6 +60,8 @@ contract BurnerLoansConfig is
     ///      active membership in this policy's Kernel.
     /// @param kernel_ Kernel that manages this policy and its module dependencies.
     /// @param ohm_ Debt token used by markets created through this policy.
+    /// @dev Reverts if:
+    ///      - The OHM token address is zero.
     constructor(
         Kernel kernel_,
         IERC20 ohm_
@@ -71,7 +73,8 @@ contract BurnerLoansConfig is
     // ========== KERNEL FUNCTIONS ========== //
 
     /// @inheritdoc Policy
-    /// @dev Reverts when FLOAN or ROLES is missing or uses an unsupported version.
+    /// @dev Reverts if:
+    ///      - FLOAN or ROLES is missing or uses an unsupported version.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
         dependencies = new Keycode[](2);
         dependencies[0] = toKeycode("FLOAN");
@@ -140,26 +143,36 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - No facility is bound or the bound facility's inventory getter fails.
     function inventory() external view returns (address) {
         return IBurnerLoansView(address(_FACILITY)).inventory();
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - The market lookup fails.
     function isAssetConfigured(address asset_) external view returns (bool) {
         return _isAssetConfigured(asset_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - No unique bound FLOAN market exists for the asset.
     function marketId(address asset_) external view returns (uint32) {
         return _marketId(asset_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - No unique bound market exists or its configuration schema is incompatible.
     function getAssetConfig(address asset_) external view returns (AssetConfig memory) {
         return _getAssetConfig(_marketId(asset_));
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - No unique bound market exists or its configuration schema is incompatible.
     function getAssetFeeConfig(address asset_) external view returns (AssetFeeConfig memory) {
         return _getAssetFeeConfig(_marketId(asset_));
     }
@@ -264,11 +277,17 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller lacks the admin role.
+    ///      - Inventory is unset or rejects the proposed cap.
     function setGlobalDebtCap(uint128 debtCapOhm_) external givenEnabled onlyAdminRole {
         _inventory().setGlobalDebtCap(debtCapOhm_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller is neither admin nor the selected config operator.
+    ///      - Burner Loans rejects the new cached-price age.
     function setPriceCacheMaxAge(
         uint48 priceCacheMaxAge_
     ) external givenEnabled onlyConfigOperatorOrAdmin {
@@ -276,25 +295,30 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
-    ///      Burner Loans rejects the recipient transition.
-    function setYieldRepurchaseRecipient(
-        address recipient_
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller is neither admin nor the selected config operator.
+    ///      - Burner Loans rejects the requested fee routing state.
+    function setSendFeesToDistributor(
+        bool enabled_
     ) external givenEnabled onlyConfigOperatorOrAdmin {
-        _FACILITY.setYieldRepurchaseRecipient(recipient_);
+        _requirePolicyActive();
+        _FACILITY.setSendFeesToDistributor(enabled_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if Config is disabled, the caller is neither admin nor config operator, or
-    ///      Burner Loans rejects the complete asset-routing transition.
-    function setYieldAssetRouting(
-        address asset_,
-        AssetYieldRouting calldata routing_
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller is neither admin nor the selected config operator.
+    ///      - Burner Loans rejects the requested yield routing state.
+    function setSendYieldToDistributor(
+        bool enabled_
     ) external givenEnabled onlyConfigOperatorOrAdmin {
-        _FACILITY.setYieldAssetRouting(asset_, routing_);
+        _requirePolicyActive();
+        _FACILITY.setSendYieldToDistributor(enabled_);
     }
 
     /// @dev Returns the Burner Loans Inventory contract currently bound by Burner Loans.
+    ///      Reverts if:
+    ///      - The facility is unset or reports no Inventory.
     function _inventory() internal view returns (IBurnerLoansInventory) {
         address inventory_ = IBurnerLoansView(address(_FACILITY)).inventory();
         if (inventory_ == address(0)) revert BurnerLoansConfig_InvalidInventory(inventory_);
@@ -332,8 +356,10 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if Config is disabled, the caller is unauthorized, the asset is not uniquely
-    ///      configured, or share output is requested without a configured DepositManager vault.
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller is neither admin nor the selected config operator.
+    ///      - The asset has no unique market.
+    ///      - The selected output mode is unsupported by DepositManager.
     function setAssetWithdrawAsShares(
         address asset_,
         bool withdrawAsShares_
@@ -395,25 +421,28 @@ contract BurnerLoansConfig is
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, or maximum
-    ///      maturity horizon violates Burner Loans bounds. The `uint128` maximum-keeper-reward type
-    ///      enforces its storage bound.
+    /// @dev Reverts if:
+    ///      - Maximum LTV, backing multiplier, keeper reward bps, term length, or maturity horizon
+    ///        violates Burner Loans bounds.
+    ///      The `uint128` maximum-keeper-reward type enforces its storage bound.
     /// @param config_ Complete asset configuration to validate.
     function validateAssetRiskConfig(AssetRiskConfigInput calldata config_) external pure {
         _validateRiskConfig(config_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if any bps component exceeds 100%, if kink configuration is invalid, or if
-    ///      the full-utilization fee rate exceeds 100%.
+    /// @dev Reverts if:
+    ///      - Any bps component exceeds 100%, the kink configuration is invalid, or the
+    ///        full-utilization fee rate exceeds 100%.
     /// @param config_ Complete fee configuration to validate.
     function validateFeeConfig(AssetFeeConfig calldata config_) external pure {
         _validateFeeConfig(config_);
     }
 
     /// @inheritdoc IBurnerLoansConfig
-    /// @dev Reverts if `asset_` is not configured, `debtCapOhm_` is below current active
-    ///      debt for `asset_`.
+    /// @dev Reverts if:
+    ///      - The asset is not configured.
+    ///      - The proposed cap is below current active debt.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
     function validateAssetDebtCap(address asset_, uint128 debtCapOhm_) external view {
@@ -423,30 +452,38 @@ contract BurnerLoansConfig is
     // ========== CONFIGURATION HELPERS ========== //
 
     /// @notice Restricts a function to the configured config operator or admin.
-    /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` when the caller is neither
-    ///      `configOperator` nor an admin.
+    /// @dev Reverts if:
+    ///      - The caller is neither the selected config operator nor an admin.
     modifier onlyConfigOperatorOrAdmin() {
         _onlyConfigOperatorOrAdmin();
         _;
     }
 
-    /// @notice Reverts unless the caller has admin or burner_loans_admin authority.
-    /// @dev Reverts with `NotAuthorised` when the caller lacks both roles.
+    /// @notice Requires admin or burner_loans_admin authority.
+    /// @dev Reverts if:
+    ///      - The caller lacks admin and burner_loans_admin roles.
     function _onlyBurnerLoansAdminOrAdmin() internal view {
         _requireAuthorized(!_isAdmin(msg.sender) && !_hasRole(msg.sender, BURNER_LOANS_ADMIN_ROLE));
     }
 
-    /// @notice Reverts unless the caller is the configured config operator or admin.
-    /// @dev Reverts with `BurnerLoansConfig_UnauthorizedConfigOperator` and the caller address
-    ///      when the caller is neither `configOperator` nor an admin.
+    /// @notice Requires the configured config operator or admin.
+    /// @dev Reverts if:
+    ///      - The caller is neither the selected config operator nor an admin.
     function _onlyConfigOperatorOrAdmin() internal view {
         if (!_isConfigOperator(msg.sender) && !_isAdmin(msg.sender)) {
             revert BurnerLoansConfig_UnauthorizedConfigOperator(msg.sender);
         }
     }
 
+    /// @dev Kernel deactivation revokes distributor-flag forwarding authority independently of local disablement.
+    function _requirePolicyActive() internal view {
+        if (!kernel.isPolicyActive(Policy(address(this))))
+            revert BurnerLoansConfig_PolicyInactive();
+    }
+
     /// @inheritdoc ConfigOperatorSingleStep
-    /// @dev Preserves the existing enabled-state check before admin-role authorization.
+    /// @dev Reverts if:
+    ///      - Config is disabled or the caller lacks the admin role.
     function _authorizeSetConfigOperator() internal view override returns (bool authorized) {
         _requireEnabled();
         _requireRole(msg.sender, ADMIN_ROLE);
@@ -468,7 +505,8 @@ contract BurnerLoansConfig is
         }
     }
 
-    /// @dev Reverts unless `facility_` is active in and reports this Kernel.
+    /// @dev Reverts if:
+    ///      - The facility is inactive or reports another Kernel.
     function _requireFacilityActive(address facility_) internal view {
         if (!kernel.isPolicyActive(Policy(facility_)) || !_reportsKernel(facility_)) {
             revert BurnerLoansConfig_InvalidFacility(facility_);
@@ -487,6 +525,9 @@ contract BurnerLoansConfig is
     /// @notice Validates the complete Burner Loans Config relationship before activation.
     /// @dev Requires active Kernel membership and matching reverse links. Burner Loans Inventory
     ///      may be globally disabled because Config does not depend on its operational state.
+    ///      Reverts if:
+    ///      - The facility is inactive, incompatible, or incorrectly bound.
+    ///      - Inventory is inactive, incompatible, or incorrectly bound.
     function _validateConfiguration() internal view {
         IBurnerLoansLifecycle facility_ = _FACILITY;
         address facilityAddress = address(facility_);
@@ -513,34 +554,35 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Authorizes a global re-enable transition.
-    /// @dev Reverts with `NotAuthorised` unless the caller has admin or burner_loans_admin
-    ///      authority.
+    /// @dev Reverts if:
+    ///      - The caller lacks admin and burner_loans_admin roles.
     function _authorizeReEnable() internal view override {
         _onlyBurnerLoansAdminOrAdmin();
     }
 
     /// @notice Authorizes a grace-period update.
-    /// @dev Reverts with `ROLESv1.ROLES_RequireRole(ADMIN_ROLE)` when the caller lacks the
-    ///      admin role.
+    /// @dev Reverts if:
+    ///      - The caller lacks the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    /// @dev Validates complete reverse links before enabling Burner Loans Config.
+    /// @dev Reverts if:
+    ///      - The facility or Inventory linkage is inactive or incompatible.
     function _beforeEnable(bytes calldata) internal view override {
         _validateConfiguration();
     }
 
-    /// @dev Preserves the grace-period gate and revalidates links before re-enabling.
+    /// @dev Reverts if:
+    ///      - The re-enable grace period expired.
+    ///      - The facility or Inventory linkage is inactive or incompatible.
     function _beforeReEnable() internal override {
         super._beforeReEnable();
         _validateConfiguration();
     }
 
     /// @notice Resolves and decodes the unique Burner Loans market for a collateral asset.
-    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when no bound market exists, or
-    ///      `BurnerLoans_AmbiguousMarket` when multiple bound markets exist for the pair.
-    ///      Reverts with `BurnerLoans_IncompatibleMarketConfig` when the resolved market uses a
-    ///      different schema, or `BurnerLoans_InvalidMarketConfigData` when its data length is
-    ///      invalid.
+    /// @dev Reverts if:
+    ///      - No unique bound market exists for the asset.
+    ///      - Its configuration schema or encoded data length is invalid.
     /// @param asset_ Collateral asset to look up.
     /// @return marketId_ FLOAN market identifier for the configured asset.
     /// @return config Decoded asset configuration.
@@ -552,7 +594,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates and stores the complete asset fee curve.
-    /// @dev Reverts if `asset_` is not configured or if `config_` violates fee bounds.
+    /// @dev Reverts if:
+    ///      - The asset is not configured or the fee curve violates protocol bounds.
     /// @param asset_ Collateral asset to update.
     /// @param config_ Complete utilization fee curve.
     function _setAssetFeeConfig(address asset_, AssetFeeConfig memory config_) internal {
@@ -568,8 +611,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates and stores risk and term fields while preserving admin-only fields.
-    /// @dev Reverts if `asset_` is not configured or if `riskConfig_` violates risk, maturity,
-    ///      or keeper reward bounds.
+    /// @dev Reverts if:
+    ///      - The asset is not configured or the risk, maturity, or reward settings violate bounds.
     /// @param asset_ Collateral asset to update.
     /// @param riskConfig_ Complete risk and term configuration.
     function _setAssetRiskConfig(address asset_, AssetRiskConfigInput memory riskConfig_) internal {
@@ -637,8 +680,9 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates a risk-config input.
-    /// @dev Reverts if maximum LTV, backing multiplier, keeper reward bps, term length, maximum
-    ///      maturity horizon violates Burner Loans bounds.
+    /// @dev Reverts if:
+    ///      - Maximum LTV, backing multiplier, keeper reward bps, term length, or maturity horizon
+    ///        violates Burner Loans bounds.
     /// @param config_ Complete risk and term input to validate.
     function _validateRiskConfig(AssetRiskConfigInput memory config_) internal pure {
         _validateMaxLtvBps(config_.maxLtvBps);
@@ -648,7 +692,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates an asset maximum LTV.
-    /// @dev Reverts with `BurnerLoans_InvalidBps` if maximum LTV is zero or exceeds 100%.
+    /// @dev Reverts if:
+    ///      - Maximum LTV is zero or exceeds 100%.
     /// @param maxLtvBps_ Maximum loan-to-value ratio, in basis points.
     function _validateMaxLtvBps(uint16 maxLtvBps_) internal pure {
         if (maxLtvBps_ == 0 || maxLtvBps_ > BurnerLoansConstants._MAX_LTV_BPS) {
@@ -657,8 +702,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates a required backing multiplier.
-    /// @dev Reverts with `BurnerLoans_InvalidParam` if the multiplier is below 100% or above the
-    ///      maximum backing multiplier.
+    /// @dev Reverts if:
+    ///      - The multiplier is below 100% or above the maximum backing multiplier.
     /// @param backingMultiplierBps_ Backing multiplier, in basis points.
     function _validateBackingMultiplierBps(uint16 backingMultiplierBps_) internal pure {
         if (
@@ -670,8 +715,9 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates the fixed term and maximum maturity horizon.
-    /// @dev Reverts with `BurnerLoans_InvalidParam` if the term is zero, exceeds the maximum
-    ///      term length, is not below the horizon, or if the horizon exceeds its maximum.
+    /// @dev Reverts if:
+    ///      - The term is zero, exceeds its maximum, or is not below the horizon.
+    ///      - The horizon exceeds its maximum.
     /// @param termLength_ Fixed extension term length, in seconds.
     /// @param maxMaturityHorizon_ Maximum maturity horizon, in seconds.
     function _validateMaturityConfig(uint48 termLength_, uint48 maxMaturityHorizon_) internal pure {
@@ -684,8 +730,9 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates a complete utilization fee curve.
-    /// @dev Reverts if any bps component exceeds 100%, if kink configuration is invalid, or if
-    ///      the full-utilization fee rate exceeds the protocol fee cap.
+    /// @dev Reverts if:
+    ///      - Any bps component exceeds 100%, the kink is invalid, or the full-utilization rate
+    ///        exceeds the protocol fee cap.
     /// @param config_ Complete fee curve to validate.
     function _validateFeeConfig(AssetFeeConfig memory config_) internal pure {
         _validateBps(config_.baseFeeBps);
@@ -706,7 +753,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates that a proposed cap is not below current active debt.
-    /// @dev Reverts with `BurnerLoans_InvalidCap` if `cap_` is below `activeDebtOhm_`.
+    /// @dev Reverts if:
+    ///      - The proposed cap is below active debt.
     /// @param cap_ Proposed cap, in OHM decimals.
     /// @param activeDebtOhm_ Current active debt to preserve, in OHM decimals.
     function _validateDebtCap(uint256 cap_, uint256 activeDebtOhm_) internal pure {
@@ -714,9 +762,9 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates an asset active debt cap against live Burner Loans state.
-    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` if `asset_` is not configured.
-    ///      Reverts with `BurnerLoans_InvalidCap` if `debtCapOhm_` is below current active
-    ///      debt for `asset_`.
+    /// @dev Reverts if:
+    ///      - The asset is not configured.
+    ///      - The proposed cap is below current active debt.
     /// @param asset_ Collateral asset to validate.
     /// @param debtCapOhm_ Proposed asset active debt cap, in OHM decimals.
     /// @return marketId_ Validated FLOAN market identifier for `asset_`.
@@ -737,8 +785,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Resolves the unique FLOAN market for a collateral asset and OHM.
-    /// @dev Reverts with `BurnerLoans_AssetNotConfigured` when no matching market exists and
-    ///      `BurnerLoans_AmbiguousMarket` when more than one matching market exists.
+    /// @dev Reverts if:
+    ///      - No matching market exists or more than one market matches.
     /// @param asset_ Collateral asset to resolve.
     /// @return marketId_ Unique matching FLOAN market identifier.
     function _marketId(address asset_) internal view returns (uint32 marketId_) {
@@ -753,8 +801,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Decodes the Burner Loans asset configuration stored by a FLOAN market.
-    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
-    ///      validates the configuration schema and encoded data length before decoding.
+    /// @dev Reverts if:
+    ///      - The market does not exist or its configuration schema or encoded data is invalid.
     /// @param marketId_ FLOAN market identifier to read.
     /// @return config Decoded Burner Loans asset configuration.
     function _getAssetConfig(uint32 marketId_) internal view returns (AssetConfig memory config) {
@@ -768,8 +816,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Decodes the Burner Loans fee configuration stored by a FLOAN market.
-    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
-    ///      validates the configuration schema and encoded data length before decoding.
+    /// @dev Reverts if:
+    ///      - The market does not exist or its configuration schema or encoded data is invalid.
     /// @param marketId_ FLOAN market identifier to read.
     /// @return config Decoded Burner Loans fee configuration.
     function _getAssetFeeConfig(uint32 marketId_) internal view returns (AssetFeeConfig memory) {
@@ -783,8 +831,8 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Decodes the Burner Loans-specific data stored by a FLOAN market.
-    /// @dev Reverts with `FLOAN_InvalidMarket` when `marketId_` does not exist and
-    ///      validates the configuration schema and encoded data length before decoding.
+    /// @dev Reverts if:
+    ///      - The market does not exist or its configuration schema or encoded data is invalid.
     /// @param marketId_ FLOAN market identifier to read.
     /// @return data Decoded Burner Loans market data.
     function _getMarketData(
@@ -809,14 +857,16 @@ contract BurnerLoansConfig is
     }
 
     /// @notice Validates token-native decimals used for ERC20 balances.
-    /// @dev Input: token decimals. Output: none. Reverts above the configured safe token scale.
+    /// @dev Reverts if:
+    ///      - Token decimals exceed the configured safe scale.
     /// @param decimals_ Token decimals reported by the ERC20.
     function _validateTokenDecimals(uint8 decimals_) internal pure {
         if (decimals_ > _MAX_TOKEN_DECIMALS) revert BurnerLoans_InvalidDecimals(decimals_);
     }
 
-    /// @notice Reverts if a bps value exceeds 100%.
-    /// @dev Reverts with `BurnerLoans_InvalidBps` when `bps_` is greater than 10,000.
+    /// @notice Validates that a bps value does not exceed 100%.
+    /// @dev Reverts if:
+    ///      - The value exceeds 10,000 basis points.
     /// @param bps_ Basis-point value to validate.
     function _validateBps(uint256 bps_) internal pure {
         if (bps_ > BurnerLoansConstants.MAX_BPS) revert BurnerLoans_InvalidBps(bps_);

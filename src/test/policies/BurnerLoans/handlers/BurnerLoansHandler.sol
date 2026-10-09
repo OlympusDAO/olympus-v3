@@ -18,19 +18,18 @@ import {IOperatorAuth} from "src/policies/interfaces/utils/IOperatorAuth.sol";
 
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {BurnerLoansPositions} from "src/policies/libraries/BurnerLoansPositions.sol";
 import {PriceCache} from "src/policies/price/PriceCache.sol";
 
 // Contracts
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
-import {Test} from "forge-std/Test.sol";
+import {Test} from "@forge-std-1.16.2/Test.sol";
 import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
 import {BurnerLoansComposites} from "src/periphery/BurnerLoansComposites.sol";
 import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
 import {BurnerLoansSeizer} from "src/policies/BurnerLoansSeizer.sol";
 import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
@@ -56,7 +55,6 @@ contract BurnerLoansHandler is Test {
     address internal immutable _ADMIN;
     address internal immutable _TREASURY;
     address internal immutable _INVENTORY_PROVIDER;
-    MockYieldRepurchaseRecipient internal immutable _YIELD_RECIPIENT;
     PriceCache internal immutable _PRIMARY_PRICE_CACHE;
     PriceCache internal immutable _SECONDARY_PRICE_CACHE;
 
@@ -84,13 +82,8 @@ contract BurnerLoansHandler is Test {
     uint256 public claimYieldResidualViolations;
     uint256 public claimYieldFailureMutationViolations;
     uint256 public claimYieldPreviewConsistencyViolations;
-    uint256 public routingFailureMutationViolations;
-    uint256 public repurchaseRecipientClearViolations;
     uint256 public cumulativeClaimedYield;
     uint256 public cumulativeDistributedYield;
-    uint256 public modelActiveRepurchaseRouteCount;
-    address public modelYieldRepurchaseRecipient;
-    bytes32 public modelAssetYieldRoutingHash;
     uint256 public backingViolations;
     uint256 public seizureEligibilityViolations;
     uint256 public seizureClosureViolations;
@@ -99,8 +92,6 @@ contract BurnerLoansHandler is Test {
     uint256 public compositeWithdrawalOutputConservationViolations;
     uint256 public withdrawAsSharesTransitionViolations;
     uint256 public positionReuseViolations;
-
-    address[5] internal _directYieldRecipients;
 
     struct Dependencies {
         BurnerLoansHarness burnerLoans;
@@ -115,7 +106,6 @@ contract BurnerLoansHandler is Test {
         address admin;
         address treasury;
         address inventoryProvider;
-        MockYieldRepurchaseRecipient yieldRecipient;
         PriceCache primaryPriceCache;
         PriceCache secondaryPriceCache;
         address[] actors;
@@ -125,11 +115,8 @@ contract BurnerLoansHandler is Test {
         IBurnerLoans.AssetCollateralStatus collateralStatus;
         IERC20 outputToken;
         uint256 treasuryBalance;
-        uint256 repurchaseBalance;
         uint256 facilityBalance;
-        uint256[5] directBalances;
-        bytes32 routeHash;
-        address globalRecipient;
+        uint256 pendingTreasury;
         bool previewReturned;
         bool previewExecutable;
         bool withdrawalModeValid;
@@ -163,22 +150,9 @@ contract BurnerLoansHandler is Test {
         _ADMIN = dependencies_.admin;
         _TREASURY = dependencies_.treasury;
         _INVENTORY_PROVIDER = dependencies_.inventoryProvider;
-        _YIELD_RECIPIENT = dependencies_.yieldRecipient;
         _PRIMARY_PRICE_CACHE = dependencies_.primaryPriceCache;
         _SECONDARY_PRICE_CACHE = dependencies_.secondaryPriceCache;
         _actors = dependencies_.actors;
-
-        for (uint256 i; i < _directYieldRecipients.length; ++i) {
-            _directYieldRecipients[i] = address(
-                uint160(uint256(keccak256(abi.encode("BurnerLoansDirectYieldRecipient", i))))
-            );
-        }
-        modelYieldRepurchaseRecipient = dependencies_.burnerLoans.getYieldRepurchaseRecipient();
-        IBurnerLoans.AssetYieldRouting memory initialRouting = dependencies_
-            .burnerLoans
-            .getYieldAssetRouting(address(dependencies_.collateral));
-        modelActiveRepurchaseRouteCount = initialRouting.repurchaseRecipientBps == 0 ? 0 : 1;
-        modelAssetYieldRoutingHash = keccak256(abi.encode(initialRouting));
 
         address inventory_ = dependencies_.burnerLoans.inventory();
         vm.prank(dependencies_.inventoryProvider);
@@ -734,77 +708,6 @@ contract BurnerLoansHandler is Test {
         }
     }
 
-    function setYieldAssetRouting(
-        uint16 repurchaseBpsSeed_,
-        uint16 directBpsSeed_,
-        uint8 directCountSeed_
-    ) external {
-        IBurnerLoans.AssetYieldRouting memory routing;
-        uint256 directCount = bound(directCountSeed_, 0, _directYieldRecipients.length);
-        bool repurchaseRecipientConfigured = _BURNER_LOANS.getYieldRepurchaseRecipient() !=
-            address(0);
-        uint256 maximumRepurchaseBps = BurnerLoansConstants.MAX_BPS - directCount;
-        uint256 repurchaseBps = repurchaseRecipientConfigured
-            ? bound(repurchaseBpsSeed_, 0, maximumRepurchaseBps)
-            : 0;
-        uint256 remainingBps = BurnerLoansConstants.MAX_BPS - repurchaseBps;
-        uint256 directBps = directCount == 0 ? 0 : bound(directBpsSeed_, directCount, remainingBps);
-
-        routing.repurchaseRecipientBps = uint16(repurchaseBps);
-        routing.directAllocations = new IBurnerLoans.DirectYieldAllocation[](directCount);
-        for (uint256 i; i < directCount; ++i) {
-            routing.directAllocations[i] = IBurnerLoans.DirectYieldAllocation({
-                recipient: _directYieldRecipients[i],
-                bps: uint16(i == 0 ? directBps - directCount + 1 : 1)
-            });
-        }
-
-        bytes32 priorHash = keccak256(
-            abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL)))
-        );
-        vm.prank(_ADMIN);
-        try _BURNER_LOANS_CONFIG.setYieldAssetRouting(address(_COLLATERAL), routing) {
-            modelActiveRepurchaseRouteCount = routing.repurchaseRecipientBps == 0 ? 0 : 1;
-            modelAssetYieldRoutingHash = keccak256(abi.encode(routing));
-        } catch {
-            if (
-                priorHash !=
-                keccak256(abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL))))
-            ) {
-                ++routingFailureMutationViolations;
-            }
-        }
-    }
-
-    function setYieldRepurchaseRecipient(bool configure_) external {
-        address requestedRecipient = configure_ ? address(_YIELD_RECIPIENT) : address(0);
-        address priorRecipient = _BURNER_LOANS.getYieldRepurchaseRecipient();
-        bytes32 priorRouteHash = keccak256(
-            abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL)))
-        );
-
-        vm.prank(_ADMIN);
-        try _BURNER_LOANS_CONFIG.setYieldRepurchaseRecipient(requestedRecipient) {
-            if (!configure_ && modelActiveRepurchaseRouteCount != 0) {
-                ++repurchaseRecipientClearViolations;
-            }
-            modelYieldRepurchaseRecipient = requestedRecipient;
-        } catch {
-            if (
-                _BURNER_LOANS.getYieldRepurchaseRecipient() != priorRecipient ||
-                keccak256(abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL)))) !=
-                priorRouteHash
-            ) ++routingFailureMutationViolations;
-            if (!configure_ && modelActiveRepurchaseRouteCount == 0) {
-                ++repurchaseRecipientClearViolations;
-            }
-        }
-    }
-
-    function toggleYieldRecipient(bool enable_) external {
-        _YIELD_RECIPIENT.setEnabled(enable_);
-    }
-
     function toggleAsset(bool enable_) external {
         IBurnerLoans.AssetConfig memory config = _BURNER_LOANS_CONFIG.getAssetConfig(
             address(_COLLATERAL)
@@ -848,14 +751,6 @@ contract BurnerLoansHandler is Test {
 
     function _inventory() private view returns (IBurnerLoansInventory) {
         return IBurnerLoansInventory(_BURNER_LOANS.inventory());
-    }
-
-    function _directYieldRecipientBalances(
-        IERC20 token_
-    ) private view returns (uint256[5] memory balances) {
-        for (uint256 i; i < _directYieldRecipients.length; ++i) {
-            balances[i] = token_.balanceOf(_directYieldRecipients[i]);
-        }
     }
 
     function _checkCompositeRepayAndWithdraw(
@@ -922,15 +817,11 @@ contract BurnerLoansHandler is Test {
         observation.outputToken = _outputToken();
         observation.withdrawalModeValid = _withdrawalModeIsValid();
         observation.treasuryBalance = observation.outputToken.balanceOf(_TREASURY);
-        observation.repurchaseBalance = observation.outputToken.balanceOf(
-            address(_YIELD_RECIPIENT)
-        );
         observation.facilityBalance = observation.outputToken.balanceOf(address(_BURNER_LOANS));
-        observation.directBalances = _directYieldRecipientBalances(observation.outputToken);
-        observation.routeHash = keccak256(
-            abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL)))
+        observation.pendingTreasury = _BURNER_LOANS.pendingPayout(
+            address(observation.outputToken),
+            _TREASURY
         );
-        observation.globalRecipient = _BURNER_LOANS.getYieldRepurchaseRecipient();
     }
 
     function _probeClaimYieldPreview(
@@ -956,25 +847,20 @@ contract BurnerLoansHandler is Test {
     ) private {
         (address tokenOut, uint256 amountOut) = abi.decode(returnData_, (address, uint256));
         uint256 distributed = observation_.outputToken.balanceOf(_TREASURY) -
-            observation_.treasuryBalance +
-            observation_.outputToken.balanceOf(address(_YIELD_RECIPIENT)) -
-            observation_.repurchaseBalance;
-        for (uint256 i; i < _directYieldRecipients.length; ++i) {
-            distributed +=
-                observation_.outputToken.balanceOf(_directYieldRecipients[i]) -
-                observation_.directBalances[i];
-        }
+            observation_.treasuryBalance;
         if (!_yieldRequestIsCovered(observation_)) ++claimYieldBoundViolations;
         if (distributed != amountOut || tokenOut != address(observation_.outputToken)) {
             ++claimYieldConservationViolations;
         }
         cumulativeClaimedYield += amountOut;
         cumulativeDistributedYield += distributed;
-        // Exact equality detects residual output tokens held by Burner Loans.
+        // Successful claims deliver directly from DepositManager without changing facility funds.
         // forge-lint: disable-start(incorrect-strict-equality)
         if (
             observation_.outputToken.balanceOf(address(_BURNER_LOANS)) !=
-            observation_.facilityBalance
+            observation_.facilityBalance ||
+            _BURNER_LOANS.pendingPayout(address(observation_.outputToken), _TREASURY) !=
+            observation_.pendingTreasury
         ) {
             ++claimYieldResidualViolations;
         }
@@ -1010,21 +896,10 @@ contract BurnerLoansHandler is Test {
             keccak256(abi.encode(observation_.collateralStatus)) !=
             keccak256(abi.encode(afterStatus)) ||
             observation_.outputToken.balanceOf(_TREASURY) != observation_.treasuryBalance ||
-            observation_.outputToken.balanceOf(address(_YIELD_RECIPIENT)) !=
-            observation_.repurchaseBalance ||
             observation_.outputToken.balanceOf(address(_BURNER_LOANS)) !=
             observation_.facilityBalance ||
-            observation_.routeHash !=
-            keccak256(abi.encode(_BURNER_LOANS.getYieldAssetRouting(address(_COLLATERAL)))) ||
-            observation_.globalRecipient != _BURNER_LOANS.getYieldRepurchaseRecipient();
-        for (uint256 i; i < _directYieldRecipients.length; ++i) {
-            if (
-                observation_.outputToken.balanceOf(_directYieldRecipients[i]) !=
-                observation_.directBalances[i]
-            ) {
-                mutated = true;
-            }
-        }
+            observation_.pendingTreasury !=
+            _BURNER_LOANS.pendingPayout(address(observation_.outputToken), _TREASURY);
         // forge-lint: disable-end(incorrect-strict-equality)
     }
 

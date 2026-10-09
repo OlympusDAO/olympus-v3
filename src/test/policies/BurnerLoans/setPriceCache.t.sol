@@ -35,8 +35,7 @@ contract BurnerLoansSetPriceCacheTest is BurnerLoansTest {
     function test_givenPolicyIsDisabled_whenCallerIsNotAdmin_reverts(address caller_) public {
         vm.assume(caller_ != admin);
         MockPriceCache candidate = new MockPriceCache(address(kernel));
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
 
         vm.expectRevert(abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, ADMIN_ROLE));
         vm.prank(caller_);
@@ -218,7 +217,8 @@ contract BurnerLoansSetPriceCacheTest is BurnerLoansTest {
         _expectInvalidCandidatePreservesDependency(
             address(candidate),
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch.selector,
+                IBurnerLoans.BurnerLoans_DependencyKernelMismatch.selector,
+                address(candidate),
                 address(kernel),
                 address(otherKernel)
             )

@@ -216,8 +216,7 @@ contract BurnerLoansPositionHealthFactorAtPriceTest is BurnerLoansPositionHealth
         public
         givenPosition(1_250e6, 100e9)
     {
-        vm.prank(emergency);
-        burnerLoans.disable("");
+        _disableBurnerLoans(emergency);
         assertEq(_atPrice(address(usds), alice, 1e6, 10e6), 1e18, "disabled policy view");
     }
 
@@ -228,8 +227,7 @@ contract BurnerLoansPositionHealthFactorAtPriceTest is BurnerLoansPositionHealth
         public
         givenPosition(1_250e6, 100e9)
     {
-        vm.prank(admin);
-        burnerLoans.disable("");
+        _disableBurnerLoans(admin);
         vm.prank(admin);
         burnerLoans.enable("");
         assertEq(_atPrice(address(usds), alice, 1e6, 10e6), 1e18, "re-enabled policy view");

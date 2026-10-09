@@ -4,7 +4,7 @@ pragma solidity >=0.8.24;
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant, unused-return)
 
-import {StdInvariant} from "forge-std/StdInvariant.sol";
+import {StdInvariant} from "@forge-std-1.16.2/StdInvariant.sol";
 
 import {Actions} from "src/Kernel.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
@@ -17,7 +17,6 @@ import {BurnerLoansTest} from "src/test/policies/BurnerLoans/BurnerLoansTest.sol
 import {MinterAdminPolicy} from "src/test/policies/BurnerLoans/fixtures/MinterAdminPolicy.sol";
 import {BurnerLoansERC7540CapabilityHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansERC7540CapabilityHandler.sol";
 import {BurnerLoansHandler} from "src/test/policies/BurnerLoans/handlers/BurnerLoansHandler.sol";
-import {MockYieldRepurchaseRecipient} from "src/test/mocks/MockYieldRepurchaseRecipient.sol";
 import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
 
 contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
@@ -29,7 +28,6 @@ contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
     BurnerLoansSeizer internal _seizer;
     MockERC7540ExternalShareVault internal _vault;
     MockERC7540ExternalShareToken internal _shareToken;
-    MockYieldRepurchaseRecipient internal _yieldRecipient;
     PriceCache internal _primaryPriceCache;
     PriceCache internal _secondaryPriceCache;
     address[] internal _invariantActors;
@@ -46,11 +44,6 @@ contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
         vm.startPrank(admin);
         MinterAdminPolicy minterAdminPolicy = new MinterAdminPolicy(kernel);
         kernel.executeAction(Actions.ActivatePolicy, address(minterAdminPolicy));
-
-        _yieldRecipient = new MockYieldRepurchaseRecipient(kernel);
-        kernel.executeAction(Actions.ActivatePolicy, address(_yieldRecipient));
-        _yieldRecipient.setVaultConfig(address(_vault), address(usds), true);
-        burnerLoansConfig.setYieldRepurchaseRecipient(address(_yieldRecipient));
 
         _primaryPriceCache = _deployPriceCache(true, true);
         _secondaryPriceCache = _deployPriceCache(true, true);
@@ -79,7 +72,6 @@ contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
                 admin: admin,
                 treasury: address(trsry),
                 inventoryProvider: protocolProvider,
-                yieldRecipient: _yieldRecipient,
                 primaryPriceCache: _primaryPriceCache,
                 secondaryPriceCache: _secondaryPriceCache,
                 actors: _invariantActors
@@ -99,7 +91,7 @@ contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
         _handler.toggleWithdrawAsShares(false);
         _handler.toggleWithdrawAsShares(true);
 
-        bytes4[] memory selectors = new bytes4[](18);
+        bytes4[] memory selectors = new bytes4[](15);
         selectors[0] = _handler.deposit.selector;
         selectors[1] = _handler.borrow.selector;
         selectors[2] = _handler.repay.selector;
@@ -115,9 +107,6 @@ contract BurnerLoansShareInvariantTest is StdInvariant, BurnerLoansTest {
         selectors[12] = _handler.withdrawInventory.selector;
         selectors[13] = _handler.compositeRepayAndWithdraw.selector;
         selectors[14] = _handler.executePeriodicSeizer.selector;
-        selectors[15] = _handler.setYieldAssetRouting.selector;
-        selectors[16] = _handler.setYieldRepurchaseRecipient.selector;
-        selectors[17] = _handler.toggleYieldRecipient.selector;
         targetContract(address(_handler));
         targetSelector(FuzzSelector({addr: address(_handler), selectors: selectors}));
 

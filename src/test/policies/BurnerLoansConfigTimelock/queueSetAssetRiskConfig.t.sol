@@ -1,18 +1,19 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// Shared domain values use constants; scenario-specific literals remain inline for auditability.
-// forge-lint: disable-start(literal-instead-of-constant)
-
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+// Interfaces
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
 import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
-import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
-import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
+// Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
@@ -36,9 +37,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetRiskConfigTest is BurnerLoansConf
         update.maxLtvBps = 0;
 
         vm.prank(caller_);
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BURNER_LOANS_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         configTimelock.queueSetAssetRiskConfig(address(usds), update, selection);
     }
 

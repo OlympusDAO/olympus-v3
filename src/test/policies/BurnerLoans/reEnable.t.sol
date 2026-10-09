@@ -20,7 +20,7 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
     uint48 internal constant _DISABLED_AT = 1234;
 
     event Enabled();
-    event Transition(address indexed by, bool indexed enable, bytes data, uint48 at);
+    event Transition(address indexed by, bool indexed enable, bytes data, uint48 timestamp);
 
     // reEnable
     // given caller has neither admin nor burner_loans_admin role
@@ -170,7 +170,7 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_InventoryNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(inventory)
             )
         );
@@ -222,7 +222,7 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_PriceCacheNotActive.selector,
+                IBurnerLoans.BurnerLoans_DependencyNotActive.selector,
                 address(candidate)
             )
         );
@@ -271,7 +271,8 @@ contract BurnerLoansReEnableTest is BurnerLoansTest {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IBurnerLoans.BurnerLoans_PriceCacheKernelMismatch.selector,
+                IBurnerLoans.BurnerLoans_DependencyKernelMismatch.selector,
+                address(candidate),
                 address(kernel),
                 otherKernel
             )

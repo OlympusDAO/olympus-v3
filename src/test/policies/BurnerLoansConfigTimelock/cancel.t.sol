@@ -1,86 +1,23 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-import {Actions} from "src/Kernel.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+// Interfaces
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Libraries
 import {EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
+// Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+import {Actions} from "src/Kernel.sol";
+import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 
 // Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
 // forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
-    function test_givenQueuedYieldAction_cancellationReleasesRoutingGuard() public {
-        address recipient = address(_deployUsdsYieldRecipient());
-        vm.prank(admin);
-        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
-            abi.encode(recipient)
-        );
-
-        (bytes32 key, ) = configTimelockHarness.getQueuedConfigState(actionId, 0, 0);
-        assertEq(configTimelockHarness.pendingActionId(key), actionId, "yield routing key owner");
-        assertEq(configTimelockHarness.getQueuedConfigStateCount(actionId, 0), 1, "guard stored");
-
-        vm.prank(emergency);
-        configTimelockHarness.cancelQueuedAction(actionId);
-
-        assertEq(configTimelockHarness.pendingActionId(key), 0, "yield routing key released");
-        assertEq(configTimelockHarness.getQueuedConfigStateCount(actionId, 0), 0, "guard cleared");
-        assertEq(
-            configTimelockHarness.getQueuedConfigDestination(actionId, 0),
-            address(0),
-            "destination cleared"
-        );
-    }
-
-    function test_givenQueuedYieldAssetRouting_cancellationReleasesAssetAndRecipientGuards()
-        public
-    {
-        address recipient = address(_deployUsdsYieldRecipient());
-        vm.startPrank(admin);
-        burnerLoansConfig.setYieldRepurchaseRecipient(recipient);
-        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
-        vm.stopPrank();
-
-        vm.prank(burnerLoansAdmin);
-        uint64 firstActionId = configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldAssetRouting.selector,
-            abi.encode(address(usds), _repurchaseRouting(2_500))
-        );
-        vm.prank(emergency);
-        configTimelockHarness.cancelQueuedAction(firstActionId);
-
-        // The cancelled action no longer owns the asset key, so the same asset can be queued again.
-        vm.prank(burnerLoansAdmin);
-        uint64 secondActionId = configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldAssetRouting.selector,
-            abi.encode(address(usds), _repurchaseRouting(5_000))
-        );
-        vm.prank(emergency);
-        configTimelockHarness.cancelQueuedAction(secondActionId);
-
-        // Once the replacement bps action is also cancelled, no per-asset key blocks a recipient
-        // rotation.
-        address replacement = address(_deployUsdsYieldRecipient());
-        vm.prank(burnerLoansAdmin);
-        uint64 recipientActionId = configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldRepurchaseRecipient.selector,
-            abi.encode(replacement)
-        );
-
-        assertEq(recipientActionId, 3, "recipient action id");
-    }
-
     // cancelQueuedAction
     // given caller does not have emergency role
     //  when cancelling a queued action
@@ -176,38 +113,51 @@ contract BurnerLoansConfigTimelockCancelTest is BurnerLoansConfigTimelockTest {
         configTimelock.getQueuedActionLength(actionId);
     }
 
-    // cancelQueuedAction
-    // given a queued action
-    //  when the timelock policy is disabled
-    //   then emergency can still cancel it
-    function test_givenTimelockDisabled_allowsEmergencyCancellation() public {
-        uint64 actionId = _queueMaximumLtvUpdate();
-
-        vm.prank(emergency);
-        configTimelock.disable("");
-
-        assertFalse(configTimelock.isEnabled(), "disabled");
-        vm.prank(emergency);
-        vm.expectEmit(true, true, false, true, address(configTimelock));
-        emit TimelockActionCancelled(actionId, emergency);
-        configTimelock.cancelQueuedAction(actionId);
+    /// @notice Disablement or Kernel removal blocks emergency cancellation and retains the action.
+    // Finite independent local and policy states.
+    // forge-lint: disable-start(calls-loop)
+    function test_givenTimelockUnavailable_whenEmergencyCancels_reverts() public {
+        for (uint256 disabled; disabled < 2; ++disabled) {
+            for (uint256 inactive; inactive < 2; ++inactive) {
+                if (disabled == 0 && inactive == 0) continue;
+                uint256 snapshot = vm.snapshotState();
+                uint64 id = _queueMaximumLtvUpdate();
+                bytes32 beforeAction = keccak256(abi.encode(configTimelock.getQueuedAction(id)));
+                (bytes32 key, bytes32 stateHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+                vm.startPrank(admin);
+                if (disabled != 0) configTimelock.disable("");
+                if (inactive != 0)
+                    kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
+                vm.stopPrank();
+                bytes memory failure = disabled != 0
+                    ? abi.encodeWithSelector(IEnabler.NotEnabled.selector)
+                    : abi.encodeWithSelector(
+                        IBurnerLoansConfigTimelock
+                            .BurnerLoansConfigTimelock_PolicyInactive
+                            .selector,
+                        address(configTimelock)
+                    );
+                vm.expectRevert(failure);
+                vm.prank(emergency);
+                configTimelock.cancelQueuedAction(id);
+                assertEq(
+                    keccak256(abi.encode(configTimelock.getQueuedAction(id))),
+                    beforeAction,
+                    "rejected cancellation preserves action"
+                );
+                assertEq(
+                    configTimelock.pendingActionId(key),
+                    id,
+                    "rejected cancellation preserves key owner"
+                );
+                (, bytes32 afterHash) = configTimelock.getQueuedConfigState(id, 0, 0);
+                assertEq(afterHash, stateHash, "rejected cancellation preserves guard");
+                assertTrue(vm.revertToState(snapshot), "restore cancellation lifecycle");
+            }
+        }
     }
 
-    function test_givenPoliciesAreInactive_allowsEmergencyCancellation() public {
-        uint64 actionId = _queueMaximumLtvUpdate();
-        vm.startPrank(admin);
-        kernel.executeAction(Actions.DeactivatePolicy, address(configTimelock));
-        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
-        vm.stopPrank();
-
-        vm.prank(emergency);
-        configTimelock.cancelQueuedAction(actionId);
-
-        assertTrue(
-            configTimelock.getQueuedAction(actionId).cancelled,
-            "emergency should cancel while policies are inactive"
-        );
-    }
+    // forge-lint: disable-end(calls-loop)
 
     // cancelQueuedAction
     // given a queued action

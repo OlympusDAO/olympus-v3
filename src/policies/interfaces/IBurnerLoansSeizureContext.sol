@@ -22,6 +22,7 @@ struct BurnerLoansContext {
     IPriceCache priceCache;
     uint48 priceCacheMaxAge;
     address treasury;
+    address yieldRecipient;
     ROLESv1 roles;
 }
 

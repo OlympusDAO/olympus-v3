@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity >=0.8.24;
 
-// Revert-path calls assert exact revert data instead of consuming return values.
-// forge-lint: disable-start(unused-return)
-
 // Interfaces
 import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
-import {BURNER_LOANS_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
 import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Revert-path calls assert exact revert data instead of consuming return values.
+// forge-lint: disable-start(unused-return)
 
 contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
     BurnerLoansConfigTimelockTest
@@ -33,9 +32,7 @@ contract BurnerLoansConfigTimelockQueueSetAssetWithdrawAsSharesTest is
     function test_givenUnauthorizedCaller_reverts(address caller_) public {
         vm.assume(caller_ != admin && caller_ != burnerLoansAdmin);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, BURNER_LOANS_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         configTimelock.queueSetAssetWithdrawAsShares(address(usds), true);
     }

@@ -14,67 +14,6 @@ import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol
 // forge-lint: disable-start(unused-return,unsafe-typecast)
 
 contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTest {
-    function test_whenYieldAssetRoutingHasZeroDirectAllocations_queues() public {
-        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(0)));
-    }
-
-    function test_whenYieldAssetRoutingHasOneDirectAllocation_queues() public {
-        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(1)));
-    }
-
-    function test_whenYieldAssetRoutingHasMoreThanFiveDirectAllocations_queues() public {
-        _queueYieldAssetRoutingPayload(abi.encode(address(usds), _directRouting(6)));
-    }
-
-    function test_whenYieldAssetRoutingDeclaresUnrepresentableAllocationCount_reverts() public {
-        bytes memory payload = abi.encode(address(usds), _treasuryOnlyRouting());
-        for (uint256 i = 128; i < 160; ++i) {
-            payload[i] = 0xff;
-        }
-
-        _expectInvalidYieldAssetRoutingPayload(payload);
-    }
-
-    function test_whenYieldAssetRoutingPayloadIsShort_reverts() public {
-        _expectInvalidYieldAssetRoutingPayload(new bytes(31));
-    }
-
-    function test_whenYieldAssetRoutingPayloadIsTruncated_reverts() public {
-        bytes memory canonicalPayload = abi.encode(address(usds), _directRouting(1));
-        bytes memory truncatedPayload = new bytes(canonicalPayload.length - 32);
-        for (uint256 i; i < truncatedPayload.length; ++i) {
-            truncatedPayload[i] = canonicalPayload[i];
-        }
-
-        _expectInvalidYieldAssetRoutingPayload(truncatedPayload);
-    }
-
-    function test_whenYieldAssetRoutingRepurchaseBpsEncodingIsNonCanonical_reverts() public {
-        bytes memory payload = abi.encode(address(usds), _treasuryOnlyRouting());
-        payload[64] = 0x01;
-
-        _expectInvalidYieldAssetRoutingPayload(payload);
-    }
-
-    function test_whenYieldAssetRoutingPayloadHasTrailingData_reverts() public {
-        bytes memory canonicalPayload = abi.encode(address(usds), _treasuryOnlyRouting());
-
-        _expectInvalidYieldAssetRoutingPayload(bytes.concat(canonicalPayload, bytes32(0)));
-    }
-
-    function test_whenYieldAssetRoutingPayloadUsesNonCanonicalOffset_reverts() public {
-        bytes memory payload = bytes.concat(
-            bytes32(uint256(uint160(address(usds)))),
-            bytes32(uint256(96)),
-            bytes32(0),
-            bytes32(0),
-            bytes32(uint256(64)),
-            bytes32(0)
-        );
-
-        _expectInvalidYieldAssetRoutingPayload(payload);
-    }
-
     // queueAction
     // given target is not BurnerLoans
     //  when queueing through the raw harness
@@ -235,8 +174,39 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
         );
     }
 
+    // queueAction
+    // given a fee-distributor flag payload has the wrong length or value
+    //  when the action is queued
+    //   then validation rejects the new flag selector
+    // Scenarios: QFEES-I08, QFEES-I09
+    function test_whenFeeDistributorFlagPayloadIsInvalid_reverts() public {
+        _expectInvalidDistributorFlagPayloads(IBurnerLoansConfig.setSendFeesToDistributor.selector);
+    }
+
+    // queueAction
+    // given a yield-distributor flag payload has the wrong length or value
+    //  when the action is queued
+    //   then validation rejects the new flag selector
+    // Scenarios: QYIELD-I08, QYIELD-I09
+    function test_whenYieldDistributorFlagPayloadIsInvalid_reverts() public {
+        _expectInvalidDistributorFlagPayloads(
+            IBurnerLoansConfig.setSendYieldToDistributor.selector
+        );
+    }
+
     function _expectInvalidPayloadLength(bytes4 selector_, uint256 payloadLength_) internal {
+        _expectInvalidPayload(selector_, new bytes(payloadLength_));
+    }
+
+    function _expectInvalidDistributorFlagPayloads(bytes4 selector_) internal {
+        _expectInvalidPayloadLength(selector_, 31);
+        _expectInvalidPayloadLength(selector_, 33);
+        _expectInvalidPayload(selector_, abi.encode(uint256(2)));
+    }
+
+    function _expectInvalidPayload(bytes4 selector_, bytes memory payload_) internal {
         _authorizeHarness();
+        uint64 nextActionId = configTimelockHarness.nextActionId();
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -246,42 +216,16 @@ contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTe
             )
         );
         vm.prank(burnerLoansAdmin);
-        configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            selector_,
-            new bytes(payloadLength_)
-        );
-    }
-
-    function _queueYieldAssetRoutingPayload(bytes memory payload_) internal {
-        _authorizeHarness();
-        vm.prank(burnerLoansAdmin);
-        uint64 actionId = configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldAssetRouting.selector,
-            payload_
-        );
-        assertEq(actionId, 1, "action id");
-    }
-
-    function _expectInvalidYieldAssetRoutingPayload(bytes memory payload_) internal {
-        _authorizeHarness();
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
-                address(burnerLoansConfig),
-                IBurnerLoansConfig.setYieldAssetRouting.selector
-            )
-        );
-        vm.prank(burnerLoansAdmin);
-        configTimelockHarness.queueAction(
-            address(burnerLoansConfig),
-            IBurnerLoansConfig.setYieldAssetRouting.selector,
-            payload_
+        configTimelockHarness.queueAction(address(burnerLoansConfig), selector_, payload_);
+        assertEq(
+            configTimelockHarness.nextActionId(),
+            nextActionId,
+            "invalid payload should not consume an action ID"
         );
     }
 
     function _authorizeHarness() internal {
+        if (burnerLoansConfig.configOperator() == address(configTimelockHarness)) return;
         vm.prank(admin);
         burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
     }

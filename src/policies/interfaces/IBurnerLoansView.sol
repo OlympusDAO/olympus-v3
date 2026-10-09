@@ -8,61 +8,74 @@ import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
 /// @notice Read-only position and quote surface implemented by the lifecycle policy.
 interface IBurnerLoansView is IBurnerLoans {
     /// @notice Returns the OHM debt token used by this facility.
-    /// @return ohm_ OHM token address.
-    function ohm() external view returns (address ohm_);
+    /// @return ohmToken OHM token address.
+    function ohm() external view returns (address ohmToken);
 
     /// @notice Returns the OHM funding Burner Loans Inventory bound to this facility.
-    /// @return inventory_ Burner Loans Inventory address, or zero before it is bound.
-    function inventory() external view returns (address inventory_);
+    /// @return inventoryPolicy Burner Loans Inventory address, or zero before it is bound.
+    function inventory() external view returns (address inventoryPolicy);
 
     /// @notice Returns the Burner Loans Config policy authorized to configure this facility.
-    /// @return configurator_ Burner Loans Config address, or zero before it is bound.
-    function configurator() external view returns (address configurator_);
+    /// @return configPolicy Burner Loans Config address, or zero before it is bound.
+    function configurator() external view returns (address configPolicy);
 
     /// @notice Returns the optional PriceCache used by the facility.
-    /// @return priceCache_ PriceCache policy, or zero when direct PRICE mode is configured.
-    function priceCache() external view returns (address priceCache_);
+    /// @return cachePolicy PriceCache policy, or zero when direct PRICE mode is configured.
+    function priceCache() external view returns (address cachePolicy);
 
     /// @notice Returns the maximum accepted age of a cached price.
-    /// @return priceCacheMaxAge_ Maximum cached-price age, in seconds.
-    function priceCacheMaxAge() external view returns (uint48 priceCacheMaxAge_);
+    /// @return maxAge Maximum cached-price age, in seconds.
+    function priceCacheMaxAge() external view returns (uint48 maxAge);
 
-    /// @notice Returns the facility-wide yield repurchase recipient.
-    /// @return recipient Current repurchase recipient, or zero when none is configured.
-    function getYieldRepurchaseRecipient() external view returns (address recipient);
+    /// @notice Returns the stored distributor pointer, even if that policy is currently inactive.
+    /// @return distributor Configured distributor address.
+    function revenueDistributor() external view returns (address distributor);
+
+    /// @notice Returns whether collateral fees are configured for distributor custody.
+    /// @return enabled Whether fee routing to the distributor is enabled.
+    function sendFeesToDistributor() external view returns (bool enabled);
+
+    /// @notice Returns whether custody yield is configured for distributor custody.
+    /// @return enabled Whether yield routing to the distributor is enabled.
+    function sendYieldToDistributor() external view returns (bool enabled);
+
+    /// @notice Returns the total currently owed to a recipient for one token.
+    /// @dev Includes an original keeper reward, and any fee or seized collateral owed to the
+    ///      current fee destination or Treasury. The amount follows destination changes.
+    /// @param token_ Token owed.
+    /// @param recipient_ Recipient to inspect.
+    /// @return amount Total amount currently owed to the recipient.
+    function pendingPayout(
+        address token_,
+        address recipient_
+    ) external view returns (uint256 amount);
+
+    /// @notice Returns distinct tokens with one or more pending payouts.
+    /// @dev Seizure output can be a share token rather than a registered collateral asset, so
+    ///      this list cannot be replaced by the standard collateral asset registry.
+    /// @return tokens Tokens with pending payouts.
+    function getPendingPayoutTokens() external view returns (address[] memory tokens);
+
+    /// @notice Returns current recipients owed a pending payout for one token.
+    /// @dev Fee and Treasury entries follow the current destinations; original keepers stay fixed.
+    /// @param token_ Token owed.
+    /// @return recipients Current recipients with pending payouts for the token.
+    function getPendingPayoutRecipients(
+        address token_
+    ) external view returns (address[] memory recipients);
 
     /// @notice Returns the number of collateral assets registered by Config.
     /// @return count Number of registered assets.
     function getAssetCount() external view returns (uint256 count);
 
     /// @notice Returns a registered collateral asset by append-only index.
-    /// @dev Reverts with OpenZeppelin's enumerable-set bounds error for an invalid index.
     /// @param index_ Registry index to query.
     /// @return asset Registered collateral asset.
     function getAssetAt(uint256 index_) external view returns (address asset);
 
-    /// @notice Returns an asset's complete stored yield route without requiring live market state.
-    /// @dev The returned direct-allocation array preserves its configured order.
-    /// @param asset_ Collateral asset queried.
-    /// @return routing Complete declarative yield route.
-    function getYieldAssetRouting(
-        address asset_
-    ) external view returns (AssetYieldRouting memory routing);
-
-    /// @notice Validates a proposed complete yield route against current facility dependencies.
-    /// @dev Reverts under the same route conditions as `setYieldAssetRouting`, without changing
-    ///      state. This supports validation before a timelocked action is queued.
-    /// @param asset_ Registered collateral asset whose route is validated.
-    /// @param routing_ Complete proposed route for the asset.
-    function validateYieldAssetRouting(
-        address asset_,
-        AssetYieldRouting calldata routing_
-    ) external view;
-
     /// @notice Validates that a collateral asset is supported by this facility's dependencies.
-    /// @dev Checks PRICE approval without reading a live price. Reverts when PRICE does not support
-    ///      the asset or the facility's Deposit Manager cannot provide enabled custody for the
-    ///      Burner Loans deposit period.
+    /// @dev Checks PRICE approval without reading a live price and validates custody support for
+    ///      the Burner Loans deposit period.
     /// @param asset_ Collateral asset to validate.
     function validateAssetDependencies(address asset_) external view;
 
@@ -72,11 +85,10 @@ interface IBurnerLoansView is IBurnerLoans {
     function validateAssetWithdrawAsShares(address asset_, bool withdrawAsShares_) external view;
 
     /// @notice Returns the fixed-term loan module used by this facility.
-    /// @return floan_ FLOAN module address.
-    function floan() external view returns (address floan_);
+    /// @return floanModule FLOAN module address.
+    function floan() external view returns (address floanModule);
 
     /// @notice Returns a borrower's position for a collateral asset.
-    /// @dev Reverts if the collateral asset is not uniquely configured.
     /// @param asset_ Collateral asset securing the position.
     /// @param borrower_ Borrower whose position is queried.
     /// @return position Borrower's position.
@@ -86,22 +98,17 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (Position memory position);
 
     /// @notice Returns every active borrower for a collateral market.
-    /// @dev Reverts if the collateral asset is not uniquely configured.
     /// @param asset_ Collateral asset whose active borrowers are queried.
     /// @return borrowers Active borrower addresses in FLOAN's stored order.
     function getActiveBorrowers(address asset_) external view returns (address[] memory borrowers);
 
     /// @notice Returns whether a borrower currently satisfies the seizure conditions.
-    /// @dev Reverts if the collateral asset is not uniquely configured or price lookup fails.
     /// @param asset_ Collateral asset securing the position.
     /// @param borrower_ Borrower whose position is evaluated.
     /// @return seizable True when the position can be seized.
     function isSeizable(address asset_, address borrower_) external view returns (bool seizable);
 
     /// @notice Projects the aggregate result of seizing a borrower batch.
-    /// @dev Reverts if Burner Loans or custody is disabled, the asset is unavailable, the batch is
-    ///      invalid, a borrower is duplicated or not seizable, custody is insolvent, or price
-    ///      validation fails.
     /// @param asset_ Collateral asset seized from every borrower.
     /// @param borrowers_ Borrowers evaluated atomically.
     /// @return preview Projected aggregate seizure result.
@@ -111,9 +118,7 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (SeizePreview memory preview);
 
     /// @notice Scans a bounded active-borrower range for seizable positions.
-    /// @dev Reverts if Burner Loans is disabled, the asset is not uniquely configured, the return
-    ///      limit exceeds the seizure batch maximum, or price validation fails. A zero check or
-    ///      return limit produces an empty result without advancing the cursor.
+    /// @dev A zero check or return limit produces an empty result without advancing the cursor.
     /// @param asset_ Collateral asset whose borrowers are scanned.
     /// @param startIndex_ Active-borrower index at which scanning begins.
     /// @param maxBorrowersToCheck_ Maximum number of active borrowers inspected.
@@ -133,9 +138,6 @@ interface IBurnerLoansView is IBurnerLoans {
         returns (address[] memory borrowers, uint256 nextIndex, uint256 expectedKeeperReward);
 
     /// @notice Projects a collateral deposit for a borrower.
-    /// @dev Reverts if Burner Loans, originations, or custody is disabled; the asset is unavailable;
-    ///      the amount is zero; custody cannot preview the deposit; or required PRICE data is
-    ///      unavailable for an indebted position.
     /// @param asset_ Collateral asset to deposit.
     /// @param amount_ Proposed collateral deposit amount, in collateral token decimals.
     /// @param onBehalfOf_ Borrower whose position receives the collateral credit.
@@ -152,11 +154,9 @@ interface IBurnerLoansView is IBurnerLoans {
         returns (uint256 depositedCollateral, uint256 totalCollateral, uint256 healthFactor);
 
     /// @notice Projects a collateral withdrawal from a borrower's position.
-    /// @dev Reverts if Burner Loans or custody is disabled, the asset or position is unavailable,
-    ///      or the amount is zero or exceeds available collateral credit. The projected return may
-    ///      be lower than the requested collateral debit or zero because ERC-4626 conversion rounds
-    ///      down. Returns `preview.executable == false` when the resulting position would be
-    ///      unhealthy or custody would return zero assets.
+    /// @dev The projected return may be lower than the requested collateral debit or zero because
+    ///      ERC-4626 conversion rounds down. The preview is not executable when the resulting
+    ///      position would be unhealthy or custody would return zero assets.
     /// @param asset_ Collateral asset to withdraw.
     /// @param amount_ Asset-denominated collateral credit debited from the position.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
@@ -170,11 +170,8 @@ interface IBurnerLoansView is IBurnerLoans {
     /// @notice Projects an OHM borrow against a collateral position.
     /// @dev A new debt episode uses the currently configured term. An additional borrow joins an
     ///      active position without changing its existing maturity, including after the configured
-    ///      term or horizon is reduced. Reverts if Burner Loans, originations, or Inventory is
-    ///      disabled; the asset or position is unavailable; the amount is zero; price or custody
-    ///      validation fails; or a debt cap or new-episode maturity bound would be exceeded. An
-    ///      unhealthy current or resulting position is returned with `preview.executable == false`,
-    ///      including health below 1e18.
+    ///      term or horizon is reduced. An unhealthy current or resulting position is returned
+    ///      with `preview.executable == false`, including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param ohmAmount_ Principal requested, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
@@ -186,11 +183,8 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (BorrowPreview memory preview);
 
     /// @notice Projects an OHM principal repayment for a borrower.
-    /// @dev Reverts if Burner Loans is disabled, the asset or debt position is unavailable, the
-    ///      amount is zero or exceeds debt, repayment is attempted in the latest borrow block, or
-    ///      required PRICE data is unavailable when projected debt remains. Projected health is
-    ///      returned even when it is below 1e18; repayment remains executable because it reduces
-    ///      debt.
+    /// @dev Projected health is returned even when it is below 1e18; repayment remains executable
+    ///      because it reduces debt.
     /// @param asset_ Collateral asset securing the position.
     /// @param repayOhm_ Principal to repay, in OHM decimals.
     /// @param onBehalfOf_ Borrower whose debt is evaluated.
@@ -203,10 +197,7 @@ interface IBurnerLoansView is IBurnerLoans {
 
     /// @notice Projects an active position's maturity extension.
     /// @dev Applies the currently configured term length and maturity horizon to the position's
-    ///      entire outstanding principal. Reverts if Burner Loans or originations are disabled, the
-    ///      asset or position is unavailable, the term count is invalid, the position is matured,
-    ///      required PRICE data is unavailable, or the resulting maturity exceeds its current
-    ///      configured horizon. An unhealthy position is returned with
+    ///      entire outstanding principal. An unhealthy position is returned with
     ///      `preview.executable == false`, including health below 1e18.
     /// @param asset_ Collateral asset securing the position.
     /// @param onBehalfOf_ Borrower whose position is evaluated.
@@ -219,7 +210,6 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (ExtendPreview memory preview);
 
     /// @notice Calculates a hypothetical position health factor.
-    /// @dev Reverts if the asset is not uniquely configured or required prices are unavailable.
     /// @param asset_ Collateral asset securing the hypothetical position.
     /// @param collateral_ Collateral amount, in collateral token decimals.
     /// @param debtOhm_ Principal amount, in OHM decimals.
@@ -248,9 +238,9 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (uint256 healthFactor);
 
     /// @notice Projects claimable custody yield for one registered collateral asset.
-    /// @dev Reverts if Burner Loans is disabled, the asset is unregistered, custody is unsupported,
-    ///      or a solvent nonzero recipient allocation has an invalid live route. Insolvent custody
-    ///      returns `preview.executable == false` and zero claimable yield.
+    /// @dev Insolvent custody returns `preview.executable == false` and zero
+    ///      claimable yield. The preview reports the selected recipient without checking its
+    ///      current enabled, Kernel, or token-route state.
     /// @param asset_ Collateral asset whose yield claim is previewed.
     /// @return preview Projected collateral-yield claim result.
     function previewClaimYield(
@@ -258,7 +248,6 @@ interface IBurnerLoansView is IBurnerLoans {
     ) external view returns (ClaimYieldPreview memory preview);
 
     /// @notice Returns DepositManager custody accounting for a registered collateral asset.
-    /// @dev Reverts if the asset is unregistered or its custody configuration is unsupported.
     /// @param asset_ Collateral asset whose custody status is queried.
     /// @return status Current collateral accounting status.
     function getAssetCollateralStatus(
