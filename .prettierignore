@@ -10,6 +10,9 @@ node_modules/
 out/
 .gen-perms/
 
+# Markdown is formatted by markdownlint; Prettier's tabWidth changes list-marker spacing.
+**/*.md
+
 # Format runs from known Forge deployment scripts only.
 broadcast/**
 !broadcast/

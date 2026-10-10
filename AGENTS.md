@@ -233,6 +233,9 @@ Claude skills are located in `.claude/skills/` and can be invoked by name:
 
 Invoke a skill by name, e.g., `/test-write` for test writing guidance.
 
+For function-level scenario planning, test implementation, and coverage mapping, use
+[`solidity-test-scenarios`](.agents/skills/solidity-test-scenarios/SKILL.md).
+
 ### MCP Servers
 
 The project includes Model Context Protocol (MCP) servers for enhanced AI capabilities:
@@ -368,13 +371,17 @@ Key standards summary:
 - Do not revert with a blank message, use a custom error instead.
 - Contracts should have a separate interface that is defined in a separate file, to allow for easy integration. All interfaces are MIT-licensed, and should avoid using internal types. Interfaces should also use NatSpec to define functions and types, and any expectations for implementation contracts.
 - Contracts that implement interfaces should use the `@inheritdoc` NatSpec tag in function documentation to reference the parent interface's function.
-- Function documentation should outline the behaviour of the function, including any conditions that would result in a revert.
+- Interface NatSpec documents the API purpose, parameters, return values, and externally observable behavior. Document revert conditions and guard details on the concrete implementation, not interface functions.
+- Implementation function documentation should outline behavior and conditions that cause a revert.
 
 ### Access Control Pattern
 
 - Policies request permissions via `requestPermissions()` function
 - Kernel grants/revokes roles based on governance actions
 - Use `onlyRole()` modifiers (or `onlyAdminRole()` etc if using the PolicyAdmin mix-in) for function access control
+- For contracts using `ConfigOperatorSingleStep`, configuration entry points should accept `admin`
+  or the current `configOperator`. Treat the operator as delegated authority while retaining direct
+  governance control. Any exception must be intentional, documented, and covered by authorization tests.
 
 ### Key Contracts to Understand
 
