@@ -5,11 +5,9 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant)
 
 // Interfaces
-import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYieldClaimer.sol";
 
 // Contracts
-import {SafeERC20} from "@openzeppelin-5.7.0/token/ERC20/utils/SafeERC20.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
 import {Actions} from "src/Kernel.sol";
@@ -22,6 +20,8 @@ import {BurnerLoansClaimYieldTestBase} from "src/test/policies/BurnerLoans/fixtu
 // forge-lint: disable-start(unused-return,unsafe-typecast,calls-loop)
 
 contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldTestBase {
+    error IntegrationClaimReverted();
+
     uint32 internal constant _ROUTE_EXECUTION_GAS_LIMIT = 700_000;
 
     address internal _heart;
@@ -46,7 +46,7 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
     }
 
     // Scenarios: EXEC-L03, EXEC-I01.
-    function test_givenBurnerLoansDisabled_reportsFailureForEveryAsset() public {
+    function test_givenBurnerLoansDisabled_skipsEveryAsset() public {
         (MockERC20 laterAsset, MockERC4626 laterVault) = _addVaultAssetForTest();
         _depositCollateral(laterAsset);
         _addYield(10e6);
@@ -60,18 +60,12 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
         vm.prank(emergency);
         burnerLoans.disable("");
 
-        vm.expectEmit(true, false, false, true, address(_claimer));
-        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
-            address(vaultAsset),
-            IEnabler.NotEnabled.selector
-        );
-        vm.expectEmit(true, false, false, true, address(_claimer));
-        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
-            address(laterAsset),
-            IEnabler.NotEnabled.selector
-        );
+        vm.recordLogs();
         vm.prank(_heart);
         _claimer.execute();
+
+        assertEq(vm.getRecordedLogs().length, 0, "disabled Burner Loans emits no task event");
+        assertEq(_claimer.nextAssetIndex(), 0, "disabled Burner Loans preserves cursor");
         assertEq(
             vaultAsset.balanceOf(address(vault)),
             firstVaultBalanceBefore,
@@ -91,86 +85,6 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
             laterAsset.balanceOf(address(trsry)),
             laterTreasuryBalanceBefore,
             "later Treasury balance"
-        );
-    }
-
-    function test_givenRecipientTransferFails_skipsAssetAndClaimsLaterAsset() public {
-        (MockERC20 laterAsset, MockERC4626 laterVault) = _addVaultAssetForTest();
-        _depositCollateral(laterAsset);
-        _addYield(10e6);
-        laterAsset.mint(address(laterVault), 10e6);
-
-        uint256 failedClaimable = burnerLoans.previewClaimYield(address(vaultAsset)).amountOut;
-        uint256 laterClaimable = burnerLoans.previewClaimYield(address(laterAsset)).amountOut;
-        uint256 failedVaultBalanceBefore = vaultAsset.balanceOf(address(vault));
-        uint256 failedCustodySharesBefore = vault.balanceOf(address(depositManager));
-        uint256 firstTreasuryBefore = vaultAsset.balanceOf(address(trsry));
-        uint256 laterTreasuryBefore = laterAsset.balanceOf(address(trsry));
-        assertGt(failedClaimable, 0, "first asset has positive yield");
-        assertGt(laterClaimable, 0, "later asset has positive yield");
-
-        vm.mockCall(
-            address(vaultAsset),
-            abi.encodeWithSelector(vaultAsset.transfer.selector, address(trsry)),
-            abi.encode(false)
-        );
-        vm.expectEmit(true, false, false, true, address(_claimer));
-        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
-            address(vaultAsset),
-            SafeERC20.SafeERC20FailedOperation.selector
-        );
-        vm.prank(_heart);
-        _claimer.execute();
-
-        assertEq(
-            vaultAsset.balanceOf(address(vault)),
-            failedVaultBalanceBefore,
-            "failed vault assets roll back"
-        );
-        assertEq(
-            vault.balanceOf(address(depositManager)),
-            failedCustodySharesBefore,
-            "failed custody shares roll back"
-        );
-        assertEq(
-            vaultAsset.balanceOf(address(trsry)),
-            firstTreasuryBefore,
-            "failed recipient receives nothing"
-        );
-        assertEq(
-            burnerLoans.previewClaimYield(address(vaultAsset)).amountOut,
-            failedClaimable,
-            "failed yield remains claimable"
-        );
-        assertEq(
-            laterAsset.balanceOf(address(trsry)) - laterTreasuryBefore,
-            laterClaimable,
-            "later recipient receives exact previewed yield"
-        );
-        assertLt(
-            burnerLoans.previewClaimYield(address(laterAsset)).amountOut,
-            laterClaimable,
-            "later yield is claimed"
-        );
-        assertEq(
-            burnerLoans.totalPendingForTest(address(vaultAsset)),
-            0,
-            "failed yield creates no payout debt"
-        );
-        assertEq(
-            burnerLoans.totalPendingForTest(address(laterAsset)),
-            0,
-            "successful yield creates no payout debt"
-        );
-        assertEq(
-            vaultAsset.balanceOf(address(_claimer)),
-            0,
-            "claimer retains no first-asset custody"
-        );
-        assertEq(
-            laterAsset.balanceOf(address(_claimer)),
-            0,
-            "claimer retains no later-asset custody"
         );
     }
 
@@ -204,6 +118,110 @@ contract BurnerLoansYieldClaimerExecuteIntegrationTest is BurnerLoansClaimYieldT
             claimableBefore,
             "manual claim reduces claimable yield"
         );
+    }
+
+    // Scenarios: EXEC-I03.
+    function test_givenMultipleYieldAssets_boundedBeatsPayTreasuryAndResume() public {
+        (MockERC20 laterAsset, MockERC4626 laterVault) = _addVaultAssetForTest();
+        _depositCollateral(laterAsset);
+        _addYield(10e6);
+        laterAsset.mint(address(laterVault), 10e6);
+
+        uint256 firstYield = burnerLoans.previewClaimYield(address(vaultAsset)).amountOut;
+        uint256 laterYield = burnerLoans.previewClaimYield(address(laterAsset)).amountOut;
+        uint256 firstTreasury = vaultAsset.balanceOf(address(trsry));
+        uint256 laterTreasury = laterAsset.balanceOf(address(trsry));
+        uint256 firstVault = vaultAsset.balanceOf(address(vault));
+        uint256 laterVaultBalance = laterAsset.balanceOf(address(laterVault));
+        uint256 count = burnerLoans.getAssetCount();
+        assertGt(firstYield, 0, "first asset has accrued yield");
+        assertGt(laterYield, 0, "later asset has accrued yield");
+
+        // Each beat is capped at 1m outer gas and 700k task gas.
+        // All amounts are in the collateral token's six-decimal scale.
+        // Treasury gains exactly previewed yield; vault assets fall by the same amount.
+        for (uint256 beat; beat < count; ++beat) {
+            vm.prank(_heart);
+            _claimer.execute{gas: 1_000_000}();
+            assertLt(_claimer.nextAssetIndex(), count, "cursor remains in live registry");
+        }
+
+        assertEq(
+            vaultAsset.balanceOf(address(trsry)) - firstTreasury,
+            firstYield,
+            "first Treasury receives previewed yield"
+        );
+        assertEq(
+            laterAsset.balanceOf(address(trsry)) - laterTreasury,
+            laterYield,
+            "later Treasury receives previewed yield"
+        );
+        assertEq(
+            firstVault - vaultAsset.balanceOf(address(vault)),
+            firstYield,
+            "first vault funds Treasury payout"
+        );
+        assertEq(
+            laterVaultBalance - laterAsset.balanceOf(address(laterVault)),
+            laterYield,
+            "later vault funds Treasury payout"
+        );
+    }
+
+    // Scenarios: EXEC-I04, EXEC-F01.
+    function test_givenFirstClaimReverts_laterClaimPaysTreasuryInSameBeat() public {
+        (MockERC20 laterAsset, MockERC4626 laterVault) = _addVaultAssetForTest();
+        _depositCollateral(laterAsset);
+        _addYield(10e6);
+        laterAsset.mint(address(laterVault), 10e6);
+        uint256 firstYield = burnerLoans.previewClaimYield(address(vaultAsset)).amountOut;
+        uint256 laterYield = burnerLoans.previewClaimYield(address(laterAsset)).amountOut;
+        uint256 firstTreasury = vaultAsset.balanceOf(address(trsry));
+        uint256 laterTreasury = laterAsset.balanceOf(address(trsry));
+        uint256 firstVault = vaultAsset.balanceOf(address(vault));
+        uint256 laterVaultBalance = laterAsset.balanceOf(address(laterVault));
+
+        vm.mockCallRevert(
+            address(burnerLoans),
+            abi.encodeCall(burnerLoans.claimYield, (address(vaultAsset))),
+            abi.encodeWithSelector(IntegrationClaimReverted.selector)
+        );
+        vm.expectEmit(true, false, false, true, address(_claimer));
+        emit IBurnerLoansYieldClaimer.YieldAssetClaimFailed(
+            address(vaultAsset),
+            IntegrationClaimReverted.selector
+        );
+        vm.prank(_heart);
+        _claimer.execute{gas: 1_000_000}();
+        vm.clearMockedCalls();
+
+        assertEq(
+            vaultAsset.balanceOf(address(trsry)),
+            firstTreasury,
+            "failed claim leaves Treasury unchanged"
+        );
+        assertEq(
+            vaultAsset.balanceOf(address(vault)),
+            firstVault,
+            "failed claim leaves vault unchanged"
+        );
+        assertEq(
+            burnerLoans.previewClaimYield(address(vaultAsset)).amountOut,
+            firstYield,
+            "failed claim remains available"
+        );
+        // Six-decimal collateral: the later payout equals its pre-execution preview.
+        assertEq(
+            laterAsset.balanceOf(address(trsry)) - laterTreasury,
+            laterYield,
+            "later yield paid in same beat"
+        );
+        assertEq(
+            laterVaultBalance - laterAsset.balanceOf(address(laterVault)),
+            laterYield,
+            "later vault funds exact payout"
+        );
+        assertEq(_claimer.nextAssetIndex(), 0, "complete traversal wraps cursor");
     }
 
     function _depositCollateral(MockERC20 asset_) internal {

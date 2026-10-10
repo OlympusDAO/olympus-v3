@@ -14,6 +14,9 @@ import {IBurnerLoansYieldClaimer} from "src/policies/interfaces/IBurnerLoansYiel
 import {BurnerLoansYieldClaimerTest} from "./BurnerLoansYieldClaimerTest.sol";
 
 contract BurnerLoansYieldClaimerSupportsInterfaceTest is BurnerLoansYieldClaimerTest {
+    bytes4 internal constant _INVALID_INTERFACE_ID = 0xffffffff;
+
+    // Scenarios: BLYC-ERC165-P01.
     function test_givenSupportedInterfaces_returnsTrue() public view {
         assertTrue(claimer.supportsInterface(type(IERC165).interfaceId), "IERC165");
         assertTrue(claimer.supportsInterface(type(IEnabler).interfaceId), "IEnabler");
@@ -28,7 +31,32 @@ contract BurnerLoansYieldClaimerSupportsInterfaceTest is BurnerLoansYieldClaimer
         );
     }
 
+    // Scenarios: BLYC-ERC165-P02.
     function test_givenUnsupportedInterface_returnsFalse() public view {
-        assertFalse(claimer.supportsInterface(bytes4(0xffffffff)), "unsupported interface");
+        assertFalse(claimer.supportsInterface(_INVALID_INTERFACE_ID), "unsupported interface");
+    }
+
+    // Scenarios: BLYC-ERC165-P03.
+    function test_givenUnrelatedInterface_returnsFalse(
+        bytes4 interfaceId_,
+        address caller_,
+        bool active_,
+        bool enabled_
+    ) public {
+        vm.assume(interfaceId_ != _INVALID_INTERFACE_ID);
+        vm.assume(interfaceId_ != type(IERC165).interfaceId);
+        vm.assume(interfaceId_ != type(IEnabler).interfaceId);
+        vm.assume(interfaceId_ != type(IEnablerV2).interfaceId);
+        vm.assume(interfaceId_ != type(IReEnabler).interfaceId);
+        vm.assume(interfaceId_ != type(IGracePeriod).interfaceId);
+        vm.assume(interfaceId_ != type(IPeriodicTask).interfaceId);
+        vm.assume(interfaceId_ != type(IVersioned).interfaceId);
+        vm.assume(interfaceId_ != type(IBurnerLoansYieldClaimer).interfaceId);
+        _setClaimerLifecycle(active_, enabled_);
+
+        vm.prank(caller_);
+        bool supported = claimer.supportsInterface(interfaceId_);
+
+        assertFalse(supported, "unrelated interface unsupported");
     }
 }

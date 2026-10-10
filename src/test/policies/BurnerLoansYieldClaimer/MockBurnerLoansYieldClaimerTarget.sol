@@ -7,10 +7,11 @@ pragma solidity >=0.8.24;
 import {IERC165} from "@openzeppelin-5.7.0/interfaces/IERC165.sol";
 
 import {Kernel, Keycode, Permissions, Policy} from "src/Kernel.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {IBurnerLoansYieldClaim} from "src/policies/interfaces/IBurnerLoansYieldClaim.sol";
 import {IBurnerLoansView} from "src/policies/interfaces/IBurnerLoansView.sol";
 
-contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYieldClaim {
+contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IEnabler, IBurnerLoansYieldClaim {
     error ClaimReverted();
     error AssetViewReverted();
     error InvalidAssetIndex(uint256 index);
@@ -20,9 +21,14 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
     bool public claimRevertsWithLargeData;
     address public claimConsumesAllGasAsset;
     bool public assetViewReverts;
+    uint256 public assetViewRevertIndex = type(uint256).max;
+    bool public supportsYieldClaim = true;
     bool public supportsAssetView = true;
+    bool public supportsLifecycle = true;
+    bool public override isEnabled = true;
     uint256 public claimCalls;
     address public lastClaimedAsset;
+    address[] public claimedAssets;
 
     address internal constant _ASSET = address(0xA11CE);
     address[] internal _assets;
@@ -69,8 +75,30 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
         supportsAssetView = supportsAssetView_;
     }
 
+    function setSupportsYieldClaim(bool supportsYieldClaim_) external {
+        supportsYieldClaim = supportsYieldClaim_;
+    }
+
+    function setSupportsLifecycle(bool supportsLifecycle_) external {
+        supportsLifecycle = supportsLifecycle_;
+    }
+
+    function enable(bytes calldata) external override {
+        isEnabled = true;
+        emit Enabled();
+    }
+
+    function disable(bytes calldata) external override {
+        isEnabled = false;
+        emit Disabled();
+    }
+
     function setAssetViewReverts(bool reverts_) external {
         assetViewReverts = reverts_;
+    }
+
+    function setAssetViewRevertIndex(uint256 index_) external {
+        assetViewRevertIndex = index_;
     }
 
     function setAssets(address[] calldata assets_) external {
@@ -91,6 +119,7 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
 
     function getAssetAt(uint256 index_) external view returns (address asset) {
         if (assetViewReverts) revert AssetViewReverted();
+        if (index_ == assetViewRevertIndex) revert AssetViewReverted();
         if (index_ >= _assets.length) revert InvalidAssetIndex(index_);
         return _assets[index_];
     }
@@ -121,14 +150,16 @@ contract MockBurnerLoansYieldClaimerTarget is Policy, IERC165, IBurnerLoansYield
         }
         if (claimReverts) revert ClaimReverted();
         lastClaimedAsset = asset_;
+        claimedAssets.push(asset_);
         ++claimCalls;
     }
 
     function supportsInterface(bytes4 interfaceId_) external view override returns (bool) {
         return
             interfaceId_ == type(IERC165).interfaceId ||
-            interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId ||
-            (supportsAssetView && interfaceId_ == type(IBurnerLoansView).interfaceId);
+            (supportsYieldClaim && interfaceId_ == type(IBurnerLoansYieldClaim).interfaceId) ||
+            (supportsAssetView && interfaceId_ == type(IBurnerLoansView).interfaceId) ||
+            (supportsLifecycle && interfaceId_ == type(IEnabler).interfaceId);
     }
 }
 
