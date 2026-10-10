@@ -135,7 +135,19 @@ To create a new simulatable proposal, follow these steps:
 
     - Optionally, feel free to include integration tests. Integration tests should be named `testProposal_xxx`.
 
-5. **Submit a Pull Request**
+5. **Run Validation and Resolve Lint Findings**
+
+    - Run Forge lint from the repository root, replacing the example filenames with your proposal and test:
+
+        ```sh
+        forge lint src/proposals/OIP_XXX.sol src/test/proposals/OIP_XXX.t.sol
+        pnpm run lint:check
+        ```
+
+    - Inspect the notes and warnings for the changed files even when the command exits successfully. Fix findings in new proposal and test code, then rerun the check.
+    - `pnpm run lint` and `pnpm run lint:check` include Forge lint alongside formatting and Markdown checks. Follow the [repository validation gates](../../AGENTS.md#validation-gates) for the remaining build and test requirements. Lint does not replace fork simulation or code review.
+
+6. **Submit a Pull Request**
     - Do a PR to the [Olympus V3](https://github.com/OlympusDAO/olympus-v3) repository.
     - Name the PR `OIP-XXX: proposal simulation`.
 
