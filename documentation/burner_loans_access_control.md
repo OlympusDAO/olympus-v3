@@ -21,8 +21,11 @@ The Burner Loans system uses two different delay mechanisms:
 | OCG governance        | The expected `admin` holder is the OCG Timelock. The target Burner Loans function is direct. |
 | Immediate             | The target function does not enforce a delay.                                                |
 
-The Burner Loans timelock has a minimum delay of one day. An action expires three days after its
-execution time starts. Any address can execute a valid action during that window.
+The shared queue and Burner Loans validation support delays from 1–30 days. The current
+`BurnerLoansConfigTimelock` constructor selects one day and exposes no public delay setter, so its
+deployed delay remains one day. A future implementation may expose the inherited internal setter,
+subject to the same 1–30 day validation. An action expires three days after its execution time
+starts. Any address can execute a valid action during that window.
 
 The `admin` role does not force a delay at the target contract. The delay exists only when the OCG
 Timelock holds that role and calls the function through governance.
@@ -47,49 +50,49 @@ The deployment process must record those addresses before activation.
 
 ## Configuration Matrix
 
-An `admin` can call the delegated Config setters directly through OCG governance. ConfigTimelock
-can call the same setters after a delay of at least one day. Both paths require Config to be
-enabled.
+An `admin` or selected config operator can call the delegated Config setters. The expected operator
+is ConfigTimelock, which adds a delay of at least one day. Direct admin calls follow OCG governance.
+Both paths require Config to be enabled; individual setters also validate their target dependencies.
 
 `setConfigOperator` accepts the zero address. Setting it to zero revokes ConfigTimelock access. When
-delegated access is enabled, the expected address is `BurnerLoansConfigTimelock`.
+delegated access is enabled, the expected address is `BurnerLoansConfigTimelock`. A different
+selected operator may call the same delegated setters without the Burner Loans timelock delay.
 
-| Contract                  | Function                                | Authorized caller               | Delay          | Main state requirements                                                 |
-| ------------------------- | --------------------------------------- | ------------------------------- | -------------- | ----------------------------------------------------------------------- |
-| `BurnerLoans`             | `setInventory`                          | `admin`                         | OCG governance | Burner Loans is disabled                                                |
-| `BurnerLoans`             | `setConfigurator`                       | `admin`                         | OCG governance | Burner Loans is disabled; replacement validates and migrates atomically |
-| `BurnerLoans`             | `setBackingOracle`                      | `admin`                         | OCG governance | Burner Loans is enabled                                                 |
-| `BurnerLoans`             | `setPriceCache`                         | `admin`                         | OCG governance | Zero selects PRICE; nonzero cache must be compatible and same-Kernel    |
-| `BurnerLoansConfig`       | `setFacility`                           | `admin`                         | OCG governance | Config is disabled, and the facility can be set only once               |
-| `BurnerLoansConfig`       | `addAsset`                              | `admin`                         | OCG governance | Config is enabled, and the new market starts with originations on       |
-| `BurnerLoansConfig`       | `setGlobalDebtCap`                      | `admin`                         | OCG governance | Config is enabled                                                       |
-| `BurnerLoansConfig`       | `setPriceCacheMaxAge`                    | `admin`                         | OCG governance | Config and Burner Loans are enabled; complete `uint48` range is valid   |
-| `BurnerLoansConfig`       | `setPriceCacheMaxAge`                    | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled; queued pre-state still matches     |
-| `BurnerLoansConfig`       | `setConfigOperator`                     | `admin`                         | OCG governance | Config is enabled, and zero revokes delegated access                    |
-| `BurnerLoansConfig`       | `setAssetDebtCap`                       | `admin`                         | OCG governance | Config is enabled, and the cap cannot be less than active debt          |
-| `BurnerLoansConfig`       | `setAssetDebtCap`                       | ConfigTimelock                  | >= 1 day       | Config is enabled, and the cap cannot be less than active debt          |
-| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | `admin`                         | OCG governance | Config is enabled, and the asset and values must be valid               |
-| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | ConfigTimelock                  | >= 1 day       | Config is enabled, and the asset and values must be valid               |
-| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | `admin`                         | OCG governance | Config is enabled, and the complete fee curve must be valid             |
-| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | ConfigTimelock                  | >= 1 day       | Config is enabled, and the complete fee curve must be valid             |
-| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | `admin`                         | OCG governance | Config is enabled, and enabling revalidates asset dependencies          |
-| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | ConfigTimelock                  | >= 1 day       | Config is enabled, and enabling revalidates asset dependencies          |
-| `BurnerLoansConfig`       | `setAssetWithdrawAsShares`              | `admin`                         | OCG governance | Config is enabled, and DepositManager accepts the withdrawal mode       |
-| `BurnerLoansConfig`       | `setAssetWithdrawAsShares`              | ConfigTimelock                  | >= 1 day       | Config is enabled, and DepositManager accepts the withdrawal mode       |
-| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
-| `BurnerLoansConfig`       | `setYieldRepurchaseRecipient`           | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                     |
-| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | `admin`                         | OCG governance | Config and Burner Loans are enabled                                     |
-| `BurnerLoansConfig`       | `setYieldAssetRouting`                  | ConfigTimelock                  | >= 1 day       | Config and Burner Loans are enabled                                     |
-| `BurnerLoansInventory`    | `setConfigurator`                       | `admin`                         | OCG governance | Inventory is disabled                                                   |
-| `BurnerLoansInventory`    | `setGlobalDebtCap`                      | `admin` via `BurnerLoansConfig` | OCG governance | Config is enabled, and the cap cannot be less than active principal     |
-| `BurnerLoansInventory`    | `syncMintApproval`                      | `burner_loans_admin`            | Immediate      | Inventory is enabled                                                    |
-| `BurnerLoansInventory`    | `burnSurplus`                           | `admin`                         | OCG governance | Inventory is enabled                                                    |
-| `BurnerLoansInventory`    | `rescueSurplus`                         | `admin`                         | OCG governance | Inventory is enabled                                                    |
-| `BurnerLoansSeizer`       | `addAsset`, `removeAsset`               | `admin`                         | OCG governance | The asset-list transition must be valid                                 |
-| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `admin`                         | OCG governance | The new limits must be valid                                            |
-| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `burner_loans_admin`            | Immediate      | The new limits must be valid                                            |
-| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `admin`                         | OCG governance | The gas limit must be nonzero                                           |
-| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `burner_loans_admin`            | Immediate      | The gas limit must be nonzero                                           |
+| Contract                  | Function                                | Authorized caller               | Delay           | Main state requirements                                                 |
+| ------------------------- | --------------------------------------- | ------------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `BurnerLoans`             | `setInventory`                          | `admin`                         | OCG governance  | Burner Loans is disabled                                                |
+| `BurnerLoans`             | `setConfigurator`                       | `admin`                         | OCG governance  | Burner Loans is disabled; replacement validates and migrates atomically |
+| `BurnerLoans`             | `setBackingOracle`                      | `admin`                         | OCG governance  | Burner Loans is enabled                                                 |
+| `BurnerLoans`             | `setPriceCache`                         | `admin`                         | OCG governance  | Zero selects PRICE; nonzero cache must be compatible and same-Kernel    |
+| `BurnerLoans`             | `setRevenueDistributor`                 | `admin`                         | OCG governance  | Burner Loans enabled and Kernel-active; nonzero distributor enabled, active, compatible, same-Kernel; zero requires both send flags false |
+| `BurnerLoansConfig`       | `setFacility`                           | `admin`                         | OCG governance  | Config disabled and Kernel-active; facility active, compatible, same-Kernel; one-time binding               |
+| `BurnerLoansConfig`       | `addAsset`                              | `admin`                         | OCG governance  | Config and Burner Loans enabled; custody and PRICE support valid; new market starts with originations on       |
+| `BurnerLoansConfig`       | `setGlobalDebtCap`                      | `admin`                         | OCG governance  | Config is enabled                                                       |
+| `BurnerLoansConfig`       | `setPriceCacheMaxAge`                   | `admin` or selected operator       | OCG or operator delay | Config and Burner Loans are enabled; a timelocked action also requires its queued pre-state to match |
+| `BurnerLoansConfig`       | `setSendFeesToDistributor`              | `admin` or selected operator    | OCG or operator delay | Config and Burner Loans enabled and Kernel-active; enabling requires a nonzero, enabled, active, compatible, same-Kernel distributor |
+| `BurnerLoansConfig`       | `setSendYieldToDistributor`             | `admin` or selected operator    | OCG or operator delay | Config and Burner Loans enabled and Kernel-active; enabling requires a nonzero, enabled, active, compatible, same-Kernel distributor |
+| `BurnerLoansConfig`       | `setConfigOperator`                     | `admin`                         | OCG governance  | Config is enabled, and zero revokes delegated access                    |
+| `BurnerLoansConfig`       | `setAssetDebtCap`                       | `admin` or selected operator       | OCG or operator delay | Config is enabled, and the cap cannot be less than active debt          |
+| `BurnerLoansConfig`       | `setAssetRiskConfig`                    | `admin` or selected operator       | OCG or operator delay | Config is enabled, and the asset and values must be valid               |
+| `BurnerLoansConfig`       | `setAssetFeeConfig`                     | `admin` or selected operator       | OCG or operator delay | Config is enabled, and the complete fee curve must be valid             |
+| `BurnerLoansConfig`       | `setAssetOriginationsEnabled`           | `admin` or selected operator       | OCG or operator delay | Config is enabled, and enabling revalidates asset dependencies          |
+| `BurnerLoansConfig`       | `setAssetWithdrawAsShares`              | `admin` or selected operator       | OCG or operator delay | Config is enabled, and DepositManager accepts the withdrawal mode       |
+| `BurnerLoansInventory`    | `setConfigurator`                       | `admin`                         | OCG governance  | Inventory is disabled                                                   |
+| `BurnerLoansInventory`    | `setGlobalDebtCap`                      | `admin` via `BurnerLoansConfig` | OCG governance  | Config is enabled, and the cap cannot be less than active principal     |
+| `BurnerLoansInventory`    | `syncMintApproval`                      | `burner_loans_admin`            | Immediate       | Inventory is enabled                                                    |
+| `BurnerLoansInventory`    | `burnSurplus`                           | `admin`                         | OCG governance  | Inventory is enabled                                                    |
+| `BurnerLoansInventory`    | `rescueSurplus`                         | `admin`                         | OCG governance  | Inventory is enabled                                                    |
+| `BurnerLoansSeizer`       | `addAsset`, `removeAsset`               | `admin`                         | OCG governance  | The asset-list transition must be valid                                 |
+| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `admin`                         | OCG governance  | The new limits must be valid                                            |
+| `BurnerLoansSeizer`       | `setScanLimits`, `setExecutionGasLimit` | `burner_loans_admin`            | Immediate       | The new limits must be valid                                            |
+| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `admin`                         | OCG governance  | The gas limit must be nonzero                                           |
+| `BurnerLoansYieldClaimer` | `setExecutionGasLimit`                  | `burner_loans_admin`            | Immediate       | The gas limit must be nonzero                                           |
+| `BurnerLoansYieldClaimer` | `setMinimumGasToAttempt`                | `admin`                         | OCG governance  | The threshold must exceed the cleanup reserve; callable while locally disabled or Kernel-inactive |
+| `BurnerLoansYieldClaimer` | `setMinimumGasToAttempt`                | `burner_loans_admin`            | Immediate       | The threshold must exceed the cleanup reserve; callable while locally disabled or Kernel-inactive |
+| `BurnerLoansYieldClaimer` | `setGasReserve`                         | `admin`                         | OCG governance  | The reserve must be at least 100,000 gas and below the threshold; callable while locally disabled or Kernel-inactive |
+| `BurnerLoansYieldClaimer` | `setGasReserve`                         | `burner_loans_admin`            | Immediate       | The reserve must be at least 100,000 gas and below the threshold; callable while locally disabled or Kernel-inactive |
+| `BurnerLoansYieldClaimer` | `setNextAssetIndex`                     | `admin`                         | OCG governance  | Zero resets the cursor; nonzero must be below the live registry count; callable while locally disabled or Kernel-inactive |
+| `BurnerLoansYieldClaimer` | `setNextAssetIndex`                     | `burner_loans_admin`            | Immediate       | Zero resets the cursor; nonzero must be below the live registry count; callable while locally disabled or Kernel-inactive |
 
 `burner_loans_admin` cannot add a market or call a Config setter directly. It can queue only the
 supported Config changes through `BurnerLoansConfigTimelock`.
@@ -108,6 +111,9 @@ for the complete migration procedure and rollback guarantees.
 
 ## Config Timelock Matrix
 
+“Both policies” below means ConfigTimelock and Config. Each action also checks its target inputs;
+rescue previews require Burner Loans Kernel-active even at queue time, while allowing local disablement.
+
 | Function                        | Authorized caller               | Delay     | Main state requirements                                                                  |
 | ------------------------------- | ------------------------------- | --------- | ---------------------------------------------------------------------------------------- |
 | `queueSetAssetFeeConfig`        | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
@@ -115,9 +121,11 @@ for the complete migration procedure and rollback guarantees.
 | `queueSetAssetRiskConfig`       | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
 | `queueSetPriceCacheMaxAge`      | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
 | `queueSetAssetWithdrawAsShares` | `admin` or `burner_loans_admin` | >= 1 day  | Both policies are Kernel-active and enabled; the timelock is the current config operator |
+| `queueSetSendFeesToDistributor`, `queueSetSendYieldToDistributor` | `admin` or `burner_loans_admin` | >= 1 day | Both policies enabled and Kernel-active; selected operator; enabling validates the distributor |
+| `queueRescue`, `queueRescuePendingPayout` | `admin` or `burner_loans_admin` | >= 1 day | Both policies enabled and Kernel-active; selected operator; Burner Loans Kernel-active, enabled or disabled |
 | `queueBatch`                    | `admin` or `burner_loans_admin` | >= 1 day  | The same lifecycle gates apply and every sub-action passes its queue-time checks         |
-| `executeQueuedAction`           | Any address                     | >= 1 day  | Action is ready and unexpired; both policies remain Kernel-active and enabled            |
-| `cancelQueuedAction`            | `emergency`                     | Immediate | Action exists and is unfinished; policy activity and enablement are not required         |
+| `executeQueuedAction`           | Any address                     | >= 1 day  | Action ready and unexpired; both policies enabled and Kernel-active; timelock remains selected; live target checks pass            |
+| `cancelQueuedAction`            | `emergency`                     | Immediate | Unfinished action; ConfigTimelock enabled and Kernel-active; Config state and operator selection do not gate cancellation |
 
 `queueBatch` supports these Config functions:
 
@@ -127,20 +135,33 @@ for the complete migration procedure and rollback guarantees.
 | `setAssetRiskConfig`          |
 | `setAssetFeeConfig`           |
 | `setAssetOriginationsEnabled` |
-| `setPriceCacheMaxAge`          |
+| `setPriceCacheMaxAge`         |
 | `setAssetWithdrawAsShares`    |
-| `setYieldRepurchaseRecipient` |
-| `setYieldAssetRouting`        |
+| `setSendFeesToDistributor`    |
+| `setSendYieldToDistributor`   |
+| `rescue`                      |
+| `rescuePendingPayout`          |
 
-The typed queue helpers cover debt-cap, risk, fee, PriceCache max-age, and withdrawal-output
-changes. Asset-originations and yield-routing changes use `queueBatch`.
+The typed queue helpers cover debt-cap, risk, fee, PriceCache max-age, withdrawal-output, both
+send flags, and both rescues. Asset-originations changes use `queueBatch`. Revenue allocations are
+configured on [Revenue Distributor](revenue_distributor_access_control.md).
 
 Each queued configuration key records its expected pre-state. Execution fails if that pre-state
 changes before execution. A stale action does not block an unrelated action.
 
-Kernel deactivation pauses queued actions rather than cancelling them. An unexpired action can resume
-after both policies are reactivated if the config operator and expected pre-state are unchanged.
-Emergency should cancel any action that must not survive a policy deactivation.
+The fee, risk, debt-cap, origination, and withdrawal-mode actions use separate per-asset domains.
+The PriceCache max-age action and each distributor send flag use separate global domains. Every
+queued state hash is scoped to the selected Config address and binds its facility and relevant
+configuration. Surplus rescue uses a separate token key; pending rescue uses a token/recipient key,
+so different recipients can be queued concurrently. Rescue hashes bind only the facility: balances
+and entitlements are checked live. Live debt is checked when a debt-cap action executes, so ordinary
+repayments and borrows do not make that action stale.
+
+Disablement or Kernel deactivation of ConfigTimelock blocks queueing, execution, and cancellation.
+Config disablement or deactivation blocks queueing and execution. Existing actions and their
+execution windows remain unchanged. After restoration, an unexpired action can execute if the
+operator, expected state, and live inputs remain valid. Emergency must cancel unwanted actions
+while ConfigTimelock is enabled and Kernel-active.
 
 ## Asset-Originations Control
 
@@ -163,6 +184,8 @@ policy when an incident requires a strict pause.
 | Withdraw collateral | Allowed              | Allowed               | Blocked               |
 | Seize               | Allowed              | Allowed               | Blocked               |
 | Claim yield         | Allowed              | Allowed               | Blocked               |
+| Retry pending payout | Allowed             | Allowed               | Blocked               |
+| Authorized rescue   | Allowed              | Allowed               | Allowed               |
 
 ## Policy-Lifecycle Matrix
 
@@ -194,7 +217,8 @@ Each policy revalidates its required dependencies before re-enabling.
 
 ## User And Automation Matrix
 
-These functions do not use a timelock.
+These entry points do not impose a delay. Admin calls follow the admin role holder's governance delay;
+a selected Config operator may itself be a timelock.
 
 | Contract                  | Function                                   | Authorized caller                           | Main state requirements                                    |
 | ------------------------- | ------------------------------------------ | ------------------------------------------- | ---------------------------------------------------------- |
@@ -208,18 +232,24 @@ These functions do not use a timelock.
 | `BurnerLoans`             | `repay`                                    | Any address                                 | Burner Loans and Inventory are enabled                     |
 | `BurnerLoans`             | `seize`                                    | Any address                                 | Burner Loans, Inventory, and custody are enabled           |
 | `BurnerLoans`             | `claimYield`                               | Any address                                 | Burner Loans is enabled                                    |
+| `BurnerLoans`             | `transferPendingPayout`                    | Any address                                 | Enabled and Kernel-active                                   |
+| `BurnerLoans`             | `rescue`, `rescuePendingPayout` | Bound Config or `admin` | Burner Loans Kernel-active; local disablement allowed |
+| `BurnerLoansConfig`       | `rescue`, `rescuePendingPayout` | `admin` or selected config operator | Config enabled and Kernel-active; Burner Loans Kernel-active, with local disablement allowed |
 | `BurnerLoansInventory`    | `supply`, `withdraw`                       | `burner_loans_inventory_provider`           | Inventory is enabled                                       |
 | `BurnerLoansInventory`    | `draw`, `settleRepayment`, `recordDefault` | Exact Burner Loans facility address         | Inventory is enabled                                       |
 | `BurnerLoansSeizer`       | `execute`                                  | `heart`                                     | A disabled Seizer returns without work                     |
 | `BurnerLoansSeizer`       | `selfExecuteTask`                          | The Seizer contract itself                  | Called by `execute`                                        |
-| `BurnerLoansYieldClaimer` | `execute`                                  | `heart`                                     | A disabled YieldClaimer returns without work               |
-| `BurnerLoansYieldClaimer` | `selfExecuteTask`                          | The YieldClaimer contract itself            | Called by `execute`                                        |
+| `BurnerLoansYieldClaimer` | `execute`                                  | `heart`                                     | A Kernel-inactive or disabled YieldClaimer returns without work |
+| `BurnerLoansYieldClaimer` | `selfExecuteTask`                          | The YieldClaimer contract itself            | Skips while Burner Loans is Kernel-inactive or disabled    |
 
 A direct permissionless seizure can receive the configured keeper reward. A caller with `heart` or
 `burner_loans_seizer` receives no product keeper reward. The Seizer policy must hold
 `burner_loans_seizer` before its automated call can proceed.
 
 ## Limits Of Each Authority
+
+These limits describe each role alone. Additional roles or selection as config operator can grant
+other access.
 
 | Authority                    | Access limit                                                                                                       |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
@@ -228,4 +258,8 @@ A direct permissionless seizure can receive the configured keeper reward. A call
 | `heart`                      | Cannot change parameters and can call only configured periodic task entry points                                   |
 | ConfigTimelock               | Cannot call functions outside the delegated Config surface                                                         |
 | Borrower-authorized operator | Cannot change protocol configuration or another borrower's position                                                |
-| Permissionless caller        | Can only repay, seize, claim yield, relay a signed authorization, and execute a valid queued action                |
+| Permissionless caller        | Can repay, seize, claim yield, retry pending payouts, relay a signed authorization, and execute valid queued actions                |
+
+If ConfigTimelock or Config is disabled or Kernel-inactive, `admin` can rescue directly on
+`BurnerLoans`. Burner Loans must remain Kernel-active; it may be locally disabled. This direct
+path does not consume a queued action or bypass any token, destination, or entitlement checks.
