@@ -244,12 +244,13 @@ contract DepositManagerConfigTimelock is
     // ========== CONFIG TIMELOCK HOOKS ========== //
 
     /// @inheritdoc ConfigTimelockBatchQueue
+    /// @dev Reverts with NotAuthorised when the caller holds neither accepted queue-proposer role.
     function _validateConfigQueue(address caller_) internal view override {
         _requireEnabled();
         _requirePoliciesActive();
-        if (!_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, DEPOSIT_MANAGER_ADMIN_ROLE)) {
-            revert ROLESv1.ROLES_RequireRole(DEPOSIT_MANAGER_ADMIN_ROLE);
-        }
+        _requireAuthorized(
+            !_hasRole(caller_, ADMIN_ROLE) && !_hasRole(caller_, DEPOSIT_MANAGER_ADMIN_ROLE)
+        );
         _requireAuthorizedConfigOperator();
         _requireDepositManagerEnabled();
     }

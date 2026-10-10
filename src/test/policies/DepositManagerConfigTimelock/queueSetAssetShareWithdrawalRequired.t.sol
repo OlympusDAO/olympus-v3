@@ -10,28 +10,24 @@ import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
-
-// Libraries
-import {DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
+import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
-import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueSetAssetShareWithdrawalRequiredTest is
     DepositManagerConfigTimelockTest
 {
     uint8 internal constant _TOKEN_DECIMALS = 18;
 
+    // Scenarios: DMCT-A03.
     function test_whenCallerIsUnauthorized_reverts(address caller_) public {
         vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, DEPOSIT_MANAGER_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
         vm.prank(caller_);
         _configTimelock.queueSetAssetShareWithdrawalRequired(iAsset, true);
     }

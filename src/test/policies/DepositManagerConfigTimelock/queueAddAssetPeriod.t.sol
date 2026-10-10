@@ -5,19 +5,16 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(unused-return)
 
 // Interfaces
+import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
 import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
-import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
-import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
-
-// Libraries
-import {DEPOSIT_MANAGER_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
 
 // Contracts
-import {MockERC20} from "src/test/mocks/MockERC20.sol";
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
 
 contract DepositManagerConfigTimelockQueueAddAssetPeriodTest is DepositManagerConfigTimelockTest {
     // ========== TESTS ========== //
@@ -25,13 +22,12 @@ contract DepositManagerConfigTimelockQueueAddAssetPeriodTest is DepositManagerCo
     // when the caller is neither admin nor deposit_manager_admin
     //  [X] it reverts
     // Deposit operators and emergency are deliberately not permitted to queue route creation.
+    // Scenarios: DMCT-A03.
     function test_whenCallerIsNotAuthorized_reverts(address caller_) public {
         vm.assume(caller_ != ADMIN);
         vm.assume(caller_ != DEPOSIT_MANAGER_ADMIN);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, DEPOSIT_MANAGER_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(caller_);
         _configTimelock.queueAddAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
@@ -242,10 +238,9 @@ contract DepositManagerConfigTimelockQueueAddAssetPeriodTest is DepositManagerCo
 
     // given an emergency caller
     //  [X] queueing route creation reverts
+    // Scenarios: DMCT-A03.
     function test_givenEmergency_whenQueueingRouteCreation_reverts() public {
-        vm.expectRevert(
-            abi.encodeWithSelector(ROLESv1.ROLES_RequireRole.selector, DEPOSIT_MANAGER_ADMIN_ROLE)
-        );
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
 
         vm.prank(EMERGENCY);
         _configTimelock.queueAddAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);

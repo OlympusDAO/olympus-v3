@@ -6,13 +6,125 @@ pragma solidity >=0.8.24;
 // forge-lint: disable-start(literal-instead-of-constant, unused-return)
 
 // Interfaces
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
-import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
+import {IPolicyAdmin} from "src/policies/interfaces/utils/IPolicyAdmin.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 import {DepositManagerConfigTimelockTest} from "./DepositManagerConfigTimelockTest.sol";
 
 contract DepositManagerConfigTimelockQueueBatchTest is DepositManagerConfigTimelockTest {
+    /// @notice Governance retains direct queue authority alongside its delegated manager role.
+    // Scenarios: DMCT-A01.
+    function test_whenAdminQueues() public {
+        _assertAuthorizedProposer(ADMIN);
+    }
+
+    /// @notice Deposit Manager Admin has the same queue permission as governance.
+    // Scenarios: DMCT-A01.
+    function test_whenDepositManagerAdminQueues() public {
+        _assertAuthorizedProposer(DEPOSIT_MANAGER_ADMIN);
+    }
+
+    /// @notice The exact unauthorized caller set is rejected before product input validation.
+    // Scenarios: DMCT-A02.
+    function test_whenCallerIsUnauthorized_reverts(address caller_) public {
+        vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
+        _assertUnauthorizedBatch(caller_, iAsset);
+    }
+
+    // Scenarios: DMCT-A02.
+    function test_whenCallerIsUnauthorized_whenAssetIsZero_reverts(address caller_) public {
+        vm.assume(caller_ != ADMIN && caller_ != DEPOSIT_MANAGER_ADMIN);
+        _assertUnauthorizedBatch(caller_, IERC20(address(0)));
+    }
+
+    /// @notice Guarantee identities that random address generation rarely exercises.
+    // Scenarios: DMCT-A02.
+    function test_whenUnauthorizedIdentitiesAreSeeded_reverts() public {
+        _assertUnauthorizedBatch(address(0), iAsset);
+        _assertUnauthorizedBatch(address(0), IERC20(address(0)));
+        _assertUnauthorizedBatch(EMERGENCY, iAsset);
+        _assertUnauthorizedBatch(EMERGENCY, IERC20(address(0)));
+        _assertUnauthorizedBatch(DEPOSIT_OPERATOR, iAsset);
+        _assertUnauthorizedBatch(DEPOSIT_OPERATOR, IERC20(address(0)));
+        _assertUnauthorizedBatch(CONFIG_OPERATOR, iAsset);
+        _assertUnauthorizedBatch(CONFIG_OPERATOR, IERC20(address(0)));
+    }
+
+    /// @dev Queue one valid cap action and check authority without executing the configuration.
+    function _assertAuthorizedProposer(address caller_) internal {
+        uint256 initialCap = depositManager.getAssetConfiguration(iAsset).depositCap;
+        uint64 expectedId = _configTimelock.nextActionId();
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(
+            IDepositManager.setAssetDepositCap.selector,
+            abi.encode(iAsset, uint256(100e18))
+        );
+        vm.prank(caller_);
+        uint64 actionId = _configTimelock.queueBatch(actions);
+
+        assertEq(actionId, expectedId, "queue returns the reserved action ID");
+        assertEq(_configTimelock.nextActionId(), expectedId + 1, "queue consumes one ID");
+        ITimelockBatchQueue.QueuedAction memory queued = _configTimelock.getQueuedAction(actionId);
+        assertEq(queued.proposer, caller_, "queue stores the authorized proposer");
+        assertEq(queued.actions.length, 1, "queue stores one action");
+        assertEq(
+            queued.actions[0].target,
+            address(depositManager),
+            "queue targets Deposit Manager"
+        );
+        assertEq(queued.actions[0].selector, actions[0].selector, "queue stores the cap selector");
+        assertEq(queued.actions[0].payload, actions[0].payload, "queue preserves exact parameters");
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            initialCap,
+            "queue leaves cap unchanged"
+        );
+    }
+
+    /// @dev Exercise valid and zero-asset requests; both must fail at the shared caller guard.
+    function _assertUnauthorizedBatch(address caller_, IERC20 asset_) internal {
+        uint64 nextId = _configTimelock.nextActionId();
+        uint256 initialCap = depositManager.getAssetConfiguration(iAsset).depositCap;
+        ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = _singleAction(
+            IDepositManager.setAssetDepositCap.selector,
+            abi.encode(asset_, uint256(100e18))
+        );
+        vm.recordLogs();
+        vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
+        vm.prank(caller_);
+        _configTimelock.queueBatch(actions);
+
+        assertEq(_configTimelock.nextActionId(), nextId, "rejection consumes no action ID");
+        // An absent action is reported by its exact getter error, rather than a zero length.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionNotFound.selector,
+                nextId
+            )
+        );
+        _configTimelock.getQueuedActionLength(nextId);
+        assertEq(
+            _configTimelock.getQueuedConfigStateCount(nextId, 0),
+            0,
+            "rejection stores no guards"
+        );
+        assertEq(vm.getRecordedLogs().length, 0, "rejection emits no events");
+        assertEq(
+            depositManager.getAssetConfiguration(iAsset).depositCap,
+            initialCap,
+            "rejection preserves cap"
+        );
+        assertEq(
+            depositManager.configOperator(),
+            address(_configTimelock),
+            "rejection preserves operator"
+        );
+    }
+
     function test_whenRouteCreationPayloadLengthIsInvalid_reverts() public {
         ITimelockBatchQueue.BatchAction[] memory actions = new ITimelockBatchQueue.BatchAction[](1);
         actions[0] = _singleAction(
