@@ -164,7 +164,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         timelock.queueBatch(batch);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -175,7 +175,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
     {
         ITimelockBatchQueue.BatchAction[] memory batch = _probeBatch();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueBatch(batch);
     }

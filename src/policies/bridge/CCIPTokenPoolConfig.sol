@@ -9,6 +9,7 @@ import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
@@ -49,8 +50,10 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         the admin role while enabled.
 ///
 ///         The config operator is the single-step delegated operator of `ConfigOperatorSingleStep`:
-///         it starts unset, `setConfigOperator` replaces it immediately, and the zero address
-///         revokes it. The route and rate limit functions accept it alongside the admin role.
+///         it starts unset, `setConfigOperator` replaces it immediately with a candidate that
+///         advertises `ICCIPTokenPoolConfigTimelock` through ERC165 and reports this policy as
+///         its config, and the zero address revokes it. The route and rate limit functions
+///         accept it alongside the admin role.
 ///
 ///         The address setters and `setRemoteToken` reject the value they already hold, the zero
 ///         address included where it is a value, so a call that lands always changes state:
@@ -749,7 +752,27 @@ contract CCIPTokenPoolConfig is
     ///      - The caller does not hold the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    // ========== CONFIG OPERATOR HOOKS ========== //
+    // ========== CONFIG OPERATOR ========== //
+
+    /// @inheritdoc ConfigOperatorSingleStep
+    /// @dev The mix-in runs the lifecycle and role gates of `_authorizeSetConfigOperator`, the
+    ///      unchanged check and the write, in that order; the candidate check runs after the
+    ///      write and reverts it when the candidate is rejected. A non-zero candidate must
+    ///      advertise `ICCIPTokenPoolConfigTimelock` through ERC165 and report this policy as
+    ///      its `config()`; the zero address revokes the operator without a candidate check.
+    ///
+    ///      Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the admin role.
+    ///      - `configOperator_` is the operator already set, the zero address included
+    ///        (`ConfigOperator_Unchanged`).
+    ///      - `configOperator_` is not the zero address and does not advertise
+    ///        `ICCIPTokenPoolConfigTimelock` through ERC165, or reports a config other than this
+    ///        policy (`CCIPTokenPoolConfig_InvalidConfigOperator`).
+    function setConfigOperator(address configOperator_) public override {
+        super.setConfigOperator(configOperator_);
+        if (configOperator_ != address(0)) _requireConfigOperatorCandidate(configOperator_);
+    }
 
     /// @inheritdoc ConfigOperatorSingleStep
     /// @dev The hook reverts on failure, so the mix-in never reports `ConfigOperator_Unauthorized`
@@ -929,6 +952,21 @@ contract CCIPTokenPoolConfig is
     ///         the liquidity container interface.
     function _requireLiquidityContainer() internal view {
         if (!_IS_LIQUIDITY_CONTAINER) revert CCIPTokenPoolConfig_NotLiquidityContainer();
+    }
+
+    /// @notice Reverts with `CCIPTokenPoolConfig_InvalidConfigOperator` unless `candidate_`
+    ///         advertises `ICCIPTokenPoolConfigTimelock` through ERC165 and reports this policy
+    ///         as its config.
+    /// @param  candidate_ The config operator candidate, never the zero address.
+    function _requireConfigOperatorCandidate(address candidate_) internal view {
+        if (
+            !ERC165Checker.supportsInterface(
+                candidate_,
+                type(ICCIPTokenPoolConfigTimelock).interfaceId
+            ) || ICCIPTokenPoolConfigTimelock(candidate_).config() != address(this)
+        ) {
+            revert CCIPTokenPoolConfig_InvalidConfigOperator(candidate_);
+        }
     }
 
     // ========== INTERNAL HELPERS ========== //

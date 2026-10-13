@@ -243,7 +243,7 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         _assertCanonicalRateLimitsApplied();
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     //   [X] every reserved key stays held
@@ -255,7 +255,7 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         givenActionReady
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         _execute(queuedActionId);
 
         assertEq(
@@ -298,8 +298,9 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         givenActionReady
     {
         address timelockAddress = address(timelock);
+        address candidate = address(otherTimelock);
         vm.prank(admin);
-        config.setConfigOperator(thirdParty);
+        config.setConfigOperator(candidate);
         vm.prank(admin);
         config.setConfigOperator(timelockAddress);
 

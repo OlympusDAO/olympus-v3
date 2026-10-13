@@ -21,7 +21,9 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         `configOperator` returns it, or the zero address when none is set, and
 ///         `setConfigOperator` replaces it immediately or revokes it with the zero address; the
 ///         setter is intended to be callable only by the admin role while the policy is enabled.
-///         It is meant to be the config timelock. A caller holding this interface casts to
+///         It is the config timelock: a non-zero candidate must advertise
+///         `ICCIPTokenPoolConfigTimelock` through ERC-165 and report this policy as its config,
+///         checked after the unchanged rule below. A caller holding this interface casts to
 ///         `IConfigOperator` for those two functions, as it does to `IEnabler` for the lifecycle.
 ///
 ///         The address setters and `setRemoteToken` reject the value they already hold, so a
@@ -60,6 +62,12 @@ interface ICCIPTokenPoolConfig {
     ///         `typeAndVersion()`.
     /// @param router The rejected router address.
     error CCIPTokenPoolConfig_InvalidRouter(address router);
+
+    /// @notice Thrown when a non-zero config operator candidate does not advertise
+    ///         `ICCIPTokenPoolConfigTimelock` through ERC-165 or reports a config other than
+    ///         this policy.
+    /// @param configOperator The rejected config operator address.
+    error CCIPTokenPoolConfig_InvalidConfigOperator(address configOperator);
 
     /// @notice Thrown when a liquidity function is called and the pool does not advertise the
     ///         liquidity container interface.

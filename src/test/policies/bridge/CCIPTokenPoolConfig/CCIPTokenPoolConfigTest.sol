@@ -23,6 +23,7 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
@@ -44,6 +45,11 @@ import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 ///         config operator is unset, and the primary pool ownership is PENDING to the config
 ///         (the test contract deployed the pool, owns it and has proposed the config). The
 ///         burn/mint pool stays owned by the test contract until givenBurnMintPoolRig runs.
+///
+///         The operator account is a CCIPTokenPoolConfigTimelock bound to the rig's config,
+///         left unactivated and disabled: the policy accepts no other candidate, and its
+///         lifecycle plays no part in the acceptance. The route functions are pranked as its
+///         address. The deploy variants rebind it to their own config.
 ///
 ///         Default constants, in base units of the 9-decimals MockOhm: outbound rate limiter
 ///         {true, 10_000, 100}, inbound {true, 20_000, 200} (deliberately distinct per
@@ -85,6 +91,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     CCIPTokenPoolConfig internal config;
 
+    /// @notice The timelock bound to the current rig's config, whose address is the operator
+    ///         account; unactivated and disabled.
+    CCIPTokenPoolConfigTimelock internal operatorTimelock;
+
     // ========== ACCOUNTS ========== //
 
     address internal admin;
@@ -109,6 +119,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     // ========== CONSTANTS ========== //
 
     uint32 internal constant GRACE_PERIOD = 3 days;
+
+    /// @notice The delay of the timelocks deployed as operator candidates.
+    uint48 internal constant TIMELOCK_DELAY = 1 days;
+
     uint64 internal constant CHAIN_SELECTOR_A = 1111;
     uint64 internal constant CHAIN_SELECTOR_B = 2222;
 
@@ -135,7 +149,6 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         emergency = makeAddr("emergency");
         bridgeAdmin = makeAddr("bridgeAdmin");
         bridgeRateLimiter = makeAddr("bridgeRateLimiter");
-        operator = makeAddr("operator");
         thirdParty = makeAddr("thirdParty");
         onRamp = makeAddr("onRamp");
         offRamp = makeAddr("offRamp");
@@ -191,6 +204,7 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(pool), GRACE_PERIOD);
         vm.label(address(config), "config");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
 
         // The test contract owns the pool; the config becomes the pending owner
         pool.transferOwnership(address(config));
@@ -206,6 +220,28 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         newConfig = new CCIPTokenPoolConfig(kernel, pool_, gracePeriod_);
         vm.label(address(newConfig), "freshConfig");
         return newConfig;
+    }
+
+    /// @notice Deploys a fresh, unactivated and disabled timelock bound to a config on the
+    ///         rig's kernel: the only shape of config operator candidate the policy accepts.
+    function _newTimelockFor(
+        address config_
+    ) internal returns (CCIPTokenPoolConfigTimelock newTimelock) {
+        newTimelock = new CCIPTokenPoolConfigTimelock(
+            kernel,
+            config_,
+            TIMELOCK_DELAY,
+            GRACE_PERIOD
+        );
+        vm.label(address(newTimelock), "timelockCandidate");
+        return newTimelock;
+    }
+
+    /// @notice Binds the operator account to a fresh timelock over the current rig's config.
+    function _bindOperatorTimelock() internal {
+        operatorTimelock = _newTimelockFor(address(config));
+        vm.label(address(operatorTimelock), "operatorTimelock");
+        operator = address(operatorTimelock);
     }
 
     /// @notice Deploys the funded liquidity source pool, optionally setting the primary pool
@@ -787,6 +823,7 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(burnMintPool), GRACE_PERIOD);
         vm.label(address(config), "configBurnMintRig");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
         burnMintPool.transferOwnership(address(config));
         _;
     }
@@ -924,6 +961,7 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(pool), GRACE_PERIOD);
         vm.label(address(config), "configAllowListRig");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
         pool.transferOwnership(address(config));
         _;
     }

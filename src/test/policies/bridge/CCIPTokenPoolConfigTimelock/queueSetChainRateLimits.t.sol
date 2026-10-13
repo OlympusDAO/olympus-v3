@@ -135,7 +135,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -147,7 +147,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -181,7 +181,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }

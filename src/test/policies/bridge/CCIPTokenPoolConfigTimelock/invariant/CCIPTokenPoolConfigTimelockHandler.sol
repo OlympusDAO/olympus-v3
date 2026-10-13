@@ -117,8 +117,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     address public immutable bridgeAdmin;
     address public immutable bridgeRateLimiter;
 
-    /// @notice The account the operator-seat rotation points the config at while the timelock
-    ///         is benched.
+    /// @notice The second timelock bound to the config, unactivated and disabled, that the
+    ///         operator-seat rotation points the config at while the timelock under test is
+    ///         benched; the config accepts no other candidate.
     address public immutable seatCandidate;
 
     /// @notice The roleless account that fires the untimely-execution and authorization
@@ -249,7 +250,15 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         emergency = emergency_;
         bridgeAdmin = bridgeAdmin_;
         bridgeRateLimiter = bridgeRateLimiter_;
-        seatCandidate = makeAddr("seatCandidate");
+        seatCandidate = address(
+            new CCIPTokenPoolConfigTimelock(
+                config_.kernel(),
+                address(config_),
+                timelock_.timelockDelay(),
+                timelock_.gracePeriod()
+            )
+        );
+        vm.label(seatCandidate, "seatCandidate");
         outsider = makeAddr("outsider");
         poolOwnerCandidate = makeAddr("poolOwnerCandidate");
         onRamp = makeAddr("handlerOnRamp");
@@ -419,9 +428,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         configLifecycleToggles += 1;
     }
 
-    /// @notice Rotates the config's operator seat between the timelock, a foreign candidate
-    ///         and the zero address. The config rejects a write of the seat it already holds,
-    ///         which the config suite probes; here it is a no-op.
+    /// @notice Rotates the config's operator seat between the timelock, the second timelock
+    ///         bound to the config and the zero address. The config rejects a write of the
+    ///         seat it already holds, which the config suite probes; here it is a no-op.
     function rotateOperatorSeat(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [address(timelock), seatCandidate, address(0)][seed_ % 3];

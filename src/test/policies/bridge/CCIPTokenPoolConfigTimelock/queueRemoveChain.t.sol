@@ -111,7 +111,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -120,7 +120,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         givenChainAdded
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }
@@ -148,7 +148,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         givenEnabled
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }

@@ -126,13 +126,13 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         timelock.queueApplyAllowListUpdates(new address[](0), adds);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts() public givenEnabled givenOperatorRotated {
         address[] memory adds = _singleAddress(allowListedThree);
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueApplyAllowListUpdates(new address[](0), adds);
     }
@@ -157,7 +157,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         givenEnabled
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueApplyAllowListUpdates(new address[](0), new address[](0));
     }

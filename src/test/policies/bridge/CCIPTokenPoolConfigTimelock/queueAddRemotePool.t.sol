@@ -122,7 +122,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -133,7 +133,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
     {
         bytes memory remotePool = REMOTE_POOL_THREE;
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
@@ -164,7 +164,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         givenChainAdded
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, "");
     }

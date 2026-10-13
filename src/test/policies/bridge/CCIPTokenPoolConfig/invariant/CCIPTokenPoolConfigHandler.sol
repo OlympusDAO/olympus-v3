@@ -178,6 +178,7 @@ contract CCIPTokenPoolConfigHandler is Test {
     uint256 public graceWindowUpdates;
     uint256 public ownershipRoundTrips;
     uint256 public unchangedWriteRejections;
+    uint256 public rejectedOperatorCandidates;
     uint256 public emptySweepRejections;
 
     // ========== CONSTRUCTOR ========== //
@@ -194,6 +195,7 @@ contract CCIPTokenPoolConfigHandler is Test {
         address bridgeAdmin_,
         address bridgeRateLimiter_,
         address operator_,
+        address operatorAlternate_,
         address liquiditySource_
     ) {
         config = config_;
@@ -206,7 +208,7 @@ contract CCIPTokenPoolConfigHandler is Test {
         bridgeAdmin = bridgeAdmin_;
         bridgeRateLimiter = bridgeRateLimiter_;
         operatorPrimary = operator_;
-        operatorAlternate = makeAddr("operatorAlternate");
+        operatorAlternate = operatorAlternate_;
         outsider = makeAddr("outsider");
         onRamp = makeAddr("handlerOnRamp");
         offRamp = makeAddr("handlerOffRamp");
@@ -317,8 +319,26 @@ contract CCIPTokenPoolConfigHandler is Test {
         _assertPoolUntouched(digestBefore, "reEnable");
     }
 
+    /// @notice Rotates the operator seat between two timelocks bound to the config and the
+    ///         zero address, probes the unchanged write of the seat already held, and with
+    ///         every fourth seed probes the roleless outsider as a candidate, which the policy
+    ///         must reject without moving the seat.
     function rotateOperator(uint256 seed_) external {
         if (!config.isEnabled()) return;
+        if (seed_ % 4 == 3) {
+            address seatBefore = config.configOperator();
+            _probeRejectedWrite(
+                admin,
+                abi.encodeCall(IConfigOperator.setConfigOperator, (outsider)),
+                abi.encodeWithSelector(
+                    ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidConfigOperator.selector,
+                    outsider
+                )
+            );
+            assertEq(config.configOperator(), seatBefore, "a rejected candidate must not land");
+            rejectedOperatorCandidates += 1;
+            return;
+        }
         address candidate = [operatorPrimary, operatorAlternate, address(0)][seed_ % 3];
         if (candidate == config.configOperator()) {
             _probeUnchangedWrite(
@@ -945,6 +965,17 @@ contract CCIPTokenPoolConfigHandler is Test {
         bytes memory payload_,
         bytes memory expected_
     ) internal {
+        _probeRejectedWrite(caller_, payload_, expected_);
+        unchangedWriteRejections += 1;
+    }
+
+    /// @dev Fires a write that must revert with exactly the predicted bytes; a success sets
+    ///      the unchanged-write ghost flag and any other revert bubbles so the run fails.
+    function _probeRejectedWrite(
+        address caller_,
+        bytes memory payload_,
+        bytes memory expected_
+    ) internal {
         vm.prank(caller_);
         // A low-level call so the expected revert does not bubble
         // forge-lint: disable-next-line(low-level-calls)
@@ -961,7 +992,6 @@ contract CCIPTokenPoolConfigHandler is Test {
                 revert(add(reason, 0x20), mload(reason))
             }
         }
-        unchangedWriteRejections += 1;
     }
 
     function _addressUnchanged(string memory parameter_) internal pure returns (bytes memory) {

@@ -105,6 +105,10 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     CCIPTokenPoolConfig internal config;
     CCIPTokenPoolConfigTimelock internal timelock;
 
+    /// @notice A second timelock bound to the current rig's config, unactivated and disabled:
+    ///         the candidate the operator seat is rotated to, since the config accepts no other.
+    CCIPTokenPoolConfigTimelock internal otherTimelock;
+
     // ========== ACCOUNTS ========== //
 
     address internal admin;
@@ -236,6 +240,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         );
         vm.label(address(timelock), "timelock");
         kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        otherTimelock = _newOtherTimelock();
 
         // Default state: config ENABLED, pool ownership ACCEPTED, operator seat set to the
         // timelock; the timelock itself stays DISABLED
@@ -247,6 +252,19 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     // ========== DEPLOY HELPERS ========== //
+
+    /// @notice Deploys the unactivated second timelock over the current rig's config, the
+    ///         rotation candidate of givenOperatorRotated.
+    function _newOtherTimelock() internal returns (CCIPTokenPoolConfigTimelock candidate) {
+        candidate = new CCIPTokenPoolConfigTimelock(
+            kernel,
+            address(config),
+            TIMELOCK_DELAY,
+            GRACE_PERIOD
+        );
+        vm.label(address(candidate), "otherTimelock");
+        return candidate;
+    }
 
     /// @notice Deploys a fresh, unactivated timelock instance for constructor-style tests.
     function _newTimelock(
@@ -1128,10 +1146,12 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         _;
     }
 
-    /// @dev The admin points the config's operator seat at thirdParty
+    /// @dev The admin points the config's operator seat at the second timelock bound to the
+    ///      config, so the timelock under test is no longer the config operator
     modifier givenOperatorRotated() {
+        address candidate = address(otherTimelock);
         vm.prank(admin);
-        config.setConfigOperator(thirdParty);
+        config.setConfigOperator(candidate);
         _;
     }
 
@@ -1313,6 +1333,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         );
         vm.label(address(timelock), "timelockAllowListRig");
         kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        otherTimelock = _newOtherTimelock();
         vm.startPrank(admin);
         config.enable("");
         config.acceptPoolOwnership();

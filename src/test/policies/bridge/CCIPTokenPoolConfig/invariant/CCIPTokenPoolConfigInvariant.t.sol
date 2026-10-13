@@ -57,6 +57,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
             bridgeAdmin,
             bridgeRateLimiter,
             operator,
+            address(_newTimelockFor(address(config))),
             address(sourcePool)
         );
         vm.label(address(handler), "handler");
@@ -96,6 +97,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         handler.transferSourceLiquidity(1);
         handler.setGraceWindow(GRACE_PERIOD);
         handler.ownershipRoundTrip(0);
+        handler.rotateOperator(3);
         require(handler.routesAdded() > 0, "bootstrap: no route was added");
         require(handler.bucketConsumptions() > 0, "bootstrap: no consumption ran");
         require(handler.containmentCalls() > 0, "bootstrap: no containment ran");
@@ -114,6 +116,10 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         require(
             handler.unchangedWriteRejections() > 0,
             "bootstrap: the unchanged-value probe did not run"
+        );
+        require(
+            handler.rejectedOperatorCandidates() > 0,
+            "bootstrap: the rejected operator candidate probe did not run"
         );
         require(
             handler.rateLimitAdminChanges() > 1,
@@ -339,6 +345,11 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         assertGt(handler.rateLimitAdminChanges(), 0, "no rate limit admin write ran");
         assertGt(handler.graceWindowUpdates(), 0, "no grace window write ran");
         assertGt(handler.unchangedWriteRejections(), 0, "the unchanged-value probe never ran");
+        assertGt(
+            handler.rejectedOperatorCandidates(),
+            0,
+            "the rejected operator candidate probe never ran"
+        );
     }
 
     /// @notice The liquidity transfer, the ownership migration and the direct-path bypass
