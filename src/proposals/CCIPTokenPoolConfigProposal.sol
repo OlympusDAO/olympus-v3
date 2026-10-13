@@ -330,9 +330,6 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         _kernel = Kernel(addresses.getAddress("olympus-kernel"));
     }
 
-    // forge-lint: disable-next-line(empty-block)
-    function _afterDeploy(Addresses addresses, address) internal override {}
-
     function _build(Addresses addresses) internal override {
         Contracts memory c = _contracts(addresses);
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(

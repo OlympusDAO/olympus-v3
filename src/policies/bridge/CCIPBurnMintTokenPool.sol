@@ -36,7 +36,7 @@ contract CCIPBurnMintTokenPool is
 
     /// @notice Unique identifier for the TokenPool
     /// @dev    This is used to identify the TokenPool to CCIP
-    string internal constant _typeAndVersion = "BurnMintTokenPool 1.5.1";
+    string internal constant _TYPE_AND_VERSION = "BurnMintTokenPool 1.5.1";
 
     // =========  CONSTRUCTOR ========= //
 
@@ -85,9 +85,18 @@ contract CCIPBurnMintTokenPool is
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[0] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.mintOhm.selector
+        });
+        permissions[1] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.burnOhm.selector
+        });
+        permissions[2] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
     }
 
     /// @notice Returns the version of the policy
@@ -131,7 +140,7 @@ contract CCIPBurnMintTokenPool is
 
     /// @inheritdoc ITypeAndVersion
     function typeAndVersion() external pure override returns (string memory) {
-        return _typeAndVersion;
+        return _TYPE_AND_VERSION;
     }
 
     // ========= ERC165 ========= //

@@ -60,8 +60,6 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
         _kernel = addresses.getAddress("olympus-kernel");
     }
 
-    function _afterDeploy(Addresses addresses, address deployer) internal override {}
-
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
         address daoMS = addresses.getAddress("olympus-multisig-dao");
