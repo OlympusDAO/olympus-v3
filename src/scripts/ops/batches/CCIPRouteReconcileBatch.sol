@@ -37,8 +37,11 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///         - `reconcileRoutes` (DAO MS as `bridge_admin`): compare every route declared under
 ///           `olympus.config.CCIP.routes` with the pool, field by field, and queue the minimal
 ///           set of `queue*` calls. Pending actions that already carry the same change are
-///           left alone; pending actions that hold a needed key with another intent, or that
-///           have expired, are cancelled and replaced.
+///           left alone. When a pending action holds a needed key with another intent, or has
+///           expired, the run holds its cancellations only and queues nothing: execution is
+///           permissionless, so the holder may execute before the batch lands, and the
+///           replacements are planned afresh by the next run from the state the cancellations
+///           leave.
 ///         - `executeReadyActions` (anyone): execute every queued action whose delay has elapsed
 ///           and whose execution would succeed; report the others.
 ///         - `cancelQueuedAction` (DAO MS as proposer, or any owner for an expired action) and
@@ -75,12 +78,19 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     // =========== ENTRY POINTS =========== //
 
-    /// @notice Queues the timelock actions that converge the pool routes to `env.json`.
+    /// @notice Queues the timelock actions that converge the pool routes to `env.json`, or
+    ///         cancels the pending actions that stand in their way.
     /// @dev    Desired routes are processed in remote chain name order; within a route the
     ///         identity change comes first, then one remote-pool change (additions before
     ///         removals), then the rate limits. A removal is queued only for a route whose entry
     ///         carries `enabled: false`; a live route that `env.json` does not declare fails the
     ///         run, since the declaration must be complete before anything is queued.
+    ///
+    ///         A run that cancels at least one pending action holds the cancellations only: the
+    ///         plan output lists the replacements, and they are queued by the next run once the
+    ///         cancellations have landed. A cancellation of an action that executed in between
+    ///         reverts with `ITimelockBatchQueue_ActionAlreadyExecuted` and fails the batch; the
+    ///         next run plans from the resulting state.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
@@ -133,10 +143,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
         console2.log("\n--- Queue ---");
         _planCancellations(config, timelock);
-        for (uint256 i = 0; i < _plan.length; ++i) {
-            _queuePlanned(timelock, i);
+        if (_cancelledIds.length > 0) {
+            _logCancelOnlyRun(timelock);
+        } else {
+            for (uint256 i = 0; i < _plan.length; ++i) {
+                _queuePlanned(timelock, i);
+            }
+            if (_plan.length == 0) console2.log("No change needed: the pool matches env.json.");
         }
-        if (_plan.length == 0) console2.log("No change needed: the pool matches env.json.");
 
         _setPostBatchValidateSelector(this._validateReconcileRoutes.selector);
 
@@ -278,8 +292,8 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     // =========== VALIDATION =========== //
 
-    /// @notice Validates the state after `reconcileRoutes`: every queued change holds its keys
-    ///         and every cancelled action is cancelled.
+    /// @notice Validates the state after `reconcileRoutes`: every cancelled action is cancelled,
+    ///         and in a run without cancellations every queued change holds its keys.
     function _validateReconcileRoutes() external view {
         IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
@@ -293,6 +307,12 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 string.concat("Action ", vm.toString(_cancelledIds[i]), " is not cancelled")
             );
             console2.log("  Action", _cancelledIds[i], "is cancelled");
+        }
+        // A run that cancels queues nothing; the replacements are checked by the next run
+        if (_cancelledIds.length > 0) {
+            console2.log("  Nothing was queued in this run");
+            console2.log("reconcileRoutes post-batch validation passed");
+            return;
         }
         for (uint256 i = 0; i < _plan.length; ++i) {
             Planned memory planned = _plan[i];
@@ -478,7 +498,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @notice Adds a cancellation for every pending action that holds a key of a planned change
     ///         while being expired or carrying another intent, across the whole plan, so that a
     ///         pending action that serves one planned change but blocks another is cancelled and
-    ///         both changes are queued afresh.
+    ///         both changes are queued afresh by the next run.
     function _planCancellations(
         ICCIPTokenPoolConfig config_,
         ICCIPTokenPoolConfigTimelock timelock_
@@ -535,17 +555,15 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     }
 
     /// @notice Queues a planned change unless an unexpired, uncancelled pending action already
-    ///         carries it. After `_planCancellations` every remaining holder of a needed key is
-    ///         such an action.
+    ///         carries it. In a run without cancellations every holder of a needed key is such
+    ///         an action.
     function _queuePlanned(ICCIPTokenPoolConfigTimelock timelock_, uint256 index_) internal {
         IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
         Planned storage planned = _plan[index_];
         console2.log("\n", planned.description);
 
-        for (uint256 k = 0; k < planned.keys.length; ++k) {
-            uint64 pendingId = queue.pendingActionId(planned.keys[k]);
-            if (pendingId == 0 || _isCancelled(pendingId)) continue;
-
+        uint64 pendingId = _pendingHolder(queue, planned);
+        if (pendingId != 0) {
             console2.log(
                 "  Already queued as action",
                 pendingId,
@@ -558,6 +576,38 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
         addToBatch(address(timelock_), planned.queueCall);
         console2.log("  Added to the batch");
+    }
+
+    /// @notice Lists the planned changes of a run that holds cancellations only: the ones an
+    ///         uncancelled pending action already carries, and the ones the next run queues.
+    function _logCancelOnlyRun(ICCIPTokenPoolConfigTimelock timelock_) internal view {
+        IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
+        console2.log(
+            "\nCancellations only: this run queues nothing. Run reconcileRoutes again once the cancellations have landed to queue the replacements."
+        );
+        uint256 length = _plan.length;
+        for (uint256 i = 0; i < length; ++i) {
+            Planned storage planned = _plan[i];
+            uint64 pendingId = _pendingHolder(queue, planned);
+            if (pendingId != 0) {
+                console2.log("  Already queued as action", pendingId, ":", planned.description);
+            } else {
+                console2.log("  Queued by the next run:", planned.description);
+            }
+        }
+    }
+
+    /// @notice Returns the pending action, not cancelled by this run, that holds a key of a
+    ///         planned change, or zero when every key is free.
+    function _pendingHolder(
+        IConfigTimelockBatchQueue queue_,
+        Planned storage planned_
+    ) internal view returns (uint64 pendingId) {
+        for (uint256 k = 0; k < planned_.keys.length; ++k) {
+            pendingId = queue_.pendingActionId(planned_.keys[k]);
+            if (pendingId != 0 && !_isCancelled(pendingId)) return pendingId;
+        }
+        return 0;
     }
 
     function _planCancel(string memory functionName_) internal {
