@@ -299,7 +299,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveRemotePool is CCIPTokenPool
                     timelock.REMOTE_POOLS_DOMAIN(),
                     CHAIN_SELECTOR_A,
                     uint256(2),
-                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO)
+                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded hash should be the live two-pool aggregate"

@@ -240,7 +240,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
 
         // The route is live, so the recomputed hashes carry the fixture state: both buckets
         // enabled at the rig defaults, two remote pools whose keccak hashes XOR into the
-        // aggregate, and a supported chain with the default remote token
+        // aggregate, and a supported chain with the default remote token, which every route
+        // domain preimage ends with
         assertEq(
             expectedHashes[0],
             keccak256(
@@ -252,7 +253,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     DEFAULT_OUTBOUND_RATE,
                     true,
                     DEFAULT_INBOUND_CAPACITY,
-                    DEFAULT_INBOUND_RATE
+                    DEFAULT_INBOUND_RATE,
+                    REMOTE_TOKEN
                 )
             ),
             "the live rate limits hash should carry the default bucket configurations"
@@ -264,7 +266,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     timelock.REMOTE_POOLS_DOMAIN(),
                     CHAIN_SELECTOR_A,
                     uint256(2),
-                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO)
+                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO),
+                    REMOTE_TOKEN
                 )
             ),
             "the live remote pools hash should carry the two-pool aggregate"
@@ -350,7 +353,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
     // removal. The recorded rate-limits hash covers the containment shape {true, 2, 1}.
     function test_givenRouteIsContained() public givenEnabled givenChainAdded givenRouteContained {
         bytes32 containedRateLimitsHash = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
-        // The containment write is {true, 2, 1} on both buckets
+        // The containment write is {true, 2, 1} on both buckets; the remote token is unchanged
         assertEq(
             containedRateLimitsHash,
             keccak256(
@@ -362,7 +365,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     uint128(1),
                     true,
                     uint128(2),
-                    uint128(1)
+                    uint128(1),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded rate limits hash should carry the containment shape"

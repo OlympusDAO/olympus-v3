@@ -369,7 +369,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
         // The hash records the state at queue time: the live default configurations, not the
-        // canonical values the action would write
+        // canonical values the action would write, followed by the remote token of the route
         assertEq(
             expectedHashes[0],
             keccak256(
@@ -381,7 +381,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
                     DEFAULT_OUTBOUND_RATE,
                     true,
                     DEFAULT_INBOUND_CAPACITY,
-                    DEFAULT_INBOUND_RATE
+                    DEFAULT_INBOUND_RATE,
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded hash should carry the live default bucket configurations"
@@ -497,7 +498,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
     // containment shape
     function test_givenRouteIsContained() public givenEnabled givenChainAdded givenRouteContained {
         bytes32 containedRateLimitsHash = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
-        // The containment write is {true, 2, 1} on both buckets
+        // The containment write is {true, 2, 1} on both buckets; the remote token is unchanged
         assertEq(
             containedRateLimitsHash,
             keccak256(
@@ -509,7 +510,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
                     uint128(1),
                     true,
                     uint128(2),
-                    uint128(1)
+                    uint128(1),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded rate limits hash should carry the containment shape"

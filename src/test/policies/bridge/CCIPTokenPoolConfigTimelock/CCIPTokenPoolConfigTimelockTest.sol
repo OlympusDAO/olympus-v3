@@ -713,8 +713,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @notice Recomputes the rate limits state hash of a route from the live pool, per the
     ///         documented preimage: (domain, selector, outbound isEnabled/capacity/rate,
-    ///         inbound isEnabled/capacity/rate). Fill levels and refill timestamps are
-    ///         excluded on purpose.
+    ///         inbound isEnabled/capacity/rate, remote token). Fill levels and refill
+    ///         timestamps are excluded on purpose.
     function _expectedRateLimitsHash(uint64 chainSelector_) internal view returns (bytes32) {
         ICCIPTokenPoolAdmin rigPool = ICCIPTokenPoolAdmin(config.pool());
         ICCIPRateLimiter.TokenBucket memory outbound = rigPool.getCurrentOutboundRateLimiterState(
@@ -733,25 +733,33 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
                     outbound.rate,
                     inbound.isEnabled,
                     inbound.capacity,
-                    inbound.rate
+                    inbound.rate,
+                    rigPool.getRemoteToken(chainSelector_)
                 )
             );
     }
 
     /// @notice Recomputes the remote pools state hash of a route from the live pool, per the
     ///         documented preimage: (domain, selector, count, XOR of keccak256 over the raw
-    ///         bytes of every accepted remote pool).
+    ///         bytes of every accepted remote pool, remote token).
     function _expectedRemotePoolsHash(uint64 chainSelector_) internal view returns (bytes32) {
-        bytes[] memory remotePools = ICCIPTokenPoolAdmin(config.pool()).getRemotePools(
-            chainSelector_
-        );
+        ICCIPTokenPoolAdmin rigPool = ICCIPTokenPoolAdmin(config.pool());
+        bytes[] memory remotePools = rigPool.getRemotePools(chainSelector_);
         uint256 count = remotePools.length;
         bytes32 aggregate;
         for (uint256 i; i < count; ++i) {
             aggregate ^= keccak256(remotePools[i]);
         }
         return
-            keccak256(abi.encode(timelock.REMOTE_POOLS_DOMAIN(), chainSelector_, count, aggregate));
+            keccak256(
+                abi.encode(
+                    timelock.REMOTE_POOLS_DOMAIN(),
+                    chainSelector_,
+                    count,
+                    aggregate,
+                    rigPool.getRemoteToken(chainSelector_)
+                )
+            );
     }
 
     /// @notice Recomputes the route identity state hash from the live pool, per the

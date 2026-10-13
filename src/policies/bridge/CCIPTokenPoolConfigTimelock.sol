@@ -521,15 +521,20 @@ contract CCIPTokenPoolConfigTimelock is
     /// @dev The hash preimages are:
     ///      - rate limits: `abi.encode(RATE_LIMITS_DOMAIN, chainSelector, outbound.isEnabled,
     ///        outbound.capacity, outbound.rate, inbound.isEnabled, inbound.capacity,
-    ///        inbound.rate)`;
-    ///      - remote pools: `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate)`,
-    ///        where `count` is the number of accepted remote pools and `aggregate` is the XOR of
-    ///        `keccak256(remotePool)` over the raw bytes of every accepted remote pool;
+    ///        inbound.rate, remoteToken)`;
+    ///      - remote pools: `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate,
+    ///        remoteToken)`, where `count` is the number of accepted remote pools and
+    ///        `aggregate` is the XOR of `keccak256(remotePool)` over the raw bytes of every
+    ///        accepted remote pool;
     ///      - route identity: `abi.encode(ROUTE_IDENTITY_DOMAIN, chainSelector, isSupported,
     ///        remoteToken)`;
     ///      - allowlist: `abi.encode(ALLOWLIST_DOMAIN, allowListEnabled, count, aggregate)`,
     ///        where `count` is the number of allowlisted addresses and `aggregate` is the XOR of
-    ///        `keccak256(abi.encode(member))` over every allowlisted address.
+    ///        `keccak256(abi.encode(member))` over every allowlisted address;
+    ///
+    ///      where `remoteToken` is the raw bytes of the remote token the pool reports for the
+    ///      route. The remote token is part of every route domain, so a replacement of the
+    ///      remote token moves the three hashes of the route together.
     ///
     ///      The two set aggregates are independent of the order in which the pool returns the
     ///      members, which changes when an entry is removed from the underlying enumerable set,
@@ -789,6 +794,8 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @notice Returns the state hash of the rate limits domain of a route.
+    /// @dev    The preimage covers the configuration of both buckets and the remote token of
+    ///         the route, never the fill levels or the refill timestamps.
     /// @param  chainSelector_ The chain selector of the route.
     /// @return stateHash The state hash.
     function _rateLimitsStateHash(uint64 chainSelector_) internal view returns (bytes32 stateHash) {
@@ -809,7 +816,8 @@ contract CCIPTokenPoolConfigTimelock is
                     outbound.rate,
                     inbound.isEnabled,
                     inbound.capacity,
-                    inbound.rate
+                    inbound.rate,
+                    _POOL.getRemoteToken(chainSelector_)
                 )
             );
     }
@@ -817,6 +825,7 @@ contract CCIPTokenPoolConfigTimelock is
     /// @notice Returns the state hash of the remote pools domain of a route.
     /// @dev    The aggregate is the XOR of `keccak256(remotePool)` over the raw bytes of every
     ///         accepted remote pool, computed in one pass over the array returned by the pool.
+    ///         The preimage also covers the remote token of the route.
     /// @param  chainSelector_ The chain selector of the route.
     /// @return stateHash The state hash.
     function _remotePoolsStateHash(
@@ -835,7 +844,8 @@ contract CCIPTokenPoolConfigTimelock is
                     CCIPTokenPoolConfigKeyLib.REMOTE_POOLS_DOMAIN,
                     chainSelector_,
                     count,
-                    aggregate
+                    aggregate,
+                    _POOL.getRemoteToken(chainSelector_)
                 )
             );
     }

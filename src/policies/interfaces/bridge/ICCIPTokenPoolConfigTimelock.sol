@@ -17,19 +17,26 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///
 ///         The domains and their state hashes are:
 ///         - rate limits of a route: `isEnabled`, `capacity` and `rate` of both buckets, never
-///           the fill level or the refill timestamp;
+///           the fill level or the refill timestamp, together with the remote token of the
+///           route;
 ///         - remote pools of a route: the number of accepted remote pools and the XOR of
-///           `keccak256(remotePool)` over the raw bytes of each of them;
+///           `keccak256(remotePool)` over the raw bytes of each of them, together with the
+///           remote token of the route;
 ///         - identity of a route: whether the route exists and its remote token;
 ///         - the pool-wide allowlist: whether the allowlist is enabled, the number of allowlisted
 ///           addresses and the XOR of `keccak256(abi.encode(member))` over each of them.
 ///
+///         The remote token is part of every route domain, so a replacement of the remote token
+///         moves the three hashes of the route together: an action queued against any domain of
+///         the route reverts at execution after the remote token has changed.
+///
 ///         The two set aggregates are independent of the order in which the pool returns the
 ///         members, which changes when an entry is removed from the underlying enumerable set.
 ///         Members are hashed before the XOR and the cardinality is part of the preimage: the
-///         preimages are `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate)` for
-///         the remote pools of a route and `abi.encode(ALLOWLIST_DOMAIN, allowListEnabled, count,
-///         aggregate)` for the allowlist. The XOR aggregate is not collision resistant against
+///         preimages are `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate,
+///         remoteToken)` for the remote pools of a route and `abi.encode(ALLOWLIST_DOMAIN,
+///         allowListEnabled, count, aggregate)` for the allowlist, where `remoteToken` is the raw
+///         bytes the pool reports for the route. The XOR aggregate is not collision resistant against
 ///         members chosen by an adversary, since XOR is linear: two distinct sets of equal
 ///         cardinality whose hashed members XOR to the same value collide. It serves as a
 ///         detector of state drift between queueing and execution and relies on the pool storing

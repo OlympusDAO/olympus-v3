@@ -302,7 +302,7 @@ This runs from the cast account (the EOA path, no multisig); flip `--broadcast` 
 
 ### Direct admin changes
 
-The `admin` role (OCG) can call the route functions of the config policy directly in a proposal. Doing so invalidates the state hash of any queued action on the same domain, which then reverts with `ConfigStateChanged` and keeps its keys: cancel it and run the reconciler again. The same applies after a containment.
+The `admin` role (OCG) can call the route functions of the config policy directly in a proposal. Doing so invalidates the state hash of any queued action on the same domain, which then reverts with `ConfigStateChanged` and keeps its keys: cancel it and run the reconciler again. The same applies after a containment. A direct `setRemoteToken` invalidates every queued action of that route, not only those of its identity domain: the remote token is part of the rate limits and remote pools hashes as well, so a queued `setChainRateLimits`, `addRemotePool` or `removeRemotePool` of the route reverts afterwards too.
 
 ### Periphery (DAO MS)
 

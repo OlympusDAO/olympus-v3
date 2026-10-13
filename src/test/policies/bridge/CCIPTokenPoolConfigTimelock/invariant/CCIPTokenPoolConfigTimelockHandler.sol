@@ -1612,11 +1612,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @dev The current state hash of a tracked domain, recomputed from the live pool per the
-    ///      documented preimages. Fill levels and refill timestamps are excluded on purpose.
+    ///      documented preimages: every route domain ends with the remote token of the route.
+    ///      Fill levels and refill timestamps are excluded on purpose.
     function _currentDomainHash(
         uint8 domainKind_,
         uint64 chainSelector_
     ) internal view returns (bytes32) {
+        bytes memory remoteToken = pool.getRemoteToken(chainSelector_);
         if (domainKind_ == 0) {
             ICCIPRateLimiter.TokenBucket memory outBucket = pool.getCurrentOutboundRateLimiterState(
                 chainSelector_
@@ -1634,7 +1636,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
                         outBucket.rate,
                         inBucket.isEnabled,
                         inBucket.capacity,
-                        inBucket.rate
+                        inBucket.rate,
+                        remoteToken
                     )
                 );
         }
@@ -1646,7 +1649,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
             }
             return
                 keccak256(
-                    abi.encode(REMOTE_POOLS_DOMAIN, chainSelector_, remotePools.length, aggregate)
+                    abi.encode(
+                        REMOTE_POOLS_DOMAIN,
+                        chainSelector_,
+                        remotePools.length,
+                        aggregate,
+                        remoteToken
+                    )
                 );
         }
         return
@@ -1655,7 +1664,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
                     ROUTE_IDENTITY_DOMAIN,
                     chainSelector_,
                     pool.isSupportedChain(chainSelector_),
-                    pool.getRemoteToken(chainSelector_)
+                    remoteToken
                 )
             );
     }

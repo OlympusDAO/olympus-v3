@@ -393,8 +393,9 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
 
         // For an absent route every pool getter answers its default, so the recomputed live
         // hashes reduce to the documented absent-route preimages:
-        // - rate limits: both buckets disabled with zero capacity and rate;
-        // - remote pools: zero count and a zero XOR aggregate;
+        // - rate limits: both buckets disabled with zero capacity and rate, and an empty
+        //   remote token;
+        // - remote pools: zero count, a zero XOR aggregate and an empty remote token;
         // - route identity: unsupported chain and an empty remote token.
         bytes32[] memory expectedHashes = new bytes32[](3);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
@@ -411,7 +412,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
                     uint128(0),
                     false,
                     uint128(0),
-                    uint128(0)
+                    uint128(0),
+                    bytes("")
                 )
             ),
             "the live rate limits hash should reduce to the absent-route preimage"
@@ -419,7 +421,13 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         assertEq(
             expectedHashes[1],
             keccak256(
-                abi.encode(timelock.REMOTE_POOLS_DOMAIN(), CHAIN_SELECTOR_A, uint256(0), bytes32(0))
+                abi.encode(
+                    timelock.REMOTE_POOLS_DOMAIN(),
+                    CHAIN_SELECTOR_A,
+                    uint256(0),
+                    bytes32(0),
+                    bytes("")
+                )
             ),
             "the live remote pools hash should reduce to the absent-route preimage"
         );
