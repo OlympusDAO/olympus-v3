@@ -97,8 +97,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The chain is canonical (the mainnet rollout runs through
     ///           `CCIPTokenPoolConfigBatch.prepareHandover` and the OCG proposal).
     ///         - The batch owner is not the Kernel executor or not the RolesAdmin admin.
-    ///         - The deployed config policy, timelock and pool are not bound to each other, or
-    ///           the pool reports itself as a liquidity container.
+    ///         - The deployed config policy, timelock and pool are not bound to each other,
+    ///           either policy reports another Kernel, or the pool reports itself as a liquidity
+    ///           container.
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - The config policy is neither the owner nor the pending owner of the pool.
     ///         - A lane toward an EVM burn/mint destination carries an OHM delivery gas budget
@@ -517,8 +518,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             _check(
                 ICCIPTokenPoolConfig(config).pool() == pool &&
                     ICCIPTokenPoolConfigTimelock(timelock).config() == config &&
-                    address(Policy(config).kernel()) == kernel,
-                "the config policy, the timelock and the pool are bound to each other"
+                    address(Policy(config).kernel()) == kernel &&
+                    address(Policy(timelock).kernel()) == kernel,
+                "the config policy, the timelock and the pool are bound to each other and both policies report the Kernel"
             );
             _check(
                 !ICCIPTokenPoolConfig(config).isLiquidityContainer(),
@@ -622,8 +624,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         if (deployed) {
             _check(
                 ICCIPTokenPoolConfig(config).pool() == pool &&
-                    ICCIPTokenPoolConfigTimelock(timelock).config() == config,
-                "the config policy, the timelock and the pool are bound to each other"
+                    ICCIPTokenPoolConfigTimelock(timelock).config() == config &&
+                    address(Policy(config).kernel()) == kernel &&
+                    address(Policy(timelock).kernel()) == kernel,
+                "the config policy, the timelock and the pool are bound to each other and both policies report the Kernel"
             );
             _check(
                 Kernel(kernel).isPolicyActive(Policy(config)) &&
@@ -900,8 +904,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         ohm = _envAddressNotZero("olympus.legacy.OHM");
     }
 
-    /// @notice Reverts unless the config policy, the timelock and the pool are bound together
-    ///         and the pool is a burn/mint pool.
+    /// @notice Reverts unless the config policy, the timelock and the pool are bound together,
+    ///         both policies report the Kernel of `env.json` and the pool is a burn/mint pool.
     function _requireBinding(
         address kernel_,
         address config_,
@@ -919,6 +923,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(
             address(Policy(config_).kernel()) == kernel_,
             "CCIPNonEthereumSetupBatch: the config policy reports another Kernel"
+        );
+        require(
+            address(Policy(timelock_).kernel()) == kernel_,
+            "CCIPNonEthereumSetupBatch: the timelock reports another Kernel"
         );
         require(
             !ICCIPTokenPoolConfig(config_).isLiquidityContainer(),

@@ -18,6 +18,7 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
+import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
 // Libraries
@@ -91,7 +92,8 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - The chain has no OCG timelock in `env.json` (`olympus.governance.Timelock`).
     ///         - The batch owner is not the Kernel executor.
-    ///         - The deployed config policy, timelock and pool are not bound to each other.
+    ///         - The deployed config policy, timelock and pool are not bound to each other, or
+    ///           either policy reports another Kernel.
     ///         - The pool owner or the OHM administrator is neither the batch owner nor already
     ///           in, or pending, its target state.
     ///         - The registered OHM pool is not the configured pool.
@@ -165,8 +167,18 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///         changed by containment are restored through
     ///         `CCIPRouteReconcileBatch.reconcileRoutes`.
     ///
+    ///         The lifecycle flags alone do not make the control plane usable: queueing and
+    ///         execution also need both policies active in the Kernel and the timelock named as
+    ///         the config operator, so the batch requires both before it plans and the
+    ///         post-batch validation asserts them with the enabled flags.
+    ///
     ///         Reverts if:
     ///         - The args file is not empty.
+    ///         - The config policy or the timelock is not active in the Kernel (the activation
+    ///           path is `Kernel.executeAction(ActivatePolicy)` from the Kernel executor).
+    ///         - The config operator of the config policy is not the timelock (the rebinding
+    ///           path is `setConfigOperator` under `admin`, which needs the config policy
+    ///           enabled: an OCG proposal on mainnet, the local DAO MS on a burn/mint chain).
     ///         - A re-enable is due and the batch owner does not hold `bridge_admin`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
@@ -191,13 +203,10 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
             "\n=== Re-enable the CCIP config policy and timelock within the grace window ==="
         );
 
-        _expectConfigEnabled = _planReEnable(kernel, config, "CCIPTokenPoolConfig", address(0));
-        _expectTimelockEnabled = _planReEnable(
-            kernel,
-            timelock,
-            "CCIPTokenPoolConfigTimelock",
-            config
-        );
+        _requireControlPlaneWired(kernel, config, timelock);
+
+        _expectConfigEnabled = _planReEnable(kernel, config, "CCIPTokenPoolConfig");
+        _expectTimelockEnabled = _planReEnable(kernel, timelock, "CCIPTokenPoolConfigTimelock");
 
         _setPostBatchValidateSelector(this._validateReEnable.selector);
 
@@ -613,12 +622,18 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         console2.log("prepareHandover post-batch validation passed");
     }
 
-    /// @notice Validates the state after `reEnable`.
+    /// @notice Validates the state after `reEnable`: the re-enabled flags, both policies active
+    ///         in the Kernel and the timelock named as the config operator.
     function _validateReEnable() external view {
+        address kernel = _envAddressNotZero("olympus.Kernel");
         address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
         address timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
 
         console2.log("\nValidating reEnable post-batch state");
+        _requireControlPlaneWired(kernel, config, timelock);
+        console2.log(
+            "  Both policies are active in the Kernel and the timelock is the config operator"
+        );
         if (_expectConfigEnabled) {
             require(IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is not enabled");
             console2.log("  CCIPTokenPoolConfig is enabled");
@@ -771,29 +786,17 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         console2.log("Added:", name_, "disable()");
     }
 
-    /// @param  requiredActivePolicy_ A policy that must be active in the Kernel for the
-    ///         re-enable to succeed (the config policy for the timelock), or the zero address.
     /// @return scheduled True if a re-enable was added to the batch.
     function _planReEnable(
         address kernel_,
         address target_,
-        string memory name_,
-        address requiredActivePolicy_
+        string memory name_
     ) internal returns (bool scheduled) {
         console2.log("\n", name_, target_);
         if (IEnabler(target_).isEnabled()) {
             console2.log("  Enabled. Nothing to do.");
             return false;
         }
-        require(
-            requiredActivePolicy_ == address(0) ||
-                Kernel(kernel_).isPolicyActive(Policy(requiredActivePolicy_)),
-            string.concat(
-                "CCIPTokenPoolConfigBatch: ",
-                name_,
-                " cannot be re-enabled while the config policy is not active in the Kernel"
-            )
-        );
 
         uint48 lastTransitionAt = IEnablerV2(target_).lastTransitionAt();
         if (lastTransitionAt == 0) {
@@ -897,7 +900,40 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         );
     }
 
-    /// @notice Reverts unless the config policy, the timelock and the pool are bound together.
+    /// @notice Reverts unless both policies are active in the Kernel and the timelock is the
+    ///         config operator of the config policy, the wiring that queueing and execution need
+    ///         beyond the enabled flags.
+    function _requireControlPlaneWired(
+        address kernel_,
+        address config_,
+        address timelock_
+    ) internal view {
+        _requireActive(kernel_, config_, "CCIPTokenPoolConfig");
+        _requireActive(kernel_, timelock_, "CCIPTokenPoolConfigTimelock");
+        address configOperator = IConfigOperator(config_).configOperator();
+        require(
+            configOperator == timelock_,
+            string.concat(
+                "CCIPTokenPoolConfigBatch: the config operator of CCIPTokenPoolConfig is ",
+                vm.toString(configOperator),
+                ", not the timelock, so the re-enabled control plane could neither queue nor execute; rebind it with setConfigOperator(timelock) under admin, which needs the config policy enabled (an OCG proposal on mainnet, the local DAO MS on a burn/mint chain)"
+            )
+        );
+    }
+
+    function _requireActive(address kernel_, address policy_, string memory name_) internal view {
+        require(
+            Kernel(kernel_).isPolicyActive(Policy(policy_)),
+            string.concat(
+                "CCIPTokenPoolConfigBatch: ",
+                name_,
+                " is not active in the Kernel, so the re-enabled control plane could neither queue nor execute; activate it with Kernel.executeAction(ActivatePolicy) from the Kernel executor first"
+            )
+        );
+    }
+
+    /// @notice Reverts unless the config policy, the timelock and the pool are bound together
+    ///         and both policies report the Kernel of `env.json`.
     function _requireBinding(
         address kernel_,
         address config_,
@@ -915,6 +951,10 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         require(
             address(Policy(config_).kernel()) == kernel_,
             "CCIPTokenPoolConfigBatch: the config policy reports another Kernel"
+        );
+        require(
+            address(Policy(timelock_).kernel()) == kernel_,
+            "CCIPTokenPoolConfigBatch: the timelock reports another Kernel"
         );
         if (ChainUtils._isCanonicalChain(chain)) {
             require(
