@@ -19,11 +19,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 import {CCIPFeeBudgetLib} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
@@ -61,7 +59,9 @@ interface ILegacyCrossChainBridge {
 ///           pool policy and register it in the local TokenAdminRegistry, which opens the chain
 ///           in both directions.
 ///         - `checkReadiness` (read-only, any sender, also on mainnet): the per-chain half of the
-///           rollout readiness report that gates the proposal submission.
+///           rollout readiness report that gates the proposal submission. On a burn/mint chain
+///           it requires the pool disabled and unregistered, the state `setup` leaves, so after
+///           `finalize` those two lines read red.
 ///
 ///         The steady state afterwards is served by the shared tooling: routes through
 ///         `CCIPRouteReconcileBatch`, containment and re-enable through `CCIPTokenPoolConfigBatch`.
@@ -106,6 +106,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - A desired route is declared with `enabled: false` (the removal marker), or a
     ///           live route differs from `env.json` (the bootstrap expects a clean pool with
     ///           every declared route enabled; reconcile through the config timelock afterwards).
+    ///         - The pool policy is enabled or a pool is registered for OHM, in the post-batch
+    ///           validation: both stay off until `finalize`, the only batch that passes the
+    ///           opposite.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -242,7 +245,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - `setup` has not converged: the pool policy is not active, the config policy does
     ///           not own the pool, the batch owner lacks the admin role, the config policy or the
     ///           timelock is disabled, a desired route is missing or differs from `env.json`, or
-    ///           a route declared with `enabled: false` is still configured on the pool.
+    ///           a route declared with `enabled: false` is still configured on the pool (a
+    ///           queued removal does not count: the route has to be gone, or declared enabled
+    ///           again, before the batch is built).
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - Another pool is registered for OHM.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
@@ -294,11 +299,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             IEnabler(timelock).isEnabled(),
             "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(registry)
             .getTokenConfig(ohm);
@@ -380,9 +381,18 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     // =========== VALIDATION =========== //
 
-    /// @notice Validates the state after `setup`.
+    /// @notice Validates the state after `setup`: the policies active, the roles granted, the
+    ///         config policy and the timelock enabled and bound, the routes converged, and the
+    ///         pool still disabled and unregistered, which only `finalize` changes.
     function _validateSetup() external view {
-        (address kernel, address config, address timelock, address pool, , ) = _contracts();
+        (
+            address kernel,
+            address config,
+            address timelock,
+            address pool,
+            address registry,
+            address ohm
+        ) = _contracts();
         address emergencyMS = _envAddressNotZero("olympus.multisig.emergency");
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(env, chain);
         ROLESv1 roles = _roles(kernel);
@@ -405,6 +415,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             legacyBridge == address(0) || !Kernel(kernel).isPolicyActive(Policy(legacyBridge)),
             "The legacy CrossChainBridge policy is still active in the Kernel"
         );
+        require(
+            !IEnabler(pool).isEnabled(),
+            "CCIPBurnMintTokenPool is enabled; it stays disabled until finalize"
+        );
+        require(
+            ICCIPTokenAdminRegistry(registry).getTokenConfig(ohm).tokenPool == address(0),
+            "A pool is registered for OHM; the registry entry stays empty until finalize"
+        );
+        console2.log("  The pool is disabled and unregistered");
         require(IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is not enabled");
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(
@@ -438,11 +457,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             ITimelockBatchQueue(timelock).timelockDelay() == desired.timelockDelay,
             "CCIPTokenPoolConfigTimelock delay mismatch"
         );
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
         console2.log("setup post-batch validation passed");
     }
 
@@ -472,11 +487,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(roles.hasRole(_owner, ADMIN_ROLE), "The DAO MS does not hold admin");
         require(roles.hasRole(_owner, BRIDGE_ADMIN_ROLE), "The DAO MS does not hold bridge_admin");
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
         console2.log("finalize post-batch validation passed");
     }
 
@@ -526,6 +537,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 Owned(periphery).owner() == daoMS,
                 "the DAO MS owns the CCIPCrossChainBridge periphery"
             );
+            // The pool stays dormant until finalize: the report is the pre-submission gate
+            _check(
+                !IEnabler(pool).isEnabled(),
+                "the pool policy is disabled (finalize enables it after the proposal executes)"
+            );
         }
 
         _check(Kernel(kernel).executor() == daoMS, "the DAO MS is the Kernel executor");
@@ -544,8 +560,12 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             )
         );
         _check(
-            tokenConfig.tokenPool == address(0) || tokenConfig.tokenPool == pool,
-            "no other pool is registered for OHM"
+            tokenConfig.tokenPool == address(0),
+            string.concat(
+                "no pool is registered for OHM (finalize registers the configured pool after the proposal executes; registered ",
+                vm.toString(tokenConfig.tokenPool),
+                ")"
+            )
         );
 
         // The setup batch grants each of these roles when it is missing (the DAO MS is the
@@ -997,15 +1017,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     /// @notice Reverts unless every enabled desired route of `env.json` is live on the pool and
     ///         matches it field by field, every live route is declared, and every route declared
-    ///         with `enabled: false` (the removal marker) is absent from the pool or has its
-    ///         removal queued on the config timelock. A queued removal is an expected transient
-    ///         state and is reported as pending; a declared removal that is neither done nor
-    ///         queued is a mismatch.
-    function _requireRoutesConverged(
-        ICCIPTokenPoolAdmin pool_,
-        address config_,
-        IConfigTimelockBatchQueue queue_
-    ) internal view {
+    ///         with `enabled: false` (the removal marker) is absent from the pool. A queued
+    ///         removal does not count: the action can expire, be cancelled or stay unexecuted
+    ///         before the pool is enabled and registered, so the route has to be gone first.
+    function _requireRoutesConverged(ICCIPTokenPoolAdmin pool_) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
             desired.length > 0,
@@ -1038,22 +1053,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 route.chainSelector
             );
             if (!route.enabled) {
-                if (!live.exists) continue;
-                if (_isRemovalQueued(config_, queue_, route.chainSelector)) {
-                    console2.log(
-                        "  Route",
-                        route.remoteChain,
-                        "is declared with enabled=false: its removal is queued on the config timelock (pending removal)"
-                    );
-                    continue;
-                }
-                revert(
+                require(
+                    !live.exists,
                     string.concat(
                         "CCIPNonEthereumSetupBatch: route ",
                         route.remoteChain,
-                        " is declared with enabled=false but is configured on the pool and no removal is queued; queue it through CCIPRouteReconcileBatch"
+                        " is declared with enabled=false but is configured on the pool, and a queued removal does not count. Remove it first: queue the removal through CCIPRouteReconcileBatch.reconcileRoutes where none is queued (cancelQueuedAction clears a stale one), execute it after the delay with executeReadyActions, then build this batch again; or declare the route enabled: true with its limits"
                     )
                 );
+                continue;
             }
             require(
                 live.exists,
@@ -1072,33 +1080,6 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 )
             );
         }
-    }
-
-    /// @notice Returns whether an unexpired queued action of the config timelock removes the route.
-    /// @dev    A removal reserves all three route domains; the route identity key is the one read.
-    function _isRemovalQueued(
-        address config_,
-        IConfigTimelockBatchQueue queue_,
-        uint64 chainSelector_
-    ) internal view returns (bool queued) {
-        uint64 actionId = queue_.pendingActionId(
-            CCIPTokenPoolConfigKeyLib.routeIdentityKey(config_, chainSelector_)
-        );
-        if (actionId == 0) return false;
-
-        ITimelockBatchQueue.QueuedAction memory action = queue_.getQueuedAction(actionId);
-        // The expiry is read by the script at simulation time
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp > action.expiresAt) return false;
-
-        bytes32 payloadHash = keccak256(abi.encode(chainSelector_));
-        for (uint256 i = 0; i < action.actions.length; ++i) {
-            if (
-                action.actions[i].selector == ICCIPTokenPoolConfig.removeChain.selector &&
-                keccak256(action.actions[i].payload) == payloadHash
-            ) return true;
-        }
-        return false;
     }
 
     function _roles(address kernel_) internal view returns (ROLESv1 roles) {

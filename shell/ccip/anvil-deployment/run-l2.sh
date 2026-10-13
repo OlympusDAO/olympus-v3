@@ -33,10 +33,12 @@
 #      the local config timelock (a re-run and an early execute propose
 #      nothing), the clock is warped past the delay, executeReadyActions opens
 #      the route, reconcileRoutes proposes nothing, reconcileTrustedRemotes sets
-#      the SVM trusted remote (empty re-run), the readiness report stays GREEN
-#      and prints the solana lane note (the lane is not mocked: the scripts do
-#      not gate it), and the route state is asserted (both buckets, the SVM
-#      trusted remote, the gas limit).
+#      the SVM trusted remote (empty re-run), the readiness report reads RED on
+#      the two dormancy lines only (the pool is enabled and registered after
+#      finalize; the report is the pre-submission gate) and prints the solana
+#      lane note (the lane is not mocked: the scripts do not gate it), and the
+#      route state is asserted (both buckets, the SVM trusted remote, the gas
+#      limit).
 #  12. Print the final authority state.
 #
 # Usage:
@@ -281,10 +283,20 @@ expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes (solana)"
 expect_log_line "$LAST_BATCH_LOG" "Added: setTrustedRemoteSVM" "reconcileTrustedRemotes sets the SVM trusted remote"
 run_batch CCIPBridgeBatch reconcileTrustedRemotes dao "" "-solana-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes re-run (solana)"
-env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$CHAIN" \
-    2>&1 | tee "$LOG_DIR/readiness-$CHAIN-solana.log"
-grep -q "READINESS RESULT $CHAIN: GREEN" "$LOG_DIR/readiness-$CHAIN-solana.log" \
-    || die "the readiness report was expected to stay GREEN with the solana route; see $LOG_DIR/readiness-$CHAIN-solana.log"
+# The report is the pre-submission gate: after finalize the pool is enabled and registered,
+# so exactly its two dormancy lines read red, and the rest of the report stays green
+if env "$READINESS_VAR=$RPC" ./shell/ccip/check_rollout_readiness.sh --chains "$CHAIN" \
+    > "$LOG_DIR/readiness-$CHAIN-solana.log" 2>&1; then
+    die "the readiness report was expected to be RED after finalize; see $LOG_DIR/readiness-$CHAIN-solana.log"
+fi
+grep -q "READINESS RESULT $CHAIN: RED" "$LOG_DIR/readiness-$CHAIN-solana.log" \
+    || die "the readiness report did not print a RED verdict after finalize; see $LOG_DIR/readiness-$CHAIN-solana.log"
+expect_eq "$(grep -c '\[FAIL\]' "$LOG_DIR/readiness-$CHAIN-solana.log")" "2" \
+    "readiness after finalize fails on the two dormancy lines only"
+expect_log_line "$LOG_DIR/readiness-$CHAIN-solana.log" "[FAIL] the pool policy is disabled" \
+    "readiness after finalize reports the enabled pool"
+expect_log_line "$LOG_DIR/readiness-$CHAIN-solana.log" "[FAIL] no pool is registered for OHM" \
+    "readiness after finalize reports the registered pool"
 expect_log_line "$LOG_DIR/readiness-$CHAIN-solana.log" "[INFO] lane $CHAIN -> solana: not gated here" \
     "readiness prints the solana lane note"
 expect_eq "$(cast call "$pool" 'isSupportedChain(uint64)(bool)' "$solana_sel" --rpc-url "$RPC")" "true" \
