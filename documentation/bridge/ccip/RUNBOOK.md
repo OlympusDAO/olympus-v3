@@ -292,7 +292,7 @@ Once the delay has elapsed, anyone can execute:
 ./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function executeReadyActions --account < cast account > --chain mainnet --broadcast false
 ```
 
-This runs from the cast account (the EOA path, no multisig); flip `--broadcast` to `true` to send. Readiness and expiry are evaluated when the script runs, so run it once the delay has elapsed rather than ahead of time. It dry-runs every ready action and reports the ones that would revert (stale after a direct `admin` change or a containment, disabled policy, lost pool ownership) instead of including them. A stale or expired action keeps its keys until it is cancelled:
+This runs from the cast account (the EOA path, no multisig); flip `--broadcast` to `true` to send. Readiness and expiry are evaluated when the script runs, so run it once the delay has elapsed rather than ahead of time. It dry-runs every ready action and reports the ones that would revert (stale after a direct `admin` change or a containment, disabled policy, lost pool ownership) instead of including them. A stale or expired action keeps its keys until it is cancelled. An action that has not expired, whether still delayed or inside its execution window, is cancelled by its proposer (the DAO MS), `admin` or `emergency`; an expired action by any account, so the cancellation batch accepts any owner for it:
 
 ```bash
 ./shell/safeBatchV2.sh --contract CCIPRouteReconcileBatch --function cancelQueuedAction --multisig true --account < cast account > --chain mainnet --broadcast false --args src/scripts/ops/batches/args/CCIPRouteReconcileBatch_cancelQueuedAction.json
@@ -344,7 +344,7 @@ On a fork, run the Emergency MS entry points with `--fork true --owner emergency
 2. Restore the approved limits declaratively: `reconcileRoutes` queues `setChainRateLimits` from `env.json` for every contained route; execute after the delay with `executeReadyActions`. Restoring the configuration does not refill the bucket: it resumes from 2 units and refills at the configured rate. Any action that was queued before the containment is stale and must be cancelled first. The exception is a queued restore itself: containing the route again writes the same contained values, so the restore's state hash still matches and it will execute after its delay and lift the new containment; when re-containing during a pending restore, cancel the restore as well (`cancelQueuedAction` from the DAO MS as its proposer, or `cancelQueuedActionEmergency`).
 3. Messages that tripped a contained inbound bucket are in the `FAILURE` state on this chain and are never retried by Chainlink (the 1.6 DON acts only on `UNTOUCHED`, the 2.0.0 executor marks its job done on a `FAILURE`); they need a permissionless manual execution once the limits are restored: `manuallyExecute` on the 1.5 and 1.6 lanes, a re-submitted `execute` on the 2.0.0 lanes. On the 1.6 lanes the commit root never expires; on the 2.0.0 lanes the execution state is keyed by message id and the CCV attestations are what a re-submission needs.
 
-Before re-enabling, cancel any queued action that should not survive the incident; an action whose window passed while the timelock was disabled has expired and must be cancelled and queued again.
+Before re-enabling, cancel any queued action that should not survive the incident; an action whose window passed while the timelock was disabled has expired and must be cancelled (by any account) and queued again.
 
 ## Rehearsal on an Anvil fork
 

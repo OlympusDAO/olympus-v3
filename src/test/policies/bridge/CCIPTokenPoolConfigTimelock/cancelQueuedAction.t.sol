@@ -12,7 +12,8 @@ import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest
 contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolConfigTimelockTest {
     // when the caller is not the admin, not the emergency role and not the proposer
     //   [X] it reverts with NotAuthorised
-    // Fuzzed; excludes the three authorized identities
+    // Fuzzed; excludes the three authorized identities. The action is inside its window, so
+    // the gate applies.
     function test_whenCallerIsNotAuthorized_reverts(
         address caller_
     ) public givenEnabled givenChainAdded givenActionQueued {
@@ -159,6 +160,119 @@ contract CCIPTokenPoolConfigTimelockTests_cancelQueuedAction is CCIPTokenPoolCon
         assertTrue(
             timelock.getQueuedAction(queuedActionId).cancelled,
             "the action should be cancelled while the timelock is disabled"
+        );
+    }
+
+    // given the block timestamp equals expiresAt
+    //   when the caller is not the admin, not the emergency role and not the proposer
+    //     [X] it reverts with NotAuthorised
+    // The last executable second is still inside the window, so the gate applies; the
+    // expiry comparison is strict
+    function test_givenTimestampEqualsExpiresAt_whenCallerIsNotAuthorized_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+        givenActionQueued
+    {
+        _warpToExpiresAt(queuedActionId);
+        ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(queuedActionId);
+        assertEq(
+            vm.getBlockTimestamp(),
+            action.expiresAt,
+            "the block timestamp should sit exactly on expiresAt"
+        );
+
+        _expectRevertNotAuthorised();
+        vm.prank(thirdParty);
+        timelock.cancelQueuedAction(queuedActionId);
+
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            queuedActionId,
+            "the rejected cancellation should leave the key held"
+        );
+    }
+
+    // given the block timestamp is expiresAt plus one
+    //   when the caller is not the admin, not the emergency role and not the proposer
+    //     [X] it cancels and releases the keys
+    //     [X] it emits TimelockActionCancelled with the caller
+    //     [X] the freed domain can be queued again
+    // One second past the window the cancellation is open to any caller: an expired action
+    // can do nothing but hold its keys
+    function test_givenTimestampIsExpiresAtPlusOne_whenCallerIsNotAuthorized()
+        public
+        givenEnabled
+        givenChainAdded
+        givenActionQueued
+    {
+        _warpToExpiresAt(queuedActionId);
+        skip(1);
+
+        vm.expectEmit(true, true, true, true, address(timelock));
+        emit ITimelockBatchQueue.TimelockActionCancelled(queuedActionId, thirdParty);
+        vm.prank(thirdParty);
+        timelock.cancelQueuedAction(queuedActionId);
+
+        assertTrue(
+            timelock.getQueuedAction(queuedActionId).cancelled,
+            "the expired action should be cancelled by the unrelated caller"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the cancellation should release the expired action's key"
+        );
+        uint64 newActionId = _queueRateLimitAction(CHAIN_SELECTOR_A);
+        assertEq(newActionId, queuedActionId + 1, "the freed domain should re-queue freshly");
+    }
+
+    // given the action has expired
+    //   when the caller is any address
+    //     [X] it cancels and releases the keys
+    // Fuzzed over every address, the three permitted classes included: past expiresAt the
+    // cancellation is permissionless
+    function test_givenActionExpired_whenCallerIsAnyAddress(
+        address caller_
+    ) public givenEnabled givenChainAdded givenActionQueued givenActionExpired {
+        vm.prank(caller_);
+        timelock.cancelQueuedAction(queuedActionId);
+
+        assertTrue(
+            timelock.getQueuedAction(queuedActionId).cancelled,
+            "the expired action should be cancelled by any caller"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the cancellation should release the expired action's key"
+        );
+    }
+
+    // given the action has expired
+    //   given the timelock is disabled
+    //     when the caller is not the admin, not the emergency role and not the proposer
+    //       [X] it cancels and releases the keys
+    // The permissionless cleanup of an expired action needs no lifecycle state either
+    function test_givenActionExpired_givenTimelockDisabled_whenCallerIsNotAuthorized()
+        public
+        givenEnabled
+        givenChainAdded
+        givenActionQueued
+        givenActionExpired
+        givenDisabled
+    {
+        vm.prank(thirdParty);
+        timelock.cancelQueuedAction(queuedActionId);
+
+        assertTrue(
+            timelock.getQueuedAction(queuedActionId).cancelled,
+            "the expired action should be cancelled while the timelock is disabled"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the cancellation should release the expired action's key"
         );
     }
 

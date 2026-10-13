@@ -201,6 +201,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     uint256 public dispatchDomainChecks;
     uint256 public cancels;
     uint256 public cancelsOfExpired;
+    uint256 public cancelsOfExpiredByOutsider;
     uint256 public cancelsWhileTimelockDisabled;
     uint256 public rejectedQueueProbes;
     uint256 public untimelyExecuteProbes;
@@ -814,16 +815,24 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         executes += 1;
     }
 
-    /// @notice Cancels a live action as one of the three permitted classes. The action is
-    ///         guarded on liveness alone: cancellation must succeed in every product state the
-    ///         sequence reaches, whatever the lifecycle, the seat or the recorded hashes say.
+    /// @notice Cancels a live action as one of the permitted classes: the admin, the emergency
+    ///         role or the proposer, and the roleless outsider once the action has expired. The
+    ///         action is guarded on liveness alone: cancellation must succeed in every product
+    ///         state the sequence reaches, whatever the lifecycle, the seat or the recorded
+    ///         hashes say.
     function cancelLiveAction(uint256 pickSeed_, uint256 callerSeed_) external {
         uint256 index = _pickLiveAction(pickSeed_);
         if (index == NOT_FOUND) return;
         GhostAction storage ghost = _ghostActions[index];
-        // The proposer of every handler action is the bridge admin
-        address caller = [admin, emergency, bridgeAdmin][callerSeed_ % 3];
         bool wasExpired = vm.getBlockTimestamp() > ghost.expiresAt;
+        // The proposer of every handler action is the bridge admin; the outsider joins the
+        // caller set only for an expired action
+        address caller;
+        if (wasExpired) {
+            caller = [admin, emergency, bridgeAdmin, outsider][callerSeed_ % 4];
+        } else {
+            caller = [admin, emergency, bridgeAdmin][callerSeed_ % 3];
+        }
         bool timelockWasDisabled = !timelock.isEnabled();
         // casting to 'uint64' is safe because the registry index is the action id minus one
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -840,6 +849,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         assertFalse(stored.executed, "the executed flag must stay clear");
         cancels += 1;
         if (wasExpired) cancelsOfExpired += 1;
+        if (wasExpired && caller == outsider) cancelsOfExpiredByOutsider += 1;
         if (timelockWasDisabled) cancelsWhileTimelockDisabled += 1;
     }
 
@@ -1334,6 +1344,21 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         return NOT_FOUND;
     }
 
+    /// @dev Picks a live action whose execution window has not closed, starting at the seed;
+    ///      past expiresAt the cancellation is permissionless.
+    function _pickLiveUnexpiredAction(uint256 seed_) internal view returns (uint256 index) {
+        uint256 count = _ghostActions.length;
+        if (count == 0) return NOT_FOUND;
+        uint256 nowTs = vm.getBlockTimestamp();
+        uint256 start = seed_ % count;
+        for (uint256 i; i < count; ++i) {
+            uint256 candidate = (start + i) % count;
+            GhostAction storage ghost = _ghostActions[candidate];
+            if (ghost.status == 0 && nowTs <= ghost.expiresAt) return candidate;
+        }
+        return NOT_FOUND;
+    }
+
     /// @dev Whether the action is executable right now: live, inside its window, both
     ///      lifecycles open, the seat still on this timelock and no recorded state drifted.
     ///      The guarded execution and the ownership probe share this predicate, so the probe
@@ -1452,9 +1477,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
     /// @dev One gated state-changing entry point per branch, in a fixed order: the five
     ///      lifecycle and configuration writers, the eight queue entry points, the
-    ///      cancellation and the kernel migration hook. The arguments are minimal on purpose,
-    ///      because the caller check of every one of them answers before any argument is
-    ///      inspected.
+    ///      cancellation of an unexpired action and the kernel migration hook. The arguments
+    ///      are minimal on purpose, because the caller check of every one of them answers
+    ///      before any argument is inspected.
     // One branch per gated entry point, in the fixed order listed above
     // forge-lint: disable-next-item(cyclomatic-complexity)
     function _unauthorizedProbePayload(uint256 branch_) internal view returns (bytes memory) {
@@ -1509,12 +1534,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
             return abi.encodeCall(timelock.queueBatch, (batch));
         }
         if (branch_ == 13) {
-            // A live id reaches the authorization check; with none live the queue state check
-            // answers first and the call fails there instead
-            uint256 index = _pickLiveAction(branch_);
+            // A live unexpired id reaches the authorization check; an expired action is open
+            // to any canceller, so it is no target here, and with no such action the id of
+            // the next queue reaches the state check and fails there instead
+            uint256 index = _pickLiveUnexpiredAction(branch_);
             // casting to 'uint64' is safe because the registry index is the id minus one
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint64 actionId = index == NOT_FOUND ? 1 : uint64(index + 1);
+            uint64 actionId = index == NOT_FOUND ? timelock.nextActionId() : uint64(index + 1);
             return abi.encodeCall(ITimelockBatchQueue.cancelQueuedAction, (actionId));
         }
         return abi.encodeCall(timelock.changeKernel, (Kernel(address(0))));

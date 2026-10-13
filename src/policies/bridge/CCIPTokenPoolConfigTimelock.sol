@@ -47,9 +47,10 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         keys until it is executed once the config policy is enabled again, or until it is
 ///         cancelled; so does an action whose dispatch reverts because the config
 ///         policy no longer owns the pool, or whose execution this timelock rejects because the
-///         config policy names another config operator or none. Cancellation is available to
-///         the admin role, the emergency role and the proposer of the action, whether or not
-///         this policy is enabled and whether or not the action has expired.
+///         config policy names another config operator or none. Cancellation is available
+///         whether or not this policy is enabled: to the admin role, the emergency role and the
+///         proposer of the action while the action has not expired, and to any caller once it
+///         has.
 ///
 ///         `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///         emergency or admin role, `reEnable` to the bridge admin role within the grace window,
@@ -652,17 +653,19 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev Cancellation is available while this policy is disabled and after the action has
-    ///      expired.
+    /// @dev Cancellation is available while this policy is disabled. While the action has not
+    ///      expired it is restricted to the admin role, the emergency role and the proposer of
+    ///      the action; once the block timestamp is past `expiresAt`, any caller may cancel it.
     ///
     ///      Reverts if:
-    ///      - `caller_` holds neither the admin role nor the emergency role and is not the
-    ///        proposer of the action.
+    ///      - The action has not expired and `caller_` holds neither the admin role nor the
+    ///        emergency role and is not the proposer of the action.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
+        if (_getBlockTimestamp() > action_.expiresAt) return;
         _requireAuthorized(
             !_isAdmin(caller_) && !_hasRole(caller_, EMERGENCY_ROLE) && caller_ != action_.proposer
         );

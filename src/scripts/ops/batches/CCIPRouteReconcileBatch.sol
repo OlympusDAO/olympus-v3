@@ -41,9 +41,9 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///           have expired, are cancelled and replaced.
 ///         - `executeReadyActions` (anyone): execute every queued action whose delay has elapsed
 ///           and whose execution would succeed; report the others.
-///         - `cancelQueuedAction` (DAO MS as proposer) and `cancelQueuedActionEmergency`
-///           (Emergency MS): cancel one action by id, which is the only way to release the
-///           configuration keys of an expired or stale action.
+///         - `cancelQueuedAction` (DAO MS as proposer, or any owner for an expired action) and
+///           `cancelQueuedActionEmergency` (Emergency MS): cancel one action by id, which is the
+///           only way to release the configuration keys of an expired or stale action.
 ///
 ///         Each change is queued as its own action so that a queued action that turned stale
 ///         does not block the execution of the other queued actions; the reconcile run itself is
@@ -231,12 +231,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     }
 
     /// @notice Cancels one queued action (DAO MS as the proposer of the action, or any `admin` or
-    ///         `emergency` holder as owner).
+    ///         `emergency` holder as owner; any owner once the action has expired).
     /// @dev    Args file: `{"functions": [{"name": "cancelQueuedAction", "args": {"actionId": 1}}]}`.
     ///
     ///         Reverts if:
     ///         - The action does not exist, or is already executed or cancelled.
-    ///         - The batch owner is neither the proposer nor an `admin` or `emergency` holder.
+    ///         - The action has not expired and the batch owner is neither the proposer nor an
+    ///           `admin` or `emergency` holder.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "cancelQueuedAction.actionId").
@@ -496,8 +497,11 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 bool expired = block.timestamp > pending.expiresAt;
                 if (!expired && _holdsChange(pending, address(config_), planned)) continue;
 
+                // An expired action is cancellable by any account; an unexpired one only by
+                // its proposer, admin or emergency
                 require(
-                    pending.proposer == _owner ||
+                    expired ||
+                        pending.proposer == _owner ||
                         roles.hasRole(_owner, ADMIN_ROLE) ||
                         roles.hasRole(_owner, EMERGENCY_ROLE),
                     string.concat(
@@ -507,7 +511,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                         planned.description,
                         " and was proposed by ",
                         vm.toString(pending.proposer),
-                        "; only its proposer, admin or emergency can cancel it (see cancelQueuedActionEmergency)"
+                        "; until it expires only its proposer, admin or emergency can cancel it (see cancelQueuedActionEmergency)"
                     )
                 );
                 console2.log(
@@ -572,12 +576,19 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         require(!action.executed, "CCIPRouteReconcileBatch: the action is already executed");
         require(!action.cancelled, "CCIPRouteReconcileBatch: the action is already cancelled");
 
+        // The expiry is read by the script at simulation time
+        // forge-lint: disable-next-line(block-timestamp)
+        bool expired = block.timestamp > action.expiresAt;
+        console2.log("Expired:", expired);
+        // An expired action is cancellable by any account; an unexpired one only by its
+        // proposer, admin or emergency
         ROLESv1 roles = _roles();
         require(
-            action.proposer == _owner ||
+            expired ||
+                action.proposer == _owner ||
                 roles.hasRole(_owner, ADMIN_ROLE) ||
                 roles.hasRole(_owner, EMERGENCY_ROLE),
-            "CCIPRouteReconcileBatch: the batch owner is neither the proposer nor admin or emergency"
+            "CCIPRouteReconcileBatch: the action has not expired and the batch owner is neither the proposer nor admin or emergency"
         );
 
         addToBatch(

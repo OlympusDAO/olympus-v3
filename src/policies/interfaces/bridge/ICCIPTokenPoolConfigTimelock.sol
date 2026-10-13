@@ -48,7 +48,10 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         `setChainRateLimits` reserves the rate limits domain; and `applyAllowListUpdates`
 ///         reserves the allowlist domain. Reserved domains are released only by execution or
 ///         cancellation, so an expired or invalidated action must be cancelled before its domains
-///         can be queued again. Queueing and execution both require the timelock and the config
+///         can be queued again. An action that has not expired, whether still delayed or inside
+///         its execution window, is cancellable by the admin role, the emergency role and its
+///         proposer; an expired action is cancellable by any caller. Queueing and execution both
+///         require the timelock and the config
 ///         policy to be enabled; an action whose config policy is disabled after queueing holds
 ///         its domains until it executes or is cancelled. Enabling and re-enabling the timelock
 ///         require the config policy to be an active policy of the timelock's kernel.

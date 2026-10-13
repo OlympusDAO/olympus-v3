@@ -97,7 +97,7 @@ The two functions below are present on every deployment of the config policy, bu
 | `queueSetChainRateLimits` | `bridge_admin` | DAO MS |
 | `queueBatch` | `bridge_admin` | DAO MS |
 | `executeQueuedAction` | permissionless after the delay | any address |
-| `cancelQueuedAction` | `admin`, `emergency`, or the original proposer; works while disabled and after expiry | OCG timelock; Emergency MS; DAO MS |
+| `cancelQueuedAction` | `admin`, `emergency`, or the original proposer; any address once the action has expired; works while disabled | OCG timelock; Emergency MS; DAO MS; any address |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
 | `reEnable` | `bridge_admin`; within the grace period | DAO MS |
 | `changeKernel` | Kernel | Kernel |

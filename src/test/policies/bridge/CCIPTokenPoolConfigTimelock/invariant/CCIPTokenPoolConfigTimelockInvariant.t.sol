@@ -70,8 +70,8 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
         // routes, queues of every width, a batch, both rejected-queue probe families, a
         // ripened execution with its dispatch-domain check, a re-queue of the freed domain,
         // drift plus the drifted-execution probe, expiry plus the expired-execution probe, a
-        // resolved-id probe, cancellations by all three classes (one of an expired action,
-        // one while the timelock is disabled), the closed-window reEnable probe, the config
+        // resolved-id probe, cancellations by three classes (the outsider's of an expired
+        // action, one while the timelock is disabled), the closed-window reEnable probe, the config
         // lifecycle toggle, the seat rotation with its gate probe, consumption, the delay and
         // grace writes, containment and the direct drift actors, the outsider sweep over
         // the whole gated surface, and both authority errors of the ownership probe.
@@ -102,7 +102,7 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
         handler.expireAction(1);
         handler.probeUntimelyExecute(1);
         handler.probeUntimelyExecute(0);
-        handler.cancelLiveAction(1, 0);
+        handler.cancelLiveAction(1, 3);
         handler.disableTimelock(0);
         handler.probeRejectedQueue(2);
         handler.probeUntimelyExecute(4);
@@ -133,8 +133,12 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
         require(handler.batchesQueued() > 0, "bootstrap: no batch was queued");
         require(handler.executes() > 0, "bootstrap: no execution ran");
         require(handler.dispatchDomainChecks() > 0, "bootstrap: no dispatch-domain check ran");
-        require(handler.cancels() > 2, "bootstrap: not every canceller class ran");
+        require(handler.cancels() > 2, "bootstrap: fewer than three cancellations ran");
         require(handler.cancelsOfExpired() > 0, "bootstrap: no expired action was cancelled");
+        require(
+            handler.cancelsOfExpiredByOutsider() > 0,
+            "bootstrap: the outsider did not cancel an expired action"
+        );
         require(
             handler.cancelsWhileTimelockDisabled() > 0,
             "bootstrap: no cancellation ran while disabled"
@@ -369,10 +373,11 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
     /// @notice The authorization surface never expands: an account holding no role, no
     ///         operator grant and no proposership fails every gated state-changing entry point
     ///         of the timelock in every reachable state. The handler sweeps the five lifecycle
-    ///         and configuration writers, the eight queue entry points, the cancellation and
-    ///         the kernel migration hook. The two deliberately open entry points are outside
-    ///         the sweep: permissionless execution and the unrestricted dependency hook are
-    ///         documented behaviour, so a success there would not be a finding.
+    ///         and configuration writers, the eight queue entry points, the cancellation of an
+    ///         unexpired action and the kernel migration hook. The deliberately open entry
+    ///         points are outside the sweep: permissionless execution, the cancellation of an
+    ///         expired action and the unrestricted dependency hook are documented behaviour,
+    ///         so a success there would not be a finding.
     function invariant_unauthorizedCallerNeverSucceeds() public view {
         assertFalse(
             handler.ghost_unauthorizedCallSucceeded(),
@@ -430,6 +435,11 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
         assertGt(handler.gateRetentionChecks(), 0, "no gate retention check ran");
         assertGt(handler.resolvedReExecuteProbes(), 0, "no resolved-id probe ran");
         assertGt(handler.cancelsOfExpired(), 0, "no expired action was cancelled");
+        assertGt(
+            handler.cancelsOfExpiredByOutsider(),
+            0,
+            "no expired action was cancelled by the outsider"
+        );
         assertGt(
             handler.cancelsWhileTimelockDisabled(),
             0,
