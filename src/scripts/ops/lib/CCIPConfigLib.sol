@@ -65,6 +65,15 @@ library CCIPConfigLib {
     ///         rejects any other length, so an override in `env.json` is checked here first.
     uint256 internal constant REMOTE_ADDRESS_LENGTH = 32;
 
+    /// @notice The capacity of the disabled rate limiter configuration that the containment
+    ///         functions of `CCIPTokenPoolConfig` write (`getDisabledRateLimiterConfig`), in
+    ///         token base units.
+    uint128 internal constant DISABLED_RATE_LIMIT_CAPACITY = 2;
+
+    /// @notice The refill rate of the disabled rate limiter configuration, in token base units
+    ///         per second.
+    uint128 internal constant DISABLED_RATE_LIMIT_RATE = 1;
+
     // ========== DATA STRUCTURES ========== //
 
     /// @notice The desired parameters of the config policy and its timelock.
@@ -375,7 +384,9 @@ library CCIPConfigLib {
     }
 
     /// @notice Reverts unless the configuration is an enabled limiter accepted by the config
-    ///         policy and the pool: `isEnabled` with `0 < rate < capacity`.
+    ///         policy and the pool: `isEnabled` with `0 < rate < capacity`, and not the disabled
+    ///         rate limiter configuration `{capacity: 2, rate: 1}` that the containment
+    ///         functions of the config policy reserve.
     function requireEnabledConfig(
         ICCIPRateLimiter.Config memory config_,
         string memory label_
@@ -385,6 +396,15 @@ library CCIPConfigLib {
         require(
             config_.rate < config_.capacity,
             string.concat("CCIPConfigLib: ", label_, " rate is not below its capacity")
+        );
+        require(
+            config_.capacity != DISABLED_RATE_LIMIT_CAPACITY ||
+                config_.rate != DISABLED_RATE_LIMIT_RATE,
+            string.concat(
+                "CCIPConfigLib: ",
+                label_,
+                " is the disabled rate limiter configuration of the containment functions"
+            )
         );
     }
 

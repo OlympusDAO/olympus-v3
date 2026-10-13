@@ -6,6 +6,7 @@ pragma solidity ^0.8.24;
 
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 
 import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
 
@@ -54,16 +55,15 @@ contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
 
     // given only the outbound bucket is contained
     //   [X] it returns false
-    // Reached through setChainRateLimits with the containment shape outbound only; a
-    // half-contained route is reported as not disabled.
+    // The shape is written directly on the pool by its owner, since the policy's setter
+    // rejects the containment shape; a half-contained route is reported as not disabled.
     function test_givenOnlyOutboundContained()
         public
         givenEnabled
         givenPoolOwnershipAccepted
         givenChainAdded
     {
-        vm.prank(admin);
-        config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _defaultInboundConfig());
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _defaultInboundConfig());
 
         assertFalse(
             config.isChainDisabled(CHAIN_SELECTOR_A),
@@ -79,8 +79,7 @@ contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
         givenPoolOwnershipAccepted
         givenChainAdded
     {
-        vm.prank(admin);
-        config.setChainRateLimits(CHAIN_SELECTOR_A, _defaultOutboundConfig(), _containmentConfig());
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _defaultOutboundConfig(), _containmentConfig());
 
         assertFalse(
             config.isChainDisabled(CHAIN_SELECTOR_A),
@@ -127,22 +126,31 @@ contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
         );
     }
 
-    // given the limits were set manually to the containment shape
+    // given the limits were set to the containment shape directly on the pool
     //   [X] it returns true
-    // {true, 2, 1} written through setChainRateLimits is indistinguishable from containment;
-    // at that capacity no transfer passes, so the answer stays operationally correct.
+    // The policy's setter rejects {true, 2, 1}, so the shape reaches a route only through the
+    // containment functions or through a direct pool write by the owner, such as a route
+    // seeded before the handover; at that capacity no transfer passes, so the answer stays
+    // operationally correct.
     function test_givenLimitsSetManuallyToContainmentShape()
         public
         givenEnabled
         givenPoolOwnershipAccepted
         givenChainAdded
     {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
         vm.prank(admin);
         config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
 
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
+
         assertTrue(
             config.isChainDisabled(CHAIN_SELECTOR_A),
-            "the manually written containment shape should read as disabled"
+            "the directly written containment shape should read as disabled"
         );
     }
 

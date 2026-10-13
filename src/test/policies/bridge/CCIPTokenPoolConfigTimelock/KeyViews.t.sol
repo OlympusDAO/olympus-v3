@@ -143,12 +143,13 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
         _assertChainActionReservesDocumentedKeys(CHAIN_SELECTOR_A);
     }
 
-    // when the selector is zero
+    // when the selector is one
     //   [X] the keys reserved for the route are the documented shape
-    // The abi.encode padding of a uint64 is exercised at the low end; no route-existence gate
-    // stands between the selector and its keys
-    function test_whenSelectorIsZero() public givenEnabled {
-        _assertChainActionReservesDocumentedKeys(0);
+    // The abi.encode padding of a uint64 is exercised at the low end: one is the smallest
+    // selector the config's validation mirror accepts, and no route-existence gate stands
+    // between the selector and its keys
+    function test_whenSelectorIsOne() public givenEnabled {
+        _assertChainActionReservesDocumentedKeys(1);
     }
 
     // when the selector is the uint64 maximum

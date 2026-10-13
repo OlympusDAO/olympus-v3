@@ -421,6 +421,98 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         config.addChain(update);
     }
 
+    // when the remote chain selector is zero
+    //   [X] it reverts with CCIPTokenPoolConfig_ChainSelectorZero
+    //   [X] validateAddChain reverts with the same error
+    // Selector zero identifies no CCIP destination; the pool would store the route
+    function test_whenChainSelectorIsZero_reverts() public givenEnabled givenPoolOwnershipAccepted {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_ChainSelectorZero.selector
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+
+        assertFalse(pool.isSupportedChain(0), "the zero selector route should not be added");
+    }
+
+    // when the remote chain selector is zero
+    //   when the outbound rate limiter config is disabled
+    //     [X] it reverts with CCIPTokenPoolConfig_RateLimiterDisabled
+    // Pins the check order: the limiter and remote token checks answer before the selector
+    function test_whenChainSelectorIsZero_whenOutboundRateLimiterIsDisabled_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+        update.outboundRateLimiterConfig = _disabledConfig();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterDisabled.selector
+            )
+        );
+        vm.prank(admin);
+        config.addChain(update);
+    }
+
+    // when the remote chain selector is zero
+    //   when the remote token is empty
+    //     [X] it reverts with ZeroAddressNotAllowed
+    // Pins the check order: the remote token checks answer before the selector
+    function test_whenChainSelectorIsZero_whenRemoteTokenIsEmpty_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+        update.remoteTokenAddress = "";
+
+        vm.expectRevert(abi.encodeWithSelector(ICCIPTokenPoolAdmin.ZeroAddressNotAllowed.selector));
+        vm.prank(admin);
+        config.addChain(update);
+    }
+
+    // when the remote chain selector is zero
+    //   when the remote pool list is empty
+    //     [X] it reverts with CCIPTokenPoolConfig_ChainSelectorZero
+    // Pins the check order: the selector answers before the remote pool list
+    function test_whenChainSelectorIsZero_whenRemotePoolListIsEmpty_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+        update.remotePoolAddresses = new bytes[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_ChainSelectorZero.selector
+            )
+        );
+        vm.prank(admin);
+        config.addChain(update);
+    }
+
+    // when the remote chain selector is one
+    //   [X] it adds the route
+    // The smallest accepted selector, next to the rejected zero
+    function test_whenChainSelectorIsOne() public givenEnabled givenPoolOwnershipAccepted {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(1);
+
+        config.validateAddChain(update);
+        vm.prank(admin);
+        config.addChain(update);
+
+        assertTrue(pool.isSupportedChain(1), "the selector one route should be added");
+    }
+
     // given the route already exists
     //   [X] it reverts with ChainAlreadyExists carrying the selector
     //   [X] validateAddChain reverts with the same error
@@ -769,26 +861,142 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         );
     }
 
-    // when both rate limiter configs are the minimum enabled {true, 2, 1}
-    //   [X] it adds the route
-    // The smallest admissible enabled config, identical to the containment constant; the new
-    // route immediately reads as contained through isChainDisabled.
-    function test_whenRateLimiterIsMinimumEnabled() public givenEnabled givenPoolOwnershipAccepted {
+    // when both rate limiter configs are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateAddChain reverts with the same error
+    // The pair passes the pool's rate check and is the disabled configuration of the
+    // containment functions, which stay its only writers: a route cannot be added reading as
+    // contained
+    function test_whenRateLimiterIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.outboundRateLimiterConfig = _containmentConfig();
         update.inboundRateLimiterConfig = _containmentConfig();
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+        );
 
+        vm.expectRevert(err);
         vm.prank(admin);
         config.addChain(update);
 
-        assertTrue(
-            pool.isSupportedChain(CHAIN_SELECTOR_A),
-            "the minimum enabled config should be accepted"
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+
+        assertFalse(pool.isSupportedChain(CHAIN_SELECTOR_A), "the route should not be added");
+    }
+
+    // when only the outbound rate limiter config is the containment shape
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateAddChain reverts with the same error
+    // Each direction is validated on its own
+    function test_whenOutboundRateLimiterIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _containmentConfig();
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
         );
-        assertTrue(
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+    }
+
+    // when only the inbound rate limiter config is the containment shape
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateAddChain reverts with the same error
+    function test_whenInboundRateLimiterIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.inboundRateLimiterConfig = _containmentConfig();
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.addChain(update);
+
+        vm.expectRevert(err);
+        config.validateAddChain(update);
+    }
+
+    // when the outbound rate limiter config is the containment shape with a zero rate
+    //   [X] it reverts with InvalidRateLimitRate
+    // Pins the validation order: the pool-shaped rate check answers before the reserved-shape
+    // check, so {true, 2, 0} reports the rate, not the reservation
+    function test_whenOutboundRateLimiterIsCapacityTwoRateZero_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _rateLimiterConfig(true, 2, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPRateLimiter.InvalidRateLimitRate.selector,
+                update.outboundRateLimiterConfig
+            )
+        );
+        vm.prank(admin);
+        config.addChain(update);
+    }
+
+    // when both rate limiter configs are {true, 3, 1}
+    //   [X] it adds the route
+    //   [X] the route does not read as contained
+    // The accepted neighbour of the reserved pair: one unit of capacity above it
+    function test_whenRateLimiterIsCapacityThreeRateOne()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _rateLimiterConfig(true, 3, 1);
+        update.inboundRateLimiterConfig = _rateLimiterConfig(true, 3, 1);
+
+        config.validateAddChain(update);
+        vm.prank(admin);
+        config.addChain(update);
+
+        assertTrue(pool.isSupportedChain(CHAIN_SELECTOR_A), "the route should be added");
+        assertFalse(
             config.isChainDisabled(CHAIN_SELECTOR_A),
-            "the {true, 2, 1} route should immediately read as contained"
+            "the {true, 3, 1} route should not read as contained"
         );
+    }
+
+    // when both rate limiter configs are {true, 3, 2}
+    //   [X] it adds the route
+    // The accepted neighbour of the reserved pair in the rate: capacity three admits rate two
+    function test_whenRateLimiterIsCapacityThreeRateTwo()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+    {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
+        update.outboundRateLimiterConfig = _rateLimiterConfig(true, 3, 2);
+        update.inboundRateLimiterConfig = _rateLimiterConfig(true, 3, 2);
+
+        config.validateAddChain(update);
+        vm.prank(admin);
+        config.addChain(update);
+
+        assertTrue(pool.isSupportedChain(CHAIN_SELECTOR_A), "the route should be added");
     }
 
     // when the capacity is the uint128 maximum
@@ -826,16 +1034,17 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     //   [X] it adds the route with both buckets starting full at the capacity
     //   [X] validateAddChain returns for the same input
     // The valid interval of the shared rate limiter validator, 0 < rate < capacity, fuzzed in
-    // both directions at once. The capacity ranges over [2, type(uint128).max], since a
-    // capacity below two leaves no room for a non-zero rate below it.
+    // both directions at once. The capacity ranges over [3, type(uint128).max]: a capacity
+    // below two leaves no room for a non-zero rate below it, and a capacity of two admits only
+    // the rate of one, the reserved containment shape, which has its own test.
     function test_whenRateIsBelowCapacity(
         uint128 capacity_,
         uint128 rate_
     ) public givenEnabled givenPoolOwnershipAccepted {
         // casting to 'uint128' is safe because the bound caps the value at the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 boundedCapacity = uint128(bound(capacity_, 2, type(uint128).max));
-        // boundedCapacity is in [2, type(uint128).max]
+        uint128 boundedCapacity = uint128(bound(capacity_, 3, type(uint128).max));
+        // boundedCapacity is in [3, type(uint128).max]
         // casting to 'uint128' is safe because the bound keeps the value below `boundedCapacity`
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 boundedRate = uint128(bound(rate_, 1, boundedCapacity - 1));
@@ -927,12 +1136,19 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         _assertRemotePoolsEq(pool.getRemotePools(CHAIN_SELECTOR_A), remotePools, "remote pools");
     }
 
-    // when the chain selector is any value
+    // when the chain selector is any non-zero value
     //   [X] it adds the route for that selector
-    // Fuzzed over the full uint64 domain, including zero and the maximum
+    // Fuzzed over the accepted interval [1, type(uint64).max]; zero is the rejected side and has
+    // its own test
     function test_whenChainSelectorIsAnyValue(
         uint64 chainSelector_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        // casting to 'uint64' is safe because the bound caps the value at the uint64 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
+        uint64 boundedSelector = uint64(bound(chainSelector_, 1, type(uint64).max));
+        // boundedSelector is in the accepted interval [1, type(uint64).max]
+        chainSelector_ = boundedSelector;
+
         vm.prank(admin);
         config.addChain(_defaultChainUpdate(chainSelector_));
 

@@ -246,7 +246,12 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
-    /// @dev Reverts if:
+    /// @dev `addChain`, `setChainRateLimits` and their validation mirrors reject the disabled
+    ///      rate limiter configuration, so both buckets hold it only after `disableChain` or
+    ///      `disableAllChains`, or when they were written directly on the pool: by its owner
+    ///      before the handover, or by a rate limit admin of the pool.
+    ///
+    ///      Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     function isChainDisabled(uint64 chainSelector_) external view override returns (bool disabled) {
         _requireSupportedChain(chainSelector_);
@@ -646,14 +651,20 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The checks run in the order in which the pool would perform its own, with the
-    ///      config-only length check of each remote address right after its emptiness check.
+    ///      config-only checks placed next to the pool check they extend: the disabled
+    ///      configuration check after the rate check of the same configuration, the length
+    ///      check of each remote address right after its emptiness check, and the zero selector
+    ///      check right before the route existence check.
     ///
     ///      Reverts if:
     ///      - Either rate limiter configuration is disabled.
     ///      - Either rate limiter configuration has a zero rate or a rate that is not below its
     ///        capacity (`InvalidRateLimitRate`).
+    ///      - Either rate limiter configuration is the disabled rate limiter configuration
+    ///        (`CCIPTokenPoolConfig_RateLimiterReserved`).
     ///      - The remote token is empty (`ZeroAddressNotAllowed`).
     ///      - The remote token is not 32 bytes long.
+    ///      - The remote chain selector is zero (`CCIPTokenPoolConfig_ChainSelectorZero`).
     ///      - The route already exists (`ChainAlreadyExists`).
     ///      - The remote pool list is empty.
     ///      - A remote pool entry is empty (`ZeroAddressNotAllowed`).
@@ -728,6 +739,8 @@ contract CCIPTokenPoolConfig is
     ///      - Either configuration is disabled.
     ///      - Either configuration has a zero rate or a rate that is not below its capacity
     ///        (`InvalidRateLimitRate`).
+    ///      - Either configuration is the disabled rate limiter configuration
+    ///        (`CCIPTokenPoolConfig_RateLimiterReserved`).
     function validateSetChainRateLimits(
         uint64 chainSelector_,
         ICCIPRateLimiter.Config calldata outbound_,
@@ -806,6 +819,7 @@ contract CCIPTokenPoolConfig is
             revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
         }
         _requireRemoteAddressLength(update_.remoteTokenAddress);
+        if (update_.remoteChainSelector == 0) revert CCIPTokenPoolConfig_ChainSelectorZero();
         if (_POOL.isSupportedChain(update_.remoteChainSelector)) {
             revert ICCIPTokenPoolAdmin.ChainAlreadyExists(update_.remoteChainSelector);
         }
@@ -918,14 +932,26 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @notice Validates a rate limiter configuration supplied to the pool.
-    /// @dev    Reverts if:
+    /// @dev    The disabled rate limiter configuration passes the pool's own checks; it is
+    ///         rejected last, so that the containment functions remain the only functions of
+    ///         this policy that leave it in place.
+    ///
+    ///         Reverts if:
     ///         - `config_` is disabled.
     ///         - `config_` has a zero rate or a rate that is not below its capacity
     ///           (`InvalidRateLimitRate`).
+    ///         - `config_` is the disabled rate limiter configuration
+    ///           (`CCIPTokenPoolConfig_RateLimiterReserved`).
     function _validateRateLimiterConfig(ICCIPRateLimiter.Config memory config_) internal pure {
         if (!config_.isEnabled) revert CCIPTokenPoolConfig_RateLimiterDisabled();
         if (config_.rate == 0 || config_.rate >= config_.capacity) {
             revert ICCIPRateLimiter.InvalidRateLimitRate(config_);
+        }
+        if (
+            config_.capacity == _DISABLED_RATE_LIMIT_CAPACITY &&
+            config_.rate == _DISABLED_RATE_LIMIT_RATE
+        ) {
+            revert CCIPTokenPoolConfig_RateLimiterReserved();
         }
     }
 

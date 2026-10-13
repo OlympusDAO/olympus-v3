@@ -522,18 +522,43 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "boundary queue");
     }
 
-    // when both configurations are the minimal enabled shape {true, 2, 1}
-    //   [X] it queues successfully
-    // The containment shape is a legal addChain configuration (rate 1 below capacity 2)
-    function test_whenRateLimitConfigsAreMinimal() public givenEnabled {
+    // when both configurations are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] no key is reserved
+    // The config's validation mirror rejects the disabled rate limiter configuration, which
+    // only the containment functions write
+    function test_whenRateLimitConfigsAreContainmentShape_reverts() public givenEnabled {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.outboundRateLimiterConfig = _containmentConfig();
         update.inboundRateLimiterConfig = _containmentConfig();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
         vm.prank(bridgeAdmin);
-        uint64 actionId = timelock.queueAddChain(update);
+        timelock.queueAddChain(update);
 
-        _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "minimal-config queue");
+        _assertRouteKeysFree(CHAIN_SELECTOR_A, "rejected containment-shape queue");
+    }
+
+    // when the selector is zero
+    //   [X] it reverts with CCIPTokenPoolConfig_ChainSelectorZero
+    //   [X] no key is reserved
+    // The config's validation mirror rejects the zero selector before any reservation
+    function test_whenSelectorIsZero_reverts() public givenEnabled {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_ChainSelectorZero.selector
+            )
+        );
+        vm.prank(bridgeAdmin);
+        timelock.queueAddChain(update);
+
+        _assertRouteKeysFree(0, "rejected zero-selector queue");
     }
 
     // when the selector is the uint64 maximum

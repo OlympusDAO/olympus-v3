@@ -137,6 +137,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     /// @notice Funding of the liquidity source pool: 1 OHM in base units (9 decimals).
     uint256 internal constant SOURCE_POOL_FUNDING = 1_000_000_000;
 
+    /// @notice The smallest capacity the fill clamp of _setBucketFills writes, in base units:
+    ///         one above the containment shape {true, 2, 1}, which the policy's setter rejects.
+    uint128 internal constant FILL_CLAMP_FLOOR = 3;
+
     // ========== EXPOSED MODIFIER STATE ========== //
 
     /// @notice The grace deadline computed by givenGraceExpired, for error-argument asserts.
@@ -469,13 +473,13 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     /// @notice Drains both buckets of a route down to the target fill levels without touching
     ///         their configurations, all in the current block so no refill lands in between.
-    /// @dev    Targets at or above two units use a temporary capacity clamp through
-    ///         setChainRateLimits ({true, target, 1}, then the original configuration in the
-    ///         same block). Targets of zero or one clamp to two first and then consume the
-    ///         remainder through a real transfer, because two is the smallest capacity of an
-    ///         enabled configuration with a rate of one. Requires the enabled policy with pool
-    ///         authority and targets at or below the current fills; a direction left at its
-    ///         current fill is a no-op.
+    /// @dev    Targets at or above FILL_CLAMP_FLOOR (three units) use a temporary capacity
+    ///         clamp through setChainRateLimits ({true, target, 1}, then the original
+    ///         configuration in the same block). Targets below it clamp to the floor first and
+    ///         then consume the remainder through a real transfer, because the clamp to two
+    ///         would be the containment shape {true, 2, 1}, which the policy's setter rejects.
+    ///         Requires the enabled policy with pool authority and targets at or below the
+    ///         current fills; a direction left at its current fill is a no-op.
     function _setBucketFills(
         uint64 chainSelector_,
         uint128 outboundTokens_,
@@ -489,8 +493,12 @@ abstract contract CCIPTokenPoolConfigTest is Test {
             rigPool.getCurrentInboundRateLimiterState(chainSelector_)
         );
 
-        uint128 outboundClamp = outboundTokens_ < 2 ? 2 : outboundTokens_;
-        uint128 inboundClamp = inboundTokens_ < 2 ? 2 : inboundTokens_;
+        uint128 outboundClamp = outboundTokens_ < FILL_CLAMP_FLOOR
+            ? FILL_CLAMP_FLOOR
+            : outboundTokens_;
+        uint128 inboundClamp = inboundTokens_ < FILL_CLAMP_FLOOR
+            ? FILL_CLAMP_FLOOR
+            : inboundTokens_;
 
         vm.startPrank(admin);
         config.setChainRateLimits(
@@ -501,8 +509,12 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config.setChainRateLimits(chainSelector_, outboundConfig, inboundConfig);
         vm.stopPrank();
 
-        if (outboundTokens_ < 2) _consumeOutbound(chainSelector_, 2 - outboundTokens_);
-        if (inboundTokens_ < 2) _consumeInbound(chainSelector_, 2 - inboundTokens_);
+        if (outboundTokens_ < FILL_CLAMP_FLOOR) {
+            _consumeOutbound(chainSelector_, FILL_CLAMP_FLOOR - outboundTokens_);
+        }
+        if (inboundTokens_ < FILL_CLAMP_FLOOR) {
+            _consumeInbound(chainSelector_, FILL_CLAMP_FLOOR - inboundTokens_);
+        }
     }
 
     // ========== TIME HELPERS ========== //

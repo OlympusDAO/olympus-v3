@@ -475,20 +475,31 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         );
     }
 
-    // when both configurations are the minimal enabled shape {true, 2, 1}
-    //   [X] it queues successfully
-    // The queue path can carry containment-equivalent values
-    function test_whenRateLimitConfigsAreMinimal() public givenEnabled givenChainAdded {
+    // when both configurations are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] the rate limits key stays free
+    // The queue path cannot carry the disabled rate limiter configuration: containment is
+    // immediate and one way, never a delayed action
+    function test_whenRateLimitConfigsAreContainmentShape_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+    {
         ICCIPRateLimiter.Config memory outbound = _containmentConfig();
         ICCIPRateLimiter.Config memory inbound = _containmentConfig();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
         vm.prank(bridgeAdmin);
-        uint64 actionId = timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
+        timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
 
         assertEq(
             timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
-            actionId,
-            "the rate limits key should belong to the minimal-config action"
+            0,
+            "the rate limits key should stay free"
         );
     }
 

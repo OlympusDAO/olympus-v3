@@ -100,6 +100,13 @@ interface ICCIPTokenPoolConfig {
     ///         Every route served by the pool carries enabled limiters in both directions.
     error CCIPTokenPoolConfig_RateLimiterDisabled();
 
+    /// @notice Thrown when a supplied rate limiter configuration equals the disabled rate
+    ///         limiter configuration, which only the containment functions write.
+    error CCIPTokenPoolConfig_RateLimiterReserved();
+
+    /// @notice Thrown when a chain is added with a zero remote chain selector.
+    error CCIPTokenPoolConfig_ChainSelectorZero();
+
     /// @notice Thrown when the removal of a remote pool would leave the route without any
     ///         accepted remote pool.
     /// @param chainSelector The chain selector of the route.
@@ -204,8 +211,9 @@ interface ICCIPTokenPoolConfig {
     function isLiquidityContainer() external view returns (bool isContainer);
 
     /// @notice Returns the rate limiter configuration written to both buckets of a route by the
-    ///         containment functions. At this capacity every real transfer exceeds the bucket
-    ///         size and fails immediately.
+    ///         containment functions, and rejected by `addChain`, `setChainRateLimits` and their
+    ///         validation mirrors. At this capacity every real transfer exceeds the bucket size
+    ///         and fails immediately.
     /// @return config The disabled rate limiter configuration.
     function getDisabledRateLimiterConfig()
         external
@@ -214,7 +222,9 @@ interface ICCIPTokenPoolConfig {
 
     /// @notice Returns whether both buckets of a configured route hold the disabled rate limiter
     ///         configuration. Only `isEnabled`, `capacity` and `rate` are compared. A route with
-    ///         exactly one contained bucket is reported as not disabled.
+    ///         exactly one contained bucket is reported as not disabled. The route functions of
+    ///         this policy never leave that configuration in place, so a route reported as
+    ///         disabled was contained through this policy or configured directly on the pool.
     /// @param chainSelector_ The chain selector of the route.
     /// @return disabled True if both buckets are contained.
     function isChainDisabled(uint64 chainSelector_) external view returns (bool disabled);
@@ -259,9 +269,10 @@ interface ICCIPTokenPoolConfig {
 
     // ========== ROUTE FUNCTIONS ========== //
 
-    /// @notice Adds a route with its remote token, accepted remote pools and enabled rate limits
-    ///         in both directions. Both buckets start full. Intended to be callable only by the
-    ///         config operator or the admin role while the policy is enabled.
+    /// @notice Adds a route with a non-zero chain selector, its remote token, accepted remote
+    ///         pools and enabled rate limits in both directions, neither of them the disabled
+    ///         rate limiter configuration. Both buckets start full. Intended to be callable only
+    ///         by the config operator or the admin role while the policy is enabled.
     /// @param update_ The chain configuration to add.
     function addChain(ICCIPTokenPoolAdmin.ChainUpdate calldata update_) external;
 
@@ -306,9 +317,10 @@ interface ICCIPTokenPoolConfig {
     // ========== RATE LIMIT FUNCTIONS ========== //
 
     /// @notice Sets both rate limiter configurations of a route together. Both configurations
-    ///         must be enabled. The fill level of each bucket is clamped to the new capacity and
-    ///         is never raised. Intended to be callable only by the bridge rate limiter role, the
-    ///         config operator or the admin role while the policy is enabled.
+    ///         must be enabled and neither may be the disabled rate limiter configuration. The
+    ///         fill level of each bucket is clamped to the new capacity and is never raised.
+    ///         Intended to be callable only by the bridge rate limiter role, the config operator
+    ///         or the admin role while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param outbound_ The outbound rate limiter configuration.
     /// @param inbound_ The inbound rate limiter configuration.

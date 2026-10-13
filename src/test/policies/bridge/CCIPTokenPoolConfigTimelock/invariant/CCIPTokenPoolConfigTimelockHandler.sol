@@ -1581,7 +1581,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @dev Enabled rate limiter configurations bounded so the config accepts them: the
-    ///      capacity in [2, MAX_CAPACITY] base units and the rate in [1, capacity - 1].
+    ///      capacity in [3, MAX_CAPACITY] base units and the rate in [1, capacity - 1]. A
+    ///      capacity of two admits only the rate of one, the containment shape the config
+    ///      rejects.
     function _boundedConfigs(
         uint256 seed_
     )
@@ -1592,13 +1594,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         uint256 mixed = uint256(keccak256(abi.encode(seed_)));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 3, MAX_CAPACITY));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 outRate = uint128(bound((mixed >> 64) & type(uint64).max, 1, outCapacity - 1));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 3, MAX_CAPACITY));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 inRate = uint128(bound(mixed >> 192, 1, inCapacity - 1));
