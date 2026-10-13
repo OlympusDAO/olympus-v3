@@ -19,9 +19,10 @@
 #   5. Post-OCG (DAO MS): CCIPRouteReconcileBatch.reconcileRoutes must propose
 #      nothing on the converged routes; the timelock path is then exercised by
 #      changing the desired outbound rate in env.json, reconciling (queues),
-#      warping past the delay, executing, and reconciling again (empty). The
-#      periphery reconciler adds the four EVM trusted remotes (nothing for
-#      solana) and proposes nothing on a re-run.
+#      warping past the delay, executing (by id through the example args file
+#      on a fresh timelock, where the queued action is action 1), and
+#      reconciling again (empty). The periphery reconciler adds the four EVM
+#      trusted remotes (nothing for solana) and proposes nothing on a re-run.
 #   6. Containment: CCIPTokenPoolConfigBatch.disableChain from the DAO MS as
 #      bridge_admin, an empty re-run through the Emergency MS variant, a
 #      reconcileRoutes run without the restoreContained flag that lists the
@@ -44,6 +45,7 @@ CHAIN="mainnet"
 SOLANA_SELECTOR="124615329519749607"
 DISABLE_ARGS="src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain.json"
 RESTORE_ARGS="src/scripts/ops/batches/args/CCIPRouteReconcileBatch_reconcileRoutes_restoreContained.json"
+EXECUTE_ARGS="src/scripts/ops/batches/args/CCIPRouteReconcileBatch_executeReadyActions.json"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -205,12 +207,20 @@ run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-queue"
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue setChainRateLimits)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-queue-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes re-run (already queued)"
-run_batch CCIPRouteReconcileBatch executeReadyActions dao "" "-early"
+# The example args file names action 1, which is the queued action on a fresh timelock;
+# against an already-deployed timelock with earlier actions, every ready action is executed
+execute_args=""
+if [ "$(cast call "$tl" 'nextActionId()(uint64)' --rpc-url "$RPC" | awk '{print $1}')" = "2" ]; then
+    execute_args="$EXECUTE_ARGS"
+    log "the queued action is action 1: executing by id through $EXECUTE_ARGS"
+fi
+run_batch CCIPRouteReconcileBatch executeReadyActions dao "$execute_args" "-early"
 expect_empty_batch "$LAST_BATCH_LOG" "executeReadyActions before the delay"
+[ -z "$execute_args" ] || expect_log_line "$LAST_BATCH_LOG" "Not ready: executable at" "executeReadyActions reports the listed action as not ready"
 # cast appends a scientific-notation hint to large numbers; keep the first token only
 delay="$(cast call "$tl" 'timelockDelay()(uint48)' --rpc-url "$RPC" | awk '{print $1}')"
 warp "$((delay + 1))"
-run_batch CCIPRouteReconcileBatch executeReadyActions dao "" "-ready"
+run_batch CCIPRouteReconcileBatch executeReadyActions dao "$execute_args" "-ready"
 expect_non_empty_batch "$LAST_BATCH_LOG" "executeReadyActions after the delay"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-after-execute"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after execution"

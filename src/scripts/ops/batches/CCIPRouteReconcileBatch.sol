@@ -23,6 +23,7 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {CCIPQueueLib} from "src/scripts/ops/lib/CCIPQueueLib.sol";
 
 // Contracts
 import {Kernel, toKeycode} from "src/Kernel.sol";
@@ -42,9 +43,12 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///           expired, the run holds its cancellations only and queues nothing: execution is
 ///           permissionless, so the holder may execute before the batch lands, and the
 ///           replacements are planned afresh by the next run from the state the cancellations
-///           leave.
+///           leave. After the plan the run lists every unresolved queued action: cancelled by
+///           this run, carrying a planned change, or outside the plan, with the sub-actions that
+///           conflict with `env.json` where the desired state decides it.
 ///         - `executeReadyActions` (anyone): execute every queued action whose delay has elapsed
-///           and whose execution would succeed; report the others.
+///           and whose execution would succeed, or only the action ids listed in the args file;
+///           report the others.
 ///         - `cancelQueuedAction` (DAO MS as proposer, or any owner for an expired action) and
 ///           `cancelQueuedActionEmergency` (Emergency MS): cancel one action by id, which is the
 ///           only way to release the configuration keys of an expired or stale action.
@@ -140,6 +144,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         reverts with `ITimelockBatchQueue_ActionAlreadyExecuted` and fails the batch; the
     ///         next run plans from the resulting state.
     ///
+    ///         The plan describes the pool state only, so the run ends with every unresolved
+    ///         queued action: cancelled by this run, carrying a planned change, or outside the
+    ///         plan, where a `removeChain` of a route declared enabled, an `addChain` of a route
+    ///         not declared or declared disabled, and a payload that differs from the desired
+    ///         values of its route are marked as conflicts. An action outside the plan executes
+    ///         once ready unless it is cancelled.
+    ///
     ///         Reverts if:
     ///         - The config policy, the timelock and the pool are not bound to each other.
     ///         - The config policy does not own the pool or does not name the timelock as its
@@ -199,26 +210,38 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             for (uint256 i = 0; i < _plan.length; ++i) {
                 _queuePlanned(timelock, i);
             }
-            if (_plan.length == 0) console2.log("No change needed: the pool matches env.json.");
+            if (_plan.length == 0) {
+                console2.log(
+                    _containedSkipped.length == 0
+                        ? "No change needed: the pool matches env.json. This describes the pool state only; the unresolved queued actions are listed below."
+                        : "No change queued: the pool matches env.json apart from the contained routes listed above, whose limits are restored only for a route named in restoreContained. This describes the pool state only; the unresolved queued actions are listed below."
+                );
+            }
         }
+        _logUnresolvedActions(IConfigTimelockBatchQueue(address(timelock)), desired);
 
         _setPostBatchValidateSelector(this._validateReconcileRoutes.selector);
 
         proposeBatch();
     }
 
-    /// @notice Executes every queued action whose delay has elapsed, whose window has not closed
-    ///         and whose execution succeeds in a dry run. Anyone may run it.
-    /// @dev    Actions that are not ready, expired, or that would revert (for instance with
+    /// @notice Executes the queued actions whose delay has elapsed, whose window has not closed
+    ///         and whose execution succeeds in a dry run: every such action, or only the listed
+    ///         ones when the args file names them. Anyone may run it.
+    /// @dev    Args file (optional):
+    ///         `{"functions": [{"name": "executeReadyActions", "args": {"actionIds": [1]}}]}`
+    ///         restricts the run to the listed ids. Every considered action is logged with its
+    ///         proposer, window and sub-actions. An action that does not exist, is executed or
+    ///         cancelled, is not ready, has expired, or would revert (for instance with
     ///         `ConfigStateChanged` after the route moved, or `NotEnabled` while a policy is
-    ///         disabled) are reported with the reason and left in the queue. An expired or stale
-    ///         action keeps its keys until it is cancelled.
-    ///
-    ///         Reverts if:
-    ///         - The args file is not empty.
+    ///         disabled) is reported with the reason and left out; an expired or stale action
+    ///         keeps its keys until it is cancelled. Each dry run is isolated, while the included
+    ///         executions share one transaction: with a multisig owner and more than one of them,
+    ///         the Safe multisend is atomic and one reverting execution fails all of them.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner; any owner may execute.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
-    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param argsFile_ Path to the arguments file (optional; may carry
+    ///        "executeReadyActions.actionIds").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
     /// @param signature_ Optional pre-computed signature for the batch.
     function executeReadyActions(
@@ -228,7 +251,6 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
-        _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
         IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
@@ -241,53 +263,20 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         console2.log("Block timestamp:", block.timestamp);
         console2.log("Queued actions so far:", nextActionId - 1);
 
-        for (uint64 actionId = 1; actionId < nextActionId; ++actionId) {
-            ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(actionId);
-            if (action.executed || action.cancelled) continue;
-
-            // The queue timestamps are read by the script at simulation time
-            // forge-lint: disable-next-line(block-timestamp)
-            if (block.timestamp < action.executableAt) {
-                console2.log(
-                    "  Action",
-                    actionId,
-                    "is not ready: executable at",
-                    action.executableAt
-                );
-                continue;
-            }
-            // The queue timestamps are read by the script at simulation time
-            // forge-lint: disable-next-line(block-timestamp)
-            if (block.timestamp > action.expiresAt) {
-                console2.log(
-                    "  Action",
-                    actionId,
-                    "has expired: cancel it to release its keys; expired at",
-                    action.expiresAt
-                );
-                continue;
-            }
-
-            (bool success, bytes memory revertData) = _dryRunExecute(timelock, actionId);
-            if (!success) {
-                console2.log(
-                    "  Action",
-                    actionId,
-                    "cannot be executed:",
-                    _describeRevert(revertData)
-                );
-                continue;
-            }
-
-            addToBatch(
-                address(timelock),
-                abi.encodeWithSelector(ITimelockBatchQueue.executeQueuedAction.selector, actionId)
-            );
-            _expectedExecuted.push(actionId);
-            console2.log("  Added: executeQueuedAction(", actionId, ")");
+        uint64[] memory candidates = _executionCandidates(timelock);
+        for (uint256 i = 0; i < candidates.length; ++i) {
+            _considerExecution(timelock, nextActionId, candidates[i]);
         }
 
-        if (_expectedExecuted.length == 0) console2.log("No action is ready to execute.");
+        if (_expectedExecuted.length == 0) {
+            console2.log("No action is ready to execute.");
+        } else if (_isMultiSig && _expectedExecuted.length > 1) {
+            console2.log(
+                "The Safe multisend is atomic: one reverting execution fails all",
+                _expectedExecuted.length,
+                "executions."
+            );
+        }
 
         _setPostBatchValidateSelector(this._validateExecuted.selector);
 
@@ -451,13 +440,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         }
 
         if (!live.exists) {
-            ICCIPTokenPoolAdmin.ChainUpdate memory update = ICCIPTokenPoolAdmin.ChainUpdate({
-                remoteChainSelector: selector,
-                remotePoolAddresses: desired_.remotePools,
-                remoteTokenAddress: desired_.remoteToken,
-                outboundRateLimiterConfig: desired_.outbound,
-                inboundRateLimiterConfig: desired_.inbound
-            });
+            ICCIPTokenPoolAdmin.ChainUpdate memory update = _chainUpdate(desired_);
             // Surface the config policy's own validation before queueing
             config_.validateAddChain(update);
             _addPlanned(
@@ -904,6 +887,235 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         _setPostBatchValidateSelector(this._validateCancelled.selector);
     }
 
+    // =========== EXECUTION =========== //
+
+    /// @notice Returns the action ids this run considers: the `actionIds` list of the args file,
+    ///         or every unresolved action.
+    function _executionCandidates(
+        IConfigTimelockBatchQueue timelock_
+    ) internal view returns (uint64[] memory ids) {
+        string memory path = ".functions[?(@.name == 'executeReadyActions')].args.actionIds";
+        if (bytes(_argsFile).length == 0 || !vm.keyExistsJson(_argsFile, path)) {
+            return CCIPQueueLib.unresolvedActionIds(timelock_);
+        }
+
+        uint256[] memory listed = _argsFile.readUintArray(path);
+        uint64[] memory buffer = new uint64[](listed.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < listed.length; ++i) {
+            uint64 actionId = SafeCast.toUint64(listed[i]);
+            if (_listed(buffer, count, actionId)) {
+                console2.log("  Action", actionId, "is listed more than once; considered once");
+                continue;
+            }
+            buffer[count++] = actionId;
+        }
+        ids = new uint64[](count);
+        for (uint256 i = 0; i < count; ++i) {
+            ids[i] = buffer[i];
+        }
+        console2.log("Considering the", ids.length, "listed action ids only");
+    }
+
+    function _listed(
+        uint64[] memory ids_,
+        uint256 count_,
+        uint64 actionId_
+    ) internal pure returns (bool listed) {
+        for (uint256 i = 0; i < count_; ++i) {
+            if (ids_[i] == actionId_) return true;
+        }
+        return false;
+    }
+
+    /// @notice Adds the execution of an action to the batch when it exists, is unresolved, is
+    ///         inside its execution window and succeeds in an isolated dry run; reports it and
+    ///         leaves it out otherwise.
+    function _considerExecution(
+        IConfigTimelockBatchQueue timelock_,
+        uint64 nextActionId_,
+        uint64 actionId_
+    ) internal {
+        if (actionId_ == 0 || actionId_ >= nextActionId_) {
+            console2.log("  Action", actionId_, "does not exist");
+            return;
+        }
+        ITimelockBatchQueue.QueuedAction memory action = timelock_.getQueuedAction(actionId_);
+        if (action.executed) {
+            console2.log("  Action", actionId_, "is already executed");
+            return;
+        }
+        if (action.cancelled) {
+            console2.log("  Action", actionId_, "is cancelled");
+            return;
+        }
+
+        // The queue timestamps are read by the script at simulation time
+        uint256 timestamp = block.timestamp;
+        CCIPQueueLib.logAction(actionId_, action, timestamp);
+        CCIPQueueLib.Status status = CCIPQueueLib.status(action, timestamp);
+        if (status == CCIPQueueLib.Status.Delayed) {
+            console2.log("    Not ready: executable at", action.executableAt);
+            return;
+        }
+        if (status == CCIPQueueLib.Status.Expired) {
+            console2.log(
+                "    Expired: cancel it to release its keys; expired at",
+                action.expiresAt
+            );
+            return;
+        }
+
+        (bool success, bytes memory revertData) = _dryRunExecute(timelock_, actionId_);
+        if (!success) {
+            console2.log("    Cannot be executed:", _describeRevert(revertData));
+            return;
+        }
+
+        addToBatch(
+            address(timelock_),
+            abi.encodeWithSelector(ITimelockBatchQueue.executeQueuedAction.selector, actionId_)
+        );
+        _expectedExecuted.push(actionId_);
+        console2.log("    Added: executeQueuedAction(", actionId_, ")");
+    }
+
+    // =========== QUEUE LISTING =========== //
+
+    /// @notice Lists every unresolved queued action after the plan: cancelled by this run,
+    ///         carrying a planned change, or outside the plan, with the sub-actions that conflict
+    ///         with `env.json` where the desired state decides it.
+    function _logUnresolvedActions(
+        IConfigTimelockBatchQueue queue_,
+        CCIPConfigLib.DesiredRoute[] memory desired_
+    ) internal view {
+        uint64[] memory ids = CCIPQueueLib.unresolvedActionIds(queue_);
+        console2.log("\n--- Unresolved queued actions:", ids.length, "---");
+        // The queue timestamps are read by the script at simulation time
+        uint256 timestamp = block.timestamp;
+        for (uint256 i = 0; i < ids.length; ++i) {
+            ITimelockBatchQueue.QueuedAction memory action = queue_.getQueuedAction(ids[i]);
+            CCIPQueueLib.logAction(ids[i], action, timestamp);
+            if (_isCancelled(ids[i])) {
+                console2.log("    Cancelled by this run.");
+            } else if (_carriesPlannedChange(action)) {
+                console2.log("    Part of this plan: carries a planned change and is left alone.");
+            } else {
+                CCIPQueueLib.Status status = CCIPQueueLib.status(action, timestamp);
+                console2.log(
+                    status == CCIPQueueLib.Status.Expired
+                        ? "    Not in this plan: expired; holds its keys until it is cancelled (cancelQueuedAction)."
+                        : "    Not in this plan: executes once ready unless it is cancelled (cancelQueuedAction)."
+                );
+                _logConflicts(action, desired_);
+            }
+        }
+    }
+
+    function _carriesPlannedChange(
+        ITimelockBatchQueue.QueuedAction memory action_
+    ) internal view returns (bool carries) {
+        uint256 length = _plan.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (_holdsChange(action_, _plan[i])) return true;
+        }
+        return false;
+    }
+
+    /// @notice Logs, per sub-action of an action outside the plan, its conflict with the desired
+    ///         state of its route, when there is one to report.
+    function _logConflicts(
+        ITimelockBatchQueue.QueuedAction memory action_,
+        CCIPConfigLib.DesiredRoute[] memory desired_
+    ) internal pure {
+        for (uint256 i = 0; i < action_.actions.length; ++i) {
+            string memory verdict = _conflict(action_.actions[i], desired_);
+            if (bytes(verdict).length == 0) continue;
+            console2.log("    ", CCIPQueueLib.describe(action_.actions[i]), verdict);
+        }
+    }
+
+    /// @notice Returns the conflict of a sub-action with `env.json`, or an empty string when the
+    ///         sub-action matches the desired state of its route.
+    function _conflict(
+        ITimelockBatchQueue.BatchAction memory sub_,
+        CCIPConfigLib.DesiredRoute[] memory desired_
+    ) internal pure returns (string memory verdict) {
+        (bool isRoute, uint64 chainSelector) = CCIPQueueLib.routeChainSelector(sub_);
+        if (!isRoute) return "is not checked: env.json declares no desired allowlist";
+
+        (bool declared, CCIPConfigLib.DesiredRoute memory route) = _desiredRoute(
+            desired_,
+            chainSelector
+        );
+        if (!declared) return "CONFLICT: its route is not declared in env.json";
+
+        if (!route.enabled) {
+            if (sub_.selector == ICCIPTokenPoolConfig.removeChain.selector) return "";
+            return "CONFLICT: its route is declared with enabled: false";
+        }
+        return _enabledRouteConflict(sub_, route);
+    }
+
+    /// @notice Returns the conflict of a sub-action with the desired state of its route, which
+    ///         is declared with `enabled: true`, or an empty string when the payload matches it.
+    function _enabledRouteConflict(
+        ITimelockBatchQueue.BatchAction memory sub_,
+        CCIPConfigLib.DesiredRoute memory route_
+    ) internal pure returns (string memory verdict) {
+        bytes4 selector = sub_.selector;
+        uint64 chainSelector = route_.chainSelector;
+        if (selector == ICCIPTokenPoolConfig.removeChain.selector) {
+            return "CONFLICT: removes a route declared enabled";
+        }
+        if (selector == ICCIPTokenPoolConfig.addChain.selector) {
+            return
+                _payloadIs(sub_, abi.encode(_chainUpdate(route_)))
+                    ? ""
+                    : "CONFLICT: adds the route with values that differ from env.json";
+        }
+        if (selector == ICCIPTokenPoolConfig.setRemoteToken.selector) {
+            return
+                _payloadIs(sub_, abi.encode(chainSelector, route_.remoteToken))
+                    ? ""
+                    : "CONFLICT: sets a remote token that differs from env.json";
+        }
+        if (selector == ICCIPTokenPoolConfig.setChainRateLimits.selector) {
+            return
+                _payloadIs(sub_, abi.encode(chainSelector, route_.outbound, route_.inbound))
+                    ? ""
+                    : "CONFLICT: sets rate limits that differ from env.json";
+        }
+
+        (, bytes memory remotePool) = abi.decode(sub_.payload, (uint64, bytes));
+        bool declaredPool = CCIPConfigLib.containsBytes(route_.remotePools, remotePool);
+        if (selector == ICCIPTokenPoolConfig.addRemotePool.selector) {
+            return
+                declaredPool ? "" : "CONFLICT: adds a remote pool that env.json does not declare";
+        }
+        // Only `removeRemotePool` remains among the route sub-actions
+        return declaredPool ? "CONFLICT: removes a remote pool that env.json declares" : "";
+    }
+
+    function _payloadIs(
+        ITimelockBatchQueue.BatchAction memory sub_,
+        bytes memory expected_
+    ) internal pure returns (bool same) {
+        return keccak256(sub_.payload) == keccak256(expected_);
+    }
+
+    // The boolean literals are the `declared` element of the returned tuple, not conditions
+    // forge-lint: disable-next-item(boolean-cst)
+    function _desiredRoute(
+        CCIPConfigLib.DesiredRoute[] memory desired_,
+        uint64 chainSelector_
+    ) internal pure returns (bool declared, CCIPConfigLib.DesiredRoute memory route) {
+        for (uint256 i = 0; i < desired_.length; ++i) {
+            if (desired_[i].chainSelector == chainSelector_) return (true, desired_[i]);
+        }
+        return (false, route);
+    }
+
     // =========== INTERNAL HELPERS =========== //
 
     function _contracts()
@@ -1000,6 +1212,20 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 target: config_,
                 selector: selector_,
                 payload: payload_
+            });
+    }
+
+    /// @notice Builds the `addChain` update of a desired route.
+    function _chainUpdate(
+        CCIPConfigLib.DesiredRoute memory desired_
+    ) internal pure returns (ICCIPTokenPoolAdmin.ChainUpdate memory update) {
+        return
+            ICCIPTokenPoolAdmin.ChainUpdate({
+                remoteChainSelector: desired_.chainSelector,
+                remotePoolAddresses: desired_.remotePools,
+                remoteTokenAddress: desired_.remoteToken,
+                outboundRateLimiterConfig: desired_.outbound,
+                inboundRateLimiterConfig: desired_.inbound
             });
     }
 

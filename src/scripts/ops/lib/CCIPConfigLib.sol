@@ -370,8 +370,6 @@ library CCIPConfigLib {
     }
 
     /// @notice Returns whether a set of encoded addresses contains an entry.
-    // Kept as a named membership test beside the other comparison helpers of the library
-    // forge-lint: disable-next-item(internal-function-used-once)
     function containsBytes(
         bytes[] memory set_,
         bytes memory item_
