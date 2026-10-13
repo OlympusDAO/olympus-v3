@@ -23,8 +23,10 @@
 #      periphery reconciler adds the four EVM trusted remotes (nothing for
 #      solana) and proposes nothing on a re-run.
 #   6. Containment: CCIPTokenPoolConfigBatch.disableChain from the DAO MS as
-#      bridge_admin, an empty re-run through the Emergency MS variant, then the
-#      declarative recovery through the timelock.
+#      bridge_admin, an empty re-run through the Emergency MS variant, a
+#      reconcileRoutes run without the restoreContained flag that lists the
+#      route as contained and proposes nothing, then the declarative recovery
+#      through the timelock with the flag.
 #   7. Print the final authority state.
 #
 # Usage:
@@ -41,6 +43,7 @@ source "$HERE/lib/common.sh"
 CHAIN="mainnet"
 SOLANA_SELECTOR="124615329519749607"
 DISABLE_ARGS="src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain.json"
+RESTORE_ARGS="src/scripts/ops/batches/args/CCIPRouteReconcileBatch_reconcileRoutes_restoreContained.json"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -226,17 +229,21 @@ expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after restore"
 step "Containment (DAO MS) and declarative recovery"
 run_batch CCIPTokenPoolConfigBatch disableChain dao "$DISABLE_ARGS"
 expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain (DAO MS)"
-echo "config.isChainDisabled(solana) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")"
+expect_eq "$(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")" "true" "config.isChainDisabled(solana) after disableChain"
 run_batch CCIPTokenPoolConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "disableChainEmergencyMS re-run"
-run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovery-queue"
-expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore)"
+# Without the flag the reconciler leaves the containment in place and lists the route
+run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-contained-no-flag"
+expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes on the contained route without restoreContained"
+expect_log_line "$LAST_BATCH_LOG" "Contained routes: limit restore skipped" "reconcileRoutes lists the contained route"
+run_batch CCIPRouteReconcileBatch reconcileRoutes dao "$RESTORE_ARGS" "-recovery-queue"
+expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore with restoreContained)"
 warp "$((delay + 1))"
 run_batch CCIPRouteReconcileBatch executeReadyActions dao "" "-recovery-execute"
 expect_non_empty_batch "$LAST_BATCH_LOG" "executeReadyActions (recovery)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovered"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after recovery"
-echo "config.isChainDisabled(solana) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")"
+expect_eq "$(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$SOLANA_SELECTOR" --rpc-url "$RPC")" "false" "config.isChainDisabled(solana) after the recovery"
 
 step "Post-run state"
 roles_mod="$(env_addr mainnet olympus.modules.OlympusRoles)"

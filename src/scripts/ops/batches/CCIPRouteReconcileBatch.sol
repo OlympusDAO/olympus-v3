@@ -7,6 +7,7 @@ pragma solidity ^0.8.24;
 // forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
+import {stdJson} from "@forge-std-1.16.2/StdJson.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
 
 // Interfaces
@@ -49,24 +50,59 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/
 ///           only way to release the configuration keys of an expired or stale action.
 ///
 ///         Each change is queued as its own action so that a queued action that turned stale
-///         does not block the execution of the other queued actions; the reconcile run itself is
+///         does not block the execution of the other queued actions, with one exception: a
+///         remote pool change and a rate limit change of one route go out as one ordered batch
+///         action, the pool change first, so that the limits of the route cannot be restored
+///         while a remote pool that is to go is still accepted. The reconcile run itself is
 ///         atomic and fails closed, so an invalid desired route reverts the whole run before
 ///         anything is queued. The timelock reserves one key per configuration domain and
 ///         refuses a second unresolved action on the same domain, so at most one remote-pool
-///         change and one rate-limit change per route, or one route-identity change, can be
-///         queued per run; the remainder is reported as deferred and queued by a later run once
-///         the first action has executed.
+///         change per route, or one route-identity change, can be queued per run; the remainder
+///         is reported as deferred and queued by a later run once the first action has executed,
+///         and a rate limit change waits for the last remote pool change of its route: a remote
+///         pool change planned on its own cancels a pending rate limit action of the route, so
+///         that the limits cannot return before the pool change. A queued batch that already
+///         carries the planned remote pool change together with the desired limits is left alone,
+///         whether or not the route is named in `restoreContained`.
+///
+///         The limits of a contained route (`isChainDisabled`) are restored only when the route
+///         is named in the `restoreContained` list of the args file; otherwise the route is
+///         listed as contained and its limits are left alone, while its remote pool and remote
+///         token changes are planned as for any route.
 contract CCIPRouteReconcileBatch is BatchScriptV2 {
+    using stdJson for string;
+
     // =========== DATA STRUCTURES =========== //
 
-    /// @notice One typed change to queue on the timelock.
+    /// @notice One change to queue on the timelock: a single config call, or an ordered batch
+    ///         of config calls that executes as one action.
+    /// @param description The change, for the logs.
+    /// @param actions The config calls, in execution order; each targets the config policy.
+    /// @param queueCall The timelock call that queues the change.
+    /// @param keys The keys the change reserves: the union over its config calls.
+    /// @param clearKeys The keys the change does not reserve but whose pending holder the run
+    ///        cancels: the rate limits key of a route whose remote pool change is planned
+    ///        without its limits.
+    /// @param skipped Whether an unexpired pending action already carries the change.
     struct Planned {
         string description;
-        bytes4 selector;
-        bytes payload;
+        ITimelockBatchQueue.BatchAction[] actions;
         bytes queueCall;
         bytes32[] keys;
+        bytes32[] clearKeys;
         bool skipped;
+    }
+
+    /// @notice The one remote pool change of a route that a run queues.
+    /// @param due Whether the route has a remote pool change.
+    /// @param name The config function, for the description.
+    /// @param call The config call.
+    /// @param queueCall The typed timelock call that queues the config call on its own.
+    struct PoolChange {
+        bool due;
+        string name;
+        ITimelockBatchQueue.BatchAction call;
+        bytes queueCall;
     }
 
     // =========== STATE =========== //
@@ -76,15 +112,27 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     uint64[] internal _expectedExecuted;
     uint64 internal _expectedCancelled;
 
+    /// @notice The remote chain names whose contained limits this run restores.
+    string[] internal _restoreContained;
+
+    /// @notice The contained routes whose limit restore this run skipped.
+    string[] internal _containedSkipped;
+
     // =========== ENTRY POINTS =========== //
 
     /// @notice Queues the timelock actions that converge the pool routes to `env.json`, or
     ///         cancels the pending actions that stand in their way.
     /// @dev    Desired routes are processed in remote chain name order; within a route the
     ///         identity change comes first, then one remote-pool change (additions before
-    ///         removals), then the rate limits. A removal is queued only for a route whose entry
-    ///         carries `enabled: false`; a live route that `env.json` does not declare fails the
-    ///         run, since the declaration must be complete before anything is queued.
+    ///         removals) and the rate limits, as one batch action when both are due. A removal
+    ///         is queued only for a route whose entry carries `enabled: false`; a live route that
+    ///         `env.json` does not declare fails the run, since the declaration must be complete
+    ///         before anything is queued.
+    ///
+    ///         Args file (optional):
+    ///         `{"functions": [{"name": "reconcileRoutes", "args": {"restoreContained": ["solana"]}}]}`
+    ///         names the contained routes whose approved limits this run restores; without it
+    ///         the limits of a contained route are left alone.
     ///
     ///         A run that cancels at least one pending action holds the cancellations only: the
     ///         plan output lists the replacements, and they are queued by the next run once the
@@ -93,16 +141,17 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         next run plans from the resulting state.
     ///
     ///         Reverts if:
-    ///         - The args file is not empty.
     ///         - The config policy, the timelock and the pool are not bound to each other.
     ///         - The config policy does not own the pool or does not name the timelock as its
     ///           config operator.
     ///         - The config policy or the timelock is disabled.
     ///         - The batch owner does not hold `bridge_admin`.
     ///         - A desired route is malformed (see `CCIPConfigLib`).
+    ///         - A name in `restoreContained` is not a route declared with `enabled: true`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
-    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param argsFile_ Path to the arguments file (optional; may carry
+    ///        "reconcileRoutes.restoreContained").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
     /// @param signature_ Optional pre-computed signature for the batch.
     function reconcileRoutes(
@@ -112,7 +161,6 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
-        _validateArgsFileEmpty(argsFile_);
         // The batch touches only the config timelock
         _skipHeartbeatValidation = true;
 
@@ -131,18 +179,20 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         uint64[] memory liveSelectors = pool.getSupportedChains();
+        _readRestoreContained(desired);
 
         _logLiveRoutes(pool, liveSelectors);
         _logDesiredRoutes(desired);
 
         console2.log("\n--- Plan ---");
         for (uint256 i = 0; i < desired.length; ++i) {
-            _planRoute(config, pool, desired[i]);
+            _planRoute(config, IConfigTimelockBatchQueue(address(timelock)), pool, desired[i]);
         }
         _requireRoutesDeclared(desired, liveSelectors);
+        _logContainedSkipped();
 
         console2.log("\n--- Queue ---");
-        _planCancellations(config, timelock);
+        _planCancellations(timelock);
         if (_cancelledIds.length > 0) {
             _logCancelOnlyRun(timelock);
         } else {
@@ -298,7 +348,6 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
             _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
         );
-        address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
 
         console2.log("\nValidating reconcileRoutes post-batch state");
         for (uint256 i = 0; i < _cancelledIds.length; ++i) {
@@ -324,7 +373,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     string.concat("No pending action holds the key of: ", planned.description)
                 );
                 require(
-                    _holdsChange(timelock.getQueuedAction(actionId), config, planned),
+                    _holdsChange(timelock.getQueuedAction(actionId), planned),
                     string.concat("The pending action does not carry: ", planned.description)
                 );
             }
@@ -368,6 +417,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     function _planRoute(
         ICCIPTokenPoolConfig config_,
+        IConfigTimelockBatchQueue queue_,
         ICCIPTokenPoolAdmin pool_,
         CCIPConfigLib.DesiredRoute memory desired_
     ) internal {
@@ -387,8 +437,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateRemoveChain(selector);
             _addPlanned(
                 string.concat("removeChain(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.removeChain.selector,
-                abi.encode(selector),
+                _single(
+                    _configCall(
+                        address(config_),
+                        ICCIPTokenPoolConfig.removeChain.selector,
+                        abi.encode(selector)
+                    )
+                ),
                 abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueRemoveChain, (selector)),
                 _routeKeys(address(config_), selector)
             );
@@ -407,8 +462,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             config_.validateAddChain(update);
             _addPlanned(
                 string.concat("addChain(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.addChain.selector,
-                abi.encode(update),
+                _single(
+                    _configCall(
+                        address(config_),
+                        ICCIPTokenPoolConfig.addChain.selector,
+                        abi.encode(update)
+                    )
+                ),
                 abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueAddChain, (update)),
                 _routeKeys(address(config_), selector)
             );
@@ -428,11 +488,19 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     "  Deferred: remote pool or rate limit changes of this route are queued by a later run, once setRemoteToken has executed (it reserves every domain of the route)."
                 );
             }
+            if (diff.limitsDiffer && config_.isChainDisabled(selector)) {
+                _noteContained(desired_.remoteChain);
+            }
             config_.validateSetRemoteToken(selector, desired_.remoteToken);
             _addPlanned(
                 string.concat("setRemoteToken(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.setRemoteToken.selector,
-                abi.encode(selector, desired_.remoteToken),
+                _single(
+                    _configCall(
+                        address(config_),
+                        ICCIPTokenPoolConfig.setRemoteToken.selector,
+                        abi.encode(selector, desired_.remoteToken)
+                    )
+                ),
                 abi.encodeCall(
                     ICCIPTokenPoolConfigTimelock.queueSetRemoteToken,
                     (selector, desired_.remoteToken)
@@ -442,69 +510,225 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
             return;
         }
 
-        if (diff.poolsToAdd.length > 0) {
-            console2.log("  Remote pool missing:", vm.toString(diff.poolsToAdd[0]));
-            config_.validateAddRemotePool(selector, diff.poolsToAdd[0]);
-            _addPlanned(
-                string.concat("addRemotePool(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.addRemotePool.selector,
-                abi.encode(selector, diff.poolsToAdd[0]),
-                abi.encodeCall(
-                    ICCIPTokenPoolConfigTimelock.queueAddRemotePool,
-                    (selector, diff.poolsToAdd[0])
-                ),
-                _singleKey(CCIPTokenPoolConfigKeyLib.remotePoolsKey(address(config_), selector))
-            );
-            _logDeferredPools(diff.poolsToAdd.length - 1, diff.poolsToRemove.length);
-        } else if (diff.poolsToRemove.length > 0) {
-            console2.log("  Remote pool to remove:", vm.toString(diff.poolsToRemove[0]));
+        _planRouteFields(config_, queue_, desired_, live, diff);
+    }
+
+    /// @notice Plans the remote pool change and the rate limit change of a live route whose
+    ///         identity matches: one remote pool change per run, and the rate limits with it as
+    ///         one batch action when both are due. The limits of a contained route are planned
+    ///         only when the route is named in `restoreContained`, or when a queued batch already
+    ///         carries the planned remote pool change together with them. A remote pool change
+    ///         planned without the limits clears the rate limits key of the route.
+    function _planRouteFields(
+        ICCIPTokenPoolConfig config_,
+        IConfigTimelockBatchQueue queue_,
+        CCIPConfigLib.DesiredRoute memory desired_,
+        CCIPConfigLib.LiveRoute memory live_,
+        CCIPConfigLib.RouteDiff memory diff_
+    ) internal {
+        PoolChange memory poolChange = _planPoolChange(config_, desired_, diff_);
+        (bool limitsChange, bool containedSkipped) = _limitsDue(config_, desired_, live_, diff_);
+        if (limitsChange && _poolChangeCount(diff_) > 1) {
             console2.log(
-                "  WARNING: removing a remote pool rejects in-flight messages from that pool."
+                "  Deferred: the rate limit change rides in the batch that queues the last remote pool change of this route."
             );
-            config_.validateRemoveRemotePool(selector, diff.poolsToRemove[0]);
-            _addPlanned(
-                string.concat("removeRemotePool(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.removeRemotePool.selector,
-                abi.encode(selector, diff.poolsToRemove[0]),
-                abi.encodeCall(
-                    ICCIPTokenPoolConfigTimelock.queueRemoveRemotePool,
-                    (selector, diff.poolsToRemove[0])
-                ),
-                _singleKey(CCIPTokenPoolConfigKeyLib.remotePoolsKey(address(config_), selector))
+            limitsChange = false;
+        }
+        if (
+            containedSkipped &&
+            poolChange.due &&
+            _poolChangeCount(diff_) == 1 &&
+            _restoreBatchQueued(queue_, config_, desired_, poolChange.call)
+        ) {
+            console2.log(
+                "  Contained: a queued action already carries this remote pool change together with the limit restore; left alone."
             );
-            _logDeferredPools(0, diff.poolsToRemove.length - 1);
+            _containedSkipped.pop();
+            limitsChange = true;
         }
 
-        if (diff.limitsDiffer) {
-            console2.log("  Rate limits differ: queueing setChainRateLimits.");
-            console2.log("    live outbound:   ", CCIPConfigLib.describe(live.outbound));
-            console2.log("    desired outbound:", CCIPConfigLib.describe(desired_.outbound));
-            console2.log("    live inbound:    ", CCIPConfigLib.describe(live.inbound));
-            console2.log("    desired inbound: ", CCIPConfigLib.describe(desired_.inbound));
-            config_.validateSetChainRateLimits(selector, desired_.outbound, desired_.inbound);
+        if (poolChange.due && limitsChange) {
+            // One action: the remote pool change executes before the limits are written
+            ITimelockBatchQueue.BatchAction[]
+                memory actions = new ITimelockBatchQueue.BatchAction[](2);
+            actions[0] = poolChange.call;
+            actions[1] = _rateLimitsCall(config_, desired_);
+            _addPlanned(
+                string.concat(poolChange.name, " + setChainRateLimits(", desired_.remoteChain, ")"),
+                actions,
+                abi.encodeCall(ICCIPTokenPoolConfigTimelock.queueBatch, (actions)),
+                _twoKeys(
+                    CCIPTokenPoolConfigKeyLib.remotePoolsKey(
+                        address(config_),
+                        desired_.chainSelector
+                    ),
+                    CCIPTokenPoolConfigKeyLib.rateLimitsKey(
+                        address(config_),
+                        desired_.chainSelector
+                    )
+                )
+            );
+        } else if (poolChange.due) {
+            _addPlanned(
+                string.concat(poolChange.name, "(", desired_.remoteChain, ")"),
+                _single(poolChange.call),
+                poolChange.queueCall,
+                _singleKey(
+                    CCIPTokenPoolConfigKeyLib.remotePoolsKey(
+                        address(config_),
+                        desired_.chainSelector
+                    )
+                )
+            );
+            // The limits of the route wait for its last remote pool change, so a pending rate
+            // limit action of the route must not execute first
+            _clearKey(
+                CCIPTokenPoolConfigKeyLib.rateLimitsKey(address(config_), desired_.chainSelector)
+            );
+        } else if (limitsChange) {
             _addPlanned(
                 string.concat("setChainRateLimits(", desired_.remoteChain, ")"),
-                ICCIPTokenPoolConfig.setChainRateLimits.selector,
-                abi.encode(selector, desired_.outbound, desired_.inbound),
+                _single(_rateLimitsCall(config_, desired_)),
                 abi.encodeCall(
                     ICCIPTokenPoolConfigTimelock.queueSetChainRateLimits,
-                    (selector, desired_.outbound, desired_.inbound)
+                    (desired_.chainSelector, desired_.outbound, desired_.inbound)
                 ),
-                _singleKey(CCIPTokenPoolConfigKeyLib.rateLimitsKey(address(config_), selector))
+                _singleKey(
+                    CCIPTokenPoolConfigKeyLib.rateLimitsKey(
+                        address(config_),
+                        desired_.chainSelector
+                    )
+                )
             );
         }
     }
 
-    /// @notice Adds a cancellation for every pending action that holds a key of a planned change
-    ///         while being expired or carrying another intent, across the whole plan, so that a
-    ///         pending action that serves one planned change but blocks another is cancelled and
-    ///         both changes are queued afresh by the next run.
-    function _planCancellations(
+    function _poolChangeCount(
+        CCIPConfigLib.RouteDiff memory diff_
+    ) internal pure returns (uint256 count) {
+        return diff_.poolsToAdd.length + diff_.poolsToRemove.length;
+    }
+
+    /// @notice Returns whether the unexpired pending holder of the remote pools key of a route
+    ///         is exactly the batch of the planned remote pool change followed by the desired
+    ///         limits.
+    function _restoreBatchQueued(
+        IConfigTimelockBatchQueue queue_,
         ICCIPTokenPoolConfig config_,
-        ICCIPTokenPoolConfigTimelock timelock_
-    ) internal {
+        CCIPConfigLib.DesiredRoute memory desired_,
+        ITimelockBatchQueue.BatchAction memory poolCall_
+    ) internal view returns (bool queued) {
+        uint64 pendingId = queue_.pendingActionId(
+            CCIPTokenPoolConfigKeyLib.remotePoolsKey(address(config_), desired_.chainSelector)
+        );
+        if (pendingId == 0) return false;
+        ITimelockBatchQueue.QueuedAction memory pending = queue_.getQueuedAction(pendingId);
+        // The expiry is read by the script at simulation time
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp > pending.expiresAt) return false;
+
+        Planned memory probe;
+        probe.actions = new ITimelockBatchQueue.BatchAction[](2);
+        probe.actions[0] = poolCall_;
+        probe.actions[1] = _rateLimitsCall(config_, desired_);
+        return _holdsChange(pending, probe);
+    }
+
+    /// @notice Plans the one remote pool change of a route that this run queues: the first
+    ///         missing pool, else the first pool to remove; the rest is reported as deferred.
+    function _planPoolChange(
+        ICCIPTokenPoolConfig config_,
+        CCIPConfigLib.DesiredRoute memory desired_,
+        CCIPConfigLib.RouteDiff memory diff_
+    ) internal view returns (PoolChange memory change) {
+        uint64 selector = desired_.chainSelector;
+        if (diff_.poolsToAdd.length > 0) {
+            bytes memory remotePool = diff_.poolsToAdd[0];
+            console2.log("  Remote pool missing:", vm.toString(remotePool));
+            config_.validateAddRemotePool(selector, remotePool);
+            change.due = true;
+            change.name = "addRemotePool";
+            change.call = _configCall(
+                address(config_),
+                ICCIPTokenPoolConfig.addRemotePool.selector,
+                abi.encode(selector, remotePool)
+            );
+            change.queueCall = abi.encodeCall(
+                ICCIPTokenPoolConfigTimelock.queueAddRemotePool,
+                (selector, remotePool)
+            );
+            _logDeferredPools(diff_.poolsToAdd.length - 1, diff_.poolsToRemove.length);
+        } else if (diff_.poolsToRemove.length > 0) {
+            bytes memory remotePool = diff_.poolsToRemove[0];
+            console2.log("  Remote pool to remove:", vm.toString(remotePool));
+            console2.log(
+                "  WARNING: removing a remote pool rejects in-flight messages from that pool."
+            );
+            config_.validateRemoveRemotePool(selector, remotePool);
+            change.due = true;
+            change.name = "removeRemotePool";
+            change.call = _configCall(
+                address(config_),
+                ICCIPTokenPoolConfig.removeRemotePool.selector,
+                abi.encode(selector, remotePool)
+            );
+            change.queueCall = abi.encodeCall(
+                ICCIPTokenPoolConfigTimelock.queueRemoveRemotePool,
+                (selector, remotePool)
+            );
+            _logDeferredPools(0, diff_.poolsToRemove.length - 1);
+        }
+    }
+
+    /// @notice Returns whether this run plans the rate limits of a route: they differ from
+    ///         `env.json`, and the route is either open or named in `restoreContained`. A
+    ///         contained route that is not named is listed and its limits are left alone, which
+    ///         `containedSkipped` reports.
+    function _limitsDue(
+        ICCIPTokenPoolConfig config_,
+        CCIPConfigLib.DesiredRoute memory desired_,
+        CCIPConfigLib.LiveRoute memory live_,
+        CCIPConfigLib.RouteDiff memory diff_
+    ) internal returns (bool due, bool containedSkipped) {
+        if (!diff_.limitsDiffer) return (due, containedSkipped);
+
+        if (config_.isChainDisabled(desired_.chainSelector)) {
+            if (!_isRestoreRequested(desired_.remoteChain)) {
+                _noteContained(desired_.remoteChain);
+                containedSkipped = true;
+                return (due, containedSkipped);
+            }
+            console2.log("  Contained: the approved limits are restored (restoreContained).");
+        }
+
+        console2.log("  Rate limits differ.");
+        console2.log("    live outbound:   ", CCIPConfigLib.describe(live_.outbound));
+        console2.log("    desired outbound:", CCIPConfigLib.describe(desired_.outbound));
+        console2.log("    live inbound:    ", CCIPConfigLib.describe(live_.inbound));
+        console2.log("    desired inbound: ", CCIPConfigLib.describe(desired_.inbound));
+        config_.validateSetChainRateLimits(
+            desired_.chainSelector,
+            desired_.outbound,
+            desired_.inbound
+        );
+        due = true;
+    }
+
+    /// @notice Records a contained route whose limit restore this run skips.
+    function _noteContained(string memory remoteChain_) internal {
+        console2.log(
+            "  Contained: the limit restore is skipped; name the route in restoreContained to queue it."
+        );
+        _containedSkipped.push(remoteChain_);
+    }
+
+    /// @notice Adds a cancellation for every pending action that holds a key of a planned change
+    ///         while being expired or carrying another intent, and for every pending holder of a
+    ///         key that a planned change clears, across the whole plan, so that a pending action
+    ///         that serves one planned change but blocks another is cancelled and both changes
+    ///         are queued afresh by the next run.
+    function _planCancellations(ICCIPTokenPoolConfigTimelock timelock_) internal {
         IConfigTimelockBatchQueue queue = IConfigTimelockBatchQueue(address(timelock_));
-        ROLESv1 roles = _roles();
         for (uint256 i = 0; i < _plan.length; ++i) {
             Planned storage planned = _plan[i];
             for (uint256 k = 0; k < planned.keys.length; ++k) {
@@ -515,43 +739,72 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 // The expiry is read by the script at simulation time
                 // forge-lint: disable-next-line(block-timestamp)
                 bool expired = block.timestamp > pending.expiresAt;
-                if (!expired && _holdsChange(pending, address(config_), planned)) continue;
+                if (!expired && _holdsChange(pending, planned)) continue;
 
-                // An expired action is cancellable by any account; an unexpired one only by
-                // its proposer, admin or emergency
-                require(
-                    expired ||
-                        pending.proposer == _owner ||
-                        roles.hasRole(_owner, ADMIN_ROLE) ||
-                        roles.hasRole(_owner, EMERGENCY_ROLE),
-                    string.concat(
-                        "CCIPRouteReconcileBatch: action ",
-                        vm.toString(pendingId),
-                        " holds a key of ",
-                        planned.description,
-                        " and was proposed by ",
-                        vm.toString(pending.proposer),
-                        "; until it expires only its proposer, admin or emergency can cancel it (see cancelQueuedActionEmergency)"
-                    )
-                );
-                console2.log(
+                _cancelPending(
+                    timelock_,
+                    pendingId,
+                    pending.proposer,
+                    expired,
                     expired
                         ? "  Cancelling expired action"
                         : "  Cancelling action with another intent on a needed key:",
-                    pendingId,
-                    "for",
                     planned.description
                 );
-                addToBatch(
-                    address(timelock_),
-                    abi.encodeWithSelector(
-                        ITimelockBatchQueue.cancelQueuedAction.selector,
-                        pendingId
-                    )
+            }
+            for (uint256 k = 0; k < planned.clearKeys.length; ++k) {
+                uint64 pendingId = queue.pendingActionId(planned.clearKeys[k]);
+                if (pendingId == 0 || _isCancelled(pendingId)) continue;
+
+                ITimelockBatchQueue.QueuedAction memory pending = queue.getQueuedAction(pendingId);
+                _cancelPending(
+                    timelock_,
+                    pendingId,
+                    pending.proposer,
+                    // The expiry is read by the script at simulation time
+                    // forge-lint: disable-next-line(block-timestamp)
+                    block.timestamp > pending.expiresAt,
+                    "  Cancelling action whose rate limit change must wait for the last remote pool change of its route:",
+                    planned.description
                 );
-                _cancelledIds.push(pendingId);
             }
         }
+    }
+
+    /// @notice Adds the cancellation of a pending action to the batch, after checking that the
+    ///         batch owner may cancel it.
+    function _cancelPending(
+        ICCIPTokenPoolConfigTimelock timelock_,
+        uint64 pendingId_,
+        address proposer_,
+        bool expired_,
+        string memory reason_,
+        string memory description_
+    ) internal {
+        ROLESv1 roles = _roles();
+        // An expired action is cancellable by any account; an unexpired one only by its
+        // proposer, admin or emergency
+        require(
+            expired_ ||
+                proposer_ == _owner ||
+                roles.hasRole(_owner, ADMIN_ROLE) ||
+                roles.hasRole(_owner, EMERGENCY_ROLE),
+            string.concat(
+                "CCIPRouteReconcileBatch: action ",
+                vm.toString(pendingId_),
+                " holds a key of ",
+                description_,
+                " and was proposed by ",
+                vm.toString(proposer_),
+                "; until it expires only its proposer, admin or emergency can cancel it (see cancelQueuedActionEmergency)"
+            )
+        );
+        console2.log(reason_, pendingId_, "for", description_);
+        addToBatch(
+            address(timelock_),
+            abi.encodeWithSelector(ITimelockBatchQueue.cancelQueuedAction.selector, pendingId_)
+        );
+        _cancelledIds.push(pendingId_);
     }
 
     /// @notice Queues a planned change unless an unexpired, uncancelled pending action already
@@ -717,22 +970,57 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
 
     function _addPlanned(
         string memory description_,
-        bytes4 selector_,
-        bytes memory payload_,
+        ITimelockBatchQueue.BatchAction[] memory actions_,
         bytes memory queueCall_,
         bytes32[] memory keys_
     ) internal {
-        _plan.push(
-            Planned({
-                description: description_,
-                selector: selector_,
-                payload: payload_,
-                queueCall: queueCall_,
-                keys: keys_,
-                skipped: false
-            })
-        );
+        Planned storage planned = _plan.push();
+        planned.description = description_;
+        for (uint256 i = 0; i < actions_.length; ++i) {
+            planned.actions.push(actions_[i]);
+        }
+        planned.queueCall = queueCall_;
+        planned.keys = keys_;
         console2.log("  Planned:", description_);
+    }
+
+    /// @notice Adds a key that the last planned change clears without reserving it.
+    function _clearKey(bytes32 key_) internal {
+        _plan[_plan.length - 1].clearKeys.push(key_);
+    }
+
+    /// @notice Builds one config call of a planned change.
+    function _configCall(
+        address config_,
+        bytes4 selector_,
+        bytes memory payload_
+    ) internal pure returns (ITimelockBatchQueue.BatchAction memory call) {
+        return
+            ITimelockBatchQueue.BatchAction({
+                target: config_,
+                selector: selector_,
+                payload: payload_
+            });
+    }
+
+    /// @notice Builds the `setChainRateLimits` call of a route from its desired limits.
+    function _rateLimitsCall(
+        ICCIPTokenPoolConfig config_,
+        CCIPConfigLib.DesiredRoute memory desired_
+    ) internal pure returns (ITimelockBatchQueue.BatchAction memory call) {
+        return
+            _configCall(
+                address(config_),
+                ICCIPTokenPoolConfig.setChainRateLimits.selector,
+                abi.encode(desired_.chainSelector, desired_.outbound, desired_.inbound)
+            );
+    }
+
+    function _single(
+        ITimelockBatchQueue.BatchAction memory call_
+    ) internal pure returns (ITimelockBatchQueue.BatchAction[] memory actions) {
+        actions = new ITimelockBatchQueue.BatchAction[](1);
+        actions[0] = call_;
     }
 
     /// @notice The three reserved keys of a route, in the order the timelock reserves them.
@@ -751,23 +1039,78 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         keys[0] = key_;
     }
 
-    /// @notice Returns whether a queued action carries the planned change as one of its
-    ///         sub-actions.
+    function _twoKeys(
+        bytes32 first_,
+        bytes32 second_
+    ) internal pure returns (bytes32[] memory keys) {
+        keys = new bytes32[](2);
+        keys[0] = first_;
+        keys[1] = second_;
+    }
+
+    /// @notice Returns whether a queued action carries a planned change: the same config calls
+    ///         in the same order and nothing else. An action that shares a key with a planned
+    ///         change but differs in any sub-action holds the key with another intent, since
+    ///         executing it would apply a change that is no longer desired or leave one out.
     function _holdsChange(
         ITimelockBatchQueue.QueuedAction memory action_,
-        address config_,
         Planned memory planned_
     ) internal pure returns (bool holds) {
-        bytes32 payloadHash = keccak256(planned_.payload);
+        if (action_.actions.length != planned_.actions.length) return false;
         for (uint256 i = 0; i < action_.actions.length; ++i) {
             ITimelockBatchQueue.BatchAction memory sub = action_.actions[i];
+            ITimelockBatchQueue.BatchAction memory want = planned_.actions[i];
             if (
-                sub.target == config_ &&
-                sub.selector == planned_.selector &&
-                keccak256(sub.payload) == payloadHash
-            ) return true;
+                sub.target != want.target ||
+                sub.selector != want.selector ||
+                keccak256(sub.payload) != keccak256(want.payload)
+            ) return false;
+        }
+        return true;
+    }
+
+    /// @notice Reads the optional `restoreContained` list of the args file: the remote chain
+    ///         names whose contained limits this run restores. Each name must be a route
+    ///         declared with `enabled: true`.
+    function _readRestoreContained(CCIPConfigLib.DesiredRoute[] memory desired_) internal {
+        if (bytes(_argsFile).length == 0) return;
+        string memory path = ".functions[?(@.name == 'reconcileRoutes')].args.restoreContained";
+        if (!vm.keyExistsJson(_argsFile, path)) return;
+
+        string[] memory names = _argsFile.readStringArray(path);
+        for (uint256 i = 0; i < names.length; ++i) {
+            bool declared = false;
+            for (uint256 j = 0; j < desired_.length; ++j) {
+                if (desired_[j].enabled && _sameString(desired_[j].remoteChain, names[i])) {
+                    declared = true;
+                    break;
+                }
+            }
+            require(
+                declared,
+                string.concat(
+                    "CCIPRouteReconcileBatch: restoreContained names ",
+                    names[i],
+                    ", which env.json does not declare as an enabled route"
+                )
+            );
+            _restoreContained.push(names[i]);
+            console2.log("Limit restore requested for the contained route:", names[i]);
+        }
+    }
+
+    function _isRestoreRequested(
+        string memory remoteChain_
+    ) internal view returns (bool requested) {
+        uint256 length = _restoreContained.length;
+        for (uint256 i = 0; i < length; ++i) {
+            if (_sameString(_restoreContained[i], remoteChain_)) return true;
         }
         return false;
+    }
+
+    function _sameString(string memory a_, string memory b_) internal pure returns (bool same) {
+        return keccak256(bytes(a_)) == keccak256(bytes(b_));
     }
 
     function _isCancelled(uint64 actionId_) internal view returns (bool cancelled) {
@@ -877,6 +1220,22 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                     "CCIPRouteReconcileBatch: live route ",
                     vm.toString(liveSelectors_[i]),
                     " is not declared in env.json; declare it with enabled: true and its limits, or with enabled: false to remove it"
+                )
+            );
+        }
+    }
+
+    /// @notice Lists the contained routes whose limit restore the run skipped.
+    function _logContainedSkipped() internal view {
+        uint256 length = _containedSkipped.length;
+        if (length == 0) return;
+        console2.log("\n--- Contained routes: limit restore skipped ---");
+        for (uint256 i = 0; i < length; ++i) {
+            console2.log(
+                string.concat(
+                    "  ",
+                    _containedSkipped[i],
+                    ": contained; the approved limits of env.json are queued only for a route named in restoreContained"
                 )
             );
         }

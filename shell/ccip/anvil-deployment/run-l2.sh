@@ -16,8 +16,10 @@
 #   7. Readiness GREEN; setup (and an empty re-run); finalize (and an empty
 #      re-run); periphery reconcile + enable (and empty re-runs).
 #   8. Containment of the mainnet route from the DAO MS as bridge_admin, an
-#      empty re-run through the Emergency MS variant, and the declarative
-#      recovery through the local config timelock.
+#      empty re-run through the Emergency MS variant, a reconcileRoutes run
+#      without the restoreContained flag that lists the route as contained and
+#      proposes nothing, and the declarative recovery through the local config
+#      timelock with the flag.
 #   9. Control-plane freeze from the DAO MS as the local admin, and the
 #      grace-window reEnable, each with an empty re-run.
 #  10. The Solana route, added after the rollout the way an operator adds it:
@@ -44,6 +46,7 @@ CHAIN="arbitrum"
 # A burn/mint chain contains its mainnet route; the unsuffixed args file names
 # the mainnet Solana route and serves run-ethereum.sh.
 DISABLE_ARGS="src/scripts/ops/batches/args/CCIPTokenPoolConfigBatch_disableChain_mainnet.json"
+RESTORE_ARGS="src/scripts/ops/batches/args/CCIPRouteReconcileBatch_reconcileRoutes_restoreContained_mainnet.json"
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -181,11 +184,15 @@ expect_empty_batch "$LAST_BATCH_LOG" "periphery enable re-run"
 step "Containment (DAO MS as bridge_admin) and declarative recovery"
 run_batch CCIPTokenPoolConfigBatch disableChain dao "$DISABLE_ARGS"
 expect_non_empty_batch "$LAST_BATCH_LOG" "disableChain (DAO MS)"
-echo "config.isChainDisabled(mainnet) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")"
+expect_eq "$(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")" "true" "config.isChainDisabled(mainnet) after disableChain"
 run_batch CCIPTokenPoolConfigBatch disableChainEmergencyMS emergency "$DISABLE_ARGS" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "disableChainEmergencyMS re-run"
-run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovery-queue"
-expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore)"
+# Without the flag the reconciler leaves the containment in place and lists the route
+run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-contained-no-flag"
+expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes on the contained route without restoreContained"
+expect_log_line "$LAST_BATCH_LOG" "Contained routes: limit restore skipped" "reconcileRoutes lists the contained route"
+run_batch CCIPRouteReconcileBatch reconcileRoutes dao "$RESTORE_ARGS" "-recovery-queue"
+expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (queue the limit restore with restoreContained)"
 # cast appends a scientific-notation hint to large numbers; keep the first token only
 delay="$(cast call "$tl" 'timelockDelay()(uint48)' --rpc-url "$RPC" | awk '{print $1}')"
 warp "$((delay + 1))"
@@ -193,7 +200,7 @@ run_batch CCIPRouteReconcileBatch executeReadyActions dao "" "-recovery-execute"
 expect_non_empty_batch "$LAST_BATCH_LOG" "executeReadyActions (recovery)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-recovered"
 expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes after recovery"
-echo "config.isChainDisabled(mainnet) = $(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")"
+expect_eq "$(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$mainnet_sel" --rpc-url "$RPC")" "false" "config.isChainDisabled(mainnet) after the recovery"
 
 step "Control-plane freeze (DAO MS as the local admin) and grace-window reEnable"
 run_batch CCIPTokenPoolConfigBatch disablePolicies dao
