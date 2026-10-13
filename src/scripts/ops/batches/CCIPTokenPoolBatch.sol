@@ -30,8 +30,8 @@ import {Kernel, Actions} from "src/Kernel.sol";
 /// @dev    These entry points act from the direct pool owner, the OHM administrator or the
 ///         rebalancer, which serves the bootstrap of a chain before its config policy takes the
 ///         pool over, and testnets. Once the pool is owned by the CCIPTokenPoolConfig policy and
-///         the OHM administrator is the OCG timelock (the mainnet state after the CCIP Token Pool
-///         Config Activation proposal), none of them is available to a multisig batch: each reverts
+///         the OHM administrator is the OCG timelock (the mainnet state after the CCIP Bridge
+///         Activation proposal), none of them is available to a multisig batch: each reverts
 ///         with the path to use instead. Route configuration runs through `CCIPRouteReconcileBatch`
 ///         (config timelock), containment and re-enable through `CCIPTokenPoolConfigBatch`, and the
 ///         registry, the rebalancer and liquidity withdrawals through an OCG proposal.
