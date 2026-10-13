@@ -74,6 +74,8 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
     // ========== SETUP ========== //
 
     function setUp() public virtual {
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
         _loadEnv();
 
@@ -211,9 +213,12 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
         if (needsRebalancer) config.setRebalancer(ocgTimelock);
         if (needsRateLimitAdminClear) config.setRateLimitAdmin(address(0));
         timelock.enable("");
+        // One `addChain` per declared burn/mint route, as the proposal performs them
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < burnMintRoutes.length; ++i) {
             config.addChain(_toChainUpdate(burnMintRoutes[i]));
         }
+        // forge-lint: disable-end(calls-loop)
         vm.stopPrank();
     }
 
@@ -228,6 +233,8 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
     function _toChainUpdate(
         RouteSpec memory spec_
     ) internal pure returns (ICCIPTokenPoolAdmin.ChainUpdate memory) {
+        // Forge counts this allocation as a call made in a loop; the helper itself has no loop
+        // forge-lint: disable-next-line(calls-loop)
         bytes[] memory remotePools = new bytes[](1);
         remotePools[0] = spec_.remotePool;
         return

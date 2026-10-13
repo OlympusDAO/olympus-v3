@@ -220,7 +220,7 @@ contract CCIPTokenPoolConfigTests_reEnable is CCIPTokenPoolConfigTest {
     // The empty Transition payload is a base promise. The no-pool-call absence claim needs
     // vm.recordLogs.
     function test_whenCallerIsBridgeAdmin() public givenEnabled givenDisabled {
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.recordLogs();
         vm.expectEmit(true, true, true, true, address(config));

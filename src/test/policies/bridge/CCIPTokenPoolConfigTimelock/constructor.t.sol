@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -313,6 +316,8 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
     //   [X] it constructs and reports timelockDelay() equal to the argument
     // Fuzzed over the valid interval [1 days, 30 days]
     function test_whenDelayIsWithinBounds(uint48 delay_) public {
+        // casting to 'uint48' is safe because the bound keeps the value at or below 30 days
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 boundedDelay = uint48(bound(delay_, 1 days, 30 days));
         // boundedDelay is in the valid interval [1 days, 30 days]
 
@@ -436,3 +441,5 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

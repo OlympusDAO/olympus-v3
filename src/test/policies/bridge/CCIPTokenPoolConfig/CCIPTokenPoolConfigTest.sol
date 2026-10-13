@@ -29,6 +29,10 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
+// The helpers of the rig run inside the loops of the suites, and its own loops walk small fixed
+// sets of routes, calling the contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
+
 /// @notice Shared abstract base of the CCIPTokenPoolConfig test suite.
 /// @dev    The setup deploys the full Kernel stack (Kernel, OlympusRoles, RolesAdmin), a real
 ///         Chainlink lock/release pool with liquidity acceptance and an empty allowlist over
@@ -387,6 +391,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         ccipRouter.setOnRamp(onRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("bridgeReceiver")),
@@ -409,6 +415,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         ccipRouter.setOffRamp(offRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(offRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.releaseOrMint(
             Pool.ReleaseOrMintInV1({
                 originalSender: abi.encode(makeAddr("bridgeSender")),
@@ -459,6 +467,16 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
         if (outboundTokens_ < 2) _consumeOutbound(chainSelector_, 2 - outboundTokens_);
         if (inboundTokens_ < 2) _consumeInbound(chainSelector_, 2 - inboundTokens_);
+    }
+
+    // ========== TIME HELPERS ========== //
+
+    /// @notice Returns the current block timestamp at the width of the lifecycle and queue
+    ///         timestamps.
+    function _blockTimestamp() internal view returns (uint48) {
+        // casting to 'uint48' is safe for realistic test timestamps
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint48(vm.getBlockTimestamp());
     }
 
     // ========== AUTHORIZATION PROBE ========== //
@@ -781,6 +799,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     }
 
     /// @dev Deploys a second funded lock/release pool whose rebalancer is left unset
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenLiquiditySourceRebalancerUnset() {
         _deployLiquiditySource(false);
         _;
@@ -848,6 +868,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     /// @dev CHAIN_SELECTOR_A is seeded directly on the pool with the outbound bucket at the
     ///      default configuration and the inbound bucket disabled ({false, 0, 0}), while the
     ///      test contract still owns the pool; runs before the ownership handover
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledInboundBucket() {
         _seedRouteOnPool(
             CHAIN_SELECTOR_A,
@@ -861,6 +883,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     /// @dev CHAIN_SELECTOR_A is seeded directly on the pool with an empty remote pool list
     ///      while the test contract still owns the pool; runs before the ownership handover
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithNoRemotePools() {
         _seedRouteOnPool(
             CHAIN_SELECTOR_A,
@@ -904,3 +928,5 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         _;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

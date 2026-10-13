@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -11,6 +14,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
+
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
 
 contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimelockTest {
     // ========== FILE-LOCAL HELPERS ========== //
@@ -477,7 +483,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         bytes32 remotePoolsHash = _expectedRemotePoolsHash(CHAIN_SELECTOR_A);
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days; expiresAt = executableAt + 3 days
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
 
         vm.expectEmit(true, true, true, true, address(timelock));
@@ -609,6 +615,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
             15,
             "fifteen sub-actions should be stored"
         );
+        // The loop checks the reservation of each route of the batch
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < routeSelectors.length; ++i) {
             assertEq(
                 timelock.pendingActionId(_rateLimitsKey(routeSelectors[i])),
@@ -616,6 +624,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
                 "each route's rate limits key should be reserved by the batch"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // when the batch reserves exactly twenty-four keys
@@ -635,9 +644,12 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
 
         // 8 sub-actions x 3 keys = exactly the 24-key budget
         uint256 totalKeys;
+        // The loop sums the key count of each sub-action of the batch
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < 8; ++i) {
             totalKeys += timelock.getQueuedConfigStateCount(actionId, i);
         }
+        // forge-lint: disable-end(calls-loop)
         assertEq(totalKeys, 24, "the batch should hold exactly twenty-four keys");
         _assertRouteKeysHeldBy(20_000, actionId, "first selector of the budget batch");
         _assertRouteKeysHeldBy(20_007, actionId, "last selector of the budget batch");
@@ -714,6 +726,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
             _applyAllowListUpdatesBatchAction(new address[](0), _singleAddress(allowListedThree))
         );
 
+        // The loop queues each canonical single-action batch in turn
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < batches.length; ++i) {
             ITimelockBatchQueue.BatchAction[] memory batch = batches[i];
             vm.prank(bridgeAdmin);
@@ -727,6 +741,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
                 "each canonical batch should queue with a sequential id"
             );
         }
+        // forge-lint: disable-end(calls-loop)
 
         // One representative reserved key per action pins that every shape reached storage
         _assertRouteKeysHeldBy(freshSelector, firstActionId, "addChain shape");
@@ -754,3 +769,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueBatch is CCIPTokenPoolConfigTimel
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

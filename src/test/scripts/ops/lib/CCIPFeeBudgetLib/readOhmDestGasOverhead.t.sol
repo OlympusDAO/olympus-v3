@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The words of each mocked return are written inline, so that a layout reads at a glance
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {
     ICCIPFeeOnRampConfig,
     ICCIPFeeQuoter20,
@@ -583,3 +586,5 @@ contract CCIPFeeBudgetLibTests_readOhmDestGasOverhead is CCIPFeeBudgetLibTest {
         assertEq(source, string.concat("OHM token entry, ", version), "source");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

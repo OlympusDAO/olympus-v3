@@ -68,7 +68,7 @@ contract CCIPTokenPoolConfigTimelockTests_disable is CCIPTokenPoolConfigTimelock
     // from
     function test_whenCallerIsAdmin() public givenEnabled {
         skip(1 hours);
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(timelock));
         emit IEnabler.Disabled();
@@ -100,7 +100,7 @@ contract CCIPTokenPoolConfigTimelockTests_disable is CCIPTokenPoolConfigTimelock
     // The payload is never decoded; fuzzed over arbitrary bytes
     function test_whenDataIsNotEmpty(bytes calldata data_) public givenEnabled {
         vm.assume(data_.length > 0);
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(timelock));
         emit IEnablerV2.Transition(admin, false, data_, timestamp);
@@ -114,7 +114,7 @@ contract CCIPTokenPoolConfigTimelockTests_disable is CCIPTokenPoolConfigTimelock
     //   [X] it disables again
     // The enabled flag has two writers (enable and reEnable); this is the reEnable producer
     function test_givenReEnabled() public givenEnabled givenDisabled givenReEnabled {
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.prank(admin);
         timelock.disable("");

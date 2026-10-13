@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 
@@ -15,6 +18,8 @@ contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
         vm.expectRevert(
             abi.encodeWithSelector(ICCIPTokenPoolAdmin.NonExistentChain.selector, CHAIN_SELECTOR_A)
         );
+        // The view is expected to revert, so there is no return value to read
+        // forge-lint: disable-next-line(unused-return)
         config.isChainDisabled(CHAIN_SELECTOR_A);
     }
 
@@ -184,3 +189,5 @@ contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

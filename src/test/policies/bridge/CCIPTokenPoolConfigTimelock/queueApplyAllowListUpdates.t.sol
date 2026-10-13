@@ -12,6 +12,9 @@ import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
 
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
+
 contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
     CCIPTokenPoolConfigTimelockTest
 {
@@ -260,7 +263,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(
             abi.encode(_singleActionBatch(_applyAllowListUpdatesBatchAction(removes, adds)))
@@ -403,3 +406,5 @@ contract CCIPTokenPoolConfigTimelockTests_queueApplyAllowListUpdates is
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, routeActionId, "route action queued second");
     }
 }
+
+// forge-lint: disable-end(unused-return)

@@ -224,6 +224,8 @@ contract CCIPTokenPoolConfigTests_constructor is CCIPTokenPoolConfigTest {
     //   [X] it constructs and reports gracePeriod() equal to the argument
     // Fuzzed over the valid interval [1, type(uint32).max]
     function test_whenGracePeriodIsNonZero(uint32 gracePeriod_) public {
+        // casting to 'uint32' is safe because the bound caps the value at the uint32 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint32 boundedGracePeriod = uint32(bound(gracePeriod_, 1, type(uint32).max));
         // boundedGracePeriod is in the valid interval [1, type(uint32).max]
 

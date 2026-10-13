@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
+import {IERC165} from "@openzeppelin-5.3.0/utils/introspection/IERC165.sol";
+
 /// @notice Well-behaved ERC165 responder that advertises a constructor-supplied set of
 ///         interface identifiers.
 /// @dev    Answers true for the ERC165 identifier, false for the invalid identifier
 ///         `0xffffffff` and otherwise true exactly for the identifiers supplied at
 ///         construction, so an `ERC165Checker` probe reads the contract as a valid ERC165
 ///         responder advertising precisely that set.
-contract MockInterfaceSet {
+contract MockInterfaceSet is IERC165 {
     mapping(bytes4 => bool) internal _advertised;
 
     constructor(bytes4[] memory interfaceIds_) {

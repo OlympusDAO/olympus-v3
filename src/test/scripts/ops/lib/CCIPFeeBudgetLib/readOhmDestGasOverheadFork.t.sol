@@ -24,9 +24,13 @@ contract CCIPFeeBudgetLibForkTests_readOhmDestGasOverhead is Test {
     string internal env;
 
     function setUp() public {
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork("mainnet", MAINNET_FORK_BLOCK);
         harness = new CCIPFeeBudgetLibHarness();
         vm.label(address(harness), "CCIPFeeBudgetLibHarness");
+        // The path is the tracked `env.json`; nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         env = vm.readFile("./src/scripts/env.json");
     }
 

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
@@ -132,6 +135,8 @@ contract CCIPTokenPoolConfigTimelockTests_setGracePeriod is CCIPTokenPoolConfigT
     //   [X] it writes gracePeriod equal to the argument
     // Fuzzed over the valid interval [1, type(uint32).max]
     function test_whenPeriodIsNonZero(uint32 period_) public givenEnabled {
+        // casting to 'uint32' is safe because the bound caps the value at the uint32 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint32 boundedPeriod = uint32(bound(period_, 1, type(uint32).max));
         // boundedPeriod is in the valid interval [1, type(uint32).max]
 
@@ -195,3 +200,5 @@ contract CCIPTokenPoolConfigTimelockTests_setGracePeriod is CCIPTokenPoolConfigT
         assertEq(timelock.gracePeriod(), 5 days, "gracePeriod should be written");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

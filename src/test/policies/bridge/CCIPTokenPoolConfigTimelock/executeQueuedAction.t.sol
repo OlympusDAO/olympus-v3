@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -58,6 +61,8 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         bytes32 key_,
         bytes32 currentStateHash_
     ) internal {
+        // Only the recorded hash is needed, to build the expected revert data
+        // forge-lint: disable-next-line(unused-return)
         (, bytes32 storedHash) = timelock.getQueuedConfigState(actionId_, 0, configStateIndex_);
         _expectRevertConfigStateChanged(actionId_, 0, key_, storedHash, currentStateHash_);
         vm.prank(thirdParty);
@@ -1115,3 +1120,5 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

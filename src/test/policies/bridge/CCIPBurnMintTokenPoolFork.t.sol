@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
+// The two forks are set up by mirrored blocks, so each setup value appears once per fork
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Test} from "@forge-std-1.16.2/Test.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 
@@ -17,6 +20,13 @@ import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
 import {Client} from "@chainlink-ccip-1.6.0/ccip/libraries/Client.sol";
 import {IRouterClient} from "@chainlink-ccip-1.6.0/ccip/interfaces/IRouterClient.sol";
+
+// Calls are made for their effect or their expected revert; a test reads only the returned
+// values it asserts.
+// forge-lint: disable-start(unused-return)
+
+// `IOwnable` is declared beside the fork suite that reads an owner through it
+// forge-lint: disable-start(multi-contract-file)
 
 interface IOwnable {
     function owner() external returns (address);
@@ -346,6 +356,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Call the bridge
         vm.startPrank(SENDER);
         mainnetOHM.approve(address(mainnetBridge), SEND_AMOUNT);
+        // The value is the CCIP fee quoted above, sent to the bridge that this suite deploys
+        // forge-lint: disable-next-line(arbitrary-send-eth)
         mainnetBridge.sendToEVM{value: fee}(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
         vm.stopPrank();
 
@@ -412,6 +424,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Call the CCIP router
         vm.startPrank(SENDER);
         mainnetOHM.approve(address(router), SEND_AMOUNT);
+        // The value is the CCIP fee quoted above, sent to the CCIP router of the fork
+        // forge-lint: disable-next-line(arbitrary-send-eth)
         router.ccipSend{value: fee}(polygonChainSelector, ccipMessage);
         vm.stopPrank();
 
@@ -467,6 +481,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Call the bridge
         vm.startPrank(SENDER);
         polygonOHM.approve(address(polygonBridge), SEND_AMOUNT);
+        // The value is the CCIP fee quoted above, sent to the bridge that this suite deploys
+        // forge-lint: disable-next-line(arbitrary-send-eth)
         polygonBridge.sendToEVM{value: fee}(mainnetChainSelector, RECIPIENT, SEND_AMOUNT);
         vm.stopPrank();
 
@@ -537,6 +553,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Call the CCIP router
         vm.startPrank(SENDER);
         polygonOHM.approve(address(router), SEND_AMOUNT);
+        // The value is the CCIP fee quoted above, sent to the CCIP router of the fork
+        // forge-lint: disable-next-line(arbitrary-send-eth)
         router.ccipSend{value: fee}(mainnetChainSelector, ccipMessage);
         vm.stopPrank();
 
@@ -587,3 +605,9 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     // [ ] the MINTR approval on mainnet is not updated
     // NOTE: unable to test this as solana is not supported by the ccip simulator
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

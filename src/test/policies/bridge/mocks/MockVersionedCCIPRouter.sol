@@ -39,6 +39,8 @@ contract MockVersionedCCIPRouter is MockCCIPRouter {
         // Raw memory of the oversized length of `MockRouterCandidate`, returned without the
         // ABI encoder so that the caller sees the length exactly
         if (currentMode == MockRouterCandidate.ReturnMode.OversizedReturn) {
+            // A raw `return` is the only way to answer with unencoded memory of that length
+            // forge-lint: disable-next-item(inline-assembly)
             // solhint-disable-next-line no-inline-assembly
             assembly {
                 return(0, OVERSIZED_RETURN_LENGTH)

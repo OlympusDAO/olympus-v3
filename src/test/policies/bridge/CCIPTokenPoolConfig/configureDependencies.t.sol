@@ -10,6 +10,9 @@ import {MockRolesModule} from "src/test/policies/bridge/mocks/MockRolesModule.so
 
 import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
 
+// The hook is called for its effect or its revert; its returned list is asserted in its own test
+// forge-lint: disable-start(unused-return)
+
 contract CCIPTokenPoolConfigTests_configureDependencies is CCIPTokenPoolConfigTest {
     // given the kernel has no ROLES module installed
     //   [X] it reverts with Policy_ModuleDoesNotExist("ROLES")
@@ -170,3 +173,5 @@ contract CCIPTokenPoolConfigTests_configureDependencies is CCIPTokenPoolConfigTe
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)

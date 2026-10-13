@@ -88,9 +88,12 @@ contract CCIPTokenPoolConfigTests_supportsInterface is CCIPTokenPoolConfigTest {
     // Fuzzed over bytes4 with the eight advertised identifiers excluded
     function test_whenInterfaceIdIsUnknown(bytes4 interfaceId_) public view {
         bytes4[] memory advertised = _advertisedInterfaceIds();
+        // The loop excludes the advertised identifiers from the fuzz domain
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < advertised.length; ++i) {
             vm.assume(interfaceId_ != advertised[i]);
         }
+        // forge-lint: disable-end(calls-loop)
 
         assertFalse(
             config.supportsInterface(interfaceId_),
@@ -128,11 +131,14 @@ contract CCIPTokenPoolConfigTests_supportsInterface is CCIPTokenPoolConfigTest {
         assertFalse(config.isEnabled(), "the policy should be disabled after setUp");
 
         bytes4[] memory advertised = _advertisedInterfaceIds();
+        // The loop asks the policy about each advertised identifier
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < advertised.length; ++i) {
             assertTrue(
                 config.supportsInterface(advertised[i]),
                 "every advertised identifier should answer true while disabled"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 }

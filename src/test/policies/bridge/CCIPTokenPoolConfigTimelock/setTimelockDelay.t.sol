@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
@@ -145,6 +148,8 @@ contract CCIPTokenPoolConfigTimelockTests_setTimelockDelay is CCIPTokenPoolConfi
     //   [X] it writes timelockDelay equal to the argument
     // Fuzzed over the valid interval [1 days, 30 days]
     function test_whenDelayIsWithinBounds(uint48 delay_) public givenEnabled {
+        // casting to 'uint48' is safe because the bound keeps the value at or below 30 days
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 boundedDelay = uint48(bound(delay_, 1 days, 30 days));
         // boundedDelay is in the valid interval [1 days, 30 days]
 
@@ -191,7 +196,7 @@ contract CCIPTokenPoolConfigTimelockTests_setTimelockDelay is CCIPTokenPoolConfi
         // executableAt = now + 2 days (the new delay); expiresAt = executableAt + 3 days
         assertEq(
             secondAction.executableAt,
-            uint48(vm.getBlockTimestamp()) + 2 days,
+            _blockTimestamp() + 2 days,
             "the second action should use the new delay"
         );
         assertEq(
@@ -227,3 +232,5 @@ contract CCIPTokenPoolConfigTimelockTests_setTimelockDelay is CCIPTokenPoolConfi
         assertEq(timelock.timelockDelay(), 2 days, "timelockDelay should be written");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

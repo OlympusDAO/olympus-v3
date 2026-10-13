@@ -57,6 +57,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     uint32 internal constant STANDARD_GRACE_PERIOD = 3 days;
 
     function _loadEnv() internal {
+        // The path is the tracked `env.json`; nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         _env = vm.readFile("./src/scripts/env.json");
     }
 
@@ -96,6 +98,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
                 // far below the uint128 maximum
                 // forge-lint: disable-next-line(unsafe-typecast)
                 capacity: uint128(_env.readUint(string.concat(prefix, ".capacity"))),
+                // casting to 'uint128' is safe because the declared limits are OHM base units
+                // far below the uint128 maximum
                 // forge-lint: disable-next-line(unsafe-typecast)
                 rate: uint128(_env.readUint(string.concat(prefix, ".rate")))
             });
@@ -153,6 +157,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         configurations when they are enabled, standard enabled values otherwise (a
     ///         disabled live bucket is a legacy direct-owner shape the config's validated
     ///         paths refuse to write back).
+    // Reads the buckets of one route; the helper also runs inside the route loops of the suites
+    // forge-lint: disable-next-item(calls-loop)
     function _serviceableRateLimits(
         address pool_,
         uint64 chainSelector_
@@ -192,6 +198,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     ///         remote token, the accepted remote pools and both bucket configurations. Fill
     ///         levels are excluded, so the digest is stable across time and the "the migration
     ///         leaves the routes untouched" claims compare cleanly.
+    // The digest reads every route of the pool
+    // forge-lint: disable-next-item(calls-loop)
     function _routeDigest(address pool_) internal view returns (bytes32) {
         ICCIPTokenPoolAdmin rigPool = ICCIPTokenPoolAdmin(pool_);
         uint64[] memory selectors = rigPool.getSupportedChains();
@@ -211,6 +219,8 @@ abstract contract CCIPMigrationForkTestBase is Test {
     }
 
     /// @notice Asserts every field of one route against expected values.
+    // Asserts one route; the helper also runs inside the route loops of the suites
+    // forge-lint: disable-next-item(calls-loop)
     function _assertRoute(
         address pool_,
         uint64 chainSelector_,

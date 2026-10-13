@@ -104,9 +104,12 @@ contract CCIPTokenPoolConfigTimelockTests_supportsInterface is CCIPTokenPoolConf
     // Fuzzed; vm.assume excludes the nine advertised ids
     function test_whenInterfaceIsUnknown(bytes4 interfaceId_) public view {
         bytes4[] memory advertised = _advertisedInterfaceIds();
+        // The loop excludes the advertised identifiers from the fuzz domain
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < advertised.length; ++i) {
             vm.assume(interfaceId_ != advertised[i]);
         }
+        // forge-lint: disable-end(calls-loop)
 
         assertFalse(
             timelock.supportsInterface(interfaceId_),

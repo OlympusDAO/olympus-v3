@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
 // solhint-disable one-contract-per-file
-// The rig, the two suites and the two proposal harnesses belong to one file: the harnesses
-// exist only for these suites, and splitting them would hide that. The labelled preconditions
-// of the rig fail on the first bad entry of a route or lane loop, which is the point of a
-// precondition, so the loop-revert note is suppressed file-wide.
-// forge-lint: disable-start(multi-contract-file, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -37,6 +32,21 @@ import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConf
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CCIPTokenPoolConfigProposal} from "src/proposals/CCIPTokenPoolConfigProposal.sol";
 import {ProposalTest} from "./ProposalTest.sol";
+
+// Rig loops walk the routes and lanes that `env.json` declares, reading the fork and arming stubs
+// forge-lint: disable-start(calls-loop)
+
+// `addresses` is assigned by the proposal setup after calls into the fork and the cheatcodes;
+// none of those callees calls back into a test contract.
+// forge-lint: disable-start(reentrancy-no-eth)
+
+// The labelled preconditions of the rig fail on the first bad entry of a route or lane loop,
+// which is the point of a precondition.
+// forge-lint: disable-start(require-revert-in-loop)
+
+// The rig, the two suites and the two proposal harnesses belong to one file: the harnesses
+// exist only for these suites, and splitting them would hide that.
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice Shared rig of the `CCIPTokenPoolConfigProposal` suites: a mainnet fork pinned at a
 ///         block that still satisfies every live precondition of the rollout, the config pair
@@ -174,8 +184,11 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     // ========== SETUP ========== //
 
     function setUp() public virtual {
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
-        /// forge-lint: disable-next-line(unsafe-cheatcode)
+        // The path is the constant `_ENV_PATH`: the tracked `env.json` and nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         _env = vm.readFile(_ENV_PATH);
 
         // ========== PROPOSAL SETUP ========== //
@@ -212,11 +225,12 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
         // ========== LOAD THE DESIRED STATE ========== //
 
-        // casting to 'uint32' and 'uint48' is safe because the declared grace period and
-        // timelock delay are second counts far below their type maxima, and the config policy
-        // and its timelock take the same widths
+        // casting to 'uint32' is safe because the declared grace period is a second count far
+        // below the uint32 maximum, and the config policy and its timelock take the same width
         // forge-lint: disable-next-line(unsafe-typecast)
         gracePeriod = uint32(_envUint("mainnet", "olympus.config.CCIPTokenPoolConfig.gracePeriod"));
+        // casting to 'uint48' is safe because the declared timelock delay is a second count far
+        // below the uint48 maximum, and the timelock takes the same width
         // forge-lint: disable-next-item(unsafe-typecast)
         timelockDelay = uint48(
             _envUint("mainnet", "olympus.config.CCIPTokenPoolConfig.timelockDelay")
@@ -341,6 +355,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 // far below the uint128 maximum, the width the pool buckets carry
                 // forge-lint: disable-next-line(unsafe-typecast)
                 capacity: uint128(_env.readUint(string.concat(prefix, ".capacity"))),
+                // casting to 'uint128' is safe because the declared limits are OHM base units
+                // far below the uint128 maximum, the width the pool buckets carry
                 // forge-lint: disable-next-line(unsafe-typecast)
                 rate: uint128(_env.readUint(string.concat(prefix, ".rate")))
             });
@@ -549,8 +565,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         string memory remoteChain_
     ) internal view returns (address feeQuoter) {
         // The return is measured by hand because its length differs by generation
-        // solhint-disable-next-line avoid-low-level-calls
         // forge-lint: disable-next-item(low-level-calls)
+        // solhint-disable-next-line avoid-low-level-calls
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRampConfig.getDynamicConfig, ())
         );
@@ -1051,6 +1067,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         _;
     }
 
+    // Named per Phase B half so that the partial-batch tests read as branching-tree conditions
     // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenPoolOwnershipProposed() {
         _proposePoolOwnership();
@@ -2035,3 +2052,11 @@ contract CCIPTokenPoolConfigProposalRebalancerHarness is CCIPTokenPoolConfigProp
         return drifted;
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(require-revert-in-loop)
+
+// forge-lint: disable-end(reentrancy-no-eth)
+
+// forge-lint: disable-end(calls-loop)

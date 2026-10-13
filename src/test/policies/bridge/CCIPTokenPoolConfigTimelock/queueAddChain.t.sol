@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -12,6 +15,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
+
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
 
 contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTimelockTest {
     // ========== SHARED QUEUE GATE LADDER ========== //
@@ -428,7 +434,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(abi.encode(_singleActionBatch(_addChainBatchAction(update))));
 
@@ -544,3 +550,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_B, secondActionId, "second route");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

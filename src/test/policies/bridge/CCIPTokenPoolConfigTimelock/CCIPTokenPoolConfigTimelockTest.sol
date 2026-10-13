@@ -31,6 +31,10 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
+// The helpers of the rig run inside the loops of the suites, and its own loops walk small fixed
+// sets of routes and keys, calling the contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
+
 /// @notice Shared abstract base of the CCIPTokenPoolConfigTimelock test suite.
 /// @dev    The rig is real end to end: no mock of the config policy and no mock pool, so the
 ///         queue-time validation runs the real validate mirrors against the real pool and the
@@ -668,6 +672,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         ccipRouter.setOnRamp(onRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("bridgeReceiver")),
@@ -680,6 +686,14 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     // ========== TIME HELPERS ========== //
+
+    /// @notice Returns the current block timestamp at the width of the lifecycle and queue
+    ///         timestamps.
+    function _blockTimestamp() internal view returns (uint48) {
+        // casting to 'uint48' is safe for realistic test timestamps
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint48(vm.getBlockTimestamp());
+    }
 
     /// @notice Skips so the timestamp lands EXACTLY on the stored executableAt of an action.
     ///         Requires the current timestamp to be at or before that boundary.
@@ -875,7 +889,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(actionId_);
         // queuedAt = now; executableAt = queuedAt + timelockDelay; expiresAt = executableAt
         // + EXECUTION_WINDOW (3 days)
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
         assertEq(action.proposer, proposer_, "stored proposer");
         assertEq(action.queuedAt, timestamp, "stored queuedAt");
         assertEq(
@@ -1048,6 +1062,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev The emergency role disables the timelock; composes after givenEnabled
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenDisabledByEmergency() {
         vm.prank(emergency);
         timelock.disable("");
@@ -1065,6 +1081,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev Lands exactly at lastTransitionAt + gracePeriod; composes after givenDisabled
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenTimestampAtGraceDeadline() {
         uint256 deadline = uint256(timelock.lastTransitionAt()) + timelock.gracePeriod();
         skip(deadline - vm.getBlockTimestamp());
@@ -1158,6 +1176,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev The admin adds CHAIN_SELECTOR_A through the config with a single remote pool
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenChainAddedWithSinglePool() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         vm.prank(admin);
@@ -1183,6 +1203,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     /// @dev Route A is seeded directly on the pool (pranking the pool owner of the moment)
     ///      with the outbound bucket disabled ({false, 0, 0}) and the inbound bucket at the
     ///      default configuration; a shape the config's validated paths cannot produce
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledOutboundBucket() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         _seedRouteOnPool(
@@ -1197,6 +1219,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @dev Route A is seeded directly on the pool with the outbound bucket at the default
     ///      configuration and the inbound bucket disabled ({false, 0, 0})
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledInboundBucket() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         _seedRouteOnPool(
@@ -1241,6 +1265,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @dev A third party executes the queued action once ready; composes after
     ///      givenActionReady
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenActionExecuted() {
         vm.prank(thirdParty);
         timelock.executeQueuedAction(queuedActionId);
@@ -1287,3 +1313,5 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         _;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

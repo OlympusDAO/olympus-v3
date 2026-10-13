@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The bootstrap replays fixed seeds; the invariants write the documented key budget and counts
+// in place.
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Contracts
 import {CCIPTokenPoolConfigTimelockHandler} from "./CCIPTokenPoolConfigTimelockHandler.sol";
 import {CCIPTokenPoolConfigTimelockTest} from "../CCIPTokenPoolConfigTimelockTest.sol";
+
+// Bootstrap and invariant loops walk the ghost registry and the tracked key universe of the
+// run, calling the handler, the timelock and assertions.
+// forge-lint: disable-start(calls-loop)
 
 /// @notice Stateful invariant suite for CCIPTokenPoolConfigTimelock. The fuzzer drives the
 ///         handler's guarded action surface (the typed queue entry points and the batch,
@@ -456,3 +464,7 @@ contract CCIPTokenPoolConfigTimelockTests_Invariants is CCIPTokenPoolConfigTimel
         assertGt(handler.expiries(), 0, "no expiry skip ran");
     }
 }
+
+// forge-lint: disable-end(calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

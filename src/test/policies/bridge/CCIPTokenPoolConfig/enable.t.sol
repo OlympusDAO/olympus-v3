@@ -92,7 +92,7 @@ contract CCIPTokenPoolConfigTests_enable is CCIPTokenPoolConfigTest {
     //   [X] it emits Transition with the caller, true, the payload and the timestamp
     // The main happy path with an empty payload; both state fields are asserted together
     function test_whenCallerIsAdmin() public {
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IEnabler.Enabled();
@@ -116,7 +116,7 @@ contract CCIPTokenPoolConfigTests_enable is CCIPTokenPoolConfigTest {
     function test_whenDataIsNotEmpty(bytes calldata data_) public {
         vm.assume(data_.length > 0);
 
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IEnablerV2.Transition(admin, true, data_, timestamp);
@@ -133,7 +133,7 @@ contract CCIPTokenPoolConfigTests_enable is CCIPTokenPoolConfigTest {
     function test_givenDisabledAfterEnable() public givenEnabled givenDisabled {
         uint48 disableTimestamp = config.lastTransitionAt();
         skip(1 hours);
-        uint48 enableTimestamp = uint48(vm.getBlockTimestamp());
+        uint48 enableTimestamp = _blockTimestamp();
 
         vm.prank(admin);
         config.enable("");

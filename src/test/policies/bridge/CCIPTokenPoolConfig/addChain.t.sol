@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -347,6 +350,8 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     function test_whenRemoteTokenLengthIsNot32_reverts(
         uint8 length_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        // casting to 'uint8' is safe because the bound keeps the value at or below 96
+        // forge-lint: disable-next-line(unsafe-typecast)
         length_ = uint8(bound(length_, 1, 96));
         vm.assume(length_ != 32);
 
@@ -374,6 +379,8 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         givenPoolOwnershipAccepted
     {
         uint256[2] memory lengths = [uint256(31), 33];
+        // Boundary loop over two lengths: each pass arms one revert and makes one call
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < lengths.length; ++i) {
             ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
             update.remoteTokenAddress = _bytesOfLength(lengths[i]);
@@ -387,6 +394,7 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
             vm.prank(admin);
             config.addChain(update);
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // given the route already exists
@@ -516,6 +524,8 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
     function test_whenARemotePoolEntryLengthIsNot32_reverts(
         uint8 length_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        // casting to 'uint8' is safe because the bound keeps the value at or below 96
+        // forge-lint: disable-next-line(unsafe-typecast)
         length_ = uint8(bound(length_, 1, 96));
         vm.assume(length_ != 32);
 
@@ -822,8 +832,12 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         uint128 capacity_,
         uint128 rate_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        // casting to 'uint128' is safe because the bound caps the value at the uint128 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint128 boundedCapacity = uint128(bound(capacity_, 2, type(uint128).max));
         // boundedCapacity is in [2, type(uint128).max]
+        // casting to 'uint128' is safe because the bound keeps the value below `boundedCapacity`
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint128 boundedRate = uint128(bound(rate_, 1, boundedCapacity - 1));
         // boundedRate is in the valid interval [1, capacity - 1]
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
@@ -862,6 +876,8 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         uint128 capacity_,
         uint128 rate_
     ) public givenEnabled givenPoolOwnershipAccepted {
+        // casting to 'uint128' is safe because the bound caps the value at the uint128 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint128 boundedRate = uint128(bound(rate_, capacity_, type(uint128).max));
         // boundedRate is in the invalid interval [capacity, type(uint128).max]
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
@@ -990,3 +1006,5 @@ contract CCIPTokenPoolConfigTests_addChain is CCIPTokenPoolConfigTest {
         config.addChain(update);
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

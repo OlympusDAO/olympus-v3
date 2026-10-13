@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The bootstrap replays fixed seeds and durations, written in the order of the calls
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 
@@ -159,6 +162,8 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
     ///         produced it.
     function invariant_routesCarryEnabledLimitersAndRemotePools() public view {
         uint64[] memory selectors = pool.getSupportedChains();
+        // The invariant inspects every configured route of the pool
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < selectors.length; ++i) {
             assertTrue(
                 _outboundBucket(selectors[i]).isEnabled,
@@ -174,6 +179,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
                 "a configured route lost its last remote pool"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // ========== DERIVED STATE ========== //
@@ -184,6 +190,8 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
     ///         drift from it.
     function invariant_isChainDisabledMatchesBucketState() public view {
         uint64[] memory selectors = pool.getSupportedChains();
+        // The invariant inspects every configured route of the pool
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < selectors.length; ++i) {
             bool expected = _isContainmentShape(_outboundBucket(selectors[i])) &&
                 _isContainmentShape(_inboundBucket(selectors[i]));
@@ -193,6 +201,7 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
                 "isChainDisabled drifted from the recomputation over the buckets"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // ========== GHOST STATE ========== //
@@ -348,3 +357,5 @@ contract CCIPTokenPoolConfigTests_Invariants is CCIPTokenPoolConfigTest {
         return bucket_.isEnabled && bucket_.capacity == 2 && bucket_.rate == 1;
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

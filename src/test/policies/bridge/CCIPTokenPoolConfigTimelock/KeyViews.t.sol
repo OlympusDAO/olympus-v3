@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
@@ -56,7 +59,11 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
         }
         assertEq(eventCount, 3, "exactly three ConfigStateQueued events should be emitted");
 
+        // The loop compares each stored key of the action with its documented key
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < expectedKeys.length; ++i) {
+            // Only the key of the stored state is compared here
+            // forge-lint: disable-next-line(unused-return)
             (bytes32 storedKey, ) = timelock.getQueuedConfigState(actionId, 0, i);
             assertEq(
                 storedKey,
@@ -64,6 +71,7 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
                 "the stored config state key should equal the documented key"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // ========== TESTS ========== //
@@ -345,6 +353,8 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
             _routeKeyOf(address(secondConfig), timelock.REMOTE_POOLS_DOMAIN(), CHAIN_SELECTOR_A),
             _routeKeyOf(address(secondConfig), timelock.ROUTE_IDENTITY_DOMAIN(), CHAIN_SELECTOR_A)
         ];
+        // The loop checks each of the three route keys on both timelocks
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < 3; ++i) {
             assertTrue(primaryKeys[i] != secondKeys[i], "the namespaces should not collide");
             assertEq(
@@ -368,5 +378,8 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
                 "the key scoped to the primary config should be free on the second timelock"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

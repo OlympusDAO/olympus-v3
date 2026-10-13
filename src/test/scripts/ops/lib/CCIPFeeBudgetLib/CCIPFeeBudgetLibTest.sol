@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The words of each mocked return are written inline, so that a layout reads at a glance
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {
@@ -296,6 +299,8 @@ abstract contract CCIPFeeBudgetLibTest is Test {
     }
 
     function _assertNotParsed(string memory raw_) internal view {
+        // Only the verdict is read for a string that must not parse
+        // forge-lint: disable-next-line(unused-return)
         (, bool ok) = harness.parseTypeAndVersion(raw_);
         assertFalse(ok, string.concat("should not parse: ", raw_));
     }
@@ -355,3 +360,5 @@ abstract contract CCIPFeeBudgetLibTest is Test {
         _;
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)
