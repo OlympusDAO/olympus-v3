@@ -23,7 +23,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {SafeCast} from "@openzeppelin-5.3.0/utils/math/SafeCast.sol";
 import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {CCIPFeeBudgetLib} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 import {CCIPQueueLib} from "src/scripts/ops/lib/CCIPQueueLib.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // Contracts
 import {Kernel, toKeycode} from "src/Kernel.sol";
@@ -133,6 +135,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         `env.json` does not declare fails the run, since the declaration must be complete
     ///         before anything is queued.
     ///
+    ///         An `addChain` toward an EVM burn/mint chain is gated on the lane's OHM delivery
+    ///         gas budget, read on this chain's live fee contracts as the setup batch reads it:
+    ///         an enabled OHM token entry of at least 175000 on an enabled destination, failing
+    ///         closed with the lane named otherwise. A lane toward an SVM destination is not
+    ///         gated and prints the note the setup batch prints; a lane toward a canonical
+    ///         chain needs no raised budget. A limit or remote pool change of an existing route
+    ///         is not gated.
+    ///
     ///         Args file (optional):
     ///         `{"functions": [{"name": "reconcileRoutes", "args": {"restoreContained": ["solana"]}}]}`
     ///         names the contained routes whose approved limits this run restores; without it
@@ -159,6 +169,9 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         - The batch owner does not hold `bridge_admin`.
     ///         - A desired route is malformed (see `CCIPConfigLib`).
     ///         - A name in `restoreContained` is not a route declared with `enabled: true`.
+    ///         - A route to add toward an EVM burn/mint chain has no enabled OHM fee entry of at
+    ///           least 175000 on its lane, or its destination is disabled on the fee quoter (the
+    ///           revert names the lane).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (optional; may carry
@@ -440,6 +453,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         }
 
         if (!live.exists) {
+            _requireLaneBudget(desired_.remoteChain);
             ICCIPTokenPoolAdmin.ChainUpdate memory update = _chainUpdate(desired_);
             // Surface the config policy's own validation before queueing
             config_.validateAddChain(update);
@@ -494,6 +508,43 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         }
 
         _planRouteFields(config_, queue_, desired_, live, diff);
+    }
+
+    /// @notice Reverts unless the lane toward a route to add carries the raised OHM delivery
+    ///         gas budget, when the destination is an EVM burn/mint chain. A lane toward an SVM
+    ///         destination is not gated and is reported as a note; a lane toward a canonical
+    ///         chain needs no raised budget, since the lock/release pool releases with a plain
+    ///         transfer.
+    function _requireLaneBudget(string memory remoteChain_) internal view {
+        if (ChainUtils._isSVMChain(remoteChain_)) {
+            console2.log(
+                string.concat("  Note: ", CCIPFeeBudgetLib.svmLaneNote(chain, remoteChain_))
+            );
+            return;
+        }
+        if (!CCIPConfigLib.isBurnMintEvmChain(remoteChain_)) {
+            console2.log("  The lane needs no raised budget (a lock/release destination).");
+            return;
+        }
+        (uint32 overhead, , string memory source) = CCIPFeeBudgetLib.readOhmDestGasOverhead(
+            env,
+            chain,
+            remoteChain_
+        );
+        console2.log(
+            string.concat(
+                "  Lane ",
+                chain,
+                " -> ",
+                remoteChain_,
+                ": OHM delivery gas budget ",
+                vm.toString(overhead),
+                " (",
+                source,
+                ")"
+            )
+        );
+        CCIPFeeBudgetLib.requireOhmFeeBudget(env, chain, remoteChain_);
     }
 
     /// @notice Plans the remote pool change and the rate limit change of a live route whose

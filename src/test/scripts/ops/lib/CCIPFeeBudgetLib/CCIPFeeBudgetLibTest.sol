@@ -133,10 +133,21 @@ abstract contract CCIPFeeBudgetLibTest is Test {
     }
 
     /// @notice Sets the fee quoter's eleven-word destination config with the live mainnet to
-    ///         Arbitrum values, the family word given, and `defaultTokenDestGasOverhead_`.
+    ///         Arbitrum values, enabled, the family word given, and `defaultTokenDestGasOverhead_`.
     function _setDestConfig20(bytes32 familyWord_, uint256 defaultTokenDestGasOverhead_) internal {
+        _setDestConfig20Raw(1, familyWord_, defaultTokenDestGasOverhead_);
+    }
+
+    /// @notice Sets the fee quoter's eleven-word destination config from a raw `isEnabled`
+    ///         word, so that a test can write a disabled destination or a value that does not
+    ///         fit a `bool`.
+    function _setDestConfig20Raw(
+        uint256 isEnabled_,
+        bytes32 familyWord_,
+        uint256 defaultTokenDestGasOverhead_
+    ) internal {
         uint256[] memory words = new uint256[](11);
-        words[0] = 1; // isEnabled
+        words[0] = isEnabled_;
         words[1] = 32_000; // maxDataBytes
         words[2] = 15_000_000; // maxPerMsgGasLimit
         words[3] = 300_000; // destGasOverhead
@@ -266,6 +277,16 @@ abstract contract CCIPFeeBudgetLibTest is Test {
         );
     }
 
+    function _expectRevertDestinationDisabled() internal {
+        _expectRevertMessage(
+            string.concat(
+                "CCIPFeeBudgetLib: the destination of the lane ",
+                LANE,
+                " is disabled on the fee quoter (getDestChainConfig().isEnabled is false)"
+            )
+        );
+    }
+
     function _expectRevertDoesNotFit(string memory field_) internal {
         _expectRevertMessage(
             string.concat(
@@ -310,20 +331,31 @@ abstract contract CCIPFeeBudgetLibTest is Test {
     // =======================================================================
 
     /// @notice A live 2.0.0 lane: `OnRamp 2.0.0` with the three-word dynamic config naming a
-    ///         `FeeQuoter 2.0.0`.
+    ///         `FeeQuoter 2.0.0` whose destination config is enabled, of the EVM family and
+    ///         carries the live 90000 default.
     modifier givenOnRamp20Lane() {
         _setVersion(onRamp, ON_RAMP_20);
         _setOnRampConfigNamingQuoter(3);
         _setVersion(feeQuoter, FEE_QUOTER_20);
+        _setDestConfig20(EVM_FAMILY_WORD, CHAIN_DEFAULT);
         _;
     }
 
     /// @notice A live 1.6 lane: `OnRamp 1.6.0` with the five-word dynamic config naming a
-    ///         `FeeQuoter 2.0.0`.
+    ///         `FeeQuoter 2.0.0` whose destination config is enabled, of the EVM family and
+    ///         carries the live 90000 default.
     modifier givenOnRamp16Lane() {
         _setVersion(onRamp, ON_RAMP_16);
         _setOnRampConfigNamingQuoter(5);
         _setVersion(feeQuoter, FEE_QUOTER_20);
+        _setDestConfig20(EVM_FAMILY_WORD, CHAIN_DEFAULT);
+        _;
+    }
+
+    /// @notice The fee quoter reports the destination disabled, with the EVM family and the
+    ///         live 90000 default otherwise.
+    modifier givenDestinationDisabled() {
+        _setDestConfig20Raw(0, EVM_FAMILY_WORD, CHAIN_DEFAULT);
         _;
     }
 

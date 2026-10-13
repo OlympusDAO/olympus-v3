@@ -120,6 +120,19 @@ contract CCIPFeeBudgetLibTests_requireOhmFeeBudget is CCIPFeeBudgetLibTest {
         _requireBudget();
     }
 
+    // given an OnRamp lane with a token entry at the minimum
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts naming the lane
+    function test_givenOnRamp20Lane_givenTokenEntryAtMinimum_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(MIN_BUDGET)
+        givenDestinationDisabled
+    {
+        _expectRevertDestinationDisabled();
+        _requireBudget();
+    }
+
     // given an OnRamp lane with the maximum representable token entry
     //   [X] it passes
     function test_givenOnRamp20Lane_givenTokenEntryMax()
