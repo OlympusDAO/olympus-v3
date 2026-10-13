@@ -334,7 +334,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         answers of every chain; the proposal is not submitted until the aggregate is
     ///         green.
     /// @dev    Prints one `[ OK ]`/`[FAIL]` line per check, an `[INFO]` line for a lane the
-    ///         fee budget gate does not cover (an SVM destination), and a final
+    ///         fee budget gate does not cover (an SVM destination) and for a local role that
+    ///         the setup batch grants when it is missing, and a final
     ///         `READINESS RESULT <chain>: GREEN|RED` line. It does not revert on a red result:
     ///         a reverted script would swallow its own log, so the shell wrapper derives the
     ///         exit code from the verdict line instead. A revert can still happen when the
@@ -535,12 +536,12 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             "no other pool is registered for OHM"
         );
 
+        // The setup batch grants each of these roles when it is missing (the DAO MS is the
+        // RolesAdmin admin, checked above), so a missing role is reported rather than failed.
         ROLESv1 roles = _roles(kernel);
-        _check(roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE), "the DAO MS holds bridge_admin");
-        _check(roles.hasRole(emergencyMS, EMERGENCY_ROLE), "the Emergency MS holds emergency");
-        if (!roles.hasRole(daoMS, ADMIN_ROLE)) {
-            console2.log("  [INFO] the DAO MS does not hold admin yet; the setup batch grants it");
-        }
+        _reportRole(roles.hasRole(daoMS, ADMIN_ROLE), "the DAO MS", "admin");
+        _reportRole(roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE), "the DAO MS", "bridge_admin");
+        _reportRole(roles.hasRole(emergencyMS, EMERGENCY_ROLE), "the Emergency MS", "emergency");
 
         address legacyBridge = _envAddress("olympus.policies.CrossChainBridge");
         if (legacyBridge != address(0)) {
@@ -677,6 +678,22 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     function _check(bool ok_, string memory description_) internal {
         console2.log(string.concat(ok_ ? "  [ OK ] " : "  [FAIL] ", description_));
         if (!ok_) _failures++;
+    }
+
+    /// @notice Reports a local role that the setup batch grants when it is missing: an `[ OK ]`
+    ///         line when the role is held and an `[INFO]` line otherwise, never a failure.
+    function _reportRole(bool held_, string memory holder_, string memory role_) internal pure {
+        console2.log(
+            held_
+                ? string.concat("  [ OK ] ", holder_, " holds ", role_)
+                : string.concat(
+                    "  [INFO] ",
+                    holder_,
+                    " does not hold ",
+                    role_,
+                    " yet; the setup batch grants it"
+                )
+        );
     }
 
     // =========== PLANNING HELPERS =========== //

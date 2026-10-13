@@ -240,7 +240,7 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
     ```
 
 4. **Funding (mainnet, DAO MS).** Re-read `shell/calc_bridged_supply.sh`, update `olympus.config.CCIP.minimumPoolBacking`, then `CCIPTokenPoolBatch.fundPool` transfers the shortfall from the DAO MS to the pool. This backs the OHM already minted on the L2s by the legacy LayerZero bridge (about 130,721 OHM; Optimism is zero).
-5. **Readiness gate and submission.** `./shell/ccip/check_rollout_readiness.sh` must be green for mainnet and all four chains (deployment bindings, ownership, registry, roles, backing, and every EVM lane budget); then submit proposal id 19.
+5. **Readiness gate and submission.** `./shell/ccip/check_rollout_readiness.sh` must be green for mainnet and all four chains (deployment bindings, ownership, registry, the Kernel executor and the `RolesAdmin` admin, backing, and every EVM lane budget); then submit proposal id 19. The local `admin`, `bridge_admin` and `emergency` roles of a burn/mint chain are reported rather than gated, since the setup batch grants a missing one.
 6. **Setup (per chain, DAO MS, during the voting window).**
 
     ```bash
