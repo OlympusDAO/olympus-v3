@@ -37,8 +37,10 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
 ///         Remote token and remote pool addresses are exactly 32 bytes: the ABI encoding of an
 ///         EVM address, or the raw account address of an SVM chain, the only length that the
-///         CCIP ramps accept on every generation in service. Every operation on the pool is
-///         emitted by this contract in addition to the events that the pool emits itself.
+///         CCIP ramps accept on every generation in service. The implementing contract checks
+///         the length only; the shape of an EVM value is validated by the tooling that builds
+///         the call. Every operation on the pool is emitted by this contract in addition to the
+///         events that the pool emits itself.
 interface ICCIPTokenPoolConfig {
     // ========== ERRORS ========== //
 

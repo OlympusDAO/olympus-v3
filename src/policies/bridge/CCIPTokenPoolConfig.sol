@@ -107,7 +107,9 @@ contract CCIPTokenPoolConfig is
     ///         any other length at send time, the 2.0.0 on-ramp unpads a 32-byte EVM remote token
     ///         to 20 bytes, and the source pool of an EVM message is delivered as its ABI
     ///         encoding, which the destination pool matches byte for byte against its accepted
-    ///         remote pools.
+    ///         remote pools. The policy checks the length only; the shape of an EVM value, a
+    ///         left-padded address outside the range reserved for precompiles, is validated by
+    ///         the tooling that builds the call.
     uint256 internal constant _REMOTE_ADDRESS_LENGTH = 32;
 
     /// @notice The minimum length of the return data of a successful `typeAndVersion()` call:
@@ -956,7 +958,8 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @notice Reverts with `CCIPTokenPoolConfig_InvalidRemoteAddressLength` unless
-    ///         `remoteAddress_` is exactly `_REMOTE_ADDRESS_LENGTH` bytes long.
+    ///         `remoteAddress_` is exactly `_REMOTE_ADDRESS_LENGTH` bytes long. The length is
+    ///         the only check: the shape of an EVM value is validated by the tooling.
     /// @param  remoteAddress_ The remote token or remote pool address to check.
     function _requireRemoteAddressLength(bytes calldata remoteAddress_) internal pure {
         if (remoteAddress_.length != _REMOTE_ADDRESS_LENGTH) {

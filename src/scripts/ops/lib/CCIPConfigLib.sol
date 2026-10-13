@@ -40,9 +40,12 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        the trusted remote for removal);
 ///      - `CCIP.minimumPoolBacking` is the funding target of the canonical lock/release pool.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
-///      or a disabled rate limiter reverts with a message naming the key, and a remote token or
-///      remote pool that is not 32 bytes long (the only length the config policy and the CCIP
-///      ramps accept) with a message naming the route and the field.
+///      or a disabled rate limiter reverts with a message naming the key, a timelock delay
+///      outside the bound of the timelock and an EVM periphery gas limit below
+///      `MIN_EVM_PERIPHERY_GAS_LIMIT` with a message naming the key or the route, and a remote
+///      token or remote pool that is not 32 bytes long (the only length the config policy and
+///      the CCIP ramps accept) or, toward an EVM remote chain, not a left-padded EVM address
+///      with a message naming the route and the field.
 library CCIPConfigLib {
     using stdJson for string;
 
@@ -62,8 +65,33 @@ library CCIPConfigLib {
 
     /// @notice The length of a remote token or remote pool address, in bytes: the ABI encoding
     ///         of an EVM address, or the raw account address of an SVM chain. The config policy
-    ///         rejects any other length, so an override in `env.json` is checked here first.
+    ///         rejects any other length and checks nothing else, so an override in `env.json`
+    ///         is checked here first, together with the shape of an EVM value.
     uint256 internal constant REMOTE_ADDRESS_LENGTH = 32;
+
+    /// @notice The smallest value of a remote token or remote pool address toward an EVM remote
+    ///         chain. A 32-byte EVM value is accepted when it is a left-padded address, at most
+    ///         `type(uint160).max`, that is not in the range the ramps reserve for precompiles,
+    ///         below this value: the 1.6 fee quoter rejects any other value at send time and the
+    ///         2.0.0 on-ramp requires the padding to be zero.
+    uint256 internal constant MIN_EVM_REMOTE_ADDRESS = 1024;
+
+    /// @notice The smallest desired `timelockDelay`, in seconds: the value of
+    ///         `MIN_TIMELOCK_DELAY` of `CCIPTokenPoolConfigTimelock`, whose constructor and
+    ///         delay setter enforce the bound.
+    uint48 internal constant MIN_TIMELOCK_DELAY = 1 days;
+
+    /// @notice The largest desired `timelockDelay`, in seconds: the value of
+    ///         `MAX_TIMELOCK_DELAY` of `CCIPTokenPoolConfigTimelock`.
+    uint48 internal constant MAX_TIMELOCK_DELAY = 30 days;
+
+    /// @notice The smallest `gasLimit` of an enabled EVM periphery block, in gas: the budget of
+    ///         the destination `ccipReceive` call. It covers the catch path of
+    ///         `CCIPCrossChainBridge._ccipReceive`, which stores a failed message for a later
+    ///         retry and meters at about 215000 gas cold on the live mainnet periphery, with
+    ///         headroom; below it the catch path itself runs out of gas and the message parks
+    ///         in CCIP `FAILURE` instead of the periphery's retryable store.
+    uint32 internal constant MIN_EVM_PERIPHERY_GAS_LIMIT = 275_000;
 
     /// @notice The capacity of the disabled rate limiter configuration that the containment
     ///         functions of `CCIPTokenPoolConfig` write (`getDisabledRateLimiterConfig`), in
@@ -136,6 +164,9 @@ library CCIPConfigLib {
     // ========== DESIRED STATE ========== //
 
     /// @notice Reads the desired config policy parameters of a chain.
+    /// @dev `timelockDelay` must lie within `[MIN_TIMELOCK_DELAY, MAX_TIMELOCK_DELAY]`, the
+    ///      inclusive bound that the constructor and the delay setter of
+    ///      `CCIPTokenPoolConfigTimelock` enforce.
     function desiredConfig(
         string memory env_,
         string memory chain_
@@ -154,7 +185,21 @@ library CCIPConfigLib {
         config.rateLimitAdmin = env_.readAddress(string.concat(base, ".rateLimitAdmin"));
 
         require(config.gracePeriod != 0, "CCIPConfigLib: gracePeriod is zero");
-        require(config.timelockDelay != 0, "CCIPConfigLib: timelockDelay is zero");
+        require(
+            config.timelockDelay >= MIN_TIMELOCK_DELAY &&
+                config.timelockDelay <= MAX_TIMELOCK_DELAY,
+            string.concat(
+                "CCIPConfigLib: the value of ",
+                base,
+                ".timelockDelay is ",
+                _VM.toString(config.timelockDelay),
+                " seconds, outside the bound of the timelock [",
+                _VM.toString(MIN_TIMELOCK_DELAY),
+                ", ",
+                _VM.toString(MAX_TIMELOCK_DELAY),
+                "]"
+            )
+        );
     }
 
     /// @notice Reads the desired routes of a chain, sorted by remote chain name.
@@ -178,11 +223,12 @@ library CCIPConfigLib {
     /// @notice Reads the desired periphery states of a chain, sorted by remote chain name: one
     ///         entry per route that carries a `periphery` block. A route without the block is not
     ///         managed by the periphery reconciler.
-    /// @dev A block on an EVM route requires `gasLimit` and defaults the trusted remote to the
-    ///      remote chain's `olympus.periphery.CCIPCrossChainBridge`, overridable with an explicit
-    ///      `trustedRemote`; a block on an SVM route requires `gasLimit` and an explicit
-    ///      `svmReceiver` (bytes32). `enabled: false` on the block or on the route marks the
-    ///      trusted remote for removal, and no other field is read then.
+    /// @dev A block on an EVM route requires a `gasLimit` of at least
+    ///      `MIN_EVM_PERIPHERY_GAS_LIMIT` and defaults the trusted remote to the remote chain's
+    ///      `olympus.periphery.CCIPCrossChainBridge`, overridable with an explicit
+    ///      `trustedRemote`; a block on an SVM route requires `gasLimit`, zero included, and an
+    ///      explicit `svmReceiver` (bytes32). `enabled: false` on the block or on the route
+    ///      marks the trusted remote for removal, and no other field is read then.
     function desiredPeripheries(
         string memory env_,
         string memory chain_
@@ -455,7 +501,7 @@ library CCIPConfigLib {
             route.remoteToken.length != 0,
             string.concat("CCIPConfigLib: empty remote token for route ", remoteChain_)
         );
-        _requireRemoteAddressLength(route.remoteToken, "remote token", remoteChain_);
+        _requireRemoteAddress(route.remoteToken, "remote token", remoteChain_);
 
         string memory poolsKey = string.concat(base, ".remotePools");
         if (_VM.keyExistsJson(env_, poolsKey)) {
@@ -473,7 +519,7 @@ library CCIPConfigLib {
                 route.remotePools[i].length != 0,
                 string.concat("CCIPConfigLib: empty remote pool for route ", remoteChain_)
             );
-            _requireRemoteAddressLength(route.remotePools[i], "remote pool", remoteChain_);
+            _requireRemoteAddress(route.remotePools[i], "remote pool", remoteChain_);
         }
 
         route.outbound = _readConfig(env_, string.concat(base, ".outboundRateLimit"));
@@ -522,13 +568,17 @@ library CCIPConfigLib {
         }
 
         // A zero gas limit is meaningful only toward an SVM chain (a token-only transfer with
-        // no receiver call); the EVM periphery always delivers data, which a zero budget would
-        // make undeliverable.
+        // no receiver call); the EVM periphery always delivers data, and its receiver needs the
+        // floor to record a failed message rather than run out of gas.
         require(
-            periphery.gasLimit != 0,
+            periphery.gasLimit >= MIN_EVM_PERIPHERY_GAS_LIMIT,
             string.concat(
-                "CCIPConfigLib: zero gas limit for the EVM periphery of route ",
-                remoteChain_
+                "CCIPConfigLib: the gas limit of the EVM periphery of route ",
+                remoteChain_,
+                " is ",
+                _VM.toString(periphery.gasLimit),
+                ", below the floor of ",
+                _VM.toString(MIN_EVM_PERIPHERY_GAS_LIMIT)
             )
         );
 
@@ -598,7 +648,10 @@ library CCIPConfigLib {
         }
     }
 
-    function _requireRemoteAddressLength(
+    /// @dev Reverts unless `value_` is `REMOTE_ADDRESS_LENGTH` bytes long and, toward an EVM
+    ///      remote chain, a left-padded EVM address at or above `MIN_EVM_REMOTE_ADDRESS`. A
+    ///      value toward an SVM remote chain is checked for its length only.
+    function _requireRemoteAddress(
         bytes memory value_,
         string memory label_,
         string memory remoteChain_
@@ -614,6 +667,22 @@ library CCIPConfigLib {
                 _VM.toString(value_.length),
                 " bytes long, expected ",
                 _VM.toString(REMOTE_ADDRESS_LENGTH)
+            )
+        );
+        if (ChainUtils._isSVMChain(remoteChain_)) return;
+
+        uint256 value = abi.decode(value_, (uint256));
+        require(
+            value <= type(uint160).max && value >= MIN_EVM_REMOTE_ADDRESS,
+            string.concat(
+                "CCIPConfigLib: the ",
+                label_,
+                " of route ",
+                remoteChain_,
+                " is not a left-padded EVM address at or above ",
+                _VM.toString(MIN_EVM_REMOTE_ADDRESS),
+                ": ",
+                _VM.toString(value_)
             )
         );
     }
