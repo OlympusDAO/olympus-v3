@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: MIT
-// forge-lint: disable-start(event-fields)
 pragma solidity ^0.8.4;
 
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
@@ -95,6 +94,10 @@ interface ICCIPTokenPoolAdmin is ICCIPTokenPoolGetters {
     /// @param remotePoolAddress The remote pool address removed.
     event RemotePoolRemoved(uint64 indexed remoteChainSelector, bytes remotePoolAddress);
 
+    // These four events mirror the Chainlink `TokenPool` declarations, which index none of
+    // their fields; an `indexed` field here would change the topic layout that readers decode.
+    // forge-lint: disable-start(event-fields)
+
     /// @notice Emitted when an address is added to the sender allowlist.
     /// @param sender The address added.
     event AllowListAdd(address sender);
@@ -111,6 +114,8 @@ interface ICCIPTokenPoolAdmin is ICCIPTokenPoolGetters {
     /// @notice Emitted when the rate limit admin is set.
     /// @param rateLimitAdmin The rate limit admin set.
     event RateLimitAdminSet(address rateLimitAdmin);
+
+    // forge-lint: disable-end(event-fields)
 
     /// @notice Emitted when an ownership transfer is requested.
     /// @param from The current owner.

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
-// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run with its message.
+// forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -189,6 +192,7 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
                 );
                 continue;
             }
+            // The queue timestamps are read by the script at simulation time
             // forge-lint: disable-next-line(block-timestamp)
             if (block.timestamp > action.expiresAt) {
                 console2.log(
@@ -830,3 +834,5 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
         );
     }
 }
+
+// forge-lint: disable-end(calls-loop,custom-errors,require-revert-in-loop)

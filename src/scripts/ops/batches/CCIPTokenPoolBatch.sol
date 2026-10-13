@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
-// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run with its message.
+// forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -1012,3 +1015,5 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         return CCIPConfigLib.pendingOwner(tokenPool_);
     }
 }
+
+// forge-lint: disable-end(calls-loop,custom-errors,require-revert-in-loop)

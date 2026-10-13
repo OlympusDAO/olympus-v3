@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
-// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run with its message.
+// forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -32,6 +35,9 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// The one-function interface of the legacy bridge is declared next to its only consumer
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice The flag the legacy LayerZero `CrossChainBridge` policy gates its send path on. A
 ///         minimal local interface, so this batch does not import the LayerZero contract graph.
@@ -1120,3 +1126,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         return ROLESv1(address(Kernel(kernel_).getModuleForKeycode(toKeycode("ROLES"))));
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(calls-loop,custom-errors,require-revert-in-loop)

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
-// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run with its message.
+// forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 // Scripting
 import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
@@ -254,6 +257,7 @@ library CCIPConfigLib {
     }
 
     /// @notice Encodes a base58 SVM public key as the 32 packed bytes that the pool expects.
+    // Kept as the named SVM counterpart of `encodeEvmAddress`
     // forge-lint: disable-next-item(internal-function-used-once)
     function encodeSvmAddress(
         string memory base58_
@@ -357,6 +361,7 @@ library CCIPConfigLib {
     }
 
     /// @notice Returns whether a set of encoded addresses contains an entry.
+    // Kept as a named membership test beside the other comparison helpers of the library
     // forge-lint: disable-next-item(internal-function-used-once)
     function containsBytes(
         bytes[] memory set_,
@@ -636,3 +641,5 @@ library CCIPConfigLib {
         return a.length < b.length;
     }
 }
+
+// forge-lint: disable-end(calls-loop,custom-errors,require-revert-in-loop)

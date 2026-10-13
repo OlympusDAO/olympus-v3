@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
-// forge-lint: disable-start(calls-loop, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Proposal code, run off-chain by forge to build and check the proposal: calls in loops are
+// simulated rather than paid for on-chain, and a failed check is meant to abort the run.
+// forge-lint: disable-start(calls-loop,require-revert-in-loop)
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -36,6 +39,9 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+
+// The proposal and the script that submits it share one file, like the other proposals here
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice OCG proposal that re-activates OHM bridging through Chainlink CCIP: it opens the
 ///         mainnet routes to Arbitrum, Optimism, Base and Berachain on the OHM token pool, and
@@ -870,7 +876,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     ///      isolated transaction under the block gas limit, and storing the file would spend most
     ///      of it.
     function _readEnv() internal view virtual returns (string memory env) {
-        /// forge-lint: disable-next-line(unsafe-cheatcode)
+        // The path is the constant `_ENV_PATH`: the tracked `env.json` and nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         return vm.readFile(_ENV_PATH);
     }
 
@@ -882,3 +889,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 contract CCIPTokenPoolConfigProposalScript is ProposalScript {
     constructor() ProposalScript(new CCIPTokenPoolConfigProposal()) {}
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(calls-loop,require-revert-in-loop)

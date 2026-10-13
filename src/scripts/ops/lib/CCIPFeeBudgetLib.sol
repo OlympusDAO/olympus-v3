@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
-// forge-lint: disable-start(require-revert-in-loop, boolean-cst, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: the calling scripts read one lane per loop iteration,
+// and a read that fails reverts to its caller, which aborts the run or reports the lane.
+// forge-lint: disable-start(require-revert-in-loop)
 
 // Scripting
 import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
 
 // Libraries
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+
+// The interfaces mirror the live fee contract ABIs for this reader alone, so they are declared
+// in the file of the library that reads through them.
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice The subset of the Chainlink `Router 1.2.0` surface the fee budget reader uses.
 /// @dev The interfaces of this file mirror the live deployed ABIs rather than the vendored
@@ -382,6 +389,7 @@ library CCIPFeeBudgetLib {
     /// @param raw_ The string to parse.
     /// @return version The parsed string; meaningless when `ok` is false.
     /// @return ok Whether the string had the expected form.
+    // Kept as a named parser so that the format it accepts can be tested on its own
     // forge-lint: disable-next-item(internal-function-used-once)
     function parseTypeAndVersion(
         string memory raw_
@@ -397,6 +405,8 @@ library CCIPFeeBudgetLib {
                 break;
             }
         }
+        // The boolean literals below are the `ok` element of the returned tuple, not conditions
+        // forge-lint: disable-start(boolean-cst)
         if (split == length || split == 0) return (version, false);
 
         (uint256 major, uint256 majorDigits, uint256 next) = _parseDigits(raw, split + 1);
@@ -413,6 +423,7 @@ library CCIPFeeBudgetLib {
             TypeAndVersion({raw: raw_, family: string(family), major: major, minor: minor}),
             true
         );
+        // forge-lint: disable-end(boolean-cst)
     }
 
     // ========== INTERNAL ========== //
@@ -542,7 +553,7 @@ library CCIPFeeBudgetLib {
         string memory versions_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        // The returns are shape-checked word by word before a field is read
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = feeQuoter_.staticcall(
             abi.encodeCall(ICCIPFeeQuoter20.getTokenTransferFeeConfig, (destSelector_, ohm_))
@@ -563,15 +574,17 @@ library CCIPFeeBudgetLib {
             lane_
         );
         if (_word(data, _FEE_QUOTER_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
-            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+            // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+            // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
             return (
-                // forge-lint: disable-next-line(unsafe-typecast)
                 uint32(_word(data, _FEE_QUOTER_ENTRY_GAS_WORD)),
                 true,
                 string.concat("OHM token entry, ", versions_)
             );
         }
 
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (ok, data) = feeQuoter_.staticcall(
             abi.encodeCall(ICCIPFeeQuoter20.getDestChainConfig, (destSelector_))
@@ -585,9 +598,10 @@ library CCIPFeeBudgetLib {
             "getDestChainConfig().defaultTokenDestGasOverhead",
             lane_
         );
-        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+        // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+        // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
         return (
-            // forge-lint: disable-next-line(unsafe-typecast)
             uint32(_word(data, _FEE_QUOTER_DEST_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", versions_, " (no OHM entry)")
@@ -603,7 +617,7 @@ library CCIPFeeBudgetLib {
         address ohm_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        // The returns are shape-checked word by word before a field is read
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRamp15.getTokenTransferFeeConfig, (ohm_))
@@ -624,15 +638,17 @@ library CCIPFeeBudgetLib {
             lane_
         );
         if (_word(data, _LEGACY_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
-            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+            // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+            // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
             return (
-                // forge-lint: disable-next-line(unsafe-typecast)
                 uint32(_word(data, _LEGACY_ENTRY_GAS_WORD)),
                 true,
                 string.concat("OHM token entry, ", onRampVersion_)
             );
         }
 
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (ok, data) = onRamp_.staticcall(abi.encodeCall(ICCIPFeeOnRamp15.getDynamicConfig, ()));
         _requireWords(ok, data, _LEGACY_DYNAMIC_CONFIG_WORDS, "getDynamicConfig", lane_);
@@ -643,9 +659,10 @@ library CCIPFeeBudgetLib {
             "getDynamicConfig().defaultTokenDestGasOverhead",
             lane_
         );
-        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+        // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+        // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
         return (
-            // forge-lint: disable-next-line(unsafe-typecast)
             uint32(_word(data, _LEGACY_DYNAMIC_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", onRampVersion_, " (no OHM entry)")
@@ -723,8 +740,8 @@ library CCIPFeeBudgetLib {
 
     function _word(bytes memory data_, uint256 index_) private pure returns (uint256 word) {
         // A word read past the length word of the array; the caller has checked the length
-        // solhint-disable-next-line no-inline-assembly
         // forge-lint: disable-next-item(inline-assembly)
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             word := mload(add(add(data_, _WORD_BYTES), mul(index_, _WORD_BYTES)))
         }
@@ -771,3 +788,7 @@ library CCIPFeeBudgetLib {
         require(value != address(0), string.concat("CCIPFeeBudgetLib: zero address for ", path));
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(require-revert-in-loop)

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// forge-lint: disable-start(reentrancy-events, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -197,6 +196,8 @@ contract CCIPTokenPoolConfig is
 
     /// @notice Reverts with `NotAuthorised` unless the caller holds the bridge rate limiter
     ///         role, is the config operator or holds the admin role.
+    // Declared as a modifier, like the two other authorization gates of this policy, so that a
+    // gated function states its gate in its signature.
     // forge-lint: disable-next-item(modifier-used-only-once)
     modifier onlyRateLimiterOrConfigOperatorOrAdmin() {
         _requireAuthorized(
@@ -788,6 +789,8 @@ contract CCIPTokenPoolConfig is
 
         uint256 length = update_.remotePoolAddresses.length;
         if (length == 0) revert CCIPTokenPoolConfig_RemotePoolsEmpty();
+        // The update is validated as a whole: its first invalid remote pool entry rejects it
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < length; ++i) {
             bytes calldata remotePool = update_.remotePoolAddresses[i];
             if (remotePool.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
@@ -803,6 +806,7 @@ contract CCIPTokenPoolConfig is
                 }
             }
         }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Validates the arguments of `removeChain`. See `validateRemoveChain`.
@@ -907,6 +911,9 @@ contract CCIPTokenPoolConfig is
     /// @param  remoteAddress_ The remote token or remote pool address to check.
     function _requireRemoteAddressLength(bytes calldata remoteAddress_) internal pure {
         if (remoteAddress_.length != _REMOTE_ADDRESS_LENGTH) {
+            // Also reached from the remote pool loop of `_validateAddChain`, which rejects the
+            // update on its first invalid entry.
+            // forge-lint: disable-next-line(require-revert-in-loop)
             revert CCIPTokenPoolConfig_InvalidRemoteAddressLength(remoteAddress_);
         }
     }
