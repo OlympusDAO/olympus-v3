@@ -184,7 +184,8 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < length; ++i) {
             QueuedConfigState storage state = states[i];
-            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, state.localKey);
+            bytes32 localKey = state.localKey;
+            bytes32 key = ConfigTimelockKeyLib.scope(expectedDestination, localKey);
             uint64 owner = _pendingActionIds[key];
             if (owner != actionId_) {
                 revert IConfigTimelockBatchQueue_ConfigKeyOwnershipInvalid(
@@ -198,15 +199,16 @@ abstract contract ConfigTimelockBatchQueue is TimelockBatchQueue, IConfigTimeloc
             bytes32 currentStateHash = _currentConfigStateHash(
                 actionId_,
                 index_,
-                state.localKey,
+                localKey,
                 action_
             );
-            if (currentStateHash != state.expectedStateHash) {
+            bytes32 expectedStateHash = state.expectedStateHash;
+            if (currentStateHash != expectedStateHash) {
                 revert IConfigTimelockBatchQueue_ConfigStateChanged(
                     actionId_,
                     index_,
                     key,
-                    state.expectedStateHash,
+                    expectedStateHash,
                     currentStateHash
                 );
             }

@@ -290,10 +290,12 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
 
         // Timelock readiness and expiry intentionally follow wall-clock timestamps.
         // forge-lint: disable-start(block-timestamp)
-        if (block.timestamp < action_.executableAt)
-            revert ITimelockBatchQueue_ActionNotReady(actionId_, action_.executableAt);
-        if (block.timestamp > action_.expiresAt)
-            revert ITimelockBatchQueue_ActionExpired(actionId_, action_.expiresAt);
+        uint48 executableAt = action_.executableAt;
+        if (block.timestamp < executableAt)
+            revert ITimelockBatchQueue_ActionNotReady(actionId_, executableAt);
+        uint48 expiresAt = action_.expiresAt;
+        if (block.timestamp > expiresAt)
+            revert ITimelockBatchQueue_ActionExpired(actionId_, expiresAt);
         // forge-lint: disable-end(block-timestamp)
     }
 
