@@ -18,9 +18,11 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
+import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
 // Libraries
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {CCIPQueueLib} from "src/scripts/ops/lib/CCIPQueueLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // Contracts
@@ -44,12 +46,17 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE}
 ///           `EmergencyMS` variants (Emergency MS): containment, which writes the disabled rate
 ///           limiter configuration to one or every route of the pool. Available to the
 ///           emergency, admin, bridge admin and bridge rate limiter roles, whether or not the
-///           config policy is enabled.
+///           config policy is enabled. Containment leaves the queued actions of the config
+///           timelock executable; each run lists the unresolved ones.
 ///         - `disablePolicies` (DAO MS as the local `admin` on a burn/mint chain) and its
 ///           `EmergencyMS` variant (Emergency MS): disable the config timelock and the config
 ///           policy, which stops queueing and execution but not transfers; containment stays
 ///           available. Both owners need `emergency` or `admin`, the gate of `disable()`, which
 ///           on mainnet the DAO MS does not hold.
+///         - `haltAll` (DAO MS as the local `admin` on a burn/mint chain) and its `EmergencyMS`
+///           variant (Emergency MS): the full halt, which contains every route and disables both
+///           policies in one batch, so that no transfer passes and no queued action executes.
+///           Same gate as `disablePolicies`.
 ///
 ///         Route configuration runs through `CCIPRouteReconcileBatch` and the config timelock.
 contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
@@ -203,8 +210,15 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///         Not gated on the config policy being enabled. Skipped when the route is already
     ///         contained. Restoring the approved limits afterwards is a declarative change:
     ///         `CCIPRouteReconcileBatch.reconcileRoutes` queues `setChainRateLimits` from
-    ///         `env.json`. Messages that trip the contained inbound bucket fail on this chain and
-    ///         need manual execution after the limits are restored.
+    ///         `env.json` for a route named in its `restoreContained` args. Messages that trip
+    ///         the contained inbound bucket fail on this chain and need manual execution after
+    ///         the limits are restored.
+    ///
+    ///         Containment does not stop a queued action of the config timelock: a matured one
+    ///         executes permissionlessly while both policies are enabled, and an `addChain`
+    ///         opens a route with the limits it carries. The run lists the unresolved queue and
+    ///         points at `haltAll`, which disables both policies with the containment, and at
+    ///         the cancellation entry points of `CCIPRouteReconcileBatch`.
     ///
     ///         Args file: `{"functions": [{"name": "disableChain", "args": {"remoteChain": "solana"}}]}`.
     ///
@@ -280,6 +294,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
             console2.log("Added: CCIPTokenPoolConfig.disableChain");
         }
         _expectedDisabledSelectors.push(chainSelector);
+        _logContainmentQueue(config);
 
         _setPostBatchValidateSelector(this._validateDisabled.selector);
     }
@@ -289,7 +304,8 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @dev    `disableAllChainsEmergencyMS` is the same batch with the Emergency MS as owner.
     ///         Not gated on the config policy being enabled. Skipped when every route is already
     ///         contained, and when no route is configured, which the config policy would reject
-    ///         (`CCIPTokenPoolConfig_NoRoutesConfigured`). See `disableChain` for the recovery.
+    ///         (`CCIPTokenPoolConfig_NoRoutesConfigured`). See `disableChain` for the recovery
+    ///         and for the queued actions that containment does not stop.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
@@ -311,7 +327,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
-        _planContainAllChains();
+        _planContainAllChains(false);
         proposeBatch();
     }
 
@@ -333,12 +349,14 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
     {
         _validateArgsFileEmpty(argsFile_);
-        _planContainAllChains();
+        _planContainAllChains(false);
         proposeBatch();
     }
 
     /// @notice Plans the containment of every configured route.
-    function _planContainAllChains() internal {
+    /// @param  halting_ Whether the batch also disables both policies (`haltAll`), in which
+    ///         case the queue is listed by the halt rather than here.
+    function _planContainAllChains(bool halting_) internal {
         _skipHeartbeatValidation = true;
 
         (address config, address pool) = _containmentAddresses();
@@ -366,6 +384,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
             );
             console2.log("Added: CCIPTokenPoolConfig.disableAllChains");
         }
+        if (!halting_) _logContainmentQueue(config);
 
         _setPostBatchValidateSelector(this._validateDisabled.selector);
     }
@@ -399,7 +418,7 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         _validateArgsFileEmpty(argsFile_);
-        _planDisablePolicies();
+        _planDisablePolicies("disablePoliciesEmergencyMS");
         proposeBatch();
     }
 
@@ -421,28 +440,107 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
         setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
     {
         _validateArgsFileEmpty(argsFile_);
-        _planDisablePolicies();
+        _planDisablePolicies("disablePoliciesEmergencyMS");
         proposeBatch();
     }
 
     /// @notice Plans the disable of the config timelock and the config policy.
-    function _planDisablePolicies() internal {
+    /// @param  emergencyEntry_ The Emergency MS entry point named by the gate message.
+    function _planDisablePolicies(string memory emergencyEntry_) internal {
         _skipHeartbeatValidation = true;
 
         address kernel = _envAddressNotZero("olympus.Kernel");
         address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
         address timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
-        ROLESv1 roles = _roles(kernel);
-        require(
-            roles.hasRole(_owner, EMERGENCY_ROLE) || roles.hasRole(_owner, ADMIN_ROLE),
-            "CCIPTokenPoolConfigBatch: the batch owner holds neither emergency nor admin; the DAO MS holds admin on the burn/mint chains only, so on mainnet use disablePoliciesEmergencyMS or an OCG proposal"
-        );
+        _requireDisableAuthority(kernel, emergencyEntry_);
 
         console2.log("\n=== Disable the CCIP config timelock and config policy ===");
         _planDisable(timelock, "CCIPTokenPoolConfigTimelock");
         _planDisable(config, "CCIPTokenPoolConfig");
 
         _setPostBatchValidateSelector(this._validateDisabledPolicies.selector);
+    }
+
+    /// @notice Halts the bridge in one batch (DAO MS as the local `admin` on a burn/mint chain,
+    ///         or any `emergency` or `admin` holder as owner): contains every configured route
+    ///         and disables the config timelock and the config policy, so that no transfer
+    ///         passes and no queued action, matured or not, executes.
+    /// @dev    `haltAllEmergencyMS` is the same batch with the Emergency MS as owner. On mainnet
+    ///         the DAO MS holds neither `emergency` nor `admin`, so the halt there is the
+    ///         Emergency MS variant or an OCG proposal. The containment is planned as in
+    ///         `disableAllChains` and the disables as in `disablePolicies`, with the same skips:
+    ///         a contained route, a disabled policy and an empty pool add nothing. The queued
+    ///         actions of the timelock are kept and may expire while the policies are disabled;
+    ///         the run lists the unresolved ones.
+    ///
+    ///         Recovery: cancel the queued actions that must not survive
+    ///         (`CCIPRouteReconcileBatch.cancelQueuedAction` or `cancelQueuedActionEmergency`),
+    ///         `reEnable` both policies within the grace window (the admin `enable` path
+    ///         afterwards), then restore the limits through
+    ///         `CCIPRouteReconcileBatch.reconcileRoutes` with every route named in its
+    ///         `restoreContained` args.
+    ///
+    ///         Reverts if:
+    ///         - The args file is not empty.
+    ///         - The batch owner holds neither `emergency` nor `admin`.
+    ///         - The config policy is neither the owner nor the rate limit admin of the pool
+    ///           (before the handover, containment belongs to the pool owner through
+    ///           `CCIPTokenPoolBatch.emergencyShutdownAll`).
+    /// @param useDaoMS_ Whether to use the DAO MS as the owner.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function haltAll(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        _validateArgsFileEmpty(argsFile_);
+        _planHaltAll();
+        proposeBatch();
+    }
+
+    /// @notice Halts the bridge in one batch with the Emergency MS as owner.
+    /// @dev    Same behaviour as `haltAll`.
+    /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
+    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
+    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
+    /// @param signature_ Optional pre-computed signature for the batch.
+    function haltAllEmergencyMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    )
+        external
+        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
+    {
+        _validateArgsFileEmpty(argsFile_);
+        _planHaltAll();
+        proposeBatch();
+    }
+
+    /// @notice Plans the full halt: the containment of every route, then the disable of the
+    ///         config timelock and the config policy.
+    function _planHaltAll() internal {
+        _skipHeartbeatValidation = true;
+
+        // The disable gate is checked before anything is planned, so that an owner without it
+        // is refused with the halt's own message
+        _requireDisableAuthority(_envAddressNotZero("olympus.Kernel"), "haltAllEmergencyMS");
+
+        console2.log("\n=== Full halt: contain every route and disable both policies ===");
+        _planContainAllChains(true);
+        _planDisablePolicies("haltAllEmergencyMS");
+        _logUnresolvedQueue(true);
+
+        // The halt validator replaces the ones the two planning helpers set
+        _setPostBatchValidateSelector(this._validateHalted.selector);
     }
 
     // =========== VALIDATION =========== //
@@ -546,6 +644,28 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
             console2.log("  Route", selector, "is contained");
         }
         console2.log("Containment post-batch validation passed");
+    }
+
+    /// @notice Validates the state after `haltAll`: every configured route of the pool is
+    ///         contained and both policies are disabled.
+    function _validateHalted() external view {
+        address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        address timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
+        address pool = _envAddressNotZero(CCIPConfigLib.poolKey(chain));
+
+        console2.log("\nValidating haltAll post-batch state");
+        uint64[] memory selectors = ICCIPTokenPoolAdmin(pool).getSupportedChains();
+        for (uint256 i = 0; i < selectors.length; ++i) {
+            require(
+                ICCIPTokenPoolConfig(config).isChainDisabled(selectors[i]),
+                string.concat("Route ", vm.toString(selectors[i]), " is not contained")
+            );
+            console2.log("  Route", selectors[i], "is contained");
+        }
+        require(!IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is still enabled");
+        require(!IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is still enabled");
+        console2.log("  Both policies are disabled");
+        console2.log("haltAll post-batch validation passed");
     }
 
     // =========== PLANNING HELPERS =========== //
@@ -705,6 +825,54 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     }
 
     // =========== INTERNAL HELPERS =========== //
+
+    /// @notice Reverts unless the batch owner holds `emergency` or `admin`, the gate of
+    ///         `disable()` on both policies.
+    function _requireDisableAuthority(
+        address kernel_,
+        string memory emergencyEntry_
+    ) internal view {
+        ROLESv1 roles = _roles(kernel_);
+        require(
+            roles.hasRole(_owner, EMERGENCY_ROLE) || roles.hasRole(_owner, ADMIN_ROLE),
+            string.concat(
+                "CCIPTokenPoolConfigBatch: the batch owner holds neither emergency nor admin; the DAO MS holds admin on the burn/mint chains only, so on mainnet use ",
+                emergencyEntry_,
+                " or an OCG proposal"
+            )
+        );
+    }
+
+    /// @notice Lists the unresolved queued actions after a containment plan, with the sentence
+    ///         that fits the live lifecycle state of the two policies.
+    function _logContainmentQueue(address config_) internal view {
+        address timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
+        _logUnresolvedQueue(!IEnabler(config_).isEnabled() || !IEnabler(timelock).isEnabled());
+    }
+
+    /// @notice Lists the unresolved queued actions of the config timelock. Containment does not
+    ///         stop them: a matured action executes permissionlessly while both policies are
+    ///         enabled, and an `addChain` opens a route with the limits it carries.
+    /// @param  executionBlocked_ Whether a policy is, or is left by this batch, disabled, which
+    ///         blocks the execution until both are enabled again.
+    function _logUnresolvedQueue(bool executionBlocked_) internal view {
+        IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
+            _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock")
+        );
+        uint64[] memory ids = CCIPQueueLib.unresolvedActionIds(timelock);
+        console2.log("\n--- Unresolved queued actions on the config timelock:", ids.length, "---");
+        if (ids.length == 0) return;
+        console2.log(
+            executionBlocked_
+                ? "Their execution is blocked while a policy is disabled. Before reEnable, cancel the ones that must not survive (CCIPRouteReconcileBatch.cancelQueuedAction or cancelQueuedActionEmergency); an action whose window closes meanwhile expires and must be cancelled and queued again."
+                : "WARNING: containment does not stop them. A matured action executes permissionlessly while both policies are enabled, and an addChain opens a route with the limits it carries. Disable both policies together with the containment through haltAll or haltAllEmergencyMS, or cancel them (CCIPRouteReconcileBatch.cancelQueuedAction or cancelQueuedActionEmergency)."
+        );
+        // The queue timestamps are read by the script at simulation time
+        uint256 timestamp = block.timestamp;
+        for (uint256 i = 0; i < ids.length; ++i) {
+            CCIPQueueLib.logAction(ids[i], timelock.getQueuedAction(ids[i]), timestamp);
+        }
+    }
 
     function _containmentAddresses() internal view returns (address config, address pool) {
         address kernel = _envAddressNotZero("olympus.Kernel");
