@@ -6,6 +6,7 @@ import {console2} from "forge-std/console2.sol";
 
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 import {Base58} from "@base58-solidity-1.0.3/Base58.sol";
+import {SafeCast} from "src/libraries/SafeCast.sol";
 
 import {ICCIPCrossChainBridge} from "src/periphery/interfaces/ICCIPCrossChainBridge.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -33,7 +34,9 @@ contract BridgeCCIPScript is WithEnvironment {
 
         address ohmAddress = _envAddressNotZero("olympus.legacy.OHM");
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        uint64 dstChainId = uint64(_envUintNotZero(toChain_, "external.ccip.ChainSelector"));
+        uint64 dstChainId = SafeCast.encodeUInt64(
+            _envUintNotZero(toChain_, "external.ccip.ChainSelector")
+        );
         bytes32 toAddress = _getSVMAddress(to_);
 
         // Approve spending of OHM by the bridge
@@ -79,7 +82,9 @@ contract BridgeCCIPScript is WithEnvironment {
 
         address ohmAddress = _envAddressNotZero("olympus.legacy.OHM");
         address bridgeAddress = _envAddressNotZero("olympus.periphery.CCIPCrossChainBridge");
-        uint64 dstChainId = uint64(_envUintNotZero(toChain_, "external.ccip.ChainSelector"));
+        uint64 dstChainId = SafeCast.encodeUInt64(
+            _envUintNotZero(toChain_, "external.ccip.ChainSelector")
+        );
 
         // Approve spending of OHM by the bridge
         console2.log("Approving spending of OHM by the bridge");
