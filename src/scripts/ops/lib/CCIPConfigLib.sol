@@ -38,7 +38,7 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        remote chain (`gasLimit` with a defaulted `trustedRemote` for EVM, `gasLimit` and an
 ///        explicit `svmReceiver` for SVM, and an optional `enabled` whose `false` value marks
 ///        the trusted remote for removal);
-///      - `CCIP.minimumPoolBacking` is the funding target of the canonical lock/release pool.
+///      - `CCIP.minimumPoolBacking` is the minimum OHM backing of the canonical lock/release pool.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
 ///      or a disabled rate limiter reverts with a message naming the key, a timelock delay
 ///      outside the bound of the timelock and an EVM periphery gas limit below
@@ -253,8 +253,9 @@ library CCIPConfigLib {
         }
     }
 
-    /// @notice Reads the minimum OHM backing of the canonical lock/release pool: the OHM
-    ///         outstanding on the burn/mint chains that the pool must be able to release.
+    /// @notice Reads the minimum OHM backing of the canonical lock/release pool: the OHM supply
+    ///         outstanding on the burn/mint chains that the pool must be able to release,
+    ///         rounded up to a whole OHM.
     function minimumPoolBacking(
         string memory env_,
         string memory chain_

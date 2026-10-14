@@ -13,8 +13,25 @@
 #   3.  Cross-checks via LayerZero Scan API (paginated, supplementary)
 #   4.  Queries OHM totalSupply, verifies no CCIP BurnMint pools on L2s
 #   5.  Reports the initialBridgedSupply value for LZBridgeGatewayBatch
+#   6.  Queries the Solana OHM mint supply and reports the CCIP pool funding
+#       amount for CCIPTokenPoolBatch.fundPool
 #
 # Bridged supply = totalSupply(OHM_Arb) + totalSupply(OHM_Opt) + totalSupply(OHM_Base) + totalSupply(OHM_Bera)
+#
+# CCIP pool funding amount = minimumPoolBacking - free liquidity of the pool,
+#   where free liquidity = pool balance - Solana mint supply
+#   - The mainnet lock/release pool releases against burns on the burn/mint
+#     chains from its own balance, which also holds the OHM locked for Solana
+#     (the Solana mint supply); the funding brings the free part of the
+#     balance up to the key, so the balance after the transfer is the key
+#     plus the Solana mint supply and a release toward Ethereum of any part
+#     of that supply leaves the balance at or above the key
+#   - minimumPoolBacking of mainnet in env.json is the bridged supply rounded
+#     up to a whole OHM; the post-batch check of fundPool, the proposal build
+#     and the proposal checker compare the raw pool balance with it
+#   - Run it with no Ethereum-Solana transfer in flight (a lock not yet minted
+#     on Solana or a burn not yet released on Ethereum counts as free liquidity
+#     and understates the amount) and build fundPool right after it
 #
 # Why this is correct:
 #   - All OHM on non-canonical chains was minted by the old CrossChainBridge
@@ -28,6 +45,9 @@
 # Prerequisites: cast (foundry), jq, python3, ALCHEMY_API_KEY in env or .env
 #   If using Alchemy, all networks (Ethereum, Arbitrum, Optimism, Base, Berachain)
 #   must be enabled in the Alchemy dashboard: https://dashboard.alchemy.com/apps/<app-id>/networks
+#   curl serves the LayerZero Scan cross-check (skipped without it) and the Solana mint supply
+#   (an error without it); the latter is read from the public Solana RPC (override via SOLANA_RPC_URL).
+#   The script also needs the mainnet minimumPoolBacking key in env.json and exits without it.
 #
 # Usage:
 #   ./shell/calc_bridged_supply.sh
@@ -119,6 +139,25 @@ declare -A RPC=(
 
 # --- CCIP LockRelease pool (Ethereum, for Solana bridge) ---
 CCIP_LOCK_RELEASE_POOL="0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD"
+
+# --- Solana OHM mint (loaded from env.json) and RPC, for the CCIP pool funding amount ---
+SOLANA_RPC_URL="${SOLANA_RPC_URL:-https://api.mainnet-beta.solana.com}"
+SOLANA_OHM_MINT=$(jq -r '.current.solana.olympus.legacy.OHM // empty' "$ENV_JSON")
+if [[ -z "$SOLANA_OHM_MINT" ]]; then
+    printf '%bError: Solana OHM mint not found in env.json (key: current.solana.olympus.legacy.OHM)%b\n' "${RED}" "${NC}"
+    exit 1
+fi
+
+# --- Minimum backing of the CCIP pool (loaded from env.json), which the funding must reach ---
+CCIP_MIN_POOL_BACKING=$(jq -r '.current.mainnet.olympus.config.CCIP.minimumPoolBacking // empty' "$ENV_JSON")
+if [[ ! "$CCIP_MIN_POOL_BACKING" =~ ^[0-9]+$ ]]; then
+    printf '%bError: minimumPoolBacking not found in env.json (key: current.mainnet.olympus.config.CCIP.minimumPoolBacking)%b\n' "${RED}" "${NC}"
+    exit 1
+fi
+CCIP_FUND_ARGS_FILE="src/scripts/ops/batches/args/CCIPTokenPoolBatch_fundPool.json"
+
+# --- One OHM in base units (9 decimals): the rounding unit of minimumPoolBacking ---
+OHM_UNIT=1000000000
 
 # --- CCIP TokenAdminRegistry addresses (to check for BurnMint pools) ---
 declare -A CCIP_REGISTRY=(
@@ -727,6 +766,7 @@ calculate_supply() {
         --rpc-url "${RPC[ethereum]}")
 
     if [[ "$ccip_bal" != "ERROR" ]]; then
+        CCIP_POOL_BALANCE="$ccip_bal"
         info "OHM locked in CCIP LockRelease pool (ETH): $(fmt_ohm "$ccip_bal") OHM"
         info "This is Ethereum-side custody for Solana bridging. Does NOT affect L2 supply"
     else
@@ -759,8 +799,11 @@ calculate_supply() {
     for chain in "${BRIDGE_CHAINS[@]}"; do
         if [[ -n "${SUPPLY[$chain]:-}" ]]; then
             bridged_supply=$((bridged_supply + SUPPLY[$chain]))
+        else
+            BRIDGED_SUPPLY_COMPLETE=false
         fi
     done
+    BRIDGED_SUPPLY="$bridged_supply"
 
     # --- Report ---
     section "RESULT: Initial Bridged Supply"
@@ -795,6 +838,129 @@ calculate_supply() {
 }
 
 # =====================================================================
+# STEP 5: Solana mint supply & CCIP pool funding amount
+#
+# The mainnet lock/release pool releases against burns on the burn/mint
+# chains from its own balance, which also holds the OHM locked for
+# Solana (the Solana mint supply). The funding amount is
+# olympus.config.CCIP.minimumPoolBacking of mainnet in env.json (the
+# bridged supply above rounded up to a whole OHM) minus the free liquidity
+# of the pool (its balance minus the Solana mint supply), so that the
+# balance after the transfer is the key plus the Solana mint supply.
+# CCIPTokenPoolBatch.fundPool transfers the amount read from its args
+# file, and its post-batch check requires the resulting balance to be at
+# or above the key.
+# =====================================================================
+BRIDGED_SUPPLY=0
+BRIDGED_SUPPLY_COMPLETE=true
+CCIP_POOL_BALANCE=""
+
+# Read the OHM supply of the Solana mint through getTokenSupply; prints
+# "<amount>:<slot>" on success or "ERROR" on any failure, a mint whose
+# decimals are not 9 included.
+solana_mint_supply() {
+    local response
+    if ! response=$(curl -sf --max-time 20 "$SOLANA_RPC_URL" -X POST \
+        -H 'Content-Type: application/json' \
+        -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getTokenSupply\",\"params\":[\"$SOLANA_OHM_MINT\"]}" 2>/dev/null); then
+        echo "ERROR"
+        return
+    fi
+    echo "$response" | jq -r '
+        if (.result.value.decimals == 9) and (.result.value.amount | test("^[0-9]+$"))
+        then "\(.result.value.amount):\(.result.context.slot)"
+        else "ERROR" end' 2>/dev/null || echo "ERROR"
+}
+
+report_ccip_funding() {
+    section "STEP 5: Solana Mint Supply & CCIP Pool Funding Amount"
+
+    if ! command -v curl &>/dev/null; then
+        err "curl not available. Cannot read the Solana mint supply for the CCIP pool funding amount"
+        return
+    fi
+    if ! $BRIDGED_SUPPLY_COMPLETE; then
+        err "The bridged supply is incomplete (a totalSupply query failed above). Cannot compute the CCIP pool funding amount"
+        return
+    fi
+    if [[ -z "$CCIP_POOL_BALANCE" ]]; then
+        err "The CCIP pool balance could not be read above. Cannot compute the CCIP pool funding amount"
+        return
+    fi
+
+    local reading solana_supply solana_slot
+    reading=$(solana_mint_supply)
+    if [[ "$reading" == "ERROR" ]]; then
+        err "Could not read the supply of the Solana OHM mint $SOLANA_OHM_MINT from $SOLANA_RPC_URL"
+        return
+    fi
+    solana_supply="${reading%%:*}"
+    solana_slot="${reading##*:}"
+    info "Solana OHM mint:     $SOLANA_OHM_MINT"
+    info "Solana mint supply:  $(fmt_ohm "$solana_supply") OHM  (raw: $solana_supply, slot $solana_slot)"
+
+    # The key is the bridged supply rounded up to a whole OHM
+    local expected_backing
+    expected_backing=$(((BRIDGED_SUPPLY + OHM_UNIT - 1) / OHM_UNIT * OHM_UNIT))
+    if [[ "$CCIP_MIN_POOL_BACKING" -eq "$expected_backing" ]]; then
+        ok "minimumPoolBacking in env.json ($CCIP_MIN_POOL_BACKING) is the bridged supply rounded up to a whole OHM"
+    else
+        warn "minimumPoolBacking in env.json is $CCIP_MIN_POOL_BACKING; the bridged supply rounded up to a whole OHM is $expected_backing. Update the key"
+    fi
+
+    # Derivation, all in OHM base units (9 decimals):
+    #   free      = pool balance - Solana mint supply (the OHM not locked for Solana)
+    #   amount    = key - free (zero when free covers the key)
+    #   resulting = pool balance + amount (the key plus the Solana mint supply)
+    local free amount resulting
+    free=$((CCIP_POOL_BALANCE - solana_supply))
+    if [[ "$free" -lt 0 ]]; then
+        warn "The pool holds less than the Solana mint supply; the shortfall of $(fmt_ohm "$((-free))") OHM is part of the funding amount"
+    fi
+    amount=$((CCIP_MIN_POOL_BACKING - free))
+    if [[ "$amount" -lt 0 ]]; then
+        amount=0
+    fi
+    resulting=$((CCIP_POOL_BALANCE + amount))
+
+    section "RESULT: CCIP Pool Funding Amount"
+
+    echo ""
+    printf '  %bDerivation (OHM base units, 9 decimals):%b\n' "${BOLD}" "${NC}"
+    echo ""
+    printf '    %-34s %s OHM  (raw: %s)\n' "bridged supply (burn/mint chains):" "$(fmt_ohm "$BRIDGED_SUPPLY")" "$BRIDGED_SUPPLY"
+    printf '    %-34s %s OHM  (raw: %s)\n' "minimumPoolBacking (env.json):" "$(fmt_ohm "$CCIP_MIN_POOL_BACKING")" "$CCIP_MIN_POOL_BACKING"
+    printf '    %-34s %s OHM  (raw: %s)\n' "Solana mint supply:" "$(fmt_ohm "$solana_supply")" "$solana_supply"
+    printf '    %-34s %s OHM  (raw: %s)\n' "pool balance:" "$(fmt_ohm "$CCIP_POOL_BALANCE")" "$CCIP_POOL_BALANCE"
+    printf '    %-34s %s OHM  (raw: %s)\n' "free liquidity (balance - Solana):" "$(fmt_ohm "$free")" "$free"
+    printf '    ------------------------------------------------\n'
+    printf '  %b  FUNDING AMOUNT (key - free):      %s OHM%b\n' "${BOLD}${GREEN}" "$(fmt_ohm "$amount")" "${NC}"
+    printf '  %b  Raw (9 dec):                      %s%b\n' "${BOLD}${GREEN}" "$amount" "${NC}"
+    printf '    ------------------------------------------------\n'
+    printf '    %-34s %s OHM  (raw: %s)\n' "pool balance after the transfer:" "$(fmt_ohm "$resulting")" "$resulting"
+    echo ""
+
+    # The batch funds only a pool below the key, and its post-batch check requires the key
+    if [[ "$CCIP_POOL_BALANCE" -ge "$CCIP_MIN_POOL_BACKING" ]]; then
+        ok "The pool already holds minimumPoolBacking; CCIPTokenPoolBatch.fundPool proposes nothing"
+        if [[ "$amount" -gt 0 ]]; then
+            warn "The free liquidity is $(fmt_ohm "$amount") OHM below the key: the pool holds the key only together with that part of the Solana float, which a release toward Ethereum can withdraw. The batch cannot add it; only a direct OHM transfer to the pool can"
+        fi
+        return
+    fi
+    ok "The pool balance after the transfer is the key plus the Solana mint supply, so a release toward Ethereum of any part of that supply leaves it at or above the key, which the post-batch check of CCIPTokenPoolBatch.fundPool requires"
+
+    echo ""
+    printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
+    printf '  %b|  Set in: %-56s|%b\n' "${BOLD}" "${CCIP_FUND_ARGS_FILE%/*}/" "${NC}"
+    printf '  %b|          %-56s|%b\n' "${BOLD}" "${CCIP_FUND_ARGS_FILE##*/}" "${NC}"
+    printf '  %b|                                                                  |%b\n' "${BOLD}" "${NC}"
+    printf '  %b|  "amount": %-54s|%b\n' "${BOLD}" "\"$amount\"" "${NC}"
+    printf '  %b+------------------------------------------------------------------+%b\n' "${BOLD}" "${NC}"
+    info "Build CCIPTokenPoolBatch.fundPool with that args file right after this run; the read must see no Ethereum-Solana transfer in flight, which would count as free liquidity"
+}
+
+# =====================================================================
 # MAIN
 # =====================================================================
 
@@ -824,13 +990,14 @@ check_inflight
 check_failed_messages
 check_lz_scan
 calculate_supply
+report_ccip_funding
 
 # --- Final verdict ---
 section "FINAL STATUS"
 
 echo ""
 if [[ $ERRORS -gt 0 ]]; then
-    err "$ERRORS error(s) found. Resolve before proceeding with Step 5"
+    err "$ERRORS error(s) found. Resolve before proceeding with Step 5 or the CCIP pool funding"
     echo ""
     exit 1
 fi
@@ -840,6 +1007,6 @@ if [[ $WARNINGS -gt 0 ]]; then
     echo ""
 fi
 
-ok "All checks passed. Ready for Step 5: LZBridgeGatewayBatch.initBridgedSupply()"
+ok "All checks passed. Ready for Step 5 (LZBridgeGatewayBatch.initBridgedSupply) and for the CCIP pool funding (CCIPTokenPoolBatch.fundPool)"
 echo ""
 exit 0

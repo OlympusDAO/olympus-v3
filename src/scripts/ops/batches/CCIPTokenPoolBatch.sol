@@ -849,23 +849,45 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     // ===== FUNDING (DAO MS PATH) ===== //
 
-    /// @notice Funds the canonical lock/release pool up to the minimum backing declared in
-    ///         `env.json` (`olympus.config.CCIP.minimumPoolBacking`): the OHM supply outstanding
-    ///         on the burn/mint chains that the pool must be able to release.
-    /// @dev    The shortfall is computed from the live pool balance at simulation time, so the
-    ///         batch is idempotent by construction: a second run on a funded pool proposes
-    ///         nothing. The transfer is a plain `OHM.transfer` from the batch owner; the pool
-    ///         keeps no internal liquidity accounting and reads `balanceOf`, so no rebalancer
-    ///         role is needed to deposit. Re-read `shell/calc_bridged_supply.sh` and update the
-    ///         `env.json` target immediately before running this.
+    /// @notice Funds the canonical lock/release pool with the OHM amount read from the args
+    ///         file, toward the minimum backing declared in `env.json`
+    ///         (`olympus.config.CCIP.minimumPoolBacking`): the OHM supply outstanding on the
+    ///         burn/mint chains that the pool must be able to release.
+    /// @dev    The amount is the figure `shell/calc_bridged_supply.sh` prints for the funding:
+    ///         the minimum backing minus the free liquidity of the pool, which is the pool
+    ///         balance minus the Solana mint supply, so that the balance after the transfer is
+    ///         the minimum backing plus the Solana mint supply and a release toward Ethereum of
+    ///         any part of that supply leaves it at or above the minimum backing. Run the
+    ///         script with no Ethereum-Solana transfer
+    ///         in flight and build the batch immediately before signing. A pool that already holds the minimum backing makes
+    ///         the batch empty, so a second run on a funded pool proposes nothing. The transfer
+    ///         is a plain `OHM.transfer` from the batch owner; the pool keeps no internal
+    ///         liquidity accounting and reads `balanceOf`, so no rebalancer role is needed to
+    ///         deposit. The post-batch check requires the pool balance after the transfer to
+    ///         cover the minimum backing against the simulated state, not the state the Safe
+    ///         executes against: a balance that falls between the build and the execution (a
+    ///         rebalancer withdrawal) is not reported here and surfaces as `BackingTooLow` of
+    ///         the proposal build.
+    ///         Args file format (`amount` in OHM base units, 9 decimals):
+    ///         {
+    ///           "functions": [{
+    ///             "name": "fundPool",
+    ///             "args": {"amount": "130720785836811"}
+    ///           }]
+    ///         }
     ///
     ///         Reverts if:
-    ///         - The args file is not empty.
     ///         - The chain is not canonical (burn/mint pools hold no backing).
-    ///         - The batch owner's OHM balance does not cover the shortfall.
+    ///         - The pool is below the minimum backing and the args file does not carry
+    ///           `fundPool.amount`.
+    ///         - The pool is below the minimum backing and the amount is zero.
+    ///         - The pool is below the minimum backing and the batch owner's OHM balance does
+    ///           not cover the amount.
+    ///         - The pool balance after the transfer is below the minimum backing (the
+    ///           post-batch check).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
-    /// @param argsFile_ Path to the arguments file (unused, must be empty).
+    /// @param argsFile_ Path to the arguments file.
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
     /// @param signature_ Optional pre-computed signature for the batch.
     function fundPool(
@@ -875,7 +897,6 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         string calldata ledgerDerivationPath_,
         bytes calldata signature_
     ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
-        _validateArgsFileEmpty(argsFile_);
         // The batch touches only the OHM balance of the pool
         _skipHeartbeatValidation = true;
         require(
@@ -885,30 +906,33 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         address tokenPool = _getTokenPoolAddressNotZero(chain);
-        uint256 target = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 minimumBacking = CCIPConfigLib.minimumPoolBacking(env, chain);
         uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
 
         console2.log("\n=== Fund the CCIP lock/release pool ===");
         console2.log("Pool:", tokenPool);
-        console2.log("Target backing (env.json):", target);
-        console2.log("Current pool balance:", poolBalance);
+        console2.log("Minimum backing (env.json):", minimumBacking);
+        console2.log("Pool balance before:", poolBalance);
 
-        if (poolBalance >= target) {
-            console2.log("The pool already holds the target backing. Nothing to do.");
+        if (poolBalance >= minimumBacking) {
+            console2.log("The pool already holds the minimum backing. Nothing to do.");
         } else {
-            uint256 shortfall = target - poolBalance;
+            uint256 amount = _readBatchArgUint256("fundPool", "amount");
+            require(amount != 0, "CCIPTokenPoolBatch: the funding amount is zero");
             uint256 ownerBalance = IERC20(ohm).balanceOf(_owner);
             require(
-                ownerBalance >= shortfall,
+                ownerBalance >= amount,
                 string.concat(
                     "CCIPTokenPoolBatch: the batch owner holds ",
                     vm.toString(ownerBalance),
-                    " OHM, below the funding shortfall ",
-                    vm.toString(shortfall)
+                    " OHM, below the funding amount ",
+                    vm.toString(amount)
                 )
             );
-            addToBatch(ohm, abi.encodeWithSelector(IERC20.transfer.selector, tokenPool, shortfall));
-            console2.log("Added: OHM.transfer(pool,", shortfall, ")");
+            console2.log("Amount (args file):", amount);
+            console2.log("Pool balance after:", poolBalance + amount);
+            addToBatch(ohm, abi.encodeWithSelector(IERC20.transfer.selector, tokenPool, amount));
+            console2.log("Added: OHM.transfer(pool,", amount, ")");
         }
 
         _setPostBatchValidateSelector(this._validateFunded.selector);
@@ -919,22 +943,23 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         console2.log("Completed");
     }
 
-    /// @notice Validates the state after `fundPool`.
+    /// @notice Validates the state after `fundPool` against the simulated state of the batch:
+    ///         the pool balance must be at or above the minimum backing.
     function _validateFunded() external view {
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         address tokenPool = _getTokenPoolAddressNotZero(chain);
-        uint256 target = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 minimumBacking = CCIPConfigLib.minimumPoolBacking(env, chain);
         uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
         require(
-            poolBalance >= target,
+            poolBalance >= minimumBacking,
             string.concat(
                 "The pool balance ",
                 vm.toString(poolBalance),
-                " is below the target backing ",
-                vm.toString(target)
+                " is below the minimum backing ",
+                vm.toString(minimumBacking)
             )
         );
-        console2.log("The pool holds the target backing:", poolBalance);
+        console2.log("The pool holds the minimum backing:", poolBalance);
     }
 
     // ===== LIQUIDITY (REBALANCER PATH) ===== //
