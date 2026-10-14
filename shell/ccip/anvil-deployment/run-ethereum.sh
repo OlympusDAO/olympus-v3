@@ -4,9 +4,9 @@
 #
 # Flow:
 #   1. Inject placeholder pools/peripheries for the four burn/mint chains, then
-#      deploy CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock
-#      (ccip_config_mainnet.json) and sync their addresses into the OCG
-#      proposal registry.
+#      deploy CCIPTokenPoolConfig, CCIPTokenPoolConfigTimelock and
+#      CCIPTokenPoolConfigProposalChecker (ccip_config_mainnet.json) and sync
+#      their addresses into the OCG proposal registry.
 #   2. Phase B (DAO MS): CCIPTokenPoolConfigBatch.prepareHandover, then a second
 #      run that must propose nothing; then CCIPTokenPoolBatch.fundPool with the
 #      amount the fork needs (the env.json minimum backing minus the pool
@@ -15,8 +15,9 @@
 #      build fails while the OHM fee budgets are still at the 90k default; then
 #      the four mainnet lanes are mocked to 175k and readiness turns GREEN.
 #   4. Phase C (OCG): executeOnAnvilFork.sh replays CCIPTokenPoolConfigProposal
-#      (12 actions: the handover plus the four addChain route actions) from
-#      the timelock; the four routes must exist on the pool afterwards.
+#      (up to 13 actions: the read-only checker call first, then the handover
+#      steps the live state still needs and the four addChain route actions)
+#      from the timelock; the four routes must exist on the pool afterwards.
 #   5. Post-OCG (DAO MS): CCIPRouteReconcileBatch.reconcileRoutes must propose
 #      nothing on the converged routes; the timelock path is then exercised by
 #      changing the desired outbound rate in env.json, reconciling (queues),
@@ -103,12 +104,14 @@ cfg="$(env_addr mainnet olympus.policies.CCIPTokenPoolConfig)"
 require_addr "$cfg" "CCIPTokenPoolConfig"
 tl="$(env_addr mainnet olympus.policies.CCIPTokenPoolConfigTimelock)"
 require_addr "$tl" "CCIPTokenPoolConfigTimelock"
+checker="$(env_addr mainnet olympus.periphery.CCIPTokenPoolConfigProposalChecker)"
+require_addr "$checker" "CCIPTokenPoolConfigProposalChecker"
 pool="$(env_addr mainnet olympus.periphery.CCIPLockReleaseTokenPool)"
 require_addr "$pool" "CCIPLockReleaseTokenPool"
 registry="$(env_addr mainnet external.ccip.TokenAdminRegistry)"
 ohm="$(env_addr mainnet olympus.legacy.OHM)"
 dao="$(env_addr mainnet olympus.multisig.dao)"
-log "config=$cfg timelock=$tl pool=$pool"
+log "config=$cfg timelock=$tl checker=$checker pool=$pool"
 
 step "Deployment checks"
 echo "config.pool()                 = $(cast call "$cfg" 'pool()(address)' --rpc-url "$RPC")"
@@ -117,10 +120,14 @@ echo "timelock.timelockDelay()      = $(cast call "$tl" 'timelockDelay()(uint48)
 echo "config.gracePeriod()          = $(cast call "$cfg" 'gracePeriod()(uint32)' --rpc-url "$RPC")"
 echo "timelock.gracePeriod()        = $(cast call "$tl" 'gracePeriod()(uint32)' --rpc-url "$RPC")"
 echo "config.isLiquidityContainer() = $(cast call "$cfg" 'isLiquidityContainer()(bool)' --rpc-url "$RPC")"
+echo "checker.CONFIG()              = $(cast call "$checker" 'CONFIG()(address)' --rpc-url "$RPC")"
+echo "checker.CONFIG_TIMELOCK()     = $(cast call "$checker" 'CONFIG_TIMELOCK()(address)' --rpc-url "$RPC")"
+echo "checker.POOL()                = $(cast call "$checker" 'POOL()(address)' --rpc-url "$RPC")"
 
 step "Sync addresses.json (proposal registry)"
 set_registry_addr olympus-policy-ccip-token-pool-config "$cfg"
 set_registry_addr olympus-policy-ccip-token-pool-config-timelock "$tl"
+set_registry_addr olympus-periphery-ccip-token-pool-config-proposal-checker "$checker"
 
 step "Phase B: prepareHandover (DAO MS)"
 run_batch CCIPTokenPoolConfigBatch prepareHandover dao

@@ -7,6 +7,10 @@
         {
             "name": "CCIPTokenPoolConfigTimelock",
             "args": {}
+        },
+        {
+            "name": "CCIPTokenPoolConfigProposalChecker",
+            "args": {}
         }
     ]
 }
