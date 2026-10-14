@@ -475,31 +475,24 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             return;
         }
 
-        // If the remote chain is already configured, then remove it first
-        if (isSupportedChain) {
-            console2.log(
-                "Removing remote chain",
-                remoteChain_,
-                "from token pool",
-                tokenPoolAddress
-            );
-            _addRemoveChain(tokenPoolAddress, remoteChainSelector);
-        }
-
-        // Prepare the chain update
+        // Prepare the chain update; an existing route is replaced in the same call
         bytes[] memory remotePoolAddresses = new bytes[](1);
         remotePoolAddresses[0] = CCIPConfigLib.encodeEvmAddress(remotePoolAddress);
-        _addAddChain(
+        _addChainUpdate(
             tokenPoolAddress,
             remoteChain_,
             remoteChainSelector,
             remotePoolAddresses,
-            CCIPConfigLib.encodeEvmAddress(remoteTokenAddress)
+            CCIPConfigLib.encodeEvmAddress(remoteTokenAddress),
+            isSupportedChain
         );
     }
 
     /// @notice Configures the TokenPool to add support for the specified EVM remote chain
-    /// @dev    Direct pool owner path only; see the contract NatSpec.
+    /// @dev    Direct pool owner path only; see the contract NatSpec. An existing route is
+    ///         replaced in one `applyChainUpdates` call, a removal followed by an addition in
+    ///         one transaction, which resets both buckets to the bootstrap default (disabled
+    ///         limiters) as the addition of a new route does.
     function configureRemoteChainEVM(
         bool useDaoMS_,
         string calldata remoteChain_
@@ -556,31 +549,24 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
             return;
         }
 
-        // If the remote chain is already configured, then remove it first
-        if (isSupportedChain) {
-            console2.log(
-                "Removing remote chain",
-                remoteChain_,
-                "from token pool",
-                tokenPoolAddress
-            );
-            _addRemoveChain(tokenPoolAddress, remoteChainSelector);
-        }
-
-        // Prepare the chain update
+        // Prepare the chain update; an existing route is replaced in the same call
         bytes[] memory remotePoolAddresses = new bytes[](1);
         remotePoolAddresses[0] = CCIPConfigLib.defaultRemotePool(env, remoteChain_);
-        _addAddChain(
+        _addChainUpdate(
             tokenPoolAddress,
             remoteChain_,
             remoteChainSelector,
             remotePoolAddresses,
-            CCIPConfigLib.defaultRemoteToken(env, remoteChain_)
+            CCIPConfigLib.defaultRemoteToken(env, remoteChain_),
+            isSupportedChain
         );
     }
 
     /// @notice Configures the TokenPool to add support for the specified SVM remote chain
-    /// @dev    Direct pool owner path only; see the contract NatSpec.
+    /// @dev    Direct pool owner path only; see the contract NatSpec. An existing route is
+    ///         replaced in one `applyChainUpdates` call, a removal followed by an addition in
+    ///         one transaction, which resets both buckets to the bootstrap default (disabled
+    ///         limiters) as the addition of a new route does.
     function configureRemoteChainSVM(
         bool useDaoMS_,
         string calldata remoteChain_
@@ -624,9 +610,10 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Configures the TokenPool to add support for all remote chains
-    /// @dev    Direct pool owner path only; see the contract NatSpec.
-    ///         This function skips the function call if the remote chain is already configured
-    ///         This function removes the remote chain if the chain is not in the trusted chains listed in the config
+    /// @dev    Direct pool owner path only; see the contract NatSpec. A chain listed in
+    ///         `olympus.config.CCIPCrossChainBridge.chains` is added or, when its route exists,
+    ///         replaced in one `applyChainUpdates` call with the bootstrap default limiters; a
+    ///         chain outside the list is removed when its route exists.
     function configureAllRemoteChains(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Configure the remote chains
         _configureRemoteChains(chain);
@@ -649,13 +636,22 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         );
     }
 
-    function _addAddChain(
+    /// @notice Adds one `applyChainUpdates` call that adds the route or, when `replace_` is
+    ///         true, replaces it in the same call: the pool removes the selectors to remove
+    ///         before it adds the updates, so the replacement is a removal followed by an
+    ///         addition in one transaction. Both buckets of the added route carry the bootstrap
+    ///         default, a disabled limiter.
+    function _addChainUpdate(
         address tokenPool_,
         string memory remoteChain_,
         uint64 remoteChainSelector_,
         bytes[] memory remotePoolAddresses_,
-        bytes memory remoteTokenAddress_
+        bytes memory remoteTokenAddress_,
+        bool replace_
     ) internal {
+        uint64[] memory remoteChainSelectorsToRemove = new uint64[](replace_ ? 1 : 0);
+        if (replace_) remoteChainSelectorsToRemove[0] = remoteChainSelector_;
+
         ICCIPTokenPoolAdmin.ChainUpdate[]
             memory chainUpdates = new ICCIPTokenPoolAdmin.ChainUpdate[](1);
         chainUpdates[0] = ICCIPTokenPoolAdmin.ChainUpdate({
@@ -667,12 +663,17 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         });
 
         // Apply the chain update
-        console2.log("Applying chain update for", remoteChain_, "to token pool", tokenPool_);
+        console2.log(
+            replace_ ? "Replacing the route of" : "Adding the route of",
+            remoteChain_,
+            "on token pool",
+            tokenPool_
+        );
         addToBatch(
             tokenPool_,
             abi.encodeWithSelector(
                 ICCIPTokenPoolAdmin.applyChainUpdates.selector,
-                new uint64[](0),
+                remoteChainSelectorsToRemove,
                 chainUpdates
             )
         );
@@ -811,7 +812,10 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @dev    Direct pool owner path only: once the pool is owned by CCIPTokenPoolConfig, use
     ///         `CCIPTokenPoolConfigBatch.disableChain` (the DAO MS as `bridge_admin`) or
     ///         `disableChainEmergencyMS` (the Emergency MS).
-    ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
+    ///         To restore the approved limits, use `setRateLimits` while the pool has a direct
+    ///         owner, or `CCIPRouteReconcileBatch.reconcileRoutes` with the route named in its
+    ///         `restoreContained` args after the handover; `configureRemoteChainEVM` and
+    ///         `configureRemoteChainSVM` replace the route with disabled limiters instead.
     function emergencyShutdown(
         bool useDaoMS_,
         string calldata remoteChain_
@@ -830,7 +834,10 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @dev    Direct pool owner path only: once the pool is owned by CCIPTokenPoolConfig, use
     ///         `CCIPTokenPoolConfigBatch.disableAllChains` (the DAO MS as `bridge_admin`) or
     ///         `disableAllChainsEmergencyMS` (the Emergency MS).
-    ///         To restore the token pool functionality, the `configureRemoteChainEVM` or `configureRemoteChainSVM` functions can be used.
+    ///         To restore the approved limits, use `setRateLimits` per route while the pool has
+    ///         a direct owner, or `CCIPRouteReconcileBatch.reconcileRoutes` with every route
+    ///         named in its `restoreContained` args after the handover; `configureRemoteChainEVM`
+    ///         and `configureRemoteChainSVM` replace a route with disabled limiters instead.
     function emergencyShutdownAll(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
         // Determine the remote chains that are configured
         uint64[] memory remoteChainSelectors = ICCIPTokenPoolAdmin(
