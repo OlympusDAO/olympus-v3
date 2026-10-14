@@ -234,7 +234,8 @@ pool-wide domain. One unresolved action may own a domain at a time.
 
 `emergency`, `admin`, `bridge_admin` or `bridge_rate_limiter` can set both buckets of one or every
 route to an enabled capacity of two and a refill rate of one, even while the config policy is
-disabled. This blocks transfers of any real OHM amount. Restoring or raising capacity needs
+disabled. This blocks transfers of any real OHM amount from a source pool that encodes nine
+decimals, which every pool in scope does. Restoring or raising capacity needs
 `setChainRateLimits`, which only the config operator, `admin` or `bridge_rate_limiter` may call, so
 `emergency` and `bridge_admin` cannot lift containment without the timelock delay or further
 authority.

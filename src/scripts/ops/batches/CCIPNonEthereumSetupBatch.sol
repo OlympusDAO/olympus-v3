@@ -89,6 +89,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         fee quoter, which this tooling cannot read; the batch prints a note for such a
     ///         lane (`CCIPFeeBudgetLib.svmLaneNote`).
     ///
+    ///         The deactivation of the legacy LayerZero bridge is planned under two
+    ///         preconditions, `bridgeActive` false and a zero MINTR mint approval, that are
+    ///         checked while the batch is built and not when the Safe executes it: the encoded
+    ///         action is `Kernel.executeAction(DeactivatePolicy, bridge)` alone, and the Kernel
+    ///         checks neither. Build and simulate the batch immediately before signing, and
+    ///         cancel a pending Safe transaction of it after any administration of the legacy
+    ///         bridge (a `setBridgeStatus` call or a change of its MINTR mint approval), then
+    ///         build it again.
+    ///
     ///         The `admin` grant is chain wide: it applies to every policy of this Kernel, not
     ///         only to the CCIP policies.
     ///
@@ -104,6 +113,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The config policy is neither the owner nor the pending owner of the pool.
     ///         - A lane toward an EVM burn/mint destination carries an OHM delivery gas budget
     ///           below 175000 (the revert names the lane).
+    ///         - The legacy bridge is active in the Kernel and reports `bridgeActive` or holds a
+    ///           MINTR mint approval.
     ///         - A desired route is declared with `enabled: false` (the removal marker), or a
     ///           live route differs from `env.json` (the bootstrap expects a clean pool with
     ///           every declared route enabled; reconcile through the config timelock afterwards).
@@ -739,6 +750,19 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     // =========== PLANNING HELPERS =========== //
 
+    /// @notice Plans the deactivation of the legacy LayerZero `CrossChainBridge` in the Kernel
+    ///         when one is recorded for the chain and is still active.
+    /// @dev    The preconditions, `bridgeActive` false and a zero MINTR mint approval, are
+    ///         checked here, while the batch is built. The encoded action is
+    ///         `Kernel.executeAction(DeactivatePolicy, bridge)` alone, and the Kernel checks
+    ///         neither, so a change of either between the build and the execution is not caught
+    ///         by the batch: build and simulate it immediately before signing, and cancel a
+    ///         pending Safe transaction of it after any administration of the legacy bridge.
+    ///
+    ///         Reverts if:
+    ///         - The legacy bridge is active in the Kernel and reports `bridgeActive`.
+    ///         - The legacy bridge is active in the Kernel and holds a MINTR mint approval.
+    /// @param kernel_ The Kernel of the chain.
     function _planLegacyBridgeDeactivation(Kernel kernel_) internal {
         address bridge = _envAddress("olympus.policies.CrossChainBridge");
         if (bridge == address(0)) {

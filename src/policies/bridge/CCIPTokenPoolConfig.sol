@@ -59,8 +59,13 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         address included where it is a value, so a call that lands always changes state:
 ///         `setRouter`, `setRebalancer`, `setRateLimitAdmin` and `setRemoteToken` with
 ///         `CCIPTokenPoolConfig_AddressUnchanged`, `setConfigOperator` with the mix-in's
-///         `ConfigOperator_Unchanged`. The check runs after the lifecycle and role gates and
-///         before any other validation of the candidate.
+///         `ConfigOperator_Unchanged`. The check runs after the lifecycle and role gates, at the
+///         position the "Reverts if" list of each setter states: it is the first check of the
+///         candidate in `setRateLimitAdmin` and in `setConfigOperator`, whose candidate check
+///         follows it; `setRebalancer` requires the pool to be a liquidity container before it;
+///         `setRouter` rejects the zero address before it and probes the candidate after it;
+///         and `setRemoteToken` requires the route to exist and the candidate to be non-empty
+///         and 32 bytes long before it, and reads the buckets of the route after it.
 ///
 ///         Every check that this contract adds on top of the pool is shared between the
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
@@ -238,6 +243,15 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
+    /// @dev The capacity of two base units and the rate of one base unit per second are counted
+    ///      in the units the pool charges: the outbound bucket in nine-decimal OHM units, the
+    ///      inbound bucket in the units of the source pool, charged before the pool converts the
+    ///      amount to local units with the decimals the source pool encodes in the message; a
+    ///      message without decimal metadata is converted as nine-decimal. A source pool that
+    ///      encodes fewer decimals therefore passes more OHM per charged unit through the inbound
+    ///      bucket: up to two whole OHM per full bucket, refilled at one OHM per second, when it
+    ///      encodes zero. This policy does not read the decimals of a remote token or a remote
+    ///      pool.
     function getDisabledRateLimiterConfig()
         external
         pure
@@ -595,7 +609,10 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Both buckets are written to `{isEnabled: true, capacity: 2, rate: 1}`, which clamps
-    ///      each fill level to two units. The policy's enabled state is not checked.
+    ///      each fill level to two units. The outbound bucket is charged in nine-decimal OHM
+    ///      units and the inbound bucket in the units of the source pool, so the inbound
+    ///      containment assumes a source pool that encodes nine decimals; see
+    ///      `getDisabledRateLimiterConfig`. The policy's enabled state is not checked.
     ///
     ///      Reverts if:
     ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
@@ -615,7 +632,10 @@ contract CCIPTokenPoolConfig is
     ///      `RouteDisabled` event is emitted per route. The policy's enabled state is not
     ///      checked. The order of the routes follows the pool's enumerable set. A pool without
     ///      a configured route is rejected before it is written to, so a sweep that lands always
-    ///      contains at least one route.
+    ///      contains at least one route. The outbound bucket of each route is charged in
+    ///      nine-decimal OHM units and the inbound bucket in the units of the source pool, so
+    ///      the inbound containment assumes a source pool that encodes nine decimals; see
+    ///      `getDisabledRateLimiterConfig`.
     ///
     ///      The cost is linear in the number of configured routes: one `getSupportedChains`
     ///      read and one `setChainRateLimiterConfigs` call, plus, per route, the storage writes

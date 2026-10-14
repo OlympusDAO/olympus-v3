@@ -124,8 +124,10 @@ interface ICCIPTokenPoolConfigTimelock {
     // solhint-disable-next-line func-name-mixedcase
     function MAX_TIMELOCK_DELAY() external view returns (uint48);
 
-    /// @notice Returns the length of the window after `executableAt` during which a queued
-    ///         action may be executed before it expires, in seconds.
+    /// @notice Returns the length of the execution window of a queued action, in seconds. An
+    ///         action is executable at any block timestamp from its `executableAt` to its
+    ///         `expiresAt`, which is `executableAt + EXECUTION_WINDOW`, both inclusive; it is
+    ///         expired once the block timestamp is past `expiresAt`.
     // solhint-disable-next-line func-name-mixedcase
     function EXECUTION_WINDOW() external view returns (uint48);
 

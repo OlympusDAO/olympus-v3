@@ -38,9 +38,11 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         the bridge admin role and the config policy to name this timelock as its config
 ///         operator. Every sub-action must target the config policy with a supported selector
 ///         and a payload whose canonical re-encoding equals the stored bytes, and must pass the
-///         config policy's validation mirror of the targeted function. Execution is permissionless once the delay elapses and requires this policy
-///         and the config policy to be enabled and this timelock to still be the config operator;
-///         the shared base then checks the reserved keys and state hashes before each dispatch.
+///         config policy's validation mirror of the targeted function. Execution is
+///         permissionless at any block timestamp from `executableAt` to `expiresAt`, both
+///         inclusive, and requires this policy and the config policy to be enabled and this
+///         timelock to still be the config operator; the shared base then checks the reserved
+///         keys and state hashes before each dispatch.
 ///         The domains and keys are those of `CCIPTokenPoolConfigKeyLib`, scoped to the config
 ///         policy; tooling derives the key of a reservation from the same library.
 ///         An action whose config policy is disabled after queueing holds its configuration
