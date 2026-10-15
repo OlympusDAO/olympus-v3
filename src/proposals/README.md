@@ -137,6 +137,7 @@ To create a new simulatable proposal, follow these steps:
 
 5. **Run Validation and Resolve Lint Findings**
 
+    - Use Forge 1.8.1, as configured by the repository bootstrap action, for this check.
     - Run Forge lint from the repository root, replacing the example filenames with your proposal and test:
 
         ```sh
