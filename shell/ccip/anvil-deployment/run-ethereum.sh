@@ -9,8 +9,10 @@
 #      their addresses into the OCG proposal registry.
 #   2. Phase B (DAO MS): CCIPTokenPoolConfigBatch.prepareHandover, then a second
 #      run that must propose nothing; then CCIPTokenPoolBatch.fundPool with the
-#      amount the fork needs (the env.json minimum backing minus the pool
-#      balance) through a generated args file, with an empty re-run.
+#      amount it requires (the env.json minimum backing minus the unclaimable
+#      balance of the pool) through a generated args file, with an empty re-run
+#      that takes the free-liquidity early return on the Solana mint supply the
+#      batch reads at build time.
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
 #      the four mainnet lanes are mocked to 175k and readiness turns GREEN.
@@ -137,14 +139,20 @@ expect_empty_batch "$LAST_BATCH_LOG" "prepareHandover re-run"
 
 step "Fund the pool to the minimum backing (DAO MS)"
 min_backing="$(jq -r '.current.mainnet.olympus.config.CCIP.minimumPoolBacking' "$REPO_ROOT/$ENV_JSON")"
+unclaimable="$(jq -r '.current.mainnet.olympus.config.CCIP.poolUnclaimableBalance' "$REPO_ROOT/$ENV_JSON")"
 pool_balance="$(cast call "$ohm" 'balanceOf(address)(uint256)' "$pool" --rpc-url "$RPC" | awk '{print $1}')"
 dao_balance="$(cast call "$ohm" 'balanceOf(address)(uint256)' "$dao" --rpc-url "$RPC" | awk '{print $1}')"
-# The amount the fork needs is the key minus the pool balance; an operator takes
-# the figure from shell/calc_bridged_supply.sh instead, which nets the Solana
-# float out of the pool balance.
-fund_amount="$((min_backing - pool_balance))"
-log "key=$min_backing pool=$pool_balance dao=$dao_balance amount=$fund_amount"
-[ "$fund_amount" -gt 0 ] || die "the pool already holds the minimum backing on this fork; the funding step expects a shortfall"
+# The amount is the key minus the unclaimable balance of the pool, the one value
+# fundPool accepts (shell/calc_bridged_supply.sh prints it). The batch reads the
+# Solana mint supply at build time, on the fork too (the solana alias of
+# foundry.toml), so the re-run takes the free-liquidity early return on the
+# live supply. The fork balance is frozen at the fork block while the supply is
+# live: a lock minted on Solana after that block leaves the fork's free
+# liquidity short by its amount and fails the re-run assertion; start the run
+# again then.
+fund_amount="$((min_backing - unclaimable))"
+log "key=$min_backing unclaimable=$unclaimable pool=$pool_balance dao=$dao_balance amount=$fund_amount"
+[ "$pool_balance" -lt "$min_backing" ] || die "the pool already holds the minimum backing on this fork; the funding step expects a shortfall"
 if [ "$dao_balance" -lt "$fund_amount" ]; then
     # The live DAO MS balance covers the amount today; this branch keeps the
     # rehearsal green if it ever does not, by minting from the OHM vault (the
@@ -161,6 +169,7 @@ run_batch CCIPTokenPoolBatch fundPool dao "$FUND_ARGS"
 expect_non_empty_batch "$LAST_BATCH_LOG" "fundPool"
 run_batch CCIPTokenPoolBatch fundPool dao "$FUND_ARGS" "-rerun"
 expect_empty_batch "$LAST_BATCH_LOG" "fundPool re-run"
+expect_log_line "$LAST_BATCH_LOG" "The free liquidity of the pool already covers the minimum backing" "fundPool re-run took the free-liquidity early return"
 rm -f "$FUND_ARGS"
 echo "pool OHM balance = $(cast call "$ohm" 'balanceOf(address)(uint256)' "$pool" --rpc-url "$RPC")  (key=$min_backing)"
 

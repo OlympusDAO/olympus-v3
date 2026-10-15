@@ -321,7 +321,8 @@ not-yet-finalized destination require permissionless manual execution.
 - **Ethereum solvency depends on pool backing.** The lock/release pool bounds releases by its OHM
     balance. The rollout scripts assume the configured `minimumPoolBacking` covers the OHM
     previously minted on the four burn/mint EVM chains; the OHM locked for Solana shares the pool
-    balance and is netted out of the funding amount off chain only (`shell/calc_bridged_supply.sh`).
+    balance and is compared with it off chain only (`CCIPTokenPoolBatch.fundPool` at build time,
+    `shell/calc_bridged_supply.sh`), so the free liquidity of the pool reaches the key.
 - **Burn/mint delivery needs a raised Chainlink fee budget.** Each lane into a burn/mint pool needs
     an enabled OHM fee entry with `destGasOverhead >= 175000`; the rollout scripts refuse to proceed
     without it.

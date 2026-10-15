@@ -716,8 +716,9 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         _nominateRegistryAdmin();
     }
 
-    /// @notice The funding step (`CCIPTokenPoolBatch.fundPool` with the amount the pool is short
-    ///         of the key): the DAO MS transfers it in real OHM, never a mint.
+    /// @notice The funding step: the DAO MS transfers the raw shortfall of the pool against the
+    ///         key in real OHM, never a mint. The suite needs the floor only;
+    ///         `CCIPTokenPoolBatch.fundPool` transfers the key minus the unclaimable balance.
     function _fundPoolToMinimumBacking() internal {
         uint256 balance = ohm.balanceOf(address(pool));
         if (balance >= minimumPoolBacking) return;

@@ -19,6 +19,7 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 // Libraries
+import {Surl} from "@surl-1.0.0/Surl.sol";
 import {SafeCast} from "src/libraries/SafeCast.sol";
 import {ArrayUtils} from "src/scripts/ops/lib/ArrayUtils.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
@@ -40,6 +41,13 @@ import {Kernel, Actions} from "src/Kernel.sol";
 ///         registry, the rebalancer and liquidity withdrawals through an OCG proposal.
 contract CCIPTokenPoolBatch is BatchScriptV2 {
     using SafeCast for uint256;
+    using Surl for string;
+
+    // ========== STATE ========== //
+
+    /// @notice The Solana mint supply read while planning `fundPool`, in OHM base units, for
+    ///         the post-batch check, which is called by selector without arguments.
+    uint256 internal _fundPoolSolanaMintSupply;
 
     // ========== HELPERS ========== //
 
@@ -856,26 +864,108 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     // ===== FUNDING (DAO MS PATH) ===== //
 
+    /// @notice Reads the supply of the Solana OHM mint declared in `env.json`
+    ///         (`current.solana.olympus.legacy.OHM`), in OHM base units, with a `getTokenSupply`
+    ///         call to the JSON-RPC endpoint behind the `solana` alias of `foundry.toml`.
+    /// @dev    The supply enters the free-liquidity comparison of `fundPool`, where a zero or
+    ///         understated value would count the OHM locked for Solana as free, so every failure
+    ///         reverts: a failed request, a status other than 200, a response without a token
+    ///         supply, decimals other than 9 (the supply is compared with the pool balance in
+    ///         OHM base units, 9 decimals) or an amount that is not a decimal number.
+    function _readSolanaMintSupply() internal returns (uint256 supply) {
+        string memory mintKey = ".current.solana.olympus.legacy.OHM";
+        require(
+            vm.keyExistsJson(env, mintKey),
+            "CCIPTokenPoolBatch: missing env.json key current.solana.olympus.legacy.OHM"
+        );
+        string memory mint = vm.parseJsonString(env, mintKey);
+
+        string[] memory headers = new string[](1);
+        headers[0] = "Content-Type: application/json";
+        // The body carries no single quote: Surl single-quotes it inside `bash -c`
+        string memory body = string.concat(
+            '{"jsonrpc":"2.0","id":1,"method":"getTokenSupply","params":["',
+            mint,
+            '"]}'
+        );
+        (uint256 status, bytes memory data) = vm.rpcUrl("solana").post(headers, body);
+        require(
+            status == 200,
+            string.concat(
+                "CCIPTokenPoolBatch: the Solana RPC answered getTokenSupply with HTTP status ",
+                vm.toString(status)
+            )
+        );
+
+        string memory response = string(data);
+        require(
+            vm.keyExistsJson(response, ".result.value.amount") &&
+                vm.keyExistsJson(response, ".result.value.decimals"),
+            string.concat("CCIPTokenPoolBatch: the Solana RPC returned no token supply: ", response)
+        );
+        uint256 decimals = vm.parseJsonUint(response, ".result.value.decimals");
+        require(
+            decimals == 9,
+            string.concat(
+                "CCIPTokenPoolBatch: the Solana OHM mint reports ",
+                vm.toString(decimals),
+                " decimals, not 9"
+            )
+        );
+        bytes memory amount = bytes(vm.parseJsonString(response, ".result.value.amount"));
+        require(amount.length != 0, "CCIPTokenPoolBatch: the Solana mint supply is empty");
+        for (uint256 i = 0; i < amount.length; i++) {
+            require(
+                amount[i] >= 0x30 && amount[i] <= 0x39,
+                string.concat(
+                    "CCIPTokenPoolBatch: the Solana mint supply is not a decimal number: ",
+                    string(amount)
+                )
+            );
+        }
+        supply = vm.parseUint(string(amount));
+    }
+
     /// @notice Funds the canonical lock/release pool with the OHM amount read from the args
-    ///         file, toward the minimum backing declared in `env.json`
-    ///         (`olympus.config.CCIP.minimumPoolBacking`): the OHM supply outstanding on the
-    ///         burn/mint chains that the pool must be able to release.
-    /// @dev    The amount is the figure `shell/calc_bridged_supply.sh` prints for the funding:
-    ///         the minimum backing minus the free liquidity of the pool, which is the pool
-    ///         balance minus the Solana mint supply, so that the balance after the transfer is
-    ///         the minimum backing plus the Solana mint supply and a release toward Ethereum of
-    ///         any part of that supply leaves it at or above the minimum backing. Run the
-    ///         script with no Ethereum-Solana transfer
-    ///         in flight and build the batch immediately before signing. A pool that already holds the minimum backing makes
-    ///         the batch empty, so a second run on a funded pool proposes nothing. The transfer
-    ///         is a plain `OHM.transfer` from the batch owner; the pool keeps no internal
-    ///         liquidity accounting and reads `balanceOf`, so no rebalancer role is needed to
-    ///         deposit. The post-batch check requires the pool balance after the transfer to
-    ///         cover the minimum backing against the simulated state, not the state the Safe
-    ///         executes against: a balance that falls between the build and the execution (a
-    ///         rebalancer withdrawal) is not reported here and surfaces as `BackingTooLow` of
-    ///         the proposal build.
-    ///         Args file format (`amount` in OHM base units, 9 decimals):
+    ///         file: the minimum backing declared in `env.json`
+    ///         (`olympus.config.CCIP.minimumPoolBacking`, the OHM supply outstanding on the
+    ///         burn/mint chains that the pool must be able to release) minus the unclaimable
+    ///         balance of the pool (`olympus.config.CCIP.poolUnclaimableBalance`, OHM locked
+    ///         against burns on Solana outside CCIP that nothing will release).
+    /// @dev    The pool balance also holds the OHM locked for Solana, which the Solana mint
+    ///         supply measures and a release toward Ethereum withdraws, so the backing the pool
+    ///         offers the burn/mint chains is its free liquidity, the balance minus that supply.
+    ///         The batch reads the supply from the Solana RPC behind the `solana` alias of
+    ///         `foundry.toml` while planning (a failed or malformed read fails the build) and
+    ///         proposes nothing when the free liquidity already covers the minimum backing.
+    ///         Otherwise it requires the amount of the args file to equal the minimum backing
+    ///         minus the unclaimable balance, the figure `shell/calc_bridged_supply.sh` prints,
+    ///         which depends neither on the pool balance nor on the Solana supply, so a
+    ///         transfer in flight cannot understate it: on a pool whose balance minus the Solana
+    ///         supply is the unclaimable balance, the free liquidity after the transfer is the
+    ///         minimum backing exactly. The amount is the whole minimum backing net of the
+    ///         unclaimable balance whatever the pool holds, so a pool whose free liquidity is
+    ///         short by less (after a rebalancer withdrawal) is over-funded by the difference.
+    ///         The transfer is a plain `OHM.transfer` from the batch owner; the pool keeps no
+    ///         internal liquidity accounting and reads `balanceOf`, so no rebalancer role is
+    ///         needed to deposit. The post-batch check requires, against the simulated state,
+    ///         the free liquidity after the transfer (with the supply read while planning) and
+    ///         the raw balance (the floor the proposal build and the checker compare on chain)
+    ///         at or above the minimum backing; a balance that falls between the build and the
+    ///         execution (a rebalancer withdrawal) is not reported here: a fall below the
+    ///         minimum backing surfaces as `BackingTooLow` of the proposal build, a smaller one
+    ///         (within the Solana mint supply) leaves the raw balance at the floor and is caught
+    ///         only by a new run of the script or of this batch. Build the batch immediately
+    ///         before signing.
+    ///         Not tracked: a further burn on Solana outside CCIP, or OHM sent to the pool
+    ///         directly, is not reflected in the unclaimable balance of `env.json` and settles
+    ///         as surplus in the pool. Transfers in flight (a lock not yet minted on Solana, a
+    ///         burn not yet released on Ethereum), which anyone can create, overstate the free
+    ///         liquidity the early return reads by the amount in flight, so a pool left short by
+    ///         less than that amount (after a rebalancer withdrawal) is reported as covered
+    ///         until they settle; the amount itself reads neither the balance nor the supply.
+    ///         Args file format (`amount` in OHM base units, 9 decimals; on 2026-10-14 the
+    ///         minimum backing 130721000000000 minus the unclaimable balance 214163189):
     ///         {
     ///           "functions": [{
     ///             "name": "fundPool",
@@ -885,13 +975,22 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///
     ///         Reverts if:
     ///         - The chain is not canonical (burn/mint pools hold no backing).
-    ///         - The pool is below the minimum backing and the args file does not carry
-    ///           `fundPool.amount`.
-    ///         - The pool is below the minimum backing and the amount is zero.
-    ///         - The pool is below the minimum backing and the batch owner's OHM balance does
-    ///           not cover the amount.
-    ///         - The pool balance after the transfer is below the minimum backing (the
-    ///           post-batch check).
+    ///         - `env.json` lacks `olympus.config.CCIP.minimumPoolBacking` or
+    ///           `olympus.config.CCIP.poolUnclaimableBalance` of the chain, or the minimum
+    ///           backing is zero.
+    ///         - `env.json` lacks `current.solana.olympus.legacy.OHM`, the Solana mint.
+    ///         - The unclaimable balance is at or above the minimum backing.
+    ///         - The Solana RPC request fails, answers with a status other than 200, without a
+    ///           token supply, with decimals other than 9 or with an amount that is not a
+    ///           decimal number.
+    ///         - The free liquidity is below the minimum backing and the args file does not
+    ///           carry `fundPool.amount`.
+    ///         - The free liquidity is below the minimum backing and the amount is not the
+    ///           minimum backing minus the unclaimable balance.
+    ///         - The free liquidity is below the minimum backing and the batch owner's OHM
+    ///           balance does not cover the amount.
+    ///         - The pool balance after the transfer, or the free liquidity after it, is below
+    ///           the minimum backing (the post-batch check).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file.
@@ -914,18 +1013,53 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         uint256 minimumBacking = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 unclaimable = CCIPConfigLib.poolUnclaimableBalance(env, chain);
+        require(
+            unclaimable < minimumBacking,
+            string.concat(
+                "CCIPTokenPoolBatch: the unclaimable balance ",
+                vm.toString(unclaimable),
+                " is not below the minimum backing ",
+                vm.toString(minimumBacking)
+            )
+        );
         uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
+        uint256 solanaSupply = _readSolanaMintSupply();
+        _fundPoolSolanaMintSupply = solanaSupply;
+        // The free liquidity is the balance minus the OHM locked for Solana; a pool that holds
+        // less than the Solana supply has none
+        uint256 freeLiquidity = poolBalance > solanaSupply ? poolBalance - solanaSupply : 0;
 
         console2.log("\n=== Fund the CCIP lock/release pool ===");
         console2.log("Pool:", tokenPool);
         console2.log("Minimum backing (env.json):", minimumBacking);
+        console2.log("Unclaimable balance (env.json):", unclaimable);
+        console2.log("Solana mint supply (Solana RPC):", solanaSupply);
         console2.log("Pool balance before:", poolBalance);
+        console2.log("Free liquidity before (balance minus Solana supply):", freeLiquidity);
+        if (poolBalance < solanaSupply) {
+            console2.log(
+                "The pool holds less than the Solana mint supply by",
+                solanaSupply - poolBalance
+            );
+        }
 
-        if (poolBalance >= minimumBacking) {
-            console2.log("The pool already holds the minimum backing. Nothing to do.");
+        if (freeLiquidity >= minimumBacking) {
+            console2.log(
+                "The free liquidity of the pool already covers the minimum backing. Nothing to do."
+            );
         } else {
             uint256 amount = _readBatchArgUint256("fundPool", "amount");
-            require(amount != 0, "CCIPTokenPoolBatch: the funding amount is zero");
+            uint256 expectedAmount = minimumBacking - unclaimable;
+            require(
+                amount == expectedAmount,
+                string.concat(
+                    "CCIPTokenPoolBatch: the funding amount ",
+                    vm.toString(amount),
+                    " is not the minimum backing minus the unclaimable balance, ",
+                    vm.toString(expectedAmount)
+                )
+            );
             uint256 ownerBalance = IERC20(ohm).balanceOf(_owner);
             require(
                 ownerBalance >= amount,
@@ -936,8 +1070,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                     vm.toString(amount)
                 )
             );
-            console2.log("Amount (args file):", amount);
-            console2.log("Pool balance after:", poolBalance + amount);
+            uint256 balanceAfter = poolBalance + amount;
+            console2.log("Amount (args file, minimum backing minus unclaimable balance):", amount);
+            console2.log("Pool balance after:", balanceAfter);
+            console2.log(
+                "Free liquidity after:",
+                balanceAfter > solanaSupply ? balanceAfter - solanaSupply : 0
+            );
             addToBatch(ohm, abi.encodeWithSelector(IERC20.transfer.selector, tokenPool, amount));
             console2.log("Added: OHM.transfer(pool,", amount, ")");
         }
@@ -951,11 +1090,14 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Validates the state after `fundPool` against the simulated state of the batch:
-    ///         the pool balance must be at or above the minimum backing.
+    ///         the pool balance must be at or above the minimum backing (the floor the proposal
+    ///         build and the checker compare on chain), and so must the free liquidity, the
+    ///         balance minus the Solana mint supply read while planning.
     function _validateFunded() external view {
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         uint256 minimumBacking = CCIPConfigLib.minimumPoolBacking(env, chain);
+        uint256 solanaSupply = _fundPoolSolanaMintSupply;
         uint256 poolBalance = IERC20(ohm).balanceOf(tokenPool);
         require(
             poolBalance >= minimumBacking,
@@ -966,7 +1108,27 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 vm.toString(minimumBacking)
             )
         );
+        require(
+            poolBalance >= solanaSupply && poolBalance - solanaSupply >= minimumBacking,
+            string.concat(
+                "The free liquidity of the pool (balance ",
+                vm.toString(poolBalance),
+                " minus the Solana mint supply ",
+                vm.toString(solanaSupply),
+                ") is below the minimum backing ",
+                vm.toString(minimumBacking)
+            )
+        );
+        uint256 freeLiquidity = poolBalance - solanaSupply;
         console2.log("The pool holds the minimum backing:", poolBalance);
+        console2.log("The free liquidity of the pool covers the minimum backing:", freeLiquidity);
+        if (freeLiquidity > minimumBacking) {
+            console2.log(
+                "The free liquidity exceeds the minimum backing by",
+                freeLiquidity - minimumBacking,
+                "(transfers in flight, OHM burned on Solana outside CCIP or sent to the pool directly, or a pool whose free liquidity was short by less than the amount)"
+            );
+        }
     }
 
     // ===== LIQUIDITY (REBALANCER PATH) ===== //

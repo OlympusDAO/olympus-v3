@@ -38,7 +38,9 @@ import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 ///        remote chain (`gasLimit` with a defaulted `trustedRemote` for EVM, `gasLimit` and an
 ///        explicit `svmReceiver` for SVM, and an optional `enabled` whose `false` value marks
 ///        the trusted remote for removal);
-///      - `CCIP.minimumPoolBacking` is the minimum OHM backing of the canonical lock/release pool.
+///      - `CCIP.minimumPoolBacking` is the minimum OHM backing of the canonical lock/release pool;
+///      - `CCIP.poolUnclaimableBalance` is the part of the balance of the canonical lock/release
+///        pool that no chain can claim.
 ///      Every read fails closed: a missing key, a zero address, an empty or malformed encoding
 ///      or a disabled rate limiter reverts with a message naming the key, a timelock delay
 ///      outside the bound of the timelock and an EVM periphery gas limit below
@@ -56,6 +58,8 @@ library CCIPConfigLib {
     string internal constant CONFIG_KEY = "olympus.config.CCIPTokenPoolConfig";
     string internal constant ROUTES_KEY = "olympus.config.CCIP.routes";
     string internal constant MIN_POOL_BACKING_KEY = "olympus.config.CCIP.minimumPoolBacking";
+    string internal constant POOL_UNCLAIMABLE_BALANCE_KEY =
+        "olympus.config.CCIP.poolUnclaimableBalance";
     string internal constant LOCK_RELEASE_POOL_KEY = "olympus.periphery.CCIPLockReleaseTokenPool";
     string internal constant BURN_MINT_POOL_KEY = "olympus.policies.CCIPBurnMintTokenPool";
     string internal constant SVM_POOL_KEY = "olympus.periphery.TokenPool";
@@ -264,6 +268,31 @@ library CCIPConfigLib {
         _requireKey(env_, key);
         backing = env_.readUint(key);
         require(backing != 0, string.concat("CCIPConfigLib: zero value for ", key));
+    }
+
+    /// @notice Reads the unclaimable balance of the canonical lock/release pool, in OHM base
+    ///         units: OHM locked in the pool whose counterpart was burned on Solana outside CCIP,
+    ///         so that no CCIP message exists that would release it. The value is derived from
+    ///         the two histories, the locks of the pool against the mints on Solana and the
+    ///         releases against the CCIP burns, so a transfer in flight does not enter it;
+    ///         before the funding it also equals the pool balance minus the Solana mint supply
+    ///         once every transfer has settled (after the funding that difference is the
+    ///         minimum backing). It changes only when more OHM in the pool becomes unclaimable
+    ///         (a further burn on Solana outside CCIP, OHM sent to the pool directly) or when
+    ///         the rebalancer withdraws such OHM. Zero is a valid value: a pool that holds
+    ///         nothing unclaimable.
+    ///         Value on 2026-10-14: 214163189, two Solana burns of 2025-09-01 (19346108 and
+    ///         194817081) against locks that nothing will release.
+    // The env.json reader of the key, kept beside minimumPoolBacking so that every key of the
+    // CCIP config is read through the library with the same fail-closed rules
+    // forge-lint: disable-next-item(internal-function-used-once)
+    function poolUnclaimableBalance(
+        string memory env_,
+        string memory chain_
+    ) internal view returns (uint256 unclaimable) {
+        string memory key = _path(chain_, POOL_UNCLAIMABLE_BALANCE_KEY);
+        _requireKey(env_, key);
+        unclaimable = env_.readUint(key);
     }
 
     /// @notice Returns whether a chain hosts an EVM burn/mint pool: an EVM chain that is not
