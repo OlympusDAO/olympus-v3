@@ -14,7 +14,7 @@ import {TimelockBatchQueueTest} from "src/test/policies/utils/TimelockBatchQueue
 contract TimelockBatchQueueGetQueuedSubActionTest is TimelockBatchQueueTest {
     function test_getQueuedSubAction_givenBatchQueued() public {
         (uint64 actionId, ITimelockBatchQueue.BatchAction[] memory actions) = _queueThreeBatch();
-        for (uint256 i = 0; i < actions.length; ++i) {
+        for (uint256 i; i < actions.length; ++i) {
             (address target, bytes4 selector, bytes memory payload) = queue.getQueuedSubAction(
                 actionId,
                 i

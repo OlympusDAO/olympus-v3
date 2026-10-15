@@ -130,6 +130,8 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
         if (!isEnabled) revert NotEnabled();
     }
 
+    // Retained as a reusable lifecycle guard for inheriting contracts.
+    // forge-lint: disable-next-item(modifier-used-only-once)
     /// @notice Modifier that reverts when the contract is not currently enabled.
     modifier givenEnabled() {
         _requireEnabled();
@@ -146,11 +148,15 @@ abstract contract EnablerV2 is IEnablerV2, ERC165 {
         if (isEnabled) revert NotDisabled();
     }
 
+    // Retained as a reusable lifecycle guard for inheriting contracts.
+    // forge-lint: disable-start(modifier-used-only-once)
     /// @notice Modifier that reverts when the contract is currently enabled.
     modifier givenDisabled() {
         _requireDisabled();
         _;
     }
+
+    // forge-lint: disable-end(modifier-used-only-once)
 
     /// @notice Returns the current block timestamp narrowed to `uint48`.
     /// @dev The function is exposed as a virtual hook so that test doubles can

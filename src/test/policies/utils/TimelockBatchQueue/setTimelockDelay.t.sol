@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
-// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
-// forge-lint: disable-start(reentrancy-events)
-
 // Shared domain values use constants; scenario-specific literals remain inline for auditability.
 // forge-lint: disable-start(literal-instead-of-constant)
 
@@ -69,5 +66,3 @@ contract TimelockBatchQueueSetTimelockDelayTest is TimelockBatchQueueTest {
 }
 
 // forge-lint: disable-end(literal-instead-of-constant)
-
-// forge-lint: disable-end(reentrancy-events)
