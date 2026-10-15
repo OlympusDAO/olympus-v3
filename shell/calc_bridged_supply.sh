@@ -212,28 +212,30 @@ declare -A CCIP_REGISTRY=(
     [berachain]="0x0944C3Fb1dB7D165336569221995B31cBE6c8A55"
 )
 
-# --- Verified failedMessages nonces (2026-03-24) ---
+# --- Verified failedMessages nonces (2026-10-15) ---
 # All nonces from 1 to these values have been checked: 0 unretried failures.
 # Format: VERIFIED_<dst>_FROM_<src>=<last_verified_nonce>
-# Total verified: 9416 nonces across 12 routes.
+# Total verified: 9641 nonces across 12 routes (the inbound nonces of the
+# destination bridges read on 2026-10-15, with every bridge inactive and no
+# message in flight).
 declare -A VERIFIED_NONCE=(
     # Ethereum bridge (receiving from):
-    [ethereum:arbitrum]=1154
+    [ethereum:arbitrum]=1158
     [ethereum:optimism]=2
-    [ethereum:base]=406
-    [ethereum:berachain]=1095
+    [ethereum:base]=429
+    [ethereum:berachain]=1129
     # Arbitrum bridge (receiving from):
-    [arbitrum:ethereum]=1495
+    [arbitrum:ethereum]=1511
     [arbitrum:optimism]=2
-    [arbitrum:base]=1505
+    [arbitrum:base]=1560
     # Optimism bridge (receiving from):
     [optimism:ethereum]=1
     [optimism:arbitrum]=1
     # Base bridge (receiving from):
-    [base:ethereum]=436
-    [base:arbitrum]=1593
+    [base:ethereum]=452
+    [base:arbitrum]=1653
     # Berachain bridge (receiving from):
-    [berachain:ethereum]=1726
+    [berachain:ethereum]=1743
 )
 
 # --- Counters ---
