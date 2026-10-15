@@ -5,15 +5,15 @@ import {Test} from "@forge-std-1.16.2/Test.sol";
 
 import {CCIPFeeBudgetLibHarness} from "src/test/scripts/ops/lib/mocks/CCIPFeeBudgetLibHarness.sol";
 
-/// @notice Runs the fee budget reader against the live fee contracts of the three ramp
-///         generations that serve mainnet today, at pinned blocks: `OnRamp 2.0.0` toward
-///         Arbitrum, `OnRamp 1.6.0` toward Base and `EVM2EVMOnRamp 1.5.0` toward Berachain, each
-///         quoting through the source chain's live contracts. No OHM entry exists on any of them
-///         at the pinned block, so every read returns the 90000 chain default and names the
-///         contracts it came from. Run with `pnpm test:fork`; the Alchemy key comes from `.env`.
+/// @notice Runs the fee budget reader against the fee contracts of the three ramp generations
+///         that serve mainnet at the pinned block: `OnRamp 2.0.0` toward Arbitrum, `OnRamp 1.6.0`
+///         toward Base and `EVM2EVMOnRamp 1.5.0` toward Berachain, each quoting through the
+///         source chain's contracts of that block. No OHM entry exists on any of them at the
+///         pinned block, so every read returns the 90000 chain default and names the contracts
+///         it came from. Run with `pnpm test:fork`; the Alchemy key comes from `.env`.
 contract CCIPFeeBudgetLibForkTests_readOhmDestGasOverhead is Test {
-    /// @notice A mainnet block of 2026-09-04, after the Arbitrum and Optimism lanes moved to
-    ///         2.0.0 and while Base stays on 1.6.0 and Berachain on 1.5.0.
+    /// @notice A mainnet block of 2026-09-04, at which the Arbitrum and Optimism lanes run
+    ///         2.0.0, the Base lane 1.6.0 and the Berachain lane 1.5.0.
     uint256 internal constant MAINNET_FORK_BLOCK = 25903191;
 
     /// @notice The live default of every EVM destination of the mainnet fee quoter and of the
