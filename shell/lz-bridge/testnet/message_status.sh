@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Reports the LayerZero status of bridge messages by querying the LayerZero Scan testnet API
 # (https://scan-testnet.layerzero-api.com) by source transaction hash.

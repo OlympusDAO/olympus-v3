@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # OlympusDAO Sherlock Audit (02/2023)
 
 The purpose of this audit is to review the security of a new OlympusDAO product: Single Sided Liquidity Vaults (SSLV), and some additional contracts to allow minting and burning of OHM by the DAO MS in order to implement governance proposals for pilot programs and other product tests.

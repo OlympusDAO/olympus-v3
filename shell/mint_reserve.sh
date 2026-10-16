@@ -1,3 +1,8 @@
+#!/usr/bin/env bash
+
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # mint_reserve.sh - Script to mint testnet DAI for testing Bophades Range System on Testnet
 # Load environment variables
 source .env

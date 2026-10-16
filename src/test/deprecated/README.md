@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Deprecated Tests
 
 Tests in this directory cover contracts that are no longer maintained or deployed as part of the

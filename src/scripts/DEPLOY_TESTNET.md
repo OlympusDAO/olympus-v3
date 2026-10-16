@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Deploying on a Testnet
 
 OHM (and associated contracts) may need to be deployed on testnets. If so, this document can help with the steps.

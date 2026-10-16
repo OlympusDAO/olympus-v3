@@ -3,6 +3,9 @@ name: test-write
 description: Write or review Olympus V3 Solidity tests, including external-function coverage matrices, authorization, enabled-state, numeric boundaries, state transitions, accounting, preview/write consistency, fuzzing, invariants, file structure, naming, and error handling.
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Test Writing Guide
 
 This guide covers the standards for writing test files in the Olympus V3 codebase.

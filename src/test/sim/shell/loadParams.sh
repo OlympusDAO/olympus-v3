@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 # Script to load params from a json file into solidity, using a filter defined in the arguments passed here.
 
 # Create filter with passed in seed

@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
+
 # shellcheck shell=bash
 # Shared helpers for the LayerZero bridge Anvil deployment harness.
 #

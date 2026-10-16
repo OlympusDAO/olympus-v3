@@ -2,6 +2,9 @@
 description: Guide for writing and formatting NatSpec documentation in the Olympus V3 codebase
 ---
 
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # NatSpec Formatting Guide
 
 This guide covers the standards for writing and formatting NatSpec documentation in the Olympus V3 codebase.

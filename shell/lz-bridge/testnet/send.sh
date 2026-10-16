@@ -1,4 +1,6 @@
 #!/bin/bash
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Sends OHM across the testnet bridge from one chain to another, then records the message in
 # deployments/messages.json (source tx hash + metadata) so its status can be tracked later.

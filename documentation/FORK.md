@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Testing with Anvil Fork
 
 This guide covers the complete workflow for testing protocol changes against a local Anvil fork, avoiding the 20-block limit of Tenderly VNet.
