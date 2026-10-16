@@ -1,0 +1,885 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Test modifiers aid setup readability; test actions assert their effects directly.
+// Test loops call assertions, cheatcodes, or fixtures over bounded collections.
+// Test helpers update expected-model state after successful calls to controlled fixtures.
+// forge-lint: disable-start(unwrapped-modifier-logic,unused-return,calls-loop,reentrancy-no-eth)
+
+import {Test} from "@forge-std-1.16.2/Test.sol";
+
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockERC4626} from "src/test/mocks/MockERC4626.sol";
+import {ERC20} from "@openzeppelin-5.7.0/token/ERC20/ERC20.sol";
+import {SafeCast} from "@openzeppelin-5.7.0/utils/math/SafeCast.sol";
+
+import {Actions, Kernel, toKeycode} from "src/Kernel.sol";
+import {IAssetManagerV1_1} from "src/bases/interfaces/IAssetManagerV1_1.sol";
+import {IERC20} from "src/interfaces/IERC20.sol";
+import {IERC4626} from "src/interfaces/IERC4626.sol";
+import {IPriceCache} from "src/interfaces/IPriceCache.sol";
+import {IFLOANv1} from "src/modules/FLOAN/IFLOAN.v1.sol";
+import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
+import {OlympusFixedTermLoan} from "src/modules/FLOAN/OlympusFixedTermLoan.sol";
+import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
+import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
+import {BurnerLoansConfigTimelock} from "src/policies/BurnerLoansConfigTimelock.sol";
+import {BurnerLoansConfig} from "src/policies/BurnerLoansConfig.sol";
+import {BurnerLoansInventory} from "src/policies/BurnerLoansInventory.sol";
+import {DepositManager} from "src/policies/deposits/DepositManager.sol";
+import {ReceiptTokenManager} from "src/policies/deposits/ReceiptTokenManager.sol";
+import {RolesAdmin} from "src/policies/RolesAdmin.sol";
+import {RevenueDistributor} from "src/policies/RevenueDistributor.sol";
+import {RevenueDistributorConfigTimelock} from "src/policies/RevenueDistributorConfigTimelock.sol";
+import {PriceCache} from "src/policies/price/PriceCache.sol";
+import {IBurnerLoans} from "src/policies/interfaces/IBurnerLoans.sol";
+import {IRevenueDistributor} from "src/policies/interfaces/IRevenueDistributor.sol";
+import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {BurnerLoansConstants} from "src/policies/libraries/BurnerLoansConstants.sol";
+import {ADMIN_ROLE, BURNER_LOANS_ADMIN_ROLE, BURNER_LOANS_INVENTORY_PROVIDER_ROLE, DEPOSIT_OPERATOR_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {MockDepositManager} from "src/test/mocks/MockDepositManager.sol";
+import {MockERC20} from "src/test/mocks/MockERC20.sol";
+import {MockOlympusBackingOracle} from "src/test/mocks/MockOlympusBackingOracle.sol";
+import {MockPrice} from "src/test/mocks/MockPrice.v2.sol";
+import {BurnerLoansHarness} from "src/test/policies/BurnerLoans/fixtures/BurnerLoansHarness.sol";
+import {MockERC7540ExternalShareToken, MockERC7540ExternalShareVault} from "src/test/mocks/MockERC7540ExternalShareVault.sol";
+import {MockERC7575Vault} from "src/test/mocks/MockERC7575Vault.sol";
+
+abstract contract BurnerLoansTest is Test {
+    using SafeCast for uint256;
+
+    event AuthorizationSet(
+        address indexed caller,
+        address indexed account,
+        address indexed authorized,
+        uint48 authorizationDeadline
+    );
+
+    address internal admin;
+    address internal burnerLoansAdmin;
+    address internal emergency;
+    address internal alice;
+    address internal protocolProvider;
+
+    Kernel internal kernel;
+    OlympusMinter internal mintr;
+    OlympusFixedTermLoan internal floan;
+    OlympusRoles internal roles;
+    OlympusTreasury internal trsry;
+    RolesAdmin internal rolesAdmin;
+    MockPrice internal price;
+    MockERC20 internal ohm;
+    MockERC20 internal usds;
+    ReceiptTokenManager internal receiptTokenManager;
+    IDepositManager internal depositManager;
+    MockDepositManager internal mockDepositManager;
+    BurnerLoansHarness internal burnerLoans;
+    BurnerLoansInventory internal inventory;
+    BurnerLoansConfig internal burnerLoansConfig;
+    BurnerLoansConfigTimelock internal configTimelock;
+    MockOlympusBackingOracle internal backingOracle;
+
+    uint8 internal constant OHM_DECIMALS = 9;
+    uint8 internal constant USDS_DECIMALS = 6;
+    uint8 internal constant PRICE_DECIMALS = 18;
+
+    function _ohmDecimals() internal pure virtual returns (uint8) {
+        return OHM_DECIMALS;
+    }
+
+    function _collateralDecimals() internal pure virtual returns (uint8) {
+        return USDS_DECIMALS;
+    }
+
+    function setUp() public virtual {
+        admin = makeAddr("admin");
+        burnerLoansAdmin = makeAddr("burnerLoansAdmin");
+        emergency = makeAddr("emergency");
+        alice = makeAddr("alice");
+        protocolProvider = makeAddr("protocolProvider");
+
+        vm.startPrank(admin);
+
+        kernel = new Kernel();
+        ohm = new MockERC20("OHM", "OHM", _ohmDecimals());
+        usds = new MockERC20("USDS", "USDS", _collateralDecimals());
+        mintr = new OlympusMinter(kernel, address(ohm));
+        floan = new OlympusFixedTermLoan(kernel);
+        roles = new OlympusRoles(kernel);
+        trsry = new OlympusTreasury(kernel);
+        rolesAdmin = new RolesAdmin(kernel);
+        price = new MockPrice(kernel, PRICE_DECIMALS, uint32(8 hours));
+        receiptTokenManager = new ReceiptTokenManager();
+        depositManager = new DepositManager(address(kernel), address(receiptTokenManager));
+        backingOracle = new MockOlympusBackingOracle(1e18);
+        burnerLoans = new BurnerLoansHarness(
+            kernel,
+            IERC20(address(ohm)),
+            depositManager,
+            IPriceCache(address(0)),
+            backingOracle
+        );
+        inventory = new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(burnerLoans));
+
+        kernel.executeAction(Actions.InstallModule, address(floan));
+        kernel.executeAction(Actions.InstallModule, address(mintr));
+        kernel.executeAction(Actions.InstallModule, address(price));
+        kernel.executeAction(Actions.InstallModule, address(roles));
+        kernel.executeAction(Actions.InstallModule, address(trsry));
+        kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
+        kernel.executeAction(Actions.ActivatePolicy, address(depositManager));
+        kernel.executeAction(Actions.ActivatePolicy, address(inventory));
+        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoans));
+
+        burnerLoansConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoansConfig));
+
+        configTimelock = new BurnerLoansConfigTimelock(kernel, burnerLoansConfig);
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+
+        vm.label(address(kernel), "Kernel");
+        vm.label(address(ohm), "OHM");
+        vm.label(address(usds), "USDS collateral");
+        vm.label(address(mintr), "MINTR");
+        vm.label(address(floan), "FLOAN");
+        vm.label(address(roles), "ROLES");
+        vm.label(address(trsry), "TRSRY");
+        vm.label(address(price), "Price oracle");
+        vm.label(address(receiptTokenManager), "Receipt token manager");
+        vm.label(address(depositManager), "Deposit manager");
+        vm.label(address(backingOracle), "Backing oracle");
+        vm.label(address(burnerLoans), "Burner Loans");
+        vm.label(address(inventory), "Burner Loans inventory");
+        vm.label(address(burnerLoansConfig), "Burner Loans config");
+        vm.label(address(configTimelock), "Burner Loans config timelock");
+
+        rolesAdmin.grantRole(ADMIN_ROLE, admin);
+        rolesAdmin.grantRole(BURNER_LOANS_ADMIN_ROLE, burnerLoansAdmin);
+        rolesAdmin.grantRole(BURNER_LOANS_INVENTORY_PROVIDER_ROLE, protocolProvider);
+        rolesAdmin.grantRole(EMERGENCY_ROLE, emergency);
+        rolesAdmin.grantRole("manager", admin);
+        rolesAdmin.grantRole("manager", address(this));
+        rolesAdmin.grantRole("deposit_operator", address(burnerLoans));
+
+        burnerLoansConfig.setFacility(address(burnerLoans));
+        inventory.setConfigurator(address(burnerLoansConfig));
+        inventory.enable("");
+        burnerLoans.setInventory(address(inventory));
+        burnerLoans.setConfigurator(address(burnerLoansConfig));
+        _enableDepositManager();
+        burnerLoansConfig.enable("");
+        depositManager.setOperatorName(address(burnerLoans), "brn");
+        burnerLoans.enable("");
+
+        vm.stopPrank();
+    }
+
+    /// @notice Asserts each pending liability and their aggregate for a single-keeper fixture.
+    function _assertPendingPayouts(
+        address token_,
+        address keeper_,
+        uint256 expectedFee_,
+        uint256 expectedSeizure_,
+        uint256 expectedSeizureReward_
+    ) internal view {
+        assertEq(
+            burnerLoans.pendingFeeForTest(token_),
+            expectedFee_,
+            "pending fee matches expected balance"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureForTest(token_),
+            expectedSeizure_,
+            "pending seizure matches expected balance"
+        );
+        assertEq(
+            burnerLoans.pendingSeizureRewardForTest(token_, keeper_),
+            expectedSeizureReward_,
+            "pending seizure reward matches expected balance"
+        );
+        assertEq(
+            burnerLoans.totalPendingForTest(token_),
+            expectedFee_ + expectedSeizure_ + expectedSeizureReward_,
+            "aggregate pending matches expected balance"
+        );
+    }
+
+    /// @notice Installs a Treasury-only distributor for the exact output tokens under test.
+    function _installRevenueDistributorForTest(
+        address[] memory tokens_
+    ) internal returns (RevenueDistributor distributor) {
+        vm.startPrank(admin);
+        distributor = new RevenueDistributor(kernel);
+        RevenueDistributorConfigTimelock timelock = new RevenueDistributorConfigTimelock(
+            kernel,
+            distributor
+        );
+        kernel.executeAction(Actions.ActivatePolicy, address(distributor));
+        kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        distributor.enable("");
+        timelock.enable("");
+        distributor.setConfigOperator(address(timelock));
+        vm.stopPrank();
+
+        IRevenueDistributor.AssetRoute[] memory routes = new IRevenueDistributor.AssetRoute[](0);
+        for (uint256 i; i < tokens_.length; ++i) {
+            vm.prank(address(timelock));
+            distributor.setAssetRoutes(tokens_[i], 0, routes);
+        }
+        vm.prank(admin);
+        burnerLoans.setRevenueDistributor(address(distributor));
+    }
+
+    function _installRevenueDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        address[] memory tokens = new address[](1);
+        tokens[0] = token_;
+        return _installRevenueDistributorForTest(tokens);
+    }
+
+    function _installFeeDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        distributor = _installRevenueDistributorForTest(token_);
+        _setSendFeesToDistributor(true);
+    }
+
+    function _installYieldDistributorForTest(
+        address token_
+    ) internal returns (RevenueDistributor distributor) {
+        distributor = _installRevenueDistributorForTest(token_);
+        _setSendYieldToDistributor(true);
+    }
+
+    function _configureFeeRecipientForTest(
+        bool sendToDistributor_,
+        address token_
+    ) internal returns (address recipient) {
+        if (!sendToDistributor_) return address(trsry);
+        return address(_installFeeDistributorForTest(token_));
+    }
+
+    function _configureYieldRecipientForTest(
+        bool sendToDistributor_,
+        address token_
+    ) internal returns (address recipient) {
+        if (!sendToDistributor_) return address(trsry);
+        return address(_installYieldDistributorForTest(token_));
+    }
+
+    function _setSendFeesToDistributor(bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setSendFeesToDistributor(enabled_);
+    }
+
+    function _setSendYieldToDistributor(bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setSendYieldToDistributor(enabled_);
+    }
+
+    function _setAssetOriginationsEnabled(address asset_, bool enabled_) internal {
+        vm.prank(admin);
+        burnerLoansConfig.setAssetOriginationsEnabled(asset_, enabled_);
+    }
+
+    function _activatePolicy(address policy_) internal {
+        vm.prank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, policy_);
+    }
+
+    function _deactivatePolicy(address policy_) internal {
+        vm.prank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, policy_);
+    }
+
+    function _deactivatePolicyIf(address policy_, bool deactivate_) internal {
+        if (deactivate_) _deactivatePolicy(policy_);
+    }
+
+    function _disableBurnerLoans(address caller_) internal {
+        vm.prank(caller_);
+        burnerLoans.disable("");
+    }
+
+    function _disableBurnerLoansIf(bool disabled_) internal {
+        if (disabled_) _disableBurnerLoans(admin);
+    }
+
+    function _enableBurnerLoans(address caller_) internal {
+        vm.prank(caller_);
+        burnerLoans.enable("");
+    }
+
+    function _defaultAssetDebtCap() internal pure returns (uint128) {
+        return uint128(100_000 * 10 ** _ohmDecimals());
+    }
+
+    function _defaultAssetFeeConfig() internal pure returns (IBurnerLoans.AssetFeeConfig memory) {
+        return
+            IBurnerLoans.AssetFeeConfig({
+                baseFeeBps: 25,
+                kinkBps: 8_000,
+                preKinkSlopeBps: 100,
+                postKinkSlopeBps: 900
+            });
+    }
+
+    function _defaultAssetRiskConfigInput()
+        internal
+        pure
+        returns (IBurnerLoans.AssetRiskConfigInput memory)
+    {
+        return _defaultAssetRiskConfigInput(_collateralDecimals());
+    }
+
+    function _defaultAssetRiskConfigInput(
+        uint8 collateralDecimals_
+    ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
+        return
+            IBurnerLoans.AssetRiskConfigInput({
+                maxLtvBps: 8_500,
+                backingMultiplierBps: 12_500,
+                keeperRewardBps: 100,
+                termLength: 30 days,
+                maxMaturityHorizon: 90 days,
+                maxKeeperReward: uint128(1_000 * 10 ** collateralDecimals_)
+            });
+    }
+
+    function _defaultAssetConfig(
+        uint8 collateralDecimals_
+    ) internal pure returns (IBurnerLoans.AssetConfig memory) {
+        return
+            IBurnerLoans.AssetConfig({
+                originationsEnabled: true,
+                withdrawAsShares: false,
+                collateralDecimals: collateralDecimals_,
+                maxLtvBps: 8_500,
+                backingMultiplierBps: 12_500,
+                keeperRewardBps: 100,
+                termLength: 30 days,
+                maxMaturityHorizon: 90 days,
+                debtCap: _defaultAssetDebtCap(),
+                maxKeeperReward: uint128(1_000 * 10 ** collateralDecimals_)
+            });
+    }
+
+    function _assetRiskConfigInputFromConfig(
+        IBurnerLoans.AssetConfig memory config_
+    ) internal pure returns (IBurnerLoans.AssetRiskConfigInput memory) {
+        return
+            IBurnerLoans.AssetRiskConfigInput({
+                maxLtvBps: config_.maxLtvBps,
+                backingMultiplierBps: config_.backingMultiplierBps,
+                keeperRewardBps: config_.keeperRewardBps,
+                termLength: config_.termLength,
+                maxMaturityHorizon: config_.maxMaturityHorizon,
+                maxKeeperReward: config_.maxKeeperReward
+            });
+    }
+
+    function _configurePrice(address asset_, uint256 price_) internal {
+        price.setPrice(asset_, price_);
+    }
+
+    function _deployPriceCache(
+        bool activate_,
+        bool enable_
+    ) internal returns (PriceCache priceCache_) {
+        priceCache_ = new PriceCache(kernel, PRICE_DECIMALS, "USD");
+        if (activate_) kernel.executeAction(Actions.ActivatePolicy, address(priceCache_));
+        if (enable_) priceCache_.enable("");
+    }
+
+    function _configureDepositManagerAsset(address asset_) internal {
+        vm.startPrank(admin);
+        depositManager.addAsset(IERC20(asset_), IERC4626(address(0)), type(uint256).max, 0);
+        depositManager.addAssetPeriod(
+            IERC20(asset_),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        vm.stopPrank();
+    }
+
+    function _depositOperatorRole() internal pure returns (bytes32) {
+        return DEPOSIT_OPERATOR_ROLE;
+    }
+
+    function _enableDepositManager() internal {
+        IEnabler(address(depositManager)).enable("");
+    }
+
+    function _disableDepositManager() internal {
+        IEnabler(address(depositManager)).disable("");
+    }
+
+    function _addVaultAssetForTest() internal returns (MockERC20 asset, MockERC4626 vault) {
+        asset = new MockERC20("Vault Collateral", "vCOLL", _collateralDecimals());
+        vault = new MockERC4626(ERC20(address(asset)), "Vault", "VAULT");
+        vm.label(address(asset), "Vault collateral");
+        vm.label(address(vault), "Collateral vault");
+        _configurePrice(address(asset), 1e18);
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(asset)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        vm.stopPrank();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _addAsyncExternalShareAssetForTest()
+        internal
+        returns (
+            MockERC20 asset,
+            MockERC7540ExternalShareVault vault,
+            MockERC7540ExternalShareToken shareToken
+        )
+    {
+        asset = new MockERC20("External Share Collateral", "esCOLL", 18);
+        vm.label(address(asset), "Async external share collateral");
+        (vault, shareToken) = _configureAsyncExternalShareAssetForTest(asset);
+    }
+
+    function _addSameDecimalExternalShareAssetForTest()
+        internal
+        returns (MockERC20 asset, MockERC7575Vault vault, IERC20 shareToken)
+    {
+        asset = new MockERC20("External Share Collateral", "esCOLL", 18);
+        vault = new MockERC7575Vault(ERC20(address(asset)), true);
+        shareToken = IERC20(vault.share());
+        vm.label(address(asset), "External share collateral");
+        vm.label(address(vault), "ERC-7575 vault");
+        vm.label(address(shareToken), "ERC-7575 share token");
+        _configurePrice(address(asset), 1e18);
+
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(asset)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        burnerLoansConfig.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(asset.decimals()),
+            _defaultAssetFeeConfig(),
+            true
+        );
+        vm.stopPrank();
+    }
+
+    function _configureAsyncExternalShareAssetForTest(
+        MockERC20 asset_
+    )
+        internal
+        returns (MockERC7540ExternalShareVault vault, MockERC7540ExternalShareToken shareToken)
+    {
+        vault = new MockERC7540ExternalShareVault(ERC20(address(asset_)), false, true, true);
+        shareToken = MockERC7540ExternalShareToken(vault.share());
+        vm.label(address(vault), "ERC-7540 external share vault");
+        vm.label(address(shareToken), "ERC-7540 share token");
+        _configurePrice(address(asset_), 1e18);
+
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(asset_)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(asset_)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        burnerLoansConfig.addAsset(
+            address(asset_),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(asset_.decimals()),
+            _defaultAssetFeeConfig(),
+            true
+        );
+        vm.stopPrank();
+    }
+
+    /// @dev Models an asynchronous ERC-4626 whose shares remain transferable while synchronous
+    ///      redemption is unavailable. Share-output tests use this to prove that no redemption is
+    ///      attempted accidentally.
+    function _makeVaultAsynchronous(MockERC4626 vault_) internal {
+        vm.mockCallRevert(
+            address(vault_),
+            abi.encodeWithSelector(IERC4626.redeem.selector),
+            abi.encode("asynchronous redemption")
+        );
+    }
+
+    function _addDirectAssetForTest() internal returns (MockERC20 asset) {
+        asset = new MockERC20("Direct Collateral", "dCOLL", _collateralDecimals());
+        vm.label(address(asset), "Direct collateral");
+        _configurePrice(address(asset), 1e18);
+        _configureDepositManagerAsset(address(asset));
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(asset),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _activateReplacementConfigurator() internal returns (BurnerLoansConfig replacement) {
+        replacement = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.ActivatePolicy, address(replacement));
+        replacement.setFacility(address(burnerLoans));
+        vm.stopPrank();
+    }
+
+    function _configureUsdsDependencies() internal {
+        _configurePrice(address(usds), 1e18);
+        _configureDepositManagerAsset(address(usds));
+    }
+
+    function _setDefaultGlobalDebtCap() internal {
+        vm.prank(admin);
+        burnerLoansConfig.setGlobalDebtCap(uint128(1_000_000 * 10 ** _ohmDecimals()));
+    }
+
+    function _addDefaultUsdsAsset() internal {
+        _configureUsdsDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _addDefaultUsdsVaultAsset() internal returns (MockERC4626 vault) {
+        vault = _configureUsdsVaultDependencies();
+        _setDefaultGlobalDebtCap();
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+    }
+
+    function _configureUsdsVaultDependencies() internal returns (MockERC4626 vault) {
+        vault = new MockERC4626(ERC20(address(usds)), "USDS Vault", "vUSDS");
+        vm.label(address(vault), "USDS vault");
+        _configurePrice(address(usds), 1e18);
+        vm.startPrank(admin);
+        depositManager.addAsset(
+            IERC20(address(usds)),
+            IERC4626(address(vault)),
+            type(uint256).max,
+            0
+        );
+        depositManager.addAssetPeriod(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        vm.stopPrank();
+    }
+
+    function _createDuplicateUsdsMarketForTest() internal returns (uint32 marketId) {
+        return _createDuplicateMarketForTest(address(usds));
+    }
+
+    function _createDuplicateMarketForTest(address asset_) internal returns (uint32 marketId) {
+        uint32 existingMarketId = burnerLoansConfig.marketId(asset_);
+        IFLOANv1.Market memory market = floan.getMarket(existingMarketId);
+        bytes memory configData = floan.getMarketConfigData(existingMarketId);
+
+        vm.prank(address(burnerLoansConfig));
+        marketId = floan.createMarket(
+            IFLOANv1.MarketInput({
+                collateralToken: market.collateralToken,
+                debtToken: market.debtToken,
+                manager: market.manager,
+                facility: market.facility,
+                configId: market.configId,
+                principalCap: market.principalCap,
+                termLength: market.termLength,
+                maxMaturityHorizon: market.maxMaturityHorizon,
+                maxLtvBps: market.maxLtvBps,
+                baseFeeBps: market.baseFeeBps
+            }),
+            configData
+        );
+    }
+
+    function _replaceMarketConfigForTest(
+        address asset_,
+        bytes16 configId_,
+        bytes memory configData_
+    ) internal returns (uint32 marketId) {
+        uint32 existingMarketId = burnerLoansConfig.marketId(asset_);
+        IFLOANv1.Market memory market = floan.getMarket(existingMarketId);
+
+        _setMarketFacilityForTest(existingMarketId, makeAddr("otherFacility"));
+        vm.startPrank(address(burnerLoansConfig));
+        marketId = floan.createMarket(
+            IFLOANv1.MarketInput({
+                collateralToken: market.collateralToken,
+                debtToken: market.debtToken,
+                manager: market.manager,
+                facility: market.facility,
+                configId: configId_,
+                principalCap: market.principalCap,
+                termLength: market.termLength,
+                maxMaturityHorizon: market.maxMaturityHorizon,
+                maxLtvBps: market.maxLtvBps,
+                baseFeeBps: market.baseFeeBps
+            }),
+            configData_
+        );
+        vm.stopPrank();
+    }
+
+    function _setMarketFacilityForTest(uint32 marketId_, address facility_) internal {
+        vm.mockCall(
+            address(kernel),
+            abi.encodeWithSelector(
+                kernel.modulePermissions.selector,
+                toKeycode("FLOAN"),
+                address(burnerLoansConfig),
+                IFLOANv1.setMarketFacility.selector
+            ),
+            abi.encode(true)
+        );
+        vm.prank(address(burnerLoansConfig));
+        floan.setMarketFacility(marketId_, facility_);
+        vm.clearMockedCalls();
+    }
+
+    function _setOtherMarketDebtForTest(uint128 debtOhm_) internal returns (MockERC20 asset) {
+        asset = new MockERC20("Other Collateral", "OTHER", 18);
+        vm.label(address(asset), "Other collateral");
+        _configurePrice(address(asset), 1e18);
+        _configureDepositManagerAsset(address(asset));
+
+        vm.prank(admin);
+        burnerLoansConfig.addAsset(
+            address(asset),
+            type(uint128).max,
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+        burnerLoans.setActiveDebtForTest(address(asset), debtOhm_);
+    }
+
+    function _setAuthorizationAndExpectEvent(
+        address owner_,
+        address operator_,
+        uint48 deadline_
+    ) internal {
+        vm.prank(owner_);
+        vm.expectEmit(true, true, true, true, address(burnerLoans));
+        emit AuthorizationSet(owner_, owner_, operator_, deadline_);
+        burnerLoans.setAuthorization(operator_, deadline_);
+    }
+
+    function _assertDepositMatchesPreview(
+        address asset_,
+        address account_,
+        uint256 previewDeposit_,
+        uint256 previewTotal_,
+        uint256 previewHealth_,
+        uint256 deposited_,
+        uint256 total_,
+        uint256 health_
+    ) internal view {
+        assertEq(previewDeposit_, deposited_, "preview deposit");
+        assertEq(previewTotal_, total_, "preview total");
+        assertEq(previewHealth_, type(uint256).max, "preview debt-free health");
+        assertEq(health_, type(uint256).max, "returned debt-free health");
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_);
+    }
+
+    function _assertWithdrawalMatchesPreview(
+        IBurnerLoans.WithdrawPreview memory preview_,
+        address tokenOut_,
+        uint256 amountOut_,
+        uint256 remaining_,
+        uint256 health_
+    ) internal pure {
+        assertEq(tokenOut_, preview_.returnToken, "preview token");
+        assertEq(amountOut_, preview_.returnAmount, "preview amount");
+        assertEq(remaining_, preview_.remainingDepositedCollateral, "preview remaining");
+        assertEq(health_, preview_.resultingHealthFactor, "preview health");
+        assertTrue(preview_.executable, "preview executable");
+    }
+
+    function _assertPositionAndActiveDebt(
+        address asset_,
+        address account_,
+        uint256 expectedCollateral_,
+        uint256 expectedDebtOhm_,
+        uint48 expectedMaturity_
+    ) internal view {
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(asset_, account_);
+        assertEq(position.depositedCollateral, expectedCollateral_, "position collateral");
+        assertEq(position.debtOhm, expectedDebtOhm_, "position debt");
+        assertEq(position.maturity, expectedMaturity_, "position maturity");
+        assertEq(burnerLoans.totalActiveDebtOhm(), expectedDebtOhm_, "total active debt");
+        assertEq(
+            inventory.activePrincipalOhm(),
+            expectedDebtOhm_,
+            "Burner Loans Inventory active debt"
+        );
+        assertEq(burnerLoans.assetActiveDebtOhm(asset_), expectedDebtOhm_, "asset active debt");
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_);
+    }
+
+    function _assertFloanPositionMatchesBurnerLoans(
+        address asset_,
+        address account_
+    ) internal view {
+        _assertFloanPositionMatchesBurnerLoans(asset_, account_, 1);
+    }
+
+    function _assertFloanPositionMatchesBurnerLoans(
+        address asset_,
+        address account_,
+        uint256 expectedPositionCount_
+    ) internal view {
+        uint32 marketId = burnerLoansConfig.marketId(asset_);
+        uint256[] memory positionIds = floan.getPositionIdsForMarketAndBorrower(marketId, account_);
+        assertEq(positionIds.length, expectedPositionCount_, "FLOAN position count");
+
+        IFLOANv1.Position memory floanPosition = floan.getPosition(positionIds[0].toUint64());
+        IBurnerLoans.Position memory position = burnerLoans.getPosition(asset_, account_);
+
+        assertEq(floanPosition.borrower, account_, "FLOAN borrower");
+        assertEq(floanPosition.marketId, marketId, "FLOAN market");
+        assertEq(floanPosition.collateral, position.depositedCollateral, "FLOAN collateral");
+        assertEq(floanPosition.principalDue, position.debtOhm, "FLOAN debt");
+        assertEq(floanPosition.interestDue, 0, "FLOAN interest");
+        assertEq(floanPosition.maturity, position.maturity, "FLOAN maturity");
+        assertEq(floanPosition.lastBorrowBlock, position.lastBorrowBlock, "FLOAN borrow block");
+    }
+
+    /// @dev Replaces the real custody policy for tests that need injected impossible-state failures.
+    function _useMockDepositManager() internal {
+        vm.startPrank(admin);
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoans));
+        kernel.executeAction(Actions.DeactivatePolicy, address(inventory));
+        kernel.executeAction(Actions.DeactivatePolicy, address(burnerLoansConfig));
+
+        mockDepositManager = new MockDepositManager(kernel, address(usds));
+        depositManager = IDepositManager(address(mockDepositManager));
+        burnerLoans = new BurnerLoansHarness(
+            kernel,
+            IERC20(address(ohm)),
+            mockDepositManager,
+            IPriceCache(address(0)),
+            backingOracle
+        );
+        inventory = new BurnerLoansInventory(kernel, IERC20(address(ohm)), address(burnerLoans));
+        kernel.executeAction(Actions.ActivatePolicy, address(mockDepositManager));
+        kernel.executeAction(Actions.ActivatePolicy, address(inventory));
+        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoans));
+        burnerLoansConfig = new BurnerLoansConfig(kernel, IERC20(address(ohm)));
+        kernel.executeAction(Actions.ActivatePolicy, address(burnerLoansConfig));
+        configTimelock = new BurnerLoansConfigTimelock(kernel, burnerLoansConfig);
+        kernel.executeAction(Actions.ActivatePolicy, address(configTimelock));
+        burnerLoansConfig.setFacility(address(burnerLoans));
+        rolesAdmin.grantRole("deposit_operator", address(burnerLoans));
+
+        mockDepositManager.addAsset(
+            IERC20(address(usds)),
+            IERC4626(address(0)),
+            type(uint256).max,
+            0
+        );
+        mockDepositManager.addAssetPeriod(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+        mockDepositManager.enableAssetPeriod(
+            IERC20(address(usds)),
+            BurnerLoansConstants.DEPOSIT_PERIOD,
+            address(burnerLoans)
+        );
+
+        price.setPrice(address(usds), 1e18);
+        inventory.setConfigurator(address(burnerLoansConfig));
+        inventory.enable("");
+        burnerLoans.setInventory(address(inventory));
+        burnerLoans.setConfigurator(address(burnerLoansConfig));
+        burnerLoansConfig.enable("");
+        burnerLoans.enable("");
+        burnerLoans.setBackingOracle(address(backingOracle));
+        burnerLoansConfig.setGlobalDebtCap(1_000_000e9);
+        burnerLoansConfig.addAsset(
+            address(usds),
+            _defaultAssetDebtCap(),
+            _defaultAssetRiskConfigInput(),
+            _defaultAssetFeeConfig(),
+            false
+        );
+        vm.stopPrank();
+    }
+
+    function _setDefaultConfigOperator() internal {
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelock));
+    }
+
+    function _enableConfigTimelock() internal {
+        vm.prank(admin);
+        configTimelock.enable("");
+    }
+
+    function _assetDepositCapUtilization(IERC20 asset_) internal view returns (uint256) {
+        return
+            IAssetManagerV1_1(address(depositManager)).getAssetDepositCapStatus(asset_).utilization;
+    }
+}
+
+// forge-lint: disable-end(unwrapped-modifier-logic,unused-return,calls-loop,reentrancy-no-eth)
+
+// forge-lint: disable-end(literal-instead-of-constant)

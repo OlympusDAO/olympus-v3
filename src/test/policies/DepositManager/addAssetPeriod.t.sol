@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.20;
 
+// Revert-path calls deliberately ignore return values.
+// forge-lint: disable-start(unused-return)
+
 import {DepositManagerTest} from "./DepositManagerTest.sol";
 import {IERC20} from "src/interfaces/IERC20.sol";
 import {IDepositManager} from "src/policies/interfaces/deposits/IDepositManager.sol";
+import {IDepositManagerV1_1} from "src/policies/interfaces/deposits/IDepositManagerV1_1.sol";
 import {IAssetManager} from "src/bases/interfaces/IAssetManager.sol";
 import {uint2str} from "src/libraries/Uint2Str.sol";
 import {String} from "src/libraries/String.sol";
@@ -179,15 +183,141 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
-    // when the caller is not the manager or admin
+    // when the caller is neither admin nor the configured config operator
     //  [X] it reverts
-    function test_whenCallerIsNotManagerOrAdmin_reverts(address caller_) public givenIsEnabled {
-        vm.assume(caller_ != ADMIN && caller_ != MANAGER);
+    function test_whenCallerIsNeitherAdminNorConfigOperator_reverts(
+        address caller_
+    ) public givenIsEnabled {
+        vm.assume(caller_ != ADMIN);
+        vm.assume(caller_ != CONFIG_OPERATOR);
+        _setConfigOperator(CONFIG_OPERATOR);
 
-        _expectRevertNotManagerOrAdmin();
+        _expectRevertNotConfigOperator(caller_);
 
         vm.prank(caller_);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    function test_whenCallerIsZero_reverts() public givenIsEnabled {
+        _setConfigOperator(CONFIG_OPERATOR);
+        _expectRevertNotConfigOperator(address(0));
+
+        vm.prank(address(0));
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // when the caller is the deposit manager admin
+    //  [X] it reverts
+    function test_givenDepositManagerAdmin_whenAddingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+    {
+        _expectRevertNotConfigOperator(DEPOSIT_MANAGER_ADMIN);
+
+        vm.prank(DEPOSIT_MANAGER_ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // when the caller is emergency
+    //  [X] it reverts
+    function test_givenEmergency_whenAddingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+    {
+        _expectRevertNotConfigOperator(EMERGENCY);
+
+        vm.prank(EMERGENCY);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // when the caller is a deposit operator
+    //  [X] it reverts
+    function test_givenDepositOperator_whenAddingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenAssetIsAdded
+    {
+        _expectRevertNotConfigOperator(DEPOSIT_OPERATOR);
+
+        vm.prank(DEPOSIT_OPERATOR);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // given the config operator is delegated
+    //  [X] the current config operator creates the route directly
+    //  [X] admin retains direct creation
+    function test_whenConfigOperator_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(CONFIG_OPERATOR);
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        assertReceiptTokenConfigured(
+            receiptTokenId,
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR,
+            "cd1"
+        );
+    }
+
+    function test_whenAdmin_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _setConfigOperator(CONFIG_OPERATOR);
+
+        vm.prank(ADMIN);
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        assertReceiptTokenConfigured(
+            receiptTokenId,
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR,
+            "cd1"
+        );
+    }
+
+    function test_whenRoutePrerequisitesAreSatisfied_validationSucceeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        depositManager.validateAddAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManager.DepositManager_AssetPeriodExists.selector,
+                address(iAsset),
+                DEPOSIT_PERIOD,
+                DEPOSIT_OPERATOR
+            )
+        );
+        depositManager.validateAddAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
     }
 
     // given the asset vault has not been configured
@@ -216,6 +346,95 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
 
         vm.prank(ADMIN);
         depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // given the operator name is set but the operator does not hold deposit_operator
+    // [X] it reverts with the typed role error
+    function test_givenOperatorHasNameButNoRole_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        address operatorWithoutRole = makeAddr("OperatorWithoutRole");
+        vm.prank(ADMIN);
+        depositManager.setOperatorName(operatorWithoutRole, "opr");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerV1_1.DepositManager_DepositOperatorRoleNotHeld.selector,
+                operatorWithoutRole
+            )
+        );
+
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, operatorWithoutRole);
+    }
+
+    // given the operator name is set and the role was revoked
+    // [X] it reverts with the typed role error
+    function test_givenRevokedOperatorRole_whenAddingAssetPeriod_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        vm.prank(ADMIN);
+        rolesAdmin.revokeRole("deposit_operator", DEPOSIT_OPERATOR);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IDepositManagerV1_1.DepositManager_DepositOperatorRoleNotHeld.selector,
+                DEPOSIT_OPERATOR
+            )
+        );
+
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+    }
+
+    // given the operator role was revoked and regranted
+    // [X] creation succeeds
+    function test_givenRevokedOperatorRole_whenRoleIsRegranted_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        vm.startPrank(ADMIN);
+        rolesAdmin.revokeRole("deposit_operator", DEPOSIT_OPERATOR);
+        rolesAdmin.grantRole("deposit_operator", DEPOSIT_OPERATOR);
+        vm.stopPrank();
+
+        vm.prank(ADMIN);
+        uint256 receiptTokenId = depositManager.addAssetPeriod(
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR
+        );
+
+        assertAssetConfigured(address(asset), DEPOSIT_PERIOD, DEPOSIT_OPERATOR);
+        assertReceiptTokenConfigured(
+            receiptTokenId,
+            iAsset,
+            DEPOSIT_PERIOD,
+            DEPOSIT_OPERATOR,
+            "cd1"
+        );
+    }
+
+    // when the operator address is zero
+    // [X] it reverts
+    function test_whenOperatorAddressIsZero_reverts()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        _expectRevertZeroAddress();
+
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, DEPOSIT_PERIOD, address(0));
     }
 
     // given the asset is already configured with the same deposit period
@@ -267,6 +486,20 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
 
         vm.prank(ADMIN);
         depositManager.addAssetPeriod(iAsset, 0, DEPOSIT_OPERATOR);
+    }
+
+    // when the deposit period is the maximum representable value
+    //  [X] it configures and enables the route
+    function test_whenDepositPeriodIsMaximum_succeeds()
+        public
+        givenIsEnabled
+        givenFacilityNameIsSetDefault
+        givenAssetIsAdded
+    {
+        vm.prank(ADMIN);
+        depositManager.addAssetPeriod(iAsset, type(uint8).max, DEPOSIT_OPERATOR);
+
+        assertAssetConfigured(address(iAsset), type(uint8).max, DEPOSIT_OPERATOR);
     }
 
     // Note: Reclaim rate validation is now handled by BaseDepositFacility, not DepositManager
@@ -337,9 +570,11 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
     {
         address newFacility = makeAddr("NewFacility");
 
-        // Set the new facility name
-        vm.prank(ADMIN);
+        // Set the new facility name and grant the deposit operator role
+        vm.startPrank(ADMIN);
         depositManager.setOperatorName(newFacility, "new");
+        rolesAdmin.grantRole("deposit_operator", newFacility);
+        vm.stopPrank();
 
         // Add the asset period with the new facility
         vm.prank(ADMIN);
@@ -446,3 +681,5 @@ contract DepositManagerAddAssetPeriodTest is DepositManagerTest {
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)

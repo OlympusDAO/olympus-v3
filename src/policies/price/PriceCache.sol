@@ -157,6 +157,16 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @inheritdoc IPriceCache
     /// @dev        Reverts if:
+    ///             - The pair is invalid (zero address or identical tokens)
+    ///             - Either non-unit asset in the pair is not approved in PRICE
+    ///             - Either asset's decimals cannot be resolved
+    function validateAssetPair(address asset_, address quote_) external view override {
+        _validatePair(asset_, quote_);
+        _validatePairDecimals(asset_, quote_);
+    }
+
+    /// @inheritdoc IPriceCache
+    /// @dev        Reverts if:
     ///             - The policy is disabled
     ///             - The caller is neither `price_admin` nor `admin`
     ///             - `asset_` is not a valid non-contract asset managed by PRICE
@@ -230,10 +240,13 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_,
         address quote_,
         uint48 maxAge_
-    ) external override onlyPolicyActive onlyEnabled {
-        if (_isStale(asset_, quote_, maxAge_)) {
-            _cachePrice(asset_, quote_);
+    ) external override onlyPolicyActive onlyEnabled returns (CachedPrice memory cachedPrice) {
+        cachedPrice = _getCachedPrice(asset_, quote_);
+        if (_isStale(cachedPrice, maxAge_)) {
+            return _cachePrice(asset_, quote_);
         }
+
+        return cachedPrice;
     }
 
     /// @inheritdoc IPriceCache
@@ -262,17 +275,22 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address quote_,
         uint48 maxAge_
     ) public view override onlyPolicyActive onlyEnabled returns (bool stale) {
-        return _isStale(asset_, quote_, maxAge_);
+        return _isStale(_getCachedPrice(asset_, quote_), maxAge_);
     }
 
     // ========== INTERNAL HELPERS ========== //
 
-    function _cachePrice(address asset_, address quote_) internal {
+    function _cachePrice(
+        address asset_,
+        address quote_
+    ) internal returns (CachedPrice memory cachedPrice) {
         _validatePair(asset_, quote_);
         _validatePairDecimals(asset_, quote_);
 
         (uint256 assetPriceUsd, uint48 assetTimestamp) = _getPriceOrUnit(asset_);
         (uint256 quotePriceUsd, uint48 quoteTimestamp) = _getPriceOrUnit(quote_);
+        // The unit-of-account leg deliberately uses the current block time as its observation.
+        // forge-lint: disable-next-line(block-timestamp)
         uint48 updatedAt = assetTimestamp < quoteTimestamp ? assetTimestamp : quoteTimestamp;
 
         (bytes32 key, bool assetIsToken0) = _pairKey(asset_, quote_);
@@ -296,6 +314,11 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
         snapshot.updatedAt = updatedAt;
         snapshot.roundId++;
+
+        cachedPrice.assetPriceUsd = assetPriceUsd;
+        cachedPrice.quotePriceUsd = quotePriceUsd;
+        cachedPrice.updatedAt = updatedAt;
+        cachedPrice.roundId = snapshot.roundId;
     }
 
     function _getCachedPrice(
@@ -337,14 +360,14 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
     }
 
     function _isStale(
-        address asset_,
-        address quote_,
+        CachedPrice memory cachedPrice_,
         uint48 maxAge_
     ) internal view returns (bool stale) {
-        CachedPrice memory cachedPrice = _getCachedPrice(asset_, quote_);
         return
-            cachedPrice.updatedAt == 0 ||
-            block.timestamp > uint256(cachedPrice.updatedAt) + uint256(maxAge_);
+            cachedPrice_.updatedAt == 0 ||
+            // A cache's age must be compared with the current block time.
+            // forge-lint: disable-next-line(block-timestamp)
+            block.timestamp > uint256(cachedPrice_.updatedAt) + uint256(maxAge_);
     }
 
     function _isUnitOfAccount(address asset_) internal view returns (bool) {
@@ -477,15 +500,16 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
 
     /// @notice Convert a <=32 byte string into a bytes32 word for immutable storage
     function _stringToBytes32(string memory value_) internal pure returns (bytes32 result_) {
-        assembly {
-            result_ := mload(add(value_, 32))
+        bytes memory valueBytes = bytes(value_);
+        for (uint256 i; i < valueBytes.length; ++i) {
+            result_ |= bytes32(valueBytes[i]) >> (i * 8);
         }
     }
 
     /// @notice Convert a zero-padded bytes32 word back into a string
     function _bytes32ToString(bytes32 value_) internal pure returns (string memory result_) {
         uint256 length;
-        while (length < 32 && value_[length] != 0) {
+        while (length < _MAX_SYMBOL_LENGTH && value_[length] != 0) {
             unchecked {
                 ++length;
             }
@@ -517,6 +541,8 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_
     ) internal view returns (uint256 price_, uint48 timestamp_) {
         if (_isUnitOfAccount(asset_)) {
+            // Current chain timestamps fit in uint48 for over eight million years.
+            // forge-lint: disable-next-line(unsafe-typecast)
             return (10 ** PRICE.decimals(), uint48(block.timestamp));
         }
 
@@ -527,11 +553,10 @@ contract PriceCache is Policy, PolicyEnabler, IPriceCache, IVersioned {
         address asset_,
         address quote_
     ) internal pure returns (bytes32 key_, bool assetIsToken0_) {
-        if (asset_ < quote_) {
-            return (keccak256(abi.encodePacked(asset_, quote_)), true);
-        }
-
-        return (keccak256(abi.encodePacked(quote_, asset_)), false);
+        assetIsToken0_ = asset_ < quote_;
+        key_ = assetIsToken0_
+            ? keccak256(abi.encodePacked(asset_, quote_))
+            : keccak256(abi.encodePacked(quote_, asset_));
     }
 
     // ========== ERC165 ========== //

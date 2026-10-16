@@ -67,11 +67,11 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
         _registerNonContractAsset(nonContractAsset);
 
         vm.prank(admin);
-        cache.setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        cache.setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
 
         assertEq(
             cache.assetDecimals(nonContractAsset),
-            8,
+            NON_CONTRACT_DECIMALS,
             "Non-contract asset decimals should use the configured cache registry value"
         );
         assertEq(
@@ -94,7 +94,7 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
         vm.expectRevert(
             abi.encodeWithSelector(IPriceCache.PriceCache_InvalidAsset.selector, nonContractAsset)
         );
-        cache.setNonContractAssetMetadata(nonContractAsset, 8, "NCA");
+        cache.setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "NCA");
     }
 
     function test_givenCallerIsAdmin_givenAssetIsERC20_reverts() public {
@@ -114,7 +114,7 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
 
         vm.prank(admin);
         vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
-        cache.setNonContractAssetMetadata(nonContractAsset, 8, "");
+        cache.setNonContractAssetMetadata(nonContractAsset, NON_CONTRACT_DECIMALS, "");
     }
 
     function test_givenCallerIsAdmin_givenSymbolExceedsMaxLength_reverts() public {
@@ -123,7 +123,11 @@ contract PriceCacheSetNonContractAssetDecimalsTest is PriceCacheTest {
 
         vm.prank(admin);
         vm.expectRevert(IPriceCache.PriceCache_InvalidAssetSymbol.selector);
-        cache.setNonContractAssetMetadata(nonContractAsset, 8, "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567");
+        cache.setNonContractAssetMetadata(
+            nonContractAsset,
+            NON_CONTRACT_DECIMALS,
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567"
+        );
     }
 }
 /// forge-lint: disable-end(mixed-case-function, mixed-case-variable)
