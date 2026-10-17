@@ -12,6 +12,8 @@ contract CCIPBridgeSolanaProposalTest is ProposalTest {
     function setUp() public virtual {
         // Mainnet Fork at a fixed block
         // Prior to actual deployment of the proposal (otherwise it will fail)
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
 
         /// @dev Deploy your proposal

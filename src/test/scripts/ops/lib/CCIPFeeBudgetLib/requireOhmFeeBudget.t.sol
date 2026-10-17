@@ -91,6 +91,8 @@ contract CCIPFeeBudgetLibTests_requireOhmFeeBudget is CCIPFeeBudgetLibTest {
         uint32 budget_
     ) public givenOnRamp20Lane {
         // The invalid interval is [0, MIN_BUDGET - 1]
+        // casting to 'uint32' is safe because the bound keeps the value below `MIN_BUDGET`
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint32 boundedBudget = uint32(bound(budget_, 0, MIN_BUDGET - 1));
         _setTokenEntry20(boundedBudget);
 
@@ -118,6 +120,19 @@ contract CCIPFeeBudgetLibTests_requireOhmFeeBudget is CCIPFeeBudgetLibTest {
         _requireBudget();
     }
 
+    // given an OnRamp lane with a token entry at the minimum
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts naming the lane
+    function test_givenOnRamp20Lane_givenTokenEntryAtMinimum_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(MIN_BUDGET)
+        givenDestinationDisabled
+    {
+        _expectRevertDestinationDisabled();
+        _requireBudget();
+    }
+
     // given an OnRamp lane with the maximum representable token entry
     //   [X] it passes
     function test_givenOnRamp20Lane_givenTokenEntryMax()
@@ -134,6 +149,8 @@ contract CCIPFeeBudgetLibTests_requireOhmFeeBudget is CCIPFeeBudgetLibTest {
         uint32 budget_
     ) public givenOnRamp20Lane {
         // The valid interval is [MIN_BUDGET, type(uint32).max]
+        // casting to 'uint32' is safe because the bound caps the value at the uint32 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint32 boundedBudget = uint32(bound(budget_, MIN_BUDGET, type(uint32).max));
         _setTokenEntry20(boundedBudget);
 

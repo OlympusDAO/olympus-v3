@@ -64,6 +64,8 @@ abstract contract CCIPNonEthereumMigrationForkTest is CCIPMigrationForkTestBase 
     // ========== SETUP ========== //
 
     function setUp() public virtual {
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork("base-sepolia", BASE_SEPOLIA_FORK_BLOCK);
         _loadEnv();
 

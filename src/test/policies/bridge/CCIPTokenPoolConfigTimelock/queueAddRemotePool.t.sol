@@ -12,6 +12,9 @@ import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
 
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
+
 contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolConfigTimelockTest {
     // ========== SHARED QUEUE GATE LADDER ========== //
 
@@ -119,7 +122,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -130,7 +133,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
     {
         bytes memory remotePool = REMOTE_POOL_THREE;
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, remotePool);
     }
@@ -161,7 +164,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         givenChainAdded
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddRemotePool(CHAIN_SELECTOR_A, "");
     }
@@ -282,7 +285,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
                     timelock.REMOTE_POOLS_DOMAIN(),
                     CHAIN_SELECTOR_A,
                     uint256(2),
-                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO)
+                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded hash should be the live two-pool aggregate"
@@ -291,7 +295,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(
             abi.encode(_singleActionBatch(_addRemotePoolBatchAction(CHAIN_SELECTOR_A, remotePool)))
@@ -479,3 +483,5 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddRemotePool is CCIPTokenPoolCon
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)

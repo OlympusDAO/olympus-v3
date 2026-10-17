@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -409,3 +412,5 @@ contract CCIPTokenPoolConfigTests_setRateLimitAdmin is CCIPTokenPoolConfigTest {
         config.addChain(_defaultChainUpdate(CHAIN_SELECTOR_B));
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

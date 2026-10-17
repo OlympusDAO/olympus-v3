@@ -23,11 +23,16 @@ import {Actions, Kernel} from "src/Kernel.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
+
+// The helpers of the rig run inside the loops of the suites, and its own loops walk small fixed
+// sets of routes, calling the contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
 
 /// @notice Shared abstract base of the CCIPTokenPoolConfig test suite.
 /// @dev    The setup deploys the full Kernel stack (Kernel, OlympusRoles, RolesAdmin), a real
@@ -40,6 +45,11 @@ import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 ///         config operator is unset, and the primary pool ownership is PENDING to the config
 ///         (the test contract deployed the pool, owns it and has proposed the config). The
 ///         burn/mint pool stays owned by the test contract until givenBurnMintPoolRig runs.
+///
+///         The operator account is a CCIPTokenPoolConfigTimelock bound to the rig's config,
+///         left unactivated and disabled: the policy accepts no other candidate, and its
+///         lifecycle plays no part in the acceptance. The route functions are pranked as its
+///         address. The deploy variants rebind it to their own config.
 ///
 ///         Default constants, in base units of the 9-decimals MockOhm: outbound rate limiter
 ///         {true, 10_000, 100}, inbound {true, 20_000, 200} (deliberately distinct per
@@ -81,6 +91,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     CCIPTokenPoolConfig internal config;
 
+    /// @notice The timelock bound to the current rig's config, whose address is the operator
+    ///         account; unactivated and disabled.
+    CCIPTokenPoolConfigTimelock internal operatorTimelock;
+
     // ========== ACCOUNTS ========== //
 
     address internal admin;
@@ -105,6 +119,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     // ========== CONSTANTS ========== //
 
     uint32 internal constant GRACE_PERIOD = 3 days;
+
+    /// @notice The delay of the timelocks deployed as operator candidates.
+    uint48 internal constant TIMELOCK_DELAY = 1 days;
+
     uint64 internal constant CHAIN_SELECTOR_A = 1111;
     uint64 internal constant CHAIN_SELECTOR_B = 2222;
 
@@ -119,6 +137,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     /// @notice Funding of the liquidity source pool: 1 OHM in base units (9 decimals).
     uint256 internal constant SOURCE_POOL_FUNDING = 1_000_000_000;
 
+    /// @notice The smallest capacity the fill clamp of _setBucketFills writes, in base units:
+    ///         one above the containment shape {true, 2, 1}, which the policy's setter rejects.
+    uint128 internal constant FILL_CLAMP_FLOOR = 3;
+
     // ========== EXPOSED MODIFIER STATE ========== //
 
     /// @notice The grace deadline computed by givenGraceExpired, for error-argument asserts.
@@ -131,7 +153,6 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         emergency = makeAddr("emergency");
         bridgeAdmin = makeAddr("bridgeAdmin");
         bridgeRateLimiter = makeAddr("bridgeRateLimiter");
-        operator = makeAddr("operator");
         thirdParty = makeAddr("thirdParty");
         onRamp = makeAddr("onRamp");
         offRamp = makeAddr("offRamp");
@@ -187,6 +208,7 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(pool), GRACE_PERIOD);
         vm.label(address(config), "config");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
 
         // The test contract owns the pool; the config becomes the pending owner
         pool.transferOwnership(address(config));
@@ -202,6 +224,28 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         newConfig = new CCIPTokenPoolConfig(kernel, pool_, gracePeriod_);
         vm.label(address(newConfig), "freshConfig");
         return newConfig;
+    }
+
+    /// @notice Deploys a fresh, unactivated and disabled timelock bound to a config on the
+    ///         rig's kernel: the only shape of config operator candidate the policy accepts.
+    function _newTimelockFor(
+        address config_
+    ) internal returns (CCIPTokenPoolConfigTimelock newTimelock) {
+        newTimelock = new CCIPTokenPoolConfigTimelock(
+            kernel,
+            config_,
+            TIMELOCK_DELAY,
+            GRACE_PERIOD
+        );
+        vm.label(address(newTimelock), "timelockCandidate");
+        return newTimelock;
+    }
+
+    /// @notice Binds the operator account to a fresh timelock over the current rig's config.
+    function _bindOperatorTimelock() internal {
+        operatorTimelock = _newTimelockFor(address(config));
+        vm.label(address(operatorTimelock), "operatorTimelock");
+        operator = address(operatorTimelock);
     }
 
     /// @notice Deploys the funded liquidity source pool, optionally setting the primary pool
@@ -387,6 +431,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         ccipRouter.setOnRamp(onRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("bridgeReceiver")),
@@ -409,6 +455,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         ccipRouter.setOffRamp(offRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(offRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.releaseOrMint(
             Pool.ReleaseOrMintInV1({
                 originalSender: abi.encode(makeAddr("bridgeSender")),
@@ -425,13 +473,13 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     /// @notice Drains both buckets of a route down to the target fill levels without touching
     ///         their configurations, all in the current block so no refill lands in between.
-    /// @dev    Targets at or above two units use a temporary capacity clamp through
-    ///         setChainRateLimits ({true, target, 1}, then the original configuration in the
-    ///         same block). Targets of zero or one clamp to two first and then consume the
-    ///         remainder through a real transfer, because two is the smallest capacity of an
-    ///         enabled configuration with a rate of one. Requires the enabled policy with pool
-    ///         authority and targets at or below the current fills; a direction left at its
-    ///         current fill is a no-op.
+    /// @dev    Targets at or above FILL_CLAMP_FLOOR (three units) use a temporary capacity
+    ///         clamp through setChainRateLimits ({true, target, 1}, then the original
+    ///         configuration in the same block). Targets below it clamp to the floor first and
+    ///         then consume the remainder through a real transfer, because the clamp to two
+    ///         would be the containment shape {true, 2, 1}, which the policy's setter rejects.
+    ///         Requires the enabled policy with pool authority and targets at or below the
+    ///         current fills; a direction left at its current fill is a no-op.
     function _setBucketFills(
         uint64 chainSelector_,
         uint128 outboundTokens_,
@@ -445,8 +493,12 @@ abstract contract CCIPTokenPoolConfigTest is Test {
             rigPool.getCurrentInboundRateLimiterState(chainSelector_)
         );
 
-        uint128 outboundClamp = outboundTokens_ < 2 ? 2 : outboundTokens_;
-        uint128 inboundClamp = inboundTokens_ < 2 ? 2 : inboundTokens_;
+        uint128 outboundClamp = outboundTokens_ < FILL_CLAMP_FLOOR
+            ? FILL_CLAMP_FLOOR
+            : outboundTokens_;
+        uint128 inboundClamp = inboundTokens_ < FILL_CLAMP_FLOOR
+            ? FILL_CLAMP_FLOOR
+            : inboundTokens_;
 
         vm.startPrank(admin);
         config.setChainRateLimits(
@@ -457,8 +509,22 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config.setChainRateLimits(chainSelector_, outboundConfig, inboundConfig);
         vm.stopPrank();
 
-        if (outboundTokens_ < 2) _consumeOutbound(chainSelector_, 2 - outboundTokens_);
-        if (inboundTokens_ < 2) _consumeInbound(chainSelector_, 2 - inboundTokens_);
+        if (outboundTokens_ < FILL_CLAMP_FLOOR) {
+            _consumeOutbound(chainSelector_, FILL_CLAMP_FLOOR - outboundTokens_);
+        }
+        if (inboundTokens_ < FILL_CLAMP_FLOOR) {
+            _consumeInbound(chainSelector_, FILL_CLAMP_FLOOR - inboundTokens_);
+        }
+    }
+
+    // ========== TIME HELPERS ========== //
+
+    /// @notice Returns the current block timestamp at the width of the lifecycle and queue
+    ///         timestamps.
+    function _blockTimestamp() internal view returns (uint48) {
+        // casting to 'uint48' is safe for realistic test timestamps
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint48(vm.getBlockTimestamp());
     }
 
     // ========== AUTHORIZATION PROBE ========== //
@@ -769,6 +835,7 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(burnMintPool), GRACE_PERIOD);
         vm.label(address(config), "configBurnMintRig");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
         burnMintPool.transferOwnership(address(config));
         _;
     }
@@ -781,6 +848,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     }
 
     /// @dev Deploys a second funded lock/release pool whose rebalancer is left unset
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenLiquiditySourceRebalancerUnset() {
         _deployLiquiditySource(false);
         _;
@@ -848,6 +917,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
     /// @dev CHAIN_SELECTOR_A is seeded directly on the pool with the outbound bucket at the
     ///      default configuration and the inbound bucket disabled ({false, 0, 0}), while the
     ///      test contract still owns the pool; runs before the ownership handover
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledInboundBucket() {
         _seedRouteOnPool(
             CHAIN_SELECTOR_A,
@@ -861,6 +932,8 @@ abstract contract CCIPTokenPoolConfigTest is Test {
 
     /// @dev CHAIN_SELECTOR_A is seeded directly on the pool with an empty remote pool list
     ///      while the test contract still owns the pool; runs before the ownership handover
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithNoRemotePools() {
         _seedRouteOnPool(
             CHAIN_SELECTOR_A,
@@ -900,7 +973,10 @@ abstract contract CCIPTokenPoolConfigTest is Test {
         config = new CCIPTokenPoolConfig(kernel, address(pool), GRACE_PERIOD);
         vm.label(address(config), "configAllowListRig");
         kernel.executeAction(Actions.ActivatePolicy, address(config));
+        _bindOperatorTimelock();
         pool.transferOwnership(address(config));
         _;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

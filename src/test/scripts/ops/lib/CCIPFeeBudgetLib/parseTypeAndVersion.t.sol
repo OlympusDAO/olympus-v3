@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The expected version components are written beside the string they are parsed from
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {CCIPFeeBudgetLibTest} from "src/test/scripts/ops/lib/CCIPFeeBudgetLib/CCIPFeeBudgetLibTest.sol";
 
 contract CCIPFeeBudgetLibTests_parseTypeAndVersion is CCIPFeeBudgetLibTest {
@@ -107,3 +110,5 @@ contract CCIPFeeBudgetLibTests_parseTypeAndVersion is CCIPFeeBudgetLibTest {
         _assertParsed(raw, "OnRamp", major_, minor_);
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

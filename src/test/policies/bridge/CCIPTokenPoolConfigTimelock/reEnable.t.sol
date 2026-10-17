@@ -143,7 +143,7 @@ contract CCIPTokenPoolConfigTimelockTests_reEnable is CCIPTokenPoolConfigTimeloc
     function test_whenCallerIsBridgeAdmin() public givenEnabled givenDisabled {
         // A time skip separates the re-enable timestamp from the disable timestamp
         skip(1 hours);
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(timelock));
         emit IEnabler.Enabled();

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -552,40 +555,159 @@ contract CCIPTokenPoolConfigTests_setChainRateLimits is CCIPTokenPoolConfigTest 
         _assertConfigEq(_toConfig(_inboundBucket(CHAIN_SELECTOR_A)), inbound, "inbound config");
     }
 
-    // when both configs are the minimum enabled {true, 2, 1}
-    //   [X] it sets both configs
-    // Equal to the containment constant; the route then reads as contained
-    function test_whenConfigIsMinimumEnabled()
+    // when both configs are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateSetChainRateLimits reverts with the same error
+    //   [X] the route keeps its limits and does not read as contained
+    // The pair passes the pool's rate check and is the disabled configuration of the
+    // containment functions, which stay its only writers
+    function test_whenConfigIsContainmentShape_reverts()
         public
         givenEnabled
         givenPoolOwnershipAccepted
         givenChainAdded
     {
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+        );
+
+        vm.expectRevert(err);
         vm.prank(admin);
         config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
 
-        // The buckets were full at 10_000 and 20_000; the capacity of two clamps both fills to
-        // min(2, tokens) = 2
-        _assertBucket(
-            _outboundBucket(CHAIN_SELECTOR_A),
-            true,
-            2,
-            1,
-            2,
-            "outbound at the minimum enabled config"
+        vm.expectRevert(err);
+        config.validateSetChainRateLimits(
+            CHAIN_SELECTOR_A,
+            _containmentConfig(),
+            _containmentConfig()
         );
-        _assertBucket(
-            _inboundBucket(CHAIN_SELECTOR_A),
-            true,
-            2,
-            1,
-            2,
-            "inbound at the minimum enabled config"
+
+        _assertConfigEq(
+            _toConfig(_outboundBucket(CHAIN_SELECTOR_A)),
+            _defaultOutboundConfig(),
+            "outbound config"
         );
-        assertTrue(
+        assertFalse(
             config.isChainDisabled(CHAIN_SELECTOR_A),
-            "the route should read as contained afterwards"
+            "the route should not read as contained"
         );
+    }
+
+    // when only the outbound config is the containment shape
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateSetChainRateLimits reverts with the same error
+    // Each direction is validated on its own
+    function test_whenOutboundConfigIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _defaultInboundConfig());
+
+        vm.expectRevert(err);
+        config.validateSetChainRateLimits(
+            CHAIN_SELECTOR_A,
+            _containmentConfig(),
+            _defaultInboundConfig()
+        );
+    }
+
+    // when only the inbound config is the containment shape
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] validateSetChainRateLimits reverts with the same error
+    function test_whenInboundConfigIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        bytes memory err = abi.encodeWithSelector(
+            ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+        );
+
+        vm.expectRevert(err);
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, _defaultOutboundConfig(), _containmentConfig());
+
+        vm.expectRevert(err);
+        config.validateSetChainRateLimits(
+            CHAIN_SELECTOR_A,
+            _defaultOutboundConfig(),
+            _containmentConfig()
+        );
+    }
+
+    // given the route is contained
+    //   when both configs are the containment shape
+    //     [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    // Re-writing the containment values goes through the containment functions, not the
+    // setter
+    function test_givenRouteContained_whenConfigIsContainmentShape_reverts()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+        givenRouteContained
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
+    }
+
+    // when both configs are {true, 3, 1}
+    //   [X] it sets both configs
+    //   [X] the route does not read as contained
+    // The accepted neighbour of the reserved pair: one unit of capacity above it. The buckets
+    // were full at 10_000 and 20_000; the capacity of three clamps both fills to
+    // min(3, tokens) = 3.
+    function test_whenConfigIsCapacityThreeRateOne()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        ICCIPRateLimiter.Config memory neighbour = _rateLimiterConfig(true, 3, 1);
+
+        config.validateSetChainRateLimits(CHAIN_SELECTOR_A, neighbour, neighbour);
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, neighbour, neighbour);
+
+        _assertBucket(_outboundBucket(CHAIN_SELECTOR_A), true, 3, 1, 3, "outbound at {true, 3, 1}");
+        _assertBucket(_inboundBucket(CHAIN_SELECTOR_A), true, 3, 1, 3, "inbound at {true, 3, 1}");
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the {true, 3, 1} route should not read as contained"
+        );
+    }
+
+    // when both configs are {true, 3, 2}
+    //   [X] it sets both configs
+    // The accepted neighbour of the reserved pair in the rate
+    function test_whenConfigIsCapacityThreeRateTwo()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        ICCIPRateLimiter.Config memory neighbour = _rateLimiterConfig(true, 3, 2);
+
+        config.validateSetChainRateLimits(CHAIN_SELECTOR_A, neighbour, neighbour);
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, neighbour, neighbour);
+
+        _assertConfigEq(_toConfig(_outboundBucket(CHAIN_SELECTOR_A)), neighbour, "outbound config");
+        _assertConfigEq(_toConfig(_inboundBucket(CHAIN_SELECTOR_A)), neighbour, "inbound config");
     }
 
     // when the capacity is the uint128 maximum
@@ -905,3 +1027,5 @@ contract CCIPTokenPoolConfigTests_setChainRateLimits is CCIPTokenPoolConfigTest 
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

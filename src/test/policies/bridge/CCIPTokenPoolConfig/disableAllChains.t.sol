@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -23,6 +26,8 @@ contract CCIPTokenPoolConfigTests_disableAllChains is CCIPTokenPoolConfigTest {
             _containmentConfig(),
             string.concat(label_, ": inbound")
         );
+        // Asserts one route; the helper also runs inside the loops over the swept routes
+        // forge-lint: disable-next-line(calls-loop)
         assertTrue(config.isChainDisabled(chainSelector_), string.concat(label_, ": contained"));
     }
 
@@ -388,3 +393,5 @@ contract CCIPTokenPoolConfigTests_disableAllChains is CCIPTokenPoolConfigTest {
         assertTrue(config.isChainDisabled(CHAIN_SELECTOR_A), "route A should stay contained");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

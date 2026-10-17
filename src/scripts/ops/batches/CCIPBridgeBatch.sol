@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors
-// Script code: the loops call the periphery and revert per remote by design.
-// forge-lint: disable-start(calls-loop, require-revert-in-loop)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run.
+// forge-lint: disable-start(calls-loop,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -474,3 +476,5 @@ contract CCIPBridgeBatch is BatchScriptV2 {
         );
     }
 }
+
+// forge-lint: disable-end(calls-loop,require-revert-in-loop)

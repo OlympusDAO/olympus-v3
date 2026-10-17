@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
-// forge-lint: disable-start(calls-loop, custom-errors, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: calls in loops are simulated rather than paid for
+// on-chain, and a failed `require` is meant to abort the whole run with its message.
+// forge-lint: disable-start(calls-loop,custom-errors,require-revert-in-loop)
 
 import {BatchScriptV2} from "src/scripts/ops/lib/BatchScriptV2.sol";
 import {console2} from "@forge-std-1.16.2/console2.sol";
@@ -16,11 +19,9 @@ import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
-import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {CCIPTokenPoolConfigKeyLib} from "src/policies/utils/CCIPTokenPoolConfigKeyLib.sol";
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 import {CCIPFeeBudgetLib} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
@@ -32,6 +33,9 @@ import {MINTRv1} from "src/modules/MINTR/MINTR.v1.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// The one-function interface of the legacy bridge is declared next to its only consumer
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice The flag the legacy LayerZero `CrossChainBridge` policy gates its send path on. A
 ///         minimal local interface, so this batch does not import the LayerZero contract graph.
@@ -55,7 +59,9 @@ interface ILegacyCrossChainBridge {
 ///           pool policy and register it in the local TokenAdminRegistry, which opens the chain
 ///           in both directions.
 ///         - `checkReadiness` (read-only, any sender, also on mainnet): the per-chain half of the
-///           rollout readiness report that gates the proposal submission.
+///           rollout readiness report that gates the proposal submission. On a burn/mint chain
+///           it requires the pool disabled and unregistered, the state `setup` leaves, so after
+///           `finalize` those two lines read red.
 ///
 ///         The steady state afterwards is served by the shared tooling: routes through
 ///         `CCIPRouteReconcileBatch`, containment and re-enable through `CCIPTokenPoolConfigBatch`.
@@ -81,7 +87,16 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         quoter's default budget for the SVM destination, the same budget as the live
     ///         mainnet to Solana lane, and the budget of the reverse lane lives on the Solana
     ///         fee quoter, which this tooling cannot read; the batch prints a note for such a
-    ///         lane (`_svmLaneNote`).
+    ///         lane (`CCIPFeeBudgetLib.svmLaneNote`).
+    ///
+    ///         The deactivation of the legacy LayerZero bridge is planned under two
+    ///         preconditions, `bridgeActive` false and a zero MINTR mint approval, that are
+    ///         checked while the batch is built and not when the Safe executes it: the encoded
+    ///         action is `Kernel.executeAction(DeactivatePolicy, bridge)` alone, and the Kernel
+    ///         checks neither. Build and simulate the batch immediately before signing, and
+    ///         cancel a pending Safe transaction of it after any administration of the legacy
+    ///         bridge (a `setBridgeStatus` call or a change of its MINTR mint approval), then
+    ///         build it again.
     ///
     ///         The `admin` grant is chain wide: it applies to every policy of this Kernel, not
     ///         only to the CCIP policies.
@@ -91,15 +106,21 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The chain is canonical (the mainnet rollout runs through
     ///           `CCIPTokenPoolConfigBatch.prepareHandover` and the OCG proposal).
     ///         - The batch owner is not the Kernel executor or not the RolesAdmin admin.
-    ///         - The deployed config policy, timelock and pool are not bound to each other, or
-    ///           the pool reports itself as a liquidity container.
+    ///         - The deployed config policy, timelock and pool are not bound to each other,
+    ///           either policy reports another Kernel, or the pool reports itself as a liquidity
+    ///           container.
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - The config policy is neither the owner nor the pending owner of the pool.
     ///         - A lane toward an EVM burn/mint destination carries an OHM delivery gas budget
     ///           below 175000 (the revert names the lane).
+    ///         - The legacy bridge is active in the Kernel and reports `bridgeActive` or holds a
+    ///           MINTR mint approval.
     ///         - A desired route is declared with `enabled: false` (the removal marker), or a
     ///           live route differs from `env.json` (the bootstrap expects a clean pool with
     ///           every declared route enabled; reconcile through the config timelock afterwards).
+    ///         - The pool policy is enabled or a pool is registered for OHM, in the post-batch
+    ///           validation: both stay off until `finalize`, the only batch that passes the
+    ///           opposite.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
     /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
@@ -223,15 +244,22 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     /// @dev    Run immediately after the mainnet proposal executes. Until then the chain stays
     ///         dormant: without `setPool` neither an outbound send nor an inbound delivery can
     ///         touch the pool. The order is enable first, register second, so that a registered
-    ///         pool is never unable to mint.
+    ///         pool is never unable to mint. The outgoing lanes are read again here, since the
+    ///         fee entries are live Chainlink state that can change between `setup` and the
+    ///         proposal execution.
     ///
     ///         Reverts if:
     ///         - The args file is not empty.
     ///         - The chain is canonical.
+    ///         - A lane toward an EVM burn/mint destination carries an OHM delivery gas budget
+    ///           below 175000, or its destination is disabled on the fee quoter (the revert
+    ///           names the lane).
     ///         - `setup` has not converged: the pool policy is not active, the config policy does
     ///           not own the pool, the batch owner lacks the admin role, the config policy or the
     ///           timelock is disabled, a desired route is missing or differs from `env.json`, or
-    ///           a route declared with `enabled: false` is still configured on the pool.
+    ///           a route declared with `enabled: false` is still configured on the pool (a
+    ///           queued removal does not count: the route has to be gone, or declared enabled
+    ///           again, before the batch is built).
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - Another pool is registered for OHM.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
@@ -262,6 +290,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         console2.log("\n=== Non-Ethereum CCIP finalize on", chain, "===");
 
         _requireBinding(kernel, config, timelock, pool);
+        _requireFeeBudgets();
         require(
             Kernel(kernel).isPolicyActive(Policy(pool)),
             "CCIPNonEthereumSetupBatch: the pool policy is not active in the Kernel; run setup first"
@@ -282,11 +311,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             IEnabler(timelock).isEnabled(),
             "CCIPNonEthereumSetupBatch: CCIPTokenPoolConfigTimelock is disabled; run setup first, or restore it (reEnable within the grace window, enable afterwards)"
         );
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(registry)
             .getTokenConfig(ohm);
@@ -334,7 +359,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         answers of every chain; the proposal is not submitted until the aggregate is
     ///         green.
     /// @dev    Prints one `[ OK ]`/`[FAIL]` line per check, an `[INFO]` line for a lane the
-    ///         fee budget gate does not cover (an SVM destination), and a final
+    ///         fee budget gate does not cover (an SVM destination) and for a local role that
+    ///         the setup batch grants when it is missing, and a final
     ///         `READINESS RESULT <chain>: GREEN|RED` line. It does not revert on a red result:
     ///         a reverted script would swallow its own log, so the shell wrapper derives the
     ///         exit code from the verdict line instead. A revert can still happen when the
@@ -367,9 +393,18 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     // =========== VALIDATION =========== //
 
-    /// @notice Validates the state after `setup`.
+    /// @notice Validates the state after `setup`: the policies active, the roles granted, the
+    ///         config policy and the timelock enabled and bound, the routes converged, and the
+    ///         pool still disabled and unregistered, which only `finalize` changes.
     function _validateSetup() external view {
-        (address kernel, address config, address timelock, address pool, , ) = _contracts();
+        (
+            address kernel,
+            address config,
+            address timelock,
+            address pool,
+            address registry,
+            address ohm
+        ) = _contracts();
         address emergencyMS = _envAddressNotZero("olympus.multisig.emergency");
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(env, chain);
         ROLESv1 roles = _roles(kernel);
@@ -392,6 +427,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             legacyBridge == address(0) || !Kernel(kernel).isPolicyActive(Policy(legacyBridge)),
             "The legacy CrossChainBridge policy is still active in the Kernel"
         );
+        require(
+            !IEnabler(pool).isEnabled(),
+            "CCIPBurnMintTokenPool is enabled; it stays disabled until finalize"
+        );
+        require(
+            ICCIPTokenAdminRegistry(registry).getTokenConfig(ohm).tokenPool == address(0),
+            "A pool is registered for OHM; the registry entry stays empty until finalize"
+        );
+        console2.log("  The pool is disabled and unregistered");
         require(IEnabler(config).isEnabled(), "CCIPTokenPoolConfig is not enabled");
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(
@@ -425,11 +469,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             ITimelockBatchQueue(timelock).timelockDelay() == desired.timelockDelay,
             "CCIPTokenPoolConfigTimelock delay mismatch"
         );
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
         console2.log("setup post-batch validation passed");
     }
 
@@ -459,11 +499,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(IEnabler(timelock).isEnabled(), "CCIPTokenPoolConfigTimelock is not enabled");
         require(roles.hasRole(_owner, ADMIN_ROLE), "The DAO MS does not hold admin");
         require(roles.hasRole(_owner, BRIDGE_ADMIN_ROLE), "The DAO MS does not hold bridge_admin");
-        _requireRoutesConverged(
-            ICCIPTokenPoolAdmin(pool),
-            config,
-            IConfigTimelockBatchQueue(timelock)
-        );
+        _requireRoutesConverged(ICCIPTokenPoolAdmin(pool));
         console2.log("finalize post-batch validation passed");
     }
 
@@ -493,8 +529,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             _check(
                 ICCIPTokenPoolConfig(config).pool() == pool &&
                     ICCIPTokenPoolConfigTimelock(timelock).config() == config &&
-                    address(Policy(config).kernel()) == kernel,
-                "the config policy, the timelock and the pool are bound to each other"
+                    address(Policy(config).kernel()) == kernel &&
+                    address(Policy(timelock).kernel()) == kernel,
+                "the config policy, the timelock and the pool are bound to each other and both policies report the Kernel"
             );
             _check(
                 !ICCIPTokenPoolConfig(config).isLiquidityContainer(),
@@ -512,6 +549,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             _check(
                 Owned(periphery).owner() == daoMS,
                 "the DAO MS owns the CCIPCrossChainBridge periphery"
+            );
+            // The pool stays dormant until finalize: the report is the pre-submission gate
+            _check(
+                !IEnabler(pool).isEnabled(),
+                "the pool policy is disabled (finalize enables it after the proposal executes)"
             );
         }
 
@@ -531,16 +573,20 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             )
         );
         _check(
-            tokenConfig.tokenPool == address(0) || tokenConfig.tokenPool == pool,
-            "no other pool is registered for OHM"
+            tokenConfig.tokenPool == address(0),
+            string.concat(
+                "no pool is registered for OHM (finalize registers the configured pool after the proposal executes; registered ",
+                vm.toString(tokenConfig.tokenPool),
+                ")"
+            )
         );
 
+        // The setup batch grants each of these roles when it is missing (the DAO MS is the
+        // RolesAdmin admin, checked above), so a missing role is reported rather than failed.
         ROLESv1 roles = _roles(kernel);
-        _check(roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE), "the DAO MS holds bridge_admin");
-        _check(roles.hasRole(emergencyMS, EMERGENCY_ROLE), "the Emergency MS holds emergency");
-        if (!roles.hasRole(daoMS, ADMIN_ROLE)) {
-            console2.log("  [INFO] the DAO MS does not hold admin yet; the setup batch grants it");
-        }
+        _reportRole(roles.hasRole(daoMS, ADMIN_ROLE), "the DAO MS", "admin");
+        _reportRole(roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE), "the DAO MS", "bridge_admin");
+        _reportRole(roles.hasRole(emergencyMS, EMERGENCY_ROLE), "the Emergency MS", "emergency");
 
         address legacyBridge = _envAddress("olympus.policies.CrossChainBridge");
         if (legacyBridge != address(0)) {
@@ -589,8 +635,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         if (deployed) {
             _check(
                 ICCIPTokenPoolConfig(config).pool() == pool &&
-                    ICCIPTokenPoolConfigTimelock(timelock).config() == config,
-                "the config policy, the timelock and the pool are bound to each other"
+                    ICCIPTokenPoolConfigTimelock(timelock).config() == config &&
+                    address(Policy(config).kernel()) == kernel &&
+                    address(Policy(timelock).kernel()) == kernel,
+                "the config policy, the timelock and the pool are bound to each other and both policies report the Kernel"
             );
             _check(
                 Kernel(kernel).isPolicyActive(Policy(config)) &&
@@ -633,14 +681,19 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     /// @notice Checks the OHM delivery gas budget of every outgoing lane whose destination is an
     ///         EVM burn/mint chain. A lane toward an SVM destination is reported as a note
-    ///         rather than checked (see `_svmLaneNote`); a lane toward a canonical chain needs
-    ///         no raised budget.
+    ///         rather than checked (see `CCIPFeeBudgetLib.svmLaneNote`); a lane toward a
+    ///         canonical chain needs no raised budget.
     function _checkLanes() internal {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
             if (ChainUtils._isSVMChain(desired[i].remoteChain)) {
-                console2.log(string.concat("  [INFO] ", _svmLaneNote(desired[i].remoteChain)));
+                console2.log(
+                    string.concat(
+                        "  [INFO] ",
+                        CCIPFeeBudgetLib.svmLaneNote(chain, desired[i].remoteChain)
+                    )
+                );
                 continue;
             }
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) continue;
@@ -679,8 +732,37 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         if (!ok_) _failures++;
     }
 
+    /// @notice Reports a local role that the setup batch grants when it is missing: an `[ OK ]`
+    ///         line when the role is held and an `[INFO]` line otherwise, never a failure.
+    function _reportRole(bool held_, string memory holder_, string memory role_) internal pure {
+        console2.log(
+            held_
+                ? string.concat("  [ OK ] ", holder_, " holds ", role_)
+                : string.concat(
+                    "  [INFO] ",
+                    holder_,
+                    " does not hold ",
+                    role_,
+                    " yet; the setup batch grants it"
+                )
+        );
+    }
+
     // =========== PLANNING HELPERS =========== //
 
+    /// @notice Plans the deactivation of the legacy LayerZero `CrossChainBridge` in the Kernel
+    ///         when one is recorded for the chain and is still active.
+    /// @dev    The preconditions, `bridgeActive` false and a zero MINTR mint approval, are
+    ///         checked here, while the batch is built. The encoded action is
+    ///         `Kernel.executeAction(DeactivatePolicy, bridge)` alone, and the Kernel checks
+    ///         neither, so a change of either between the build and the execution is not caught
+    ///         by the batch: build and simulate it immediately before signing, and cancel a
+    ///         pending Safe transaction of it after any administration of the legacy bridge.
+    ///
+    ///         Reverts if:
+    ///         - The legacy bridge is active in the Kernel and reports `bridgeActive`.
+    ///         - The legacy bridge is active in the Kernel and holds a MINTR mint approval.
+    /// @param kernel_ The Kernel of the chain.
     function _planLegacyBridgeDeactivation(Kernel kernel_) internal {
         address bridge = _envAddress("olympus.policies.CrossChainBridge");
         if (bridge == address(0)) {
@@ -846,8 +928,8 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         ohm = _envAddressNotZero("olympus.legacy.OHM");
     }
 
-    /// @notice Reverts unless the config policy, the timelock and the pool are bound together
-    ///         and the pool is a burn/mint pool.
+    /// @notice Reverts unless the config policy, the timelock and the pool are bound together,
+    ///         both policies report the Kernel of `env.json` and the pool is a burn/mint pool.
     function _requireBinding(
         address kernel_,
         address config_,
@@ -865,6 +947,10 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         require(
             address(Policy(config_).kernel()) == kernel_,
             "CCIPNonEthereumSetupBatch: the config policy reports another Kernel"
+        );
+        require(
+            address(Policy(timelock_).kernel()) == kernel_,
+            "CCIPNonEthereumSetupBatch: the timelock reports another Kernel"
         );
         require(
             !ICCIPTokenPoolConfig(config_).isLiquidityContainer(),
@@ -914,16 +1000,21 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
 
     /// @notice Reverts unless every outgoing lane toward an EVM burn/mint destination carries
     ///         the raised OHM delivery gas budget. A lane toward an SVM destination is not
-    ///         gated and is reported as a note (see `_svmLaneNote`); a lane toward a canonical
-    ///         chain needs no raised budget, since the lock/release pool releases with a plain
-    ///         transfer.
+    ///         gated and is reported as a note (see `CCIPFeeBudgetLib.svmLaneNote`); a lane
+    ///         toward a canonical chain needs no raised budget, since the lock/release pool
+    ///         releases with a plain transfer.
     function _requireFeeBudgets() internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         console2.log("\n--- Outgoing lane fee budgets ---");
         for (uint256 i = 0; i < desired.length; ++i) {
             if (!desired[i].enabled) continue;
             if (ChainUtils._isSVMChain(desired[i].remoteChain)) {
-                console2.log(string.concat("Note: ", _svmLaneNote(desired[i].remoteChain)));
+                console2.log(
+                    string.concat(
+                        "Note: ",
+                        CCIPFeeBudgetLib.svmLaneNote(chain, desired[i].remoteChain)
+                    )
+                );
                 continue;
             }
             if (!CCIPConfigLib.isBurnMintEvmChain(desired[i].remoteChain)) {
@@ -956,54 +1047,12 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         }
     }
 
-    /// @notice The note printed for an outgoing lane toward an SVM destination, which the fee
-    ///         budget gate does not cover. The OHM delivery on the SVM side is billed under the
-    ///         fee quoter's default budget for the SVM destination, which is what the live
-    ///         mainnet to Solana lane runs under without an OHM entry, so no request to
-    ///         Chainlink is needed for this direction. The reverse lane depends on the local
-    ///         pool: on a burn/mint chain it delivers through MINTR and needs the raised budget
-    ///         on the Solana fee quoter, which this tooling cannot read, so it should be confirmed
-    ///         before the route opens; on a canonical chain it releases from the lock/release pool
-    ///         with a plain transfer and needs no raise.
-    function _svmLaneNote(string memory remoteChain_) internal view returns (string memory note) {
-        string memory reverseLane = string.concat(remoteChain_, " -> ", chain);
-        string memory reverseNote = ChainUtils._isCanonicalChain(chain)
-            ? string.concat(
-                "the reverse lane ",
-                reverseLane,
-                " needs no raised budget either (a lock/release delivery)"
-            )
-            : string.concat(
-                "the reverse lane ",
-                reverseLane,
-                " needs an enabled OHM entry of at least ",
-                vm.toString(uint256(CCIPFeeBudgetLib.OHM_MIN_DEST_GAS_OVERHEAD)),
-                " on the Solana fee quoter, which this tooling cannot read; confirm it before opening the route"
-            );
-        return
-            string.concat(
-                "lane ",
-                chain,
-                " -> ",
-                remoteChain_,
-                ": not gated here; the OHM delivery on ",
-                remoteChain_,
-                " runs under the fee quoter's default budget for the SVM destination, the budget the live mainnet -> solana lane runs under without an OHM entry; ",
-                reverseNote
-            );
-    }
-
     /// @notice Reverts unless every enabled desired route of `env.json` is live on the pool and
     ///         matches it field by field, every live route is declared, and every route declared
-    ///         with `enabled: false` (the removal marker) is absent from the pool or has its
-    ///         removal queued on the config timelock. A queued removal is an expected transient
-    ///         state and is reported as pending; a declared removal that is neither done nor
-    ///         queued is a mismatch.
-    function _requireRoutesConverged(
-        ICCIPTokenPoolAdmin pool_,
-        address config_,
-        IConfigTimelockBatchQueue queue_
-    ) internal view {
+    ///         with `enabled: false` (the removal marker) is absent from the pool. A queued
+    ///         removal does not count: the action can expire, be cancelled or stay unexecuted
+    ///         before the pool is enabled and registered, so the route has to be gone first.
+    function _requireRoutesConverged(ICCIPTokenPoolAdmin pool_) internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(env, chain);
         require(
             desired.length > 0,
@@ -1036,22 +1085,15 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 route.chainSelector
             );
             if (!route.enabled) {
-                if (!live.exists) continue;
-                if (_isRemovalQueued(config_, queue_, route.chainSelector)) {
-                    console2.log(
-                        "  Route",
-                        route.remoteChain,
-                        "is declared with enabled=false: its removal is queued on the config timelock (pending removal)"
-                    );
-                    continue;
-                }
-                revert(
+                require(
+                    !live.exists,
                     string.concat(
                         "CCIPNonEthereumSetupBatch: route ",
                         route.remoteChain,
-                        " is declared with enabled=false but is configured on the pool and no removal is queued; queue it through CCIPRouteReconcileBatch"
+                        " is declared with enabled=false but is configured on the pool, and a queued removal does not count. Remove it first: queue the removal through CCIPRouteReconcileBatch.reconcileRoutes where none is queued (cancelQueuedAction clears a stale one), execute it after the delay with executeReadyActions, then build this batch again; or declare the route enabled: true with its limits"
                     )
                 );
+                continue;
             }
             require(
                 live.exists,
@@ -1072,34 +1114,11 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
         }
     }
 
-    /// @notice Returns whether an unexpired queued action of the config timelock removes the route.
-    /// @dev    A removal reserves all three route domains; the route identity key is the one read.
-    function _isRemovalQueued(
-        address config_,
-        IConfigTimelockBatchQueue queue_,
-        uint64 chainSelector_
-    ) internal view returns (bool queued) {
-        uint64 actionId = queue_.pendingActionId(
-            CCIPTokenPoolConfigKeyLib.routeIdentityKey(config_, chainSelector_)
-        );
-        if (actionId == 0) return false;
-
-        ITimelockBatchQueue.QueuedAction memory action = queue_.getQueuedAction(actionId);
-        // The expiry is read by the script at simulation time
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp > action.expiresAt) return false;
-
-        bytes32 payloadHash = keccak256(abi.encode(chainSelector_));
-        for (uint256 i = 0; i < action.actions.length; ++i) {
-            if (
-                action.actions[i].selector == ICCIPTokenPoolConfig.removeChain.selector &&
-                keccak256(action.actions[i].payload) == payloadHash
-            ) return true;
-        }
-        return false;
-    }
-
     function _roles(address kernel_) internal view returns (ROLESv1 roles) {
         return ROLESv1(address(Kernel(kernel_).getModuleForKeycode(toKeycode("ROLES"))));
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(calls-loop,custom-errors,require-revert-in-loop)

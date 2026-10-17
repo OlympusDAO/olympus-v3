@@ -1,13 +1,21 @@
 // SPDX-License-Identifier: Unlicense
 // solhint-disable custom-errors, one-contract-per-file
-// forge-lint: disable-start(require-revert-in-loop, boolean-cst, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Script code, run off-chain by forge: the calling scripts read one lane per loop iteration,
+// and a read that fails reverts to its caller, which aborts the run or reports the lane.
+// forge-lint: disable-start(require-revert-in-loop)
 
 // Scripting
 import {VmSafe} from "@forge-std-1.16.2/Vm.sol";
 
 // Libraries
 import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
+
+// The interfaces mirror the live fee contract ABIs for this reader alone, so they are declared
+// in the file of the library that reads through them.
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice The subset of the Chainlink `Router 1.2.0` surface the fee budget reader uses.
 /// @dev The interfaces of this file mirror the live deployed ABIs rather than the vendored
@@ -171,8 +179,9 @@ interface ICCIPFeeOnRamp15 {
 ///         on an EVM burn/mint chain that sequence runs two MINTR calls and does not fit the
 ///         90000 default, so every lane toward an EVM burn/mint chain must carry an enabled OHM
 ///         entry of at least `OHM_MIN_DEST_GAS_OVERHEAD` before the route opens. The reader is
-///         meant for EVM destinations: the chain default it falls back to is accepted only from
-///         a destination config that carries the EVM chain family selector.
+///         meant for EVM destinations: on a fee quoter lane it requires the destination config
+///         to be enabled and to carry the EVM chain family selector before it reads the token
+///         entry, so a lane that the fee quoter does not serve fails closed on either path.
 /// @dev Chainlink migrates lanes between ramp generations and bumps `typeAndVersion` per contract
 ///      change, so the reader does not pin exact version strings. It dispatches on the contract
 ///      family and the major version of the on-ramp and of its fee quoter, then checks the form
@@ -224,6 +233,7 @@ library CCIPFeeBudgetLib {
     uint256 internal constant _ON_RAMP_FEE_QUOTER_WORD = 0;
     uint256 internal constant _FEE_QUOTER_ENTRY_GAS_WORD = 1;
     uint256 internal constant _FEE_QUOTER_ENTRY_ENABLED_WORD = 3;
+    uint256 internal constant _FEE_QUOTER_DEST_ENABLED_WORD = 0;
     uint256 internal constant _FEE_QUOTER_DEST_FAMILY_WORD = 5;
     uint256 internal constant _FEE_QUOTER_DEST_DEFAULT_GAS_WORD = 7;
     uint256 internal constant _LEGACY_ENTRY_GAS_WORD = 3;
@@ -267,7 +277,8 @@ library CCIPFeeBudgetLib {
     ///         `remoteChain_`, together with whether it comes from an enabled OHM token entry
     ///         and a description of where the value came from.
     /// @dev Fails closed: reverts when the local router carries no lane to the destination, when
-    ///      the on-ramp or its fee quoter is of an unsupported family or major version, or when
+    ///      the on-ramp or its fee quoter is of an unsupported family or major version, when
+    ///      the fee quoter reports the destination disabled or of another chain family, or when
     ///      a return does not have the expected form.
     /// @param env_ The contents of `env.json`.
     /// @param localChain_ The source chain of the lane.
@@ -372,6 +383,49 @@ library CCIPFeeBudgetLib {
         );
     }
 
+    /// @notice The note printed for an outgoing lane toward an SVM destination, which the fee
+    ///         budget gate does not cover. The OHM delivery on the SVM side is billed under the
+    ///         fee quoter's default budget for the SVM destination, which is what the live
+    ///         mainnet to Solana lane runs under without an OHM entry, so no request to
+    ///         Chainlink is needed for this direction. The reverse lane depends on the local
+    ///         pool: on a burn/mint chain it delivers through MINTR and needs the raised budget
+    ///         on the Solana fee quoter, which this tooling cannot read, so it should be confirmed
+    ///         before the route opens; on a canonical chain it releases from the lock/release pool
+    ///         with a plain transfer and needs no raise.
+    /// @param localChain_ The source chain of the lane.
+    /// @param remoteChain_ The SVM destination chain of the lane.
+    /// @return note The note, without a prefix.
+    function svmLaneNote(
+        string memory localChain_,
+        string memory remoteChain_
+    ) internal pure returns (string memory note) {
+        string memory reverseLane = string.concat(remoteChain_, " -> ", localChain_);
+        string memory reverseNote = ChainUtils._isCanonicalChain(localChain_)
+            ? string.concat(
+                "the reverse lane ",
+                reverseLane,
+                " needs no raised budget either (a lock/release delivery)"
+            )
+            : string.concat(
+                "the reverse lane ",
+                reverseLane,
+                " needs an enabled OHM entry of at least ",
+                _VM.toString(uint256(OHM_MIN_DEST_GAS_OVERHEAD)),
+                " on the Solana fee quoter, which this tooling cannot read; confirm it before opening the route"
+            );
+        return
+            string.concat(
+                "lane ",
+                localChain_,
+                " -> ",
+                remoteChain_,
+                ": not gated here; the OHM delivery on ",
+                remoteChain_,
+                " runs under the fee quoter's default budget for the SVM destination, the budget the live mainnet -> solana lane runs under without an OHM entry; ",
+                reverseNote
+            );
+    }
+
     // ========== VERSION PARSING ========== //
 
     /// @notice Parses a `typeAndVersion` string of the form `<family> <major>.<minor>[.<patch>][-<suffix>]`.
@@ -382,6 +436,7 @@ library CCIPFeeBudgetLib {
     /// @param raw_ The string to parse.
     /// @return version The parsed string; meaningless when `ok` is false.
     /// @return ok Whether the string had the expected form.
+    // Kept as a named parser so that the format it accepts can be tested on its own
     // forge-lint: disable-next-item(internal-function-used-once)
     function parseTypeAndVersion(
         string memory raw_
@@ -397,6 +452,8 @@ library CCIPFeeBudgetLib {
                 break;
             }
         }
+        // The boolean literals below are the `ok` element of the returned tuple, not conditions
+        // forge-lint: disable-start(boolean-cst)
         if (split == length || split == 0) return (version, false);
 
         (uint256 major, uint256 majorDigits, uint256 next) = _parseDigits(raw, split + 1);
@@ -413,6 +470,7 @@ library CCIPFeeBudgetLib {
             TypeAndVersion({raw: raw_, family: string(family), major: major, minor: minor}),
             true
         );
+        // forge-lint: disable-end(boolean-cst)
     }
 
     // ========== INTERNAL ========== //
@@ -522,10 +580,13 @@ library CCIPFeeBudgetLib {
             );
     }
 
-    /// @dev Reads the OHM entry, then the chain default, from a `FeeQuoter` of major 2, checking
-    ///      the form of each return before reading a word of it: the token entry must be four
-    ///      words with `uint32` values and a `bool`, the destination config eleven words with
-    ///      the EVM chain family selector in word five.
+    /// @dev Reads the destination config, then the OHM entry, from a `FeeQuoter` of major 2,
+    ///      checking the form of each return before reading a word of it: the destination
+    ///      config must be eleven words with `isEnabled` true in word zero and the EVM chain
+    ///      family selector in word five, the token entry four words with `uint32` values and a
+    ///      `bool`. A destination the fee quoter reports disabled, or of another chain family,
+    ///      fails closed before the token entry is read, so neither path accepts it; the chain
+    ///      default of the destination config is read only when the token entry is disabled.
     ///
     ///      Residual risk of matching on the major rather than on the exact version: a
     ///      `FeeQuoter 2.x` that reordered the four-word token entry while keeping its word
@@ -542,53 +603,78 @@ library CCIPFeeBudgetLib {
         string memory versions_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        // The returns are shape-checked word by word before a field is read
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
-        (bool ok, bytes memory data) = feeQuoter_.staticcall(
+        (bool ok, bytes memory destConfig) = feeQuoter_.staticcall(
+            abi.encodeCall(ICCIPFeeQuoter20.getDestChainConfig, (destSelector_))
+        );
+        _requireWords(ok, destConfig, _FEE_QUOTER_DEST_CONFIG_WORDS, "getDestChainConfig", lane_);
+        _requireWordFits(
+            destConfig,
+            _FEE_QUOTER_DEST_ENABLED_WORD,
+            _BOOL_BITS,
+            "getDestChainConfig().isEnabled",
+            lane_
+        );
+        require(
+            _word(destConfig, _FEE_QUOTER_DEST_ENABLED_WORD) == _TRUE_WORD,
+            string.concat(
+                "CCIPFeeBudgetLib: the destination of the lane ",
+                lane_,
+                " is disabled on the fee quoter (getDestChainConfig().isEnabled is false)"
+            )
+        );
+        _requireChainFamily(destConfig, _FEE_QUOTER_DEST_FAMILY_WORD, lane_);
+
+        // The return is shape-checked word by word before a field is read
+        // forge-lint: disable-next-item(low-level-calls)
+        (bool entryOk, bytes memory entry) = feeQuoter_.staticcall(
             abi.encodeCall(ICCIPFeeQuoter20.getTokenTransferFeeConfig, (destSelector_, ohm_))
         );
-        _requireWords(ok, data, _FEE_QUOTER_TOKEN_ENTRY_WORDS, "getTokenTransferFeeConfig", lane_);
+        _requireWords(
+            entryOk,
+            entry,
+            _FEE_QUOTER_TOKEN_ENTRY_WORDS,
+            "getTokenTransferFeeConfig",
+            lane_
+        );
         _requireWordFits(
-            data,
+            entry,
             _FEE_QUOTER_ENTRY_GAS_WORD,
             _UINT32_BITS,
             "getTokenTransferFeeConfig().destGasOverhead",
             lane_
         );
         _requireWordFits(
-            data,
+            entry,
             _FEE_QUOTER_ENTRY_ENABLED_WORD,
             _BOOL_BITS,
             "getTokenTransferFeeConfig().isEnabled",
             lane_
         );
-        if (_word(data, _FEE_QUOTER_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
-            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        if (_word(entry, _FEE_QUOTER_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+            // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+            // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
             return (
-                // forge-lint: disable-next-line(unsafe-typecast)
-                uint32(_word(data, _FEE_QUOTER_ENTRY_GAS_WORD)),
+                uint32(_word(entry, _FEE_QUOTER_ENTRY_GAS_WORD)),
                 true,
                 string.concat("OHM token entry, ", versions_)
             );
         }
 
-        // forge-lint: disable-next-item(low-level-calls)
-        (ok, data) = feeQuoter_.staticcall(
-            abi.encodeCall(ICCIPFeeQuoter20.getDestChainConfig, (destSelector_))
-        );
-        _requireWords(ok, data, _FEE_QUOTER_DEST_CONFIG_WORDS, "getDestChainConfig", lane_);
-        _requireChainFamily(data, _FEE_QUOTER_DEST_FAMILY_WORD, lane_);
         _requireWordFits(
-            data,
+            destConfig,
             _FEE_QUOTER_DEST_DEFAULT_GAS_WORD,
             _UINT32_BITS,
             "getDestChainConfig().defaultTokenDestGasOverhead",
             lane_
         );
-        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+        // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+        // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
         return (
-            // forge-lint: disable-next-line(unsafe-typecast)
-            uint32(_word(data, _FEE_QUOTER_DEST_DEFAULT_GAS_WORD)),
+            uint32(_word(destConfig, _FEE_QUOTER_DEST_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", versions_, " (no OHM entry)")
         );
@@ -603,7 +689,7 @@ library CCIPFeeBudgetLib {
         address ohm_,
         string memory lane_
     ) private view returns (uint32 overhead, bool isTokenEntry, string memory source) {
-        // The returns are shape-checked word by word before a field is read
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRamp15.getTokenTransferFeeConfig, (ohm_))
@@ -624,15 +710,17 @@ library CCIPFeeBudgetLib {
             lane_
         );
         if (_word(data, _LEGACY_ENTRY_ENABLED_WORD) == _TRUE_WORD) {
-            // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+            // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+            // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+            // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
             return (
-                // forge-lint: disable-next-line(unsafe-typecast)
                 uint32(_word(data, _LEGACY_ENTRY_GAS_WORD)),
                 true,
                 string.concat("OHM token entry, ", onRampVersion_)
             );
         }
 
+        // The return is shape-checked word by word before a field is read
         // forge-lint: disable-next-item(low-level-calls)
         (ok, data) = onRamp_.staticcall(abi.encodeCall(ICCIPFeeOnRamp15.getDynamicConfig, ()));
         _requireWords(ok, data, _LEGACY_DYNAMIC_CONFIG_WORDS, "getDynamicConfig", lane_);
@@ -643,9 +731,10 @@ library CCIPFeeBudgetLib {
             "getDynamicConfig().defaultTokenDestGasOverhead",
             lane_
         );
-        // casting to 'uint32' is safe because the word is checked to fit 32 bits above
+        // casting to 'uint32' is safe because the word is checked to fit 32 bits above; the
+        // literal is the `isTokenEntry` element of the returned tuple, not a condition.
+        // forge-lint: disable-next-item(unsafe-typecast,boolean-cst)
         return (
-            // forge-lint: disable-next-line(unsafe-typecast)
             uint32(_word(data, _LEGACY_DYNAMIC_DEFAULT_GAS_WORD)),
             false,
             string.concat("chain default, ", onRampVersion_, " (no OHM entry)")
@@ -723,8 +812,8 @@ library CCIPFeeBudgetLib {
 
     function _word(bytes memory data_, uint256 index_) private pure returns (uint256 word) {
         // A word read past the length word of the array; the caller has checked the length
-        // solhint-disable-next-line no-inline-assembly
         // forge-lint: disable-next-item(inline-assembly)
+        // solhint-disable-next-line no-inline-assembly
         assembly {
             word := mload(add(add(data_, _WORD_BYTES), mul(index_, _WORD_BYTES)))
         }
@@ -771,3 +860,7 @@ library CCIPFeeBudgetLib {
         require(value != address(0), string.concat("CCIPFeeBudgetLib: zero address for ", path));
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(require-revert-in-loop)

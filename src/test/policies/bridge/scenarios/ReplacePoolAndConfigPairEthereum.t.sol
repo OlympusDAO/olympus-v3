@@ -98,6 +98,8 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
     ///         validated paths refuse disabled buckets).
     function _recreateRoutesFromOldPool() internal {
         uint64[] memory selectors = pool.getSupportedChains();
+        // The loop recreates every route of the outgoing pool on the new one
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < selectors.length; ++i) {
             (
                 ICCIPRateLimiter.Config memory outbound,
@@ -113,6 +115,7 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
                 })
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // ========== TESTS ========== //
@@ -137,6 +140,8 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
 
         // The registry probe precondition: the replacement answers supportsInterface within
         // the 30,000 gas the destination off-ramp forwards; setPool itself never checks this
+        // A raw call under the gas cap of the off-ramp; the callee is the pool this test deployed
+        // forge-lint: disable-next-item(low-level-calls,return-bomb)
         (bool probeOk, bytes memory probeData) = address(newPool).staticcall{gas: 30_000}(
             abi.encodeCall(IERC165.supportsInterface, (bytes4(0xaff2afbf)))
         );
@@ -146,6 +151,8 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
         _ocgProposalMigrateToNewStack();
 
         // Every route of the outgoing pool is live on the new one with its token and pools
+        // The loop compares every recreated route with the outgoing pool
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < oldSelectors.length; ++i) {
             assertTrue(
                 newPool.isSupportedChain(oldSelectors[i]),
@@ -162,6 +169,7 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairEthereum is CCIPEthereum
                 "the recreated route should accept the same remote pools"
             );
         }
+        // forge-lint: disable-end(calls-loop)
 
         // The liquidity moved in full: the old pool is empty, the new one holds everything,
         // and no OHM was minted or burned on the way

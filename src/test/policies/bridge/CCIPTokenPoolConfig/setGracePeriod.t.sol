@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 
@@ -152,6 +155,8 @@ contract CCIPTokenPoolConfigTests_setGracePeriod is CCIPTokenPoolConfigTest {
     function test_whenPeriodIsNonZero(uint32 period_) public givenEnabled {
         // The valid interval of the setter is [1, type(uint32).max]: zero is the only rejected
         // value
+        // casting to 'uint32' is safe because the bound caps the value at the uint32 maximum
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint32 boundedPeriod = uint32(bound(period_, 1, type(uint32).max));
 
         vm.prank(admin);
@@ -209,3 +214,5 @@ contract CCIPTokenPoolConfigTests_setGracePeriod is CCIPTokenPoolConfigTest {
         assertFalse(config.isEnabled(), "the policy should stay disabled past the updated window");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
-// forge-lint: disable-start(reentrancy-events, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
@@ -10,6 +9,7 @@ import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
@@ -50,15 +50,22 @@ import {BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE} from "src/policies/utils/Ro
 ///         the admin role while enabled.
 ///
 ///         The config operator is the single-step delegated operator of `ConfigOperatorSingleStep`:
-///         it starts unset, `setConfigOperator` replaces it immediately, and the zero address
-///         revokes it. The route and rate limit functions accept it alongside the admin role.
+///         it starts unset, `setConfigOperator` replaces it immediately with a candidate that
+///         advertises `ICCIPTokenPoolConfigTimelock` through ERC165 and reports this policy as
+///         its config, and the zero address revokes it. The route and rate limit functions
+///         accept it alongside the admin role.
 ///
 ///         The address setters and `setRemoteToken` reject the value they already hold, the zero
 ///         address included where it is a value, so a call that lands always changes state:
 ///         `setRouter`, `setRebalancer`, `setRateLimitAdmin` and `setRemoteToken` with
 ///         `CCIPTokenPoolConfig_AddressUnchanged`, `setConfigOperator` with the mix-in's
-///         `ConfigOperator_Unchanged`. The check runs after the lifecycle and role gates and
-///         before any other validation of the candidate.
+///         `ConfigOperator_Unchanged`. The check runs after the lifecycle and role gates, at the
+///         position the "Reverts if" list of each setter states: it is the first check of the
+///         candidate in `setRateLimitAdmin` and in `setConfigOperator`, whose candidate check
+///         follows it; `setRebalancer` requires the pool to be a liquidity container before it;
+///         `setRouter` rejects the zero address before it and probes the candidate after it;
+///         and `setRemoteToken` requires the route to exist and the candidate to be non-empty
+///         and 32 bytes long before it, and reads the buckets of the route after it.
 ///
 ///         Every check that this contract adds on top of the pool is shared between the
 ///         state-changing function and its `validate*` mirror, and the mirrors also repeat the
@@ -105,7 +112,9 @@ contract CCIPTokenPoolConfig is
     ///         any other length at send time, the 2.0.0 on-ramp unpads a 32-byte EVM remote token
     ///         to 20 bytes, and the source pool of an EVM message is delivered as its ABI
     ///         encoding, which the destination pool matches byte for byte against its accepted
-    ///         remote pools.
+    ///         remote pools. The policy checks the length only; the shape of an EVM value, a
+    ///         left-padded address outside the range reserved for precompiles, is validated by
+    ///         the tooling that builds the call.
     uint256 internal constant _REMOTE_ADDRESS_LENGTH = 32;
 
     /// @notice The minimum length of the return data of a successful `typeAndVersion()` call:
@@ -197,6 +206,8 @@ contract CCIPTokenPoolConfig is
 
     /// @notice Reverts with `NotAuthorised` unless the caller holds the bridge rate limiter
     ///         role, is the config operator or holds the admin role.
+    // Declared as a modifier, like the two other authorization gates of this policy, so that a
+    // gated function states its gate in its signature.
     // forge-lint: disable-next-item(modifier-used-only-once)
     modifier onlyRateLimiterOrConfigOperatorOrAdmin() {
         _requireAuthorized(
@@ -232,6 +243,15 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
+    /// @dev The capacity of two base units and the rate of one base unit per second are counted
+    ///      in the units the pool charges: the outbound bucket in nine-decimal OHM units, the
+    ///      inbound bucket in the units of the source pool, charged before the pool converts the
+    ///      amount to local units with the decimals the source pool encodes in the message; a
+    ///      message without decimal metadata is converted as nine-decimal. A source pool that
+    ///      encodes fewer decimals therefore passes more OHM per charged unit through the inbound
+    ///      bucket: up to two whole OHM per full bucket, refilled at one OHM per second, when it
+    ///      encodes zero. This policy does not read the decimals of a remote token or a remote
+    ///      pool.
     function getDisabledRateLimiterConfig()
         external
         pure
@@ -242,7 +262,12 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @inheritdoc ICCIPTokenPoolConfig
-    /// @dev Reverts if:
+    /// @dev `addChain`, `setChainRateLimits` and their validation mirrors reject the disabled
+    ///      rate limiter configuration, so both buckets hold it only after `disableChain` or
+    ///      `disableAllChains`, or when they were written directly on the pool: by its owner
+    ///      before the handover, or by a rate limit admin of the pool.
+    ///
+    ///      Reverts if:
     ///      - `chainSelector_` is not a configured route (`NonExistentChain`).
     function isChainDisabled(uint64 chainSelector_) external view override returns (bool disabled) {
         _requireSupportedChain(chainSelector_);
@@ -584,7 +609,10 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev Both buckets are written to `{isEnabled: true, capacity: 2, rate: 1}`, which clamps
-    ///      each fill level to two units. The policy's enabled state is not checked.
+    ///      each fill level to two units. The outbound bucket is charged in nine-decimal OHM
+    ///      units and the inbound bucket in the units of the source pool, so the inbound
+    ///      containment assumes a source pool that encodes nine decimals; see
+    ///      `getDisabledRateLimiterConfig`. The policy's enabled state is not checked.
     ///
     ///      Reverts if:
     ///      - The caller holds none of the emergency, admin, bridge admin and bridge rate
@@ -604,7 +632,10 @@ contract CCIPTokenPoolConfig is
     ///      `RouteDisabled` event is emitted per route. The policy's enabled state is not
     ///      checked. The order of the routes follows the pool's enumerable set. A pool without
     ///      a configured route is rejected before it is written to, so a sweep that lands always
-    ///      contains at least one route.
+    ///      contains at least one route. The outbound bucket of each route is charged in
+    ///      nine-decimal OHM units and the inbound bucket in the units of the source pool, so
+    ///      the inbound containment assumes a source pool that encodes nine decimals; see
+    ///      `getDisabledRateLimiterConfig`.
     ///
     ///      The cost is linear in the number of configured routes: one `getSupportedChains`
     ///      read and one `setChainRateLimiterConfigs` call, plus, per route, the storage writes
@@ -642,14 +673,20 @@ contract CCIPTokenPoolConfig is
 
     /// @inheritdoc ICCIPTokenPoolConfig
     /// @dev The checks run in the order in which the pool would perform its own, with the
-    ///      config-only length check of each remote address right after its emptiness check.
+    ///      config-only checks placed next to the pool check they extend: the disabled
+    ///      configuration check after the rate check of the same configuration, the length
+    ///      check of each remote address right after its emptiness check, and the zero selector
+    ///      check right before the route existence check.
     ///
     ///      Reverts if:
     ///      - Either rate limiter configuration is disabled.
     ///      - Either rate limiter configuration has a zero rate or a rate that is not below its
     ///        capacity (`InvalidRateLimitRate`).
+    ///      - Either rate limiter configuration is the disabled rate limiter configuration
+    ///        (`CCIPTokenPoolConfig_RateLimiterReserved`).
     ///      - The remote token is empty (`ZeroAddressNotAllowed`).
     ///      - The remote token is not 32 bytes long.
+    ///      - The remote chain selector is zero (`CCIPTokenPoolConfig_ChainSelectorZero`).
     ///      - The route already exists (`ChainAlreadyExists`).
     ///      - The remote pool list is empty.
     ///      - A remote pool entry is empty (`ZeroAddressNotAllowed`).
@@ -724,6 +761,8 @@ contract CCIPTokenPoolConfig is
     ///      - Either configuration is disabled.
     ///      - Either configuration has a zero rate or a rate that is not below its capacity
     ///        (`InvalidRateLimitRate`).
+    ///      - Either configuration is the disabled rate limiter configuration
+    ///        (`CCIPTokenPoolConfig_RateLimiterReserved`).
     function validateSetChainRateLimits(
         uint64 chainSelector_,
         ICCIPRateLimiter.Config calldata outbound_,
@@ -748,7 +787,27 @@ contract CCIPTokenPoolConfig is
     ///      - The caller does not hold the admin role.
     function _authorizeSetGracePeriod() internal view override onlyAdminRole {}
 
-    // ========== CONFIG OPERATOR HOOKS ========== //
+    // ========== CONFIG OPERATOR ========== //
+
+    /// @inheritdoc ConfigOperatorSingleStep
+    /// @dev The mix-in runs the lifecycle and role gates of `_authorizeSetConfigOperator`, the
+    ///      unchanged check and the write, in that order; the candidate check runs after the
+    ///      write and reverts it when the candidate is rejected. A non-zero candidate must
+    ///      advertise `ICCIPTokenPoolConfigTimelock` through ERC165 and report this policy as
+    ///      its `config()`; the zero address revokes the operator without a candidate check.
+    ///
+    ///      Reverts if:
+    ///      - The policy is disabled.
+    ///      - The caller does not hold the admin role.
+    ///      - `configOperator_` is the operator already set, the zero address included
+    ///        (`ConfigOperator_Unchanged`).
+    ///      - `configOperator_` is not the zero address and does not advertise
+    ///        `ICCIPTokenPoolConfigTimelock` through ERC165, or reports a config other than this
+    ///        policy (`CCIPTokenPoolConfig_InvalidConfigOperator`).
+    function setConfigOperator(address configOperator_) public override {
+        super.setConfigOperator(configOperator_);
+        if (configOperator_ != address(0)) _requireConfigOperatorCandidate(configOperator_);
+    }
 
     /// @inheritdoc ConfigOperatorSingleStep
     /// @dev The hook reverts on failure, so the mix-in never reports `ConfigOperator_Unauthorized`
@@ -782,12 +841,15 @@ contract CCIPTokenPoolConfig is
             revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
         }
         _requireRemoteAddressLength(update_.remoteTokenAddress);
+        if (update_.remoteChainSelector == 0) revert CCIPTokenPoolConfig_ChainSelectorZero();
         if (_POOL.isSupportedChain(update_.remoteChainSelector)) {
             revert ICCIPTokenPoolAdmin.ChainAlreadyExists(update_.remoteChainSelector);
         }
 
         uint256 length = update_.remotePoolAddresses.length;
         if (length == 0) revert CCIPTokenPoolConfig_RemotePoolsEmpty();
+        // The update is validated as a whole: its first invalid remote pool entry rejects it
+        // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < length; ++i) {
             bytes calldata remotePool = update_.remotePoolAddresses[i];
             if (remotePool.length == 0) revert ICCIPTokenPoolAdmin.ZeroAddressNotAllowed();
@@ -803,6 +865,7 @@ contract CCIPTokenPoolConfig is
                 }
             }
         }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Validates the arguments of `removeChain`. See `validateRemoveChain`.
@@ -891,22 +954,38 @@ contract CCIPTokenPoolConfig is
     }
 
     /// @notice Validates a rate limiter configuration supplied to the pool.
-    /// @dev    Reverts if:
+    /// @dev    The disabled rate limiter configuration passes the pool's own checks; it is
+    ///         rejected last, so that the containment functions remain the only functions of
+    ///         this policy that leave it in place.
+    ///
+    ///         Reverts if:
     ///         - `config_` is disabled.
     ///         - `config_` has a zero rate or a rate that is not below its capacity
     ///           (`InvalidRateLimitRate`).
+    ///         - `config_` is the disabled rate limiter configuration
+    ///           (`CCIPTokenPoolConfig_RateLimiterReserved`).
     function _validateRateLimiterConfig(ICCIPRateLimiter.Config memory config_) internal pure {
         if (!config_.isEnabled) revert CCIPTokenPoolConfig_RateLimiterDisabled();
         if (config_.rate == 0 || config_.rate >= config_.capacity) {
             revert ICCIPRateLimiter.InvalidRateLimitRate(config_);
         }
+        if (
+            config_.capacity == _DISABLED_RATE_LIMIT_CAPACITY &&
+            config_.rate == _DISABLED_RATE_LIMIT_RATE
+        ) {
+            revert CCIPTokenPoolConfig_RateLimiterReserved();
+        }
     }
 
     /// @notice Reverts with `CCIPTokenPoolConfig_InvalidRemoteAddressLength` unless
-    ///         `remoteAddress_` is exactly `_REMOTE_ADDRESS_LENGTH` bytes long.
+    ///         `remoteAddress_` is exactly `_REMOTE_ADDRESS_LENGTH` bytes long. The length is
+    ///         the only check: the shape of an EVM value is validated by the tooling.
     /// @param  remoteAddress_ The remote token or remote pool address to check.
     function _requireRemoteAddressLength(bytes calldata remoteAddress_) internal pure {
         if (remoteAddress_.length != _REMOTE_ADDRESS_LENGTH) {
+            // Also reached from the remote pool loop of `_validateAddChain`, which rejects the
+            // update on its first invalid entry.
+            // forge-lint: disable-next-line(require-revert-in-loop)
             revert CCIPTokenPoolConfig_InvalidRemoteAddressLength(remoteAddress_);
         }
     }
@@ -922,6 +1001,21 @@ contract CCIPTokenPoolConfig is
     ///         the liquidity container interface.
     function _requireLiquidityContainer() internal view {
         if (!_IS_LIQUIDITY_CONTAINER) revert CCIPTokenPoolConfig_NotLiquidityContainer();
+    }
+
+    /// @notice Reverts with `CCIPTokenPoolConfig_InvalidConfigOperator` unless `candidate_`
+    ///         advertises `ICCIPTokenPoolConfigTimelock` through ERC165 and reports this policy
+    ///         as its config.
+    /// @param  candidate_ The config operator candidate, never the zero address.
+    function _requireConfigOperatorCandidate(address candidate_) internal view {
+        if (
+            !ERC165Checker.supportsInterface(
+                candidate_,
+                type(ICCIPTokenPoolConfigTimelock).interfaceId
+            ) || ICCIPTokenPoolConfigTimelock(candidate_).config() != address(this)
+        ) {
+            revert CCIPTokenPoolConfig_InvalidConfigOperator(candidate_);
+        }
     }
 
     // ========== INTERNAL HELPERS ========== //

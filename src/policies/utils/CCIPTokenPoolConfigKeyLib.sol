@@ -110,6 +110,9 @@ library CCIPTokenPoolConfigKeyLib {
     /// @notice Returns the reserved key of the allowlist domain.
     /// @param  config_ The config policy the timelock is bound to.
     /// @return key The destination-scoped key.
+    // The allowlist member of the scoped-key set, kept beside the three route keys so that every
+    // key the timelock reserves is derived in this library.
+    // forge-lint: disable-next-item(internal-function-used-once)
     function allowListKey(address config_) internal pure returns (bytes32 key) {
         return ConfigTimelockKeyLib.scope(config_, allowListLocalKey());
     }

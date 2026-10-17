@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -11,6 +14,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
+
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
 
 contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfigTimelockTest {
     // ========== SHARED QUEUE GATE LADDER ========== //
@@ -105,7 +111,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -114,7 +120,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         givenChainAdded
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }
@@ -142,7 +148,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         givenEnabled
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueRemoveChain(CHAIN_SELECTOR_A);
     }
@@ -234,7 +240,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
 
         // The route is live, so the recomputed hashes carry the fixture state: both buckets
         // enabled at the rig defaults, two remote pools whose keccak hashes XOR into the
-        // aggregate, and a supported chain with the default remote token
+        // aggregate, and a supported chain with the default remote token, which every route
+        // domain preimage ends with
         assertEq(
             expectedHashes[0],
             keccak256(
@@ -246,7 +253,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     DEFAULT_OUTBOUND_RATE,
                     true,
                     DEFAULT_INBOUND_CAPACITY,
-                    DEFAULT_INBOUND_RATE
+                    DEFAULT_INBOUND_RATE,
+                    REMOTE_TOKEN
                 )
             ),
             "the live rate limits hash should carry the default bucket configurations"
@@ -258,7 +266,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     timelock.REMOTE_POOLS_DOMAIN(),
                     CHAIN_SELECTOR_A,
                     uint256(2),
-                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO)
+                    keccak256(REMOTE_POOL_ONE) ^ keccak256(REMOTE_POOL_TWO),
+                    REMOTE_TOKEN
                 )
             ),
             "the live remote pools hash should carry the two-pool aggregate"
@@ -274,7 +283,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(
             abi.encode(_singleActionBatch(_removeChainBatchAction(CHAIN_SELECTOR_A)))
@@ -344,7 +353,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
     // removal. The recorded rate-limits hash covers the containment shape {true, 2, 1}.
     function test_givenRouteIsContained() public givenEnabled givenChainAdded givenRouteContained {
         bytes32 containedRateLimitsHash = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
-        // The containment write is {true, 2, 1} on both buckets
+        // The containment write is {true, 2, 1} on both buckets; the remote token is unchanged
         assertEq(
             containedRateLimitsHash,
             keccak256(
@@ -356,7 +365,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
                     uint128(1),
                     true,
                     uint128(2),
-                    uint128(1)
+                    uint128(1),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded rate limits hash should carry the containment shape"
@@ -392,3 +402,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueRemoveChain is CCIPTokenPoolConfi
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, secondActionId, "first route removal");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

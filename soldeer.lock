@@ -52,10 +52,16 @@ git = "https://github.com/smartcontractkit/chainlink.git"
 rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
 
 [[dependencies]]
+name = "chainlink-contracts-ccip"
+version = "2.0.0"
+git = "https://github.com/smartcontractkit/chainlink-ccip.git"
+rev = "c2c125c27f056db2e98d21501922b6eff5750f36"
+
+[[dependencies]]
 name = "chainlink-local"
-version = "0.2.9"
+version = "0.3.1"
 git = "https://github.com/smartcontractkit/chainlink-local.git"
-rev = "f8c0efe8685660dac07e08f4558f1b578ae991aa"
+rev = "af2b3da7e84e141695389739bb137680d0942d1c"
 
 [[dependencies]]
 name = "clones-with-immutable-args"

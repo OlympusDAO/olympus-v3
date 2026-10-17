@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -58,6 +61,8 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         bytes32 key_,
         bytes32 currentStateHash_
     ) internal {
+        // Only the recorded hash is needed, to build the expected revert data
+        // forge-lint: disable-next-line(unused-return)
         (, bytes32 storedHash) = timelock.getQueuedConfigState(actionId_, 0, configStateIndex_);
         _expectRevertConfigStateChanged(actionId_, 0, key_, storedHash, currentStateHash_);
         vm.prank(thirdParty);
@@ -238,7 +243,7 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         _assertCanonicalRateLimitsApplied();
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     //   [X] every reserved key stays held
@@ -250,7 +255,7 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         givenActionReady
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         _execute(queuedActionId);
 
         assertEq(
@@ -293,8 +298,9 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         givenActionReady
     {
         address timelockAddress = address(timelock);
+        address candidate = address(otherTimelock);
         vm.prank(admin);
-        config.setConfigOperator(thirdParty);
+        config.setConfigOperator(candidate);
         vm.prank(admin);
         config.setConfigOperator(timelockAddress);
 
@@ -429,22 +435,118 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
     }
 
     // given the remote token was replaced directly by the admin
-    //   [X] it reverts with ConfigStateChanged naming exactly the route identity key
-    // The precision case: the direct replacement preserves configurations, pools and
-    // fills, so the rate limits and remote pools hashes still match and only the identity
-    // hash differs. The queued action is a removeChain holding all three domains.
+    //   [X] it reverts with ConfigStateChanged naming the rate limits key
+    //   [X] every reserved key stays held
+    // The direct replacement preserves configurations, pools and fills, and the remote token
+    // sits in the preimage of every route domain, so all three stored hashes differ. The
+    // queued action is a removeChain holding all three domains; the walk over the stored
+    // states fails on the first one, the rate limits state at index 0.
     function test_givenRemoteTokenReplacedDirectly_reverts() public givenEnabled givenChainAdded {
         uint64 actionId = _queueRemoveChainAction(CHAIN_SELECTOR_A);
         _warpToExecutableAt(actionId);
         _directSetRemoteToken(CHAIN_SELECTOR_A, REMOTE_TOKEN_B);
 
-        // The walk over the stored states passes the rate limits (index 0) and remote pools
-        // (index 1) checks and fails on the identity state at index 2
         _expectStateChangedAndExecute(
             actionId,
-            2,
-            _routeIdentityKey(CHAIN_SELECTOR_A),
-            _expectedRouteIdentityHash(CHAIN_SELECTOR_A)
+            0,
+            _rateLimitsKey(CHAIN_SELECTOR_A),
+            _expectedRateLimitsHash(CHAIN_SELECTOR_A)
+        );
+
+        _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "after the drift revert");
+    }
+
+    // given the remote token was replaced directly by the admin
+    //   given the queued action is a rate limit change of the route
+    //     [X] it reverts with ConfigStateChanged naming the rate limits key
+    //     [X] the rate limits key stays held until the action is cancelled
+    // The rate limits preimage carries the remote token: a limit change reviewed against one
+    // route cannot execute on the replaced one, although the bucket configurations it hashed
+    // are unchanged
+    function test_givenRemoteTokenReplacedDirectly_givenRateLimitAction_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+        givenActionQueued
+        givenActionReady
+    {
+        _directSetRemoteToken(CHAIN_SELECTOR_A, REMOTE_TOKEN_B);
+
+        _expectStateChangedAndExecute(
+            queuedActionId,
+            0,
+            _rateLimitsKey(CHAIN_SELECTOR_A),
+            _expectedRateLimitsHash(CHAIN_SELECTOR_A)
+        );
+
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            queuedActionId,
+            "the rate limits key should stay held after the drift revert"
+        );
+
+        vm.prank(bridgeAdmin);
+        timelock.cancelQueuedAction(queuedActionId);
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the cancellation should release the stale action's key"
+        );
+    }
+
+    // given the remote token was replaced directly by the admin
+    //   given the queued action is a remote pool addition of the route
+    //     [X] it reverts with ConfigStateChanged naming the remote pools key
+    //     [X] the remote pools key stays held
+    // The remote pools preimage carries the remote token: the set the action hashed is
+    // carried forward unchanged by the replacement, and the hash still moves
+    function test_givenRemoteTokenReplacedDirectly_givenAddRemotePoolAction_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+    {
+        uint64 actionId = _queueAddRemotePoolAction(CHAIN_SELECTOR_A);
+        _warpToExecutableAt(actionId);
+        _directSetRemoteToken(CHAIN_SELECTOR_A, REMOTE_TOKEN_B);
+
+        _expectStateChangedAndExecute(
+            actionId,
+            0,
+            _remotePoolsKey(CHAIN_SELECTOR_A),
+            _expectedRemotePoolsHash(CHAIN_SELECTOR_A)
+        );
+
+        assertEq(
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
+            actionId,
+            "the remote pools key should stay held after the drift revert"
+        );
+    }
+
+    // given the remote token was replaced directly by the admin
+    //   given the queued action is a remote pool removal of the route
+    //     [X] it reverts with ConfigStateChanged naming the remote pools key
+    //     [X] the remote pools key stays held
+    function test_givenRemoteTokenReplacedDirectly_givenRemoveRemotePoolAction_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+    {
+        uint64 actionId = _queueRemoveRemotePoolAction(CHAIN_SELECTOR_A);
+        _warpToExecutableAt(actionId);
+        _directSetRemoteToken(CHAIN_SELECTOR_A, REMOTE_TOKEN_B);
+
+        _expectStateChangedAndExecute(
+            actionId,
+            0,
+            _remotePoolsKey(CHAIN_SELECTOR_A),
+            _expectedRemotePoolsHash(CHAIN_SELECTOR_A)
+        );
+
+        assertEq(
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
+            actionId,
+            "the remote pools key should stay held after the drift revert"
         );
     }
 
@@ -466,9 +568,10 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
     }
 
     // given the route was removed and re-added with a different token
-    //   [X] it reverts with ConfigStateChanged naming the route identity key
-    // The re-add restores configurations and pools identically, so the identity hash is
-    // the one that stays drifted
+    //   [X] it reverts with ConfigStateChanged naming the rate limits key
+    // The re-add restores configurations and pools identically, so only the remote token
+    // differs; it sits in every route domain preimage, and the walk over the stored states
+    // fails on the first one
     function test_givenRouteRemovedAndReAddedWithDifferentToken_reverts()
         public
         givenEnabled
@@ -489,9 +592,9 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
 
         _expectStateChangedAndExecute(
             actionId,
-            2,
-            _routeIdentityKey(CHAIN_SELECTOR_A),
-            _expectedRouteIdentityHash(CHAIN_SELECTOR_A)
+            0,
+            _rateLimitsKey(CHAIN_SELECTOR_A),
+            _expectedRateLimitsHash(CHAIN_SELECTOR_A)
         );
     }
 
@@ -927,6 +1030,58 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         );
     }
 
+    // given a ready batch of a remote pool removal followed by a rate limit change of one
+    // route
+    //   [X] it queues: the two sub-actions reserve different domains of the route
+    //   [X] it dispatches both in array order and releases both keys
+    // The remote pools and rate limits domains of one route stay distinct keys, so one batch
+    // can carry a pool change and a limit change of the same route
+    function test_givenRemoveRemotePoolThenRateLimitBatchReady()
+        public
+        givenEnabled
+        givenChainAdded
+    {
+        ITimelockBatchQueue.BatchAction[] memory batch = new ITimelockBatchQueue.BatchAction[](2);
+        batch[0] = _removeRemotePoolBatchAction(CHAIN_SELECTOR_A, REMOTE_POOL_TWO);
+        batch[1] = _setChainRateLimitsBatchAction(
+            CHAIN_SELECTOR_A,
+            _canonicalOutboundConfig(),
+            _canonicalInboundConfig()
+        );
+        vm.prank(bridgeAdmin);
+        uint64 actionId = timelock.queueBatch(batch);
+        assertEq(
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
+            actionId,
+            "the batch should reserve the remote pools key"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            actionId,
+            "the batch should reserve the rate limits key"
+        );
+        _warpToExecutableAt(actionId);
+
+        _execute(actionId);
+
+        bytes[] memory remotePools = ICCIPTokenPoolAdmin(config.pool()).getRemotePools(
+            CHAIN_SELECTOR_A
+        );
+        assertEq(remotePools.length, 1, "the removal should leave one remote pool");
+        assertEq(remotePools[0], REMOTE_POOL_ONE, "the remaining pool should be the first one");
+        _assertCanonicalRateLimitsApplied();
+        assertEq(
+            timelock.pendingActionId(_remotePoolsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the remote pools key should be released after the batch"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the rate limits key should be released after the batch"
+        );
+    }
+
     // ========== DISPATCH FAILURES: POOL OWNERSHIP LOST ========== //
 
     // given the config lost the pool ownership
@@ -1060,6 +1215,42 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         );
     }
 
+    // given two live actions reserve independent domains of one route
+    //   when the remote pool action executes first
+    //     [X] the rate limit action stays live with its key held and executes afterwards
+    // The mirror of the case above: the dispatch inside the remote pools domain leaves the
+    // rate limits hash, remote token included, as it was recorded
+    function test_givenIndependentDomainActionsOnOneRoute_whenPoolActionExecutesFirst()
+        public
+        givenEnabled
+        givenChainAdded
+    {
+        uint64 rateLimitActionId = _queueRateLimitAction(CHAIN_SELECTOR_A);
+        uint64 poolActionId = _queueAddRemotePoolAction(CHAIN_SELECTOR_A);
+        _warpToExecutableAt(poolActionId);
+
+        _execute(poolActionId);
+
+        assertTrue(
+            ICCIPTokenPoolAdmin(config.pool()).isRemotePool(CHAIN_SELECTOR_A, REMOTE_POOL_THREE),
+            "the first dispatch should accept the remote pool"
+        );
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            rateLimitActionId,
+            "the untouched action should keep its key"
+        );
+
+        _execute(rateLimitActionId);
+
+        _assertCanonicalRateLimitsApplied();
+        assertEq(
+            timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
+            0,
+            "the second execution should release its key"
+        );
+    }
+
     // given another live action for a different route was cancelled
     //   [X] the cancellation releases only the cancelled action's key
     //   [X] the remaining action still executes
@@ -1115,3 +1306,5 @@ contract CCIPTokenPoolConfigTimelockTests_executeQueuedAction is CCIPTokenPoolCo
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

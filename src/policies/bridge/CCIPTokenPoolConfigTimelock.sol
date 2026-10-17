@@ -38,18 +38,21 @@ import {TimelockBatchQueue} from "src/policies/utils/TimelockBatchQueue.sol";
 ///         the bridge admin role and the config policy to name this timelock as its config
 ///         operator. Every sub-action must target the config policy with a supported selector
 ///         and a payload whose canonical re-encoding equals the stored bytes, and must pass the
-///         config policy's validation mirror of the targeted function. Execution is permissionless once the delay elapses and requires this policy
-///         and the config policy to be enabled and this timelock to still be the config operator;
-///         the shared base then checks the reserved keys and state hashes before each dispatch.
+///         config policy's validation mirror of the targeted function. Execution is
+///         permissionless at any block timestamp from `executableAt` to `expiresAt`, both
+///         inclusive, and requires this policy and the config policy to be enabled and this
+///         timelock to still be the config operator; the shared base then checks the reserved
+///         keys and state hashes before each dispatch.
 ///         The domains and keys are those of `CCIPTokenPoolConfigKeyLib`, scoped to the config
 ///         policy; tooling derives the key of a reservation from the same library.
 ///         An action whose config policy is disabled after queueing holds its configuration
 ///         keys until it is executed once the config policy is enabled again, or until it is
 ///         cancelled; so does an action whose dispatch reverts because the config
 ///         policy no longer owns the pool, or whose execution this timelock rejects because the
-///         config policy names another config operator or none. Cancellation is available to
-///         the admin role, the emergency role and the proposer of the action, whether or not
-///         this policy is enabled and whether or not the action has expired.
+///         config policy names another config operator or none. Cancellation is available
+///         whether or not this policy is enabled: to the admin role, the emergency role and the
+///         proposer of the action while the action has not expired, and to any caller once it
+///         has.
 ///
 ///         `enable` and `setTimelockDelay` are restricted to the admin role, `disable` to the
 ///         emergency or admin role, `reEnable` to the bridge admin role within the grace window,
@@ -521,15 +524,20 @@ contract CCIPTokenPoolConfigTimelock is
     /// @dev The hash preimages are:
     ///      - rate limits: `abi.encode(RATE_LIMITS_DOMAIN, chainSelector, outbound.isEnabled,
     ///        outbound.capacity, outbound.rate, inbound.isEnabled, inbound.capacity,
-    ///        inbound.rate)`;
-    ///      - remote pools: `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate)`,
-    ///        where `count` is the number of accepted remote pools and `aggregate` is the XOR of
-    ///        `keccak256(remotePool)` over the raw bytes of every accepted remote pool;
+    ///        inbound.rate, remoteToken)`;
+    ///      - remote pools: `abi.encode(REMOTE_POOLS_DOMAIN, chainSelector, count, aggregate,
+    ///        remoteToken)`, where `count` is the number of accepted remote pools and
+    ///        `aggregate` is the XOR of `keccak256(remotePool)` over the raw bytes of every
+    ///        accepted remote pool;
     ///      - route identity: `abi.encode(ROUTE_IDENTITY_DOMAIN, chainSelector, isSupported,
     ///        remoteToken)`;
     ///      - allowlist: `abi.encode(ALLOWLIST_DOMAIN, allowListEnabled, count, aggregate)`,
     ///        where `count` is the number of allowlisted addresses and `aggregate` is the XOR of
-    ///        `keccak256(abi.encode(member))` over every allowlisted address.
+    ///        `keccak256(abi.encode(member))` over every allowlisted address;
+    ///
+    ///      where `remoteToken` is the raw bytes of the remote token the pool reports for the
+    ///      route. The remote token is part of every route domain, so a replacement of the
+    ///      remote token moves the three hashes of the route together.
     ///
     ///      The two set aggregates are independent of the order in which the pool returns the
     ///      members, which changes when an entry is removed from the underlying enumerable set,
@@ -647,17 +655,19 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @inheritdoc TimelockBatchQueue
-    /// @dev Cancellation is available while this policy is disabled and after the action has
-    ///      expired.
+    /// @dev Cancellation is available while this policy is disabled. While the action has not
+    ///      expired it is restricted to the admin role, the emergency role and the proposer of
+    ///      the action; once the block timestamp is past `expiresAt`, any caller may cancel it.
     ///
     ///      Reverts if:
-    ///      - `caller_` holds neither the admin role nor the emergency role and is not the
-    ///        proposer of the action.
+    ///      - The action has not expired and `caller_` holds neither the admin role nor the
+    ///        emergency role and is not the proposer of the action.
     function _validateCancellation(
         address caller_,
         uint64,
         ITimelockBatchQueue.QueuedAction storage action_
     ) internal view override {
+        if (_getBlockTimestamp() > action_.expiresAt) return;
         _requireAuthorized(
             !_isAdmin(caller_) && !_hasRole(caller_, EMERGENCY_ROLE) && caller_ != action_.proposer
         );
@@ -789,6 +799,8 @@ contract CCIPTokenPoolConfigTimelock is
     }
 
     /// @notice Returns the state hash of the rate limits domain of a route.
+    /// @dev    The preimage covers the configuration of both buckets and the remote token of
+    ///         the route, never the fill levels or the refill timestamps.
     /// @param  chainSelector_ The chain selector of the route.
     /// @return stateHash The state hash.
     function _rateLimitsStateHash(uint64 chainSelector_) internal view returns (bytes32 stateHash) {
@@ -809,7 +821,8 @@ contract CCIPTokenPoolConfigTimelock is
                     outbound.rate,
                     inbound.isEnabled,
                     inbound.capacity,
-                    inbound.rate
+                    inbound.rate,
+                    _POOL.getRemoteToken(chainSelector_)
                 )
             );
     }
@@ -817,6 +830,7 @@ contract CCIPTokenPoolConfigTimelock is
     /// @notice Returns the state hash of the remote pools domain of a route.
     /// @dev    The aggregate is the XOR of `keccak256(remotePool)` over the raw bytes of every
     ///         accepted remote pool, computed in one pass over the array returned by the pool.
+    ///         The preimage also covers the remote token of the route.
     /// @param  chainSelector_ The chain selector of the route.
     /// @return stateHash The state hash.
     function _remotePoolsStateHash(
@@ -835,7 +849,8 @@ contract CCIPTokenPoolConfigTimelock is
                     CCIPTokenPoolConfigKeyLib.REMOTE_POOLS_DOMAIN,
                     chainSelector_,
                     count,
-                    aggregate
+                    aggregate,
+                    _POOL.getRemoteToken(chainSelector_)
                 )
             );
     }

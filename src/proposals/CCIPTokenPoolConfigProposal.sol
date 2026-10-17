@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 // solhint-disable one-contract-per-file
-// forge-lint: disable-start(calls-loop, require-revert-in-loop, multi-contract-file)
 pragma solidity ^0.8.24;
+
+// Proposal code, run off-chain by forge to build and check the proposal: calls in loops are
+// simulated rather than paid for on-chain, and a failed check is meant to abort the run.
+// forge-lint: disable-start(calls-loop,require-revert-in-loop)
 
 // OCG Proposal Simulator
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
@@ -27,6 +30,7 @@ import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoo
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 
 // Constants
 import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
@@ -36,6 +40,10 @@ import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {Kernel, Policy} from "src/Kernel.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
+
+// The proposal and the script that submits it share one file, like the other proposals here
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice OCG proposal that re-activates OHM bridging through Chainlink CCIP: it opens the
 ///         mainnet routes to Arbitrum, Optimism, Base and Berachain on the OHM token pool, and
@@ -43,27 +51,38 @@ import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 ///         and the OHM administrator position in the Chainlink TokenAdminRegistry under the OCG
 ///         timelock.
 ///
-///         Every handover action is conditional on the live state, so the proposal is idempotent
-///         with respect to steps that already happened. The actions read, in order:
-///         accept the OHM administrator role, grant `bridge_admin` to the DAO MS, enable the
-///         config policy, accept the pool ownership, set the config timelock as config operator,
-///         set the OCG timelock as rebalancer, clear the native rate limit admin, enable the
-///         config timelock, and add the four routes through `CCIPTokenPoolConfig.addChain`. At most
-///         twelve actions, so no activator contract is needed.
+///         The first action calls the deployed CCIPTokenPoolConfigProposalChecker, a read-only
+///         contract that asserts at execution time what the build read: the precondition of
+///         each handover action the proposal includes, the end state of each handover action
+///         the live state already satisfies, the absence of the four routes from the pool and
+///         the minimum backing of the pool. Every handover action is conditional on the live
+///         state, so the proposal is idempotent with respect to steps that had already happened
+///         when it was built; a step that happens between the build and the execution fails
+///         the first action instead. The actions read, in order: check the preconditions,
+///         accept the OHM administrator
+///         role, grant `bridge_admin` to the DAO MS, enable the config policy, accept the pool
+///         ownership, set the config timelock as config operator, set the OCG timelock as
+///         rebalancer, clear the native rate limit admin, enable the config timelock, and add
+///         the four routes through `CCIPTokenPoolConfig.addChain`. At most thirteen actions, so
+///         no activator contract is needed.
 ///
 ///         The route actions come after the handover actions because `addChain` requires the
 ///         config policy to be enabled and to own the pool, both of which happen earlier in the
-///         same execution. The gap between submission and execution is safe: until execution the
-///         only party able to change the pool, the registry entry or the routes is the DAO MS
-///         (the pool owner and the OHM administrator until the proposal accepts both), and any
-///         interference makes the execution revert (`ChainAlreadyExists`, `MustBeProposedOwner`,
-///         `OnlyPendingAdministrator`) rather than land in an unexpected state. If a route is
-///         added directly before submission, the build-time check of the missing set fails
-///         closed: investigate, rebuild and resubmit.
+///         same execution. The gap between submission and execution is covered by the checker:
+///         until execution the only party able to change the pool, the registry entry or the
+///         routes is the DAO MS (the pool owner, the pool rebalancer and the OHM administrator
+///         until the proposal accepts both transfers), and a change that invalidates an action
+///         or lowers the backing below the minimum makes the first action revert with a named
+///         error, so no handover action runs. The one change the checker cannot see is a
+///         repointed pending pool owner, since the pool exposes no read of it; that case
+///         reverts at the acceptance action with `MustBeProposedOwner`. If a route is added
+///         directly before submission, the build-time check of the missing set fails closed:
+///         investigate, rebuild and resubmit.
 ///
 ///         Assumes:
-///         - CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum
-///           mainnet and recorded in `src/proposals/addresses.json` and `src/scripts/env.json`.
+///         - CCIPTokenPoolConfig, CCIPTokenPoolConfigTimelock and
+///           CCIPTokenPoolConfigProposalChecker have been deployed on Ethereum mainnet and
+///           recorded in `src/proposals/addresses.json` and `src/scripts/env.json`.
 ///         - The DAO MS has run `CCIPTokenPoolConfigBatch.prepareHandover`: both policies are
 ///           active in the Kernel, CCIPTokenPoolConfig is the pending owner of the pool and the OCG
 ///           timelock is the pending OHM administrator in the TokenAdminRegistry.
@@ -211,6 +230,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     struct Contracts {
         ICCIPTokenPoolConfig config;
         ICCIPTokenPoolConfigTimelock configTimelock;
+        CCIPTokenPoolConfigProposalChecker checker;
         ICCIPTokenPoolAdmin pool;
         ICCIPTokenAdminRegistry registry;
         ROLESv1 roles;
@@ -261,7 +281,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "## Assumptions\n",
                 "\n",
-                "- CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay.\n",
+                "- CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay, together with CCIPTokenPoolConfigProposalChecker, the read-only contract that the first step calls.\n",
                 "- The DAO MS has activated both policies in the Kernel, proposed CCIPTokenPoolConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
                 "- The OCG timelock holds the `admin` role.\n",
                 "- The live Solana route of the pool matches the desired configuration and the four new routes are not configured yet.\n",
@@ -277,20 +297,21 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "## Proposal Steps\n",
                 "\n",
-                "Each step is included only if the live state requires it.\n",
+                "The first step is always included; each later step is included only if the live state requires it.\n",
                 "\n",
-                "1. Accept the OHM administrator role in the Chainlink TokenAdminRegistry. The registered OHM pool is not changed.\n",
-                "2. Grant the `bridge_admin` role to the DAO MS.\n",
-                "3. Enable the CCIPTokenPoolConfig policy.\n",
-                "4. Accept the ownership of the token pool through CCIPTokenPoolConfig.\n",
-                "5. Set the CCIPTokenPoolConfigTimelock as the config operator of CCIPTokenPoolConfig.\n",
-                "6. Set the OCG timelock as the rebalancer of the token pool.\n",
-                "7. Clear the native rate limit admin of the token pool.\n",
-                "8. Enable the CCIPTokenPoolConfigTimelock policy.\n",
-                "9. Add the Arbitrum route to the token pool.\n",
-                "10. Add the Base route to the token pool.\n",
-                "11. Add the Berachain route to the token pool.\n",
-                "12. Add the Optimism route to the token pool.\n",
+                "1. Call CCIPTokenPoolConfigProposalChecker, a read-only contract that reverts unless the state the later steps rely on still holds at execution: the precondition of each step included, the end state of each step not included, none of the four routes configured on the pool yet, and the pool holding at least the minimum backing. The pool exposes no read of its pending owner, so the precondition of step 5 is its current owner. A revert here fails the whole proposal before any other step runs.\n",
+                "2. Accept the OHM administrator role in the Chainlink TokenAdminRegistry. The registered OHM pool is not changed.\n",
+                "3. Grant the `bridge_admin` role to the DAO MS.\n",
+                "4. Enable the CCIPTokenPoolConfig policy.\n",
+                "5. Accept the ownership of the token pool through CCIPTokenPoolConfig.\n",
+                "6. Set the CCIPTokenPoolConfigTimelock as the config operator of CCIPTokenPoolConfig.\n",
+                "7. Set the OCG timelock as the rebalancer of the token pool.\n",
+                "8. Clear the native rate limit admin of the token pool.\n",
+                "9. Enable the CCIPTokenPoolConfigTimelock policy.\n",
+                "10. Add the Arbitrum route to the token pool.\n",
+                "11. Add the Base route to the token pool.\n",
+                "12. Add the Berachain route to the token pool.\n",
+                "13. Add the Optimism route to the token pool.\n",
                 "\n",
                 "## Authority Model\n",
                 "\n",
@@ -330,9 +351,6 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         _kernel = Kernel(addresses.getAddress("olympus-kernel"));
     }
 
-    // forge-lint: disable-next-line(empty-block)
-    function _afterDeploy(Addresses addresses, address) internal override {}
-
     function _build(Addresses addresses) internal override {
         Contracts memory c = _contracts(addresses);
         CCIPConfigLib.DesiredConfig memory desired = CCIPConfigLib.desiredConfig(
@@ -350,70 +368,88 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             );
         }
         _requireRole(c.roles, ADMIN_ROLE, c.ocgTimelock);
-        // The routes this proposal opens are allowed to be missing; _buildRouteActions requires
+        // The routes this proposal opens are allowed to be missing; _missingRoutes requires
         // the missing set to be exactly the four expected chains.
         _requireRoutesMatchEnv(c.pool, false);
-        _requireBackingAndFeeBudgets(c);
+        uint256 minBacking = _minimumPoolBacking();
+        _requireBackingAndFeeBudgets(c, minBacking);
 
-        // 1-2. Registry and role actions
-        _buildAuthorityActions(c);
-        // 3-8. Config policy and timelock actions
-        _buildConfigActions(c, desired);
-        // 9-12. Add the four routes, after the handover actions: addChain requires the config
+        // The expectations of the checker are the record of the live reads that decide each
+        // conditional action, so they are read first and the actions follow them.
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _expectations(
+            c,
+            desired,
+            minBacking
+        );
+        (
+            ICCIPTokenPoolAdmin.ChainUpdate[] memory routeUpdates,
+            string[] memory routeNames
+        ) = _missingRoutes(c);
+        expectations.routesToAdd = _selectorsOf(routeUpdates);
+        // The checker accepts the state the build read, so a successful build is one whose
+        // first action passes on that state
+        c.checker.check(expectations);
+
+        // 1. The checker call, before every other action: it asserts the expectations at
+        // execution time and fails the proposal with a named error when one no longer holds.
+        _pushAction(
+            address(c.checker),
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker.check.selector,
+                expectations
+            ),
+            "Check the handover preconditions and the pool backing on chain"
+        );
+        // 2-3. Registry and role actions
+        _pushAuthorityActions(c, expectations);
+        // 4-9. Config policy and timelock actions
+        _pushConfigActions(c, expectations);
+        // 10-13. Add the four routes, after the handover actions: addChain requires the config
         // policy to be enabled and to own the pool, both established earlier in this execution.
-        _buildRouteActions(c);
+        _pushRouteActions(c, routeUpdates, routeNames);
     }
 
-    /// @notice Adds the registry and role actions: accept the OHM administrator role and grant
-    ///         `bridge_admin` to the DAO MS, each only if the live state requires it.
-    function _buildAuthorityActions(Contracts memory c) internal {
-        // 1. Accept the OHM administrator role (conditional)
+    /// @notice Reads the live state that decides each conditional handover action and records
+    ///         the decisions as the expectations of the checker: for each action, whether it is
+    ///         included, which the checker turns into the precondition the action needs or the
+    ///         end state the action would have left.
+    /// @dev    Reverts with `PendingMismatch` when a two-step transfer is neither completed nor
+    ///         pending to the right party, and with `AddressMismatch` when the registry does
+    ///         not register the pool, when the pool ownership is to be accepted but the DAO MS
+    ///         does not own the pool, or when the grant of `bridge_admin` is needed but the OCG
+    ///         timelock does not administer RolesAdmin. The route selectors are filled by the
+    ///         caller from `_missingRoutes`.
+    function _expectations(
+        Contracts memory c,
+        CCIPConfigLib.DesiredConfig memory desired,
+        uint256 minBacking_
+    ) internal view returns (ICCIPTokenPoolConfigProposalChecker.Expectations memory e) {
+        // The OHM administrator role (conditional)
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = c.registry.getTokenConfig(c.ohm);
         _requireAddress("TokenAdminRegistry pool", tokenConfig.tokenPool, address(c.pool));
-        if (tokenConfig.administrator != c.ocgTimelock) {
-            if (tokenConfig.pendingAdministrator != c.ocgTimelock) {
-                revert CCIPTokenPoolConfigProposal_PendingMismatch(
-                    "OHM administrator",
-                    tokenConfig.pendingAdministrator,
-                    c.ocgTimelock
-                );
-            }
-            _pushAction(
-                address(c.registry),
-                abi.encodeWithSelector(ICCIPTokenAdminRegistry.acceptAdminRole.selector, c.ohm),
-                "Accept the OHM administrator role in the TokenAdminRegistry"
+        e.acceptAdminRole = tokenConfig.administrator != c.ocgTimelock;
+        if (e.acceptAdminRole && tokenConfig.pendingAdministrator != c.ocgTimelock) {
+            revert CCIPTokenPoolConfigProposal_PendingMismatch(
+                "OHM administrator",
+                tokenConfig.pendingAdministrator,
+                c.ocgTimelock
             );
         }
 
-        // 2. Grant bridge_admin to the DAO MS (conditional)
-        if (!c.roles.hasRole(c.daoMS, BRIDGE_ADMIN_ROLE)) {
+        // bridge_admin for the DAO MS (conditional)
+        e.grantBridgeAdmin = !c.roles.hasRole(c.daoMS, BRIDGE_ADMIN_ROLE);
+        if (e.grantBridgeAdmin) {
             _requireAddress("RolesAdmin admin", RolesAdmin(c.rolesAdmin).admin(), c.ocgTimelock);
-            _pushAction(
-                c.rolesAdmin,
-                abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, c.daoMS),
-                "Grant bridge_admin role to the DAO MS"
-            );
-        }
-    }
-
-    /// @notice Adds the config policy and timelock actions: enable the config policy, accept the
-    ///         pool ownership, set the config operator, the rebalancer and the rate limit admin,
-    ///         and enable the timelock, each only if the live state requires it.
-    function _buildConfigActions(
-        Contracts memory c,
-        CCIPConfigLib.DesiredConfig memory desired
-    ) internal {
-        // 3. Enable the config policy (conditional); its admin functions require it
-        if (!IEnabler(address(c.config)).isEnabled()) {
-            _pushAction(
-                address(c.config),
-                abi.encodeWithSelector(IEnabler.enable.selector, ""),
-                "Enable CCIPTokenPoolConfig"
-            );
         }
 
-        // 4. Accept the pool ownership (conditional)
-        if (c.pool.owner() != address(c.config)) {
+        // The config policy lifecycle (conditional); its admin functions require it enabled
+        e.enableConfig = !IEnabler(address(c.config)).isEnabled();
+
+        // The pool ownership (conditional): the acceptance needs the DAO MS to own the pool and
+        // the config policy to be its pending owner
+        e.acceptPoolOwnership = c.pool.owner() != address(c.config);
+        if (e.acceptPoolOwnership) {
+            _requireAddress("pool owner", c.pool.owner(), c.daoMS);
             address pendingOwner = _pendingOwner(address(c.pool));
             if (pendingOwner != address(c.config)) {
                 revert CCIPTokenPoolConfigProposal_PendingMismatch(
@@ -422,6 +458,67 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                     address(c.config)
                 );
             }
+        }
+
+        // The config operator, the rebalancer and the rate limit admin (conditional): the config
+        // policy rejects a setter call that carries the value already held
+        e.setConfigOperator =
+            IConfigOperator(address(c.config)).configOperator() != address(c.configTimelock);
+        e.rebalancer = desired.rebalancer;
+        e.setRebalancer =
+            ICCIPLockReleaseTokenPool(address(c.pool)).getRebalancer() != desired.rebalancer;
+        e.rateLimitAdmin = desired.rateLimitAdmin;
+        e.setRateLimitAdmin = c.pool.getRateLimitAdmin() != desired.rateLimitAdmin;
+
+        // The config timelock lifecycle (conditional)
+        e.enableTimelock = !IEnabler(address(c.configTimelock)).isEnabled();
+
+        e.minimumPoolBacking = minBacking_;
+    }
+
+    /// @notice Adds the registry and role actions the expectations include: accept the OHM
+    ///         administrator role and grant `bridge_admin` to the DAO MS.
+    function _pushAuthorityActions(
+        Contracts memory c,
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory e
+    ) internal {
+        // 2. Accept the OHM administrator role (conditional)
+        if (e.acceptAdminRole) {
+            _pushAction(
+                address(c.registry),
+                abi.encodeWithSelector(ICCIPTokenAdminRegistry.acceptAdminRole.selector, c.ohm),
+                "Accept the OHM administrator role in the TokenAdminRegistry"
+            );
+        }
+
+        // 3. Grant bridge_admin to the DAO MS (conditional)
+        if (e.grantBridgeAdmin) {
+            _pushAction(
+                c.rolesAdmin,
+                abi.encodeWithSelector(RolesAdmin.grantRole.selector, BRIDGE_ADMIN_ROLE, c.daoMS),
+                "Grant bridge_admin role to the DAO MS"
+            );
+        }
+    }
+
+    /// @notice Adds the config policy and timelock actions the expectations include: enable the
+    ///         config policy, accept the pool ownership, set the config operator, the rebalancer
+    ///         and the rate limit admin, and enable the timelock.
+    function _pushConfigActions(
+        Contracts memory c,
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory e
+    ) internal {
+        // 4. Enable the config policy (conditional); its admin functions require it
+        if (e.enableConfig) {
+            _pushAction(
+                address(c.config),
+                abi.encodeWithSelector(IEnabler.enable.selector, ""),
+                "Enable CCIPTokenPoolConfig"
+            );
+        }
+
+        // 5. Accept the pool ownership (conditional)
+        if (e.acceptPoolOwnership) {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(ICCIPTokenPoolConfig.acceptPoolOwnership.selector),
@@ -429,8 +526,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             );
         }
 
-        // 5. Set the config timelock as config operator (conditional)
-        if (IConfigOperator(address(c.config)).configOperator() != address(c.configTimelock)) {
+        // 6. Set the config timelock as config operator (conditional)
+        if (e.setConfigOperator) {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(
@@ -441,32 +538,29 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             );
         }
 
-        // 6. Set the OCG timelock as rebalancer (conditional)
-        if (ICCIPLockReleaseTokenPool(address(c.pool)).getRebalancer() != desired.rebalancer) {
+        // 7. Set the OCG timelock as rebalancer (conditional)
+        if (e.setRebalancer) {
             _pushAction(
                 address(c.config),
-                abi.encodeWithSelector(
-                    ICCIPTokenPoolConfig.setRebalancer.selector,
-                    desired.rebalancer
-                ),
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.setRebalancer.selector, e.rebalancer),
                 "Set the OCG timelock as the rebalancer of the token pool"
             );
         }
 
-        // 7. Clear the native rate limit admin (conditional)
-        if (c.pool.getRateLimitAdmin() != desired.rateLimitAdmin) {
+        // 8. Clear the native rate limit admin (conditional)
+        if (e.setRateLimitAdmin) {
             _pushAction(
                 address(c.config),
                 abi.encodeWithSelector(
                     ICCIPTokenPoolConfig.setRateLimitAdmin.selector,
-                    desired.rateLimitAdmin
+                    e.rateLimitAdmin
                 ),
                 "Set the native rate limit admin of the token pool"
             );
         }
 
-        // 8. Enable the config timelock (conditional)
-        if (!IEnabler(address(c.configTimelock)).isEnabled()) {
+        // 9. Enable the config timelock (conditional)
+        if (e.enableTimelock) {
             _pushAction(
                 address(c.configTimelock),
                 abi.encodeWithSelector(IEnabler.enable.selector, ""),
@@ -475,15 +569,22 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         }
     }
 
-    /// @notice Adds one `addChain` action per desired route missing from the pool, in remote
-    ///         chain name order, and requires the missing set to be exactly the four expected
-    ///         chains (Arbitrum, Optimism, Base, Berachain).
+    /// @notice Returns one `addChain` update per desired route missing from the pool, in remote
+    ///         chain name order with the remote chain names alongside, and requires the missing
+    ///         set to be exactly the four expected chains (Arbitrum, Optimism, Base, Berachain).
+    ///         Each update passes the config policy's own validation.
     /// @dev Fails closed on any drift: a missing route outside the expected set (an undeclared
     ///      selector cannot appear here since the routes come from `env.json`, so this means the
     ///      declaration changed), or an expected route that is already configured (someone added
     ///      it directly while the DAO MS still owned the pool). Both need investigation and a
     ///      rebuild rather than a silently smaller proposal.
-    function _buildRouteActions(Contracts memory c) internal {
+    function _missingRoutes(
+        Contracts memory c
+    )
+        internal
+        view
+        returns (ICCIPTokenPoolAdmin.ChainUpdate[] memory updates, string[] memory names)
+    {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(
             _readEnv(),
             _chain()
@@ -495,6 +596,10 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             _BERACHAIN_SELECTOR
         ];
         bool[_EXPECTED_ROUTE_COUNT] memory added;
+        ICCIPTokenPoolAdmin.ChainUpdate[] memory buffer = new ICCIPTokenPoolAdmin.ChainUpdate[](
+            desired.length
+        );
+        string[] memory bufferNames = new string[](desired.length);
         uint256 missingCount = 0;
 
         for (uint256 i = 0; i < desired.length; ++i) {
@@ -513,7 +618,6 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 revert CCIPTokenPoolConfigProposal_UnexpectedMissingRoute(route.remoteChain);
             }
             added[expectedIndex] = true;
-            missingCount++;
 
             ICCIPTokenPoolAdmin.ChainUpdate memory update = ICCIPTokenPoolAdmin.ChainUpdate({
                 remoteChainSelector: route.chainSelector,
@@ -524,11 +628,9 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             });
             // Surface the config policy's own validation at build time
             c.config.validateAddChain(update);
-            _pushAction(
-                address(c.config),
-                abi.encodeWithSelector(ICCIPTokenPoolConfig.addChain.selector, update),
-                string.concat("Add the ", route.remoteChain, " route to the token pool")
-            );
+            buffer[missingCount] = update;
+            bufferNames[missingCount] = route.remoteChain;
+            missingCount++;
         }
 
         if (missingCount != expected.length || !(added[0] && added[1] && added[2] && added[3])) {
@@ -537,16 +639,66 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 expected.length
             );
         }
+
+        updates = new ICCIPTokenPoolAdmin.ChainUpdate[](missingCount);
+        names = new string[](missingCount);
+        for (uint256 i = 0; i < missingCount; ++i) {
+            updates[i] = buffer[i];
+            names[i] = bufferNames[i];
+        }
+    }
+
+    /// @notice Adds one `addChain` action per route update, in the order given.
+    function _pushRouteActions(
+        Contracts memory c,
+        ICCIPTokenPoolAdmin.ChainUpdate[] memory updates,
+        string[] memory names
+    ) internal {
+        // 10-13. Add the routes
+        for (uint256 i = 0; i < updates.length; ++i) {
+            _pushAction(
+                address(c.config),
+                abi.encodeWithSelector(ICCIPTokenPoolConfig.addChain.selector, updates[i]),
+                string.concat("Add the ", names[i], " route to the token pool")
+            );
+        }
+    }
+
+    /// @notice The chain selectors of the route updates, in the same order.
+    function _selectorsOf(
+        ICCIPTokenPoolAdmin.ChainUpdate[] memory updates
+    ) internal pure returns (uint64[] memory selectors) {
+        selectors = new uint64[](updates.length);
+        for (uint256 i = 0; i < updates.length; ++i) {
+            selectors[i] = updates[i].remoteChainSelector;
+        }
+    }
+
+    /// @notice The expectations of the end state the proposal leaves: no handover action
+    ///         included, no route to add, the declared rebalancer, rate limit admin and
+    ///         minimum backing.
+    function _endStateExpectations(
+        CCIPConfigLib.DesiredConfig memory desired,
+        uint256 minBacking_
+    ) internal pure returns (ICCIPTokenPoolConfigProposalChecker.Expectations memory e) {
+        e.rebalancer = desired.rebalancer;
+        e.rateLimitAdmin = desired.rateLimitAdmin;
+        e.routesToAdd = new uint64[](0);
+        e.minimumPoolBacking = minBacking_;
+    }
+
+    /// @notice Reads `olympus.config.CCIP.minimumPoolBacking` of the chain.
+    function _minimumPoolBacking() internal view returns (uint256 minBacking) {
+        return CCIPConfigLib.minimumPoolBacking(_readEnv(), _chain());
     }
 
     /// @notice Reverts unless the pool holds the minimum backing and every mainnet lane toward a
     ///         burn/mint destination carries the raised OHM delivery gas budget. Checked at build
     ///         time and re-checked by `_validate`.
-    function _requireBackingAndFeeBudgets(Contracts memory c) internal view {
-        uint256 minBacking = CCIPConfigLib.minimumPoolBacking(_readEnv(), _chain());
+    function _requireBackingAndFeeBudgets(Contracts memory c, uint256 minBacking_) internal view {
         uint256 poolBalance = IERC20(c.ohm).balanceOf(address(c.pool));
-        if (poolBalance < minBacking) {
-            revert CCIPTokenPoolConfigProposal_BackingTooLow(poolBalance, minBacking);
+        if (poolBalance < minBacking_) {
+            revert CCIPTokenPoolConfigProposal_BackingTooLow(poolBalance, minBacking_);
         }
 
         string memory env = _readEnv();
@@ -575,13 +727,17 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         );
 
         _requireDeployment(c);
+        // The checker accepts the end state: no handover action included, no route to add, the
+        // declared rebalancer, rate limit admin and minimum backing
+        uint256 minBacking = _minimumPoolBacking();
+        c.checker.check(_endStateExpectations(desired, minBacking));
         _validateLifecycle(c);
         _validatePoolAuthority(c, desired);
         _validateRegistry(c);
         _validateRoles(c, addresses.getAddress("proposer"));
         _validateParameters(c, desired);
         _requireRoutesMatchEnv(c.pool, true);
-        _requireBackingAndFeeBudgets(c);
+        _requireBackingAndFeeBudgets(c, minBacking);
 
         // The periphery is untouched
         _requireAddress("CCIPCrossChainBridge owner", Owned(c.bridge).owner(), c.daoMS);
@@ -685,8 +841,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         );
     }
 
-    /// @notice Reverts unless the config policy, the timelock and the pool are bound together
-    ///         and the pool serves OHM.
+    /// @notice Reverts unless the config policy, the timelock and the pool are bound together,
+    ///         the pool serves OHM and the checker is bound to the same contracts and accounts.
     function _requireDeployment(Contracts memory c) internal view {
         _requireAddress("CCIPTokenPoolConfig pool", c.config.pool(), address(c.pool));
         _requireAddress(
@@ -712,6 +868,26 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         _requireActive(address(c.configTimelock));
         _requireVersion(address(c.config));
         _requireVersion(address(c.configTimelock));
+        _requireCheckerBindings(c);
+    }
+
+    /// @notice Reverts unless the checker reports the contracts and accounts this proposal acts
+    ///         on as its bindings.
+    function _requireCheckerBindings(Contracts memory c) internal view {
+        CCIPTokenPoolConfigProposalChecker checker = c.checker;
+        _requireAddress("checker kernel", address(checker.KERNEL()), address(_kernel));
+        _requireAddress("checker config", address(checker.CONFIG()), address(c.config));
+        _requireAddress(
+            "checker config timelock",
+            address(checker.CONFIG_TIMELOCK()),
+            address(c.configTimelock)
+        );
+        _requireAddress("checker pool", address(checker.POOL()), address(c.pool));
+        _requireAddress("checker OHM", address(checker.OHM()), c.ohm);
+        _requireAddress("checker registry", address(checker.REGISTRY()), address(c.registry));
+        _requireAddress("checker ROLES", address(checker.ROLES()), address(c.roles));
+        _requireAddress("checker OCG timelock", checker.OCG_TIMELOCK(), c.ocgTimelock);
+        _requireAddress("checker DAO MS", checker.DAO_MS(), c.daoMS);
     }
 
     /// @notice Reverts unless the policy reports version 1.0.
@@ -848,6 +1024,9 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         c.configTimelock = ICCIPTokenPoolConfigTimelock(
             addresses.getAddress("olympus-policy-ccip-token-pool-config-timelock")
         );
+        c.checker = CCIPTokenPoolConfigProposalChecker(
+            addresses.getAddress("olympus-periphery-ccip-token-pool-config-proposal-checker")
+        );
         c.pool = ICCIPTokenPoolAdmin(
             addresses.getAddress("olympus-periphery-ccip-lock-release-token-pool")
         );
@@ -873,7 +1052,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     ///      isolated transaction under the block gas limit, and storing the file would spend most
     ///      of it.
     function _readEnv() internal view virtual returns (string memory env) {
-        /// forge-lint: disable-next-line(unsafe-cheatcode)
+        // The path is the constant `_ENV_PATH`: the tracked `env.json` and nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         return vm.readFile(_ENV_PATH);
     }
 
@@ -885,3 +1065,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 contract CCIPTokenPoolConfigProposalScript is ProposalScript {
     constructor() ProposalScript(new CCIPTokenPoolConfigProposal()) {}
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(calls-loop,require-revert-in-loop)

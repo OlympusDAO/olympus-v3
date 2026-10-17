@@ -315,6 +315,11 @@
         "name": "olympus-policy-ccip-token-pool-config-timelock"
     },
     {
+        "addr": "0x0000000000000000000000000000000000000000",
+        "chainId": 1,
+        "name": "olympus-periphery-ccip-token-pool-config-proposal-checker"
+    },
+    {
         "addr": "0xa5588e518CE5ee0e4628C005E4edAbD5e87de3aD",
         "chainId": 1,
         "name": "olympus-periphery-ccip-lock-release-token-pool"

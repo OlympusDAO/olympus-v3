@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Branch indices, candidate counts and minimal probe arguments are written where they are used
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IReEnabler} from "src/bases/interfaces/IReEnabler.sol";
@@ -25,6 +28,10 @@ import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConf
 import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
+
+// Handler loops walk the tracked selectors and the ghost registry of the run, calling the
+// contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
 
 /// @notice Invariant-test handler that drives CCIPTokenPoolConfigTimelock through its production
 ///         entry points over a small fixed selector space, next to the direct config-policy
@@ -94,6 +101,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
     // ========== RIG REFERENCES ========== //
 
+    // Handles and actors are named like the state variables of the unit rig (`timelock`, `config`,
+    // `admin`), so that an action body reads like a test body.
+    // forge-lint: disable-start(screaming-snake-case-immutable)
     CCIPTokenPoolConfigTimelock public immutable timelock;
     CCIPTokenPoolConfig public immutable config;
     ICCIPTokenPoolAdmin public immutable pool;
@@ -107,8 +117,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     address public immutable bridgeAdmin;
     address public immutable bridgeRateLimiter;
 
-    /// @notice The account the operator-seat rotation points the config at while the timelock
-    ///         is benched.
+    /// @notice The second timelock bound to the config, unactivated and disabled, that the
+    ///         operator-seat rotation points the config at while the timelock under test is
+    ///         benched; the config accepts no other candidate.
     address public immutable seatCandidate;
 
     /// @notice The roleless account that fires the untimely-execution and authorization
@@ -120,6 +131,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     address public immutable poolOwnerCandidate;
 
     address internal immutable onRamp;
+    // forge-lint: disable-end(screaming-snake-case-immutable)
 
     // ========== DOMAIN CONSTANTS (cached from the timelock) ========== //
 
@@ -190,6 +202,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     uint256 public dispatchDomainChecks;
     uint256 public cancels;
     uint256 public cancelsOfExpired;
+    uint256 public cancelsOfExpiredByOutsider;
     uint256 public cancelsWhileTimelockDisabled;
     uint256 public rejectedQueueProbes;
     uint256 public untimelyExecuteProbes;
@@ -215,6 +228,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
     // ========== CONSTRUCTOR ========== //
 
+    // A test fixture: the actor addresses are labelled test accounts, never user input
+    // forge-lint: disable-next-item(missing-zero-check)
     constructor(
         CCIPTokenPoolConfigTimelock timelock_,
         CCIPTokenPoolConfig config_,
@@ -235,7 +250,15 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         emergency = emergency_;
         bridgeAdmin = bridgeAdmin_;
         bridgeRateLimiter = bridgeRateLimiter_;
-        seatCandidate = makeAddr("seatCandidate");
+        seatCandidate = address(
+            new CCIPTokenPoolConfigTimelock(
+                config_.kernel(),
+                address(config_),
+                timelock_.timelockDelay(),
+                timelock_.gracePeriod()
+            )
+        );
+        vm.label(seatCandidate, "seatCandidate");
         outsider = makeAddr("outsider");
         poolOwnerCandidate = makeAddr("poolOwnerCandidate");
         onRamp = makeAddr("handlerOnRamp");
@@ -352,6 +375,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
                 // casting to 'bytes4' is deliberate: only the error selector is inspected
                 // forge-lint: disable-next-line(unsafe-typecast)
                 if (bytes4(reason_) != IGracePeriod.GracePeriod_Expired.selector) {
+                    // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+                    // forge-lint: disable-next-line(inline-assembly)
                     assembly {
                         revert(add(reason_, 0x20), mload(reason_))
                     }
@@ -403,9 +428,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         configLifecycleToggles += 1;
     }
 
-    /// @notice Rotates the config's operator seat between the timelock, a foreign candidate
-    ///         and the zero address. The config rejects a write of the seat it already holds,
-    ///         which the config suite probes; here it is a no-op.
+    /// @notice Rotates the config's operator seat between the timelock, the second timelock
+    ///         bound to the config and the zero address. The config rejects a write of the
+    ///         seat it already holds, which the config suite probes; here it is a no-op.
     function rotateOperatorSeat(uint256 seed_) external {
         if (!config.isEnabled()) return;
         address candidate = [address(timelock), seatCandidate, address(0)][seed_ % 3];
@@ -557,6 +582,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         // Mirror the production flow: the tokens land on the pool before the lock
         ohm.mint(address(rigPool), amount);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("handlerBridgeReceiver")),
@@ -582,8 +609,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         ) = _boundedConfigs(shapeSeed_);
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueSetChainRateLimits(selector, outbound, inbound);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(
@@ -602,8 +632,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _buildChainUpdate(selector, shapeSeed_);
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueAddChain(update);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(index, ICCIPTokenPoolConfig.addChain.selector, abi.encode(update));
@@ -617,8 +650,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         if (!_routeDomainsFree(selector)) return;
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueRemoveChain(selector);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(index, ICCIPTokenPoolConfig.removeChain.selector, abi.encode(selector));
@@ -636,8 +672,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         // (validated additions and containment alike) keeps them enabled
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueSetRemoteToken(selector, candidate);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(
@@ -657,8 +696,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         if (candidate.length == 0) return;
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueAddRemotePool(selector, candidate);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(
@@ -679,8 +721,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         bytes memory victim = members[indexSeed_ % members.length];
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueRemoveRemotePool(selector, victim);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         _registerSub(
@@ -728,8 +773,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         }
         uint256 index = _prepareRegistration();
 
+        // The ghost registration is completed with the id that this queue call returns
+        // forge-lint: disable-start(reentrancy-no-eth)
         vm.prank(bridgeAdmin);
         uint64 actionId = timelock.queueBatch(batch);
+        // forge-lint: disable-end(reentrancy-no-eth)
 
         _finishRegistration(index, actionId);
         cursor = 0;
@@ -776,16 +824,24 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         executes += 1;
     }
 
-    /// @notice Cancels a live action as one of the three permitted classes. The action is
-    ///         guarded on liveness alone: cancellation must succeed in every product state the
-    ///         sequence reaches, whatever the lifecycle, the seat or the recorded hashes say.
+    /// @notice Cancels a live action as one of the permitted classes: the admin, the emergency
+    ///         role or the proposer, and the roleless outsider once the action has expired. The
+    ///         action is guarded on liveness alone: cancellation must succeed in every product
+    ///         state the sequence reaches, whatever the lifecycle, the seat or the recorded
+    ///         hashes say.
     function cancelLiveAction(uint256 pickSeed_, uint256 callerSeed_) external {
         uint256 index = _pickLiveAction(pickSeed_);
         if (index == NOT_FOUND) return;
         GhostAction storage ghost = _ghostActions[index];
-        // The proposer of every handler action is the bridge admin
-        address caller = [admin, emergency, bridgeAdmin][callerSeed_ % 3];
         bool wasExpired = vm.getBlockTimestamp() > ghost.expiresAt;
+        // The proposer of every handler action is the bridge admin; the outsider joins the
+        // caller set only for an expired action
+        address caller;
+        if (wasExpired) {
+            caller = [admin, emergency, bridgeAdmin, outsider][callerSeed_ % 4];
+        } else {
+            caller = [admin, emergency, bridgeAdmin][callerSeed_ % 3];
+        }
         bool timelockWasDisabled = !timelock.isEnabled();
         // casting to 'uint64' is safe because the registry index is the action id minus one
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -802,6 +858,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         assertFalse(stored.executed, "the executed flag must stay clear");
         cancels += 1;
         if (wasExpired) cancelsOfExpired += 1;
+        if (wasExpired && caller == outsider) cancelsOfExpiredByOutsider += 1;
         if (timelockWasDisabled) cancelsWhileTimelockDisabled += 1;
     }
 
@@ -894,7 +951,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
         vm.prank(outsider);
         // A low-level call so the expected revert does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-line(low-level-calls)
         (bool success, ) = address(timelock).call(payload);
 
         if (success) ghost_unauthorizedCallSucceeded = true;
@@ -1189,10 +1246,12 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     ) internal returns (bool succeeded) {
         vm.prank(caller_);
         // A low-level call so the expected revert does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-line(low-level-calls)
         (bool ok, bytes memory returnData) = target_.call(callData_);
         if (ok) return true;
         if (keccak256(returnData) != keccak256(expectedRevert_)) {
+            // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+            // forge-lint: disable-next-line(inline-assembly)
             assembly {
                 revert(add(returnData, 0x20), mload(returnData))
             }
@@ -1294,6 +1353,21 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         return NOT_FOUND;
     }
 
+    /// @dev Picks a live action whose execution window has not closed, starting at the seed;
+    ///      past expiresAt the cancellation is permissionless.
+    function _pickLiveUnexpiredAction(uint256 seed_) internal view returns (uint256 index) {
+        uint256 count = _ghostActions.length;
+        if (count == 0) return NOT_FOUND;
+        uint256 nowTs = vm.getBlockTimestamp();
+        uint256 start = seed_ % count;
+        for (uint256 i; i < count; ++i) {
+            uint256 candidate = (start + i) % count;
+            GhostAction storage ghost = _ghostActions[candidate];
+            if (ghost.status == 0 && nowTs <= ghost.expiresAt) return candidate;
+        }
+        return NOT_FOUND;
+    }
+
     /// @dev Whether the action is executable right now: live, inside its window, both
     ///      lifecycles open, the seat still on this timelock and no recorded state drifted.
     ///      The guarded execution and the ownership probe share this predicate, so the probe
@@ -1364,6 +1438,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @dev A routed selector whose rate limits domain is free per the registry.
+    // The boolean literals are the `found` element of the returned tuple, not conditions
+    // forge-lint: disable-next-item(boolean-cst)
     function _findFreeRateLimitSlot(
         uint256 seed_
     ) internal view returns (bool found, uint64 selector) {
@@ -1380,6 +1456,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
     /// @dev A routed selector whose remote pools domain is free and that still has an absent
     ///      pool candidate to add.
+    // The boolean literals are the `found` element of the returned tuple, not conditions
+    // forge-lint: disable-next-item(boolean-cst)
     function _findFreePoolAdditionSlot(
         uint256 seed_
     ) internal view returns (bool found, uint64 selector, bytes memory candidate) {
@@ -1408,9 +1486,11 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
 
     /// @dev One gated state-changing entry point per branch, in a fixed order: the five
     ///      lifecycle and configuration writers, the eight queue entry points, the
-    ///      cancellation and the kernel migration hook. The arguments are minimal on purpose,
-    ///      because the caller check of every one of them answers before any argument is
-    ///      inspected.
+    ///      cancellation of an unexpired action and the kernel migration hook. The arguments
+    ///      are minimal on purpose, because the caller check of every one of them answers
+    ///      before any argument is inspected.
+    // One branch per gated entry point, in the fixed order listed above
+    // forge-lint: disable-next-item(cyclomatic-complexity)
     function _unauthorizedProbePayload(uint256 branch_) internal view returns (bytes memory) {
         uint64 selector = trackedSelectors[0];
         ICCIPRateLimiter.Config memory someConfig = ICCIPRateLimiter.Config({
@@ -1463,12 +1543,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
             return abi.encodeCall(timelock.queueBatch, (batch));
         }
         if (branch_ == 13) {
-            // A live id reaches the authorization check; with none live the queue state check
-            // answers first and the call fails there instead
-            uint256 index = _pickLiveAction(branch_);
+            // A live unexpired id reaches the authorization check; an expired action is open
+            // to any canceller, so it is no target here, and with no such action the id of
+            // the next queue reaches the state check and fails there instead
+            uint256 index = _pickLiveUnexpiredAction(branch_);
             // casting to 'uint64' is safe because the registry index is the id minus one
             // forge-lint: disable-next-line(unsafe-typecast)
-            uint64 actionId = index == NOT_FOUND ? 1 : uint64(index + 1);
+            uint64 actionId = index == NOT_FOUND ? timelock.nextActionId() : uint64(index + 1);
             return abi.encodeCall(ITimelockBatchQueue.cancelQueuedAction, (actionId));
         }
         return abi.encodeCall(timelock.changeKernel, (Kernel(address(0))));
@@ -1500,7 +1581,9 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @dev Enabled rate limiter configurations bounded so the config accepts them: the
-    ///      capacity in [2, MAX_CAPACITY] base units and the rate in [1, capacity - 1].
+    ///      capacity in [3, MAX_CAPACITY] base units and the rate in [1, capacity - 1]. A
+    ///      capacity of two admits only the rate of one, the containment shape the config
+    ///      rejects.
     function _boundedConfigs(
         uint256 seed_
     )
@@ -1511,11 +1594,14 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         uint256 mixed = uint256(keccak256(abi.encode(seed_)));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 3, MAX_CAPACITY));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 outRate = uint128(bound((mixed >> 64) & type(uint64).max, 1, outCapacity - 1));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 3, MAX_CAPACITY));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 inRate = uint128(bound(mixed >> 192, 1, inCapacity - 1));
         outbound = ICCIPRateLimiter.Config({isEnabled: true, capacity: outCapacity, rate: outRate});
@@ -1563,11 +1649,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
     }
 
     /// @dev The current state hash of a tracked domain, recomputed from the live pool per the
-    ///      documented preimages. Fill levels and refill timestamps are excluded on purpose.
+    ///      documented preimages: every route domain ends with the remote token of the route.
+    ///      Fill levels and refill timestamps are excluded on purpose.
     function _currentDomainHash(
         uint8 domainKind_,
         uint64 chainSelector_
     ) internal view returns (bytes32) {
+        bytes memory remoteToken = pool.getRemoteToken(chainSelector_);
         if (domainKind_ == 0) {
             ICCIPRateLimiter.TokenBucket memory outBucket = pool.getCurrentOutboundRateLimiterState(
                 chainSelector_
@@ -1585,7 +1673,8 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
                         outBucket.rate,
                         inBucket.isEnabled,
                         inBucket.capacity,
-                        inBucket.rate
+                        inBucket.rate,
+                        remoteToken
                     )
                 );
         }
@@ -1597,7 +1686,13 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
             }
             return
                 keccak256(
-                    abi.encode(REMOTE_POOLS_DOMAIN, chainSelector_, remotePools.length, aggregate)
+                    abi.encode(
+                        REMOTE_POOLS_DOMAIN,
+                        chainSelector_,
+                        remotePools.length,
+                        aggregate,
+                        remoteToken
+                    )
                 );
         }
         return
@@ -1606,7 +1701,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
                     ROUTE_IDENTITY_DOMAIN,
                     chainSelector_,
                     pool.isSupportedChain(chainSelector_),
-                    pool.getRemoteToken(chainSelector_)
+                    remoteToken
                 )
             );
     }
@@ -1711,3 +1806,7 @@ contract CCIPTokenPoolConfigTimelockHandler is Test {
         }
     }
 }
+
+// forge-lint: disable-end(calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

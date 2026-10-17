@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Branch indices, candidate counts and minimal probe arguments are written where they are used
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -23,6 +26,10 @@ import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol"
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 import {MockRouterCandidate} from "src/test/policies/bridge/mocks/MockRouterCandidate.sol";
 import {MockVersionedCCIPRouter} from "src/test/policies/bridge/mocks/MockVersionedCCIPRouter.sol";
+
+// Handler loops walk the tracked selectors, the router candidates and the configured routes,
+// calling the contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
 
 /// @notice Invariant-test handler that drives CCIPTokenPoolConfig through its production entry
 ///         points over a small fixed selector space, with every action pranked as the role
@@ -53,6 +60,9 @@ import {MockVersionedCCIPRouter} from "src/test/policies/bridge/mocks/MockVersio
 contract CCIPTokenPoolConfigHandler is Test {
     // ========== RIG REFERENCES ========== //
 
+    // Handles and actors are named like the state variables of the unit rig (`config`, `pool`,
+    // `admin`), so that an action body reads like a test body.
+    // forge-lint: disable-start(screaming-snake-case-immutable)
     CCIPTokenPoolConfig public immutable config;
     ICCIPTokenPoolAdmin public immutable pool;
     MockOhm internal immutable ohm;
@@ -87,6 +97,7 @@ contract CCIPTokenPoolConfigHandler is Test {
     /// @notice The funded lock/release pool whose rebalancer is the pool under management; the
     ///         only account that can move its tokens is therefore the config's transfer path.
     address public immutable liquiditySource;
+    // forge-lint: disable-end(screaming-snake-case-immutable)
 
     // ========== TRACKED SELECTORS AND CANDIDATES ========== //
 
@@ -106,6 +117,8 @@ contract CCIPTokenPoolConfigHandler is Test {
     MockRouterCandidate[2] internal rejectingRouters;
 
     /// @notice A codeless candidate, rejected before the probe runs.
+    // Named like the other handles of the handler
+    // forge-lint: disable-next-line(screaming-snake-case-immutable)
     address internal immutable codelessRouter;
 
     // ========== ACTION BOUNDS ========== //
@@ -165,10 +178,13 @@ contract CCIPTokenPoolConfigHandler is Test {
     uint256 public graceWindowUpdates;
     uint256 public ownershipRoundTrips;
     uint256 public unchangedWriteRejections;
+    uint256 public rejectedOperatorCandidates;
     uint256 public emptySweepRejections;
 
     // ========== CONSTRUCTOR ========== //
 
+    // A test fixture: the actor addresses are labelled test accounts, never user input
+    // forge-lint: disable-next-item(missing-zero-check)
     constructor(
         CCIPTokenPoolConfig config_,
         MockOhm ohm_,
@@ -179,6 +195,7 @@ contract CCIPTokenPoolConfigHandler is Test {
         address bridgeAdmin_,
         address bridgeRateLimiter_,
         address operator_,
+        address operatorAlternate_,
         address liquiditySource_
     ) {
         config = config_;
@@ -191,7 +208,7 @@ contract CCIPTokenPoolConfigHandler is Test {
         bridgeAdmin = bridgeAdmin_;
         bridgeRateLimiter = bridgeRateLimiter_;
         operatorPrimary = operator_;
-        operatorAlternate = makeAddr("operatorAlternate");
+        operatorAlternate = operatorAlternate_;
         outsider = makeAddr("outsider");
         onRamp = makeAddr("handlerOnRamp");
         offRamp = makeAddr("handlerOffRamp");
@@ -289,6 +306,8 @@ contract CCIPTokenPoolConfigHandler is Test {
                 // casting to 'bytes4' is deliberate: only the error selector is inspected
                 // forge-lint: disable-next-line(unsafe-typecast)
                 if (bytes4(reason_) != IGracePeriod.GracePeriod_Expired.selector) {
+                    // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+                    // forge-lint: disable-next-line(inline-assembly)
                     assembly {
                         revert(add(reason_, 0x20), mload(reason_))
                     }
@@ -300,8 +319,26 @@ contract CCIPTokenPoolConfigHandler is Test {
         _assertPoolUntouched(digestBefore, "reEnable");
     }
 
+    /// @notice Rotates the operator seat between two timelocks bound to the config and the
+    ///         zero address, probes the unchanged write of the seat already held, and with
+    ///         every fourth seed probes the roleless outsider as a candidate, which the policy
+    ///         must reject without moving the seat.
     function rotateOperator(uint256 seed_) external {
         if (!config.isEnabled()) return;
+        if (seed_ % 4 == 3) {
+            address seatBefore = config.configOperator();
+            _probeRejectedWrite(
+                admin,
+                abi.encodeCall(IConfigOperator.setConfigOperator, (outsider)),
+                abi.encodeWithSelector(
+                    ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidConfigOperator.selector,
+                    outsider
+                )
+            );
+            assertEq(config.configOperator(), seatBefore, "a rejected candidate must not land");
+            rejectedOperatorCandidates += 1;
+            return;
+        }
         address candidate = [operatorPrimary, operatorAlternate, address(0)][seed_ % 3];
         if (candidate == config.configOperator()) {
             _probeUnchangedWrite(
@@ -398,6 +435,8 @@ contract CCIPTokenPoolConfigHandler is Test {
                 errorSelector != ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidRouter.selector &&
                 errorSelector != ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidAddress.selector
             ) {
+                // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+                // forge-lint: disable-next-line(inline-assembly)
                 assembly {
                     revert(add(reason_, 0x20), mload(reason_))
                 }
@@ -472,7 +511,7 @@ contract CCIPTokenPoolConfigHandler is Test {
 
         vm.prank(rateLimitAdminCandidate);
         // A low-level call so the expected rejection does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-line(low-level-calls)
         (bool success, ) = address(pool).call(payload);
 
         if (granted) {
@@ -770,6 +809,8 @@ contract CCIPTokenPoolConfigHandler is Test {
         // Mirror the production flow: the tokens land on the pool before the lock
         ohm.mint(address(rigPool), amount);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("handlerBridgeReceiver")),
@@ -803,6 +844,8 @@ contract CCIPTokenPoolConfigHandler is Test {
         // The release transfers tokens out of the pool, so it is funded first
         ohm.mint(address(rigPool), amount);
         vm.prank(offRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.releaseOrMint(
             Pool.ReleaseOrMintInV1({
                 originalSender: abi.encode(makeAddr("handlerBridgeSender")),
@@ -836,13 +879,15 @@ contract CCIPTokenPoolConfigHandler is Test {
 
         vm.prank(outsider);
         // A low-level call so a revert (the expected outcome) does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-line(low-level-calls)
         (bool success, ) = address(config).call(payload);
 
         if (success) ghost_unauthorizedCallSucceeded = true;
         outsiderProbes += 1;
     }
 
+    // One branch per gated entry point: the dispatch table of the outsider probe
+    // forge-lint: disable-next-item(cyclomatic-complexity)
     function _probePayload(uint256 branch_) internal view returns (bytes memory) {
         uint64 selector = trackedSelectors[0];
         ICCIPRateLimiter.Config memory someConfig = ICCIPRateLimiter.Config({
@@ -920,9 +965,20 @@ contract CCIPTokenPoolConfigHandler is Test {
         bytes memory payload_,
         bytes memory expected_
     ) internal {
+        _probeRejectedWrite(caller_, payload_, expected_);
+        unchangedWriteRejections += 1;
+    }
+
+    /// @dev Fires a write that must revert with exactly the predicted bytes; a success sets
+    ///      the unchanged-write ghost flag and any other revert bubbles so the run fails.
+    function _probeRejectedWrite(
+        address caller_,
+        bytes memory payload_,
+        bytes memory expected_
+    ) internal {
         vm.prank(caller_);
         // A low-level call so the expected revert does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-line(low-level-calls)
         (bool success, bytes memory reason) = address(config).call(payload_);
 
         if (success) {
@@ -930,11 +986,12 @@ contract CCIPTokenPoolConfigHandler is Test {
             return;
         }
         if (keccak256(reason) != keccak256(expected_)) {
+            // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+            // forge-lint: disable-next-line(inline-assembly)
             assembly {
                 revert(add(reason, 0x20), mload(reason))
             }
         }
-        unchangedWriteRejections += 1;
     }
 
     function _addressUnchanged(string memory parameter_) internal pure returns (bytes memory) {
@@ -957,7 +1014,7 @@ contract CCIPTokenPoolConfigHandler is Test {
 
         vm.prank(caller_);
         // A low-level call so the expected revert does not bubble
-        // forge-lint: disable-next-line(unchecked-call)
+        // forge-lint: disable-next-item(low-level-calls)
         (bool success, bytes memory reason) = address(config).call(
             abi.encodeCall(ICCIPTokenPoolConfig.disableAllChains, ())
         );
@@ -967,6 +1024,8 @@ contract CCIPTokenPoolConfigHandler is Test {
             return;
         }
         if (keccak256(reason) != keccak256(expected)) {
+            // Bubbles the unexpected revert data as is, which a Solidity `revert` cannot do
+            // forge-lint: disable-next-line(inline-assembly)
             assembly {
                 revert(add(reason, 0x20), mload(reason))
             }
@@ -1011,8 +1070,10 @@ contract CCIPTokenPoolConfigHandler is Test {
         return codelessRouter;
     }
 
-    /// @dev Enabled rate limiter configurations bounded so the pool accepts them: the
-    ///      capacity in [2, MAX_CAPACITY] base units and the rate in [1, capacity - 1].
+    /// @dev Enabled rate limiter configurations bounded so the config accepts them: the
+    ///      capacity in [3, MAX_CAPACITY] base units and the rate in [1, capacity - 1]. A
+    ///      capacity of two admits only the rate of one, the containment shape the config
+    ///      rejects.
     function _boundedConfigs(
         uint256 seed_
     )
@@ -1023,11 +1084,14 @@ contract CCIPTokenPoolConfigHandler is Test {
         uint256 mixed = uint256(keccak256(abi.encode(seed_)));
         // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 outCapacity = uint128(bound(mixed & type(uint64).max, 3, MAX_CAPACITY));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 outRate = uint128(bound((mixed >> 64) & type(uint64).max, 1, outCapacity - 1));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
-        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 2, MAX_CAPACITY));
+        uint128 inCapacity = uint128(bound((mixed >> 128) & type(uint64).max, 3, MAX_CAPACITY));
+        // casting to 'uint128' is safe because the bounds stay far below the uint128 maximum
         // forge-lint: disable-next-line(unsafe-typecast)
         uint128 inRate = uint128(bound(mixed >> 192, 1, inCapacity - 1));
         outbound = ICCIPRateLimiter.Config({isEnabled: true, capacity: outCapacity, rate: outRate});
@@ -1162,3 +1226,7 @@ contract CCIPTokenPoolConfigHandler is Test {
         fillTransitionsChecked += 1;
     }
 }
+
+// forge-lint: disable-end(calls-loop)
+
+// forge-lint: disable-end(literal-instead-of-constant)

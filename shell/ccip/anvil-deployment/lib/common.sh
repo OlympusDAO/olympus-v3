@@ -329,6 +329,37 @@ bucket_config() {
     "$(cast to-dec "0x${raw:$((2 + 4 * 64)):64}")"
 }
 
+# supported_chains <pool>  ->  one chain selector per line (the scientific-notation
+# hint cast appends to each large number is dropped)
+supported_chains() {
+  cast call "$1" 'getSupportedChains()(uint64[])' --rpc-url "$RPC" \
+    | tr -d '[]' | tr ',' '\n' | awk 'NF {print $1}'
+}
+
+# expect_routes_contained <config> <pool> <true|false> <label>: isChainDisabled must
+# read the expected value on every configured route of the pool. The route list is
+# read first and must not be empty, so a failed read cannot pass as "nothing to check".
+expect_routes_contained() {
+  local cfg="$1" pool="$2" expected="$3" label="$4" sels sel
+  sels="$(supported_chains "$pool")"
+  [ -n "$sels" ] || die "$label: the pool reports no configured route"
+  while read -r sel; do
+    expect_eq "$(cast call "$cfg" 'isChainDisabled(uint64)(bool)' "$sel" --rpc-url "$RPC")" \
+      "$expected" "$label: config.isChainDisabled($sel)"
+  done <<< "$sels"
+}
+
+# write_restore_all_args <chain> <path>: writes a reconcileRoutes args file whose
+# restoreContained names every route the chain declares enabled in env.json, the
+# file an operator writes to restore the limits after a full halt. The path must
+# be readable by forge (fs_permissions), hence deployments/, which cleanup sweeps.
+write_restore_all_args() {
+  jq -c --arg c "$1" '{functions: [{name: "reconcileRoutes", args: {restoreContained:
+    ([.current[$c].olympus.config.CCIP.routes | to_entries[] | select(.value.enabled) | .key] | sort)}}]}' \
+    "$REPO_ROOT/$ENV_JSON" > "$2"
+  log "restoreContained args for $1: $(jq -c '.functions[0].args.restoreContained' "$2")"
+}
+
 # cast_send_impersonated <from> <to> <sig> [args...]
 cast_send_impersonated() {
   local from="$1" to="$2" sig="$3"; shift 3

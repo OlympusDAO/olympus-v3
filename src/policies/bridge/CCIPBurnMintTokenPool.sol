@@ -22,6 +22,9 @@ import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 /// @dev    As the CCIP contracts have a minimum solidity version of 0.8.24, this policy is also compiled with 0.8.24
 ///
 ///         Despite being a policy, the admin functions inherited from `TokenPool` are not virtual and cannot be overriden, and so remain gated to the owner.
+// `VERSION()` is declared by the pool itself: `supportsInterface` does not list `IVersioned`,
+// and inheriting the interface would call for listing it, which changes the ERC-165 answers.
+// forge-lint: disable-next-line(missing-inheritance)
 contract CCIPBurnMintTokenPool is
     Policy,
     PolicyEnabler,
@@ -36,7 +39,7 @@ contract CCIPBurnMintTokenPool is
 
     /// @notice Unique identifier for the TokenPool
     /// @dev    This is used to identify the TokenPool to CCIP
-    string internal constant _typeAndVersion = "BurnMintTokenPool 1.5.1";
+    string internal constant _TYPE_AND_VERSION = "BurnMintTokenPool 1.5.1";
 
     // =========  CONSTRUCTOR ========= //
 
@@ -60,7 +63,11 @@ contract CCIPBurnMintTokenPool is
         MINTR = MINTRv1(getModuleAddress(dependencies[0]));
         ROLES = ROLESv1(getModuleAddress(dependencies[1]));
 
+        // MINTR compatibility depends only on its major version
+        // forge-lint: disable-next-line(unused-return)
         (uint8 MINTR_MAJOR, ) = MINTR.VERSION();
+        // ROLES compatibility depends only on its major version
+        // forge-lint: disable-next-line(unused-return)
         (uint8 ROLES_MAJOR, ) = ROLES.VERSION();
 
         // Ensure Modules are using the expected major version.
@@ -85,9 +92,18 @@ contract CCIPBurnMintTokenPool is
         Keycode MINTR_KEYCODE = MINTR.KEYCODE();
 
         permissions = new Permissions[](3);
-        permissions[0] = Permissions(MINTR_KEYCODE, MINTR.mintOhm.selector);
-        permissions[1] = Permissions(MINTR_KEYCODE, MINTR.burnOhm.selector);
-        permissions[2] = Permissions(MINTR_KEYCODE, MINTR.increaseMintApproval.selector);
+        permissions[0] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.mintOhm.selector
+        });
+        permissions[1] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.burnOhm.selector
+        });
+        permissions[2] = Permissions({
+            keycode: MINTR_KEYCODE,
+            funcSelector: MINTR.increaseMintApproval.selector
+        });
     }
 
     /// @notice Returns the version of the policy
@@ -105,6 +121,8 @@ contract CCIPBurnMintTokenPool is
     function _burn(uint256 amount_) internal override onlyEnabled {
         // Burn the OHM
         // Will revert if amount is 0 or if there is insufficient balance
+        // OHM reverts on a failed approval and returns true otherwise
+        // forge-lint: disable-next-line(unused-return)
         i_token.approve(address(MINTR), amount_);
         MINTR.burnOhm(address(this), amount_);
     }
@@ -131,7 +149,7 @@ contract CCIPBurnMintTokenPool is
 
     /// @inheritdoc ITypeAndVersion
     function typeAndVersion() external pure override returns (string memory) {
-        return _typeAndVersion;
+        return _TYPE_AND_VERSION;
     }
 
     // ========= ERC165 ========= //

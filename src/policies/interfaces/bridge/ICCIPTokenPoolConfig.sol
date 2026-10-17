@@ -21,7 +21,9 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         `configOperator` returns it, or the zero address when none is set, and
 ///         `setConfigOperator` replaces it immediately or revokes it with the zero address; the
 ///         setter is intended to be callable only by the admin role while the policy is enabled.
-///         It is meant to be the config timelock. A caller holding this interface casts to
+///         It is the config timelock: a non-zero candidate must advertise
+///         `ICCIPTokenPoolConfigTimelock` through ERC-165 and report this policy as its config,
+///         checked after the unchanged rule below. A caller holding this interface casts to
 ///         `IConfigOperator` for those two functions, as it does to `IEnabler` for the lifecycle.
 ///
 ///         The address setters and `setRemoteToken` reject the value they already hold, so a
@@ -29,14 +31,23 @@ import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 ///         `setRateLimitAdmin` and `setRemoteToken` with `CCIPTokenPoolConfig_AddressUnchanged`,
 ///         `setConfigOperator` with `ConfigOperator_Unchanged` of `IConfigOperator`. Where the
 ///         zero address is a meaningful value, it is subject to the same rule: revoking an
-///         authority that is already unset reverts. Tooling that phrases a step as "set or
-///         validate" reads the live value and skips the call when it already matches.
+///         authority that is already unset reverts. The unchanged check follows the lifecycle
+///         and role checks; its position among the other checks of a candidate is stated on
+///         each setter: `setRateLimitAdmin` and `setConfigOperator` run it first, the candidate
+///         check of the config operator after it, `setRebalancer` requires a liquidity
+///         container pool before it, `setRouter` rejects the zero address before it and probes
+///         the candidate after it, and `setRemoteToken` requires the route to exist and the
+///         candidate to be non-empty and 32 bytes long before it and reads the rate limiters of
+///         the route after it. Tooling that phrases a step as "set or validate" reads the live
+///         value and skips the call when it already matches.
 ///
 ///         Amounts, capacities and rates are expressed in the smallest unit of the pool token.
 ///         Remote token and remote pool addresses are exactly 32 bytes: the ABI encoding of an
 ///         EVM address, or the raw account address of an SVM chain, the only length that the
-///         CCIP ramps accept on every generation in service. Every operation on the pool is
-///         emitted by this contract in addition to the events that the pool emits itself.
+///         CCIP ramps accept on every generation in service. The implementing contract checks
+///         the length only; the shape of an EVM value is validated by the tooling that builds
+///         the call. Every operation on the pool is emitted by this contract in addition to the
+///         events that the pool emits itself.
 interface ICCIPTokenPoolConfig {
     // ========== ERRORS ========== //
 
@@ -60,6 +71,12 @@ interface ICCIPTokenPoolConfig {
     ///         `typeAndVersion()`.
     /// @param router The rejected router address.
     error CCIPTokenPoolConfig_InvalidRouter(address router);
+
+    /// @notice Thrown when a non-zero config operator candidate does not advertise
+    ///         `ICCIPTokenPoolConfigTimelock` through ERC-165 or reports a config other than
+    ///         this policy.
+    /// @param configOperator The rejected config operator address.
+    error CCIPTokenPoolConfig_InvalidConfigOperator(address configOperator);
 
     /// @notice Thrown when a liquidity function is called and the pool does not advertise the
     ///         liquidity container interface.
@@ -91,6 +108,13 @@ interface ICCIPTokenPoolConfig {
     /// @notice Thrown when a supplied or current rate limiter configuration is disabled.
     ///         Every route served by the pool carries enabled limiters in both directions.
     error CCIPTokenPoolConfig_RateLimiterDisabled();
+
+    /// @notice Thrown when a supplied rate limiter configuration equals the disabled rate
+    ///         limiter configuration, which only the containment functions write.
+    error CCIPTokenPoolConfig_RateLimiterReserved();
+
+    /// @notice Thrown when a chain is added with a zero remote chain selector.
+    error CCIPTokenPoolConfig_ChainSelectorZero();
 
     /// @notice Thrown when the removal of a remote pool would leave the route without any
     ///         accepted remote pool.
@@ -196,8 +220,13 @@ interface ICCIPTokenPoolConfig {
     function isLiquidityContainer() external view returns (bool isContainer);
 
     /// @notice Returns the rate limiter configuration written to both buckets of a route by the
-    ///         containment functions. At this capacity every real transfer exceeds the bucket
-    ///         size and fails immediately.
+    ///         containment functions, and rejected by `addChain`, `setChainRateLimits` and their
+    ///         validation mirrors. At this capacity every real transfer exceeds the bucket size
+    ///         and fails immediately. The capacity and the rate are counted in the units the
+    ///         pool charges: nine-decimal OHM units outbound, the units of the source pool
+    ///         inbound, charged before the pool converts the amount to local units; the inbound
+    ///         containment therefore assumes a source pool that encodes nine decimals. The policy
+    ///         does not verify the decimals of a remote token or a remote pool.
     /// @return config The disabled rate limiter configuration.
     function getDisabledRateLimiterConfig()
         external
@@ -206,7 +235,9 @@ interface ICCIPTokenPoolConfig {
 
     /// @notice Returns whether both buckets of a configured route hold the disabled rate limiter
     ///         configuration. Only `isEnabled`, `capacity` and `rate` are compared. A route with
-    ///         exactly one contained bucket is reported as not disabled.
+    ///         exactly one contained bucket is reported as not disabled. The route functions of
+    ///         this policy never leave that configuration in place, so a route reported as
+    ///         disabled was contained through this policy or configured directly on the pool.
     /// @param chainSelector_ The chain selector of the route.
     /// @return disabled True if both buckets are contained.
     function isChainDisabled(uint64 chainSelector_) external view returns (bool disabled);
@@ -223,22 +254,23 @@ interface ICCIPTokenPoolConfig {
     /// @param newOwner_ The proposed owner.
     function transferPoolOwnership(address newOwner_) external;
 
-    /// @notice Sets the router of the pool after checking that the candidate differs from the
-    ///         current router, holds code and answers `typeAndVersion()` within a bounded gas
-    ///         budget. Intended to be callable only by the admin role while the policy is
-    ///         enabled.
+    /// @notice Sets the router of the pool after checking, in this order, that the candidate is
+    ///         not the zero address, differs from the current router, holds code and answers
+    ///         `typeAndVersion()` within a bounded gas budget. Intended to be callable only by
+    ///         the admin role while the policy is enabled.
     /// @param router_ The router address.
     function setRouter(address router_) external;
 
     /// @notice Sets the rebalancer of a liquidity container pool. The zero address clears the
-    ///         rebalancer; the current value, zero included, is rejected. Intended to be
-    ///         callable only by the admin role while the policy is enabled.
+    ///         rebalancer; the current value, zero included, is rejected after the liquidity
+    ///         container check. Intended to be callable only by the admin role while the policy
+    ///         is enabled.
     /// @param rebalancer_ The rebalancer address.
     function setRebalancer(address rebalancer_) external;
 
     /// @notice Sets the rate limit admin of the pool. The zero address clears the role; the
-    ///         current value, zero included, is rejected. Intended to be callable only by the
-    ///         admin role while the policy is enabled.
+    ///         current value, zero included, is rejected, the only check of the candidate.
+    ///         Intended to be callable only by the admin role while the policy is enabled.
     /// @param rateLimitAdmin_ The rate limit admin address.
     function setRateLimitAdmin(address rateLimitAdmin_) external;
 
@@ -251,9 +283,10 @@ interface ICCIPTokenPoolConfig {
 
     // ========== ROUTE FUNCTIONS ========== //
 
-    /// @notice Adds a route with its remote token, accepted remote pools and enabled rate limits
-    ///         in both directions. Both buckets start full. Intended to be callable only by the
-    ///         config operator or the admin role while the policy is enabled.
+    /// @notice Adds a route with a non-zero chain selector, its remote token, accepted remote
+    ///         pools and enabled rate limits in both directions, neither of them the disabled
+    ///         rate limiter configuration. Both buckets start full. Intended to be callable only
+    ///         by the config operator or the admin role while the policy is enabled.
     /// @param update_ The chain configuration to add.
     function addChain(ICCIPTokenPoolAdmin.ChainUpdate calldata update_) external;
 
@@ -267,8 +300,11 @@ interface ICCIPTokenPoolConfig {
     ///         token, so the route is recreated: it is removed and re-added in one pool call with
     ///         the same remote pools and rate limiter configurations, after which the fill level
     ///         of both buckets is restored to its level before the replacement, with a floor of
-    ///         two units. The current remote token is rejected. Intended to be callable only by
-    ///         the config operator or the admin role while the policy is enabled.
+    ///         two units. The route must exist and the candidate must be non-empty and 32 bytes
+    ///         long; the current remote token is rejected after those checks and before the
+    ///         rate limiters of the route are read, both of which must be enabled. Intended to
+    ///         be callable only by the config operator or the admin role while the policy is
+    ///         enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param remoteToken_ The new remote token address.
     function setRemoteToken(uint64 chainSelector_, bytes calldata remoteToken_) external;
@@ -298,9 +334,10 @@ interface ICCIPTokenPoolConfig {
     // ========== RATE LIMIT FUNCTIONS ========== //
 
     /// @notice Sets both rate limiter configurations of a route together. Both configurations
-    ///         must be enabled. The fill level of each bucket is clamped to the new capacity and
-    ///         is never raised. Intended to be callable only by the bridge rate limiter role, the
-    ///         config operator or the admin role while the policy is enabled.
+    ///         must be enabled and neither may be the disabled rate limiter configuration. The
+    ///         fill level of each bucket is clamped to the new capacity and is never raised.
+    ///         Intended to be callable only by the bridge rate limiter role, the config operator
+    ///         or the admin role while the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     /// @param outbound_ The outbound rate limiter configuration.
     /// @param inbound_ The inbound rate limiter configuration.
@@ -313,16 +350,19 @@ interface ICCIPTokenPoolConfig {
     // ========== CONTAINMENT FUNCTIONS ========== //
 
     /// @notice Sets both buckets of a route to the disabled rate limiter configuration. Safe to
-    ///         call on a route that is already contained. Intended to be callable only by the
-    ///         emergency, admin, bridge admin or bridge rate limiter role, whether or not the
-    ///         policy is enabled.
+    ///         call on a route that is already contained. The inbound containment assumes a
+    ///         source pool that encodes nine decimals; see `getDisabledRateLimiterConfig`.
+    ///         Intended to be callable only by the emergency, admin, bridge admin or bridge rate
+    ///         limiter role, whether or not the policy is enabled.
     /// @param chainSelector_ The chain selector of the route.
     function disableChain(uint64 chainSelector_) external;
 
     /// @notice Sets both buckets of every configured route to the disabled rate limiter
-    ///         configuration. Reverts when no route is configured. Intended to be callable only
-    ///         by the emergency, admin, bridge admin or bridge rate limiter role, whether or not
-    ///         the policy is enabled.
+    ///         configuration. Reverts when no route is configured. The inbound containment
+    ///         assumes a source pool that encodes nine decimals; see
+    ///         `getDisabledRateLimiterConfig`. Intended to be callable only by the emergency,
+    ///         admin, bridge admin or bridge rate limiter role, whether or not the policy is
+    ///         enabled.
     function disableAllChains() external;
 
     // ========== VALIDATION FUNCTIONS ========== //
