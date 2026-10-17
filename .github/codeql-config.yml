@@ -1,0 +1,6 @@
+name: "Olympus CodeQL configuration"
+
+# Solidity metrics reports are generated audit artifacts that bundle third-party browser code.
+# They are not application code and produce non-actionable JavaScript findings.
+paths-ignore:
+    - "audit/**/solidity-metrics.html"

@@ -1,0 +1,12 @@
+{
+    "sequence": [
+        {
+            "name": "CCIPTokenPoolConfig",
+            "args": {}
+        },
+        {
+            "name": "CCIPTokenPoolConfigTimelock",
+            "args": {}
+        }
+    ]
+}

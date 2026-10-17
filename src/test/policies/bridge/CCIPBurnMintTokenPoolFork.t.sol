@@ -11,7 +11,7 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 
-import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.5/ccip/CCIPLocalSimulatorFork.sol";
+import {CCIPLocalSimulatorFork, Register} from "@chainlink-local-0.2.9/ccip/CCIPLocalSimulatorFork.sol";
 import {RateLimiter} from "@chainlink-ccip-1.6.0/ccip/libraries/RateLimiter.sol";
 import {TokenPool} from "@chainlink-ccip-1.6.0/ccip/pools/TokenPool.sol";
 import {ITokenAdminRegistry} from "@chainlink-ccip-1.6.0/ccip/interfaces/ITokenAdminRegistry.sol";
@@ -304,6 +304,31 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         bridge_.setGasLimit(chainSelector_, gasLimit_);
     }
 
+    /// @dev Explicit delivery checks, to be called after `switchChainAndRouteMessage`.
+    ///      chainlink-local 0.2.9 does not revert when routing fails, it silently leaves
+    ///      the message undelivered.
+    ///      The active-fork check catches "message not found" (the simulator only switches
+    ///      to the destination fork after matching a sent message); the total-supply check
+    ///      catches "execution reverted on the destination" (swallowed by the simulator,
+    ///      so no mint).
+    function _assertDelivered(
+        uint256 destForkId_,
+        MockOhm destOhm_,
+        string memory chain_
+    ) internal {
+        assertEq(
+            vm.activeFork(),
+            destForkId_,
+            string.concat(chain_, ": delivery: fork not switched")
+        );
+        // Total supply = MINT_AMOUNT (minted in setUp) + SEND_AMOUNT (minted on delivery)
+        assertEq(
+            destOhm_.totalSupply(),
+            MINT_AMOUNT + SEND_AMOUNT,
+            string.concat(chain_, ": delivery: OHM total supply")
+        );
+    }
+
     // ========= TESTS ========= //
 
     // mainnet -> polygon
@@ -313,6 +338,7 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     // [X] the bridged supply on polygon is not updated
     // [X] the MINTR approval on mainnet is not updated
     // [X] the MINTR approval on polygon is not updated
+    // [X] the message is routed and executed on polygon
 
     function test_mainnetToPolygon() public {
         uint256 fee = mainnetBridge.getFeeEVM(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
@@ -343,6 +369,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(polygonForkId);
 
+        _assertDelivered(polygonForkId, polygonOHM, "polygon");
+
         // Assertions - polygon
         assertEq(polygonOHM.balanceOf(SENDER), MINT_AMOUNT, "polygon: sender: OHM balance");
         assertEq(polygonOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "polygon: recipient: OHM balance");
@@ -361,6 +389,7 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     //  [X] the bridged supply on polygon is not updated
     //  [X] the MINTR approval on mainnet is not updated
     //  [X] the MINTR approval on polygon is not updated
+    //  [X] the message is routed and executed on polygon
 
     function test_mainnetToPolygon_noBridge() public {
         uint256 fee = mainnetBridge.getFeeEVM(polygonChainSelector, RECIPIENT, SEND_AMOUNT);
@@ -406,6 +435,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(polygonForkId);
 
+        _assertDelivered(polygonForkId, polygonOHM, "polygon");
+
         // Assertions - polygon
         assertEq(polygonOHM.balanceOf(SENDER), MINT_AMOUNT, "polygon: sender: OHM balance");
         assertEq(polygonOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "polygon: recipient: OHM balance");
@@ -424,6 +455,7 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     // [X] the bridged supply on mainnet is not updated
     // [X] the MINTR approval on polygon is not updated
     // [X] the MINTR approval on mainnet is not updated
+    // [X] the message is routed and executed on mainnet
 
     function test_polygonToMainnet() public {
         // Start on Polygon
@@ -458,6 +490,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(mainnetForkId);
 
+        _assertDelivered(mainnetForkId, mainnetOHM, "mainnet");
+
         // Assertions - mainnet
         assertEq(mainnetOHM.balanceOf(SENDER), MINT_AMOUNT, "mainnet: sender: OHM balance");
         assertEq(mainnetOHM.balanceOf(RECIPIENT), SEND_AMOUNT, "mainnet: recipient: OHM balance");
@@ -476,6 +510,7 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
     // [X] the bridged supply on mainnet is not updated
     // [X] the MINTR approval on polygon is not updated
     // [X] the MINTR approval on mainnet is not updated
+    // [X] the message is routed and executed on mainnet
 
     function test_polygonToMainnet_noBridge() public {
         // Start on Polygon
@@ -524,6 +559,8 @@ contract CCIPBurnMintTokenPoolForkTest is Test {
 
         // Process the bridging transaction
         simulator.switchChainAndRouteMessage(mainnetForkId);
+
+        _assertDelivered(mainnetForkId, mainnetOHM, "mainnet");
 
         // Assertions - mainnet
         assertEq(mainnetOHM.balanceOf(SENDER), MINT_AMOUNT, "mainnet: sender: OHM balance");
