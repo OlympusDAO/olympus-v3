@@ -2,9 +2,12 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Contracts
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
@@ -15,6 +18,23 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     /// @dev The mix-in's error for a rotation to the operator already set
     function _expectRevertConfigOperatorUnchanged() internal {
         vm.expectRevert(abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector));
+    }
+
+    /// @dev The policy's error for a candidate that is not a timelock bound to this config
+    function _expectRevertInvalidConfigOperator(address candidate_) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_InvalidConfigOperator.selector,
+                candidate_
+            )
+        );
+    }
+
+    /// @dev A timelock bound to a second config over the rig's pool: it advertises the
+    ///      timelock interface but reports the other config
+    function _timelockOfAnotherConfig() internal returns (address foreignTimelock) {
+        CCIPTokenPoolConfig otherConfig = _newConfig(address(pool), GRACE_PERIOD);
+        return address(_newTimelockFor(address(otherConfig)));
     }
 
     // ========== TESTS ========== //
@@ -55,6 +75,16 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         config.setConfigOperator(operator);
     }
 
+    // given the policy is disabled
+    //   when the operator holds no code
+    //     [X] it reverts with NotEnabled
+    // Pins the masking order: the lifecycle gate answers before the candidate check
+    function test_givenDisabled_whenOperatorHoldsNoCode_reverts() public {
+        _expectRevertNotEnabled();
+        vm.prank(admin);
+        config.setConfigOperator(thirdParty);
+    }
+
     // when the caller does not hold the admin role
     //   [X] it reverts with ROLES_RequireRole("admin")
     // The mix-in's ConfigOperator_Unauthorized is dead through this policy: the hook reverts
@@ -80,6 +110,21 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         _expectRevertRequireRole(ADMIN_ROLE);
         vm.prank(caller_);
         config.setConfigOperator(operator);
+    }
+
+    // when the caller does not hold the admin role
+    //   when the operator holds no code
+    //     [X] it reverts with ROLES_RequireRole("admin")
+    // Pins the masking order: the role gate answers before the candidate check. The fuzz
+    // excludes the admin account.
+    function test_whenCallerIsNotAdmin_whenOperatorHoldsNoCode_reverts(
+        address caller_
+    ) public givenEnabled {
+        vm.assume(caller_ != admin);
+
+        _expectRevertRequireRole(ADMIN_ROLE);
+        vm.prank(caller_);
+        config.setConfigOperator(thirdParty);
     }
 
     // when the caller holds only the bridge admin role
@@ -108,11 +153,94 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         config.setConfigOperator(makeAddr("selfPickedSuccessor"));
     }
 
+    // when the operator holds no code
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the candidate
+    //   [X] the operator stays unset
+    // Fuzzed over the codeless addresses other than zero: an account that cannot answer the
+    // ERC165 probe is rejected, the mistyped-address case
+    function test_whenOperatorHoldsNoCode_reverts(address candidate_) public givenEnabled {
+        vm.assume(candidate_ != address(0));
+        vm.assume(candidate_.code.length == 0);
+
+        _expectRevertInvalidConfigOperator(candidate_);
+        vm.prank(admin);
+        config.setConfigOperator(candidate_);
+
+        assertEq(config.configOperator(), address(0), "the config operator should stay unset");
+    }
+
+    // when the operator is a contract that does not answer ERC165
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the candidate
+    // The token holds code but no supportsInterface; the ERC165 probe fails
+    function test_whenOperatorDoesNotAnswerERC165_reverts() public givenEnabled {
+        address candidate = address(ohm);
+
+        _expectRevertInvalidConfigOperator(candidate);
+        vm.prank(admin);
+        config.setConfigOperator(candidate);
+    }
+
+    // when the operator is a contract that does not advertise the timelock interface
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the candidate
+    // The pool answers ERC165 but not ICCIPTokenPoolConfigTimelock
+    function test_whenOperatorDoesNotAdvertiseTimelockInterface_reverts() public givenEnabled {
+        address candidate = address(pool);
+
+        _expectRevertInvalidConfigOperator(candidate);
+        vm.prank(admin);
+        config.setConfigOperator(candidate);
+    }
+
+    // when the operator is a timelock bound to another config
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the candidate
+    // The candidate advertises the interface and reports the other config; the binding check
+    // mirrors the one the timelock constructor makes in the other direction
+    function test_whenOperatorIsTimelockOfAnotherConfig_reverts() public givenEnabled {
+        address candidate = _timelockOfAnotherConfig();
+
+        _expectRevertInvalidConfigOperator(candidate);
+        vm.prank(admin);
+        config.setConfigOperator(candidate);
+
+        assertEq(config.configOperator(), address(0), "the config operator should stay unset");
+    }
+
+    // given an operator is set
+    //   when the operator is a timelock bound to another config
+    //     [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the candidate
+    //     [X] the current operator stays set
+    // The candidate check runs after the mix-in's write, and the revert undoes the write
+    function test_givenOperatorSet_whenOperatorIsTimelockOfAnotherConfig_reverts()
+        public
+        givenEnabled
+        givenConfigOperatorSet
+    {
+        address candidate = _timelockOfAnotherConfig();
+
+        _expectRevertInvalidConfigOperator(candidate);
+        vm.prank(admin);
+        config.setConfigOperator(candidate);
+
+        assertEq(config.configOperator(), operator, "the current operator should stay set");
+    }
+
     // when the parameters are valid
     //   [X] it sets configOperator to the new address
     //   [X] it emits ConfigOperatorSet with the new address
-    // The grant is immediate: no acceptance step exists
+    // The grant is immediate: no acceptance step exists. The candidate is the timelock bound
+    // to this config, unactivated and disabled: its lifecycle plays no part in the acceptance.
     function test_whenParametersAreValid() public givenEnabled {
+        assertFalse(operatorTimelock.isEnabled(), "the candidate timelock should be disabled");
+        assertFalse(
+            kernel.isPolicyActive(operatorTimelock),
+            "the candidate timelock should be unactivated"
+        );
+        assertEq(
+            operatorTimelock.config(),
+            address(config),
+            "the candidate timelock should be bound to this config"
+        );
+
         vm.expectEmit(true, true, true, true, address(config));
         emit IConfigOperator.ConfigOperatorSet(operator);
         vm.prank(admin);
@@ -148,6 +276,35 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         assertEq(config.configOperator(), operator, "the config operator should stay set");
     }
 
+    // when the operator equals the current value
+    //   given the current operator no longer reports this config
+    //     [X] it reverts with ConfigOperator_Unchanged
+    // Pins the check order: the mix-in's unchanged check answers before the candidate check.
+    // A set operator always passes the candidate check, since config() is immutable, so the
+    // answer of config() is mocked to another address to make the order observable.
+    function test_whenValueEqualsCurrentValue_givenOperatorReportsAnotherConfig_reverts()
+        public
+        givenEnabled
+        givenConfigOperatorSet
+    {
+        vm.mockCall(
+            operator,
+            abi.encodeWithSelector(ICCIPTokenPoolConfigTimelock.config.selector),
+            abi.encode(makeAddr("anotherConfig"))
+        );
+        assertTrue(
+            ICCIPTokenPoolConfigTimelock(operator).config() != address(config),
+            "the mocked operator should report another config"
+        );
+
+        _expectRevertConfigOperatorUnchanged();
+        vm.prank(admin);
+        config.setConfigOperator(operator);
+
+        vm.clearMockedCalls();
+        assertEq(config.configOperator(), operator, "the config operator should stay set");
+    }
+
     // when the operator is the zero address
     //   given no operator is set
     //     [X] it reverts with ConfigOperator_Unchanged
@@ -167,13 +324,14 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     //   when a different operator is supplied
     //     [X] it sets configOperator to the new address
     //     [X] it emits ConfigOperatorSet with the new address
-    // Rotation replaces the previous operator immediately
+    // Rotation replaces the previous operator immediately; the successor is a second timelock
+    // bound to this config
     function test_givenOperatorSet_whenOperatorIsReplaced()
         public
         givenEnabled
         givenConfigOperatorSet
     {
-        address newOperator = makeAddr("newOperator");
+        address newOperator = address(_newTimelockFor(address(config)));
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IConfigOperator.ConfigOperatorSet(newOperator);
@@ -184,14 +342,15 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
     }
 
     // when the operator is the admin account itself
-    //   [X] it sets configOperator to the admin
-    // Address aliasing: no self-appointment check exists, and the two authority classes of the
-    // route functions collapse into one account.
-    function test_whenOperatorIsAdmin() public givenEnabled {
+    //   [X] it reverts with CCIPTokenPoolConfig_InvalidConfigOperator carrying the admin
+    // The admin account holds no code, so the two authority classes of the route functions
+    // cannot collapse into one account through this setter
+    function test_whenOperatorIsAdmin_reverts() public givenEnabled {
+        _expectRevertInvalidConfigOperator(admin);
         vm.prank(admin);
         config.setConfigOperator(admin);
 
-        assertEq(config.configOperator(), admin, "the admin should be set as the operator");
+        assertEq(config.configOperator(), address(0), "the config operator should stay unset");
     }
 
     // given an operator is set
@@ -236,7 +395,7 @@ contract CCIPTokenPoolConfigTests_setConfigOperator is CCIPTokenPoolConfigTest {
         givenEnabled
         givenConfigOperatorSet
     {
-        address newOperator = makeAddr("newOperator");
+        address newOperator = address(_newTimelockFor(address(config)));
         vm.prank(admin);
         config.setConfigOperator(newOperator);
 

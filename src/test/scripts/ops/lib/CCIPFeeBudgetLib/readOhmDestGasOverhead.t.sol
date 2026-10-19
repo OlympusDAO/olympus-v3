@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// The words of each mocked return are written inline, so that a layout reads at a glance
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {
     ICCIPFeeOnRampConfig,
     ICCIPFeeQuoter20,
@@ -193,6 +196,144 @@ contract CCIPFeeBudgetLibTests_readOhmDestGasOverhead is CCIPFeeBudgetLibTest {
         _setVersion(feeQuoter, "FeeQuoter 3.0.0");
         _expectRevertUnsupportedFeeQuoter("FeeQuoter 3.0.0");
         _read();
+    }
+
+    // ========== FEE QUOTER DEST CONFIG: READ BEFORE THE TOKEN ENTRY ========== //
+
+    // given an OnRamp lane with a token entry
+    //   given the destination config call reverts
+    //     [X] it reverts
+    function test_givenOnRamp20Lane_givenTokenEntry_givenDestConfigReverts_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+    {
+        feeQuoter.setRevert(ICCIPFeeQuoter20.getDestChainConfig.selector);
+
+        _expectRevertMessage(
+            string.concat("CCIPFeeBudgetLib: getDestChainConfig reverted on the lane ", LANE)
+        );
+        _read();
+    }
+
+    // given an OnRamp lane whose token entry call reverts
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts on the destination: the destination config is read first
+    function test_givenOnRamp20Lane_givenTokenEntryReverts_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp20Lane
+        givenDestinationDisabled
+    {
+        feeQuoter.setRevert(ICCIPFeeQuoter20.getTokenTransferFeeConfig.selector);
+
+        _expectRevertDestinationDisabled();
+        _read();
+    }
+
+    // given an OnRamp lane with a token entry
+    //   given the destination config has nineteen words, the 1.6 layout
+    //     [X] it reverts
+    function test_givenOnRamp20Lane_givenTokenEntry_givenDestConfigHasNineteenWords_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+    {
+        _setDestConfig20Words(19);
+
+        _expectRevertWords("getDestChainConfig", 19, 11);
+        _read();
+    }
+
+    // given an OnRamp lane with a token entry
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts naming the lane
+    function test_givenOnRamp20Lane_givenTokenEntry_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+        givenDestinationDisabled
+    {
+        _expectRevertDestinationDisabled();
+        _read();
+    }
+
+    // given an OnRamp 1.6.0 lane with a token entry
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts naming the lane
+    function test_givenOnRamp16Lane_givenTokenEntry_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp16Lane
+        givenTokenEntry(175_000)
+        givenDestinationDisabled
+    {
+        _expectRevertDestinationDisabled();
+        _read();
+    }
+
+    // given an OnRamp lane without a token entry
+    //   given the destination is disabled on the fee quoter
+    //     [X] it reverts naming the lane
+    function test_givenOnRamp20Lane_givenNoTokenEntry_givenDestinationDisabled_reverts()
+        public
+        givenOnRamp20Lane
+        givenDestinationDisabled
+    {
+        _setNoTokenEntry20();
+
+        _expectRevertDestinationDisabled();
+        _read();
+    }
+
+    // given an OnRamp lane
+    //   given the destination isEnabled word is neither zero nor one
+    //     [X] it reverts
+    function test_givenOnRamp20Lane_givenDestinationEnabledWordDirty_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+    {
+        _setDestConfig20Raw(2, EVM_FAMILY_WORD, CHAIN_DEFAULT);
+
+        _expectRevertDoesNotFit("getDestChainConfig().isEnabled");
+        _read();
+    }
+
+    // given an OnRamp lane with a token entry
+    //   given the chain family selector is SVM
+    //     [X] it reverts: the family is required on the token entry path as well
+    function test_givenOnRamp20Lane_givenTokenEntry_givenFamilyIsSvm_reverts()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+    {
+        _setDestConfig20(SVM_FAMILY_WORD, CHAIN_DEFAULT);
+
+        _expectRevertMessage(
+            string.concat(
+                "CCIPFeeBudgetLib: getDestChainConfig().chainFamilySelector on the lane ",
+                LANE,
+                " is ",
+                vm.toString(SVM_FAMILY_WORD),
+                ", expected the EVM family; the layout or the destination differs from the supported one"
+            )
+        );
+        _read();
+    }
+
+    // given an OnRamp lane with a token entry
+    //   given the default word of the destination config does not fit a uint32
+    //     [X] it returns the entry: the default is read on the default path only
+    function test_givenOnRamp20Lane_givenTokenEntry_givenDefaultWordDirty()
+        public
+        givenOnRamp20Lane
+        givenTokenEntry(175_000)
+    {
+        _setDestConfig20(EVM_FAMILY_WORD, uint256(type(uint32).max) + 1);
+
+        (uint32 overhead, bool isTokenEntry, ) = _read();
+
+        assertEq(overhead, 175_000, "overhead should be the token entry");
+        assertTrue(isTokenEntry, "should be a token entry");
     }
 
     // ========== FEE QUOTER TOKEN ENTRY SHAPE ========== //
@@ -583,3 +724,5 @@ contract CCIPFeeBudgetLibTests_readOhmDestGasOverhead is CCIPFeeBudgetLibTest {
         assertEq(source, string.concat("OHM token entry, ", version), "source");
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

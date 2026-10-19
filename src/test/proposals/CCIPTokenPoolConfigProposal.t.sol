@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 // solhint-disable one-contract-per-file
-// The rig, the two suites and the two proposal harnesses belong to one file: the harnesses
-// exist only for these suites, and splitting them would hide that. The labelled preconditions
-// of the rig fail on the first bad entry of a route or lane loop, which is the point of a
-// precondition, so the loop-revert note is suppressed file-wide.
-// forge-lint: disable-start(multi-contract-file, require-revert-in-loop)
 pragma solidity ^0.8.24;
 
 // Interfaces
+import {ICCIPLiquidityContainer} from "src/external/bridge/ICCIPLiquidityContainer.sol";
 import {ICCIPLockReleaseTokenPool} from "src/external/bridge/ICCIPLockReleaseTokenPool.sol";
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenAdminRegistry} from "src/external/bridge/ICCIPTokenAdminRegistry.sol";
@@ -17,6 +13,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
+import {ICCIPTokenPoolConfigProposalChecker} from "src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol";
 import {ICCIPFeeOnRamp15, ICCIPFeeOnRampConfig, ICCIPFeeQuoter20, ICCIPFeeRouter, ICCIPFeeTypeAndVersion} from "src/scripts/ops/lib/CCIPFeeBudgetLib.sol";
 
 // Libraries
@@ -30,19 +27,37 @@ import {ADMIN_ROLE, BRIDGE_ADMIN_ROLE, BRIDGE_RATE_LIMITER_ROLE, EMERGENCY_ROLE}
 // Contracts
 import {Owned} from "@solmate-6.2.0/auth/Owned.sol";
 import {Addresses} from "proposal-sim/addresses/Addresses.sol";
+import {Timelock} from "src/external/governance/Timelock.sol";
 import {Actions, Kernel} from "src/Kernel.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
 import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {CCIPTokenPoolConfigProposal} from "src/proposals/CCIPTokenPoolConfigProposal.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
 import {ProposalTest} from "./ProposalTest.sol";
+
+// Rig loops walk the routes and lanes that `env.json` declares, reading the fork and arming stubs
+// forge-lint: disable-start(calls-loop)
+
+// `addresses` is assigned by the proposal setup after calls into the fork and the cheatcodes;
+// none of those callees calls back into a test contract.
+// forge-lint: disable-start(reentrancy-no-eth)
+
+// The labelled preconditions of the rig fail on the first bad entry of a route or lane loop,
+// which is the point of a precondition.
+// forge-lint: disable-start(require-revert-in-loop)
+
+// The rig, the two suites and the two proposal harnesses belong to one file: the harnesses
+// exist only for these suites, and splitting them would hide that.
+// forge-lint: disable-start(multi-contract-file)
 
 /// @notice Shared rig of the `CCIPTokenPoolConfigProposal` suites: a mainnet fork pinned at a
 ///         block that still satisfies every live precondition of the rollout, the config pair
-///         deployed over the live lock/release pool and registered with the proposal simulator's
-///         address registry, the Phase B batch and the pool funding as replayable steps, and the
-///         OHM fee entries the build requires stubbed on the live fee contracts.
+///         and the proposal checker deployed over the live lock/release pool and registered with
+///         the proposal simulator's address registry, the Phase B batch and the pool funding as
+///         replayable steps, and the OHM fee entries the build requires stubbed on the live fee
+///         contracts.
 /// @dev    The proposal instance the suites run is `CCIPTokenPoolConfigProposalHarness`, which
 ///         patches the counterpart burn/mint pools of `env.json` in memory (see its NatSpec).
 ///         The rig itself reads the tracked `env.json` for every other desired-state value, so
@@ -74,8 +89,13 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     ///      chain name order that `CCIPConfigLib.desiredRoutes` sorts into.
     uint256 internal constant _NEW_ROUTE_COUNT = 4;
 
-    /// @dev The largest action list the proposal can build.
-    uint256 internal constant _MAX_ACTION_COUNT = 12;
+    /// @dev The largest action list the proposal can build: the checker call, the eight
+    ///      conditional handover actions and the four route actions.
+    uint256 internal constant _MAX_ACTION_COUNT = 13;
+
+    /// @dev The registry key of the checker in `src/proposals/addresses.json`.
+    string internal constant _CHECKER_KEY =
+        "olympus-periphery-ccip-token-pool-config-proposal-checker";
 
     /// @dev The path of the desired-state file, as the proposal reads it.
     string internal constant _ENV_PATH = "./src/scripts/env.json";
@@ -107,8 +127,9 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     // ========== DEPLOYMENT TOGGLES ========== //
 
     /// @dev False while `src/proposals/addresses.json` records the zero address for both config
-    ///      policies: `setUp` deploys them over the live pool and registers them. Set to true
-    ///      once they are deployed on Ethereum and recorded, and `setUp` reads them instead.
+    ///      policies and the checker: `setUp` deploys them over the live pool and registers
+    ///      them. Set to true once they are deployed on Ethereum and recorded, and `setUp`
+    ///      reads them instead.
     bool public constant IS_CONTRACTS_DEPLOYED = false;
 
     // ========== ENVIRONMENT ========== //
@@ -121,6 +142,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     CCIPTokenPoolConfigProposalHarness internal proposal;
     CCIPTokenPoolConfig internal config;
     CCIPTokenPoolConfigTimelock internal timelock;
+    CCIPTokenPoolConfigProposalChecker internal checker;
 
     Kernel internal kernel;
     RolesAdmin internal rolesAdmin;
@@ -174,8 +196,11 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     // ========== SETUP ========== //
 
     function setUp() public virtual {
+        // The call selects the fork; its id is not needed afterwards
+        // forge-lint: disable-next-line(unused-return)
         vm.createSelectFork(_RPC_ALIAS, BLOCK);
-        /// forge-lint: disable-next-line(unsafe-cheatcode)
+        // The path is the constant `_ENV_PATH`: the tracked `env.json` and nothing else is read
+        // forge-lint: disable-next-line(unsafe-cheatcode)
         _env = vm.readFile(_ENV_PATH);
 
         // ========== PROPOSAL SETUP ========== //
@@ -212,11 +237,12 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
         // ========== LOAD THE DESIRED STATE ========== //
 
-        // casting to 'uint32' and 'uint48' is safe because the declared grace period and
-        // timelock delay are second counts far below their type maxima, and the config policy
-        // and its timelock take the same widths
+        // casting to 'uint32' is safe because the declared grace period is a second count far
+        // below the uint32 maximum, and the config policy and its timelock take the same width
         // forge-lint: disable-next-line(unsafe-typecast)
         gracePeriod = uint32(_envUint("mainnet", "olympus.config.CCIPTokenPoolConfig.gracePeriod"));
+        // casting to 'uint48' is safe because the declared timelock delay is a second count far
+        // below the uint48 maximum, and the timelock takes the same width
         // forge-lint: disable-next-item(unsafe-typecast)
         timelockDelay = uint48(
             _envUint("mainnet", "olympus.config.CCIPTokenPoolConfig.timelockDelay")
@@ -237,6 +263,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             timelock = CCIPTokenPoolConfigTimelock(
                 addresses.getAddress("olympus-policy-ccip-token-pool-config-timelock")
             );
+            checker = CCIPTokenPoolConfigProposalChecker(addresses.getAddress(_CHECKER_KEY));
         } else {
             require(
                 addresses._addresses("olympus-policy-ccip-token-pool-config", block.chainid) ==
@@ -250,6 +277,10 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 ) == address(0),
                 "live: addresses.json should record no CCIPTokenPoolConfigTimelock"
             );
+            require(
+                addresses._addresses(_CHECKER_KEY, block.chainid) == address(0),
+                "live: addresses.json should record no CCIPTokenPoolConfigProposalChecker"
+            );
 
             config = new CCIPTokenPoolConfig(kernel, address(pool), gracePeriod);
             vm.label(address(config), "CCIPTokenPoolConfig");
@@ -260,6 +291,18 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 gracePeriod
             );
             vm.label(address(timelock), "CCIPTokenPoolConfigTimelock");
+            checker = new CCIPTokenPoolConfigProposalChecker(
+                address(kernel),
+                address(config),
+                address(timelock),
+                address(pool),
+                address(ohm),
+                address(registry),
+                address(roles),
+                ocgTimelock,
+                daoMS
+            );
+            vm.label(address(checker), "CCIPTokenPoolConfigProposalChecker");
 
             addresses.addAddress(
                 "olympus-policy-ccip-token-pool-config",
@@ -271,6 +314,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 address(timelock),
                 block.chainid
             );
+            addresses.addAddress(_CHECKER_KEY, address(checker), block.chainid);
         }
 
         // ========== LIVE PRECONDITIONS ========== //
@@ -341,6 +385,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 // far below the uint128 maximum, the width the pool buckets carry
                 // forge-lint: disable-next-line(unsafe-typecast)
                 capacity: uint128(_env.readUint(string.concat(prefix, ".capacity"))),
+                // casting to 'uint128' is safe because the declared limits are OHM base units
+                // far below the uint128 maximum, the width the pool buckets carry
                 // forge-lint: disable-next-line(unsafe-typecast)
                 rate: uint128(_env.readUint(string.concat(prefix, ".rate")))
             });
@@ -353,6 +399,10 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     function _requireLiveState() internal view {
         require(kernel.executor() == daoMS, "live: the DAO MS should be the Kernel executor");
         require(pool.owner() == daoMS, "live: the DAO MS should own the pool");
+        require(
+            ICCIPLockReleaseTokenPool(address(pool)).getRebalancer() == daoMS,
+            "live: the DAO MS should be the pool rebalancer"
+        );
         require(
             CCIPConfigLib.pendingOwner(address(pool)) == address(0),
             "live: the pool should carry no pending owner"
@@ -549,8 +599,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         string memory remoteChain_
     ) internal view returns (address feeQuoter) {
         // The return is measured by hand because its length differs by generation
-        // solhint-disable-next-line avoid-low-level-calls
         // forge-lint: disable-next-item(low-level-calls)
+        // solhint-disable-next-line avoid-low-level-calls
         (bool ok, bytes memory data) = onRamp_.staticcall(
             abi.encodeCall(ICCIPFeeOnRampConfig.getDynamicConfig, ())
         );
@@ -666,8 +716,9 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         _nominateRegistryAdmin();
     }
 
-    /// @notice The funding step (`CCIPTokenPoolBatch.fundPool`): the DAO MS transfers the
-    ///         shortfall in real OHM, never a mint.
+    /// @notice The funding step: the DAO MS transfers the raw shortfall of the pool against the
+    ///         key in real OHM, never a mint. The suite needs the floor only;
+    ///         `CCIPTokenPoolBatch.fundPool` transfers the key minus the unclaimable balance.
     function _fundPoolToMinimumBacking() internal {
         uint256 balance = ohm.balanceOf(address(pool));
         if (balance >= minimumPoolBacking) return;
@@ -714,6 +765,26 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         pool.applyChainUpdates(removals, additions);
     }
 
+    /// @notice The DAO MS, as the pool rebalancer, withdraws liquidity from the pool.
+    function _daoWithdrawLiquidity(uint256 amount_) internal {
+        ICCIPLiquidityContainer container = ICCIPLiquidityContainer(address(pool));
+        vm.prank(daoMS);
+        container.withdrawLiquidity(amount_);
+    }
+
+    /// @notice The DAO MS, as the pool owner, proposes another pool owner.
+    function _daoProposePoolOwner(address newOwner_) internal {
+        vm.prank(daoMS);
+        pool.transferOwnership(newOwner_);
+    }
+
+    /// @notice The DAO MS, as the OHM administrator, nominates another administrator.
+    function _daoNominateRegistryAdmin(address nominee_) internal {
+        address ohmAddress = address(ohm);
+        vm.prank(daoMS);
+        registry.transferAdminRole(ohmAddress, nominee_);
+    }
+
     /// @notice Solana rate limits that `env.json` does not declare, for the drift gates.
     function _driftedSolanaLimits()
         internal
@@ -735,19 +806,23 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     // ========== EXPECTED ACTIONS ========== //
 
     /// @notice The action list the proposal must build, derived from the live state the way the
-    ///         proposal derives it, so that a re-pin does not invalidate the assertion.
+    ///         proposal derives it, so that a re-pin does not invalidate the assertion. The
+    ///         first action is the checker call, whose expectations record the same decisions.
     /// @dev    One branch per conditional action of the proposal, in the proposal's own order.
     ///         Splitting the chain would hide that correspondence, which is the point of the
     ///         assertion, so the complexity note is suppressed rather than refactored away.
     // forge-lint: disable-next-item(cyclomatic-complexity)
     function _expectedActions() internal view returns (ExpectedAction[] memory expected) {
         ExpectedAction[_MAX_ACTION_COUNT] memory buffer;
-        uint256 count = 0;
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations;
+        // Index 0 is the checker call, written once the expectations are complete
+        uint256 count = 1;
 
         ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = registry.getTokenConfig(
             address(ohm)
         );
         if (tokenConfig.administrator != ocgTimelock) {
+            expectations.acceptAdminRole = true;
             buffer[count++] = ExpectedAction({
                 target: address(registry),
                 data: abi.encodeWithSelector(
@@ -758,6 +833,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             });
         }
         if (!roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE)) {
+            expectations.grantBridgeAdmin = true;
             buffer[count++] = ExpectedAction({
                 target: address(rolesAdmin),
                 data: abi.encodeWithSelector(
@@ -769,6 +845,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             });
         }
         if (!config.isEnabled()) {
+            expectations.enableConfig = true;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(IEnabler.enable.selector, ""),
@@ -776,6 +853,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             });
         }
         if (pool.owner() != address(config)) {
+            expectations.acceptPoolOwnership = true;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(ICCIPTokenPoolConfig.acceptPoolOwnership.selector),
@@ -783,6 +861,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             });
         }
         if (config.configOperator() != address(timelock)) {
+            expectations.setConfigOperator = true;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(
@@ -792,7 +871,9 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 label: "set the config operator"
             });
         }
+        expectations.rebalancer = desiredRebalancer;
         if (ICCIPLockReleaseTokenPool(address(pool)).getRebalancer() != desiredRebalancer) {
+            expectations.setRebalancer = true;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(
@@ -802,7 +883,9 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 label: "set the rebalancer"
             });
         }
+        expectations.rateLimitAdmin = desiredRateLimitAdmin;
         if (pool.getRateLimitAdmin() != desiredRateLimitAdmin) {
+            expectations.setRateLimitAdmin = true;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(
@@ -813,14 +896,18 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             });
         }
         if (!timelock.isEnabled()) {
+            expectations.enableTimelock = true;
             buffer[count++] = ExpectedAction({
                 target: address(timelock),
                 data: abi.encodeWithSelector(IEnabler.enable.selector, ""),
                 label: "enable CCIPTokenPoolConfigTimelock"
             });
         }
+        uint64[] memory routesToAdd = new uint64[](newRoutes.length);
+        uint256 routeCount = 0;
         for (uint256 i = 0; i < newRoutes.length; ++i) {
             if (pool.isSupportedChain(newRoutes[i].chainSelector)) continue;
+            routesToAdd[routeCount++] = newRoutes[i].chainSelector;
             buffer[count++] = ExpectedAction({
                 target: address(config),
                 data: abi.encodeWithSelector(
@@ -830,6 +917,20 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                 label: string.concat("add the ", newRoutes[i].name, " route")
             });
         }
+        expectations.routesToAdd = new uint64[](routeCount);
+        for (uint256 i = 0; i < routeCount; ++i) {
+            expectations.routesToAdd[i] = routesToAdd[i];
+        }
+        expectations.minimumPoolBacking = minimumPoolBacking;
+
+        buffer[0] = ExpectedAction({
+            target: address(checker),
+            data: abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker.check.selector,
+                expectations
+            ),
+            label: "check the preconditions and the backing"
+        });
 
         expected = new ExpectedAction[](count);
         for (uint256 i = 0; i < count; ++i) {
@@ -870,6 +971,71 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                     (uint32(uint8(payload_[2])) << 8) |
                     uint32(uint8(payload_[3]))
             );
+    }
+
+    /// @notice The index of the first built action whose payload carries the selector.
+    function _actionIndexOf(bytes4 selector_) internal view returns (uint256 index) {
+        // Only the payloads are inspected; the build test asserts the targets and the values
+        // forge-lint: disable-next-line(unused-return)
+        (, , bytes[] memory payloads) = proposal.getProposalActions();
+        for (uint256 i = 0; i < payloads.length; ++i) {
+            if (_selectorOf(payloads[i]) == selector_) return i;
+        }
+        revert("the built actions carry no such selector");
+    }
+
+    /// @notice The expectations the built checker action carries, decoded from its payload.
+    function _builtExpectations()
+        internal
+        view
+        returns (ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations)
+    {
+        // Only the first target and payload are inspected; the build test asserts the values
+        // forge-lint: disable-next-line(unused-return)
+        (address[] memory targets, , bytes[] memory payloads) = proposal.getProposalActions();
+        assertEq(targets[0], address(checker), "The first action should target the checker");
+        assertEq(
+            _selectorOf(payloads[0]),
+            ICCIPTokenPoolConfigProposalChecker.check.selector,
+            "The first action should call check"
+        );
+        return
+            abi.decode(
+                _callArguments(payloads[0]),
+                (ICCIPTokenPoolConfigProposalChecker.Expectations)
+            );
+    }
+
+    // ========== REPLAY ========== //
+
+    /// @notice Replays the built actions from the OCG timelock the way the governor's timelock
+    ///         sends them, one plain call each, and asserts that every action before
+    ///         `failingIndex_` succeeds and that the action at `failingIndex_` fails with
+    ///         `revertData_`.
+    function _assertReplayFailsAt(uint256 failingIndex_, bytes memory revertData_) internal {
+        (address[] memory targets, uint256[] memory values, bytes[] memory payloads) = proposal
+            .getProposalActions();
+        assertLt(failingIndex_, targets.length, "The failing index should name a built action");
+        for (uint256 i = 0; i <= failingIndex_; ++i) {
+            assertEq(values[i], 0, string.concat("action ", vm.toString(i + 1), " sends no value"));
+            address target = targets[i];
+            bytes memory payload = payloads[i];
+            vm.prank(ocgTimelock);
+            // The governor's timelock sends every action as a plain call, so does the replay
+            // forge-lint: disable-next-item(low-level-calls)
+            // solhint-disable-next-line avoid-low-level-calls
+            (bool ok, bytes memory data) = target.call(payload);
+            if (i < failingIndex_) {
+                assertTrue(ok, string.concat("action ", vm.toString(i + 1), " should succeed"));
+                continue;
+            }
+            assertFalse(ok, string.concat("action ", vm.toString(i + 1), " should fail"));
+            assertEq(
+                data,
+                revertData_,
+                string.concat("action ", vm.toString(i + 1), " should revert with the named error")
+            );
+        }
     }
 
     // ========== ROUTE OBSERVATION ========== //
@@ -1020,6 +1186,64 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             )
         );
     }
+
+    // ========== CHECKER ERROR ENCODERS ========== //
+
+    function _checkerRouteAlreadyExists(
+        uint64 chainSelector_
+    ) internal pure returns (bytes memory revertData) {
+        return
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_RouteAlreadyExists
+                    .selector,
+                chainSelector_
+            );
+    }
+
+    function _checkerOhmAdministratorMismatch(
+        address administrator_,
+        address pendingAdministrator_,
+        bool acceptIncluded_
+    ) internal pure returns (bytes memory revertData) {
+        return
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_OhmAdministratorMismatch
+                    .selector,
+                administrator_,
+                pendingAdministrator_,
+                acceptIncluded_
+            );
+    }
+
+    function _checkerPoolOwnerMismatch(
+        address owner_,
+        address expected_
+    ) internal pure returns (bytes memory revertData) {
+        return
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_PoolOwnerMismatch
+                    .selector,
+                owner_,
+                expected_
+            );
+    }
+
+    function _checkerBackingTooLow(
+        uint256 balance_,
+        uint256 minimum_
+    ) internal pure returns (bytes memory revertData) {
+        return
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_BackingTooLow
+                    .selector,
+                balance_,
+                minimum_
+            );
+    }
 }
 
 /// @notice The build stage: the proposal's `_deploy` and `_build` called directly on the
@@ -1051,6 +1275,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         _;
     }
 
+    // Named per Phase B half so that the partial-batch tests read as branching-tree conditions
     // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenPoolOwnershipProposed() {
         _proposePoolOwnership();
@@ -1469,7 +1694,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         assertLe(
             targets.length,
             _MAX_ACTION_COUNT,
-            "The proposal should never build more than twelve actions"
+            "The proposal should never build more than thirteen actions"
         );
         for (uint256 i = 0; i < expected.length; ++i) {
             assertEq(targets[i], expected[i].target, string.concat("target: ", expected[i].label));
@@ -1477,16 +1702,69 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
             assertEq(values[i], 0, string.concat("value: ", expected[i].label));
         }
 
+        // The checker action carries the decisions of the build and the checker accepts them
+        // on the state the build read
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _builtExpectations();
+        assertTrue(
+            expectations.acceptAdminRole,
+            "The acceptance of the OHM administrator role should be included"
+        );
+        assertTrue(expectations.enableConfig, "The enable of the config policy should be included");
+        assertTrue(
+            expectations.acceptPoolOwnership,
+            "The pool ownership acceptance should be included"
+        );
+        assertTrue(
+            expectations.setConfigOperator,
+            "The config operator rotation should be included"
+        );
+        assertTrue(expectations.setRebalancer, "The rebalancer setter should be included");
+        assertTrue(expectations.enableTimelock, "The enable of the timelock should be included");
+        assertEq(
+            expectations.rebalancer,
+            desiredRebalancer,
+            "The expectations should carry the declared rebalancer"
+        );
+        assertEq(
+            expectations.rateLimitAdmin,
+            desiredRateLimitAdmin,
+            "The expectations should carry the declared rate limit admin"
+        );
+        assertEq(
+            expectations.routesToAdd.length,
+            _NEW_ROUTE_COUNT,
+            "The expectations should name the four routes"
+        );
+        for (uint256 i = 0; i < newRoutes.length; ++i) {
+            assertEq(
+                expectations.routesToAdd[i],
+                newRoutes[i].chainSelector,
+                string.concat("route to add: ", newRoutes[i].name)
+            );
+        }
+        assertEq(
+            expectations.minimumPoolBacking,
+            minimumPoolBacking,
+            "The expectations should carry the declared minimum backing"
+        );
+        checker.check(expectations);
+
         // The live state has converged on the two conditional writes the same-value rule of the
-        // config policy would reject, so neither is built.
+        // config policy would reject, so neither is built and the checker expects the end
+        // state of both.
         assertTrue(
             roles.hasRole(daoMS, BRIDGE_ADMIN_ROLE),
             "The DAO MS should already hold bridge_admin at this pin"
         );
+        assertFalse(expectations.grantBridgeAdmin, "The bridge_admin grant should not be included");
         assertEq(
             pool.getRateLimitAdmin(),
             desiredRateLimitAdmin,
             "The pool should already carry the declared rate limit admin at this pin"
+        );
+        assertFalse(
+            expectations.setRateLimitAdmin,
+            "The rate limit admin setter should not be included"
         );
 
         // The four route actions carry the declared route, field by field
@@ -1532,6 +1810,189 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
                 update.inboundRateLimiterConfig,
                 newRoutes[i].inbound,
                 string.concat(label, ": inbound")
+            );
+        }
+    }
+
+    // ========== STALE STATE AFTER THE BUILD ========== //
+
+    /// @notice Deploys and builds the proposal on the Phase B state, the way a submission does,
+    ///         and returns the expectations its checker action carries.
+    function _buildProposal()
+        internal
+        returns (ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations)
+    {
+        proposal.deploy(addresses, address(this));
+        proposal.build(addresses);
+        return _builtExpectations();
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given the DAO MS then adds one of the four routes directly on the pool
+    //     [X] the checker reverts with RouteAlreadyExists naming the route
+    //     [X] the replay from the timelock fails at the first action with the same error
+    //     [X] the governor run reverts with the timelock's generic execution error
+
+    function test_givenBuilt_givenRouteAddedDirectly_checkerReverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _buildProposal();
+
+        _daoAddRoute(_toChainUpdate(newRoutes[0]));
+
+        bytes memory revertData = _checkerRouteAlreadyExists(newRoutes[0].chainSelector);
+        vm.expectRevert(revertData);
+        checker.check(expectations);
+
+        _assertReplayFailsAt(0, revertData);
+    }
+
+    function test_givenBuilt_givenRouteAddedDirectly_whenSimulated_reverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        _buildProposal();
+
+        _daoAddRoute(_toChainUpdate(newRoutes[0]));
+
+        // The timelock sends the checker call, action 1, exactly once and the acceptance of
+        // the OHM administrator role, action 2, never: the checker's revert stops the run.
+        // Only the targets and payloads are inspected; the build test asserts the values.
+        // forge-lint: disable-next-line(unused-return)
+        (address[] memory targets, , bytes[] memory payloads) = proposal.getProposalActions();
+        vm.expectCall(targets[0], payloads[0], 1);
+        vm.expectCall(targets[1], payloads[1], 0);
+        vm.expectRevert(Timelock.Timelock_InvalidTx_ExecReverted.selector);
+        proposal.simulate(addresses);
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given the DAO MS then nominates another OHM administrator
+    //     [X] the checker reverts with OhmAdministratorMismatch naming both live values
+    //     [X] the replay from the timelock fails at the first action with the same error
+
+    function test_givenBuilt_givenPendingAdministratorRepointed_checkerReverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _buildProposal();
+
+        address nominee = makeAddr("otherAdministrator");
+        _daoNominateRegistryAdmin(nominee);
+
+        bytes memory revertData = _checkerOhmAdministratorMismatch(daoMS, nominee, true);
+        vm.expectRevert(revertData);
+        checker.check(expectations);
+
+        _assertReplayFailsAt(0, revertData);
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given the DAO MS then proposes another pool owner, who does not accept
+    //     [X] the checker passes, since the pool exposes no read of its pending owner
+    //     [X] the replay from the timelock fails at the ownership acceptance with the pool's
+    //         MustBeProposedOwner
+
+    function test_givenBuilt_givenPendingOwnerRepointed_checkerPasses()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _buildProposal();
+
+        _daoProposePoolOwner(makeAddr("otherPendingOwner"));
+
+        checker.check(expectations);
+
+        _assertReplayFailsAt(
+            _actionIndexOf(ICCIPTokenPoolConfig.acceptPoolOwnership.selector),
+            abi.encodeWithSelector(ICCIPTokenPoolAdmin.MustBeProposedOwner.selector)
+        );
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given the DAO MS then proposes another pool owner, who accepts
+    //     [X] the checker reverts with PoolOwnerMismatch naming the new owner and the DAO MS
+    //     [X] the replay from the timelock fails at the first action with the same error
+
+    function test_givenBuilt_givenPoolOwnershipTaken_checkerReverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _buildProposal();
+
+        address newOwner = makeAddr("otherOwner");
+        _daoProposePoolOwner(newOwner);
+        ICCIPTokenPoolAdmin rigPool = pool;
+        vm.prank(newOwner);
+        rigPool.acceptOwnership();
+
+        bytes memory revertData = _checkerPoolOwnerMismatch(newOwner, daoMS);
+        vm.expectRevert(revertData);
+        checker.check(expectations);
+
+        _assertReplayFailsAt(0, revertData);
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given the DAO MS, as the pool rebalancer, then withdraws liquidity below the minimum
+    //     [X] the checker reverts with BackingTooLow naming the balance and the minimum
+    //     [X] the replay from the timelock fails at the first action with the same error
+
+    function test_givenBuilt_givenLiquidityWithdrawn_checkerReverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _buildProposal();
+
+        uint256 withdrawn = 1;
+        _daoWithdrawLiquidity(withdrawn);
+        uint256 balance = ohm.balanceOf(address(pool));
+        assertLt(balance, minimumPoolBacking, "The withdrawal should leave the pool short");
+
+        bytes memory revertData = _checkerBackingTooLow(balance, minimumPoolBacking);
+        vm.expectRevert(revertData);
+        checker.check(expectations);
+
+        _assertReplayFailsAt(0, revertData);
+    }
+
+    // given Phase B is complete, the pool is funded and the proposal is built
+    //   given nothing changes
+    //     [X] the replay from the timelock runs every action
+
+    function test_givenBuilt_whenReplayedFromTheTimelock()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        _buildProposal();
+
+        (address[] memory targets, uint256[] memory values, bytes[] memory payloads) = proposal
+            .getProposalActions();
+        for (uint256 i = 0; i < targets.length; ++i) {
+            assertEq(values[i], 0, string.concat("action ", vm.toString(i + 1), " sends no value"));
+            address target = targets[i];
+            bytes memory payload = payloads[i];
+            vm.prank(ocgTimelock);
+            // The governor's timelock sends every action as a plain call, so does the replay
+            // forge-lint: disable-next-item(low-level-calls)
+            // solhint-disable-next-line avoid-low-level-calls
+            (bool ok, ) = target.call(payload);
+            assertTrue(ok, string.concat("action ", vm.toString(i + 1), " should succeed"));
+        }
+
+        assertEq(pool.owner(), address(config), "The config policy should own the pool");
+        for (uint256 i = 0; i < newRoutes.length; ++i) {
+            assertTrue(
+                pool.isSupportedChain(newRoutes[i].chainSelector),
+                string.concat("route ", newRoutes[i].name, ": should exist")
             );
         }
     }
@@ -1773,29 +2234,78 @@ contract CCIPTokenPoolConfigProposalTests_execution is CCIPTokenPoolConfigPropos
     // given the proposal has executed
     //   given the Emergency MS has disabled the config policy
     //     when the proposal validates the state
-    //       [X] it reverts with PolicyNotEnabled
+    //       [X] it reverts with the checker's ConfigEnabledMismatch
 
     function test_givenExecuted_givenConfigDisabled_whenValidated_reverts() public {
         CCIPTokenPoolConfig rigConfig = config;
         vm.prank(emergencyMS);
         rigConfig.disable("");
 
-        _expectRevertPolicyNotEnabled(address(config));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_ConfigEnabledMismatch
+                    .selector,
+                false,
+                false
+            )
+        );
         proposal.validate(addresses, proposer);
     }
 
     // given the proposal has executed
     //   given the OCG timelock has revoked the config operator
     //     when the proposal validates the state
-    //       [X] it reverts with AddressMismatch on the config operator
+    //       [X] it reverts with the checker's ConfigOperatorMismatch
 
     function test_givenExecuted_givenConfigOperatorRevoked_whenValidated_reverts() public {
         CCIPTokenPoolConfig rigConfig = config;
         vm.prank(ocgTimelock);
         rigConfig.setConfigOperator(address(0));
 
-        _expectRevertAddressMismatch("config operator", address(0), address(timelock));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfigProposalChecker
+                    .CCIPTokenPoolConfigProposalChecker_ConfigOperatorMismatch
+                    .selector,
+                address(0),
+                address(timelock),
+                false
+            )
+        );
         proposal.validate(addresses, proposer);
+    }
+
+    // given the proposal has executed
+    //   given the OCG timelock, as the rebalancer, has withdrawn liquidity below the minimum
+    //     when the proposal validates the state
+    //       [X] it reverts with the checker's BackingTooLow
+
+    function test_givenExecuted_givenLiquidityWithdrawn_whenValidated_reverts() public {
+        ICCIPLiquidityContainer container = ICCIPLiquidityContainer(address(pool));
+        uint256 withdrawn = 1;
+        vm.prank(ocgTimelock);
+        container.withdrawLiquidity(withdrawn);
+        uint256 balance = ohm.balanceOf(address(pool));
+        assertLt(balance, minimumPoolBacking, "The withdrawal should leave the pool short");
+
+        vm.expectRevert(_checkerBackingTooLow(balance, minimumPoolBacking));
+        proposal.validate(addresses, proposer);
+    }
+
+    // given the proposal has executed
+    //   when the checker is called with the expectations of the executed build
+    //     [X] it reverts at the first handover expectation, since the acceptance happened
+
+    function test_givenExecuted_whenCheckerCalledWithBuildExpectations_reverts() public {
+        ICCIPTokenPoolConfigProposalChecker.Expectations memory expectations = _builtExpectations();
+        assertTrue(
+            expectations.acceptAdminRole,
+            "The executed build should have included the acceptance"
+        );
+
+        vm.expectRevert(_checkerOhmAdministratorMismatch(ocgTimelock, address(0), true));
+        checker.check(expectations);
     }
 
     // given the proposal has executed
@@ -1979,6 +2489,11 @@ contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
         _build(addresses_);
     }
 
+    /// @notice Runs the built actions through the governor, the way `run` does after the build.
+    function simulate(Addresses addresses_) external {
+        _run(addresses_, address(0));
+    }
+
     function validate(Addresses addresses_, address caller_) external view {
         _validate(addresses_, caller_);
     }
@@ -2035,3 +2550,11 @@ contract CCIPTokenPoolConfigProposalRebalancerHarness is CCIPTokenPoolConfigProp
         return drifted;
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)
+
+// forge-lint: disable-end(require-revert-in-loop)
+
+// forge-lint: disable-end(reentrancy-no-eth)
+
+// forge-lint: disable-end(calls-loop)

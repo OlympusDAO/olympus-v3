@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IGracePeriod} from "src/bases/interfaces/IGracePeriod.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -8,6 +11,9 @@ import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoo
 import {ICCIPTokenPoolConfigTimelock} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfigTimelock.sol";
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+// Libraries
+import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
 
 // Contracts
 import {Vm} from "@forge-std-1.16.2/Vm.sol";
@@ -207,6 +213,7 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
     //   [X] it reports isActive() false before activation
     //   [X] it reports MIN_TIMELOCK_DELAY as 1 days, MAX_TIMELOCK_DELAY as 30 days and
     //       EXECUTION_WINDOW as 3 days
+    //   [X] it reports the delay bound that CCIPConfigLib validates env.json against
     // The full initial-state assertion, covering the unset fields next to the set ones. Both
     // events come from base constructors, so they are captured with vm.recordLogs rather than
     // vm.expectEmit. The nextActionId() == 1 assertion pins the free-key sentinel: action id
@@ -283,6 +290,16 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
             "MAX_TIMELOCK_DELAY should be 30 days"
         );
         assertEq(freshTimelock.EXECUTION_WINDOW(), 3 days, "EXECUTION_WINDOW should be 3 days");
+        assertEq(
+            freshTimelock.MIN_TIMELOCK_DELAY(),
+            CCIPConfigLib.MIN_TIMELOCK_DELAY,
+            "MIN_TIMELOCK_DELAY should be the bound CCIPConfigLib validates against"
+        );
+        assertEq(
+            freshTimelock.MAX_TIMELOCK_DELAY(),
+            CCIPConfigLib.MAX_TIMELOCK_DELAY,
+            "MAX_TIMELOCK_DELAY should be the bound CCIPConfigLib validates against"
+        );
     }
 
     // when the delay equals the minimum
@@ -313,6 +330,8 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
     //   [X] it constructs and reports timelockDelay() equal to the argument
     // Fuzzed over the valid interval [1 days, 30 days]
     function test_whenDelayIsWithinBounds(uint48 delay_) public {
+        // casting to 'uint48' is safe because the bound keeps the value at or below 30 days
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint48 boundedDelay = uint48(bound(delay_, 1 days, 30 days));
         // boundedDelay is in the valid interval [1 days, 30 days]
 
@@ -436,3 +455,5 @@ contract CCIPTokenPoolConfigTimelockTests_constructor is CCIPTokenPoolConfigTime
         );
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

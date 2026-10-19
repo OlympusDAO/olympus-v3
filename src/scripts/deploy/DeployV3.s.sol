@@ -90,6 +90,7 @@ import {ERC20} from "solmate/tokens/ERC20.sol";
 // OCG Activator contracts
 import {ConvertibleDepositActivator} from "src/proposals/ConvertibleDepositActivator.sol";
 import {LZBridgeActivator} from "src/proposals/LZBridgeActivator.sol";
+import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolConfigProposalChecker.sol";
 
 // solhint-disable gas-custom-errors
 
@@ -602,6 +603,56 @@ contract DeployV3 is WithEnvironment {
         );
 
         return (address(timelock), "olympus.policies");
+    }
+
+    /// @notice Deploys the read-only checker that `CCIPTokenPoolConfigProposal` calls as its
+    ///         first action, bound to the mainnet lock/release pool, the config policy and the
+    ///         config timelock (both resolved from the same sequence first), OHM, the
+    ///         TokenAdminRegistry, the ROLES module, the OCG timelock and the DAO MS.
+    /// @dev    The checker constructor requires the config policy to report the pool, the
+    ///         timelock to report the config policy, both policies to report the Kernel, the
+    ///         Kernel to report the ROLES module and the pool to serve OHM, so a wrong binding
+    ///         fails at deployment.
+    function deployCCIPTokenPoolConfigProposalChecker() public returns (address, string memory) {
+        // Dependencies
+        console2.log("Checking dependencies");
+        address kernel = _getAddressNotZero("olympus.Kernel");
+        address config = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        address configTimelock = _getAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
+        address pool = _getAddressNotZero("olympus.periphery.CCIPLockReleaseTokenPool");
+        address ohm = _getAddressNotZero("olympus.legacy.OHM");
+        address registry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
+        address roles = _getAddressNotZero("olympus.modules.OlympusRoles");
+        address ocgTimelock = _getAddressNotZero("olympus.governance.Timelock");
+        address daoMS = _envAddressNotZero("olympus.multisig.dao");
+
+        // Log parameters
+        console2.log("CCIPTokenPoolConfigProposalChecker parameters:");
+        console2.log("  kernel", kernel);
+        console2.log("  config", config);
+        console2.log("  configTimelock", configTimelock);
+        console2.log("  pool", pool);
+        console2.log("  ohm", ohm);
+        console2.log("  registry", registry);
+        console2.log("  roles", roles);
+        console2.log("  ocgTimelock", ocgTimelock);
+        console2.log("  daoMS", daoMS);
+
+        // Deploy
+        vm.broadcast();
+        CCIPTokenPoolConfigProposalChecker checker = new CCIPTokenPoolConfigProposalChecker(
+            kernel,
+            config,
+            configTimelock,
+            pool,
+            ohm,
+            registry,
+            roles,
+            ocgTimelock,
+            daoMS
+        );
+
+        return (address(checker), "olympus.periphery");
     }
 
     function deployOlympusHeart() public returns (address, string memory) {

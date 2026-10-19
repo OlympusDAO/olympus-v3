@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -322,6 +325,8 @@ contract CCIPTokenPoolConfigTests_addRemotePool is CCIPTokenPoolConfigTest {
     function test_whenRemotePoolLengthIsNot32_reverts(
         uint8 length_
     ) public givenEnabled givenPoolOwnershipAccepted givenChainAdded {
+        // casting to 'uint8' is safe because the bound keeps the value at or below 96
+        // forge-lint: disable-next-line(unsafe-typecast)
         length_ = uint8(bound(length_, 1, 96));
         vm.assume(length_ != 32);
 
@@ -349,6 +354,8 @@ contract CCIPTokenPoolConfigTests_addRemotePool is CCIPTokenPoolConfigTest {
         givenChainAdded
     {
         uint256[2] memory lengths = [uint256(31), 33];
+        // Boundary loop over two lengths: each pass arms one revert and makes one call
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < lengths.length; ++i) {
             bytes memory entry = _bytesOfLength(lengths[i]);
 
@@ -361,6 +368,7 @@ contract CCIPTokenPoolConfigTests_addRemotePool is CCIPTokenPoolConfigTest {
             vm.prank(admin);
             config.addRemotePool(CHAIN_SELECTOR_A, entry);
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // given the remote pool was removed earlier
@@ -457,3 +465,5 @@ contract CCIPTokenPoolConfigTests_addRemotePool is CCIPTokenPoolConfigTest {
         config.addRemotePool(CHAIN_SELECTOR_A, REMOTE_POOL_B);
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

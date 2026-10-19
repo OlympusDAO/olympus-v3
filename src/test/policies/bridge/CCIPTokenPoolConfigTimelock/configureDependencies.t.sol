@@ -12,6 +12,9 @@ import {MockRolesModule} from "src/test/policies/bridge/mocks/MockRolesModule.so
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
 
+// The hook is called for its effect or its revert; its returned list is asserted in its own test
+// forge-lint: disable-start(unused-return)
+
 contract CCIPTokenPoolConfigTimelockTests_configureDependencies is CCIPTokenPoolConfigTimelockTest {
     // given the kernel has no ROLES module installed
     //   [X] it reverts with Policy_ModuleDoesNotExist("ROLES")
@@ -165,3 +168,5 @@ contract CCIPTokenPoolConfigTimelockTests_configureDependencies is CCIPTokenPool
         assertEq(permissions.length, 0, "the policy should request no module permissions");
     }
 }
+
+// forge-lint: disable-end(unused-return)

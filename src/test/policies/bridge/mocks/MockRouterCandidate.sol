@@ -42,6 +42,8 @@ contract MockRouterCandidate {
         // length exactly. Producing it costs more gas than a bounded probe forwards, so a caller
         // that caps the probe sees the call fail instead.
         if (currentMode == ReturnMode.OversizedReturn) {
+            // A raw `return` is the only way to answer with unencoded memory of that length
+            // forge-lint: disable-next-item(inline-assembly)
             // solhint-disable-next-line no-inline-assembly
             assembly {
                 return(0, OVERSIZED_RETURN_LENGTH)

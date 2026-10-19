@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {IConfigTimelockBatchQueue} from "src/policies/interfaces/utils/IConfigTimelockBatchQueue.sol";
 
@@ -56,7 +59,11 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
         }
         assertEq(eventCount, 3, "exactly three ConfigStateQueued events should be emitted");
 
+        // The loop compares each stored key of the action with its documented key
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < expectedKeys.length; ++i) {
+            // Only the key of the stored state is compared here
+            // forge-lint: disable-next-line(unused-return)
             (bytes32 storedKey, ) = timelock.getQueuedConfigState(actionId, 0, i);
             assertEq(
                 storedKey,
@@ -64,6 +71,7 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
                 "the stored config state key should equal the documented key"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 
     // ========== TESTS ========== //
@@ -135,12 +143,13 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
         _assertChainActionReservesDocumentedKeys(CHAIN_SELECTOR_A);
     }
 
-    // when the selector is zero
+    // when the selector is one
     //   [X] the keys reserved for the route are the documented shape
-    // The abi.encode padding of a uint64 is exercised at the low end; no route-existence gate
-    // stands between the selector and its keys
-    function test_whenSelectorIsZero() public givenEnabled {
-        _assertChainActionReservesDocumentedKeys(0);
+    // The abi.encode padding of a uint64 is exercised at the low end: one is the smallest
+    // selector the config's validation mirror accepts, and no route-existence gate stands
+    // between the selector and its keys
+    function test_whenSelectorIsOne() public givenEnabled {
+        _assertChainActionReservesDocumentedKeys(1);
     }
 
     // when the selector is the uint64 maximum
@@ -345,6 +354,8 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
             _routeKeyOf(address(secondConfig), timelock.REMOTE_POOLS_DOMAIN(), CHAIN_SELECTOR_A),
             _routeKeyOf(address(secondConfig), timelock.ROUTE_IDENTITY_DOMAIN(), CHAIN_SELECTOR_A)
         ];
+        // The loop checks each of the three route keys on both timelocks
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < 3; ++i) {
             assertTrue(primaryKeys[i] != secondKeys[i], "the namespaces should not collide");
             assertEq(
@@ -368,5 +379,8 @@ contract CCIPTokenPoolConfigTimelockTests_KeyViews is CCIPTokenPoolConfigTimeloc
                 "the key scoped to the primary config should be free on the second timelock"
             );
         }
+        // forge-lint: disable-end(calls-loop)
     }
 }
+
+// forge-lint: disable-end(literal-instead-of-constant)

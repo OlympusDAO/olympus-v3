@@ -15,6 +15,9 @@ import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.s
 
 import {CCIPNonEthereumMigrationForkTest} from "./CCIPNonEthereumMigrationForkTest.sol";
 
+// `IRouterOffRamps` mirrors one getter of the live router for the delivery probes of this suite
+// forge-lint: disable-start(multi-contract-file)
+
 /// @notice Mirror of the live CCIP router's off-ramp listing, used to impersonate a real
 ///         off-ramp for the inbound delivery probes.
 interface IRouterOffRamps {
@@ -117,6 +120,8 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairNonEthereum is
         ICCIPTokenPoolAdmin oldPool = ICCIPTokenPoolAdmin(address(pool));
         uint64[] memory selectors = oldPool.getSupportedChains();
         vm.startPrank(daoMS);
+        // The loop recreates every route of the outgoing pool on the new one
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < selectors.length; ++i) {
             (
                 ICCIPRateLimiter.Config memory outbound,
@@ -132,6 +137,7 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairNonEthereum is
                 })
             );
         }
+        // forge-lint: disable-end(calls-loop)
         vm.stopPrank();
     }
 
@@ -168,6 +174,8 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairNonEthereum is
         });
         if (expectedRevert_.length != 0) vm.expectRevert(expectedRevert_);
         vm.prank(offRamp);
+        // The delivery is probed for its revert or its mint; the returned amount is not asserted
+        // forge-lint: disable-next-line(unused-return)
         targetPool_.releaseOrMint(delivery);
     }
 
@@ -200,12 +208,15 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairNonEthereum is
             address(newPool),
             "the registry should point at the new pool"
         );
+        // The loop checks every recreated route on the new pool
+        // forge-lint: disable-start(calls-loop)
         for (uint256 i; i < oldSelectors.length; ++i) {
             assertTrue(
                 newPool.isSupportedChain(oldSelectors[i]),
                 "the recreated route should exist on the new pool"
             );
         }
+        // forge-lint: disable-end(calls-loop)
         assertFalse(pool.isEnabled(), "the outgoing pool should be disabled");
         assertFalse(
             kernel.isPolicyActive(pool),
@@ -330,3 +341,5 @@ contract CCIPMigrationForkTests_ReplacePoolAndConfigPairNonEthereum is
         config.addChain(update);
     }
 }
+
+// forge-lint: disable-end(multi-contract-file)

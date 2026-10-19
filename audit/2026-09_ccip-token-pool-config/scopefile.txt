@@ -46,6 +46,8 @@ src/libraries/SafeCall.sol
 
 src/scripts/deploy/DeployV3.s.sol
 src/proposals/CCIPTokenPoolConfigProposal.sol
+src/proposals/CCIPTokenPoolConfigProposalChecker.sol
+src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol
 
 # Multisig and Operational Configuration
 

@@ -31,6 +31,10 @@ import {MockOhm} from "src/test/mocks/MockOhm.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
 import {MockRMNProxy} from "src/test/policies/bridge/mocks/MockRMNProxy.sol";
 
+// The helpers of the rig run inside the loops of the suites, and its own loops walk small fixed
+// sets of routes and keys, calling the contracts under test and cheatcodes.
+// forge-lint: disable-start(calls-loop)
+
 /// @notice Shared abstract base of the CCIPTokenPoolConfigTimelock test suite.
 /// @dev    The rig is real end to end: no mock of the config policy and no mock pool, so the
 ///         queue-time validation runs the real validate mirrors against the real pool and the
@@ -100,6 +104,10 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     CCIPTokenPoolConfig internal config;
     CCIPTokenPoolConfigTimelock internal timelock;
+
+    /// @notice A second timelock bound to the current rig's config, unactivated and disabled:
+    ///         the candidate the operator seat is rotated to, since the config accepts no other.
+    CCIPTokenPoolConfigTimelock internal otherTimelock;
 
     // ========== ACCOUNTS ========== //
 
@@ -232,6 +240,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         );
         vm.label(address(timelock), "timelock");
         kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        otherTimelock = _newOtherTimelock();
 
         // Default state: config ENABLED, pool ownership ACCEPTED, operator seat set to the
         // timelock; the timelock itself stays DISABLED
@@ -243,6 +252,19 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     // ========== DEPLOY HELPERS ========== //
+
+    /// @notice Deploys the unactivated second timelock over the current rig's config, the
+    ///         rotation candidate of givenOperatorRotated.
+    function _newOtherTimelock() internal returns (CCIPTokenPoolConfigTimelock candidate) {
+        candidate = new CCIPTokenPoolConfigTimelock(
+            kernel,
+            address(config),
+            TIMELOCK_DELAY,
+            GRACE_PERIOD
+        );
+        vm.label(address(candidate), "otherTimelock");
+        return candidate;
+    }
 
     /// @notice Deploys a fresh, unactivated timelock instance for constructor-style tests.
     function _newTimelock(
@@ -668,6 +690,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         ccipRouter.setOnRamp(onRamp);
         ohm.mint(address(rigPool), amount_);
         vm.prank(onRamp);
+        // The transfer is made to consume the bucket; its return data is not asserted
+        // forge-lint: disable-next-item(unused-return)
         rigPool.lockOrBurn(
             Pool.LockOrBurnInV1({
                 receiver: abi.encode(makeAddr("bridgeReceiver")),
@@ -680,6 +704,14 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     // ========== TIME HELPERS ========== //
+
+    /// @notice Returns the current block timestamp at the width of the lifecycle and queue
+    ///         timestamps.
+    function _blockTimestamp() internal view returns (uint48) {
+        // casting to 'uint48' is safe for realistic test timestamps
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return uint48(vm.getBlockTimestamp());
+    }
 
     /// @notice Skips so the timestamp lands EXACTLY on the stored executableAt of an action.
     ///         Requires the current timestamp to be at or before that boundary.
@@ -699,8 +731,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @notice Recomputes the rate limits state hash of a route from the live pool, per the
     ///         documented preimage: (domain, selector, outbound isEnabled/capacity/rate,
-    ///         inbound isEnabled/capacity/rate). Fill levels and refill timestamps are
-    ///         excluded on purpose.
+    ///         inbound isEnabled/capacity/rate, remote token). Fill levels and refill
+    ///         timestamps are excluded on purpose.
     function _expectedRateLimitsHash(uint64 chainSelector_) internal view returns (bytes32) {
         ICCIPTokenPoolAdmin rigPool = ICCIPTokenPoolAdmin(config.pool());
         ICCIPRateLimiter.TokenBucket memory outbound = rigPool.getCurrentOutboundRateLimiterState(
@@ -719,25 +751,33 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
                     outbound.rate,
                     inbound.isEnabled,
                     inbound.capacity,
-                    inbound.rate
+                    inbound.rate,
+                    rigPool.getRemoteToken(chainSelector_)
                 )
             );
     }
 
     /// @notice Recomputes the remote pools state hash of a route from the live pool, per the
     ///         documented preimage: (domain, selector, count, XOR of keccak256 over the raw
-    ///         bytes of every accepted remote pool).
+    ///         bytes of every accepted remote pool, remote token).
     function _expectedRemotePoolsHash(uint64 chainSelector_) internal view returns (bytes32) {
-        bytes[] memory remotePools = ICCIPTokenPoolAdmin(config.pool()).getRemotePools(
-            chainSelector_
-        );
+        ICCIPTokenPoolAdmin rigPool = ICCIPTokenPoolAdmin(config.pool());
+        bytes[] memory remotePools = rigPool.getRemotePools(chainSelector_);
         uint256 count = remotePools.length;
         bytes32 aggregate;
         for (uint256 i; i < count; ++i) {
             aggregate ^= keccak256(remotePools[i]);
         }
         return
-            keccak256(abi.encode(timelock.REMOTE_POOLS_DOMAIN(), chainSelector_, count, aggregate));
+            keccak256(
+                abi.encode(
+                    timelock.REMOTE_POOLS_DOMAIN(),
+                    chainSelector_,
+                    count,
+                    aggregate,
+                    rigPool.getRemoteToken(chainSelector_)
+                )
+            );
     }
 
     /// @notice Recomputes the route identity state hash from the live pool, per the
@@ -875,7 +915,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         ITimelockBatchQueue.QueuedAction memory action = timelock.getQueuedAction(actionId_);
         // queuedAt = now; executableAt = queuedAt + timelockDelay; expiresAt = executableAt
         // + EXECUTION_WINDOW (3 days)
-        uint48 timestamp = uint48(vm.getBlockTimestamp());
+        uint48 timestamp = _blockTimestamp();
         assertEq(action.proposer, proposer_, "stored proposer");
         assertEq(action.queuedAt, timestamp, "stored queuedAt");
         assertEq(
@@ -1048,6 +1088,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev The emergency role disables the timelock; composes after givenEnabled
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenDisabledByEmergency() {
         vm.prank(emergency);
         timelock.disable("");
@@ -1065,6 +1107,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev Lands exactly at lastTransitionAt + gracePeriod; composes after givenDisabled
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenTimestampAtGraceDeadline() {
         uint256 deadline = uint256(timelock.lastTransitionAt()) + timelock.gracePeriod();
         skip(deadline - vm.getBlockTimestamp());
@@ -1102,10 +1146,12 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         _;
     }
 
-    /// @dev The admin points the config's operator seat at thirdParty
+    /// @dev The admin points the config's operator seat at the second timelock bound to the
+    ///      config, so the timelock under test is no longer the config operator
     modifier givenOperatorRotated() {
+        address candidate = address(otherTimelock);
         vm.prank(admin);
-        config.setConfigOperator(thirdParty);
+        config.setConfigOperator(candidate);
         _;
     }
 
@@ -1158,6 +1204,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     }
 
     /// @dev The admin adds CHAIN_SELECTOR_A through the config with a single remote pool
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenChainAddedWithSinglePool() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         vm.prank(admin);
@@ -1183,6 +1231,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
     /// @dev Route A is seeded directly on the pool (pranking the pool owner of the moment)
     ///      with the outbound bucket disabled ({false, 0, 0}) and the inbound bucket at the
     ///      default configuration; a shape the config's validated paths cannot produce
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledOutboundBucket() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         _seedRouteOnPool(
@@ -1197,6 +1247,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @dev Route A is seeded directly on the pool with the outbound bucket at the default
     ///      configuration and the inbound bucket disabled ({false, 0, 0})
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenRouteWithDisabledInboundBucket() {
         _armRmnProxy(CHAIN_SELECTOR_A);
         _seedRouteOnPool(
@@ -1241,6 +1293,8 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
 
     /// @dev A third party executes the queued action once ready; composes after
     ///      givenActionReady
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenActionExecuted() {
         vm.prank(thirdParty);
         timelock.executeQueuedAction(queuedActionId);
@@ -1279,6 +1333,7 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         );
         vm.label(address(timelock), "timelockAllowListRig");
         kernel.executeAction(Actions.ActivatePolicy, address(timelock));
+        otherTimelock = _newOtherTimelock();
         vm.startPrank(admin);
         config.enable("");
         config.acceptPoolOwnership();
@@ -1287,3 +1342,5 @@ abstract contract CCIPTokenPoolConfigTimelockTest is Test {
         _;
     }
 }
+
+// forge-lint: disable-end(calls-loop)

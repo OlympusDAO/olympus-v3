@@ -88,7 +88,7 @@ contract CCIPTokenPoolConfigTests_disable is CCIPTokenPoolConfigTest {
         // The skip separates the enable timestamp from the disable timestamp, so the write is
         // observable
         skip(1 hours);
-        uint48 disableTimestamp = uint48(vm.getBlockTimestamp());
+        uint48 disableTimestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IEnabler.Disabled();
@@ -115,7 +115,7 @@ contract CCIPTokenPoolConfigTests_disable is CCIPTokenPoolConfigTest {
     //   [X] it emits Disabled and Transition
     // The second authorized caller class gets its own success case
     function test_whenCallerIsEmergency() public givenEnabled {
-        uint48 disableTimestamp = uint48(vm.getBlockTimestamp());
+        uint48 disableTimestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IEnabler.Disabled();
@@ -139,7 +139,7 @@ contract CCIPTokenPoolConfigTests_disable is CCIPTokenPoolConfigTest {
     function test_whenDataIsNotEmpty(bytes calldata data_) public givenEnabled {
         vm.assume(data_.length > 0);
 
-        uint48 disableTimestamp = uint48(vm.getBlockTimestamp());
+        uint48 disableTimestamp = _blockTimestamp();
 
         vm.expectEmit(true, true, true, true, address(config));
         emit IEnablerV2.Transition(admin, false, data_, disableTimestamp);

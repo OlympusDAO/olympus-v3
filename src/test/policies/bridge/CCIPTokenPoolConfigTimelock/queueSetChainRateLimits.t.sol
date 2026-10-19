@@ -13,6 +13,9 @@ import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
 
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
+
 contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
     CCIPTokenPoolConfigTimelockTest
 {
@@ -132,7 +135,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -144,7 +147,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -178,7 +181,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         ICCIPRateLimiter.Config memory outbound = _canonicalOutboundConfig();
         ICCIPRateLimiter.Config memory inbound = _canonicalInboundConfig();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
     }
@@ -366,7 +369,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         bytes32[] memory expectedHashes = new bytes32[](1);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
         // The hash records the state at queue time: the live default configurations, not the
-        // canonical values the action would write
+        // canonical values the action would write, followed by the remote token of the route
         assertEq(
             expectedHashes[0],
             keccak256(
@@ -378,7 +381,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
                     DEFAULT_OUTBOUND_RATE,
                     true,
                     DEFAULT_INBOUND_CAPACITY,
-                    DEFAULT_INBOUND_RATE
+                    DEFAULT_INBOUND_RATE,
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded hash should carry the live default bucket configurations"
@@ -387,7 +391,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(
             abi.encode(
@@ -471,20 +475,31 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         );
     }
 
-    // when both configurations are the minimal enabled shape {true, 2, 1}
-    //   [X] it queues successfully
-    // The queue path can carry containment-equivalent values
-    function test_whenRateLimitConfigsAreMinimal() public givenEnabled givenChainAdded {
+    // when both configurations are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] the rate limits key stays free
+    // The queue path cannot carry the disabled rate limiter configuration: containment is
+    // immediate and one way, never a delayed action
+    function test_whenRateLimitConfigsAreContainmentShape_reverts()
+        public
+        givenEnabled
+        givenChainAdded
+    {
         ICCIPRateLimiter.Config memory outbound = _containmentConfig();
         ICCIPRateLimiter.Config memory inbound = _containmentConfig();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
         vm.prank(bridgeAdmin);
-        uint64 actionId = timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
+        timelock.queueSetChainRateLimits(CHAIN_SELECTOR_A, outbound, inbound);
 
         assertEq(
             timelock.pendingActionId(_rateLimitsKey(CHAIN_SELECTOR_A)),
-            actionId,
-            "the rate limits key should belong to the minimal-config action"
+            0,
+            "the rate limits key should stay free"
         );
     }
 
@@ -494,7 +509,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
     // containment shape
     function test_givenRouteIsContained() public givenEnabled givenChainAdded givenRouteContained {
         bytes32 containedRateLimitsHash = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
-        // The containment write is {true, 2, 1} on both buckets
+        // The containment write is {true, 2, 1} on both buckets; the remote token is unchanged
         assertEq(
             containedRateLimitsHash,
             keccak256(
@@ -506,7 +521,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
                     uint128(1),
                     true,
                     uint128(2),
-                    uint128(1)
+                    uint128(1),
+                    REMOTE_TOKEN
                 )
             ),
             "the recorded rate limits hash should carry the containment shape"
@@ -552,3 +568,5 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetChainRateLimits is
         );
     }
 }
+
+// forge-lint: disable-end(unused-return)

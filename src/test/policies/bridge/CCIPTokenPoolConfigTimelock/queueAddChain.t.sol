@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPRateLimiter} from "src/external/bridge/ICCIPRateLimiter.sol";
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
@@ -12,6 +15,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
+
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
 
 contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTimelockTest {
     // ========== SHARED QUEUE GATE LADDER ========== //
@@ -115,13 +121,13 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         timelock.queueAddChain(update);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts() public givenEnabled givenOperatorRotated {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddChain(update);
     }
@@ -149,7 +155,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.outboundRateLimiterConfig = _disabledConfig();
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueAddChain(update);
     }
@@ -387,8 +393,9 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
 
         // For an absent route every pool getter answers its default, so the recomputed live
         // hashes reduce to the documented absent-route preimages:
-        // - rate limits: both buckets disabled with zero capacity and rate;
-        // - remote pools: zero count and a zero XOR aggregate;
+        // - rate limits: both buckets disabled with zero capacity and rate, and an empty
+        //   remote token;
+        // - remote pools: zero count, a zero XOR aggregate and an empty remote token;
         // - route identity: unsupported chain and an empty remote token.
         bytes32[] memory expectedHashes = new bytes32[](3);
         expectedHashes[0] = _expectedRateLimitsHash(CHAIN_SELECTOR_A);
@@ -405,7 +412,8 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
                     uint128(0),
                     false,
                     uint128(0),
-                    uint128(0)
+                    uint128(0),
+                    bytes("")
                 )
             ),
             "the live rate limits hash should reduce to the absent-route preimage"
@@ -413,7 +421,13 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         assertEq(
             expectedHashes[1],
             keccak256(
-                abi.encode(timelock.REMOTE_POOLS_DOMAIN(), CHAIN_SELECTOR_A, uint256(0), bytes32(0))
+                abi.encode(
+                    timelock.REMOTE_POOLS_DOMAIN(),
+                    CHAIN_SELECTOR_A,
+                    uint256(0),
+                    bytes32(0),
+                    bytes("")
+                )
             ),
             "the live remote pools hash should reduce to the absent-route preimage"
         );
@@ -428,7 +442,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(abi.encode(_singleActionBatch(_addChainBatchAction(update))));
 
@@ -508,18 +522,43 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "boundary queue");
     }
 
-    // when both configurations are the minimal enabled shape {true, 2, 1}
-    //   [X] it queues successfully
-    // The containment shape is a legal addChain configuration (rate 1 below capacity 2)
-    function test_whenRateLimitConfigsAreMinimal() public givenEnabled {
+    // when both configurations are the containment shape {true, 2, 1}
+    //   [X] it reverts with CCIPTokenPoolConfig_RateLimiterReserved
+    //   [X] no key is reserved
+    // The config's validation mirror rejects the disabled rate limiter configuration, which
+    // only the containment functions write
+    function test_whenRateLimitConfigsAreContainmentShape_reverts() public givenEnabled {
         ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(CHAIN_SELECTOR_A);
         update.outboundRateLimiterConfig = _containmentConfig();
         update.inboundRateLimiterConfig = _containmentConfig();
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
         vm.prank(bridgeAdmin);
-        uint64 actionId = timelock.queueAddChain(update);
+        timelock.queueAddChain(update);
 
-        _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "minimal-config queue");
+        _assertRouteKeysFree(CHAIN_SELECTOR_A, "rejected containment-shape queue");
+    }
+
+    // when the selector is zero
+    //   [X] it reverts with CCIPTokenPoolConfig_ChainSelectorZero
+    //   [X] no key is reserved
+    // The config's validation mirror rejects the zero selector before any reservation
+    function test_whenSelectorIsZero_reverts() public givenEnabled {
+        ICCIPTokenPoolAdmin.ChainUpdate memory update = _defaultChainUpdate(0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_ChainSelectorZero.selector
+            )
+        );
+        vm.prank(bridgeAdmin);
+        timelock.queueAddChain(update);
+
+        _assertRouteKeysFree(0, "rejected zero-selector queue");
     }
 
     // when the selector is the uint64 maximum
@@ -544,3 +583,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueAddChain is CCIPTokenPoolConfigTi
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_B, secondActionId, "second route");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

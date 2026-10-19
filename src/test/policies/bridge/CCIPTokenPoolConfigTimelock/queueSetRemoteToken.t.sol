@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 // Interfaces
 import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
 import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
@@ -11,6 +14,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 import {BRIDGE_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 import {CCIPTokenPoolConfigTimelockTest} from "./CCIPTokenPoolConfigTimelockTest.sol";
+
+// Reverting queue calls return nothing, and a test reads only the returned values it asserts
+// forge-lint: disable-start(unused-return)
 
 contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolConfigTimelockTest {
     // ========== SHARED QUEUE GATE LADDER ========== //
@@ -120,7 +126,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
     }
 
-    // given the config operator has been rotated to another account
+    // given the config operator has been rotated to another timelock
     //   [X] it reverts with CCIPTokenPoolConfigTimelock_NotConfigOperator carrying the new
     //       operator
     function test_givenOperatorRotated_reverts()
@@ -131,7 +137,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
     {
         bytes memory remoteToken = REMOTE_TOKEN_B;
 
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, remoteToken);
     }
@@ -162,7 +168,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         givenChainAdded
         givenOperatorRotated
     {
-        _expectRevertNotConfigOperator(thirdParty);
+        _expectRevertNotConfigOperator(address(otherTimelock));
         vm.prank(bridgeAdmin);
         timelock.queueSetRemoteToken(CHAIN_SELECTOR_A, "");
     }
@@ -350,7 +356,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         uint64 expectedActionId = timelock.nextActionId();
         // executableAt = now + 1 days (the delay); expiresAt = executableAt + 3 days (the
         // execution window)
-        uint48 expectedExecutableAt = uint48(vm.getBlockTimestamp()) + TIMELOCK_DELAY;
+        uint48 expectedExecutableAt = _blockTimestamp() + TIMELOCK_DELAY;
         uint48 expectedExpiresAt = expectedExecutableAt + 3 days;
         bytes32 batchHash = keccak256(
             abi.encode(
@@ -471,3 +477,7 @@ contract CCIPTokenPoolConfigTimelockTests_queueSetRemoteToken is CCIPTokenPoolCo
         _assertRouteKeysHeldBy(CHAIN_SELECTOR_A, actionId, "contained-route token change");
     }
 }
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)

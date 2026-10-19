@@ -140,6 +140,10 @@ of it are in scope.
 ### Deployment and Configuration
 
 - [CCIPTokenPoolConfigProposal](../../src/proposals/CCIPTokenPoolConfigProposal.sol)
+- [CCIPTokenPoolConfigProposalChecker](../../src/proposals/CCIPTokenPoolConfigProposalChecker.sol)
+    and its [interface](../../src/proposals/interfaces/ICCIPTokenPoolConfigProposalChecker.sol):
+    the read-only contract the proposal calls as its first action, which asserts the handover
+    preconditions and the pool backing at execution
 - [DeployV3](../../src/scripts/deploy/DeployV3.s.sol)
 - [CCIPTokenPoolConfigBatch](../../src/scripts/ops/batches/CCIPTokenPoolConfigBatch.sol)
 - [CCIPNonEthereumSetupBatch](../../src/scripts/ops/batches/CCIPNonEthereumSetupBatch.sol)
@@ -230,7 +234,8 @@ pool-wide domain. One unresolved action may own a domain at a time.
 
 `emergency`, `admin`, `bridge_admin` or `bridge_rate_limiter` can set both buckets of one or every
 route to an enabled capacity of two and a refill rate of one, even while the config policy is
-disabled. This blocks transfers of any real OHM amount. Restoring or raising capacity needs
+disabled. This blocks transfers of any real OHM amount from a source pool that encodes nine
+decimals, which every pool in scope does. Restoring or raising capacity needs
 `setChainRateLimits`, which only the config operator, `admin` or `bridge_rate_limiter` may call, so
 `emergency` and `bridge_admin` cannot lift containment without the timelock delay or further
 authority.
@@ -247,14 +252,21 @@ deploys and activates the config policies on five chains, establishes roles and 
 the EVM routes, funds the Ethereum lock/release pool, enables and registers the non-Ethereum pools,
 and reconciles the optional periphery.
 
-The mainnet OCG proposal carries at most twelve actions: eight conditional handover steps and one
-`addChain` per new EVM route. It fails closed unless its deployment bindings, Solana route, exact
-set of four missing EVM routes, lock/release backing and per-lane delivery budgets match the
-desired state. On each burn/mint chain, setup runs during the voting window but leaves the pool
-disabled and unregistered. Finalization enables the pool and then registers it immediately after
-the mainnet proposal executes. This ordering keeps a failed vote recoverable, at the cost of a
-short post-execution window in which messages to a not-yet-finalized destination require
-permissionless manual execution.
+The mainnet OCG proposal carries at most thirteen actions: a call of the read-only
+`CCIPTokenPoolConfigProposalChecker`, eight conditional handover steps and one `addChain` per new
+EVM route. It fails closed at build time unless its deployment bindings, Solana route, exact set
+of four missing EVM routes, lock/release backing and per-lane delivery budgets match the desired
+state. The checker call, the first action, carries which handover steps the build included and
+asserts at execution the precondition of each included step, the end state of each omitted one,
+the absence of the four routes and the minimum backing (the configured `minimumPoolBacking`, a
+static number carried in the calldata and compared with the raw pool balance), so a precondition
+the DAO Multisig invalidated during the voting period reverts the proposal with a named error
+before any handover step runs; the pool exposes no read of its pending owner, so a repointed
+pending owner reverts at the acceptance step instead. On each burn/mint chain, setup runs during
+the voting window but leaves the pool disabled and unregistered. Finalization enables the pool and
+then registers it immediately after the mainnet proposal executes. This ordering keeps a failed
+vote recoverable, at the cost of a short post-execution window in which messages to a
+not-yet-finalized destination require permissionless manual execution.
 
 ## Documentation
 
@@ -307,8 +319,10 @@ permissionless manual execution.
 - **Rollout has a short destination gap.** After Ethereum opens a route and before a destination
     pool is finalized, messages may enter CCIP failure state and require manual execution.
 - **Ethereum solvency depends on pool backing.** The lock/release pool bounds releases by its OHM
-    balance. The rollout scripts assume the configured backing target covers supply previously minted
-    on the non-canonical chains.
+    balance. The rollout scripts assume the configured `minimumPoolBacking` covers the OHM
+    previously minted on the four burn/mint EVM chains; the OHM locked for Solana shares the pool
+    balance and is compared with it off chain only (`CCIPTokenPoolBatch.fundPool` at build time,
+    `shell/calc_bridged_supply.sh`), so the free liquidity of the pool reaches the key.
 - **Burn/mint delivery needs a raised Chainlink fee budget.** Each lane into a burn/mint pool needs
     an enabled OHM fee entry with `destGasOverhead >= 175000`; the rollout scripts refuse to proceed
     without it.
