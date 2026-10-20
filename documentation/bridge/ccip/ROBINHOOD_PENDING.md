@@ -25,9 +25,10 @@ With the `robinhood` routes declared on mainnet, Arbitrum and Base, every run th
 ## Open questions
 
 - **Emergency MS.** The address of the other chains, `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55`, has no code on Robinhood Chain (read 2026-10-20). Either it is deployed there at the same address or another Safe is; the chosen address goes into `olympus.multisig.emergency` before the setup batch, which grants it `emergency`.
-- **`safe-utils` gap.** The pinned `safe-utils` 0.0.17 maps neither chain ID 4663 nor 80094 (Berachain), so `getProposeTransactionsTargetAndData` reverts with `MultiSendCallOnlyNotFound` before a batch is signed: every batch built on `BatchScriptV2` for a multisig owner on Robinhood Chain is blocked until the dependency is bumped (upstream `main` maps both), through `safeBatchV2.sh` and through the direct `forge script` entry points alike, `acceptAdminRole` from the DAO MS in step 1 included.
 
 ## Rollout steps for Robinhood Chain (`RUNBOOK.md`, "Non-Ethereum rollout")
+
+Every DAO MS batch below is built on `BatchScriptV2` with `safe-utils` 0.0.23, which maps chain ID 4663 to the Safe transaction service `api.safe.global/tx-service/robinhood` and to `MultiSendCallOnly` 1.4.1 `0x9641d764fc13c8B624c04430C7356C1C7C8102e2`, so the batches propose on Robinhood Chain as on the other chains.
 
 0. The fee budget entries above.
 1. Registry: `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS, once Chainlink has proposed it.

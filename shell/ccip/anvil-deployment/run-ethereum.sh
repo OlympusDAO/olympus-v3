@@ -3,7 +3,8 @@
 # mainnet Anvil fork.
 #
 # Flow:
-#   1. Inject placeholder pools/peripheries for the five burn/mint chains, then
+#   1. Inject placeholder pools/peripheries for the burn/mint chains whose
+#      contracts are not recorded in env.json yet (Robinhood Chain), then
 #      deploy CCIPTokenPoolConfig, CCIPTokenPoolConfigTimelock and
 #      CCIPTokenPoolConfigProposalChecker (ccip_config_mainnet.json) and sync
 #      their addresses into the OCG proposal registry.

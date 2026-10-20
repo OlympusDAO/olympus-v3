@@ -27,11 +27,10 @@ import {CCIPMigrationForkTestBase} from "./CCIPMigrationForkTestBase.sol";
 ///         past this (for instance the bootstrap has been executed live), the requires fail
 ///         with an explicit message and the pin or the procedure needs updating.
 ///
-///         The counterpart burn/mint pools are not deployed yet (their env.json slots are
-///         zero), so the remote pool half of each new route uses a labelled placeholder
-///         address, and so does the remote token of the Robinhood Chain route, whose OHM is
-///         not deployed yet either: no step of the migration reads or validates those values,
-///         and the real rollout fills them in when the counterpart chain deploys.
+///         The remote pool half of each new route is a labelled placeholder address rather
+///         than the counterpart pool recorded in env.json, and so is the remote token of the
+///         Robinhood Chain route, whose OHM is not deployed yet: no step of the migration
+///         reads or validates those values.
 abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
     // ========== FORK PIN ========== //
 
