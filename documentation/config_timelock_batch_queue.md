@@ -227,8 +227,8 @@ gates. Burner Loans and Revenue Distributor config timelocks require themselves 
 Kernel-active; target state and operator selection do not gate cancellation. Restore the timelock
 before cancelling if it is disabled or inactive.
 
-`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` works while the timelock is
-disabled, so an authorized caller releases the keys without first restoring the timelock. See
+`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` has no enabled or Kernel-active
+gate, so an authorized caller releases the keys without first restoring the timelock. See
 [CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
 
 ## Implement a subclass

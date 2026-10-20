@@ -10,9 +10,10 @@
 #   2. Phase B (DAO MS): CCIPTokenPoolConfigBatch.prepareHandover, then a second
 #      run that must propose nothing; then CCIPTokenPoolBatch.fundPool with the
 #      amount it requires (the env.json minimum backing minus the unclaimable
-#      balance of the pool) through a generated args file, with an empty re-run
-#      that takes the free-liquidity early return on the Solana mint supply the
-#      batch reads at build time.
+#      balance of the pool) through a generated args file. A pool that is short
+#      gets the transfer and an empty re-run that takes the free-liquidity early
+#      return on the Solana mint supply the batch reads at build time. A pool
+#      that is already funded takes that early return on the first run.
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
 #      the four mainnet lanes are mocked to 175k and readiness turns GREEN.
@@ -145,13 +146,14 @@ dao_balance="$(cast call "$ohm" 'balanceOf(address)(uint256)' "$dao" --rpc-url "
 # The amount is the key minus the unclaimable balance of the pool, the one value
 # fundPool accepts (shell/calc_bridged_supply.sh prints it). The batch reads the
 # Solana mint supply at build time, on the fork too (the solana alias of
-# foundry.toml), and compares the free liquidity (the pool balance minus that
-# supply) with the key, so the harness leaves that decision to the batch. A pool
-# that is already funded (--use-deployed after the real funding) takes the
-# free-liquidity early return on the first run. The fork balance is frozen at
-# the fork block while the supply is live: a lock minted on Solana after that
-# block leaves the fork's free liquidity short by its amount and fails the
-# re-run assertion; start the run again then.
+# foundry.toml). The batch compares the free liquidity (the pool balance minus
+# that supply) with the key. The harness leaves that decision to the batch. A
+# pool that is already funded (after the real funding) takes the free-liquidity
+# early return on the first run. The fork balance is frozen at the fork block
+# while the supply is live. A lock minted on Solana after that block leaves the
+# fork's free liquidity short by its amount and fails the re-run assertion;
+# start the run again then.
+FREE_LIQUIDITY_COVERED="The free liquidity of the pool already covers the minimum backing"
 fund_amount="$((min_backing - unclaimable))"
 log "key=$min_backing unclaimable=$unclaimable pool=$pool_balance dao=$dao_balance amount=$fund_amount"
 if [ "$dao_balance" -lt "$fund_amount" ]; then
@@ -167,14 +169,14 @@ fi
 jq -n --arg amount "$fund_amount" '{functions: [{name: "fundPool", args: {amount: $amount}}]}' > "$FUND_ARGS"
 log "fundPool args: $(jq -c '.functions[0].args' "$FUND_ARGS")"
 run_batch CCIPTokenPoolBatch fundPool dao "$FUND_ARGS"
-if grep -qF "The free liquidity of the pool already covers the minimum backing" "$LAST_BATCH_LOG"; then
+if grep -qF -- "$FREE_LIQUIDITY_COVERED" "$LAST_BATCH_LOG"; then
     expect_empty_batch "$LAST_BATCH_LOG" "fundPool on an already funded pool"
     log "the free liquidity of the pool already covers the key on this fork; no funding needed"
 else
     expect_non_empty_batch "$LAST_BATCH_LOG" "fundPool"
     run_batch CCIPTokenPoolBatch fundPool dao "$FUND_ARGS" "-rerun"
     expect_empty_batch "$LAST_BATCH_LOG" "fundPool re-run"
-    expect_log_line "$LAST_BATCH_LOG" "The free liquidity of the pool already covers the minimum backing" "fundPool re-run took the free-liquidity early return"
+    expect_log_line "$LAST_BATCH_LOG" "$FREE_LIQUIDITY_COVERED" "fundPool re-run took the free-liquidity early return"
 fi
 rm -f "$FUND_ARGS"
 echo "pool OHM balance = $(cast call "$ohm" 'balanceOf(address)(uint256)' "$pool" --rpc-url "$RPC")  (key=$min_backing)"
