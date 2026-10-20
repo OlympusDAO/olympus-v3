@@ -164,7 +164,7 @@ chainlink-local = { version = "0.3.1", git = "https://github.com/smartcontractki
 # The CCIP 2.0.0 contracts that chainlink-local 0.3.1 compiles against (tag contracts-ccip-v2.0.0)
 chainlink-contracts-ccip = { version = "2.0.0", git = "https://github.com/smartcontractkit/chainlink-ccip.git", rev = "c2c125c27f056db2e98d21501922b6eff5750f36" }
 forge-std = "1.16.2"
-safe-utils = { version = "0.0.17", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "c057d167139dc4878f10ab7133a8c069fa6b1601" }
+safe-utils = { version = "0.0.23", git = "https://github.com/Recon-Fuzz/safe-utils.git", rev = "8884959c4416d5f22c9057c51875e20d81555081" }
 base58-solidity = { version = "1.0.3", git = "https://github.com/storyicon/base58-solidity.git", rev = "2b56a9a42456ba18e79e4a8a0b541c0d7fb61b6f" }
 clones-with-immutable-args = { version = "1.1.2", git = "https://github.com/wighawag/clones-with-immutable-args.git", rev = "196f1ecc6485c1bf2d41677fa01d3df4927ff9ce" }
 # Used at CrossChainBridge deploy; EVM bytecode identical to 1.1.0, only metadata hash differs
