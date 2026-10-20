@@ -19,7 +19,7 @@ Each run backs up and, on exit, restores `src/scripts/env.json` and `src/proposa
 
 Steps:
 
-1. Inject placeholder pools and peripheries for the five burn/mint chains into `env.json` (the proposal encodes them into its route actions; the mainnet fork cannot see the real ones). Start an Anvil fork of mainnet; fund the deployer and the timelock.
+1. Inject placeholder pools and peripheries for the five burn/mint chains into `env.json` (the proposal encodes them into its route actions; the mainnet fork cannot see the real ones). The Robinhood Chain OHM is not injected: until it is recorded in `env.json`, the route readers fail closed on its zero placeholder, so this run and `run-l2.sh` for Arbitrum, Base and Robinhood stop at the readiness step (`documentation/bridge/ccip/ROBINHOOD_PENDING.md`). Start an Anvil fork of mainnet; fund the deployer and the timelock.
 2. Deploy `ccip_config_mainnet.json` (`CCIPTokenPoolConfig`, then `CCIPTokenPoolConfigTimelock`, then `CCIPTokenPoolConfigProposalChecker`, the read-only contract the proposal calls as its first action) and print the binding (`config.pool()`, `timelock.config()`, delay, grace periods, the checker's config, timelock and pool).
 3. Sync the three deployed addresses into `addresses.json`.
 4. Phase B (DAO MS as Kernel executor, pool owner and OHM administrator): `CCIPTokenPoolConfigBatch.prepareHandover`, then a second run that must propose nothing. Then `CCIPTokenPoolBatch.fundPool` transfers the amount it requires, `olympus.config.CCIP.minimumPoolBacking` minus `olympus.config.CCIP.poolUnclaimableBalance`, through an args file the harness generates under `deployments/` and removes afterwards (the figure `shell/calc_bridged_supply.sh` prints; the DAO MS is minted to from the impersonated MINTR module first if its balance were ever short). The batch reads the Solana mint supply at build time through the `solana` alias of `foundry.toml`, on the fork too, so the step needs the network beyond the fork; the empty re-run on the funded pool must take the free-liquidity early return (the balance minus that supply at or above the key), which the harness asserts in the log (the fork balance is frozen at the fork block while the supply is live, so a lock minted on Solana after that block fails the assertion; start the run again then).
@@ -40,7 +40,7 @@ Every batch log is asserted: steps that must change state must report `Batch exe
 
 Steps:
 
-1. Inject placeholder pools and peripheries for the other burn/mint chains; fork the L2.
+1. Inject placeholder pools and peripheries for the other burn/mint chains; fork the L2. A chain that declares a `robinhood` route (Arbitrum, Base) and Robinhood Chain itself wait for the Robinhood OHM, as above.
 2. Registry handover with the real entry points: `CCIPTokenPoolBatch.transferTokenPoolAdminRoleToDaoMS` from the impersonated Olympus deployer EOA, `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS.
 3. Deploy `ccip_full_not_mainnet.json` (pool, periphery, config policy, timelock) and print the binding.
 4. Ownership handover from the deployer: `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` and `CCIPBridgeBatch.transferOwnership`.
