@@ -264,25 +264,6 @@ run_batch_expect_fail() {
   log "OK: ${contract}.${fn} failed with the expected message"
 }
 
-# run_script_fn <ContractName> <sig> <senderAddr> <logName> [args...]
-# Runs a non-standard batch entry point (custom signature) from an impersonated
-# sender, e.g. the registry admin handover functions of CCIPTokenPoolBatch.
-run_script_fn() {
-  local contract="$1" sig="$2" sender="$3" logname="$4"; shift 4
-  fund "$sender"
-  LAST_BATCH_LOG="$LOG_DIR/script-${logname}.log"
-  step "Script ${contract} --sig '${sig}' (sender $sender)"
-  (
-    cd "$REPO_ROOT"
-    set -o pipefail
-    FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
-      "src/scripts/ops/batches/${contract}.sol:${contract}" \
-      --sig "$sig" "$@" \
-      --rpc-url "$RPC" --sender "$sender" --unlocked --slow $TX_FLAGS -vvv --broadcast \
-      2>&1 | tee "$LAST_BATCH_LOG"
-  ) || die "script ${contract} ${sig} failed; see $LAST_BATCH_LOG"
-}
-
 # expect_empty_batch <log> <label>: the last batch must have proposed nothing.
 expect_empty_batch() {
   if grep -q "No batch targets to execute" "$1"; then
