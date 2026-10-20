@@ -724,6 +724,9 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
             );
         } catch Error(string memory reason) {
             _check(false, string.concat(lane, ": ", reason));
+        } catch (bytes memory data) {
+            // A custom error or an empty revert fails the lane without stopping the report
+            _check(false, string.concat(lane, ": reverted with data ", vm.toString(data)));
         }
     }
 

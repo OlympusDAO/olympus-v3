@@ -227,6 +227,10 @@ gates. Burner Loans and Revenue Distributor config timelocks require themselves 
 Kernel-active; target state and operator selection do not gate cancellation. Restore the timelock
 before cancelling if it is disabled or inactive.
 
+`CCIPTokenPoolConfigTimelock` is the exception: `cancelQueuedAction` works while the timelock is
+disabled, so an authorized caller releases the keys without first restoring the timelock. See
+[CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for its cancellation authority.
+
 ## Implement a subclass
 
 ### Start with the base contract
@@ -432,8 +436,8 @@ cannot override those shared bookkeeping paths. Product customization uses only 
 section and the remaining `TimelockBatchQueue` lifecycle hooks.
 
 Product-specific keys and hashes belong with each product's configuration documentation. See
-[Burner Loans access control](burner_loans_access_control.md) for its timelock authority and
-[Revenue Distributor access control](revenue_distributor_access_control.md) for distribution routes.
+[CCIP access control](bridge/ccip/ACCESS_CONTROL.md) for the authority of the CCIP token pool
+config timelock.
 
 ## Observability
 
