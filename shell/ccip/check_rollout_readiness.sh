@@ -2,12 +2,12 @@
 # Aggregated CCIP rollout readiness report: the submission gate for the
 # CCIP Bridge Activation proposal.
 #
-# Runs CCIPNonEthereumSetupBatch.checkReadiness (read-only) on mainnet and the four
+# Runs CCIPNonEthereumSetupBatch.checkReadiness (read-only) on mainnet and the five
 # burn/mint chains, and aggregates a green/red verdict per chain and per outgoing
 # lane. The proposal must not be submitted until every chain reports GREEN.
 #
 # Usage:
-#   ./shell/ccip/check_rollout_readiness.sh [--chains "mainnet arbitrum optimism base berachain"] [--env <env-file>]
+#   ./shell/ccip/check_rollout_readiness.sh [--chains "mainnet arbitrum optimism base berachain robinhood"] [--env <env-file>]
 #
 # RPC resolution per chain: the READINESS_RPC_<CHAIN> environment variable (uppercase)
 # wins; otherwise the chain uses its foundry.toml RPC alias, which needs
@@ -23,7 +23,7 @@ set -uo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CHAINS="mainnet arbitrum optimism base berachain"
+CHAINS="mainnet arbitrum optimism base berachain robinhood"
 ENV_FILE=".env"
 while [ $# -gt 0 ]; do
     case "$1" in

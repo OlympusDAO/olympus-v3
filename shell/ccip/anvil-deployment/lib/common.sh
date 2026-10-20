@@ -41,12 +41,14 @@ declare -A PLACEHOLDER_POOL=(
   [optimism]="0x0000000000000000000000000000000000cc1ba2"
   [base]="0x0000000000000000000000000000000000cc1ba3"
   [berachain]="0x0000000000000000000000000000000000cc1ba4"
+  [robinhood]="0x0000000000000000000000000000000000cc1ba5"
 )
 declare -A PLACEHOLDER_PERIPHERY=(
   [arbitrum]="0x0000000000000000000000000000000000cc1bf1"
   [optimism]="0x0000000000000000000000000000000000cc1bf2"
   [base]="0x0000000000000000000000000000000000cc1bf3"
   [berachain]="0x0000000000000000000000000000000000cc1bf4"
+  [robinhood]="0x0000000000000000000000000000000000cc1bf5"
 )
 
 # 10000 ETH in wei (hex), funded onto every account that pays gas on the fork.
@@ -375,7 +377,7 @@ cast_send_impersonated() {
 inject_placeholder_contracts() {
   local own="$1" ch existing
   step "Inject placeholder pools and peripheries for the other burn/mint chains"
-  for ch in arbitrum optimism base berachain; do
+  for ch in arbitrum optimism base berachain robinhood; do
     [ "$ch" = "$own" ] && continue
     existing="$(env_addr "$ch" "olympus.policies.CCIPBurnMintTokenPool")"
     if [ -n "$existing" ] && [ "$existing" != "0x0000000000000000000000000000000000000000" ]; then

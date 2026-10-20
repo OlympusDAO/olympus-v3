@@ -3,7 +3,7 @@
 # mainnet Anvil fork.
 #
 # Flow:
-#   1. Inject placeholder pools/peripheries for the four burn/mint chains, then
+#   1. Inject placeholder pools/peripheries for the five burn/mint chains, then
 #      deploy CCIPTokenPoolConfig, CCIPTokenPoolConfigTimelock and
 #      CCIPTokenPoolConfigProposalChecker (ccip_config_mainnet.json) and sync
 #      their addresses into the OCG proposal registry.
@@ -15,17 +15,17 @@
 #      batch reads at build time.
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
-#      the four mainnet lanes are mocked to 175k and readiness turns GREEN.
+#      the five mainnet lanes are mocked to 175k and readiness turns GREEN.
 #   4. Phase C (OCG): executeOnAnvilFork.sh replays CCIPTokenPoolConfigProposal
-#      (up to 13 actions: the read-only checker call first, then the handover
-#      steps the live state still needs and the four addChain route actions)
-#      from the timelock; the four routes must exist on the pool afterwards.
+#      (up to 14 actions: the read-only checker call first, then the handover
+#      steps the live state still needs and the five addChain route actions)
+#      from the timelock; the five routes must exist on the pool afterwards.
 #   5. Post-OCG (DAO MS): CCIPRouteReconcileBatch.reconcileRoutes must propose
 #      nothing on the converged routes; the timelock path is then exercised by
 #      changing the desired outbound rate in env.json, reconciling (queues),
 #      warping past the delay, executing (by id through the example args file
 #      on a fresh timelock, where the queued action is action 1), and
-#      reconciling again (empty). The periphery reconciler adds the four EVM
+#      reconciling again (empty). The periphery reconciler adds the five EVM
 #      trusted remotes (nothing for solana) and proposes nothing on a re-run.
 #   6. Containment: CCIPTokenPoolConfigBatch.disableChain from the DAO MS as
 #      bridge_admin, an empty re-run through the Emergency MS variant, a
@@ -88,7 +88,7 @@ trap cleanup EXIT
 TIMELOCK="$(env_addr "$CHAIN" olympus.governance.Timelock)"
 require_addr "$TIMELOCK" "$CHAIN olympus.governance.Timelock"
 
-# The proposal resolves the remote pools of its four addChain actions from
+# The proposal resolves the remote pools of its five addChain actions from
 # env.json; the burn/mint chains are not deployed on this single-chain fork.
 inject_placeholder_contracts "$CHAIN"
 
@@ -193,8 +193,8 @@ grep -q "OHM delivery gas budget of the lane" "$LOG_DIR/proposal-no-budget.log" 
     || die "the proposal did not fail on the fee budgets; see $LOG_DIR/proposal-no-budget.log"
 log "OK: the proposal build fails on the fee budgets before the mock"
 
-step "Mock the OHM fee entries of the four mainnet lanes"
-for peer in arbitrum optimism base berachain; do
+step "Mock the OHM fee entries of the five mainnet lanes"
+for peer in arbitrum optimism base berachain robinhood; do
     mock_ohm_fee_entry mainnet "$peer"
 done
 
@@ -211,8 +211,8 @@ RPC_URL="$RPC" src/scripts/proposals/executeOnAnvilFork.sh \
     2>&1 | tee "$LOG_DIR/proposal.log"
 grep -q "Proposal executed successfully" "$LOG_DIR/proposal.log" || die "proposal replay failed; see $LOG_DIR/proposal.log"
 
-step "The four routes must exist on the pool after the proposal"
-for peer in arbitrum optimism base berachain; do
+step "The five routes must exist on the pool after the proposal"
+for peer in arbitrum optimism base berachain robinhood; do
     peer_sel="$(jq -r --arg c "$peer" '.current[$c].external.ccip.ChainSelector' "$REPO_ROOT/$ENV_JSON")"
     supported="$(cast call "$pool" 'isSupportedChain(uint64)(bool)' "$peer_sel" --rpc-url "$RPC")"
     [ "$supported" = "true" ] || die "the $peer route is missing on the pool after the proposal"
@@ -221,9 +221,9 @@ done
 
 step "Post-OCG: reconcileRoutes on the converged routes (DAO MS)"
 run_batch CCIPRouteReconcileBatch reconcileRoutes dao "" "-converged"
-expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (converged: the proposal added the four routes)"
+expect_empty_batch "$LAST_BATCH_LOG" "reconcileRoutes (converged: the proposal added the five routes)"
 
-step "Periphery reconcile (DAO MS): four EVM trusted remotes, nothing for solana"
+step "Periphery reconcile (DAO MS): five EVM trusted remotes, nothing for solana"
 run_batch CCIPBridgeBatch reconcileTrustedRemotes dao
 expect_non_empty_batch "$LAST_BATCH_LOG" "reconcileTrustedRemotes"
 if grep -q "Added: setTrustedRemoteSVM\|Added: unsetTrustedRemoteSVM" "$LAST_BATCH_LOG"; then
