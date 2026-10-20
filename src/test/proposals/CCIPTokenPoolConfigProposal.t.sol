@@ -2586,7 +2586,19 @@ contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
     }
 
     /// @inheritdoc CCIPTokenPoolConfigProposal
+    /// @dev Patches through an external self-call so that the copies of the file the patch
+    ///      allocates live in that call's frame and are released on return. Under
+    ///      `isolate = true` the whole `run` of the proposal is one transaction whose frame
+    ///      reads the file about ten times, and the memory gas of a frame grows quadratically
+    ///      with everything it has ever allocated: patched in the caller's frame, the three
+    ///      copies of the 85 KB file per read exhaust the block gas limit before `_validate`
+    ///      finishes (`MemoryOOG`).
     function _readEnv() internal view virtual override returns (string memory env) {
+        return this.patchedEnv();
+    }
+
+    /// @notice The tracked file with the placeholders patched in, as `_readEnv` returns it.
+    function patchedEnv() external view returns (string memory env) {
         env = super._readEnv();
         if (PLACEHOLDER_POOL != address(0)) {
             env = _patch(
