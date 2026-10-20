@@ -93,7 +93,9 @@ import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolCon
 ///         - The burn/mint pools of those five chains are deployed and recorded in
 ///           `src/scripts/env.json` (`olympus.policies.CCIPBurnMintTokenPool`), since each route
 ///           resolves its accepted remote pool from there unless it declares an explicit
-///           `remotePools` override.
+///           `remotePools` override; so is the OHM of Robinhood Chain (`olympus.legacy.OHM`),
+///           the default remote token of its route, which the tracked file records as the zero
+///           address until it is deployed.
 ///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
 ///           outstanding on the burn/mint chains; `CCIPTokenPoolBatch.fundPool`).
 ///         - Every mainnet lane toward the five chains carries an enabled OHM fee entry with a
@@ -271,7 +273,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "## Justification\n",
                 "\n",
-                "OHM on Arbitrum, Optimism, Base and Berachain was issued by the LayerZero v1 bridge, which is closed to traffic. Robinhood Chain joins as a fifth burn/mint chain: it carries no OHM yet, and its supply is minted only by CCIP deliveries against OHM locked in the mainnet pool. CCIP already carries OHM between Ethereum and Solana through the mainnet lock/release pool; opening the five routes on that pool restores bridging to every supported chain through one infrastructure, with the pool funded with the OHM outstanding on the burn/mint chains so that it can release against tokens burned there.\n",
+                "OHM on Arbitrum, Optimism, Base and Berachain was issued by the LayerZero v1 bridge, which is closed to traffic. Robinhood Chain joins as a fifth burn/mint chain: it carries no OHM yet, and its supply is minted only by CCIP deliveries, from Ethereum against OHM locked in the mainnet pool or from Arbitrum and Base against OHM burned there. CCIP already carries OHM between Ethereum and Solana through the mainnet lock/release pool; opening the five routes on that pool restores bridging to every supported chain through one infrastructure, with the pool funded with the OHM outstanding on the burn/mint chains so that it can release against tokens burned there.\n",
                 "\n",
                 "To make the pool and its routes governable, the proposal also moves the pool and the OHM entry in the Chainlink TokenAdminRegistry, both held by the DAO MS today, under on-chain governance: the OCG timelock becomes the OHM administrator, the CCIPTokenPoolConfig policy becomes the owner of the pool, and the DAO MS keeps the `bridge_admin` role to queue route changes on the CCIPTokenPoolConfigTimelock. The complete allocation is listed under Authority Model below the proposal steps.\n",
                 "\n",
