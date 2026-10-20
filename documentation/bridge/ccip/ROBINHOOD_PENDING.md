@@ -17,6 +17,8 @@ The other values of the block are real: `external.ccip` (`Router 1.2.0` `0x06fC8
 
 With the `robinhood` routes declared on mainnet, Arbitrum and Base, every run that resolves them fails closed on the zero Robinhood OHM, pool or periphery, on those three chains as well as on Robinhood Chain: the readiness report, `CCIPNonEthereumSetupBatch.setup` and `finalize`, `CCIPRouteReconcileBatch.reconcileRoutes`, `CCIPBridgeBatch.reconcileTrustedRemotes` and the build of proposal 19. No check is softened to make a run pass; the three addresses are recorded first.
 
+Once the Robinhood Chain pool and OHM are recorded, the harness patch of `src/test/proposals/CCIPTokenPoolConfigProposal.t.sol` and its two "unrecorded" tests go, and the proposal suite reads the tracked file unchanged.
+
 ## Requests to Chainlink
 
 1. **OHM administrator.** Propose the local DAO MS as the OHM administrator in the Robinhood `TokenAdminRegistry` (`0x1912C3cF...`, owned by a Chainlink timelock with a 3-hour delay). The Robinhood OHM has neither `owner()` nor `getCCIPAdmin()`, so no self-service path of `RegistryModuleOwnerCustom` applies and only the registry owner proposes. Sent once the OHM and the DAO MS exist. The registry step of the rollout then reduces to `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS.
