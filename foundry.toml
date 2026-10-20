@@ -22,8 +22,7 @@ fs_permissions = [
 gas_limit = "18446744073709551615"
 # Run each top-level test call as a separate transaction so account and storage access costs match
 # production execution. Keeping this explicit also gives Forge 1.7 and 1.8 the same test semantics.
-# `forge script` honors the same key, so a simulated call is charged the way the broadcast
-# transaction is.
+# Multisig simulations override this below because their internal calls share one transaction.
 # The `deploy` profile also produces the gas snapshots, so needs isolation (inherited).
 isolate = true
 
@@ -74,6 +73,10 @@ script_execution_protection = false
 
 [profile.multisig]
 script_execution_protection = false
+# A Safe batch runs internal calls in one transaction paid for by its relayer. Isolation instead
+# treats each pranked call as a transaction from the Safe. Forge 1.8.1 can then charge OP Stack L1
+# data fees to the Safe and reject an unfunded Safe before the target contract executes.
+isolate = false
 
 # Used by `forge coverage`, which recompiles from scratch every run and keeps nothing in `out/`.
 [profile.coverage]
