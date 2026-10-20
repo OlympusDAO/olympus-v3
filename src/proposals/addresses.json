@@ -305,17 +305,17 @@
         "name": "olympus-lz-bridge-activator"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0x2CEA7B722dbd6b03f0E857d11e53ECB698cC2b4E",
         "chainId": 1,
         "name": "olympus-policy-ccip-token-pool-config"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0xF489F38BF8d98A5C10a030f8C16624f6764CD27A",
         "chainId": 1,
         "name": "olympus-policy-ccip-token-pool-config-timelock"
     },
     {
-        "addr": "0x0000000000000000000000000000000000000000",
+        "addr": "0x1b1FB8C6E0420C6595a016Dd8AD962176aa564c9",
         "chainId": 1,
         "name": "olympus-periphery-ccip-token-pool-config-proposal-checker"
     },
