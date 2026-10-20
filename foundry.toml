@@ -145,6 +145,8 @@ polygon = { endpoint = "https://polygon-mainnet.g.alchemy.com/v2/${ALCHEMY_API_K
 polygon-amoy = { endpoint = "https://polygon-amoy.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
 berachain = { endpoint = "https://berachain-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
 berachain-bepolia = { endpoint = "https://berachain-bepolia.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+robinhood = { endpoint = "https://robinhood-mainnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
+robinhood-testnet = { endpoint = "https://robinhood-testnet.g.alchemy.com/v2/${ALCHEMY_API_KEY}", retries = 3, retry_backoff = 10000, compute_units_per_second = 500 }
 # Solana is not an EVM chain, so forge cannot fork or call it through this alias; it serves the
 # HTTP reads of the tooling only (`vm.rpcUrl("solana")` in CCIPTokenPoolBatch.fundPool and the
 # default Solana endpoint of shell/calc_bridged_supply.sh, overridable with SOLANA_RPC_URL).
