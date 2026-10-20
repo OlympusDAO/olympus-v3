@@ -259,6 +259,10 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @dev    The batch owner must be the OHM administrator. On mainnet after the handover the
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
     function setPool(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+        // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
+        // burn/mint chains also deploy no OlympusHeart to validate against.
+        _skipHeartbeatValidation = true;
+
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
