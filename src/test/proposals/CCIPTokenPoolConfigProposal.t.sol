@@ -76,7 +76,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     ///         `admin`, the pool serves the Solana route only and carries no rate limit admin,
     ///         and the three ramp generations in scope are live (`OnRamp 2.0.0` toward Arbitrum
     ///         and Optimism, `OnRamp 1.6.0` toward Base, `EVM2EVMOnRamp 1.5.0` toward
-    ///         Berachain), so the fee stub exercises every dispatch branch of the reader.
+    ///         Berachain, and `OnRamp 2.0.0` toward Robinhood Chain), so the fee stub exercises
+    ///         every dispatch branch of the reader.
     uint256 public constant BLOCK = 25_903_191;
 
     /// @dev The OCG proposal id. Must match `CCIPTokenPoolConfigProposal.id()`.
@@ -85,13 +86,13 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     /// @dev The proposal name and the first line of its description.
     string internal constant _PROPOSAL_NAME = "CCIP Bridge Activation";
 
-    /// @dev The `env.json` names of the four burn/mint chains this proposal opens, in the remote
+    /// @dev The `env.json` names of the five burn/mint chains this proposal opens, in the remote
     ///      chain name order that `CCIPConfigLib.desiredRoutes` sorts into.
-    uint256 internal constant _NEW_ROUTE_COUNT = 4;
+    uint256 internal constant _NEW_ROUTE_COUNT = 5;
 
     /// @dev The largest action list the proposal can build: the checker call, the eight
-    ///      conditional handover actions and the four route actions.
-    uint256 internal constant _MAX_ACTION_COUNT = 13;
+    ///      conditional handover actions and the five route actions.
+    uint256 internal constant _MAX_ACTION_COUNT = 14;
 
     /// @dev The registry key of the checker in `src/proposals/addresses.json`.
     string internal constant _CHECKER_KEY =
@@ -160,8 +161,12 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     address internal proposer;
 
     /// @notice The stand-in for the counterpart burn/mint pools, which are not deployed yet. The
-    ///         four routes share it, since nothing requires their remote pools to differ.
+    ///         five routes share it, since nothing requires their remote pools to differ.
     address internal placeholderPool;
+
+    /// @notice The stand-in for the Robinhood Chain OHM, which is not deployed yet: the remote
+    ///         token of the Robinhood route, patched into the environment by the harness.
+    address internal placeholderRobinhoodOhm;
 
     // ========== DESIRED STATE (env.json) ========== //
 
@@ -183,7 +188,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         ICCIPRateLimiter.Config inbound;
     }
 
-    /// @notice The four routes the proposal opens, in remote chain name order.
+    /// @notice The five routes the proposal opens, in remote chain name order.
     RouteSpec[] internal newRoutes;
 
     /// @notice One expected proposal action.
@@ -206,7 +211,8 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         // ========== PROPOSAL SETUP ========== //
 
         placeholderPool = makeAddr("counterpartBurnMintPool");
-        proposal = new CCIPTokenPoolConfigProposalHarness(placeholderPool);
+        placeholderRobinhoodOhm = makeAddr("robinhoodOhm");
+        proposal = new CCIPTokenPoolConfigProposalHarness(placeholderPool, placeholderRobinhoodOhm);
         vm.label(address(proposal), "CCIPTokenPoolConfigProposalHarness");
 
         // Set to true once the proposal has been submitted on-chain, so that the framework
@@ -323,13 +329,19 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
         // ========== ROUTE SPECS AND THE PATCHED ENVIRONMENT ========== //
 
-        string[_NEW_ROUTE_COUNT] memory names = ["arbitrum", "base", "berachain", "optimism"];
+        string[_NEW_ROUTE_COUNT] memory names = [
+            "arbitrum",
+            "base",
+            "berachain",
+            "optimism",
+            "robinhood"
+        ];
         for (uint256 i = 0; i < names.length; ++i) {
             newRoutes.push(
                 RouteSpec({
                     name: names[i],
                     chainSelector: _envChainSelector(names[i]),
-                    remoteToken: abi.encode(_envAddress(names[i], "olympus.legacy.OHM")),
+                    remoteToken: abi.encode(_counterpartOhm(names[i])),
                     remotePool: abi.encode(placeholderPool),
                     outbound: _envRouteLimit(names[i], "outboundRateLimit"),
                     inbound: _envRouteLimit(names[i], "inboundRateLimit")
@@ -359,6 +371,16 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         string memory key_
     ) internal view returns (uint256 value) {
         return _env.readUint(string.concat("$.current.", chain_, ".", key_));
+    }
+
+    /// @notice The OHM of a counterpart chain as the patched environment resolves it: the
+    ///         tracked address, or the labelled placeholder for Robinhood Chain, whose OHM the
+    ///         tracked file records as the zero address until it is deployed.
+    function _counterpartOhm(string memory chain_) internal view returns (address ohmAddress) {
+        ohmAddress = _envAddress(chain_, "olympus.legacy.OHM");
+        if (ohmAddress == address(0) && _sameString(chain_, "robinhood")) {
+            ohmAddress = placeholderRobinhoodOhm;
+        }
     }
 
     function _envChainSelector(string memory chain_) internal view returns (uint64 selector) {
@@ -453,9 +475,10 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         );
     }
 
-    /// @notice Proves the harness patch before the suites rely on it: the four counterpart pools
-    ///         of the patched environment resolve to the labelled placeholder. A fragment that no
-    ///         longer matches the file reaches this as a zero address instead.
+    /// @notice Proves the harness patch before the suites rely on it: the five counterpart pools
+    ///         of the patched environment resolve to the labelled placeholder, and so does the
+    ///         Robinhood Chain OHM as the remote token of its route. A fragment that no longer
+    ///         matches the file reaches this as a zero address instead.
     function _requirePatchedEnvRoutes() internal view {
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(
             proposal.readEnv(),
@@ -463,7 +486,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         );
         require(
             desired.length == _NEW_ROUTE_COUNT + 1,
-            "patch: mainnet should declare the four new routes and the Solana one"
+            "patch: mainnet should declare the five new routes and the Solana one"
         );
 
         bytes memory expectedPool = abi.encode(placeholderPool);
@@ -488,6 +511,14 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
                     " should resolve the placeholder as its remote pool"
                 )
             );
+            require(
+                keccak256(route.remoteToken) == keccak256(newRoutes[i].remoteToken),
+                string.concat(
+                    "patch: route ",
+                    newRoutes[i].name,
+                    " should resolve the declared remote token"
+                )
+            );
         }
     }
 
@@ -510,7 +541,13 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     ///         dedicated `EVM2EVMOnRamp 1.5` of a legacy lane. The generation of a lane is never
     ///         hardcoded: Chainlink moves lanes between generations without notice.
     function _stubOhmFeeEntries(string memory skipChain_) internal {
-        string[_NEW_ROUTE_COUNT] memory names = ["arbitrum", "base", "berachain", "optimism"];
+        string[_NEW_ROUTE_COUNT] memory names = [
+            "arbitrum",
+            "base",
+            "berachain",
+            "optimism",
+            "robinhood"
+        ];
         for (uint256 i = 0; i < names.length; ++i) {
             if (_sameString(names[i], skipChain_)) continue;
             _stubOhmFeeEntry(names[i]);
@@ -625,7 +662,13 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
     /// @notice Proves the stubs answer the reader the proposal calls, before any build runs.
     function _requireOhmFeeBudgets(string memory skipChain_) internal view {
-        string[_NEW_ROUTE_COUNT] memory names = ["arbitrum", "base", "berachain", "optimism"];
+        string[_NEW_ROUTE_COUNT] memory names = [
+            "arbitrum",
+            "base",
+            "berachain",
+            "optimism",
+            "robinhood"
+        ];
         for (uint256 i = 0; i < names.length; ++i) {
             if (_sameString(names[i], skipChain_)) continue;
             (uint32 overhead, bool isTokenEntry, ) = CCIPFeeBudgetLib.readOhmDestGasOverhead(
@@ -1303,8 +1346,9 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         givenPhaseBComplete
         givenPoolFunded
     {
-        // A zero placeholder makes the harness return the tracked file unchanged
+        // Zero placeholders make the harness return the tracked file unchanged
         CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalHarness(
+            address(0),
             address(0)
         );
         vm.label(address(unpatched), "unpatchedProposalHarness");
@@ -1314,6 +1358,30 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
             bytes(
                 "CCIPConfigLib: zero address for .current.arbitrum.olympus.policies.CCIPBurnMintTokenPool"
             )
+        );
+        unpatched.build(addresses);
+    }
+
+    // given Phase B is complete and the pool is funded
+    //   given the counterpart pools are recorded but the Robinhood Chain OHM is not
+    //     when the proposal is built
+    //       [X] it reverts in the desired route reader on the zero Robinhood OHM
+
+    function test_givenPhaseBComplete_givenPoolFunded_givenRobinhoodOhmUnrecorded_reverts()
+        public
+        givenPhaseBComplete
+        givenPoolFunded
+    {
+        // A zero OHM placeholder leaves the tracked Robinhood OHM entry unchanged
+        CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalHarness(
+            placeholderPool,
+            address(0)
+        );
+        vm.label(address(unpatched), "unpatchedOhmProposalHarness");
+        unpatched.deploy(addresses, address(this));
+
+        vm.expectRevert(
+            bytes("CCIPConfigLib: zero address for .current.robinhood.olympus.legacy.OHM")
         );
         unpatched.build(addresses);
     }
@@ -1523,7 +1591,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
     }
 
     // given Phase B is complete and the pool is funded
-    //   given one of the four expected routes was added directly beforehand
+    //   given one of the five expected routes was added directly beforehand
     //     when the proposal is built
     //       [X] it reverts with MissingRouteSetMismatch rather than building a smaller proposal
 
@@ -1543,7 +1611,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
     }
 
     // given Phase B is complete and the pool is funded
-    //   given a declared route outside the four expected ones is missing from the pool
+    //   given a declared route outside the five expected ones is missing from the pool
     //     when the proposal is built
     //       [X] it reverts with UnexpectedMissingRoute naming that route
 
@@ -1578,7 +1646,8 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         givenPoolFunded
     {
         CCIPTokenPoolConfigProposalRebalancerHarness drifted = new CCIPTokenPoolConfigProposalRebalancerHarness(
-                placeholderPool
+                placeholderPool,
+                placeholderRobinhoodOhm
             );
         vm.label(address(drifted), "rebalancerDriftProposalHarness");
         drifted.deploy(addresses, address(this));
@@ -1694,7 +1763,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         assertLe(
             targets.length,
             _MAX_ACTION_COUNT,
-            "The proposal should never build more than thirteen actions"
+            "The proposal should never build more than fourteen actions"
         );
         for (uint256 i = 0; i < expected.length; ++i) {
             assertEq(targets[i], expected[i].target, string.concat("target: ", expected[i].label));
@@ -1733,7 +1802,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         assertEq(
             expectations.routesToAdd.length,
             _NEW_ROUTE_COUNT,
-            "The expectations should name the four routes"
+            "The expectations should name the five routes"
         );
         for (uint256 i = 0; i < newRoutes.length; ++i) {
             assertEq(
@@ -1767,7 +1836,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
             "The rate limit admin setter should not be included"
         );
 
-        // The four route actions carry the declared route, field by field
+        // The five route actions carry the declared route, field by field
         uint256 routeActionOffset = expected.length - _NEW_ROUTE_COUNT;
         for (uint256 i = 0; i < newRoutes.length; ++i) {
             bytes memory payload = payloads[routeActionOffset + i];
@@ -1828,7 +1897,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
     }
 
     // given Phase B is complete, the pool is funded and the proposal is built
-    //   given the DAO MS then adds one of the four routes directly on the pool
+    //   given the DAO MS then adds one of the five routes directly on the pool
     //     [X] the checker reverts with RouteAlreadyExists naming the route
     //     [X] the replay from the timelock fails at the first action with the same error
     //     [X] the governor run reverts with the timelock's generic execution error
@@ -2028,7 +2097,7 @@ contract CCIPTokenPoolConfigProposalTests_execution is CCIPTokenPoolConfigPropos
     //   [X] the OCG timelock administers OHM with no pending administrator and the same pool
     //   [X] the roles are allocated as the authority model declares
     //   [X] the grace periods and the timelock delay match env.json
-    //   [X] the pool serves the Solana route and the four new ones, each at capacity
+    //   [X] the pool serves the Solana route and the five new ones, each at capacity
     //   [X] the pool backing covers the declared minimum
     //   [X] the periphery owner is untouched
 
@@ -2128,7 +2197,7 @@ contract CCIPTokenPoolConfigProposalTests_execution is CCIPTokenPoolConfigPropos
         assertEq(
             liveSelectors.length,
             _NEW_ROUTE_COUNT + 1,
-            "The pool should serve the Solana route and the four new ones"
+            "The pool should serve the Solana route and the five new ones"
         );
         assertTrue(
             pool.isSupportedChain(solanaSelector),
@@ -2443,37 +2512,55 @@ contract CCIPTokenPoolConfigProposalTests_execution is CCIPTokenPoolConfigPropos
 }
 
 /// @notice Test harness over `CCIPTokenPoolConfigProposal`: it exposes the internal lifecycle
-///         hooks as external calls and patches the counterpart burn/mint pools of `env.json` in
-///         memory.
+///         hooks as external calls and patches the counterpart burn/mint pools and the Robinhood
+///         Chain OHM of `env.json` in memory.
 /// @dev    The tracked `src/scripts/env.json` records the zero address for the
-///         `CCIPBurnMintTokenPool` of Arbitrum, Base, Berachain and Optimism, so the desired
-///         route reader fails closed on it before any proposal check runs. The proposal must not
-///         be run against a mutated tracked file and must leave no file behind, so the override
-///         reads the tracked file on every use, as the proposal does, and replaces the four
-///         byte-identical zero entries with one labelled placeholder in the returned string.
-///         Nothing is stored: `vm.readFile` and `vm.replace` are cheatcodes and the transient
-///         string is freed with the call.
+///         `CCIPBurnMintTokenPool` of Arbitrum, Base, Berachain, Optimism and Robinhood Chain
+///         and for the OHM of Robinhood Chain, so the desired route reader fails closed on them
+///         before any proposal check runs. The proposal must not be run against a mutated
+///         tracked file and must leave no file behind, so the override reads the tracked file
+///         on every use, as the proposal does, and replaces the five byte-identical zero pool
+///         entries with one labelled placeholder, and the zero Robinhood OHM entry with
+///         another, in the returned string. Nothing is stored: `vm.readFile` and `vm.replace`
+///         are cheatcodes and the transient string is freed with the call.
 ///
-///         A zero `placeholderPool_` disables the patch, so that a test can prove that the
-///         tracked file fails closed in the reader.
+///         A zero `placeholderPool_` or `placeholderRobinhoodOhm_` disables that patch, so that
+///         a test can prove that the tracked file fails closed in the reader.
 contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
     /// @dev The exact line fragment of the prettier-formatted `env.json` that records an
-    ///      undeployed counterpart pool. All four burn/mint chains carry it verbatim, and
-    ///      nothing requires the remote pools of different routes to differ, so the four routes
+    ///      undeployed counterpart pool. All five burn/mint chains carry it verbatim, and
+    ///      nothing requires the remote pools of different routes to differ, so the five routes
     ///      share one placeholder.
     string internal constant _ZERO_POOL_FRAGMENT =
         '"CCIPBurnMintTokenPool": "0x0000000000000000000000000000000000000000"';
 
     string internal constant _POOL_KEY_FRAGMENT = '"CCIPBurnMintTokenPool": "';
 
+    /// @dev The exact fragment of the prettier-formatted `env.json` that records the undeployed
+    ///      Robinhood Chain OHM: the zero `OHM` entry and the closing brace of its `legacy`
+    ///      block, of which it is the only key. The zero `OHM` line alone also occurs in the
+    ///      `last` block of the file, where other keys follow it, so the brace is what makes
+    ///      the fragment unique to Robinhood Chain.
+    string internal constant _ZERO_ROBINHOOD_OHM_FRAGMENT =
+        '"OHM": "0x0000000000000000000000000000000000000000"\n                }';
+
+    string internal constant _OHM_KEY_FRAGMENT = '"OHM": "';
+
+    string internal constant _LEGACY_BLOCK_CLOSE = '"\n                }';
+
     /// @notice The stand-in for the counterpart burn/mint pools, or the zero address to read the
-    ///         tracked file unchanged.
+    ///         tracked pool entries unchanged.
     address public immutable PLACEHOLDER_POOL;
+
+    /// @notice The stand-in for the Robinhood Chain OHM, or the zero address to read the tracked
+    ///         entry unchanged.
+    address public immutable PLACEHOLDER_ROBINHOOD_OHM;
 
     // The zero address is a meaningful value here: it disables the patch
     // forge-lint: disable-next-item(missing-zero-check)
-    constructor(address placeholderPool_) {
+    constructor(address placeholderPool_, address placeholderRobinhoodOhm_) {
         PLACEHOLDER_POOL = placeholderPool_;
+        PLACEHOLDER_ROBINHOOD_OHM = placeholderRobinhoodOhm_;
     }
 
     /// @notice The desired-state string the proposal reads, for the rig's own assertions.
@@ -2500,19 +2587,47 @@ contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
 
     /// @inheritdoc CCIPTokenPoolConfigProposal
     function _readEnv() internal view virtual override returns (string memory env) {
-        string memory tracked = super._readEnv();
-        if (PLACEHOLDER_POOL == address(0)) return tracked;
+        env = super._readEnv();
+        if (PLACEHOLDER_POOL != address(0)) {
+            env = _patch(
+                env,
+                _ZERO_POOL_FRAGMENT,
+                string.concat(_POOL_KEY_FRAGMENT, vm.toString(PLACEHOLDER_POOL), '"'),
+                "counterpart pool"
+            );
+        }
+        if (PLACEHOLDER_ROBINHOOD_OHM != address(0)) {
+            env = _patch(
+                env,
+                _ZERO_ROBINHOOD_OHM_FRAGMENT,
+                string.concat(
+                    _OHM_KEY_FRAGMENT,
+                    vm.toString(PLACEHOLDER_ROBINHOOD_OHM),
+                    _LEGACY_BLOCK_CLOSE
+                ),
+                "Robinhood OHM"
+            );
+        }
+    }
 
-        string memory patched = vm.replace(
-            tracked,
-            _ZERO_POOL_FRAGMENT,
-            string.concat(_POOL_KEY_FRAGMENT, vm.toString(PLACEHOLDER_POOL), '"')
-        );
+    /// @dev Replaces every occurrence of `fragment_` in `env_` and requires that at least one
+    ///      was found, so that a fragment the file no longer carries fails here, naming it,
+    ///      rather than in the reader.
+    function _patch(
+        string memory env_,
+        string memory fragment_,
+        string memory replacement_,
+        string memory label_
+    ) private pure returns (string memory patched) {
+        patched = vm.replace(env_, fragment_, replacement_);
         require(
-            keccak256(bytes(patched)) != keccak256(bytes(tracked)),
-            "CCIPTokenPoolConfigProposalHarness: the counterpart pool fragment no longer matches env.json"
+            keccak256(bytes(patched)) != keccak256(bytes(env_)),
+            string.concat(
+                "CCIPTokenPoolConfigProposalHarness: the ",
+                label_,
+                " fragment no longer matches env.json"
+            )
         );
-        return patched;
     }
 }
 
@@ -2529,7 +2644,10 @@ contract CCIPTokenPoolConfigProposalRebalancerHarness is CCIPTokenPoolConfigProp
     /// @notice The rebalancer the patched environment declares instead of the OCG timelock.
     address public constant FOREIGN_REBALANCER = 0x000000000000000000000000000000000000dEaD;
 
-    constructor(address placeholderPool_) CCIPTokenPoolConfigProposalHarness(placeholderPool_) {}
+    constructor(
+        address placeholderPool_,
+        address placeholderRobinhoodOhm_
+    ) CCIPTokenPoolConfigProposalHarness(placeholderPool_, placeholderRobinhoodOhm_) {}
 
     /// @inheritdoc CCIPTokenPoolConfigProposalHarness
     function _readEnv() internal view override returns (string memory env) {
