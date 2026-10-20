@@ -220,13 +220,11 @@ Opens Arbitrum, Optimism, Base and Berachain, coordinated with the mainnet propo
 Sequence (each script is idempotent and fails closed on a missing precondition):
 
 0. **Chainlink fee budgets (outside the repository).** Every lane toward a burn/mint chain must carry an enabled OHM fee entry with `destGasOverhead >= 175000` (the destination mint runs two MINTR calls and does not fit the 90000 default). Only Chainlink can set it; request it for the four mainnet lanes and every open L2-to-L2 lane. The entry sits on the source chain's `FeeQuoter 2.0.0` for a 1.6 or 2.0 lane, which is every lane in scope, Berachain's included (read 2026-10-15), and on the dedicated `EVM2EVMOnRamp` for a 1.5 lane; the scripts read the live fee contracts and refuse to proceed until the entries exist: the readiness report, the proposal build, `setup`, `finalize` (which reads the lanes again, since the entries can change between the two) and every `reconcileRoutes` run that adds a route toward a burn/mint chain. On a fee quoter lane the reader also requires the destination to be enabled on the fee quoter, since a disabled destination rejects every send. On 2.0.0 lanes the budget is billed and summed into the message's execution gas limit but not enforced per token on-chain, so it still decides what the executor pays for and supplies; the request is the same on every generation. The mainnet readiness report prints a note for the live mainnet to Solana route instead of a check: the delivery on Solana is billed under the fee quoter's default budget for the SVM destination (150000 on every EVM chain, read 2026-10-15; a live value, re-read it with the lane generations), and the reverse lane needs no raise since the lock/release pool releases with a plain transfer.
-1. **Registry handover (per chain).** The OHM administrator in each local `TokenAdminRegistry` is the deployer EOA `0x1A5309F2...`. From that EOA: `CCIPTokenPoolBatch.transferTokenPoolAdminRoleToDaoMS`; from the DAO MS: `CCIPTokenPoolBatch.acceptAdminRole`. These entry points do not use the standard five-argument batch signature, so they run through `forge script` directly rather than `safeBatchV2.sh`:
+1. **Registry handover (per chain).** The OHM administrator in each local `TokenAdminRegistry` is the deployer EOA `0x1A5309F2...`. From that EOA: `CCIPTokenPoolBatch.transferTokenPoolAdminRoleToDaoMS`; from the DAO MS: `CCIPTokenPoolBatch.acceptAdminRole`. Both use the standard five-argument batch signature through `safeBatchV2.sh`:
 
     ```bash
-    FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPoolBatch.sol:CCIPTokenPoolBatch \
-        --sig "transferTokenPoolAdminRoleToDaoMS()" --rpc-url <CHAIN> --account < cast account > --sender <deployer EOA> --slow --broadcast
-    FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPoolBatch.sol:CCIPTokenPoolBatch \
-        --sig "acceptAdminRole(bool)" true --rpc-url <CHAIN> --account < cast account > --sender <signer> --slow --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolAdminRoleToDaoMS --multisig false --account < cast account > --chain <CHAIN> --broadcast true
+    ./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function acceptAdminRole --multisig true --account < cast account > --chain <CHAIN> --broadcast true
     ```
 
     Confirm custody of the EOA key before starting; after the acceptance the key is no longer needed for CCIP.
@@ -235,8 +233,7 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 3. **Ownership handover (per chain, from the deployer).** `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` proposes the config policy as the pool owner (accepted later by the setup batch), and `CCIPBridgeBatch.transferOwnership` moves the periphery to the DAO MS:
 
     ```bash
-    FOUNDRY_PROFILE=multisig forge script src/scripts/ops/batches/CCIPTokenPoolBatch.sol:CCIPTokenPoolBatch \
-        --sig "transferTokenPoolOwnershipToConfig()" --rpc-url <CHAIN> --account < cast account > --sender <deployer> --slow --broadcast
+    ./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --multisig false --account < cast account > --chain <CHAIN> --broadcast true
     ./shell/safeBatchV2.sh --contract CCIPBridgeBatch --function transferOwnership --account < cast account > --chain <CHAIN> --broadcast true
     ```
 
@@ -388,5 +385,22 @@ For EVM -> SVM, use `./shell/bridge_ccip_to_svm.sh`. The recipient must already 
 For SVM -> EVM, follow the [SVM tutorial](https://docs.chain.link/ccip/tutorials/svm/source).
 
 ## Bootstrap and legacy entry points
+
+All batch entry points use `(bool,bool,string,string,bytes)` with `safeBatchV2.sh`. Use
+`--multisig false` for an EOA sender and `--multisig true` for the DAO MS. For
+`configureRemoteChainEVM`, `configureRemoteChainSVM` and `emergencyShutdown`, pass `remoteChain`
+through `--args`; for `withdrawLiquidity`, pass `amount` in OHM base units (9 decimals). The args
+entry must match the selected function name, for example:
+
+```json
+{
+    "functions": [
+        {
+            "name": "configureRemoteChainEVM",
+            "args": {"remoteChain": "base"}
+        }
+    ]
+}
+```
 
 `src/scripts/ops/batches/CCIPTokenPoolBatch.sol` holds the entry points that act directly on the pool from its owner (`install`, `configureRemoteChainEVM`, `configureRemoteChainSVM`, `configureAllRemoteChains`, `setRateLimits`, `emergencyShutdown`, `emergencyShutdownAll`), on the registry from the OHM administrator (`acceptAdminRole`, `setPool`, `transferTokenPoolAdminRoleToDaoMS`), on the pool ownership (`transferTokenPoolOwnershipToDaoMS`, `acceptTokenPoolOwnership`) and on the liquidity from the rebalancer (`withdrawLiquidity`, `withdrawAllLiquidity`). They serve the bootstrap of a new chain before its config policy takes the pool over, and testnets. Each of them checks that the batch owner holds the authority it needs and reverts with the replacement path otherwise. `configureRemoteChainEVM`, `configureRemoteChainSVM` and `configureAllRemoteChains` replace an existing route in one `applyChainUpdates` call, which the pool performs as a removal followed by an addition in one transaction, so a run from an EOA, where every batch entry is its own transaction, cannot leave the route removed; the replacement resets both limiters to the disabled bootstrap default, as the addition of a new route does. After `emergencyShutdown` or `emergencyShutdownAll` the approved limits are restored with `setRateLimits` while the pool has a direct owner, and after the handover through `CCIPRouteReconcileBatch.reconcileRoutes` with the route named in `restoreContained` (see Recovery), never through the configure entry points.
