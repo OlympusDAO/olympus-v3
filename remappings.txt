@@ -23,7 +23,7 @@ dependencies/chainlink-local-0.3.1/:@openzeppelin/contracts@5.3.0/=dependencies/
 @forge-std-1.16.2/=dependencies/forge-std-1.16.2/src/
 forge-std/=dependencies/forge-std-1.16.2/src/
 
-@safe-utils-0.0.17/=dependencies/safe-utils-0.0.17/src/
+@safe-utils-0.0.23/=dependencies/safe-utils-0.0.23/src/
 
 @base58-solidity-1.0.3/=dependencies/base58-solidity-1.0.3/contracts/
 

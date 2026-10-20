@@ -109,8 +109,8 @@ solana_sel="$(jq -r '.current.solana.external.ccip.ChainSelector' "$REPO_ROOT/$E
 
 step "Registry handover: deployer EOA -> DAO MS"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
-run_script_fn CCIPTokenPoolBatch "transferTokenPoolAdminRoleToDaoMS()" "$OLYMPUS_DEPLOYER_EOA" "transferAdminRole-$CHAIN"
-run_script_fn CCIPTokenPoolBatch "acceptAdminRole(bool)" "$dao" "acceptAdminRole-$CHAIN" true
+run_batch_from CCIPTokenPoolBatch transferTokenPoolAdminRoleToDaoMS "$OLYMPUS_DEPLOYER_EOA" false
+run_batch CCIPTokenPoolBatch acceptAdminRole dao
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
 
 deploy_sequence "src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json"
@@ -133,7 +133,7 @@ echo "config.gracePeriod()          = $(cast call "$cfg" 'gracePeriod()(uint32)'
 echo "config.isLiquidityContainer() = $(cast call "$cfg" 'isLiquidityContainer()(bool)' --rpc-url "$RPC")"
 
 step "Pool and periphery ownership handover (deployer)"
-run_script_fn CCIPTokenPoolBatch "transferTokenPoolOwnershipToConfig()" "$DEPLOYER_ADDR" "transferPoolOwnership-$CHAIN"
+run_batch_from CCIPTokenPoolBatch transferTokenPoolOwnershipToConfig "$DEPLOYER_ADDR" false
 run_batch_from CCIPBridgeBatch transferOwnership "$DEPLOYER_ADDR" false "" "-deployer"
 expect_non_empty_batch "$LAST_BATCH_LOG" "periphery transferOwnership"
 echo "pool.owner()      = $(cast call "$pool" 'owner()(address)' --rpc-url "$RPC")  (deployer=$DEPLOYER_ADDR)"

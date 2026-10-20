@@ -16,7 +16,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // External
-import {Safe} from "@safe-utils-0.0.17/Safe.sol";
+import {Safe} from "@safe-utils-0.0.23/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
 
 // Bophades

@@ -149,7 +149,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         rebalancer. Once the pool is owned by the CCIPTokenPoolConfig policy, the rebalancer
     ///         is managed through `CCIPTokenPoolConfig.setRebalancer` by the admin role and the
     ///         function adds nothing.
-    function install(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function install(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // Assumptions
         // - The token pool has been linked to OHM in the CCIP token admin registry
         // - The token pool is already configured
@@ -214,7 +220,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Accepts the admin role for the OHM token
     /// @dev    The batch owner must be the pending administrator. On mainnet after the handover
     ///         the administrator is the OCG timelock and registry changes are OCG proposals.
-    function acceptAdminRole(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function acceptAdminRole(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -258,7 +270,17 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Sets the token pool for the OHM token
     /// @dev    The batch owner must be the OHM administrator. On mainnet after the handover the
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
-    function setPool(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function setPool(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
+        // burn/mint chains also deploy no OlympusHeart to validate against.
+        _skipHeartbeatValidation = true;
+
         // Load contract addresses from the environment file
         address tokenRegistry = _envAddressNotZero("external.ccip.TokenAdminRegistry");
         address token = _envAddressNotZero("olympus.legacy.OHM");
@@ -288,7 +310,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Transfers the admin role for the OHM token to the DAO multisig
     /// @dev    The batch owner must be the OHM administrator. On mainnet after the handover the
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
-    function transferTokenPoolAdminRoleToDaoMS() external setUpWithChainId(false) {
+    function transferTokenPoolAdminRoleToDaoMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -329,7 +357,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @notice Transfers the ownership of the TokenPool to the DAO multisig
     /// @dev    The batch owner must be the pool owner. After the handover the pool is owned by
     ///         CCIPTokenPoolConfig and ownership transfers go through `transferPoolOwnership`.
-    function transferTokenPoolOwnershipToDaoMS() external setUpWithChainId(false) {
+    function transferTokenPoolOwnershipToDaoMS(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
@@ -365,7 +399,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         `acceptPoolOwnership` in the setup batch (non-canonical chains) or in the OCG
     ///         proposal (mainnet). Skipped when the config policy already owns or is the pending
     ///         owner of the pool.
-    function transferTokenPoolOwnershipToConfig() external setUpWithChainId(false) {
+    function transferTokenPoolOwnershipToConfig(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // The batch touches only the CCIP pool, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -407,7 +447,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Accepts the ownership of the TokenPool
     /// @dev    The batch owner must be the pending owner of the pool.
-    function acceptTokenPoolOwnership() external setUpWithChainId(false) {
+    function acceptTokenPoolOwnership(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
@@ -501,12 +547,18 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         replaced in one `applyChainUpdates` call, a removal followed by an addition in
     ///         one transaction, which resets both buckets to the bootstrap default (disabled
     ///         limiters) as the addition of a new route does.
+    ///         Reads `remoteChain` from this function's entry in the args file.
     function configureRemoteChainEVM(
         bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string memory remoteChain = _readBatchArgString("configureRemoteChainEVM", "remoteChain");
+
         // Configure the remote chain
-        _configureRemoteChainEVM(remoteChain_, false);
+        _configureRemoteChainEVM(remoteChain, false);
 
         // Run
         proposeBatch();
@@ -575,12 +627,18 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         replaced in one `applyChainUpdates` call, a removal followed by an addition in
     ///         one transaction, which resets both buckets to the bootstrap default (disabled
     ///         limiters) as the addition of a new route does.
+    ///         Reads `remoteChain` from this function's entry in the args file.
     function configureRemoteChainSVM(
         bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string memory remoteChain = _readBatchArgString("configureRemoteChainSVM", "remoteChain");
+
         // Configure the remote chain
-        _configureRemoteChainSVM(remoteChain_, false);
+        _configureRemoteChainSVM(remoteChain, false);
 
         // Run
         proposeBatch();
@@ -622,7 +680,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         `olympus.config.CCIPCrossChainBridge.chains` is added or, when its route exists,
     ///         replaced in one `applyChainUpdates` call with the bootstrap default limiters; a
     ///         chain outside the list is removed when its route exists.
-    function configureAllRemoteChains(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function configureAllRemoteChains(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // Configure the remote chains
         _configureRemoteChains(chain);
 
@@ -824,11 +888,16 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         owner, or `CCIPRouteReconcileBatch.reconcileRoutes` with the route named in its
     ///         `restoreContained` args after the handover; `configureRemoteChainEVM` and
     ///         `configureRemoteChainSVM` replace the route with disabled limiters instead.
+    ///         Reads `remoteChain` from this function's entry in the args file.
     function emergencyShutdown(
         bool useDaoMS_,
-        string calldata remoteChain_
-    ) external setUpWithChainId(useDaoMS_) {
-        uint64 remoteChainSelector = CCIPConfigLib.chainSelector(env, remoteChain_);
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string memory remoteChain = _readBatchArgString("emergencyShutdown", "remoteChain");
+        uint64 remoteChainSelector = CCIPConfigLib.chainSelector(env, remoteChain);
 
         _emergencyShutdown(remoteChainSelector);
 
@@ -846,7 +915,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         a direct owner, or `CCIPRouteReconcileBatch.reconcileRoutes` with every route
     ///         named in its `restoreContained` args after the handover; `configureRemoteChainEVM`
     ///         and `configureRemoteChainSVM` replace a route with disabled limiters instead.
-    function emergencyShutdownAll(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function emergencyShutdownAll(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // Determine the remote chains that are configured
         uint64[] memory remoteChainSelectors = ICCIPTokenPoolAdmin(
             _getTokenPoolAddressNotZero(chain)
@@ -1170,7 +1245,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Withdraws the total balance of OHM from a LockReleaseTokenPool
     /// @dev    This function can only be called on canonical chains, by the rebalancer
-    function withdrawAllLiquidity(bool useDaoMS_) external setUpWithChainId(useDaoMS_) {
+    function withdrawAllLiquidity(
+        bool useDaoMS_,
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
         // The pool keeps no internal accounting: its liquidity is its OHM balance
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         uint256 liquidity = IERC20(ohm).balanceOf(_getTokenPoolAddressNotZero(chain));
@@ -1190,12 +1271,18 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
 
     /// @notice Withdraws a specific amount of OHM from a LockReleaseTokenPool
     /// @dev    This function can only be called on canonical chains, by the rebalancer
+    ///         Reads `amount` in OHM base units (9 decimals) from this function's args entry.
     function withdrawLiquidity(
         bool useDaoMS_,
-        uint256 amount_
-    ) external setUpWithChainId(useDaoMS_) {
+        bool signOnly_,
+        string calldata argsFile_,
+        string calldata ledgerDerivationPath_,
+        bytes calldata signature_
+    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        uint256 amount = _readBatchArgUint256("withdrawLiquidity", "amount");
+
         // Withdraw liquidity
-        _withdrawLiquidity(amount_);
+        _withdrawLiquidity(amount);
 
         // Run
         proposeBatch();
