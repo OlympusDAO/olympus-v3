@@ -229,13 +229,16 @@ Sequence (each script is idempotent and fails closed on a missing precondition):
 
     Confirm custody of the EOA key before starting; after the acceptance the key is no longer needed for CCIP.
 
-2. **Deploy (per chain).** `ccip_full_not_mainnet.json` as above (pool, periphery, config policy, timelock in one sequence).
-3. **Ownership handover (per chain, from the deployer).** `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` proposes the config policy as the pool owner (accepted later by the setup batch), and `CCIPBridgeBatch.transferOwnership` moves the periphery to the DAO MS; both run through `shell/safeBatchV2.sh` from the deployer wallet, without `--multisig`:
+2. **Deploy (per chain).** Robinhood uses `shell/L2/deploy.sh`, which includes all four CCIP contracts with the core. Do not run a second CCIP deployment sequence there. For other chains that still need the four contracts, use `ccip_full_not_mainnet.json` as above.
+3. **Ownership handover (per chain).** For a new stack deployed with `shell/L2/deploy.sh`, complete the initial DAO handoff first: confirm and execute the `L2HandoffBatch.acceptHandoff` Safe proposal created by `shell/L2/handoff.sh`. It accepts both RolesAdmin administration and pool ownership. Run `shell/L2/verify.sh --chain <chain>` and require a passing report. The deployer must retain no direct administrative access. The periphery is already owned by the DAO after `handoff.sh`.
+
+    The current pool owner then nominates `CCIPTokenPoolConfig`, which accepts ownership in the later setup batch. When the DAO owns the pool, run:
 
     ```bash
-    ./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --account < deployer cast account > --chain <CHAIN> --broadcast true
-    ./shell/safeBatchV2.sh --contract CCIPBridgeBatch --function transferOwnership --account < deployer cast account > --chain <CHAIN> --broadcast true
+    ./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --multisig true --account < cast account > --chain <CHAIN> --broadcast true
     ```
+
+    Execute the nomination before building the setup batch. For an older deployment still owned by its deployer, first transfer pool ownership to the DAO and have it accept. If that deployment also leaves the periphery owned by the deployer, run `CCIPBridgeBatch.transferOwnership` from that deployer. New L2 deployments do not need that extra periphery transfer.
 
 4. **Funding (mainnet, DAO MS).** Re-run `shell/calc_bridged_supply.sh`: its bridged supply rounded up to a whole OHM is `olympus.config.CCIP.minimumPoolBacking` (the run warns when the key differs; update it), and its funding amount, the key minus `olympus.config.CCIP.poolUnclaimableBalance`, goes into `amount` of `src/scripts/ops/batches/args/CCIPTokenPoolBatch_fundPool.json`; the batch accepts no other value. The run also prints the pool balance minus the Solana mint supply next to the unclaimable balance and warns when they differ: an Ethereum-Solana transfer in flight closes the difference when it completes, a further burn on Solana outside CCIP settles as surplus in the pool and asks for an updated `poolUnclaimableBalance`, and a smaller figure (a rebalancer withdrawal) makes the post-batch check fail. Build `CCIPTokenPoolBatch.fundPool` with that args file immediately before signing:
 

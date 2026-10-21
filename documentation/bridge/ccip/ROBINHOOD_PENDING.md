@@ -6,8 +6,8 @@ Robinhood Chain (chain ID 4663, CCIP selector `6180753054346818345`) is the fift
 
 | Key | Filled by |
 | --- | --- |
-| `olympus.Kernel`, `olympus.legacy.OHM`, `olympus.modules.OlympusMinter`, `olympus.modules.OlympusRoles`, `olympus.policies.RolesAdmin` | the Olympus stack deployment on Robinhood Chain (the contracts of the other burn/mint chains: a 9-decimal `OlympusERC20Token`, MINTR, ROLES, RolesAdmin), recorded by hand |
-| `olympus.policies.CCIPBurnMintTokenPool`, `olympus.policies.CCIPTokenPoolConfig`, `olympus.policies.CCIPTokenPoolConfigTimelock`, `olympus.periphery.CCIPCrossChainBridge` | deployed together with the core by `./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true`, recorded by hand |
+| `olympus.Kernel`, `olympus.legacy.OHM`, `olympus.modules.OlympusMinter`, `olympus.modules.OlympusRoles`, `olympus.policies.RolesAdmin` | the Olympus stack deployment on Robinhood Chain (the contracts of the other burn/mint chains: a 9-decimal `OlympusERC20Token`, MINTR, ROLES, RolesAdmin), recorded automatically by `shell/L2/deploy.sh` |
+| `olympus.policies.CCIPBurnMintTokenPool`, `olympus.policies.CCIPTokenPoolConfig`, `olympus.policies.CCIPTokenPoolConfigTimelock`, `olympus.periphery.CCIPCrossChainBridge` | deployed together with the core by `./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true`, recorded automatically by `shell/L2/deploy.sh` |
 
 The other values of the block are real: `external.ccip` (`Router 1.2.0` `0x06fC836c...`, `ARMProxy 1.0.0` `0xe8464c35...`, `TokenAdminRegistry 1.5.0` `0x1912C3cF...`, read from the chain on 2026-10-19 and again on 2026-10-20 and matching the Chainlink CCIP Directory), the three routes with their limits and `periphery` blocks, and the config parameters.
 
@@ -29,16 +29,16 @@ The setup batch grants the configured Emergency Safe its `emergency` role.
 
 Every DAO MS batch below is built on `BatchScriptV2` with `safe-utils` 0.0.23, which maps chain ID 4663 to the Safe transaction service `api.safe.global/tx-service/robinhood` and to `MultiSendCallOnly` 1.4.1 `0x9641d764fc13c8B624c04430C7356C1C7C8102e2`, so the batches propose on Robinhood Chain as on the other chains.
 
-0. The fee budget entries above.
-1. Registry: `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS, once Chainlink has proposed it.
-2. Deploy the core and all four CCIP contracts with `shell/L2/deploy.sh`; record all thirteen addresses. Do not also run `ccip_full_not_mainnet.json`.
-3. Run `shell/L2/grantRoles.sh` and `shell/L2/handoff.sh` with `--chain robinhood --ledger 5 --broadcast true`, then accept RolesAdmin administration from the DAO Safe. Handoff proposes the config policy as pool owner and transfers the periphery bridge to the DAO Safe. The later setup batch accepts pool ownership.
+0. Deploy the core and all four CCIP contracts with `shell/L2/deploy.sh`; it records all thirteen confirmed addresses in `env.json` and formats the timestamped broadcast artifact and registry. Do not also run `ccip_full_not_mainnet.json`.
+1. Run `shell/L2/grantRoles.sh` and `shell/L2/handoff.sh` with `--chain robinhood --ledger 5 --broadcast true`. Handoff nominates the DAO Safe as pool owner, transfers the periphery bridge to the DAO Safe, and creates the `L2HandoffBatch.acceptHandoff` Safe proposal.
+2. Confirm and execute the acceptance proposal in the DAO Safe. It calls both `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`. Run `./shell/L2/verify.sh --chain robinhood`. Do not treat the handoff as complete until the report passes. Commit the timestamped deployment artifacts and `env.json`.
+3. Complete the Chainlink requests above. Execute `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS once Chainlink has proposed it. Then execute `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` from the DAO MS before the readiness gate. The DAO remains pool owner until setup accepts the configuration policy as owner. The deployer has no role in either step.
 4. Funding on mainnet, unchanged by Robinhood Chain: its supply is not part of `minimumPoolBacking` and stays out of `shell/calc_bridged_supply.sh`. Check first that the Robinhood OHM holds no supply: `cast call <OHM> 'totalSupply()(uint256)' --rpc-url robinhood` must print `0`.
 5. Readiness gate green on mainnet and the five burn/mint chains, then the proposal.
 6. `setup` during the voting window (Robinhood Chain records no legacy bridge; the batch skips that step).
 7. Vote, queue, execute.
 8. `finalize`.
-9. `CCIPBridgeBatch.reconcileTrustedRemotes`, then `CCIPBridgeBatch.enable`.
+9. `CCIPBridgeBatch.reconcileTrustedRemotes`, then `CCIPBridgeBatch.enable`. Re-run the ownership verifier after setup and activation.
 
 ## Checks that wait for the stack
 

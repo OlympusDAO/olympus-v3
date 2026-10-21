@@ -25,7 +25,10 @@ A Bophades installation can be deployed by following these steps:
     - `--verify true` submits source verification during deployment. Separate verification commands are unnecessary after success.
     - Verification explicitly selects Sourcify and requires no Etherscan API key.
 
-5. Store the confirmed contract addresses in `src/scripts/env.json` before running the role scripts.
+5. After a successful broadcast, the wrapper records the deployed addresses in `src/scripts/env.json`.
+   Solidity records each deployed address with its registry key in the broadcast return value.
+   After Forge succeeds, the wrapper saves these values through `write_deployment.sh`, then formats and checks the timestamped broadcast artifact and `env.json` with Prettier.
+   Review those files before running the role scripts. Previews leave `env.json` unchanged.
 
 This will deploy the contracts and install them into the kernel.
 
@@ -54,9 +57,9 @@ It does not deploy the legacy LayerZero bridge or a canonical lock/release pool.
 
 Robinhood's CCIP Router, RMN proxy, chain selector, and TokenAdminRegistry are populated in `env.json`
 from the [official Chainlink directory](https://docs.chain.link/ccip/directory/mainnet/chain/robinhood-mainnet).
-Record all thirteen confirmed addresses in `current.robinhood.olympus` before continuing.
-Store the pool at `policies.CCIPBurnMintTokenPool` and the bridge at `periphery.CCIPCrossChainBridge`.
-Store the configuration contracts at `policies.CCIPTokenPoolConfig` and `policies.CCIPTokenPoolConfigTimelock`.
+The wrapper records all thirteen confirmed addresses in `current.robinhood.olympus` before returning.
+It stores the pool at `policies.CCIPBurnMintTokenPool` and the bridge at `periphery.CCIPCrossChainBridge`.
+It stores the configuration contracts at `policies.CCIPTokenPoolConfig` and `policies.CCIPTokenPoolConfigTimelock`.
 Leave `policies.CrossChainBridge` absent or zero; the role scripts skip its grants and transfers in that case.
 Preserve the deployment manifest in `broadcast/L2Deploy.s.sol/4663/` before running another entrypoint from this script.
 
@@ -65,20 +68,24 @@ Preserve the deployment manifest in `broadcast/L2Deploy.s.sol/4663/` before runn
 ./shell/L2/handoff.sh --chain robinhood --ledger 5 --broadcast true
 ```
 
-Complete the DAO Safe acceptance described under Handoff below.
+Confirm and execute the acceptance proposal created by `handoff.sh`, as described under Handoff below.
 The existing role script gives both `emergency_shutdown` and `emergency_restart` to the configured Emergency Safe.
 When a CCIP pool is recorded, it also grants `admin` to the DAO Safe and `emergency` to the Emergency Safe.
 These shared roles control the pool's enabled state. The periphery bridge uses its owner for enabling and disabling.
 
-The handoff script transfers the CCIP periphery bridge to the DAO Safe and proposes the config policy as pool owner.
-The later `CCIPNonEthereumSetupBatch.setup` accepts pool ownership through the config policy and binds its timelock.
+The handoff script transfers the CCIP periphery bridge to the DAO Safe and proposes the DAO Safe as pool owner.
+The DAO accepts pool ownership during the initial handoff. The deployer then retains no direct administrative access.
+Before the CCIP readiness gate, the DAO nominates the configuration policy as pool owner.
+The later `CCIPNonEthereumSetupBatch.setup` accepts that ownership through the configuration policy and binds its timelock.
 CCIP registration, remote routes, rate limits, and enabling remain separate setup work; deployment alone does not enable bridging.
 Follow [the CCIP runbook](../../documentation/bridge/ccip/RUNBOOK.md) and [Robinhood checklist](../../documentation/bridge/ccip/ROBINHOOD_PENDING.md).
 The setup batch skips policies already active in the Kernel. Do not run a second CCIP deployment sequence after this command.
 
 If source verification fails after successful transactions, preserve the deployment manifest, confirm every receipt, and retry
 the same deployment command with `--resume true`. Foundry requires `--broadcast true` with `--verify true`.
-Resume processes the saved transaction sequence; confirmed transactions are not sent again. Do not start a fresh deployment to retry verification.
+Resume processes the saved transaction sequence; confirmed transactions are not sent again. After success, the wrapper records addresses and formats the artifacts.
+Do not start a fresh deployment to retry verification.
+Direct calls to the Solidity entrypoint bypass this wrapper step. Use `shell/L2/deploy.sh` for automatic recording and formatting.
 
 ## Grant Roles
 
@@ -139,19 +146,33 @@ The last step in the deployment is to transfer the ownership of the installation
 
 This should be run using the deployer account.
 
-The DAO multisig must then call `RolesAdmin.pullNewAdmin()` to accept administration.
-Use a Safe **Call** to the confirmed RolesAdmin address, with value **0** and calldata from:
+After a successful broadcast, `handoff.sh` runs `L2HandoffBatch.acceptHandoff` through the existing Safe batch wrapper.
+It simulates, signs, and proposes one Safe transaction containing `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`.
+The signing wallet must also be a DAO Safe owner. Ledger and `cast wallet` accounts are supported.
+Confirm and execute that proposal in the DAO Safe. Proposing alone does not transfer ownership.
+The batch checks accepted ownership during simulation and skips transfers already accepted by the DAO.
+A handoff preview creates no Safe proposal because the pending transfers have not been broadcast.
+
+To preview or retry only the acceptance proposal, use:
 
 ```bash
-cast calldata 'pullNewAdmin()'
+./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 5
+./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 5 --broadcast true
 ```
 
-The legacy `ops/batches/PullRolesAdmin.sol` helper does not support Robinhood. Use the direct Safe call there.
-Authority role transfers are immediate and need no acceptance calls.
+Use `--account <account>` instead of `--ledger 5` for a Cast account.
+The deployer remains RolesAdmin administrator and pool owner until the DAO executes the proposal.
+Authority role transfers and CCIP periphery bridge ownership transfer are immediate and need no acceptance calls.
 
-Pool ownership is proposed to `CCIPTokenPoolConfig`, whose `acceptPoolOwnership()` call is included in the later CCIP setup batch.
-The DAO Safe does not call the pool's `acceptOwnership()` directly.
-The CCIP periphery bridge ownership transfer is immediate and needs no acceptance call.
+Before the CCIP readiness gate, nominate the configuration policy from the DAO Safe:
+
+```bash
+./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --chain robinhood --multisig true --ledger 5 --broadcast true
+```
+
+Execute that Safe proposal before building `CCIPNonEthereumSetupBatch.setup`.
+The setup batch accepts pool ownership through `CCIPTokenPoolConfig.acceptPoolOwnership()`.
+The DAO remains pool owner until that acceptance. The deployer is not needed for either step.
 
 ## Verification
 
@@ -161,7 +182,32 @@ Use direct Etherscan verification only for contracts that remain unverified ther
 Final state checks remain necessary: confirm the DAO Kernel executor, accepted RolesAdmin admin, Authority holders,
 MINTR vault, emergency and custodian roles, installed modules, active policies, and zero initial OHM supply.
 Also confirm the pool, config policy, and timelock are active Kernel policies, the periphery bridge owner is the DAO Safe,
-and pool ownership is pending to the config policy until setup accepts it. All four CCIP contracts remain disabled before setup.
+and the DAO owns the pool after initial acceptance. Before setup, the DAO nominates the configuration policy as its successor.
+All four CCIP contracts remain disabled before setup.
 
-`shell/L2/verify.sh` contains historical Berachain/mainnet bridge checks. It is not a general deployment verifier;
-do not run it for a Robinhood core deployment.
+After the DAO executes both acceptance calls, run the read-only ownership verifier:
+
+```bash
+./shell/L2/verify.sh --chain robinhood
+```
+
+The verifier reads contract and multisig addresses from `env.json`.
+It uses the saved broadcast only to identify the deployer and ROLES creation block.
+The default is `broadcast/L2Deploy.s.sol/<chain-id>/deploy-latest.json`.
+Use `--deployment <timestamped-run.json>` to select a committed broadcast instead.
+The broadcast must match the RPC chain and the ROLES address in `env.json`, with a successful creation receipt.
+The creation block bounds the role-history scan: ROLES can check a named role but cannot enumerate all roles held by an address.
+No wallet or Ledger is needed. This checks live state; the acceptance batch checks its simulated outcome.
+
+The report shows `[PASS]` and `[FAIL]` for each ownership check and exits nonzero on an incomplete handoff.
+It checks Kernel execution, current and pending RolesAdmin and Authority assignments, pool ownership and rate-limit administration,
+periphery ownership, the configuration operator, and current and pending TokenAdminRegistry administration.
+It checks every role ever granted to the deployer since ROLES creation, including unexpected roles, against current role membership.
+A missing ROLES creation receipt or an RPC error prevents a passing report.
+
+The pool can be owned by the DAO, pending to the configuration policy, or owned by the configuration policy.
+Run the verifier again after CCIP setup and finalization. A passing report proves the checked state at its printed RPC block.
+It does not prevent a later governance transaction from granting new access.
+A deployer can remain one of the Safe signers. The check rejects direct administrative authority, not membership in a threshold Safe.
+
+Commit the timestamped broadcast artifacts and the updated `env.json` after deployment.
