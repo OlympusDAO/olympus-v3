@@ -2,15 +2,20 @@
 pragma solidity ^0.8.15;
 
 import {console2} from "forge-std/console2.sol";
+import {Vm} from "@forge-std-1.16.2/Vm.sol";
 import {WithEnvironment} from "../WithEnvironment.s.sol";
 import {WithLayerZeroConstants} from "../WithLayerZeroConstants.sol";
 
 // Libraries
 import {SafeCast} from "src/libraries/SafeCast.sol";
 import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+import {CCIPConfigLib} from "src/scripts/ops/lib/CCIPConfigLib.sol";
+
+// Interfaces
+import {ICCIPTokenAdminRegistry} from "src/external/bridge/ICCIPTokenAdminRegistry.sol";
 
 // Contracts
-import {Kernel, Actions} from "src/Kernel.sol";
+import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
 import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
@@ -31,6 +36,11 @@ import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConf
 /// @notice Deploys and configures a Bophades installation on another chain.
 // solhint-disable gas-custom-errors
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
+    error L2Deploy_InvalidVerificationInput();
+
+    uint256 internal _ownershipFailures;
+    string internal _deploymentAddresses;
+
     function _getDaoMultisig() internal view returns (address) {
         return _envAddressNotZero("olympus.multisig.dao");
     }
@@ -182,7 +192,11 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ///         CCIP registration, routes and enabling are separate configuration steps.
     /// @param chain_ Chain key in env.json.
     /// @param shouldDeployOhm_ Deploy Authority and OHM instead of reusing the registry entries.
-    function deploy(string calldata chain_, bool shouldDeployOhm_) external {
+    /// @return addresses JSON registry keys and addresses, saved in the Forge broadcast for the wrapper.
+    function deploy(
+        string calldata chain_,
+        bool shouldDeployOhm_
+    ) external returns (string memory addresses) {
         _loadEnv(chain_);
 
         // Require CCIP infrastructure before starting any deployment transactions.
@@ -211,8 +225,8 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
                 msg.sender // vault, will be set to MINTR in grantRoles()
             );
             ohm = new OlympusERC20Token(address(auth));
-            console2.log("OlympusAuthority deployed at:", address(auth));
-            console2.log("OlympusERC20Token deployed at:", address(ohm));
+            _recordDeployment("olympus.legacy.OlympusAuthority", address(auth));
+            _recordDeployment("olympus.legacy.OHM", address(ohm));
         } else {
             auth = OlympusAuthority(_envAddressNotZero("olympus.legacy.OlympusAuthority"));
             ohm = OlympusERC20Token(_envAddressNotZero("olympus.legacy.OHM"));
@@ -220,25 +234,25 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         // Set addresses for dependencies
         Kernel kernel = new Kernel();
-        console2.log("Kernel deployed at:", address(kernel));
+        _recordDeployment("olympus.Kernel", address(kernel));
 
         OlympusMinter MINTR = new OlympusMinter(kernel, address(ohm));
-        console2.log("MINTR deployed at:", address(MINTR));
+        _recordDeployment("olympus.modules.OlympusMinter", address(MINTR));
 
         OlympusRoles ROLES = new OlympusRoles(kernel);
-        console2.log("ROLES deployed at:", address(ROLES));
+        _recordDeployment("olympus.modules.OlympusRoles", address(ROLES));
 
         OlympusTreasury TRSRY = new OlympusTreasury(kernel);
-        console2.log("Treasury deployed at:", address(TRSRY));
+        _recordDeployment("olympus.modules.OlympusTreasury", address(TRSRY));
 
         RolesAdmin rolesAdmin = new RolesAdmin(kernel);
-        console2.log("RolesAdmin deployed at:", address(rolesAdmin));
+        _recordDeployment("olympus.policies.RolesAdmin", address(rolesAdmin));
 
         Emergency emergency = new Emergency(kernel);
-        console2.log("Emergency deployed at:", address(emergency));
+        _recordDeployment("olympus.policies.Emergency", address(emergency));
 
         TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
-        console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
+        _recordDeployment("olympus.policies.TreasuryCustodian", address(treasuryCustodian));
 
         CCIPBurnMintTokenPool ccipTokenPool = new CCIPBurnMintTokenPool(
             address(kernel),
@@ -246,19 +260,19 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
             rmnProxy,
             ccipRouter
         );
-        console2.log("CCIPBurnMintTokenPool deployed at:", address(ccipTokenPool));
+        _recordDeployment("olympus.policies.CCIPBurnMintTokenPool", address(ccipTokenPool));
 
         CCIPCrossChainBridge ccipBridge = new CCIPCrossChainBridge(
             address(ohm),
             ccipRouter,
             msg.sender
         );
-        console2.log("CCIPCrossChainBridge deployed at:", address(ccipBridge));
+        _recordDeployment("olympus.periphery.CCIPCrossChainBridge", address(ccipBridge));
 
         Minter minter;
         if (isTestnet_) {
             minter = new Minter(kernel);
-            console2.log("Minter deployed at:", address(minter));
+            _recordDeployment("olympus.policies.Minter", address(minter));
         }
 
         // Execute actions on Kernel
@@ -285,7 +299,14 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         console2.log("");
         console2.log("Deployments complete");
-        console2.log("Please update the src/scripts/env.json file with the new addresses");
+        console2.log("shell/L2/deploy.sh saves the returned addresses after broadcast succeeds");
+        return _deploymentAddresses;
+    }
+
+    /// @dev Collect registry keys with the deployments, for the shared writer after broadcast.
+    function _recordDeployment(string memory key_, address deployed_) internal {
+        console2.log(key_, "deployed at:", deployed_);
+        _deploymentAddresses = vm.serializeAddress("l2Deployment", key_, deployed_);
     }
 
     /// @dev Uses the same configuration keys as DeployV3's CCIP sequences.
@@ -298,14 +319,14 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         );
 
         CCIPTokenPoolConfig config = new CCIPTokenPoolConfig(kernel_, pool_, gracePeriod);
-        console2.log("CCIPTokenPoolConfig deployed at:", address(config));
+        _recordDeployment("olympus.policies.CCIPTokenPoolConfig", address(config));
         CCIPTokenPoolConfigTimelock timelock = new CCIPTokenPoolConfigTimelock(
             kernel_,
             address(config),
             timelockDelay,
             gracePeriod
         );
-        console2.log("CCIPTokenPoolConfigTimelock deployed at:", address(timelock));
+        _recordDeployment("olympus.policies.CCIPTokenPoolConfigTimelock", address(timelock));
 
         kernel_.executeAction(Actions.ActivatePolicy, address(config));
         kernel_.executeAction(Actions.ActivatePolicy, address(timelock));
@@ -412,10 +433,8 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         address ccipTokenPool = _envAddress("olympus.policies.CCIPBurnMintTokenPool");
         if (ccipTokenPool != address(0)) {
-            address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
-            console2.log("Proposing CCIP config policy as pool owner", config);
-            CCIPBurnMintTokenPool(ccipTokenPool).transferOwnership(config);
-            console2.log("CCIPNonEthereumSetupBatch.setup will accept pool ownership");
+            console2.log("Proposing DAO multisig as CCIP pool owner", daoMultisig);
+            CCIPBurnMintTokenPool(ccipTokenPool).transferOwnership(daoMultisig);
         }
 
         address ccipBridge = _envAddress("olympus.periphery.CCIPCrossChainBridge");
@@ -432,10 +451,200 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         Kernel(kernel).executeAction(Actions.ChangeExecutor, daoMultisig);
         vm.stopBroadcast();
 
-        console2.log("Handoff complete");
-        console2.log(
-            "DAO multisig will need to call RolesAdmin.pullNewAdmin() to complete the handoff"
+        console2.log("HANDOFF PENDING: DAO Safe acceptance is required");
+        console2.log("shell/L2/handoff.sh creates the L2HandoffBatch.acceptHandoff Safe proposal");
+        console2.log("Deployer retains pending-transfer authority until the DAO accepts");
+        console2.log("After acceptance, run shell/L2/verify.sh --chain <chain>");
+    }
+
+    /// @notice Reports ownership and deployer access at the current RPC block without changing chain state.
+    /// @dev Addresses come from env.json. The wrapper reads the deployer and ROLES creation block
+    ///      from the saved broadcast receipts.
+    ///      Every role granted since that block is checked, including roles outside the bootstrap list.
+    ///      Returns false rather than reverting so Forge shows every failed check. The wrapper exits nonzero.
+    /// @param chain_ Registry chain key.
+    /// @param deployer_ Sender of the ROLES creation transaction.
+    /// @param rolesCreationBlock_ Block containing the confirmed ROLES creation transaction.
+    /// @return passed Whether the DAO handoff is complete and the deployer has no checked administrative access.
+    function verifyOwnership(
+        string calldata chain_,
+        address deployer_,
+        uint256 rolesCreationBlock_
+    ) external returns (bool passed) {
+        _loadEnv(chain_);
+        address dao = _getDaoMultisig();
+        if (
+            deployer_ == address(0) ||
+            deployer_ == dao ||
+            deployer_ == _getEmergencyMultisig() ||
+            rolesCreationBlock_ > block.number
+        ) revert L2Deploy_InvalidVerificationInput();
+        _ownershipFailures = 0;
+        console2.log("=== L2 ownership and deployer access verification ===");
+        console2.log("Deployer:", deployer_);
+        console2.log("DAO Safe:", dao);
+        console2.log("RPC block:", block.number);
+
+        Kernel kernel = Kernel(_envAddressNotZero("olympus.Kernel"));
+        OlympusRoles roles = OlympusRoles(_envAddressNotZero("olympus.modules.OlympusRoles"));
+        address mintr = _envAddressNotZero("olympus.modules.OlympusMinter");
+        _checkOwnership("Kernel executor is DAO Safe", kernel.executor() == dao);
+        _checkOwnership(
+            "Recorded ROLES is installed in Kernel",
+            address(kernel.getModuleForKeycode(toKeycode("ROLES"))) == address(roles)
         );
+        _checkOwnership(
+            "Recorded MINTR is installed in Kernel",
+            address(kernel.getModuleForKeycode(toKeycode("MINTR"))) == mintr
+        );
+
+        RolesAdmin rolesAdmin = RolesAdmin(_envAddressNotZero("olympus.policies.RolesAdmin"));
+        _checkOwnership(
+            "RolesAdmin uses the recorded Kernel and ROLES",
+            address(rolesAdmin.kernel()) == address(kernel) &&
+                address(rolesAdmin.ROLES()) == address(roles)
+        );
+        _checkOwnership("RolesAdmin admin is DAO Safe", rolesAdmin.admin() == dao);
+        _checkOwnership("RolesAdmin has no pending admin", rolesAdmin.newAdmin() == address(0));
+        _verifyAuthority(deployer_, dao, mintr);
+        _verifyCCIPOwnership(deployer_, dao);
+        _verifyDeployerRoles(roles, deployer_, rolesCreationBlock_);
+
+        passed = _ownershipFailures == 0;
+        console2.log("Failed ownership checks:", _ownershipFailures);
+        console2.log(passed ? "OWNERSHIP VERIFICATION: PASS" : "OWNERSHIP VERIFICATION: FAIL");
+    }
+
+    function _verifyAuthority(address deployer_, address dao_, address mintr_) internal {
+        OlympusAuthority auth = OlympusAuthority(
+            _envAddressNotZero("olympus.legacy.OlympusAuthority")
+        );
+        OlympusERC20Token ohm = OlympusERC20Token(_envAddressNotZero("olympus.legacy.OHM"));
+        _checkOwnership(
+            "OHM uses the recorded Authority",
+            address(ohm.authority()) == address(auth)
+        );
+        _checkOwnership(
+            "Authority uses itself for access control",
+            address(auth.authority()) == address(auth)
+        );
+        _checkOwnership("Authority governor is DAO Safe", auth.governor() == dao_);
+        _checkOwnership("Authority guardian is DAO Safe", auth.guardian() == dao_);
+        _checkOwnership("Authority policy is DAO Safe", auth.policy() == dao_);
+        _checkOwnership("Authority vault is MINTR", auth.vault() == mintr_ && mintr_ != deployer_);
+        _checkOwnership(
+            "Authority pending governor is zero or DAO Safe",
+            auth.newGovernor() == address(0) || auth.newGovernor() == dao_
+        );
+        _checkOwnership(
+            "Authority pending guardian is zero or DAO Safe",
+            auth.newGuardian() == address(0) || auth.newGuardian() == dao_
+        );
+        _checkOwnership(
+            "Authority pending policy is zero or DAO Safe",
+            auth.newPolicy() == address(0) || auth.newPolicy() == dao_
+        );
+        _checkOwnership(
+            "Authority pending vault is zero or MINTR",
+            auth.newVault() == address(0) || auth.newVault() == mintr_
+        );
+    }
+
+    function _verifyCCIPOwnership(address deployer_, address dao_) internal {
+        CCIPBurnMintTokenPool pool = CCIPBurnMintTokenPool(
+            _envAddressNotZero("olympus.policies.CCIPBurnMintTokenPool")
+        );
+        address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+        address timelock = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfigTimelock");
+        address kernel = _envAddressNotZero("olympus.Kernel");
+        _checkOwnership(
+            "CCIP policies use the recorded Kernel",
+            address(pool.kernel()) == kernel &&
+                address(CCIPTokenPoolConfig(config).kernel()) == kernel &&
+                address(CCIPTokenPoolConfigTimelock(timelock).kernel()) == kernel
+        );
+        _checkOwnership(
+            "Config and timelock are bound to the recorded pool",
+            CCIPTokenPoolConfig(config).pool() == address(pool) &&
+                CCIPTokenPoolConfigTimelock(timelock).config() == config
+        );
+        address poolOwner = pool.owner();
+        address pendingOwner = CCIPConfigLib.pendingOwner(address(pool));
+        console2.log("Pool owner:", poolOwner);
+        console2.log("Pool pending owner:", pendingOwner);
+        _checkOwnership(
+            "Pool owner is DAO Safe or config policy",
+            (poolOwner == dao_ || poolOwner == config) && poolOwner != deployer_
+        );
+        _checkOwnership(
+            "Pool pending owner is zero or config policy",
+            pendingOwner == address(0) || (pendingOwner == config && pendingOwner != deployer_)
+        );
+        address rateLimitAdmin = pool.getRateLimitAdmin();
+        _checkOwnership(
+            "Pool rate limit admin matches configuration and is not deployer",
+            rateLimitAdmin == _envAddress("olympus.config.CCIPTokenPoolConfig.rateLimitAdmin") &&
+                rateLimitAdmin != deployer_
+        );
+        _checkOwnership(
+            "CCIP bridge owner is DAO Safe",
+            CCIPCrossChainBridge(_envAddressNotZero("olympus.periphery.CCIPCrossChainBridge"))
+                .owner() == dao_
+        );
+        address operator = CCIPTokenPoolConfig(config).configOperator();
+        _checkOwnership(
+            "Config operator is unset or timelock, not deployer",
+            (operator == address(0) || operator == timelock) && operator != deployer_
+        );
+
+        ICCIPTokenAdminRegistry.TokenConfig memory tokenConfig = ICCIPTokenAdminRegistry(
+            _envAddressNotZero("external.ccip.TokenAdminRegistry")
+        ).getTokenConfig(_envAddressNotZero("olympus.legacy.OHM"));
+        _checkOwnership(
+            "Token registry admin is unset or DAO Safe",
+            tokenConfig.administrator == address(0) || tokenConfig.administrator == dao_
+        );
+        _checkOwnership(
+            "Token registry pending admin is unset or DAO Safe",
+            tokenConfig.pendingAdministrator == address(0) ||
+                tokenConfig.pendingAdministrator == dao_
+        );
+    }
+
+    function _verifyDeployerRoles(
+        OlympusRoles roles_,
+        address deployer_,
+        uint256 fromBlock_
+    ) internal {
+        bytes32[] memory topics = new bytes32[](1);
+        topics[0] = keccak256("RoleGranted(bytes32,address)");
+        console2.log("Checking all ROLES grants from creation block:", fromBlock_);
+        uint256 grants;
+        bool noRoles = true;
+        // Bound each RPC log query instead of relying on an unrestricted historical block range.
+        for (uint256 start = fromBlock_; start <= block.number; ) {
+            uint256 end = start + 999;
+            if (end > block.number) end = block.number;
+            Vm.EthGetLogs[] memory logs = vm.eth_getLogs(start, end, address(roles_), topics);
+            for (uint256 i; i < logs.length; ++i) {
+                if (logs[i].topics[2] != bytes32(uint256(uint160(deployer_)))) continue;
+                ++grants;
+                bytes32 role = logs[i].topics[1];
+                console2.log("Historical deployer role:");
+                console2.logBytes32(role);
+                bool held = roles_.hasRole(deployer_, role);
+                if (held) noRoles = false;
+                _checkOwnership("Deployer no longer holds this role", !held);
+            }
+            start = end + 1;
+        }
+        console2.log("Historical grants to deployer checked:", grants);
+        _checkOwnership("Deployer holds no ROLES roles", noRoles);
+    }
+
+    function _checkOwnership(string memory label_, bool passed_) internal {
+        console2.log(string.concat(passed_ ? "[PASS] " : "[FAIL] ", label_));
+        if (!passed_) ++_ownershipFailures;
     }
 
     function verifyBerachain(string calldata chain_) public {

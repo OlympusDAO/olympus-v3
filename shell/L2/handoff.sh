@@ -61,4 +61,20 @@ FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy
     $RESUME_FLAG
 
 echo ""
-echo "Handoff complete"
+if [ "$BROADCAST" == "true" ]; then
+    echo "Handoff broadcast complete. Creating the DAO Safe acceptance proposal."
+    echo "The signing wallet must be an owner of the DAO Safe."
+    SAFE_ARGS=(--contract L2HandoffBatch --function acceptHandoff --chain "$CHAIN" --multisig true --broadcast true)
+    if [ -n "$account" ]; then
+        SAFE_ARGS+=(--account "$account")
+    else
+        SAFE_ARGS+=(--ledger "$ledger")
+    fi
+    if [ -n "$nonce" ]; then SAFE_ARGS+=(--nonce "$nonce"); fi
+    "$SCRIPT_DIR/../safeBatchV2.sh" "${SAFE_ARGS[@]}"
+    echo "Confirm and execute the acceptance proposal in the DAO Safe to complete the handoff."
+    echo "After execution, run ./shell/L2/verify.sh --chain $CHAIN to check the live deployer-access invariant."
+else
+    echo "Handoff preview complete. No transactions or Safe proposal were submitted."
+    echo "A broadcast handoff also creates the DAO Safe acceptance batch."
+fi

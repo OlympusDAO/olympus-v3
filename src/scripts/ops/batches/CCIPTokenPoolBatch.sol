@@ -384,8 +384,8 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     }
 
     /// @notice Proposes the local CCIPTokenPoolConfig policy as the new owner of the TokenPool
-    /// @dev    The batch owner must be the pool owner (the deployer, right after the deploy
-    ///         sequence). The transfer is only proposed here; the config policy accepts it with
+    /// @dev    The batch owner must be the pool owner (the DAO MS after the initial L2 handoff).
+    ///         The transfer is only proposed here; the config policy accepts it with
     ///         `acceptPoolOwnership` in the setup batch (non-canonical chains) or in the OCG
     ///         proposal (mainnet). Skipped when the config policy already owns or is the pending
     ///         owner of the pool.
@@ -415,7 +415,7 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
         }
         _requireDirectPoolOwner(
             tokenPool,
-            "Run this entry point again with the printed pool owner as the sender (the deployer after the deploy sequence)."
+            "Run this entry point with the printed pool owner as the sender (the DAO MS after the initial L2 handoff)."
         );
 
         console2.log("Transferring ownership of", tokenPool, "to CCIPTokenPoolConfig", config);

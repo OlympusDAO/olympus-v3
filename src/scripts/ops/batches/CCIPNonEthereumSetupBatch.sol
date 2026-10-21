@@ -535,7 +535,7 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
                 string.concat(
                     "the config policy owns or is the pending owner of the pool (owner ",
                     vm.toString(poolOwner),
-                    "; if the deployer still owns it, run CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig)"
+                    "; run CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig from the current pool owner)"
                 )
             );
             _check(
