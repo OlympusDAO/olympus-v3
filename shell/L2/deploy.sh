@@ -11,12 +11,13 @@
 #   --ohm <true|false>
 #   --broadcast <false>
 #   --verify <false>
+#   --verifier <both|etherscan|sourcify> (default: both)
 #   --resume <false>
 #   --env <env-file> (optional; defaults to .env if present)
 #
 # Environment variables:
 # RPC_URL, CHAIN (legacy alternative to --chain)
-# Source verification uses Sourcify and requires no Etherscan API key.
+# Source verification uses Etherscan and Sourcify. Etherscan requires ETHERSCAN_API_KEY.
 
 # Exit if any error occurs
 set -eo pipefail
@@ -59,11 +60,7 @@ echo "  Deploying OHM: $ohm"
 # Validate and set forge script flags
 source "$SCRIPT_DIR/../lib/forge.sh"
 set_broadcast_flag "$BROADCAST"
-set_verify_flag "$VERIFY"
-if [ -n "$VERIFY_FLAG" ] && [ -z "$BROADCAST_FLAG" ]; then
-    display_error "Foundry requires --broadcast true with --verify true. To retry a saved deployment, inspect receipts and use --resume true."
-    exit 1
-fi
+configure_verification "$VERIFY" "${verifier:-both}" "$RPC_URL"
 set_resume_flag "$RESUME"
 validate_and_set_account "$account" "$ledger"
 
@@ -77,13 +74,11 @@ fi
 # Deploy using script
 echo ""
 echo "Running forge script"
-FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy \
-    --sig "deploy(string,bool)(string)" "$CHAIN" "$ohm" \
-    --rpc-url "$RPC_URL" $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv \
-    --sender "$ACCOUNT_ADDRESS" \
-    $BROADCAST_FLAG \
-    $VERIFY_FLAG \
-    $RESUME_FLAG \
+FORGE_ARGS=(./src/scripts/deploy/L2Deploy.s.sol:L2Deploy
+    --sig "deploy(string,bool)(string)" "$CHAIN" "$ohm"
+    --rpc-url "$RPC_URL" $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv
+    --sender "$ACCOUNT_ADDRESS" $BROADCAST_FLAG)
+FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG \
     |
     # The address map is saved in the broadcast for the registry writer; individual
     # deployments are already logged. Flush progress output immediately.
@@ -102,13 +97,9 @@ if [ "$BROADCAST" == "true" ]; then
         ./src/scripts/deploy/write_deployment.sh "current.$CHAIN.$key" "$address"
     done <<< "$DEPLOYMENTS"
 
-    # Format the timestamped artifact kept in Git; Forge latest aliases stay transient.
-    TIMESTAMP=$(jq -er '.timestamp' "$DEPLOYMENT")
-    BROADCAST_FILE="broadcast/L2Deploy.s.sol/$CHAIN_ID/run-$TIMESTAMP.json"
-    validate_file "$BROADCAST_FILE" "Missing timestamped deployment artifact: $BROADCAST_FILE"
-    pnpm exec prettier --cache --cache-strategy content --write "$BROADCAST_FILE" src/scripts/env.json
-    pnpm exec prettier --cache --cache-strategy content --check "$BROADCAST_FILE" src/scripts/env.json
+    format_broadcast "${FORGE_ARGS[0]}" "$CHAIN_ID"
 fi
 
 echo ""
-echo "Deployment complete"
+echo "Deployment transactions complete"
+FOUNDRY_PROFILE=deploy verify_deployment "${FORGE_ARGS[@]}"

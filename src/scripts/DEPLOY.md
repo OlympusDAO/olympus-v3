@@ -22,16 +22,22 @@
 
 ## Verification
 
-`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` explicitly select Sourcify when `--verify true` is passed.
-No Etherscan API key or custom explorer endpoint is required.
+`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` verify with **Etherscan and Sourcify** when `--verify true` is passed.
+Set `ETHERSCAN_API_KEY` in the environment or deployment env file. The legacy `ETHERSCAN_KEY` name is also accepted.
+Use `--verifier etherscan` or `--verifier sourcify` to select one provider; the default is `both`.
+Sourcify-only verification requires no Etherscan API key.
 
-Sourcify forwards successful verifications to supported explorers, including Etherscan.
-Check the target explorer afterward: Etherscan's forwarding quota can prevent some submissions.
-See [Sourcify's forwarding documentation](https://docs.sourcify.dev/docs/external-verifiers/).
+Verification runs from saved receipts after deployment succeeds. Both providers are attempted even if one fails.
+The command exits nonzero if either provider fails, while retaining the deployment records.
+Retry the failed provider with the original command plus `--resume true --verify true --verifier <provider>`.
+Resume uses the saved deployment; confirmed transactions are not sent again.
+
+Etherscan uses the explicit V2 endpoint and RPC chain ID, including Robinhood (4663).
+See [Etherscan's custom-chain instructions](https://docs.etherscan.io/contract-verification/verify-with-foundry#custom-chains).
 
 ### Manual Verification
 
-If automatic Sourcify verification fails, retry with the original deployment profile and contract source:
+To verify one contract on Sourcify, use the original deployment profile and contract source:
 
 ```bash
 FOUNDRY_PROFILE=deploy forge verify-contract \
@@ -40,5 +46,4 @@ FOUNDRY_PROFILE=deploy forge verify-contract \
 ```
 
 Keep the original compiler settings and source files.
-If a contract is verified on Sourcify but remains unverified on Etherscan, use `shell/verify_etherscan.sh` as a fallback.
-That separate Etherscan tool still requires its own API key.
+For individual Etherscan verification, `shell/verify_etherscan.sh` remains available and requires an API key.

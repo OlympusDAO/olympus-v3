@@ -9,10 +9,11 @@
 #   --chain <chain-name> (e.g. mainnet, base, or provide a custom RPC URL)
 #   [--broadcast <false>]
 #   [--verify <false>]
+#   [--verifier <both|etherscan|sourcify>] (default: both)
 #   [--resume <false>]
 #   [--env <env-file>]
 #
-# Source verification uses Sourcify and requires no Etherscan API key.
+# Source verification uses Etherscan and Sourcify. Etherscan requires ETHERSCAN_API_KEY.
 
 # Exit if any error occurs
 set -e
@@ -48,27 +49,22 @@ echo "  Chain: $chain"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag "$VERIFY"
+configure_verification "$VERIFY" "${verifier:-both}" "$chain"
 set_resume_flag $RESUME
 validate_and_set_account "$account" "$ledger"
 
 # Deploy using script
 echo ""
 echo "Running forge script"
-FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3 \
-    --sig "deploy(string)()" $sequence \
-    --rpc-url $chain \
-    $ACCOUNT_FLAG \
-    $LEDGER_FLAGS \
-    --slow \
-    -vvv \
-    --sender $ACCOUNT_ADDRESS \
-    $BROADCAST_FLAG \
-    $VERIFY_FLAG \
-    $RESUME_FLAG
+FORGE_ARGS=(./src/scripts/deploy/DeployV3.s.sol:DeployV3
+    --sig "deploy(string)()" "$sequence" --rpc-url "$chain"
+    $ACCOUNT_FLAG $LEDGER_FLAGS --slow -vvv --sender "$ACCOUNT_ADDRESS" $BROADCAST_FLAG)
+FOUNDRY_PROFILE=deploy forge script "${FORGE_ARGS[@]}" $RESUME_FLAG
 
 echo ""
 echo "Formatting deployment JSON files (best effort)"
 pnpm exec prettier --cache --cache-strategy content --no-error-on-unmatched-pattern --write "deployments/**/*.json" "deployments/**/.*.json" "src/scripts/env.json" || {
     echo "WARNING: Deployment JSON formatting failed; continuing"
 }
+
+FOUNDRY_PROFILE=deploy verify_deployment "${FORGE_ARGS[@]}"

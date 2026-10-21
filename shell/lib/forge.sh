@@ -2,7 +2,7 @@
 
 # Library for forge script commands
 
-source $( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/error.sh
+source $(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/error.sh
 
 # @description Sets the broadcast flag based on the value of the variable
 # @param {boolean} $1 The variable holding the boolean value
@@ -19,19 +19,71 @@ set_broadcast_flag() {
     fi
 }
 
-# @description Enables Sourcify verification when requested
-# @param {boolean} $1 The verification boolean
-# @sideEffects Sets the VERIFY_FLAG global variable
-set_verify_flag() {
-    # If the variable is true (case insensitive)
-    local lowercase=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    if [ "$lowercase" = "true" ]; then
-        VERIFY_FLAG="--verify --verifier sourcify"
-        echo "  Verification: Sourcify"
-    else
-        VERIFY_FLAG=""
+# Configure source verification before any deployment transactions are sent.
+# --verify true defaults to both providers; --verifier selects a targeted retry.
+configure_verification() {
+    VERIFY_ENABLED=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    local provider=${2:-both}
+    case "$provider" in
+        both) VERIFICATION_PROVIDERS=(etherscan sourcify) ;;
+        etherscan | sourcify) VERIFICATION_PROVIDERS=("$provider") ;;
+        *)
+            display_error "Provide --verifier both, etherscan, or sourcify."
+            return 1
+            ;;
+    esac
+
+    if [ "$VERIFY_ENABLED" != "true" ]; then
         echo "  Verification: disabled"
+        return
     fi
+    if [ -z "$BROADCAST_FLAG" ]; then
+        display_error "Verification requires --broadcast true. Use --resume true for a saved deployment."
+        return 1
+    fi
+    if [ "$provider" != "sourcify" ]; then
+        export ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-${ETHERSCAN_KEY:-}}
+        if [ -z "$ETHERSCAN_API_KEY" ]; then
+            display_error "Set ETHERSCAN_API_KEY (or ETHERSCAN_KEY) for Etherscan verification."
+            return 1
+        fi
+    fi
+    VERIFICATION_CHAIN_ID=$(cast chain-id --rpc-url "$3")
+    echo "  Verification: ${VERIFICATION_PROVIDERS[*]}"
+}
+
+# Format the timestamped artifact kept in Git; latest aliases stay transient.
+format_broadcast() {
+    local script=${1%%:*}
+    local manifest="broadcast/${script##*/}/$2/deploy-latest.json"
+    local timestamp
+    timestamp=$(jq -er '.timestamp' "$manifest")
+    pnpm exec prettier --cache --cache-strategy content --write "${manifest%/*}/run-$timestamp.json" src/scripts/env.json
+    pnpm exec prettier --cache --cache-strategy content --check "${manifest%/*}/run-$timestamp.json" src/scripts/env.json
+}
+
+# Verify saved receipts after deployment and registry recording have succeeded.
+# Attempt every selected provider, then report failure if any provider failed.
+verify_deployment() {
+    if [ "$VERIFY_ENABLED" != "true" ]; then return; fi
+    local provider status=0
+    local verifier_args=()
+    for provider in "${VERIFICATION_PROVIDERS[@]}"; do
+        verifier_args=(--resume --verify --verifier "$provider")
+        if [ "$provider" == "etherscan" ]; then
+            verifier_args+=(--chain "$VERIFICATION_CHAIN_ID" --verifier-url "https://api.etherscan.io/v2/api?chainid=$VERIFICATION_CHAIN_ID")
+        fi
+        echo ""
+        echo "Verifying saved deployment with $provider"
+        if forge script "$@" "${verifier_args[@]}"; then
+            echo "[PASS] $provider verification"
+        else
+            echo "[FAIL] $provider verification; retry with --resume true --verify true --verifier $provider"
+            status=1
+        fi
+        format_broadcast "$1" "$VERIFICATION_CHAIN_ID" || status=1
+    done
+    return "$status"
 }
 
 # @description Sets the resume flag based on the value of the variable
