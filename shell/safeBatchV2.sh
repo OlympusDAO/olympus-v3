@@ -134,8 +134,8 @@ else
     VERBOSITY="-vvv"
 fi
 
-# Build forge command
-FORGE_CMD="FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,string,string)()\" $multisig \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS $UNLOCKED_FLAG --slow $VERBOSITY"
+# Use deployment compiler settings while simulating the batch calls in one transaction.
+FORGE_CMD="FOUNDRY_PROFILE=deploy forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,string,string)()\" $multisig \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS $UNLOCKED_FLAG --no-isolate --slow $VERBOSITY"
 
 # Add broadcast flag
 if [ "$broadcast" == "true" ]; then
