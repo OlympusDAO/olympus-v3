@@ -932,8 +932,8 @@ solana_mint_supply() {
 # that difference is the key, so a funded pool is reported against the key
 # instead). Takes the funding amount; warns on every
 # difference and on a skipped read, since the amount does not depend on either
-# figure and fundPool reads the supply itself at build time. A pool state on
-# which the post-batch check of fundPool would fail sets CCIP_FUNDING_BLOCKED.
+# figure and fundPool reads the supply itself at build time. A pool state that
+# fundPool refuses sets CCIP_FUNDING_BLOCKED.
 check_ccip_free_liquidity() {
     local amount="$1"
     subsection "Cross-check: free liquidity of the pool against poolUnclaimableBalance"
@@ -1000,7 +1000,7 @@ check_ccip_free_liquidity() {
     if [[ "$free_after" -ge "$CCIP_MIN_POOL_BACKING" ]]; then
         ok "The free liquidity after the transfer covers minimumPoolBacking, which the post-batch check of CCIPTokenPoolBatch.fundPool requires"
     else
-        warn "The free liquidity after the transfer is $(fmt_ohm "$((CCIP_MIN_POOL_BACKING - free_after))") OHM below minimumPoolBacking: the post-batch check of CCIPTokenPoolBatch.fundPool fails on this pool state"
+        warn "The free liquidity after the transfer is $(fmt_ohm "$((CCIP_MIN_POOL_BACKING - free_after))") OHM below minimumPoolBacking: CCIPTokenPoolBatch.fundPool refuses this pool state"
         CCIP_FUNDING_BLOCKED=true
     fi
 }
@@ -1105,7 +1105,7 @@ fi
 
 if $CCIP_FUNDING_BLOCKED; then
     ok "All checks passed. Ready for Step 5 (LZBridgeGatewayBatch.initBridgedSupply)"
-    printf '  %b[!]%b %s\n' "${YELLOW}" "${NC}" "Not ready for the CCIP pool funding: the post-batch check of CCIPTokenPoolBatch.fundPool fails on this pool state (see STEP 5)"
+    printf '  %b[!]%b %s\n' "${YELLOW}" "${NC}" "Not ready for the CCIP pool funding: CCIPTokenPoolBatch.fundPool refuses this pool state (see STEP 5)"
 else
     ok "All checks passed. Ready for Step 5 (LZBridgeGatewayBatch.initBridgedSupply) and for the CCIP pool funding (CCIPTokenPoolBatch.fundPool)"
 fi
