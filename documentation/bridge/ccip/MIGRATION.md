@@ -43,7 +43,7 @@ sequenceDiagram
     DAO->>P: transferOwnership(config)
     DAO->>REG: transferAdminRole(OHM, OCG timelock)
 
-    Note over DAO,REG: Phase C: OCG proposal, up to 13 actions in one transaction, the checker call first and each later action only if the live state lacks it
+    Note over DAO,REG: Phase C: OCG proposal, up to 14 actions in one transaction, the checker call first and each later action only if the live state lacks it
     OCG->>CH: check(expectations)
     OCG->>REG: acceptAdminRole(OHM)
     OCG->>RA: grantRole(bridge_admin, DAO Multisig)
