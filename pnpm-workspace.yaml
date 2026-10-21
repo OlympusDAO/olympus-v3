@@ -1,4 +1,7 @@
 minimumReleaseAge: 10080
+minimumReleaseAgeExclude:
+    # GHSA-gfr2-rv44-r23c, GHSA-vfgh-jcmw-g37q. Remove after 2026-10-23.
+    - "markdown-it@14.3.3"
 preferFrozenLockfile: true
 engineStrict: true
 strictDepBuilds: true
@@ -14,7 +17,8 @@ overrides:
     "js-yaml@>=5.0.0 <5.4.1": "5.4.1"
     "linkify-it@<=5.0.1": "^5.0.2"
     "lodash@<=4.17.23": "^4.18.0"
-    "markdown-it@>=13.0.0 <14.2.0": "^14.2.0"
+    "markdown-it@>=13.0.0 <14.3.3": "14.3.3"
+    "katex@>=0.11.0 <0.18.2": "0.18.11"
     "minimatch@>=10.0.0 <10.2.3": "^10.2.3"
     "minimatch@>=5.0.0 <5.1.8": "^5.1.8"
     "picomatch@<2.3.2": "^2.3.2"
