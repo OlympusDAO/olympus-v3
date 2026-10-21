@@ -5,6 +5,10 @@ import {console2} from "forge-std/console2.sol";
 import {WithEnvironment} from "../WithEnvironment.s.sol";
 import {WithLayerZeroConstants} from "../WithLayerZeroConstants.sol";
 
+// Libraries
+import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
+
+// Contracts
 import {Kernel, Actions} from "src/Kernel.sol";
 
 import {OlympusAuthority} from "src/external/OlympusAuthority.sol";
@@ -13,11 +17,13 @@ import {OlympusERC20Token} from "src/external/OlympusERC20.sol";
 import {OlympusMinter} from "src/modules/MINTR/OlympusMinter.sol";
 import {OlympusRoles} from "src/modules/ROLES/OlympusRoles.sol";
 import {OlympusTreasury} from "src/modules/TRSRY/OlympusTreasury.sol";
+import {CCIPCrossChainBridge} from "src/periphery/bridge/CCIPCrossChainBridge.sol";
 import {CrossChainBridge} from "src/policies/CrossChainBridge.sol";
 import {RolesAdmin} from "src/policies/RolesAdmin.sol";
 import {Emergency} from "src/policies/Emergency.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
+import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
 
 /// @notice Deploys and configures a Bophades installation on another chain.
 // solhint-disable gas-custom-errors
@@ -110,6 +116,16 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
             rolesAdmin.grantRole("bridge_admin", msg.sender);
         }
 
+        if (_envAddress("olympus.policies.CCIPBurnMintTokenPool") != address(0)) {
+            console2.log("Granting CCIP pool admin role to DAO multisig", _getDaoMultisig());
+            rolesAdmin.grantRole(ADMIN_ROLE, _getDaoMultisig());
+            console2.log(
+                "Granting CCIP pool emergency role to emergency multisig",
+                _getEmergencyMultisig()
+            );
+            rolesAdmin.grantRole(EMERGENCY_ROLE, _getEmergencyMultisig());
+        }
+
         {
             // OlympusAuthority vault
             console2.log("Granting OlympusAuthority vault role to MINTR", address(MINTR));
@@ -153,19 +169,27 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ///         - RolesAdmin
     ///         - Emergency
     ///         - TreasuryCustodian
+    ///         - CCIPBurnMintTokenPool
+    ///         - CCIPCrossChainBridge
     ///         - Minter (testnet only)
-    /// @dev    Bridge deployment is a separate operation.
+    /// @dev    The CCIP pool is activated in the Kernel. Both CCIP contracts remain disabled.
+    ///         CCIP registration, routes and enabling are separate configuration steps.
     /// @param chain_ Chain key in env.json.
     /// @param shouldDeployOhm_ Deploy Authority and OHM instead of reusing the registry entries.
     function deploy(string calldata chain_, bool shouldDeployOhm_) external {
         _loadEnv(chain_);
 
+        // Require CCIP infrastructure before starting any deployment transactions.
+        address rmnProxy = _envAddressNotZero("external.ccip.RMN");
+        address ccipRouter = _envAddressNotZero("external.ccip.Router");
         bool isTestnet_ = isTestnet(chain_);
 
         console2.log("");
         console2.log("Deploying to", chain_);
         console2.log("Is testnet:", isTestnet_);
         console2.log("Initial Kernel executor:", msg.sender);
+        console2.log("CCIP Router:", ccipRouter);
+        console2.log("CCIP RMN:", rmnProxy);
 
         vm.startBroadcast();
 
@@ -210,6 +234,21 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         TreasuryCustodian treasuryCustodian = new TreasuryCustodian(kernel);
         console2.log("TreasuryCustodian deployed at:", address(treasuryCustodian));
 
+        CCIPBurnMintTokenPool ccipTokenPool = new CCIPBurnMintTokenPool(
+            address(kernel),
+            address(ohm),
+            rmnProxy,
+            ccipRouter
+        );
+        console2.log("CCIPBurnMintTokenPool deployed at:", address(ccipTokenPool));
+
+        CCIPCrossChainBridge ccipBridge = new CCIPCrossChainBridge(
+            address(ohm),
+            ccipRouter,
+            msg.sender
+        );
+        console2.log("CCIPCrossChainBridge deployed at:", address(ccipBridge));
+
         Minter minter;
         if (isTestnet_) {
             minter = new Minter(kernel);
@@ -234,6 +273,7 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
+        kernel.executeAction(Actions.ActivatePolicy, address(ccipTokenPool));
         if (isTestnet_) {
             kernel.executeAction(Actions.ActivatePolicy, address(minter));
         }
@@ -338,6 +378,19 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
             console2.log("Granting bridge_admin role to DAO multisig", daoMultisig);
             RolesAdmin(rolesAdmin).grantRole("bridge_admin", daoMultisig);
+        }
+
+        address ccipTokenPool = _envAddress("olympus.policies.CCIPBurnMintTokenPool");
+        if (ccipTokenPool != address(0)) {
+            console2.log("Proposing DAO multisig as CCIP pool owner", daoMultisig);
+            CCIPBurnMintTokenPool(ccipTokenPool).transferOwnership(daoMultisig);
+            console2.log("DAO multisig must call CCIPBurnMintTokenPool.acceptOwnership()");
+        }
+
+        address ccipBridge = _envAddress("olympus.periphery.CCIPCrossChainBridge");
+        if (ccipBridge != address(0)) {
+            console2.log("Transferring CCIP bridge ownership to DAO multisig", daoMultisig);
+            CCIPCrossChainBridge(ccipBridge).transferOwnership(daoMultisig);
         }
 
         // Propose DAO multisig as new admin

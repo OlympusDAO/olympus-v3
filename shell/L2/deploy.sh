@@ -1,6 +1,7 @@
 #!/bin/bash
 
-# Deploys an L2 installation of the Olympus protocol.
+# Deploys an L2 installation of the Olympus protocol, including the CCIP pool and bridge.
+# Requires external.ccip.RMN and external.ccip.Router in src/scripts/env.json.
 #
 # Usage:
 # ./deploy.sh
