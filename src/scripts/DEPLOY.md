@@ -11,7 +11,7 @@
     - Use any necessary configuration parameters.
     - Create a copy the file under `src/scripts/deploy/savedDeployments/` and give it a name that makes sense.
 3. If external dependencies are required, add them in `src/scripts/env.json`, so that they can be used in `DeployV2.sol`.
-4. If necessary, update your `.env` file. It should, at least, have the same variables as in `.env.deploy.example`.
+4. Use `.env.example` as the template for `.env` and set the variables required by your deployment and verification providers.
 5. Run `shell/deploy.sh --sequence $DEPLOY_FILE_PATH` to run the deployment shell script. E.g. `shell/deploy.sh --sequence src/scripts/deploy/savedDeployments/rbs_v1_3.json`
     - If you want to broadcast the tx to the network, append `--broadcast true` to the command.
     - If you want to verify the contracts, append `--verify true` to the command.
