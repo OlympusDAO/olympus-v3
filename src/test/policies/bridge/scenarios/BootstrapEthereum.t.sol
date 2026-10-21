@@ -110,7 +110,7 @@ contract CCIPMigrationForkTests_BootstrapEthereum is CCIPEthereumMigrationForkTe
             "OCG proposal: the DAO MS should hold the bridge admin role"
         );
 
-        // The four burn/mint routes carry the declared limits and counterpart tokens
+        // The five burn/mint routes carry the declared limits and counterpart tokens
         for (uint256 i; i < burnMintRoutes.length; ++i) {
             _assertRoute(
                 address(pool),

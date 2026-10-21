@@ -27,10 +27,11 @@ This document describes the intended state after the complete rollout.
 | Optimism DAO MS | `0x559a14a2219Ae81f9a9f857CF31407de2b07F36c` |
 | Base DAO MS | `0x18a390bD45bCc92652b9A91AD51Aed7f1c1358f5` |
 | Berachain DAO MS | `0x91494D1BC2286343D51c55E46AE80C9356D099b5` |
-| Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` |
+| Robinhood Chain DAO MS | not deployed yet; a zero placeholder in `env.json` (`ROBINHOOD_PENDING.md`) |
+| Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` on Ethereum, Arbitrum, Optimism, Base and Berachain; no code on Robinhood Chain (read 2026-10-20), so its holder there is pending |
 | Zero address | `0x0000000000000000000000000000000000000000` |
 
-The non-Ethereum EVM chains are Arbitrum, Optimism, Base and Berachain. Each carries its own `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock`, `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`, and its own DAO MS. The Holder columns below name the Ethereum holders; on those chains the local DAO MS stands in for both the OCG timelock and the DAO MS.
+The non-Ethereum EVM chains are Arbitrum, Optimism, Base, Berachain and Robinhood Chain. Each carries its own `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock`, `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`, and its own DAO MS. The Holder columns below name the Ethereum holders; on those chains the local DAO MS stands in for both the OCG timelock and the DAO MS.
 
 ## Timelock parameters
 

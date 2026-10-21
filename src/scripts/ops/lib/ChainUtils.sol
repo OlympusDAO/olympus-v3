@@ -9,6 +9,7 @@ library ChainUtils {
     string public constant PROD_ARBITRUM = "arbitrum";
     string public constant PROD_BERACHAIN = "berachain";
     string public constant PROD_OPTIMISM = "optimism";
+    string public constant PROD_ROBINHOOD = "robinhood";
     string public constant PROD_SOLANA = "solana";
 
     string public constant TEST_SEPOLIA = "sepolia";
@@ -27,6 +28,7 @@ library ChainUtils {
     uint256 public constant CHAIN_BERACHAIN_BEPOLIA = 80069;
     uint256 public constant CHAIN_OPTIMISM = 10;
     uint256 public constant CHAIN_OPTIMISM_SEPOLIA = 11155420;
+    uint256 public constant CHAIN_ROBINHOOD = 4663;
     uint256 public constant CHAIN_POLYGON = 137;
     uint256 public constant CHAIN_POLYGON_AMOY = 80002;
 
@@ -44,13 +46,14 @@ library ChainUtils {
 
     /// @notice Returns an array of production chains
     function _getProductionChains() internal pure returns (string[] memory) {
-        string[] memory chains = new string[](6);
+        string[] memory chains = new string[](7);
         chains[0] = PROD_MAINNET;
         chains[1] = PROD_BASE;
         chains[2] = PROD_ARBITRUM;
         chains[3] = PROD_BERACHAIN;
         chains[4] = PROD_OPTIMISM;
-        chains[5] = PROD_SOLANA;
+        chains[5] = PROD_ROBINHOOD;
+        chains[6] = PROD_SOLANA;
 
         return chains;
     }
@@ -107,6 +110,8 @@ library ChainUtils {
             return PROD_BERACHAIN;
         } else if (chainId_ == CHAIN_OPTIMISM) {
             return PROD_OPTIMISM;
+        } else if (chainId_ == CHAIN_ROBINHOOD) {
+            return PROD_ROBINHOOD;
         } else {
             // solhint-disable-next-line gas-custom-errors
             revert("_getChainId: Chain ID not found");

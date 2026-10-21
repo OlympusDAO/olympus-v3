@@ -42,7 +42,7 @@
 #  12. Print the final authority state.
 #
 # Usage:
-#   ./run-l2.sh [--chain arbitrum|optimism|base|berachain] [--port <port>] [--keep-fork]
+#   ./run-l2.sh [--chain arbitrum|optimism|base|berachain|robinhood] [--port <port>] [--keep-fork]
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,8 +79,8 @@ while [ $# -gt 0 ]; do
 done
 
 case "$CHAIN" in
-    arbitrum | optimism | base | berachain) ;;
-    *) die "the chain must be one of arbitrum|optimism|base|berachain (got '$CHAIN')" ;;
+    arbitrum | optimism | base | berachain | robinhood) ;;
+    *) die "the chain must be one of arbitrum|optimism|base|berachain|robinhood (got '$CHAIN')" ;;
 esac
 HARNESS_CHAIN="$CHAIN"
 
@@ -109,8 +109,8 @@ solana_sel="$(jq -r '.current.solana.external.ccip.ChainSelector' "$REPO_ROOT/$E
 
 step "Registry handover: deployer EOA -> DAO MS"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
-run_batch_from CCIPTokenPoolBatch transferTokenPoolAdminRoleToDaoMS "$OLYMPUS_DEPLOYER_EOA" false
-run_batch CCIPTokenPoolBatch acceptAdminRole dao
+run_batch_from CCIPTokenPoolBatch transferTokenPoolAdminRoleToDaoMS "$OLYMPUS_DEPLOYER_EOA" false "" "-$CHAIN"
+run_batch_from CCIPTokenPoolBatch acceptAdminRole "$dao" true "" "-$CHAIN"
 echo "registry.getTokenConfig(OHM) = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
 
 deploy_sequence "src/scripts/deploy/savedDeployments/ccip_full_not_mainnet.json"
@@ -133,7 +133,7 @@ echo "config.gracePeriod()          = $(cast call "$cfg" 'gracePeriod()(uint32)'
 echo "config.isLiquidityContainer() = $(cast call "$cfg" 'isLiquidityContainer()(bool)' --rpc-url "$RPC")"
 
 step "Pool and periphery ownership handover (deployer)"
-run_batch_from CCIPTokenPoolBatch transferTokenPoolOwnershipToConfig "$DEPLOYER_ADDR" false
+run_batch_from CCIPTokenPoolBatch transferTokenPoolOwnershipToConfig "$DEPLOYER_ADDR" false "" "-$CHAIN"
 run_batch_from CCIPBridgeBatch transferOwnership "$DEPLOYER_ADDR" false "" "-deployer"
 expect_non_empty_batch "$LAST_BATCH_LOG" "periphery transferOwnership"
 echo "pool.owner()      = $(cast call "$pool" 'owner()(address)' --rpc-url "$RPC")  (deployer=$DEPLOYER_ADDR)"
@@ -318,7 +318,13 @@ echo "timelock.isEnabled()          = $(cast call "$tl" 'isEnabled()(bool)' --rp
 echo "config.configOperator()       = $(cast call "$cfg" 'configOperator()(address)' --rpc-url "$RPC")  (timelock=$tl)"
 echo "pool.getRateLimitAdmin()      = $(cast call "$pool" 'getRateLimitAdmin()(address)' --rpc-url "$RPC")"
 echo "registry.getTokenConfig(OHM)  = $(cast call "$registry" 'getTokenConfig(address)((address,address,address))' "$ohm" --rpc-url "$RPC")"
-echo "kernel legacy bridge active   = $(cast call "$kernel" 'isPolicyActive(address)(bool)' "$(env_addr "$CHAIN" olympus.policies.CrossChainBridge)" --rpc-url "$RPC")"
+# A chain without a legacy LayerZero bridge (Robinhood) records no CrossChainBridge key
+legacy_bridge="$(env_addr "$CHAIN" olympus.policies.CrossChainBridge)"
+if [ -n "$legacy_bridge" ]; then
+    echo "kernel legacy bridge active   = $(cast call "$kernel" 'isPolicyActive(address)(bool)' "$legacy_bridge" --rpc-url "$RPC")"
+else
+    echo "kernel legacy bridge active   = no legacy CrossChainBridge recorded in env.json"
+fi
 echo "DAO MS admin                  = $(cast call "$roles_mod" 'hasRole(address,bytes32)(bool)' "$dao" "$(cast format-bytes32-string admin)" --rpc-url "$RPC")"
 echo "DAO MS bridge_admin           = $(cast call "$roles_mod" 'hasRole(address,bytes32)(bool)' "$dao" "$(cast format-bytes32-string bridge_admin)" --rpc-url "$RPC")"
 echo "Emergency MS emergency        = $(cast call "$roles_mod" 'hasRole(address,bytes32)(bool)' "$ems" "$(cast format-bytes32-string emergency)" --rpc-url "$RPC")"
