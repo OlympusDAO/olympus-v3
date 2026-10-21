@@ -122,17 +122,13 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///           validation: both stay off until `finalize`, the only batch that passes the
     ///           opposite.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function setup(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         // The batch touches only the CCIP contracts, the Kernel policy set and the roles
         _skipHeartbeatValidation = true;
@@ -263,17 +259,13 @@ contract CCIPNonEthereumSetupBatch is BatchScriptV2 {
     ///         - The batch owner is not the OHM administrator in the local TokenAdminRegistry.
     ///         - Another pool is registered for OHM.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function finalize(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
         _requireNonCanonical();

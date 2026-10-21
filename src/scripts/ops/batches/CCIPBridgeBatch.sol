@@ -59,17 +59,13 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     ///         - A declared periphery block is malformed (see `CCIPConfigLib`).
     ///         - A live trusted remote has no `periphery` block in `env.json`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function reconcileTrustedRemotes(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         // The batch touches only the CCIP periphery
         _skipHeartbeatValidation = true;
@@ -109,17 +105,13 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - The batch owner is not the owner of the periphery.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function enable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
@@ -144,17 +136,13 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - The batch owner is not the owner of the periphery.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
@@ -178,17 +166,13 @@ contract CCIPBridgeBatch is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - A transfer is due and the batch owner is not the owner of the periphery.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function transferOwnership(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 

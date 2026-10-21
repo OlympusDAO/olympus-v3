@@ -151,11 +151,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         function adds nothing.
     function install(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Assumptions
         // - The token pool has been linked to OHM in the CCIP token admin registry
         // - The token pool is already configured
@@ -222,11 +220,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         the administrator is the OCG timelock and registry changes are OCG proposals.
     function acceptAdminRole(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -272,11 +268,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
     function setPool(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -312,11 +306,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         administrator is the OCG timelock and registry changes are OCG proposals.
     function transferTokenPoolAdminRoleToDaoMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the CCIP registry, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -359,11 +351,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         CCIPTokenPoolConfig and ownership transfers go through `transferPoolOwnership`.
     function transferTokenPoolOwnershipToDaoMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
@@ -401,11 +391,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         owner of the pool.
     function transferTokenPoolOwnershipToConfig(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the CCIP pool, which cannot affect the heartbeat; the
         // burn/mint chains also deploy no OlympusHeart to validate against.
         _skipHeartbeatValidation = true;
@@ -449,11 +437,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @dev    The batch owner must be the pending owner of the pool.
     function acceptTokenPoolOwnership(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         address tokenPool = _getTokenPoolAddressNotZero(chain);
         address daoMS = _envAddressNotZero("olympus.multisig.dao");
 
@@ -550,11 +536,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         Reads `remoteChain` from this function's entry in the args file.
     function configureRemoteChainEVM(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         string memory remoteChain = _readBatchArgString("configureRemoteChainEVM", "remoteChain");
 
         // Configure the remote chain
@@ -630,11 +614,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         Reads `remoteChain` from this function's entry in the args file.
     function configureRemoteChainSVM(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         string memory remoteChain = _readBatchArgString("configureRemoteChainSVM", "remoteChain");
 
         // Configure the remote chain
@@ -682,11 +664,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         chain outside the list is removed when its route exists.
     function configureAllRemoteChains(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Configure the remote chains
         _configureRemoteChains(chain);
 
@@ -803,11 +783,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         }
     function setRateLimits(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath_) {
         string memory localChain = _readBatchArgString("setRateLimits", "localChain");
         if (keccak256(abi.encodePacked(localChain)) != keccak256(abi.encodePacked(chain))) {
             revert("Local chain arg does not match the execution chain");
@@ -891,11 +869,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         Reads `remoteChain` from this function's entry in the args file.
     function emergencyShutdown(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         string memory remoteChain = _readBatchArgString("emergencyShutdown", "remoteChain");
         uint64 remoteChainSelector = CCIPConfigLib.chainSelector(env, remoteChain);
 
@@ -917,11 +893,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         and `configureRemoteChainSVM` replace a route with disabled limiters instead.
     function emergencyShutdownAll(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Determine the remote chains that are configured
         uint64[] memory remoteChainSelectors = ICCIPTokenPoolAdmin(
             _getTokenPoolAddressNotZero(chain)
@@ -1067,17 +1041,13 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         - The pool balance after the transfer, or the free liquidity after it, is below
     ///           the minimum backing (the post-batch check).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file.
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function fundPool(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the OHM balance of the pool
         _skipHeartbeatValidation = true;
         require(
@@ -1247,11 +1217,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     /// @dev    This function can only be called on canonical chains, by the rebalancer
     function withdrawAllLiquidity(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The pool keeps no internal accounting: its liquidity is its OHM balance
         address ohm = _envAddressNotZero("olympus.legacy.OHM");
         uint256 liquidity = IERC20(ohm).balanceOf(_getTokenPoolAddressNotZero(chain));
@@ -1274,11 +1242,9 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         Reads `amount` in OHM base units (9 decimals) from this function's args entry.
     function withdrawLiquidity(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         uint256 amount = _readBatchArgUint256("withdrawLiquidity", "amount");
 
         // Withdraw liquidity
