@@ -1,0 +1,246 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity >=0.8.24;
+
+// Shared domain values use constants; scenario-specific literals remain inline for auditability.
+// forge-lint: disable-start(literal-instead-of-constant)
+
+import {IBurnerLoansConfig} from "src/policies/interfaces/IBurnerLoansConfig.sol";
+import {IBurnerLoansConfigTimelock} from "src/policies/interfaces/IBurnerLoansConfigTimelock.sol";
+import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
+
+import {BurnerLoansConfigTimelockTest} from "./BurnerLoansConfigTimelockTest.sol";
+
+// Test actions assert effects directly; test inputs prove casts fit or select fixed-width values.
+// forge-lint: disable-start(unused-return,unsafe-typecast)
+
+contract BurnerLoansConfigTimelockQueueActionTest is BurnerLoansConfigTimelockTest {
+    // queueAction
+    // given target is not BurnerLoans
+    //  when queueing through the raw harness
+    //   then validation rejects the action
+    function test_givenWrongTarget_reverts(address target_) public {
+        vm.assume(target_ != address(burnerLoansConfig));
+        (
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdate memory update,
+            IBurnerLoansConfigTimelock.AssetRiskConfigUpdateSelection memory selection
+        ) = _maxLtvUpdate();
+        _authorizeHarness();
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                target_,
+                IBurnerLoansConfig.setAssetRiskConfig.selector
+            )
+        );
+        configTimelockHarness.queueAction(
+            target_,
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds), update, selection)
+        );
+    }
+
+    // queueAction
+    // given selector is not a supported Burner Loans configuration setter
+    //  when queueing through the raw harness
+    //   then validation rejects the action
+    function test_givenUnsupportedSelector_reverts() public {
+        bytes4 unsupportedSelector = bytes4(keccak256("setGlobalDebtCap(uint256)"));
+        _authorizeHarness();
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(burnerLoansConfig),
+                unsupportedSelector
+            )
+        );
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            unsupportedSelector,
+            abi.encode(1_000_000e9)
+        );
+    }
+
+    // queueAction
+    // given payload length does not match the asset risk setter ABI
+    //  when queueing through the raw harness
+    //   then validation rejects the action
+    function test_givenMalformedAssetRiskConfigPayload_reverts() public {
+        _authorizeHarness();
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.setAssetRiskConfig.selector
+            )
+        );
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetRiskConfig.selector,
+            abi.encode(address(usds))
+        );
+    }
+
+    // queueAction
+    // given payload length does not match the fee config setter ABI
+    //  when queueing through the raw harness
+    //   then validation rejects the action
+    function test_givenMalformedFeeConfigPayload_reverts() public {
+        _authorizeHarness();
+
+        vm.prank(burnerLoansAdmin);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(burnerLoansConfig),
+                IBurnerLoansConfig.setAssetFeeConfig.selector
+            )
+        );
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetFeeConfig.selector,
+            abi.encode(address(usds))
+        );
+    }
+
+    // queueAction
+    // given the asset debt cap payload is one byte shorter than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetDebtCapPayloadOneByteShort_whenQueued_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetDebtCap.selector, 63);
+    }
+
+    // queueAction
+    // given the asset debt cap payload is one byte longer than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetDebtCapPayloadOneByteLong_whenQueued_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetDebtCap.selector, 65);
+    }
+
+    // queueAction
+    // given the asset debt cap word is not a canonical uint128 encoding
+    //  when the action is queued
+    //   then ABI decoding rejects the action
+    function test_givenAssetDebtCapEncodingNonCanonical_whenQueued_reverts() public {
+        _authorizeHarness();
+
+        // Solidity's ABI decoder returns no stable custom error for a non-canonical uint128 word.
+        vm.expectRevert(bytes(""));
+        vm.prank(burnerLoansAdmin);
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetDebtCap.selector,
+            abi.encode(address(usds), uint256(type(uint128).max) + 1)
+        );
+    }
+
+    // queueAction
+    // given the asset originations payload is one byte shorter than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetOriginationsPayloadOneByteShort_whenQueued_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetOriginationsEnabled.selector, 63);
+    }
+
+    // queueAction
+    // given the asset originations payload is one byte longer than its ABI encoding
+    //  when the action is queued
+    //   then validation rejects the action
+    function test_givenAssetOriginationsPayloadOneByteLong_whenQueued_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.setAssetOriginationsEnabled.selector, 65);
+    }
+
+    // queueAction
+    // given the asset originations word is not a canonical bool encoding
+    //  when the action is queued
+    //   then ABI decoding rejects the action
+    function test_givenAssetOriginationsEncodingNonCanonical_whenQueued_reverts() public {
+        _authorizeHarness();
+
+        // Solidity's ABI decoder returns no stable custom error for a non-canonical bool word.
+        vm.expectRevert(bytes(""));
+        vm.prank(burnerLoansAdmin);
+        configTimelockHarness.queueAction(
+            address(burnerLoansConfig),
+            IBurnerLoansConfig.setAssetOriginationsEnabled.selector,
+            abi.encode(address(usds), uint256(2))
+        );
+    }
+
+    // queueAction
+    // given a fee-distributor flag payload has the wrong length or value
+    //  when the action is queued
+    //   then validation rejects the new flag selector
+    // Scenarios: QFEES-I08, QFEES-I09
+    function test_whenFeeDistributorFlagPayloadIsInvalid_reverts() public {
+        _expectInvalidDistributorFlagPayloads(IBurnerLoansConfig.setSendFeesToDistributor.selector);
+    }
+
+    // queueAction
+    // given a yield-distributor flag payload has the wrong length or value
+    //  when the action is queued
+    //   then validation rejects the new flag selector
+    // Scenarios: QYIELD-I08, QYIELD-I09
+    function test_whenYieldDistributorFlagPayloadIsInvalid_reverts() public {
+        _expectInvalidDistributorFlagPayloads(
+            IBurnerLoansConfig.setSendYieldToDistributor.selector
+        );
+    }
+
+    // queueAction
+    // given a surplus-rescue payload is not exactly two ABI words
+    //  when the action is queued
+    //   then validation rejects the new rescue selector before preview
+    // Scenarios: I-04
+    function test_whenSurplusRescuePayloadLengthIsInvalid_reverts() public {
+        _expectInvalidPayloadLength(IBurnerLoansConfig.rescue.selector, 63);
+        _expectInvalidPayloadLength(IBurnerLoansConfig.rescue.selector, 65);
+    }
+
+    function _expectInvalidPayloadLength(bytes4 selector_, uint256 payloadLength_) internal {
+        _expectInvalidPayload(selector_, new bytes(payloadLength_));
+    }
+
+    function _expectInvalidDistributorFlagPayloads(bytes4 selector_) internal {
+        _expectInvalidPayloadLength(selector_, 31);
+        _expectInvalidPayloadLength(selector_, 33);
+        _expectInvalidPayload(selector_, abi.encode(uint256(2)));
+    }
+
+    function _expectInvalidPayload(bytes4 selector_, bytes memory payload_) internal {
+        _authorizeHarness();
+        uint64 nextActionId = configTimelockHarness.nextActionId();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ITimelockBatchQueue.ITimelockBatchQueue_ActionInvalid.selector,
+                address(burnerLoansConfig),
+                selector_
+            )
+        );
+        vm.prank(burnerLoansAdmin);
+        configTimelockHarness.queueAction(address(burnerLoansConfig), selector_, payload_);
+        assertEq(
+            configTimelockHarness.nextActionId(),
+            nextActionId,
+            "invalid payload should not consume an action ID"
+        );
+    }
+
+    function _authorizeHarness() internal {
+        if (burnerLoansConfig.configOperator() == address(configTimelockHarness)) return;
+        vm.prank(admin);
+        burnerLoansConfig.setConfigOperator(address(configTimelockHarness));
+    }
+}
+
+// forge-lint: disable-end(unused-return,unsafe-typecast)
+
+// forge-lint: disable-end(literal-instead-of-constant)

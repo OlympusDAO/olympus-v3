@@ -8,6 +8,8 @@ import {IPRICEv2} from "src/modules/PRICE/IPRICE.v2.sol";
 import {PriceCacheTest} from "./PriceCacheTest.sol";
 
 contract PriceCacheCachePriceTest is PriceCacheTest {
+    uint80 internal constant THIRD_ROUND_ID = 3;
+
     function test_whenPolicyDisabled_reverts() public {
         vm.prank(admin);
         cache.disable("");
@@ -82,13 +84,13 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
     function test_whenPairIsValid_cachesSnapshotAndIncrementsRoundId() public {
         cache.cachePrice(address(assetToken), address(quoteToken));
         IPriceCache.CachedPrice memory firstSnapshot = _cachedPair();
-        assertEq(firstSnapshot.assetPriceUsd, 2e18, "Asset leg should be cached");
-        assertEq(firstSnapshot.quotePriceUsd, 1e18, "Quote leg should be cached");
+        assertEq(firstSnapshot.assetPriceUsd, ASSET_PRICE_USD, "Asset leg should be cached");
+        assertEq(firstSnapshot.quotePriceUsd, QUOTE_PRICE_USD, "Quote leg should be cached");
         assertGt(firstSnapshot.updatedAt, 0, "updatedAt should be set");
         assertEq(firstSnapshot.roundId, 1, "roundId should start at 1");
 
         vm.warp(block.timestamp + 1);
-        priceModule.setTimestamp(uint48(block.timestamp));
+        _setPriceTimestampAtCurrentBlock();
         cache.cachePrice(address(assetToken), address(quoteToken));
         IPriceCache.CachedPrice memory secondSnapshot = _cachedPair();
         assertEq(secondSnapshot.roundId, 2, "roundId should increment on each write");
@@ -112,11 +114,19 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
             firstQuoteAsset.updatedAt,
             "Pair timestamp should match"
         );
-        assertEq(firstQuoteAsset.assetPriceUsd, 1e18, "Reverse asset leg should flip orientation");
-        assertEq(firstQuoteAsset.quotePriceUsd, 2e18, "Reverse quote leg should flip orientation");
+        assertEq(
+            firstQuoteAsset.assetPriceUsd,
+            QUOTE_PRICE_USD,
+            "Reverse asset leg should flip orientation"
+        );
+        assertEq(
+            firstQuoteAsset.quotePriceUsd,
+            ASSET_PRICE_USD,
+            "Reverse quote leg should flip orientation"
+        );
 
         vm.warp(block.timestamp + 5);
-        priceModule.setTimestamp(uint48(block.timestamp));
+        _setPriceTimestampAtCurrentBlock();
         cache.cachePrice(address(assetToken), address(quoteToken));
         IPriceCache.CachedPrice memory secondAssetQuote = cache.getCachedPrice(
             address(assetToken),
@@ -136,7 +146,7 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
         );
 
         vm.warp(block.timestamp + 7);
-        priceModule.setTimestamp(uint48(block.timestamp));
+        _setPriceTimestampAtCurrentBlock();
         cache.cachePrice(address(quoteToken), address(assetToken));
         IPriceCache.CachedPrice memory thirdAssetQuote = cache.getCachedPrice(
             address(assetToken),
@@ -146,17 +156,41 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
             address(quoteToken),
             address(assetToken)
         );
-        assertEq(thirdAssetQuote.roundId, 3, "Forward round should increment from reverse writes");
-        assertEq(thirdQuoteAsset.roundId, 3, "Reverse round should share incremented round");
+        assertEq(
+            thirdAssetQuote.roundId,
+            THIRD_ROUND_ID,
+            "Forward round should increment from reverse writes"
+        );
+        assertEq(
+            thirdQuoteAsset.roundId,
+            THIRD_ROUND_ID,
+            "Reverse round should share incremented round"
+        );
         assertGt(
             thirdAssetQuote.updatedAt,
             secondAssetQuote.updatedAt,
             "Timestamp should keep advancing"
         );
-        assertEq(thirdAssetQuote.assetPriceUsd, 2e18, "Forward orientation should remain correct");
-        assertEq(thirdAssetQuote.quotePriceUsd, 1e18, "Forward orientation should remain correct");
-        assertEq(thirdQuoteAsset.assetPriceUsd, 1e18, "Reverse orientation should remain correct");
-        assertEq(thirdQuoteAsset.quotePriceUsd, 2e18, "Reverse orientation should remain correct");
+        assertEq(
+            thirdAssetQuote.assetPriceUsd,
+            ASSET_PRICE_USD,
+            "Forward orientation should remain correct"
+        );
+        assertEq(
+            thirdAssetQuote.quotePriceUsd,
+            QUOTE_PRICE_USD,
+            "Forward orientation should remain correct"
+        );
+        assertEq(
+            thirdQuoteAsset.assetPriceUsd,
+            QUOTE_PRICE_USD,
+            "Reverse orientation should remain correct"
+        );
+        assertEq(
+            thirdQuoteAsset.quotePriceUsd,
+            ASSET_PRICE_USD,
+            "Reverse orientation should remain correct"
+        );
     }
 
     function test_whenAssetIsUnitOfAccount_cachesUnitPriceAsAssetLeg() public {
@@ -168,8 +202,12 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
             address(assetToken)
         );
 
-        assertEq(snapshot.assetPriceUsd, 1e18, "Unit-of-account should be cached at 1e18");
-        assertEq(snapshot.quotePriceUsd, 2e18, "Quote leg should use token USD price");
+        assertEq(
+            snapshot.assetPriceUsd,
+            QUOTE_PRICE_USD,
+            "Unit-of-account should be cached at 1e18"
+        );
+        assertEq(snapshot.quotePriceUsd, ASSET_PRICE_USD, "Quote leg should use token USD price");
         assertEq(snapshot.roundId, 1, "Round should increment on successful write");
         assertGt(snapshot.updatedAt, 0, "Timestamp should be set");
     }
@@ -183,8 +221,12 @@ contract PriceCacheCachePriceTest is PriceCacheTest {
             unitOfAccount
         );
 
-        assertEq(snapshot.assetPriceUsd, 2e18, "Asset leg should use token USD price");
-        assertEq(snapshot.quotePriceUsd, 1e18, "Unit-of-account should be cached at 1e18");
+        assertEq(snapshot.assetPriceUsd, ASSET_PRICE_USD, "Asset leg should use token USD price");
+        assertEq(
+            snapshot.quotePriceUsd,
+            QUOTE_PRICE_USD,
+            "Unit-of-account should be cached at 1e18"
+        );
         assertEq(snapshot.roundId, 1, "Round should increment on successful write");
         assertGt(snapshot.updatedAt, 0, "Timestamp should be set");
     }

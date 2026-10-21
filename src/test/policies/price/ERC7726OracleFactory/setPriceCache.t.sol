@@ -7,8 +7,7 @@ import {MockPriceCache} from "src/test/mocks/MockPriceCache.sol";
 import {IERC7726OracleFactory} from "src/policies/interfaces/price/IERC7726OracleFactory.sol";
 import {ROLESv1} from "src/modules/ROLES/ROLES.v1.sol";
 import {ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol";
-
-contract MockNonPriceCache {}
+import {MockNonPriceCache} from "src/test/mocks/MockNonPriceCache.sol";
 
 contract ERC7726OracleFactorySetPriceCacheTest is ERC7726OracleFactoryTest {
     function test_whenCallerIsAdmin_setsPriceCache() public givenFactoryIsEnabled {

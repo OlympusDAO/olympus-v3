@@ -1,0 +1,4 @@
+interface:
+    display_name: "Solidity Test Scenarios"
+    short_description: "Plan function scenarios, tests, and coverage mappings"
+    default_prompt: "Use $solidity-test-scenarios to analyse this function, develop its Markdown scenario plan, implement grouped tests and helpers, and maintain the scenario-to-test mapping."
