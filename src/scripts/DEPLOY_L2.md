@@ -10,7 +10,7 @@ A Bophades installation can be deployed by following these steps:
    Set `current.<chain>.external.ccip.RMN` and `Router` to the confirmed Chainlink infrastructure addresses.
    The script checks both entries before it starts deploying contracts.
    Set `olympus.config.CCIPTokenPoolConfig.gracePeriod` and `timelockDelay` in seconds.
-2. Export the RPC credentials, or use the normal `.env`. A chain-specific `--env <file>` is optional.
+2. Export the RPC credentials, or copy `.env.example` to `.env` and set the required values. A chain-specific `--env <file>` is optional.
 3. Use a `cast wallet` account with `--account <account>`, or a Ledger with `--ledger <mnemonic-index>`.
 4. Run the deployment:
 
@@ -155,6 +155,7 @@ This should be run using the deployer account.
 After a successful handoff broadcast, run `L2HandoffBatch.acceptHandoff` through the existing Safe batch wrapper.
 This separate command simulates, signs, and proposes one Safe transaction containing `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`.
 The proposal signing wallet must be a DAO Safe owner. It can differ from the deployer. Ledger and `cast wallet` accounts are supported.
+The wrapper uses `FOUNDRY_PROFILE=deploy` for deployment compiler settings and `--no-isolate` for Safe batch simulation.
 Confirm and execute that proposal in the DAO Safe. Proposing alone does not transfer ownership.
 The batch checks accepted ownership during simulation and skips transfers already accepted by the DAO.
 A handoff preview creates no Safe proposal because the pending transfers have not been broadcast.
@@ -221,16 +222,18 @@ The default is `broadcast/L2Deploy.s.sol/<chain-id>/deploy-latest.json`.
 Use `--deployment <timestamped-run.json>` to select a committed broadcast instead.
 The broadcast must match the RPC chain and the ROLES address in `env.json`, with a successful creation receipt.
 The creation block bounds the role-history scan: ROLES can check a named role but cannot enumerate all roles held by an address.
+The scan ends at `eth_blockNumber` from the active RPC. Solidity's `block.number` can instead contain an ancestor-chain number on Arbitrum-family chains.
 No wallet or Ledger is needed. This checks live state; the acceptance batch checks its simulated outcome.
 
 The report shows `[PASS]` and `[FAIL]` for each ownership check and exits nonzero on an incomplete handoff.
+Invalid deployer identities or block ranges are reported as failures; the dependent role-history scan is skipped while other ownership checks continue.
 It checks Kernel execution, current and pending RolesAdmin and Authority assignments, pool ownership and rate-limit administration,
 periphery ownership, the configuration operator, and current and pending TokenAdminRegistry administration.
 It checks every role ever granted to the deployer since ROLES creation, including unexpected roles, against current role membership.
 A missing ROLES creation receipt or an RPC error prevents a passing report.
 
 The pool can be owned by the DAO, pending to the configuration policy, or owned by the configuration policy.
-Run the verifier again after CCIP setup and finalization. A passing report proves the checked state at its printed RPC block.
+Run the verifier again after CCIP setup and finalization. A passing report confirms the checked access state for that run.
 It does not prevent a later governance transaction from granting new access.
 A deployer can remain one of the Safe signers. The check rejects direct administrative authority, not membership in a threshold Safe.
 

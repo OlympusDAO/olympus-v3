@@ -36,8 +36,6 @@ import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConf
 /// @notice Deploys and configures a Bophades installation on another chain.
 // solhint-disable gas-custom-errors
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
-    error L2Deploy_InvalidVerificationInput();
-
     uint256 internal _ownershipFailures;
     string internal _deploymentAddresses;
 
@@ -478,17 +476,23 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ) external returns (bool passed) {
         _loadEnv(chain_);
         address dao = _getDaoMultisig();
-        if (
-            deployer_ == address(0) ||
-            deployer_ == dao ||
-            deployer_ == _getEmergencyMultisig() ||
-            rolesCreationBlock_ > block.number
-        ) revert L2Deploy_InvalidVerificationInput();
+        uint256 rpcBlock = vm.parseUint(vm.toString(vm.rpc("eth_blockNumber", "[]")));
         _ownershipFailures = 0;
         console2.log("=== L2 ownership and deployer access verification ===");
         console2.log("Deployer:", deployer_);
         console2.log("DAO Safe:", dao);
-        console2.log("RPC block:", block.number);
+        console2.log("RPC block:", rpcBlock);
+        bool validDeployer = deployer_ != address(0) &&
+            deployer_ != dao &&
+            deployer_ != _getEmergencyMultisig();
+        _checkOwnership(
+            "Deployer is nonzero and distinct from the DAO and Emergency Safes",
+            validDeployer
+        );
+        // Arbitrum-family chains expose an ancestor-chain number through block.number.
+        // Receipt blocks and eth_getLogs ranges must use the RPC's child-chain numbers.
+        bool validBlockRange = rolesCreationBlock_ <= rpcBlock;
+        _checkOwnership("ROLES creation block is not after the RPC block", validBlockRange);
 
         Kernel kernel = Kernel(_envAddressNotZero("olympus.Kernel"));
         OlympusRoles roles = OlympusRoles(_envAddressNotZero("olympus.modules.OlympusRoles"));
@@ -513,7 +517,11 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         _checkOwnership("RolesAdmin has no pending admin", rolesAdmin.newAdmin() == address(0));
         _verifyAuthority(deployer_, dao, mintr);
         _verifyCCIPOwnership(deployer_, dao);
-        _verifyDeployerRoles(roles, deployer_, rolesCreationBlock_);
+        if (validDeployer && validBlockRange) {
+            _verifyDeployerRoles(roles, deployer_, rolesCreationBlock_, rpcBlock);
+        } else {
+            console2.log("[SKIP] Deployer role-history scan: invalid deployer or block range");
+        }
 
         passed = _ownershipFailures == 0;
         console2.log("Failed ownership checks:", _ownershipFailures);
@@ -619,7 +627,8 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     function _verifyDeployerRoles(
         OlympusRoles roles_,
         address deployer_,
-        uint256 fromBlock_
+        uint256 fromBlock_,
+        uint256 toBlock_
     ) internal {
         bytes32[] memory topics = new bytes32[](1);
         topics[0] = keccak256("RoleGranted(bytes32,address)");
@@ -627,9 +636,9 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         uint256 grants;
         bool noRoles = true;
         // Bound each RPC log query instead of relying on an unrestricted historical block range.
-        for (uint256 start = fromBlock_; start <= block.number; ) {
+        for (uint256 start = fromBlock_; start <= toBlock_; ) {
             uint256 end = start + 999;
-            if (end > block.number) end = block.number;
+            if (end > toBlock_) end = toBlock_;
             Vm.EthGetLogs[] memory logs = vm.eth_getLogs(start, end, address(roles_), topics);
             for (uint256 i; i < logs.length; ++i) {
                 if (logs[i].topics[2] != bytes32(uint256(uint160(deployer_)))) continue;
