@@ -69,9 +69,11 @@ Preserve the deployment manifest in `broadcast/L2Deploy.s.sol/4663/` before runn
 ```bash
 ./shell/L2/grantRoles.sh --chain robinhood --ledger 5 --broadcast true
 ./shell/L2/handoff.sh --chain robinhood --ledger 5 --broadcast true
+./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 3 --broadcast true
 ```
 
-Confirm and execute the acceptance proposal created by `handoff.sh`, as described under Handoff below.
+Confirm and execute the acceptance proposal created by `safeBatchV2.sh`, as described under Handoff below.
+The handoff uses deployment Ledger index 5 for the ownership transfers and DAO-owner Ledger index 3 for the Safe proposal.
 The existing role script gives both `emergency_shutdown` and `emergency_restart` to the configured Emergency Safe.
 When a CCIP pool is recorded, it also grants `admin` to the DAO Safe and `emergency` to the Emergency Safe.
 These shared roles control the pool's enabled state. The periphery bridge uses its owner for enabling and disabling.
@@ -150,28 +152,28 @@ The last step in the deployment is to transfer the ownership of the installation
 
 This should be run using the deployer account.
 
-After a successful broadcast, `handoff.sh` runs `L2HandoffBatch.acceptHandoff` through the existing Safe batch wrapper.
-It simulates, signs, and proposes one Safe transaction containing `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`.
-The signing wallet must also be a DAO Safe owner. Ledger and `cast wallet` accounts are supported.
+After a successful handoff broadcast, run `L2HandoffBatch.acceptHandoff` through the existing Safe batch wrapper.
+This separate command simulates, signs, and proposes one Safe transaction containing `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`.
+The proposal signing wallet must be a DAO Safe owner. It can differ from the deployer. Ledger and `cast wallet` accounts are supported.
 Confirm and execute that proposal in the DAO Safe. Proposing alone does not transfer ownership.
 The batch checks accepted ownership during simulation and skips transfers already accepted by the DAO.
 A handoff preview creates no Safe proposal because the pending transfers have not been broadcast.
 
-To preview or retry only the acceptance proposal, use:
+To preview, submit, or retry the acceptance proposal, use the DAO-owner wallet at Ledger index 3:
 
 ```bash
-./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 5
-./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 5 --broadcast true
+./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 3
+./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 3 --broadcast true
 ```
 
-Use `--account <account>` instead of `--ledger 5` for a Cast account.
+Use `--account <account>` instead of `--ledger 3` for a Cast account.
 The deployer remains RolesAdmin administrator and pool owner until the DAO executes the proposal.
 Authority role transfers and CCIP periphery bridge ownership transfer are immediate and need no acceptance calls.
 
 Before the CCIP readiness gate, nominate the configuration policy from the DAO Safe:
 
 ```bash
-./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --chain robinhood --multisig true --ledger 5 --broadcast true
+./shell/safeBatchV2.sh --contract CCIPTokenPoolBatch --function transferTokenPoolOwnershipToConfig --chain robinhood --multisig true --ledger 3 --broadcast true
 ```
 
 Execute that Safe proposal before building `CCIPNonEthereumSetupBatch.setup`.

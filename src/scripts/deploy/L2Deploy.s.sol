@@ -455,7 +455,9 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         vm.stopBroadcast();
 
         console2.log("HANDOFF PENDING: DAO Safe acceptance is required");
-        console2.log("shell/L2/handoff.sh creates the L2HandoffBatch.acceptHandoff Safe proposal");
+        console2.log(
+            "Run L2HandoffBatch.acceptHandoff through shell/safeBatchV2.sh as a DAO Safe owner"
+        );
         console2.log("Deployer retains pending-transfer authority until the DAO accepts");
         console2.log("After acceptance, run shell/L2/verify.sh --chain <chain>");
     }
