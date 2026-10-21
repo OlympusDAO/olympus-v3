@@ -6,14 +6,15 @@ import {Test} from "@forge-std-1.16.2/Test.sol";
 import {CCIPFeeBudgetLibHarness} from "src/test/scripts/ops/lib/mocks/CCIPFeeBudgetLibHarness.sol";
 
 /// @notice Runs the fee budget reader against the fee contracts of the three ramp generations
-///         that serve mainnet at the pinned block: `OnRamp 2.0.0` toward Arbitrum, `OnRamp 1.6.0`
-///         toward Base and `EVM2EVMOnRamp 1.5.0` toward Berachain, each quoting through the
-///         source chain's contracts of that block. No OHM entry exists on any of them at the
-///         pinned block, so every read returns the 90000 chain default and names the contracts
-///         it came from. Run with `pnpm test:fork`; the Alchemy key comes from `.env`.
+///         that serve mainnet at the pinned block: `OnRamp 2.0.0` toward Arbitrum and toward
+///         Robinhood Chain, `OnRamp 1.6.0` toward Base and `EVM2EVMOnRamp 1.5.0` toward
+///         Berachain, each quoting through the source chain's contracts of that block. No OHM
+///         entry exists on any of them at the pinned block, so every read returns the 90000
+///         chain default and names the contracts it came from. Run with `pnpm test:fork`; the
+///         Alchemy key comes from `.env`.
 contract CCIPFeeBudgetLibForkTests_readOhmDestGasOverhead is Test {
-    /// @notice A mainnet block of 2026-09-04, at which the Arbitrum and Optimism lanes run
-    ///         2.0.0, the Base lane 1.6.0 and the Berachain lane 1.5.0.
+    /// @notice A mainnet block of 2026-09-04, at which the Arbitrum, Optimism and Robinhood
+    ///         Chain lanes run 2.0.0, the Base lane 1.6.0 and the Berachain lane 1.5.0.
     uint256 internal constant MAINNET_FORK_BLOCK = 25903191;
 
     /// @notice The live default of every EVM destination of the mainnet fee quoter and of the
@@ -39,6 +40,17 @@ contract CCIPFeeBudgetLibForkTests_readOhmDestGasOverhead is Test {
     function test_givenLiveOnRamp20Lane() public view {
         (uint32 overhead, bool isTokenEntry, string memory source) = harness
             .readOhmDestGasOverhead(env, "mainnet", "arbitrum");
+
+        assertEq(overhead, LIVE_CHAIN_DEFAULT, "overhead should be the live chain default");
+        assertFalse(isTokenEntry, "no OHM entry exists on the lane at the pinned block");
+        assertEq(source, "chain default, FeeQuoter 2.0.0 via OnRamp 2.0.0 (no OHM entry)", "source");
+    }
+
+    // given the live mainnet to Robinhood Chain lane, an OnRamp 2.0.0 quoting through FeeQuoter 2.0.0
+    //   [X] it reads the chain default from the fee quoter and names both contracts
+    function test_givenLiveOnRamp20Lane_robinhood() public view {
+        (uint32 overhead, bool isTokenEntry, string memory source) = harness
+            .readOhmDestGasOverhead(env, "mainnet", "robinhood");
 
         assertEq(overhead, LIVE_CHAIN_DEFAULT, "overhead should be the live chain default");
         assertFalse(isTokenEntry, "no OHM entry exists on the lane at the pinned block");

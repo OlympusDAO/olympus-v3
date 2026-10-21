@@ -46,15 +46,15 @@ import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolCon
 // forge-lint: disable-start(multi-contract-file)
 
 /// @notice OCG proposal that re-activates OHM bridging through Chainlink CCIP: it opens the
-///         mainnet routes to Arbitrum, Optimism, Base and Berachain on the OHM token pool, and
-///         moves the pool under the CCIPTokenPoolConfig policy and its CCIPTokenPoolConfigTimelock
+///         mainnet routes to Arbitrum, Optimism, Base, Berachain and Robinhood Chain on the OHM
+///         token pool, and moves the pool under the CCIPTokenPoolConfig policy and its CCIPTokenPoolConfigTimelock
 ///         and the OHM administrator position in the Chainlink TokenAdminRegistry under the OCG
 ///         timelock.
 ///
 ///         The first action calls the deployed CCIPTokenPoolConfigProposalChecker, a read-only
 ///         contract that asserts at execution time what the build read: the precondition of
 ///         each handover action the proposal includes, the end state of each handover action
-///         the live state already satisfies, the absence of the four routes from the pool and
+///         the live state already satisfies, the absence of the five routes from the pool and
 ///         the minimum backing of the pool. Every handover action is conditional on the live
 ///         state, so the proposal is idempotent with respect to steps that had already happened
 ///         when it was built; a step that happens between the build and the execution fails
@@ -63,7 +63,7 @@ import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolCon
 ///         role, grant `bridge_admin` to the DAO MS, enable the config policy, accept the pool
 ///         ownership, set the config timelock as config operator, set the OCG timelock as
 ///         rebalancer, clear the native rate limit admin, enable the config timelock, and add
-///         the four routes through `CCIPTokenPoolConfig.addChain`. At most thirteen actions, so
+///         the five routes through `CCIPTokenPoolConfig.addChain`. At most fourteen actions, so
 ///         no activator contract is needed.
 ///
 ///         The route actions come after the handover actions because `addChain` requires the
@@ -88,15 +88,17 @@ import {CCIPTokenPoolConfigProposalChecker} from "src/proposals/CCIPTokenPoolCon
 ///           timelock is the pending OHM administrator in the TokenAdminRegistry.
 ///         - The OCG timelock holds the `admin` role.
 ///         - The live Solana route of the pool matches `olympus.config.CCIP.routes` in
-///           `src/scripts/env.json`; the exact four routes to Arbitrum, Optimism, Base and
-///           Berachain are declared there and missing from the pool.
-///         - The burn/mint pools of those four chains are deployed and recorded in
+///           `src/scripts/env.json`; the exact five routes to Arbitrum, Optimism, Base,
+///           Berachain and Robinhood Chain are declared there and missing from the pool.
+///         - The burn/mint pools of those five chains are deployed and recorded in
 ///           `src/scripts/env.json` (`olympus.policies.CCIPBurnMintTokenPool`), since each route
 ///           resolves its accepted remote pool from there unless it declares an explicit
-///           `remotePools` override.
+///           `remotePools` override; so is the OHM of Robinhood Chain (`olympus.legacy.OHM`),
+///           the default remote token of its route, which the tracked file records as the zero
+///           address until it is deployed.
 ///         - The pool holds at least `olympus.config.CCIP.minimumPoolBacking` OHM (the supply
 ///           outstanding on the burn/mint chains; `CCIPTokenPoolBatch.fundPool`).
-///         - Every mainnet lane toward the four chains carries an enabled OHM fee entry with a
+///         - Every mainnet lane toward the five chains carries an enabled OHM fee entry with a
 ///           delivery gas budget of at least 175000, obtained from Chainlink.
 contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     // ========== ERRORS ========== //
@@ -191,13 +193,13 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     /// @param remoteChain The remote chain name.
     error CCIPTokenPoolConfigProposal_RouteDrift(string remoteChain);
 
-    /// @notice Thrown when a desired route missing from the pool is not one of the four chains
+    /// @notice Thrown when a desired route missing from the pool is not one of the five chains
     ///         this proposal opens.
     /// @param remoteChain The remote chain name.
     error CCIPTokenPoolConfigProposal_UnexpectedMissingRoute(string remoteChain);
 
     /// @notice Thrown when the set of desired routes missing from the pool is not exactly the
-    ///         four chains this proposal opens (investigate, rebuild and resubmit).
+    ///         five chains this proposal opens (investigate, rebuild and resubmit).
     /// @param missingCount The number of missing routes among the expected chains.
     /// @param expectedCount The number of expected chains.
     error CCIPTokenPoolConfigProposal_MissingRouteSetMismatch(
@@ -216,13 +218,14 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 
     string internal constant _ENV_PATH = "./src/scripts/env.json";
 
-    /// @dev The chain selectors of the four routes this proposal opens. The build fails closed
+    /// @dev The chain selectors of the five routes this proposal opens. The build fails closed
     ///      unless the set of desired routes missing from the pool equals exactly this set.
-    uint256 internal constant _EXPECTED_ROUTE_COUNT = 4;
+    uint256 internal constant _EXPECTED_ROUTE_COUNT = 5;
     uint64 internal constant _ARBITRUM_SELECTOR = 4949039107694359620;
     uint64 internal constant _OPTIMISM_SELECTOR = 3734403246176062136;
     uint64 internal constant _BASE_SELECTOR = 15971525489660198786;
     uint64 internal constant _BERACHAIN_SELECTOR = 1294465214383781161;
+    uint64 internal constant _ROBINHOOD_SELECTOR = 6180753054346818345;
 
     // ========== DATA STRUCTURES ========== //
 
@@ -266,11 +269,11 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             string.concat(
                 "# CCIP Bridge Activation\n",
                 "\n",
-                "This proposal re-activates OHM bridging through Chainlink CCIP. It opens the mainnet routes to Arbitrum, Optimism, Base and Berachain on the OHM token pool, which so far serves only Solana, so that OHM can move between Ethereum and the four EVM chains through the CCIP lanes, next to the existing Ethereum-Solana route.\n",
+                "This proposal re-activates OHM bridging through Chainlink CCIP. It opens the mainnet routes to Arbitrum, Optimism, Base, Berachain and Robinhood Chain on the OHM token pool, which so far serves only Solana, so that OHM can move between Ethereum and the five EVM chains through the CCIP lanes, next to the existing Ethereum-Solana route.\n",
                 "\n",
                 "## Justification\n",
                 "\n",
-                "OHM on Arbitrum, Optimism, Base and Berachain was issued by the LayerZero v1 bridge, which is closed to traffic. CCIP already carries OHM between Ethereum and Solana through the mainnet lock/release pool; opening the four routes on that pool restores bridging to every supported chain through one infrastructure, with the pool funded with the OHM outstanding on the burn/mint chains so that it can release against tokens burned there.\n",
+                "OHM on Arbitrum, Optimism, Base and Berachain was issued by the LayerZero v1 bridge, which is closed to traffic. Robinhood Chain joins as a fifth burn/mint chain: it carries no OHM yet, and its supply is minted only by CCIP deliveries, from Ethereum against OHM locked in the mainnet pool or from Arbitrum and Base against OHM burned there. CCIP already carries OHM between Ethereum and Solana through the mainnet lock/release pool; opening the five routes on that pool restores bridging to every supported chain through one infrastructure, with the pool funded with the OHM outstanding on the burn/mint chains so that it can release against tokens burned there.\n",
                 "\n",
                 "To make the pool and its routes governable, the proposal also moves the pool and the OHM entry in the Chainlink TokenAdminRegistry, both held by the DAO MS today, under on-chain governance: the OCG timelock becomes the OHM administrator, the CCIPTokenPoolConfig policy becomes the owner of the pool, and the DAO MS keeps the `bridge_admin` role to queue route changes on the CCIPTokenPoolConfigTimelock. The complete allocation is listed under Authority Model below the proposal steps.\n",
                 "\n",
@@ -284,10 +287,10 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "- CCIPTokenPoolConfig and CCIPTokenPoolConfigTimelock have been deployed on Ethereum mainnet with a 3-day grace period and a 1-day initial timelock delay, together with CCIPTokenPoolConfigProposalChecker, the read-only contract that the first step calls.\n",
                 "- The DAO MS has activated both policies in the Kernel, proposed CCIPTokenPoolConfig as the new owner of the token pool and nominated the OCG timelock as the OHM administrator in the TokenAdminRegistry.\n",
                 "- The OCG timelock holds the `admin` role.\n",
-                "- The live Solana route of the pool matches the desired configuration and the four new routes are not configured yet.\n",
-                "- The CCIP contracts of Arbitrum, Optimism, Base and Berachain (the burn/mint pool, its config policy, its config timelock and the periphery) have been deployed, the OHM administrator role in each local TokenAdminRegistry has been handed to the local DAO MS, and each local pool has been proposed to its config policy as the new owner.\n",
-                "- The pool has been funded with at least the OHM supply outstanding on Arbitrum, Optimism, Base and Berachain, so it can release against tokens burned there.\n",
-                "- Chainlink has raised the OHM delivery gas budget to at least 175,000 on every mainnet lane toward the four chains; without it every inbound transfer on those chains would fail on arrival.\n"
+                "- The live Solana route of the pool matches the desired configuration and the five new routes are not configured yet.\n",
+                "- The CCIP contracts of Arbitrum, Optimism, Base, Berachain and Robinhood Chain (the burn/mint pool, its config policy, its config timelock and the periphery) have been deployed, the OHM administrator role in each local TokenAdminRegistry is held by the local DAO MS, and each local pool has been proposed to its config policy as the new owner.\n",
+                "- The pool has been funded with at least the OHM supply outstanding on Arbitrum, Optimism, Base and Berachain (Robinhood Chain holds none yet), so it can release against tokens burned there.\n",
+                "- Chainlink has raised the OHM delivery gas budget to at least 175,000 on every mainnet lane toward the five chains; without it every inbound transfer on those chains would fail on arrival.\n"
             );
     }
 
@@ -299,7 +302,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "The first step is always included; each later step is included only if the live state requires it.\n",
                 "\n",
-                "1. Call CCIPTokenPoolConfigProposalChecker, a read-only contract that reverts unless the state the later steps rely on still holds at execution: the precondition of each step included, the end state of each step not included, none of the four routes configured on the pool yet, and the pool holding at least the minimum backing. The pool exposes no read of its pending owner, so the precondition of step 5 is its current owner. A revert here fails the whole proposal before any other step runs.\n",
+                "1. Call CCIPTokenPoolConfigProposalChecker, a read-only contract that reverts unless the state the later steps rely on still holds at execution: the precondition of each step included, the end state of each step not included, none of the five routes configured on the pool yet, and the pool holding at least the minimum backing. The pool exposes no read of its pending owner, so the precondition of step 5 is its current owner. A revert here fails the whole proposal before any other step runs.\n",
                 "2. Accept the OHM administrator role in the Chainlink TokenAdminRegistry. The registered OHM pool is not changed.\n",
                 "3. Grant the `bridge_admin` role to the DAO MS.\n",
                 "4. Enable the CCIPTokenPoolConfig policy.\n",
@@ -312,6 +315,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "11. Add the Base route to the token pool.\n",
                 "12. Add the Berachain route to the token pool.\n",
                 "13. Add the Optimism route to the token pool.\n",
+                "14. Add the Robinhood Chain route to the token pool.\n",
                 "\n",
                 "## Authority Model\n",
                 "\n",
@@ -325,7 +329,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "## Route Limits\n",
                 "\n",
-                "Each of the four routes (Arbitrum, Optimism, Base, Berachain) opens with independent rate limit buckets in OHM base units (9 decimals), sized from the LayerZero v2 figures with a one-day window:\n",
+                "Each of the five routes (Arbitrum, Optimism, Base, Berachain, Robinhood Chain) opens with independent rate limit buckets in OHM base units (9 decimals) with a one-day window. The figures of the four LayerZero chains are sized from the LayerZero v2 figures; Robinhood Chain has no LayerZero history, so its route takes the same figures as the other four:\n",
                 "\n",
                 "- Outbound (mainnet to the chain): capacity 100,000 OHM (100000000000000), refill rate 1157407407 per second.\n",
                 "- Inbound (the chain to mainnet): capacity 55,000 OHM (55000000000000), refill rate 636574074 per second.\n",
@@ -338,10 +342,10 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "The following are performed by the DAO MS of each chain and are not part of this proposal:\n",
                 "\n",
-                "- On Arbitrum, Optimism, Base and Berachain: the local CCIP contracts, including the local pool's routes to mainnet and to the other burn/mint chains (less the Optimism-Berachain pair, for which Chainlink serves no lane), are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. The same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain toward mainnet and the other burn/mint chains.\n",
-                "- On mainnet and on those four chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the four new peripheries.\n",
+                "- On Arbitrum, Optimism, Base, Berachain and Robinhood Chain: the local CCIP contracts, including the local pool's routes to mainnet and to the other burn/mint chains (less the pairs for which Chainlink serves no lane: Optimism-Berachain, Robinhood-Optimism and Robinhood-Berachain), are configured during the voting period, with the local pool left disabled and unregistered so that the chain stays dormant. On the four LayerZero chains the same batch deactivates the legacy LayerZero CrossChainBridge policy in the local Kernel, which is already closed to traffic and holds no mint approval, both asserted before the deactivation. Immediately after this proposal executes, the local DAO MS enables the local pool and registers it in the local TokenAdminRegistry, which is what opens the chain toward mainnet and the other burn/mint chains.\n",
+                "- On mainnet and on those five chains: set the trusted remotes and gas limits of the CCIPCrossChainBridge periphery, and enable the five new peripheries.\n",
                 "\n",
-                "The routes between Solana and the four chains are not part of this rollout. The existing Ethereum-Solana route is unchanged.\n"
+                "The routes between Solana and the five chains are not part of this rollout. The existing Ethereum-Solana route is unchanged.\n"
             );
     }
 
@@ -369,7 +373,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         }
         _requireRole(c.roles, ADMIN_ROLE, c.ocgTimelock);
         // The routes this proposal opens are allowed to be missing; _missingRoutes requires
-        // the missing set to be exactly the four expected chains.
+        // the missing set to be exactly the five expected chains.
         _requireRoutesMatchEnv(c.pool, false);
         uint256 minBacking = _minimumPoolBacking();
         _requireBackingAndFeeBudgets(c, minBacking);
@@ -404,7 +408,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         _pushAuthorityActions(c, expectations);
         // 4-9. Config policy and timelock actions
         _pushConfigActions(c, expectations);
-        // 10-13. Add the four routes, after the handover actions: addChain requires the config
+        // 10-14. Add the five routes, after the handover actions: addChain requires the config
         // policy to be enabled and to own the pool, both established earlier in this execution.
         _pushRouteActions(c, routeUpdates, routeNames);
     }
@@ -571,7 +575,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
 
     /// @notice Returns one `addChain` update per desired route missing from the pool, in remote
     ///         chain name order with the remote chain names alongside, and requires the missing
-    ///         set to be exactly the four expected chains (Arbitrum, Optimism, Base, Berachain).
+    ///         set to be exactly the five expected chains (Arbitrum, Optimism, Base, Berachain,
+    ///         Robinhood Chain).
     ///         Each update passes the config policy's own validation.
     /// @dev Fails closed on any drift: a missing route outside the expected set (an undeclared
     ///      selector cannot appear here since the routes come from `env.json`, so this means the
@@ -593,7 +598,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             _ARBITRUM_SELECTOR,
             _OPTIMISM_SELECTOR,
             _BASE_SELECTOR,
-            _BERACHAIN_SELECTOR
+            _BERACHAIN_SELECTOR,
+            _ROBINHOOD_SELECTOR
         ];
         bool[_EXPECTED_ROUTE_COUNT] memory added;
         ICCIPTokenPoolAdmin.ChainUpdate[] memory buffer = new ICCIPTokenPoolAdmin.ChainUpdate[](
@@ -633,7 +639,10 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
             missingCount++;
         }
 
-        if (missingCount != expected.length || !(added[0] && added[1] && added[2] && added[3])) {
+        if (
+            missingCount != expected.length ||
+            !(added[0] && added[1] && added[2] && added[3] && added[4])
+        ) {
             revert CCIPTokenPoolConfigProposal_MissingRouteSetMismatch(
                 missingCount,
                 expected.length
@@ -654,7 +663,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
         ICCIPTokenPoolAdmin.ChainUpdate[] memory updates,
         string[] memory names
     ) internal {
-        // 10-13. Add the routes
+        // 10-14. Add the routes
         for (uint256 i = 0; i < updates.length; ++i) {
             _pushAction(
                 address(c.config),
@@ -943,7 +952,7 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
     ///         limiters enabled, and every route declared with `enabled: false` (the removal
     ///         marker) is absent from the pool.
     /// @param requireDesiredLive_ Whether a desired enabled route missing from the pool reverts.
-    ///        The build passes false and requires the missing set to equal the four expected
+    ///        The build passes false and requires the missing set to equal the five expected
     ///        chains instead; the post-execution validation passes true.
     function _requireRoutesMatchEnv(
         ICCIPTokenPoolAdmin pool_,

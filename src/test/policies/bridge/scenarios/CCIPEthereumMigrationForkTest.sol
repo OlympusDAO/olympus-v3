@@ -27,10 +27,10 @@ import {CCIPMigrationForkTestBase} from "./CCIPMigrationForkTestBase.sol";
 ///         past this (for instance the bootstrap has been executed live), the requires fail
 ///         with an explicit message and the pin or the procedure needs updating.
 ///
-///         The counterpart burn/mint pools are not deployed yet (their env.json slots are
-///         zero), so the remote pool half of each new route uses a labelled placeholder
-///         address: no step of the migration reads or validates that value, and the real
-///         rollout fills it in when the counterpart chain deploys.
+///         The remote pool half of each new route is a labelled placeholder address rather
+///         than the counterpart pool recorded in env.json, and so is the remote token of the
+///         Robinhood Chain route, whose OHM is not deployed yet: no step of the migration
+///         reads or validates those values.
 abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
     // ========== FORK PIN ========== //
 
@@ -66,7 +66,7 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
         ICCIPRateLimiter.Config inbound;
     }
 
-    /// @notice The four burn/mint routes the bootstrap proposal opens, built from env.json:
+    /// @notice The five burn/mint routes the bootstrap proposal opens, built from env.json:
     ///         real selectors and counterpart OHM addresses, declared rate limits, and a
     ///         placeholder remote pool (see the contract NatSpec).
     RouteSpec[] internal burnMintRoutes;
@@ -110,15 +110,19 @@ abstract contract CCIPEthereumMigrationForkTest is CCIPMigrationForkTestBase {
         solanaSelector = _envChainSelector("solana");
         minimumPoolBacking = _envUint("mainnet", "olympus.config.CCIP.minimumPoolBacking");
 
-        string[4] memory counterparts = ["arbitrum", "base", "berachain", "optimism"];
+        string[5] memory counterparts = ["arbitrum", "base", "berachain", "optimism", "robinhood"];
         for (uint256 i; i < counterparts.length; ++i) {
             string memory name = counterparts[i];
             address placeholderPool = makeAddr(string.concat("futurePool:", name));
+            // The Robinhood Chain OHM is not deployed yet (a zero env.json slot), so its
+            // route carries a labelled placeholder as the remote token, like the remote pool
+            address remoteOhm = _envAddress(name, "olympus.legacy.OHM");
+            if (remoteOhm == address(0)) remoteOhm = makeAddr(string.concat("futureOhm:", name));
             burnMintRoutes.push(
                 RouteSpec({
                     name: name,
                     chainSelector: _envChainSelector(name),
-                    remoteToken: abi.encode(_envAddress(name, "olympus.legacy.OHM")),
+                    remoteToken: abi.encode(remoteOhm),
                     remotePool: abi.encode(placeholderPool),
                     outbound: _envRouteLimit("mainnet", name, "outboundRateLimit"),
                     inbound: _envRouteLimit("mainnet", name, "inboundRateLimit")
