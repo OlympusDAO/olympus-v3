@@ -19,13 +19,9 @@ import {Emergency} from "src/policies/Emergency.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
 
-/// @notice Script to deploy the Bridge to a separate testnet
+/// @notice Deploys and configures a Bophades installation on another chain.
 // solhint-disable gas-custom-errors
 contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
-    function _getLzEndpoint() internal view returns (address) {
-        return _envAddressNotZero("external.layerzero.endpoint");
-    }
-
     function _getDaoMultisig() internal view returns (address) {
         return _envAddressNotZero("olympus.multisig.dao");
     }
@@ -109,7 +105,7 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         // CrossChainBridge
         // The role is required for setup. It will be transferred to the multisig later
-        {
+        if (_envAddress("olympus.policies.CrossChainBridge") != address(0)) {
             console2.log("Granting bridge admin role to deployer", msg.sender);
             rolesAdmin.grantRole("bridge_admin", msg.sender);
         }
@@ -155,10 +151,12 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ///         - OlympusRoles
     ///         - OlympusTreasury
     ///         - RolesAdmin
-    ///         - CrossChainBridge
     ///         - Emergency
     ///         - TreasuryCustodian
     ///         - Minter (testnet only)
+    /// @dev    Bridge deployment is a separate operation.
+    /// @param chain_ Chain key in env.json.
+    /// @param shouldDeployOhm_ Deploy Authority and OHM instead of reusing the registry entries.
     function deploy(string calldata chain_, bool shouldDeployOhm_) external {
         _loadEnv(chain_);
 
@@ -203,9 +201,6 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         OlympusTreasury TRSRY = new OlympusTreasury(kernel);
         console2.log("Treasury deployed at:", address(TRSRY));
 
-        CrossChainBridge bridge = new CrossChainBridge(kernel, _getLzEndpoint());
-        console2.log("Bridge deployed at:", address(bridge));
-
         RolesAdmin rolesAdmin = new RolesAdmin(kernel);
         console2.log("RolesAdmin deployed at:", address(rolesAdmin));
 
@@ -237,7 +232,6 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         // Activate Policies
         kernel.executeAction(Actions.ActivatePolicy, address(rolesAdmin));
-        kernel.executeAction(Actions.ActivatePolicy, address(bridge));
         kernel.executeAction(Actions.ActivatePolicy, address(emergency));
         kernel.executeAction(Actions.ActivatePolicy, address(treasuryCustodian));
         if (isTestnet_) {
@@ -338,13 +332,13 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         vm.startBroadcast();
 
-        // Remove bridge_admin role from deployer
-        console2.log("Removing bridge_admin role from deployer", msg.sender);
-        RolesAdmin(rolesAdmin).revokeRole("bridge_admin", msg.sender);
+        if (_envAddress("olympus.policies.CrossChainBridge") != address(0)) {
+            console2.log("Removing bridge_admin role from deployer", msg.sender);
+            RolesAdmin(rolesAdmin).revokeRole("bridge_admin", msg.sender);
 
-        // Give roles to multisig and pull admin
-        console2.log("Granting bridge_admin role to DAO multisig", daoMultisig);
-        RolesAdmin(rolesAdmin).grantRole("bridge_admin", daoMultisig);
+            console2.log("Granting bridge_admin role to DAO multisig", daoMultisig);
+            RolesAdmin(rolesAdmin).grantRole("bridge_admin", daoMultisig);
+        }
 
         // Propose DAO multisig as new admin
         console2.log("Proposing DAO multisig as new admin", daoMultisig);

@@ -8,8 +8,7 @@
 # Environment variables:
 # RPC_URL
 # CHAIN
-# ETHERSCAN_KEY (only needed if verify is true)
-# VERIFIER_URL (only needed for a custom verifier or on a fork)
+# Source verification uses Sourcify and requires no Etherscan API key.
 
 # Exit if any error occurs
 set -e
@@ -49,7 +48,7 @@ echo "  Using RPC at URL: $RPC_URL"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
+set_verify_flag "$VERIFY"
 set_resume_flag $RESUME
 set_account_address $account
 

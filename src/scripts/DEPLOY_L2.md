@@ -6,18 +6,59 @@ This file contains instructions for deploying the different components of the Ol
 
 A Bophades installation can be deployed by following these steps:
 
-1. Create a `.env.<CHAIN>` file for the new chain using the `.env.L2.example` file as a reference
-2. Set up an account with `cast wallet`
-3. Run the deployment:
+1. Configure a Foundry RPC alias and the chain's DAO and emergency multisigs in `src/scripts/env.json`.
+2. Export the RPC credentials, or use the normal `.env`. A chain-specific `--env <file>` is optional.
+3. Use a `cast wallet` account with `--account <account>`, or a Ledger with `--ledger <mnemonic-index>`.
+4. Run the deployment:
 
     ```bash
-    ./shell/L2/deploy.sh --account <account> --env <env-file> --broadcast true --verify true
+    ./shell/L2/deploy.sh --chain <rpc-alias> --account <account> --ohm true --broadcast true --verify true
     ```
 
-    - Set `--broadcast` to `false` to run in simulation mode (recommended)
-4. Store the addresses of the contracts in the `src/scripts/env.json` file for the new chain
+    - Omit `--broadcast true` to preview without sending transactions.
+    - `--ohm true` deploys both Authority and OHM. `--ohm false` reuses their registry addresses.
+    - The deployment creates the Bophades core. Bridge deployment is a separate operation.
+    - `--verify true` submits source verification during deployment. Separate verification commands are unnecessary after success.
+    - Verification explicitly selects Sourcify and requires no Etherscan API key.
+5. Store the confirmed contract addresses in `src/scripts/env.json` before running the role scripts.
 
 This will deploy the contracts and install them into the kernel.
+
+All three wrappers use `FOUNDRY_PROFILE=deploy` and accept the same `--chain`, `--account`/`--ledger`, and optional `--env` arguments.
+The legacy `CHAIN` and `RPC_URL` environment variables remain supported when `--chain` is omitted.
+
+### Robinhood core
+
+The `robinhood` RPC alias uses `ALCHEMY_API_KEY`. The chain ID is **4663**.
+Use Ledger mnemonic index **5**:
+
+```bash
+# Preview: no transactions or explorer submissions.
+./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true
+
+# Deploy, install modules, activate policies, and verify sources on Sourcify.
+./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true
+```
+
+All deployment wrappers pass `--verifier sourcify` when verification is enabled, including when an Etherscan key exists in the environment.
+No separate `.env.robinhood` is required. No staking, Distributor, sOHM, or gOHM deployment is required.
+The core creates Authority, OHM, Kernel, MINTR, ROLES, TRSRY, RolesAdmin, Emergency, and TreasuryCustodian.
+
+Record all nine confirmed addresses in `current.robinhood.olympus` before continuing.
+Leave `policies.CrossChainBridge` absent or zero; the role scripts skip its grants and transfers in that case.
+Preserve the deployment manifest in `broadcast/L2Deploy.s.sol/4663/` before running another entrypoint from this script.
+
+```bash
+./shell/L2/grantRoles.sh --chain robinhood --ledger 5 --broadcast true
+./shell/L2/handoff.sh --chain robinhood --ledger 5 --broadcast true
+```
+
+Complete the DAO Safe acceptance described under Handoff below.
+The existing role script gives both `emergency_shutdown` and `emergency_restart` to the configured Emergency Safe.
+
+If source verification fails after successful transactions, preserve the deployment manifest, confirm every receipt, and retry
+the same deployment command with `--resume true`. Foundry requires `--broadcast true` with `--verify true`.
+Resume processes the saved transaction sequence; confirmed transactions are not sent again. Do not start a fresh deployment to retry verification.
 
 ## Grant Roles
 
@@ -27,9 +68,10 @@ The `grantRoles.sh` script can be used to grant the roles and ownership to facil
 ./shell/L2/grantRoles.sh --account <account> --env <env-file> --broadcast true
 ```
 
-## Bridge Setup
+## Legacy Bridge Setup
 
-The new chain installation will have a CrossChainBridge contract deployed. For each chain that it needs to interact with, the `setupBridge.sh` script should be run to trust messages from the remote chain. However, this needs to be performed on both chains.
+This section and Bridge Testing apply to existing legacy bridge installations, separately from core deployment.
+Run `setupBridge.sh` for each remote chain the existing CrossChainBridge should trust. Perform this on both chains.
 
 An example with Base and Optimism is shown below:
 
@@ -77,10 +119,23 @@ The last step in the deployment is to transfer the ownership of the installation
 
 This should be run using the deployer account.
 
-## Verification
-
-The `verify.sh` script can be used to verify the deployment.
+The DAO multisig must then call `RolesAdmin.pullNewAdmin()` to accept administration.
+Use a Safe **Call** to the confirmed RolesAdmin address, with value **0** and calldata from:
 
 ```bash
-./shell/L2/verify.sh --env .env.optimism
+cast calldata 'pullNewAdmin()'
 ```
+
+The legacy `ops/batches/PullRolesAdmin.sol` helper does not support Robinhood. Use the direct Safe call there.
+Authority role transfers are immediate and need no acceptance calls.
+
+## Verification
+
+Source verification on Sourcify is handled by `deploy.sh --verify true`.
+Sourcify also forwards verification to supported explorers. Check RobinScan afterward; Etherscan's forwarding quota can prevent some submissions.
+Use direct Etherscan verification only for contracts that remain unverified there.
+Final state checks remain necessary: confirm the DAO Kernel executor, accepted RolesAdmin admin, Authority holders,
+MINTR vault, emergency and custodian roles, installed modules, active policies, and zero initial OHM supply.
+
+`shell/L2/verify.sh` contains historical Berachain/mainnet bridge checks. It is not a general deployment verifier;
+do not run it for a Robinhood core deployment.

@@ -12,9 +12,7 @@
 #   [--resume <false>]
 #   [--env <env-file>]
 #
-# Environment variables:
-# ETHERSCAN_KEY (only needed if verify is true)
-# VERIFIER_URL (only needed for a custom verifier or on a fork)
+# Source verification uses Sourcify and requires no Etherscan API key.
 
 # Exit if any error occurs
 set -e
@@ -50,15 +48,13 @@ echo "  Chain: $chain"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-set_verify_flag $VERIFY $ETHERSCAN_KEY $VERIFIER_URL
+set_verify_flag "$VERIFY"
 set_resume_flag $RESUME
 validate_and_set_account "$account" "$ledger"
 
 # Deploy using script
 echo ""
 echo "Running forge script"
-echo "NOTE: If verification of any contract fails during deployment, you can verify them"
-echo "      individually using: ./shell/verify_etherscan.sh --address <address> --metadata <metadata-file>"
 FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/DeployV3.s.sol:DeployV3 \
     --sig "deploy(string)()" $sequence \
     --rpc-url $chain \

@@ -22,38 +22,23 @@
 
 ## Verification
 
-Verification is handled automatically by the `deploy.sh` script, as long as the `--verify true` flag is passed.
+`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` explicitly select Sourcify when `--verify true` is passed.
+No Etherscan API key or custom explorer endpoint is required.
+
+Sourcify forwards successful verifications to supported explorers, including Etherscan.
+Check the target explorer afterward: Etherscan's forwarding quota can prevent some submissions.
+See [Sourcify's forwarding documentation](https://docs.sourcify.dev/docs/external-verifiers/).
 
 ### Manual Verification
 
-Sometimes the automatic etherscan verification fails when deploying a contract. If that's the case, follow the these steps to verify existing contracts:
+If automatic Sourcify verification fails, retry with the original deployment profile and contract source:
 
-1. Execute the `shell/verify_etherscan.sh` script with the following arguments:
+```bash
+FOUNDRY_PROFILE=deploy forge verify-contract \
+    <contract-address> <source-path:contract-name> \
+    --chain <chain-id> --verifier sourcify --watch
+```
 
-    - `CONTRACT_ADDRESS`: Address of the target contract to be verified.
-    - `CONTRACT_PATH`: Relative path to the target contract.
-    - `CONSTRUCTOR_ARGS`: Calldata of the constructor args. The preferred method is to manually encode the data, but `cast abi-encode "constructor(args)" "values"` can also be used.
-
-2. This is an example execution of the shell script:
-
-    ```shell
-    shell/verify_etherscan.sh 0x0AE561226896dA978EaDA0Bec4a7d3CfAE04f506 src/policies/Operator.sol:Operator 0x0000000000000000000000002286d7f9639e8158fad1169e76d1fbc38247f54b000000000000000000000000007f7a1cb838a872515c8ebd16be4b14ef43a22200000000000000000000000073df08ce9dcc8d74d22f23282c4d49f13b4c795e00000000000000000000000064aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d50000000000000000000000006b175474e89094c44da98b954eedeac495271d0f00000000000000000000000083f20f44975d03b1b09e64809b757c47f942beea0000000000000000000000000000000000000000000000000000000000000bb8000000000000000000000000000000000000000000000000000000000003f48000000000000000000000000000000000000000000000000000000000000186a0000000000000000000000000000000000000000000000000000000000000384000000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000007e90000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000015
-    ```
-
-    Where the `CONSTRUCTOR_ARGS` have been decode in the following way:
-
-    ```hex
-    constructor(address,address,address,uint256,uint256[2],uint256[2])"
-
-    0x
-    0000000000000000000000002286d7f9639e8158fad1169e76d1fbc38247f54b  # address1
-    00000000000000000000000064aa3364f17a4d01c6f1751fd97c2bd3d7e7f1d5  # address2
-    0000000000000000000000006b175474e89094c44da98b954eedeac495271d0f  # address3
-    0000000000000000000000000000000000000000000000000000000000000064  # uint256
-    00000000000000000000000000000000000000000000000000000000000003e8  # array1[0]
-    00000000000000000000000000000000000000000000000000000000000007d0  # array1[1]
-    00000000000000000000000000000000000000000000000000000000000003e8  # array2[0]
-    00000000000000000000000000000000000000000000000000000000000007d0  # array2[1]
-    ```
-
-    Remember that you can use `chisel` to easily convert from decimals to hex
+Keep the original compiler settings and source files.
+If a contract is verified on Sourcify but remains unverified on Etherscan, use `shell/verify_etherscan.sh` as a fallback.
+That separate Etherscan tool still requires its own API key.
