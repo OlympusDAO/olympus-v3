@@ -9,6 +9,7 @@
 #   [--constructor_args <constructor-args>]
 #   [--compiler_version <version>]
 #   [--optimizer_runs <runs>]
+#   [--libraries <path:name:address,path:name:address,...>]
 #   [--chain <chain-name-or-url>]
 #   [--verify <true/false>]
 #   [--env <env-file>]
@@ -16,6 +17,12 @@
 # Examples:
 # ./verify_etherscan.sh --address 0x123... --metadata out/Heart.sol/OlympusHeart.0.8.15.json --chain mainnet
 # ./verify_etherscan.sh --address 0x123... --metadata out/Kernel.sol/Kernel.0.8.15.json --constructor_args 0x456... --chain http://localhost:8545
+#
+# A contract linked against external libraries must be verified with the library
+# addresses, otherwise the bytecode does not match. The entries are recorded in the
+# broadcast file of the deployment (the ".libraries" field, e.g.
+# broadcast/DeployV3.s.sol/1/deploy-latest.json) and are passed comma-separated:
+# ./verify_etherscan.sh --address 0x123... --metadata out/YieldRepurchaseFacilityV2.sol/YieldRepurchaseFacilityV2.json --optimizer_runs 400 --libraries src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol:YRFBondMarketLib:0x456...,src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol:YRFClearinghouseLib:0x789... --chain mainnet
 
 # Exit if any error occurs
 set -e
@@ -36,6 +43,7 @@ VERIFY=${verify:-true}
 CONSTRUCTOR_ARGS=${constructor_args:-}
 COMPILER_VERSION_OVERRIDE=${compiler_version:-}
 OPTIMIZER_RUNS_OVERRIDE=${optimizer_runs:-}
+LIBRARIES=${libraries:-}
 
 # Validate required arguments
 echo ""
@@ -136,6 +144,10 @@ else
     echo "  Constructor args: (auto-detected from cache)"
 fi
 
+if [ -n "$LIBRARIES" ]; then
+    echo "  Libraries: $LIBRARIES"
+fi
+
 if [ -n "$VERIFIER_URL" ]; then
     echo "  Verifier: custom ($VERIFIER_URL)"
 else
@@ -170,6 +182,15 @@ VERIFY_CMD="$VERIFY_CMD --chain $chain"
 # Add constructor args if provided
 if [ -n "$CONSTRUCTOR_ARGS" ]; then
     VERIFY_CMD="$VERIFY_CMD --constructor-args $CONSTRUCTOR_ARGS"
+fi
+
+# Add libraries if provided (comma-separated <path>:<name>:<address> entries, repeated
+# as one --libraries flag each)
+if [ -n "$LIBRARIES" ]; then
+    IFS=',' read -ra LIBRARY_ENTRIES <<< "$LIBRARIES"
+    for LIBRARY_ENTRY in "${LIBRARY_ENTRIES[@]}"; do
+        VERIFY_CMD="$VERIFY_CMD --libraries $LIBRARY_ENTRY"
+    done
 fi
 
 # Add contract address and path

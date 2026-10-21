@@ -6,6 +6,7 @@ This document describes the roles that are used in the Olympus protocol.
 
 | Role | Policy | Actions |
 |------|----------|-------------|
+| admin | BackingOracle | Enable the policy with the initial backing, set the backing directly within the change bound, queue backing updates, set the timelock delay, enable/disable the policy |
 | admin | ChainlinkOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods, enable/disable contract |
 | admin | ConvertibleDepositFacility | Authorize/deauthorize operators, enable/disable contract |
@@ -22,6 +23,10 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, queue timelock delay changes, install submodules, store observations, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
+| admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, return funds to the treasury while disabled, rescue tokens, disable the facility |
+| admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate the config operator, set the grace period, enable/disable the policy |
+| admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, enable/disable the policy |
+| backing_admin | BackingOracle | Queue timelocked backing updates |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |
 | bridge_admin | CrossChainBridge | Allows configuring the CrossChainBridge |
 | bridge_admin | LZBridgeGateway | Call the one-shot `initializeBridgedSupply` bootstrap |
@@ -42,6 +47,7 @@ This document describes the roles that are used in the Olympus protocol.
 | deposit_operator | DepositManager | Allows a caller to manage deposits on behalf of depositors |
 | distributor_admin | Distributor | Set reward rate, bounty, and other parameters |
 | em_manager | EmissionManager | Allows setting parameters on the EmissionManager |
+| emergency | BackingOracle | Disable the policy, cancel queued backing updates |
 | emergency | ChainlinkOracleFactory | Allows disable of oracles, disable of new oracle creation, enable/disable the contract |
 | emergency | ConvertibleDepositAuctioneer | Disable the contract |
 | emergency | ConvertibleDepositFacility | Deauthorize operators, disable contract |
@@ -56,6 +62,9 @@ This document describes the roles that are used in the Olympus protocol.
 | emergency | MorphoOracleFactory | Allows disable of oracles, disable of new oracle creation, disable the contract |
 | emergency | PriceConfig v2 | Disable contract, cancel queued timelock actions |
 | emergency | ReserveWrapper | Disable contract |
+| emergency | YieldRepurchaseFacilityV2 | Disable the facility, return funds to the treasury while disabled |
+| emergency | YieldRepurchaseFacilityV2Config | Disable the policy |
+| emergency | YieldRepurchaseFacilityV2ConfigTimelock | Disable the policy, cancel queued actions |
 | emergency_restart | Emergency | Reactivates the TRSRY and/or MINTR modules |
 | emergency_shutdown | Clearinghouse | Allows shutting down the protocol in an emergency |
 | emergency_shutdown | Emergency | Deactivates the TRSRY and/or MINTR modules |
@@ -64,6 +73,7 @@ This document describes the roles that are used in the Olympus protocol.
 | heart | Operator | Call the operate() function |
 | heart | ReserveMigrator | Allows migrating reserves from one reserve token to another |
 | heart | YieldRepurchaseFacility | Creates a new YRF market |
+| heart | YieldRepurchaseFacilityV2 | Calls the execute() function |
 | legacy_migration_admin | V1Migrator | Set the merkle root and rescue tokens |
 | loan_consolidator_admin | LoanConsolidator | Allows configuring the LoanConsolidator |
 | manager | ConvertibleDepositAuctioneer | Set tracking period, set tick step, enable/disable deposit periods |
@@ -81,6 +91,9 @@ This document describes the roles that are used in the Olympus protocol.
 | price_admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, install submodules, store observations |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
+| yrf_admin | YieldRepurchaseFacilityV2 | Re-enable the facility within the grace window after a disable, rescue tokens |
+| yrf_admin | YieldRepurchaseFacilityV2Config | Re-enable the policy within the grace window after a disable |
+| yrf_admin | YieldRepurchaseFacilityV2ConfigTimelock | Queue timelocked operator setters of the config policy (yield buyback share, initial discount, max price premium, Clearinghouse offset increases and exclusions, next yield decreases, asset enable/disable), re-enable the policy within the grace window after a disable |
 
 ## Role Allocations
 
