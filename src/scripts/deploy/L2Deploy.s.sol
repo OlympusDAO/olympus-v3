@@ -6,6 +6,7 @@ import {WithEnvironment} from "../WithEnvironment.s.sol";
 import {WithLayerZeroConstants} from "../WithLayerZeroConstants.sol";
 
 // Libraries
+import {SafeCast} from "src/libraries/SafeCast.sol";
 import {ADMIN_ROLE, EMERGENCY_ROLE} from "src/policies/utils/RoleDefinitions.sol";
 
 // Contracts
@@ -24,6 +25,8 @@ import {Emergency} from "src/policies/Emergency.sol";
 import {TreasuryCustodian} from "src/policies/TreasuryCustodian.sol";
 import {Minter} from "src/policies/Minter.sol";
 import {CCIPBurnMintTokenPool} from "src/policies/bridge/CCIPBurnMintTokenPool.sol";
+import {CCIPTokenPoolConfig} from "src/policies/bridge/CCIPTokenPoolConfig.sol";
+import {CCIPTokenPoolConfigTimelock} from "src/policies/bridge/CCIPTokenPoolConfigTimelock.sol";
 
 /// @notice Deploys and configures a Bophades installation on another chain.
 // solhint-disable gas-custom-errors
@@ -171,8 +174,11 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
     ///         - TreasuryCustodian
     ///         - CCIPBurnMintTokenPool
     ///         - CCIPCrossChainBridge
+    ///         - CCIPTokenPoolConfig
+    ///         - CCIPTokenPoolConfigTimelock
     ///         - Minter (testnet only)
-    /// @dev    The CCIP pool is activated in the Kernel. Both CCIP contracts remain disabled.
+    /// @dev    The CCIP pool, config policy and timelock are activated in the Kernel.
+    ///         All four CCIP contracts remain disabled.
     ///         CCIP registration, routes and enabling are separate configuration steps.
     /// @param chain_ Chain key in env.json.
     /// @param shouldDeployOhm_ Deploy Authority and OHM instead of reusing the registry entries.
@@ -255,10 +261,6 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
             console2.log("Minter deployed at:", address(minter));
         }
 
-        console2.log("");
-        console2.log("Deployments complete");
-        console2.log("Please update the src/scripts/env.json file with the new addresses");
-
         // Execute actions on Kernel
 
         console2.log("");
@@ -277,8 +279,36 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         if (isTestnet_) {
             kernel.executeAction(Actions.ActivatePolicy, address(minter));
         }
+        _deployCCIPConfig(kernel, address(ccipTokenPool));
         console2.log("Kernel actions complete");
         vm.stopBroadcast();
+
+        console2.log("");
+        console2.log("Deployments complete");
+        console2.log("Please update the src/scripts/env.json file with the new addresses");
+    }
+
+    /// @dev Uses the same configuration keys as DeployV3's CCIP sequences.
+    function _deployCCIPConfig(Kernel kernel_, address pool_) internal {
+        uint32 gracePeriod = SafeCast.encodeUInt32(
+            _envUintNotZero("olympus.config.CCIPTokenPoolConfig.gracePeriod")
+        );
+        uint48 timelockDelay = SafeCast.encodeUInt48(
+            _envUintNotZero("olympus.config.CCIPTokenPoolConfig.timelockDelay")
+        );
+
+        CCIPTokenPoolConfig config = new CCIPTokenPoolConfig(kernel_, pool_, gracePeriod);
+        console2.log("CCIPTokenPoolConfig deployed at:", address(config));
+        CCIPTokenPoolConfigTimelock timelock = new CCIPTokenPoolConfigTimelock(
+            kernel_,
+            address(config),
+            timelockDelay,
+            gracePeriod
+        );
+        console2.log("CCIPTokenPoolConfigTimelock deployed at:", address(timelock));
+
+        kernel_.executeAction(Actions.ActivatePolicy, address(config));
+        kernel_.executeAction(Actions.ActivatePolicy, address(timelock));
     }
 
     /// @notice Deploys a new CrossChainBridge
@@ -382,9 +412,10 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
 
         address ccipTokenPool = _envAddress("olympus.policies.CCIPBurnMintTokenPool");
         if (ccipTokenPool != address(0)) {
-            console2.log("Proposing DAO multisig as CCIP pool owner", daoMultisig);
-            CCIPBurnMintTokenPool(ccipTokenPool).transferOwnership(daoMultisig);
-            console2.log("DAO multisig must call CCIPBurnMintTokenPool.acceptOwnership()");
+            address config = _envAddressNotZero("olympus.policies.CCIPTokenPoolConfig");
+            console2.log("Proposing CCIP config policy as pool owner", config);
+            CCIPBurnMintTokenPool(ccipTokenPool).transferOwnership(config);
+            console2.log("CCIPNonEthereumSetupBatch.setup will accept pool ownership");
         }
 
         address ccipBridge = _envAddress("olympus.periphery.CCIPCrossChainBridge");

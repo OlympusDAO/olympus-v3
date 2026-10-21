@@ -9,6 +9,7 @@ A Bophades installation can be deployed by following these steps:
 1. Configure a Foundry RPC alias and the chain's DAO and emergency multisigs in `src/scripts/env.json`.
    Set `current.<chain>.external.ccip.RMN` and `Router` to the confirmed Chainlink infrastructure addresses.
    The script checks both entries before it starts deploying contracts.
+   Set `olympus.config.CCIPTokenPoolConfig.gracePeriod` and `timelockDelay` in seconds.
 2. Export the RPC credentials, or use the normal `.env`. A chain-specific `--env <file>` is optional.
 3. Use a `cast wallet` account with `--account <account>`, or a Ledger with `--ledger <mnemonic-index>`.
 4. Run the deployment:
@@ -19,8 +20,8 @@ A Bophades installation can be deployed by following these steps:
 
     - Omit `--broadcast true` to preview without sending transactions.
     - `--ohm true` deploys both Authority and OHM. `--ohm false` reuses their registry addresses.
-    - The deployment creates the Bophades core, `CCIPBurnMintTokenPool`, and `CCIPCrossChainBridge`.
-    - The pool is activated as a Kernel policy. Both CCIP contracts remain disabled until configured.
+    - The deployment creates the core, `CCIPBurnMintTokenPool`, `CCIPCrossChainBridge`, `CCIPTokenPoolConfig`, and `CCIPTokenPoolConfigTimelock`.
+    - The pool, config policy, and timelock are activated in the Kernel. All four CCIP contracts remain disabled until configured.
     - `--verify true` submits source verification during deployment. Separate verification commands are unnecessary after success.
     - Verification explicitly selects Sourcify and requires no Etherscan API key.
 
@@ -47,13 +48,15 @@ Use Ledger mnemonic index **5**:
 All deployment wrappers pass `--verifier sourcify` when verification is enabled, including when an Etherscan key exists in the environment.
 No separate `.env.robinhood` is required. No staking, Distributor, sOHM, or gOHM deployment is required.
 The core creates Authority, OHM, Kernel, MINTR, ROLES, TRSRY, RolesAdmin, Emergency, and TreasuryCustodian.
-The same command also creates the CCIP burn/mint pool and periphery bridge, for **eleven contracts** in total.
+The same command also creates the four CCIP contracts, for **thirteen contracts** in total.
+Robinhood's existing configuration uses a 259200-second re-enable grace period and an 86400-second timelock delay.
 It does not deploy the legacy LayerZero bridge or a canonical lock/release pool.
 
 Robinhood's CCIP Router, RMN proxy, chain selector, and TokenAdminRegistry are populated in `env.json`
 from the [official Chainlink directory](https://docs.chain.link/ccip/directory/mainnet/chain/robinhood-mainnet).
-Record all eleven confirmed addresses in `current.robinhood.olympus` before continuing.
+Record all thirteen confirmed addresses in `current.robinhood.olympus` before continuing.
 Store the pool at `policies.CCIPBurnMintTokenPool` and the bridge at `periphery.CCIPCrossChainBridge`.
+Store the configuration contracts at `policies.CCIPTokenPoolConfig` and `policies.CCIPTokenPoolConfigTimelock`.
 Leave `policies.CrossChainBridge` absent or zero; the role scripts skip its grants and transfers in that case.
 Preserve the deployment manifest in `broadcast/L2Deploy.s.sol/4663/` before running another entrypoint from this script.
 
@@ -67,10 +70,11 @@ The existing role script gives both `emergency_shutdown` and `emergency_restart`
 When a CCIP pool is recorded, it also grants `admin` to the DAO Safe and `emergency` to the Emergency Safe.
 These shared roles control the pool's enabled state. The periphery bridge uses its owner for enabling and disabling.
 
-The handoff script transfers the CCIP periphery bridge to the DAO Safe immediately and proposes the DAO Safe as pool owner.
-The DAO Safe must accept pool ownership as described below. CCIP registration, remote routes, rate limits, and enabling
-remain separate setup work; deployment alone does not make bridging available. See [the CCIP runbook](../../documentation/BRIDGE_CCIP.md).
-The pool is already activated in the Kernel, so do not repeat its installation step from that runbook.
+The handoff script transfers the CCIP periphery bridge to the DAO Safe and proposes the config policy as pool owner.
+The later `CCIPNonEthereumSetupBatch.setup` accepts pool ownership through the config policy and binds its timelock.
+CCIP registration, remote routes, rate limits, and enabling remain separate setup work; deployment alone does not enable bridging.
+Follow [the CCIP runbook](../../documentation/bridge/ccip/RUNBOOK.md) and [Robinhood checklist](../../documentation/bridge/ccip/ROBINHOOD_PENDING.md).
+The setup batch skips policies already active in the Kernel. Do not run a second CCIP deployment sequence after this command.
 
 If source verification fails after successful transactions, preserve the deployment manifest, confirm every receipt, and retry
 the same deployment command with `--resume true`. Foundry requires `--broadcast true` with `--verify true`.
@@ -145,12 +149,8 @@ cast calldata 'pullNewAdmin()'
 The legacy `ops/batches/PullRolesAdmin.sol` helper does not support Robinhood. Use the direct Safe call there.
 Authority role transfers are immediate and need no acceptance calls.
 
-For the CCIP pool, the DAO Safe must also make a **Call** to the confirmed `CCIPBurnMintTokenPool` address, with value **0**:
-
-```bash
-cast calldata 'acceptOwnership()'
-```
-
+Pool ownership is proposed to `CCIPTokenPoolConfig`, whose `acceptPoolOwnership()` call is included in the later CCIP setup batch.
+The DAO Safe does not call the pool's `acceptOwnership()` directly.
 The CCIP periphery bridge ownership transfer is immediate and needs no acceptance call.
 
 ## Verification
@@ -160,8 +160,8 @@ Sourcify also forwards verification to supported explorers. Check RobinScan afte
 Use direct Etherscan verification only for contracts that remain unverified there.
 Final state checks remain necessary: confirm the DAO Kernel executor, accepted RolesAdmin admin, Authority holders,
 MINTR vault, emergency and custodian roles, installed modules, active policies, and zero initial OHM supply.
-Also confirm the CCIP pool is an active Kernel policy, both CCIP owners are the DAO Safe after acceptance,
-the pool lifecycle roles are assigned, and both CCIP contracts remain disabled until the separate setup is complete.
+Also confirm the pool, config policy, and timelock are active Kernel policies, the periphery bridge owner is the DAO Safe,
+and pool ownership is pending to the config policy until setup accepts it. All four CCIP contracts remain disabled before setup.
 
 `shell/L2/verify.sh` contains historical Berachain/mainnet bridge checks. It is not a general deployment verifier;
 do not run it for a Robinhood core deployment.
