@@ -19,7 +19,7 @@
 # Source verification uses Sourcify and requires no Etherscan API key.
 
 # Exit if any error occurs
-set -e
+set -eo pipefail
 
 # Load named arguments
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -83,7 +83,11 @@ FOUNDRY_PROFILE=deploy forge script ./src/scripts/deploy/L2Deploy.s.sol:L2Deploy
     --sender "$ACCOUNT_ADDRESS" \
     $BROADCAST_FLAG \
     $VERIFY_FLAG \
-    $RESUME_FLAG
+    $RESUME_FLAG \
+    |
+    # The address map is saved in the broadcast for the registry writer; individual
+    # deployments are already logged. Flush progress output immediately.
+    awk '/^== Return ==$/ || /^addresses: string / {next} {print; fflush()}'
 
 if [ "$BROADCAST" == "true" ]; then
     DEPLOYMENT="broadcast/L2Deploy.s.sol/$CHAIN_ID/deploy-latest.json"

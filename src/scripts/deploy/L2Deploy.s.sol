@@ -329,7 +329,10 @@ contract L2Deploy is WithEnvironment, WithLayerZeroConstants {
         _recordDeployment("olympus.policies.CCIPTokenPoolConfigTimelock", address(timelock));
 
         kernel_.executeAction(Actions.ActivatePolicy, address(config));
+        console2.log("CCIPTokenPoolConfig activated in Kernel:", address(config));
         kernel_.executeAction(Actions.ActivatePolicy, address(timelock));
+        console2.log("CCIPTokenPoolConfigTimelock activated in Kernel:", address(timelock));
+        console2.log("Both policies remain operationally disabled until CCIP setup");
     }
 
     /// @notice Deploys a new CrossChainBridge
