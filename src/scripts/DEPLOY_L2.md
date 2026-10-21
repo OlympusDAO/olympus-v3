@@ -22,8 +22,10 @@ A Bophades installation can be deployed by following these steps:
     - `--ohm true` deploys both Authority and OHM. `--ohm false` reuses their registry addresses.
     - The deployment creates the core, `CCIPBurnMintTokenPool`, `CCIPCrossChainBridge`, `CCIPTokenPoolConfig`, and `CCIPTokenPoolConfigTimelock`.
     - The pool, config policy, and timelock are activated in the Kernel. All four CCIP contracts remain disabled until configured.
-    - `--verify true` submits source verification to both Etherscan and Sourcify after deployment.
-    - Set `ETHERSCAN_API_KEY` (or `ETHERSCAN_KEY`). Select one provider with `--verifier etherscan` or `--verifier sourcify`; the default is `both`.
+    - `--verify true` submits source verification to Etherscan, Sourcify and Blockscout after deployment.
+    - Set `ETHERSCAN_API_KEY` (or `ETHERSCAN_KEY`) and `BLOCKSCOUT_API_KEY`. Required keys are checked before deployment.
+    - Select one provider with `--verifier etherscan`, `--verifier sourcify`, or `--verifier blockscout`; the default is `all`.
+    - `--verifier both` selects only Etherscan and Sourcify.
 
 5. After a successful broadcast, the wrapper records the deployed addresses in `src/scripts/env.json`.
    Solidity records each deployed address with its registry key in the broadcast return value.
@@ -44,12 +46,12 @@ Use Ledger mnemonic index **5**:
 # Preview: no transactions or explorer submissions.
 ./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true
 
-# Deploy core and CCIP contracts, install modules and policies, and verify sources on both providers.
+# Deploy core and CCIP contracts, install modules and policies, and verify sources on all three providers.
 ./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true
 ```
 
-Both providers are attempted even if one fails. Sourcify-only verification requires no Etherscan API key.
-Etherscan uses its V2 endpoint with `chainid=4663` for Robinhood.
+Every selected provider is attempted even if one fails. Sourcify-only verification requires no Etherscan API key.
+The Robinhood explorer entry in `foundry.toml` selects Etherscan V2 with `chainid=4663` for verification and trace source lookups.
 No separate `.env.robinhood` is required. No staking, Distributor, sOHM, or gOHM deployment is required.
 The core creates Authority, OHM, Kernel, MINTR, ROLES, TRSRY, RolesAdmin, Emergency, and TreasuryCustodian.
 The same command also creates the four CCIP contracts, for **thirteen contracts** in total.
@@ -83,8 +85,8 @@ Follow [the CCIP runbook](../../documentation/bridge/ccip/RUNBOOK.md) and [Robin
 The setup batch skips policies already active in the Kernel. Do not run a second CCIP deployment sequence after this command.
 
 If source verification fails after successful transactions, preserve the deployment manifest and retry
-the same deployment command with `--resume true --verifier etherscan` or `--resume true --verifier sourcify`.
-Omit `--verifier` to retry both. The wrapper requires `--broadcast true` with `--verify true`.
+the same deployment command with `--resume true --verifier etherscan`, `--resume true --verifier sourcify`, or `--resume true --verifier blockscout`.
+Omit `--verifier` to retry all three, or use `--verifier both` for Etherscan and Sourcify. The wrapper requires `--broadcast true` with `--verify true`.
 Resume processes the saved transaction sequence; confirmed transactions are not sent again. After success, the wrapper records addresses and formats the artifacts.
 Do not start a fresh deployment to retry verification.
 Direct calls to the Solidity entrypoint bypass this wrapper step. Use `shell/L2/deploy.sh` for automatic recording and formatting.
@@ -178,7 +180,7 @@ The DAO remains pool owner until that acceptance. The deployer is not needed for
 
 ## Verification
 
-Source verification on both Etherscan and Sourcify is handled by `deploy.sh --verify true`.
+Source verification on Etherscan, Sourcify and Blockscout is handled by `deploy.sh --verify true`.
 The providers are called directly; successful forwarding from Sourcify is not required.
 To retry Robinhood verification on Etherscan after a Sourcify limit, use:
 
@@ -186,8 +188,18 @@ To retry Robinhood verification on Etherscan after a Sourcify limit, use:
 ./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true --resume true --verifier etherscan
 ```
 
-Use `--verifier sourcify` to retry Sourcify alone, or omit the flag to run both.
+Use `--verifier sourcify` to retry Sourcify alone, or omit the flag to run all three.
 The deployment addresses are recorded before verification, so a verifier failure does not leave the registry empty.
+
+For direct Blockscout verification, set `BLOCKSCOUT_API_KEY` from [the developer portal](https://dev.blockscout.com) and run:
+
+```bash
+./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true --resume true --verifier blockscout
+```
+
+This uses Blockscout's gateway with `chain_id=4663`; the direct Robinhood explorer API can return a Cloudflare challenge.
+It does not require an Etherscan key or Sourcify forwarding. Use `--verifier all` to submit to all three providers.
+See [Blockscout's Forge instructions](https://docs.blockscout.com/devs/verification/foundry-verification).
 
 Final state checks remain necessary: confirm the DAO Kernel executor, accepted RolesAdmin admin, Authority holders,
 MINTR vault, emergency and custodian roles, installed modules, active policies, and zero initial OHM supply.

@@ -11,13 +11,14 @@
 #   --ohm <true|false>
 #   --broadcast <false>
 #   --verify <false>
-#   --verifier <both|etherscan|sourcify> (default: both)
+#   --verifier <all|both|etherscan|sourcify|blockscout> (default: all)
 #   --resume <false>
 #   --env <env-file> (optional; defaults to .env if present)
 #
 # Environment variables:
 # RPC_URL, CHAIN (legacy alternative to --chain)
-# Source verification uses Etherscan and Sourcify. Etherscan requires ETHERSCAN_API_KEY.
+# Source verification uses Etherscan, Sourcify and Blockscout by default.
+# Etherscan requires ETHERSCAN_API_KEY; Blockscout requires BLOCKSCOUT_API_KEY.
 
 # Exit if any error occurs
 set -eo pipefail
@@ -60,7 +61,7 @@ echo "  Deploying OHM: $ohm"
 # Validate and set forge script flags
 source "$SCRIPT_DIR/../lib/forge.sh"
 set_broadcast_flag "$BROADCAST"
-configure_verification "$VERIFY" "${verifier:-both}" "$RPC_URL"
+configure_verification "$VERIFY" "${verifier:-all}" "$RPC_URL"
 set_resume_flag "$RESUME"
 validate_and_set_account "$account" "$ledger"
 

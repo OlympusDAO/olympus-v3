@@ -20,15 +20,16 @@ set_broadcast_flag() {
 }
 
 # Configure source verification before any deployment transactions are sent.
-# --verify true defaults to both providers; --verifier selects a targeted retry.
+# --verify true defaults to all providers; --verifier selects a targeted retry.
 configure_verification() {
     VERIFY_ENABLED=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    local provider=${2:-both}
+    local provider=${2:-all}
     case "$provider" in
         both) VERIFICATION_PROVIDERS=(etherscan sourcify) ;;
-        etherscan | sourcify) VERIFICATION_PROVIDERS=("$provider") ;;
+        all) VERIFICATION_PROVIDERS=(etherscan sourcify blockscout) ;;
+        etherscan | sourcify | blockscout) VERIFICATION_PROVIDERS=("$provider") ;;
         *)
-            display_error "Provide --verifier both, etherscan, or sourcify."
+            display_error "Provide --verifier both, all, etherscan, sourcify, or blockscout."
             return 1
             ;;
     esac
@@ -41,13 +42,23 @@ configure_verification() {
         display_error "Verification requires --broadcast true. Use --resume true for a saved deployment."
         return 1
     fi
-    if [ "$provider" != "sourcify" ]; then
-        export ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-${ETHERSCAN_KEY:-}}
-        if [ -z "$ETHERSCAN_API_KEY" ]; then
-            display_error "Set ETHERSCAN_API_KEY (or ETHERSCAN_KEY) for Etherscan verification."
-            return 1
-        fi
-    fi
+    case "$provider" in
+        both | all | etherscan)
+            export ETHERSCAN_API_KEY=${ETHERSCAN_API_KEY:-${ETHERSCAN_KEY:-}}
+            if [ -z "$ETHERSCAN_API_KEY" ]; then
+                display_error "Set ETHERSCAN_API_KEY (or ETHERSCAN_KEY) for Etherscan verification."
+                return 1
+            fi
+            ;;
+    esac
+    case "$provider" in
+        all | blockscout)
+            if [ -z "$BLOCKSCOUT_API_KEY" ]; then
+                display_error "Set BLOCKSCOUT_API_KEY for Blockscout verification (https://dev.blockscout.com)."
+                return 1
+            fi
+            ;;
+    esac
     VERIFICATION_CHAIN_ID=$(cast chain-id --rpc-url "$3")
     echo "  Verification: ${VERIFICATION_PROVIDERS[*]}"
 }
@@ -66,16 +77,20 @@ format_broadcast() {
 # Attempt every selected provider, then report failure if any provider failed.
 verify_deployment() {
     if [ "$VERIFY_ENABLED" != "true" ]; then return; fi
-    local provider status=0
+    local provider api_key status=0
     local verifier_args=()
     for provider in "${VERIFICATION_PROVIDERS[@]}"; do
-        verifier_args=(--resume --verify --verifier "$provider")
-        if [ "$provider" == "etherscan" ]; then
-            verifier_args+=(--chain "$VERIFICATION_CHAIN_ID" --verifier-url "https://api.etherscan.io/v2/api?chainid=$VERIFICATION_CHAIN_ID")
+        verifier_args=(--resume --verify --verifier "$provider" --chain "$VERIFICATION_CHAIN_ID")
+        api_key=${ETHERSCAN_API_KEY:-}
+        if [ "$provider" == "blockscout" ]; then
+            verifier_args+=(--verifier-url "https://api.blockscout.com/v2/api?chain_id=$VERIFICATION_CHAIN_ID")
+            # Forge uses ETHERSCAN_API_KEY for Etherscan-compatible providers.
+            # Scope the Blockscout key to this subprocess; keep credentials out of argv.
+            api_key=$BLOCKSCOUT_API_KEY
         fi
         echo ""
         echo "Verifying saved deployment with $provider"
-        if forge script "$@" "${verifier_args[@]}"; then
+        if ETHERSCAN_API_KEY="$api_key" forge script "$@" "${verifier_args[@]}"; then
             echo "[PASS] $provider verification"
         else
             echo "[FAIL] $provider verification; retry with --resume true --verify true --verifier $provider"

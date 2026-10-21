@@ -22,17 +22,25 @@
 
 ## Verification
 
-`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` verify with **Etherscan and Sourcify** when `--verify true` is passed.
+`shell/deploy.sh`, `shell/deployV3.sh`, and `shell/L2/deploy.sh` verify with **Etherscan, Sourcify and Blockscout** when `--verify true` is passed.
 Set `ETHERSCAN_API_KEY` in the environment or deployment env file. The legacy `ETHERSCAN_KEY` name is also accepted.
-Use `--verifier etherscan` or `--verifier sourcify` to select one provider; the default is `both`.
+Use `--verifier etherscan`, `--verifier sourcify`, or `--verifier blockscout` to select one provider.
+The default is `all`; `--verifier both` selects only Etherscan and Sourcify.
 Sourcify-only verification requires no Etherscan API key.
 
-Verification runs from saved receipts after deployment succeeds. Both providers are attempted even if one fails.
-The command exits nonzero if either provider fails, while retaining the deployment records.
+Blockscout verification requires `BLOCKSCOUT_API_KEY` from [the Blockscout developer portal](https://dev.blockscout.com).
+The wrappers use `https://api.blockscout.com/v2/api?chain_id=<chain-id>` so verification does not depend on the explorer site's Cloudflare challenge.
+The Blockscout call uses its own key; the Etherscan call retains its original key. Blockscout-only verification requires no Etherscan key.
+Missing required keys stop the wrapper before deployment. See [Blockscout's Forge instructions](https://docs.blockscout.com/devs/verification/foundry-verification).
+
+Verification runs from saved receipts after deployment succeeds. Every selected provider is attempted even if one fails.
+The command exits nonzero if any selected provider fails, while retaining the deployment records.
 Retry the failed provider with the original command plus `--resume true --verify true --verifier <provider>`.
 Resume uses the saved deployment; confirmed transactions are not sent again.
 
-Etherscan uses the explicit V2 endpoint and RPC chain ID, including Robinhood (4663).
+The wrappers pass the RPC chain ID and use Foundry's explorer configuration.
+The Robinhood entry in `foundry.toml` selects the Etherscan V2 endpoint for chain 4663.
+The same entry directs trace source lookups, including those from `grantRoles.sh`, away from Blockscout.
 See [Etherscan's custom-chain instructions](https://docs.etherscan.io/contract-verification/verify-with-foundry#custom-chains).
 
 ### Manual Verification

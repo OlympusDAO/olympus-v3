@@ -4,12 +4,13 @@
 #
 # Usage:
 # ./deploy.sh --account <cast wallet> --sequence <sequence-file> --broadcast <false> --verify <false> --resume <false> --env <env-file>
-# --verifier <both|etherscan|sourcify> selects verification providers (default: both).
+# --verifier <all|both|etherscan|sourcify|blockscout> selects verification providers (default: all).
 #
 # Environment variables:
 # RPC_URL
 # CHAIN
-# Source verification uses Etherscan and Sourcify. Etherscan requires ETHERSCAN_API_KEY.
+# Source verification uses Etherscan, Sourcify and Blockscout by default.
+# Etherscan requires ETHERSCAN_API_KEY; Blockscout requires BLOCKSCOUT_API_KEY.
 
 # Exit if any error occurs
 set -e
@@ -49,7 +50,7 @@ echo "  Using RPC at URL: $RPC_URL"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-configure_verification "$VERIFY" "${verifier:-both}" "$RPC_URL"
+configure_verification "$VERIFY" "${verifier:-all}" "$RPC_URL"
 set_resume_flag $RESUME
 set_account_address $account
 

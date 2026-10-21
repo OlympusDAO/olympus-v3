@@ -9,11 +9,12 @@
 #   --chain <chain-name> (e.g. mainnet, base, or provide a custom RPC URL)
 #   [--broadcast <false>]
 #   [--verify <false>]
-#   [--verifier <both|etherscan|sourcify>] (default: both)
+#   [--verifier <all|both|etherscan|sourcify|blockscout>] (default: all)
 #   [--resume <false>]
 #   [--env <env-file>]
 #
-# Source verification uses Etherscan and Sourcify. Etherscan requires ETHERSCAN_API_KEY.
+# Source verification uses Etherscan, Sourcify and Blockscout by default.
+# Etherscan requires ETHERSCAN_API_KEY; Blockscout requires BLOCKSCOUT_API_KEY.
 
 # Exit if any error occurs
 set -e
@@ -49,7 +50,7 @@ echo "  Chain: $chain"
 # Validate and set forge script flags
 source $SCRIPT_DIR/lib/forge.sh
 set_broadcast_flag $BROADCAST
-configure_verification "$VERIFY" "${verifier:-both}" "$chain"
+configure_verification "$VERIFY" "${verifier:-all}" "$chain"
 set_resume_flag $RESUME
 validate_and_set_account "$account" "$ledger"
 
