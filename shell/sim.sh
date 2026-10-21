@@ -1,4 +1,6 @@
 #!/bin/sh
+# SPDX-FileCopyrightText: Contributors to OlympusDAO
+# SPDX-License-Identifier: Unlicense
 
 # Clear existing sim files
 rm ./src/test/sim/sims/*.t.sol

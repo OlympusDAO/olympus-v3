@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Legacy compiler pragmas
 
 Every file listed below declared an exact `pragma solidity 0.8.15` (or `=0.8.15`) until commit `623777ebbdaf3ae66c32cc964efcc373fe04a6a1` relaxed it to `>=0.8.15` and pinned the whole project to one compiler through `solc_version` in `foundry.toml`.

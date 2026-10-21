@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
 /// @notice External `pure` no-op used as an observation point for hooks that

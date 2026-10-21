@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # PRICE v1 → v1.2 Upgrade Rollout
 
 ## Problem Statement

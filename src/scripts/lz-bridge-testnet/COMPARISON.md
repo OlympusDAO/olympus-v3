@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: Contributors to OlympusDAO -->
+<!-- SPDX-License-Identifier: Unlicense -->
+
 # Production vs testnet setup
 
 Same bridge **contracts** and the same wiring **sequence**; what changes is the network data, the security/limit parameters, and who drives the configuration.

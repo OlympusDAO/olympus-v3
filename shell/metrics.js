@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: github.com/tintinweb
+// SPDX-License-Identifier: MIT
 'use strict';
 /**
  * @author github.com/tintinweb
