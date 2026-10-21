@@ -14,7 +14,8 @@
 #      balance of the pool) through a generated args file. A pool that is short
 #      gets the transfer and an empty re-run that takes the free-liquidity early
 #      return on the Solana mint supply the batch reads at build time. A pool
-#      that is already funded takes that early return on the first run.
+#      that is already funded takes that early return on the first run. A fork
+#      whose free liquidity is below the unclaimable balance stops the run.
 #   3. Negative checks: the mainnet readiness report is RED and the proposal
 #      build fails while the OHM fee budgets are still at the 90k default; then
 #      the five mainnet lanes are mocked to 175k and readiness turns GREEN.
@@ -147,25 +148,38 @@ dao_balance="$(cast call "$ohm" 'balanceOf(address)(uint256)' "$dao" --rpc-url "
 # The amount is the key minus the unclaimable balance of the pool, the one value
 # fundPool accepts (shell/calc_bridged_supply.sh prints it). The batch reads the
 # Solana mint supply at build time, on the fork too (the solana alias of
-# foundry.toml). The batch compares the free liquidity (the pool balance minus
-# that supply) with the key. The harness leaves that decision to the batch. A
-# pool that is already funded (after the real funding) takes the free-liquidity
-# early return on the first run. The fork balance is frozen at the fork block
-# while the supply is live. A lock minted on Solana after that block leaves the
-# fork's free liquidity short by its amount and fails the re-run assertion;
-# start the run again then.
+# foundry.toml), and compares the free liquidity (the pool balance minus that
+# supply) with the key. The harness reads the supply through the same alias and
+# applies the same condition before the batch: a pool that is already funded
+# (after the real funding) needs no DAO MS top-up and takes the free-liquidity
+# early return on the first run; a pool whose free liquidity is below the
+# unclaimable balance cannot reach the key with the amount, so the run stops
+# before any transfer. The fork balance is frozen at the fork block while the
+# supply is live. A lock minted on Solana after that block leaves the fork's
+# free liquidity short by its amount; start the run again then.
 FREE_LIQUIDITY_COVERED="The free liquidity of the pool already covers the minimum backing"
+solana_mint="$(jq -r '.current.solana.olympus.legacy.OHM' "$REPO_ROOT/$ENV_JSON")"
+solana_supply="$(cast rpc --raw getTokenSupply "[\"$solana_mint\"]" --rpc-url solana \
+    | jq -r 'if (.value.decimals == 9) and (.value.amount | test("^[0-9]+$")) then .value.amount else empty end')" \
+    || die "the Solana RPC (the solana alias of foundry.toml) did not answer getTokenSupply for the OHM mint $solana_mint"
+[ -n "$solana_supply" ] || die "the Solana RPC returned no 9-decimal supply for the OHM mint $solana_mint"
+free_liquidity=0
+[ "$pool_balance" -le "$solana_supply" ] || free_liquidity="$((pool_balance - solana_supply))"
 fund_amount="$((min_backing - unclaimable))"
-log "key=$min_backing unclaimable=$unclaimable pool=$pool_balance dao=$dao_balance amount=$fund_amount"
-if [ "$dao_balance" -lt "$fund_amount" ]; then
-    # The live DAO MS balance covers the amount today; this branch keeps the
-    # rehearsal green if it ever does not, by minting from the OHM vault (the
-    # MINTR module, resolved through the token's authority rather than assumed).
-    ohm_authority="$(cast call "$ohm" 'authority()(address)' --rpc-url "$RPC")"
-    ohm_vault="$(cast call "$ohm_authority" 'vault()(address)' --rpc-url "$RPC")"
-    top_up="$((fund_amount - dao_balance))"
-    log "minting $top_up OHM to the DAO MS from the OHM vault $ohm_vault"
-    cast_send_impersonated "$ohm_vault" "$ohm" "mint(address,uint256)" "$dao" "$top_up"
+log "key=$min_backing unclaimable=$unclaimable pool=$pool_balance solana=$solana_supply free=$free_liquidity dao=$dao_balance amount=$fund_amount"
+if [ "$free_liquidity" -lt "$min_backing" ]; then
+    [ "$free_liquidity" -ge "$unclaimable" ] \
+        || die "the free liquidity of the pool on this fork ($free_liquidity) is below the unclaimable balance ($unclaimable), so the amount cannot bring it to the key; a lock minted on Solana after the fork block shortens it, start the run again"
+    if [ "$dao_balance" -lt "$fund_amount" ]; then
+        # The live DAO MS balance covers the amount today; this branch keeps the
+        # rehearsal green if it ever does not, by minting from the OHM vault (the
+        # MINTR module, resolved through the token's authority rather than assumed).
+        ohm_authority="$(cast call "$ohm" 'authority()(address)' --rpc-url "$RPC")"
+        ohm_vault="$(cast call "$ohm_authority" 'vault()(address)' --rpc-url "$RPC")"
+        top_up="$((fund_amount - dao_balance))"
+        log "minting $top_up OHM to the DAO MS from the OHM vault $ohm_vault"
+        cast_send_impersonated "$ohm_vault" "$ohm" "mint(address,uint256)" "$dao" "$top_up"
+    fi
 fi
 jq -n --arg amount "$fund_amount" '{functions: [{name: "fundPool", args: {amount: $amount}}]}' > "$FUND_ARGS"
 log "fundPool args: $(jq -c '.functions[0].args' "$FUND_ARGS")"
