@@ -173,18 +173,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///           least 175000 on its lane, or its destination is disabled on the fee quoter (the
     ///           revert names the lane).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (optional; may carry
     ///        "reconcileRoutes.restoreContained").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function reconcileRoutes(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // The batch touches only the config timelock
         _skipHeartbeatValidation = true;
 
@@ -252,18 +248,14 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         executions share one transaction: with a multisig owner and more than one of them,
     ///         the Safe multisend is atomic and one reverting execution fails all of them.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner; any owner may execute.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (optional; may carry
     ///        "executeReadyActions.actionIds").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function executeReadyActions(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _skipHeartbeatValidation = true;
 
         IConfigTimelockBatchQueue timelock = IConfigTimelockBatchQueue(
@@ -305,17 +297,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     ///         - The action has not expired and the batch owner is neither the proposer nor an
     ///           `admin` or `emergency` holder.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "cancelQueuedAction.actionId").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function cancelQueuedAction(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _planCancel("cancelQueuedAction");
         proposeBatch();
     }
@@ -324,20 +312,13 @@ contract CCIPRouteReconcileBatch is BatchScriptV2 {
     /// @dev    Same args file as `cancelQueuedAction`, under the function name
     ///         `cancelQueuedActionEmergency`.
     /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "cancelQueuedActionEmergency.actionId").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function cancelQueuedActionEmergency(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
-    {
+        string calldata ledgerDerivationPath_
+    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _planCancel("cancelQueuedActionEmergency");
         proposeBatch();
     }

@@ -98,17 +98,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           in, or pending, its target state.
     ///         - The registered OHM pool is not the configured pool.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function prepareHandover(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         // The batch touches only the CCIP contracts, the Kernel policy set and the registry
         _skipHeartbeatValidation = true;
@@ -181,17 +177,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           enabled: an OCG proposal on mainnet, the local DAO MS on a burn/mint chain).
     ///         - A re-enable is due and the batch owner does not hold `bridge_admin`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function reEnable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _skipHeartbeatValidation = true;
 
@@ -239,17 +231,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           (before the handover, containment belongs to the pool owner through
     ///           `CCIPTokenPoolBatch.emergencyShutdown`).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "disableChain.remoteChain").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disableChain(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _planContainChain("disableChain");
         proposeBatch();
     }
@@ -258,20 +246,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @dev    Same behaviour and args file as `disableChain`, under the function name
     ///         `disableChainEmergencyMS`.
     /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (must contain "disableChainEmergencyMS.remoteChain").
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disableChainEmergencyMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
-    {
+        string calldata ledgerDerivationPath_
+    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _planContainChain("disableChainEmergencyMS");
         proposeBatch();
     }
@@ -324,17 +305,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           (before the handover, containment belongs to the pool owner through
     ///           `CCIPTokenPoolBatch.emergencyShutdownAll`).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disableAllChains(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planContainAllChains(false);
         proposeBatch();
@@ -343,20 +320,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @notice Contains every configured route with the Emergency MS as owner.
     /// @dev    Same behaviour as `disableAllChains`.
     /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disableAllChainsEmergencyMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
-    {
+        string calldata ledgerDerivationPath_
+    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planContainAllChains(false);
         proposeBatch();
@@ -415,17 +385,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///         - The args file is not empty.
     ///         - The batch owner holds neither `emergency` nor `admin`.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disablePolicies(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planDisablePolicies("disablePoliciesEmergencyMS");
         proposeBatch();
@@ -434,20 +400,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @notice Disables the config timelock and the config policy with the Emergency MS as owner.
     /// @dev    Same behaviour as `disablePolicies`.
     /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disablePoliciesEmergencyMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
-    {
+        string calldata ledgerDerivationPath_
+    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planDisablePolicies("disablePoliciesEmergencyMS");
         proposeBatch();
@@ -496,17 +455,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     ///           (before the handover, containment belongs to the pool owner through
     ///           `CCIPTokenPoolBatch.emergencyShutdownAll`).
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function haltAll(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planHaltAll();
         proposeBatch();
@@ -515,20 +470,13 @@ contract CCIPTokenPoolConfigBatch is BatchScriptV2 {
     /// @notice Halts the bridge in one batch with the Emergency MS as owner.
     /// @dev    Same behaviour as `haltAll`.
     /// @param useDaoMS_ Ignored; the owner is the Emergency MS.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function haltAllEmergencyMS(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    )
-        external
-        setUpWithEmergencyMS(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_)
-    {
+        string calldata ledgerDerivationPath_
+    ) external setUpWithEmergencyMS(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _planHaltAll();
         proposeBatch();

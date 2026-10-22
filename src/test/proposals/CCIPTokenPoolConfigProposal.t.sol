@@ -48,7 +48,7 @@ import {ProposalTest} from "./ProposalTest.sol";
 // which is the point of a precondition.
 // forge-lint: disable-start(require-revert-in-loop)
 
-// The rig, the two suites and the two proposal harnesses belong to one file: the harnesses
+// The rig, the two suites and the proposal harnesses belong to one file: the harnesses
 // exist only for these suites, and splitting them would hide that.
 // forge-lint: disable-start(multi-contract-file)
 
@@ -60,9 +60,8 @@ import {ProposalTest} from "./ProposalTest.sol";
 ///         replayable steps, and the OHM fee entries the build requires stubbed on the live fee
 ///         contracts.
 /// @dev    The proposal instance the suites run is `CCIPTokenPoolConfigProposalHarness`, which
-///         patches the Robinhood Chain burn/mint pool and OHM of `env.json` in memory (see its
-///         NatSpec). The rig itself reads the tracked `env.json` for every other desired-state
-///         value, so the assertions follow the file rather than repeating its numbers.
+///         reads the tracked `env.json` unchanged, including the deployed Robinhood contracts.
+///         The rig reads the same file, so the assertions follow its desired-state values.
 ///
 ///         Live preconditions are checked with labelled requires: a failure there means mainnet
 ///         has moved past the pin, not that the proposal is broken.
@@ -142,7 +141,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
     // ========== ENVIRONMENT ========== //
 
-    /// @notice The tracked `env.json`, as the rig reads it. The proposal reads the patched copy.
+    /// @notice The tracked `env.json`, read unchanged by both the rig and the proposal.
     string internal _env;
 
     // ========== CONTRACTS ========== //
@@ -166,16 +165,6 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
     address internal emergencyMS;
     address internal ocgTimelock;
     address internal proposer;
-
-    /// @notice The stand-in for the Robinhood Chain burn/mint pool, which the tracked file
-    ///         records as the zero address: the remote pool of the Robinhood route, patched into
-    ///         the environment by the harness.
-    address internal placeholderPool;
-
-    /// @notice The stand-in for the Robinhood Chain OHM, which the tracked file records as the
-    ///         zero address: the remote token of the Robinhood route, patched into the
-    ///         environment by the harness.
-    address internal placeholderRobinhoodOhm;
 
     // ========== DESIRED STATE (env.json) ========== //
 
@@ -219,9 +208,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
 
         // ========== PROPOSAL SETUP ========== //
 
-        placeholderPool = makeAddr("robinhoodBurnMintPool");
-        placeholderRobinhoodOhm = makeAddr("robinhoodOhm");
-        proposal = new CCIPTokenPoolConfigProposalHarness(placeholderPool, placeholderRobinhoodOhm);
+        proposal = new CCIPTokenPoolConfigProposalHarness();
         vm.label(address(proposal), "CCIPTokenPoolConfigProposalHarness");
 
         // Set to true once the proposal has been submitted on-chain, so that the framework
@@ -359,7 +346,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             );
         }
 
-        _requirePatchedEnvRoutes();
+        _requireRecordedEnvRoutes();
 
         // ========== OHM FEE BUDGETS ========== //
 
@@ -383,25 +370,14 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         return _env.readUint(string.concat("$.current.", chain_, ".", key_));
     }
 
-    /// @notice The OHM of a counterpart chain as the patched environment resolves it: the
-    ///         tracked address, or the labelled placeholder for Robinhood Chain, whose OHM the
-    ///         tracked file records as the zero address until it is deployed.
+    /// @notice The recorded OHM of a counterpart chain.
     function _counterpartOhm(string memory chain_) internal view returns (address ohmAddress) {
         ohmAddress = _envAddress(chain_, "olympus.legacy.OHM");
-        if (ohmAddress == address(0) && _sameString(chain_, "robinhood")) {
-            ohmAddress = placeholderRobinhoodOhm;
-        }
     }
 
-    /// @notice The burn/mint pool of a counterpart chain as the patched environment resolves
-    ///         it: the tracked address, or the labelled placeholder for Robinhood Chain, whose
-    ///         pool the tracked file records as the zero address, the rule `_counterpartOhm`
-    ///         applies to the remote token.
+    /// @notice The recorded burn/mint pool of a counterpart chain.
     function _counterpartPool(string memory chain_) internal view returns (address poolAddress) {
         poolAddress = _envAddress(chain_, "olympus.policies.CCIPBurnMintTokenPool");
-        if (poolAddress == address(0) && _sameString(chain_, "robinhood")) {
-            poolAddress = placeholderPool;
-        }
     }
 
     function _envChainSelector(string memory chain_) internal view returns (uint64 selector) {
@@ -569,20 +545,21 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         );
     }
 
-    /// @notice Proves the harness patch before the suites rely on it: each of the five
-    ///         burn/mint routes of the patched environment resolves the remote pool and the
-    ///         remote token the rig expects, the recorded addresses for Arbitrum, Base,
-    ///         Berachain and Optimism and the labelled placeholders for Robinhood Chain. A zero
-    ///         pool entry of another route chain is patched too, and that route fails here:
-    ///         `_counterpartPool` resolves the placeholder for Robinhood Chain only.
-    function _requirePatchedEnvRoutes() internal view {
+    /// @notice Proves the harness reads the tracked file unchanged and each burn/mint route
+    ///         resolves the recorded remote pool and token.
+    function _requireRecordedEnvRoutes() internal view {
+        assertEq(
+            keccak256(bytes(proposal.readEnv())),
+            keccak256(bytes(_env)),
+            "The proposal harness should read the tracked env.json unchanged"
+        );
         CCIPConfigLib.DesiredRoute[] memory desired = CCIPConfigLib.desiredRoutes(
             proposal.readEnv(),
             "mainnet"
         );
         require(
             desired.length == _NEW_ROUTE_COUNT + 1,
-            "patch: mainnet should declare the five new routes and the Solana one"
+            "env: mainnet should declare the five new routes and the Solana one"
         );
 
         for (uint256 i = 0; i < newRoutes.length; ++i) {
@@ -593,7 +570,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             require(
                 route.remotePools.length == 1,
                 string.concat(
-                    "patch: route ",
+                    "env: route ",
                     newRoutes[i].name,
                     " should resolve exactly one remote pool"
                 )
@@ -601,7 +578,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             require(
                 keccak256(route.remotePools[0]) == keccak256(newRoutes[i].remotePool),
                 string.concat(
-                    "patch: route ",
+                    "env: route ",
                     newRoutes[i].name,
                     " should resolve the expected remote pool"
                 )
@@ -609,7 +586,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
             require(
                 keccak256(route.remoteToken) == keccak256(newRoutes[i].remoteToken),
                 string.concat(
-                    "patch: route ",
+                    "env: route ",
                     newRoutes[i].name,
                     " should resolve the declared remote token"
                 )
@@ -624,7 +601,7 @@ abstract contract CCIPTokenPoolConfigProposalTest is ProposalTest {
         for (uint256 i = 0; i < desired_.length; ++i) {
             if (desired_[i].chainSelector == chainSelector_) return desired_[i];
         }
-        revert("patch: the declared route is missing from the patched environment");
+        revert("env: the declared route is missing from the recorded environment");
     }
 
     // ========== OHM FEE BUDGET STUBS ========== //
@@ -1433,7 +1410,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
     // ========== ERROR CONDITIONS ========== //
 
     // given Phase B is complete and the pool is funded
-    //   given the Robinhood Chain OHM is patched but its burn/mint pool is not
+    //   given the Robinhood Chain burn/mint pool is unrecorded
     //     when the proposal is built
     //       [X] it reverts in the desired route reader on the zero Robinhood pool
 
@@ -1442,12 +1419,9 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         givenPhaseBComplete
         givenPoolFunded
     {
-        // A zero pool placeholder leaves the tracked Robinhood pool entry unchanged; the OHM
-        // stays patched, since the reader resolves the remote token before the remote pools
-        CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalHarness(
-            address(0),
-            placeholderRobinhoodOhm
-        );
+        CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalUnrecordedHarness(
+                true
+            );
         vm.label(address(unpatched), "unpatchedPoolProposalHarness");
         unpatched.deploy(addresses, address(this));
 
@@ -1460,7 +1434,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
     }
 
     // given Phase B is complete and the pool is funded
-    //   given the Robinhood Chain burn/mint pool is patched but its OHM is not
+    //   given the Robinhood Chain OHM is unrecorded
     //     when the proposal is built
     //       [X] it reverts in the desired route reader on the zero Robinhood OHM
 
@@ -1469,11 +1443,9 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         givenPhaseBComplete
         givenPoolFunded
     {
-        // A zero OHM placeholder leaves the tracked Robinhood OHM entry unchanged
-        CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalHarness(
-            placeholderPool,
-            address(0)
-        );
+        CCIPTokenPoolConfigProposalHarness unpatched = new CCIPTokenPoolConfigProposalUnrecordedHarness(
+                false
+            );
         vm.label(address(unpatched), "unpatchedOhmProposalHarness");
         unpatched.deploy(addresses, address(this));
 
@@ -1742,10 +1714,7 @@ contract CCIPTokenPoolConfigProposalTests_build is CCIPTokenPoolConfigProposalTe
         givenPhaseBComplete
         givenPoolFunded
     {
-        CCIPTokenPoolConfigProposalRebalancerHarness drifted = new CCIPTokenPoolConfigProposalRebalancerHarness(
-                placeholderPool,
-                placeholderRobinhoodOhm
-            );
+        CCIPTokenPoolConfigProposalRebalancerHarness drifted = new CCIPTokenPoolConfigProposalRebalancerHarness();
         vm.label(address(drifted), "rebalancerDriftProposalHarness");
         drifted.deploy(addresses, address(this));
 
@@ -2608,58 +2577,8 @@ contract CCIPTokenPoolConfigProposalTests_execution is CCIPTokenPoolConfigPropos
     }
 }
 
-/// @notice Test harness over `CCIPTokenPoolConfigProposal`: it exposes the internal lifecycle
-///         hooks as external calls and patches the burn/mint pool and the OHM of Robinhood
-///         Chain in `env.json` in memory.
-/// @dev    The tracked `src/scripts/env.json` records the zero address for the
-///         `CCIPBurnMintTokenPool` and the OHM of Robinhood Chain, so the desired route reader
-///         fails closed on them before any proposal check runs. The proposal must not be run
-///         against a mutated tracked file and must leave no file behind, so the override reads
-///         the tracked file on every use, as the proposal does, and replaces the zero pool
-///         entry with one labelled placeholder, and the zero Robinhood OHM entry with another,
-///         in the returned string. Nothing is stored: `vm.readFile` and `vm.replace` are
-///         cheatcodes and the transient string is freed with the call.
-///
-///         A zero `placeholderPool_` or `placeholderRobinhoodOhm_` disables that patch, so that
-///         a test can prove that the tracked file fails closed in the reader.
+/// @notice Exposes the proposal lifecycle hooks and reads the tracked `env.json` unchanged.
 contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
-    /// @dev The exact line fragment of the prettier-formatted `env.json` that records an
-    ///      undeployed counterpart pool. The Robinhood Chain block is the only one that carries
-    ///      it; the patch replaces every occurrence, and the rig's route check fails on any
-    ///      other route chain the patch reaches, since the rig expects the placeholder for
-    ///      Robinhood Chain only.
-    string internal constant _ZERO_POOL_FRAGMENT =
-        '"CCIPBurnMintTokenPool": "0x0000000000000000000000000000000000000000"';
-
-    string internal constant _POOL_KEY_FRAGMENT = '"CCIPBurnMintTokenPool": "';
-
-    /// @dev The exact fragment of the prettier-formatted `env.json` that records the undeployed
-    ///      Robinhood Chain OHM: the zero `OHM` entry and the closing brace of its `legacy`
-    ///      block, of which it is the only key. The zero `OHM` line alone also occurs in the
-    ///      `last` block of the file, where other keys follow it, so the brace is what makes
-    ///      the fragment unique to Robinhood Chain.
-    string internal constant _ZERO_ROBINHOOD_OHM_FRAGMENT =
-        '"OHM": "0x0000000000000000000000000000000000000000"\n                }';
-
-    string internal constant _OHM_KEY_FRAGMENT = '"OHM": "';
-
-    string internal constant _LEGACY_BLOCK_CLOSE = '"\n                }';
-
-    /// @notice The stand-in for the Robinhood Chain burn/mint pool, or the zero address to read
-    ///         the tracked pool entry unchanged.
-    address public immutable PLACEHOLDER_POOL;
-
-    /// @notice The stand-in for the Robinhood Chain OHM, or the zero address to read the tracked
-    ///         entry unchanged.
-    address public immutable PLACEHOLDER_ROBINHOOD_OHM;
-
-    // The zero address is a meaningful value here: it disables the patch
-    // forge-lint: disable-next-item(missing-zero-check)
-    constructor(address placeholderPool_, address placeholderRobinhoodOhm_) {
-        PLACEHOLDER_POOL = placeholderPool_;
-        PLACEHOLDER_ROBINHOOD_OHM = placeholderRobinhoodOhm_;
-    }
-
     /// @notice The desired-state string the proposal reads, for the rig's own assertions.
     function readEnv() external view returns (string memory env) {
         return _readEnv();
@@ -2681,62 +2600,32 @@ contract CCIPTokenPoolConfigProposalHarness is CCIPTokenPoolConfigProposal {
     function validate(Addresses addresses_, address caller_) external view {
         _validate(addresses_, caller_);
     }
+}
+
+/// @notice Clears one recorded Robinhood address in memory for the missing-address tests.
+contract CCIPTokenPoolConfigProposalUnrecordedHarness is CCIPTokenPoolConfigProposalHarness {
+    using stdJson for string;
+
+    bool private immutable _UNRECORD_POOL;
+
+    constructor(bool unrecordPool_) {
+        _UNRECORD_POOL = unrecordPool_;
+    }
 
     /// @inheritdoc CCIPTokenPoolConfigProposal
-    /// @dev Patches through an external self-call so that the copies of the file the patch
-    ///      allocates live in that call's frame and are released on return. Under
-    ///      `isolate = true` the whole `run` of the proposal is one transaction whose frame
-    ///      reads the file about ten times, and the memory gas of a frame grows quadratically
-    ///      with everything it has ever allocated: patched in the caller's frame, the three
-    ///      copies of the 85 KB file per read exhaust the block gas limit before `_validate`
-    ///      finishes (`MemoryOOG`).
-    function _readEnv() internal view virtual override returns (string memory env) {
-        return this.patchedEnv();
-    }
-
-    /// @notice The tracked file with the placeholders patched in, as `_readEnv` returns it.
-    function patchedEnv() external view returns (string memory env) {
+    function _readEnv() internal view override returns (string memory env) {
         env = super._readEnv();
-        if (PLACEHOLDER_POOL != address(0)) {
-            env = _patch(
+        string memory key = _UNRECORD_POOL ? "CCIPBurnMintTokenPool" : "OHM";
+        string memory path = _UNRECORD_POOL
+            ? ".current.robinhood.olympus.policies.CCIPBurnMintTokenPool"
+            : ".current.robinhood.olympus.legacy.OHM";
+        string memory recorded = env.readString(path);
+        return
+            vm.replace(
                 env,
-                _ZERO_POOL_FRAGMENT,
-                string.concat(_POOL_KEY_FRAGMENT, vm.toString(PLACEHOLDER_POOL), '"'),
-                "Robinhood pool"
+                string.concat('"', key, '": "', recorded, '"'),
+                string.concat('"', key, '": "', vm.toString(address(0)), '"')
             );
-        }
-        if (PLACEHOLDER_ROBINHOOD_OHM != address(0)) {
-            env = _patch(
-                env,
-                _ZERO_ROBINHOOD_OHM_FRAGMENT,
-                string.concat(
-                    _OHM_KEY_FRAGMENT,
-                    vm.toString(PLACEHOLDER_ROBINHOOD_OHM),
-                    _LEGACY_BLOCK_CLOSE
-                ),
-                "Robinhood OHM"
-            );
-        }
-    }
-
-    /// @dev Replaces every occurrence of `fragment_` in `env_` and requires that at least one
-    ///      was found, so that a fragment the file no longer carries fails here, naming it,
-    ///      rather than in the reader.
-    function _patch(
-        string memory env_,
-        string memory fragment_,
-        string memory replacement_,
-        string memory label_
-    ) private pure returns (string memory patched) {
-        patched = vm.replace(env_, fragment_, replacement_);
-        require(
-            keccak256(bytes(patched)) != keccak256(bytes(env_)),
-            string.concat(
-                "CCIPTokenPoolConfigProposalHarness: the ",
-                label_,
-                " fragment no longer matches env.json"
-            )
-        );
     }
 }
 
@@ -2753,12 +2642,7 @@ contract CCIPTokenPoolConfigProposalRebalancerHarness is CCIPTokenPoolConfigProp
     /// @notice The rebalancer the patched environment declares instead of the OCG timelock.
     address public constant FOREIGN_REBALANCER = 0x000000000000000000000000000000000000dEaD;
 
-    constructor(
-        address placeholderPool_,
-        address placeholderRobinhoodOhm_
-    ) CCIPTokenPoolConfigProposalHarness(placeholderPool_, placeholderRobinhoodOhm_) {}
-
-    /// @inheritdoc CCIPTokenPoolConfigProposalHarness
+    /// @inheritdoc CCIPTokenPoolConfigProposal
     function _readEnv() internal view override returns (string memory env) {
         string memory patched = super._readEnv();
         address declared = patched.readAddress(

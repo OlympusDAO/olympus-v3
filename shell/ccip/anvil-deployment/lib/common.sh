@@ -223,7 +223,7 @@ run_batch_from() {
     set -o pipefail
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
-      --sig "${fn}(bool,bool,string,string,bytes)()" "$useDaoMS" false "$argsfile" "" 0x \
+      --sig "${fn}(bool,string,string)()" "$useDaoMS" "$argsfile" "" \
       --rpc-url "$RPC" --sender "$sender" --unlocked --slow $TX_FLAGS -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
   ) || die "batch ${contract}.${fn} failed; see $LAST_BATCH_LOG"
@@ -253,7 +253,7 @@ run_batch_expect_fail() {
     set -o pipefail
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
-      --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
+      --sig "${fn}(bool,string,string)()" true "$argsfile" "" \
       --rpc-url "$RPC" --sender "$owner" --unlocked --slow $TX_FLAGS -vvv --broadcast \
       2>&1 | tee "$LAST_BATCH_LOG"
   ); then

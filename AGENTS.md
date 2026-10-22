@@ -337,7 +337,7 @@ Key standards summary:
 
 ### Deployment
 
-- Chain-specific env files: `.env.[chain]` (copy from `.env.deploy.example`)
+- Shared environment template: `.env.example`. Use `.env`, or optional chain-specific `.env.[chain]` files through `--env`.
 - Deployment scripts in `src/scripts/deploy/`
 - Saved deployments in `src/scripts/deploy/savedDeployments/`
 - See `src/scripts/DEPLOY.md` and `src/scripts/DEPLOY_L2.md` for detailed steps

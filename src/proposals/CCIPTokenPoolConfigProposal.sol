@@ -281,6 +281,8 @@ contract CCIPTokenPoolConfigProposal is GovernorBravoProposal {
                 "\n",
                 "- Operator documentation: `documentation/bridge/ccip/RUNBOOK.md` in the olympus-v3 repository.\n",
                 "- Contracts: `src/policies/bridge/CCIPTokenPoolConfig.sol`, `src/policies/bridge/CCIPTokenPoolConfigTimelock.sol`.\n",
+                "- Audit report: [Cyfrin CCIP audit report](https://storage.googleapis.com/olympusdao-landing-page-reports/audits/2026-10-16-cyfrin-olympus-ccip-exp-v2.0.pdf).\n",
+                "- CCIP bridging implementation: [PR #338: CCIP Bridging](https://github.com/OlympusDAO/olympus-v3/pull/338).\n",
                 "\n",
                 "## Assumptions\n",
                 "\n",

@@ -69,15 +69,12 @@ contract DeployOracles is BatchScriptV2 {
 
     /// @notice Deploy a single Chainlink oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployChainlinkOracle(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath) {
         console2.log("=== Deploying Chainlink Oracle ===");
 
         _loadFactoryAddresses();
@@ -104,15 +101,12 @@ contract DeployOracles is BatchScriptV2 {
 
     /// @notice Deploy a single Morpho oracle for a token pair
     /// @param useDaoMS_ Whether to use the DAO multisig
-    /// @param signOnly_ Whether to only sign the batch
     /// @param argsFilePath_ Path to args file with baseToken, quoteToken, maxAge, minPrice, maxPrice
     function deployMorphoOracle(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath, signature_) {
+        string calldata ledgerDerivationPath
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath) {
         console2.log("=== Deploying Morpho Oracle ===");
 
         _loadFactoryAddresses();
