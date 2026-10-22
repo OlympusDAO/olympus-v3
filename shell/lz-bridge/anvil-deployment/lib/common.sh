@@ -194,7 +194,7 @@ run_batch() {
     set -o pipefail
     FORK=true USE_ANVIL_FORK=true FOUNDRY_PROFILE=multisig forge script \
       "src/scripts/ops/batches/${contract}.sol:${contract}" \
-      --sig "${fn}(bool,bool,string,string,bytes)()" true false "$argsfile" "" 0x \
+      --sig "${fn}(bool,string,string)()" true "$argsfile" "" \
       --rpc-url "$RPC" --sender "$daoMS" --unlocked --slow -vvv --broadcast \
       2>&1 | tee "$LOG_DIR/batch-${contract}-${fn}.log"
   ) || die "batch ${contract}.${fn} failed; see $LOG_DIR/batch-${contract}-${fn}.log"

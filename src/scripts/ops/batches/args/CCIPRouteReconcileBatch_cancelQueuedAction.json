@@ -1,0 +1,16 @@
+{
+    "functions": [
+        {
+            "args": {
+                "actionId": 1
+            },
+            "name": "cancelQueuedAction"
+        },
+        {
+            "args": {
+                "actionId": 1
+            },
+            "name": "cancelQueuedActionEmergency"
+        }
+    ]
+}

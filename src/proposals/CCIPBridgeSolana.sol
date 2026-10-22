@@ -11,6 +11,9 @@ import {IERC20} from "src/interfaces/IERC20.sol";
 // Script
 import {ProposalScript} from "./ProposalScript.sol";
 
+// The proposal and the script that submits it share one file, like the other proposals here
+// forge-lint: disable-start(multi-contract-file)
+
 /// @notice Proposal for activation of the CCIP Bridge for Solana
 // solhint-disable gas-custom-errors
 contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
@@ -60,8 +63,6 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
         _kernel = addresses.getAddress("olympus-kernel");
     }
 
-    function _afterDeploy(Addresses addresses, address deployer) internal override {}
-
     // Sets up actions for the proposal
     function _build(Addresses addresses) internal override {
         address daoMS = addresses.getAddress("olympus-multisig-dao");
@@ -87,6 +88,8 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
     }
 
     // Validates the post-execution state.
+    // The proposal carries a single placeholder action, so there is no end state to validate
+    // forge-lint: disable-next-item(empty-block)
     function _validate(Addresses addresses, address) internal view override {
         // Nothing to do
     }
@@ -95,3 +98,5 @@ contract SolanaCCIPBridgeProposal is GovernorBravoProposal {
 contract SolanaCCIPBridgeProposalScript is ProposalScript {
     constructor() ProposalScript(new SolanaCCIPBridgeProposal()) {}
 }
+
+// forge-lint: disable-end(multi-contract-file)

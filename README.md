@@ -48,7 +48,7 @@ Up-to-date addresses of all the deployments can be found in:
 
 Add `FORK_TEST_RPC_URL` to the .env file in order to run fork tests
 
-Copy the `.env.deploy.example` file into one file per chain, e.g. `.env_deploy_goerli` and set the appropriate variables. This chain-specific environment file can then be called during deployment, e.g. `env $(cat .env_deploy_goerli | xargs) PRIVATE_KEY=<PRIVATE KEY> ./shell/deploy.sh`
+Copy `.env.example` to `.env` and set the variables required by the scripts you run. Use `--env .env` to load it in deployment scripts. L2 scripts also load `.env` automatically and select the chain with `--chain <rpc-alias>`.
 
 ## Deployment
 

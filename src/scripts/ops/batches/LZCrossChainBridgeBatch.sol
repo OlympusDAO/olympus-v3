@@ -35,17 +35,13 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
     ///         LZBridgeAndDelegateConfig policy and every subsequent rotation goes through
     ///         the timelock queue exposed by the config.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function initializeConfigurator(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _requireCanonical();
 
@@ -63,17 +59,13 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
 
     /// @notice Ethereum (post-OCG, pre-migration): disable old CrossChainBridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disableOldBridge(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _requireCanonical();
 
@@ -96,17 +88,13 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
 
     /// @notice Ethereum setup (post-OCG): deactivate old CrossChainBridge and enable the periphery bridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function setup(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _requireCanonical();
 
@@ -148,17 +136,13 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
 
     /// @notice Enable the periphery bridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function enable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _requireCanonical();
 
@@ -172,17 +156,13 @@ contract LZCrossChainBridgeBatch is BatchScriptV2 {
 
     /// @notice Disable the periphery bridge.
     /// @param useDaoMS_ Whether to use the DAO MS as the owner.
-    /// @param signOnly_ Whether to only sign the batch without proposing/executing it.
     /// @param argsFile_ Path to the arguments file (unused, must be empty).
     /// @param ledgerDerivationPath_ Derivation path for Ledger signing (if applicable).
-    /// @param signature_ Optional pre-computed signature for the batch.
     function disable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
         _requireCanonical();
 

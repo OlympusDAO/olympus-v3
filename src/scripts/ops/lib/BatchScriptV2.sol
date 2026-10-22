@@ -16,7 +16,7 @@ import {WithEnvironment} from "src/scripts/WithEnvironment.s.sol";
 import {ChainUtils} from "src/scripts/ops/lib/ChainUtils.sol";
 
 // External
-import {Safe} from "@safe-utils-0.0.17/Safe.sol";
+import {Safe} from "@safe-utils-0.0.23/Safe.sol";
 import {Enum} from "safe-smart-account/common/Enum.sol";
 
 // Bophades
@@ -41,10 +41,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @notice Whether the owner is a Safe Multisig
     bool internal _isMultiSig;
 
-    /// @notice Whether to only sign the batch without proposing/executing it
-    /// @dev    Provided to setUp modifiers
-    bool internal _signOnly;
-
     /// @notice safe-utils client
     Safe.Client internal _multiSig;
 
@@ -64,11 +60,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
     /// @dev    Loaded by {_setUpBatchScript}
     string internal _ledgerDerivationPath;
 
-    /// @notice Optional signature for the batch
-    /// @dev    Loaded by {_setUpBatchScript}
-    ///         If this is provided, the batch will be proposed using the signature instead of asking the sender to sign
-    bytes internal _signature;
-
     /// @notice Optional post-batch validation function selector
     /// @dev    If set, this function will be called after batch simulation to validate state
     bytes4 internal _postBatchValidateSelector;
@@ -82,7 +73,7 @@ abstract contract BatchScriptV2 is WithEnvironment {
     // [X] Check for --broadcast flag before proposing batch
     // [X] Simulate batch before proposing
 
-    function _setUp(string memory chain_, bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUp(string memory chain_, bool useDaoMS_, string memory argsFilePath_, string memory ledgerDerivationPath_) internal {
         console2.log("Setting up batch script");
 
         _loadEnv(chain_);
@@ -92,19 +83,19 @@ abstract contract BatchScriptV2 is WithEnvironment {
         if (useDaoMS_) {
             owner = _envAddressNotZero("olympus.multisig.dao");
         }
-        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
+        _setUpBatchScript(owner, ledgerDerivationPath_);
     }
 
-    modifier setUp(bool useDaoMS_, bool signOnly_, string memory argsFilePath_, string memory ledgerDerivationPath_, bytes memory signature_) {
+    modifier setUp(bool useDaoMS_, string memory argsFilePath_, string memory ledgerDerivationPath_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_);
+        _setUp(chainName, useDaoMS_, argsFilePath_, ledgerDerivationPath_);
         _;
     }
 
     /// @dev    Deprecated.
     modifier setUpWithChainId(bool useDaoMS_) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
-        _setUp(chainName, useDaoMS_, false, "", "", "");
+        _setUp(chainName, useDaoMS_, "", "");
         _;
     }
 
@@ -113,25 +104,36 @@ abstract contract BatchScriptV2 is WithEnvironment {
     ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
     modifier setUpWithTreasuryWorkingGroupMS(
         bool useDaoMS_,
-        bool signOnly_,
         string memory argsFilePath_,
-        string memory ledgerDerivationPath_,
-        bytes memory signature_
+        string memory ledgerDerivationPath_
     ) {
         string memory chainName = ChainUtils._getChainName(block.chainid);
         _loadEnv(chainName);
         _loadArgs(argsFilePath_);
 
         address owner = _envAddressNotZero("olympus.multisig.treasuryWorkingGroup");
-        _setUpBatchScript(signOnly_, owner, ledgerDerivationPath_, signature_);
+        _setUpBatchScript(owner, ledgerDerivationPath_);
         _;
     }
 
-    function _hasSignature() internal view returns (bool) {
-        return bytes(_signature).length > 0;
+    /// @notice Set up with the Emergency multisig as owner
+    /// @dev    Reads from olympus.multisig.emergency in env.json
+    ///         Parameter useDaoMS_ is ignored but present for signature compatibility with safeBatchV2.sh
+    modifier setUpWithEmergencyMS(
+        bool useDaoMS_,
+        string memory argsFilePath_,
+        string memory ledgerDerivationPath_
+    ) {
+        string memory chainName = ChainUtils._getChainName(block.chainid);
+        _loadEnv(chainName);
+        _loadArgs(argsFilePath_);
+
+        address owner = _envAddressNotZero("olympus.multisig.emergency");
+        _setUpBatchScript(owner, ledgerDerivationPath_);
+        _;
     }
 
-    function _setUpBatchScript(bool signOnly_, address owner_, string memory ledgerDerivationPath_, bytes memory signature_) internal {
+    function _setUpBatchScript(address owner_, string memory ledgerDerivationPath_) internal {
         // Validate that the owner is not the forge default deployer
         if (owner_ == 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38) {
             // solhint-disable-next-line gas-custom-errors
@@ -153,21 +155,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
         } else {
             console2.log("  Owner address is an EOA");
             _isMultiSig = false;
-        }
-
-        _signOnly = signOnly_;
-        console2.log("  Sign only", _signOnly);
-
-        _signature = signature_;
-        if (_hasSignature()) {
-            console2.log("  Signature provided");
-        } else {
-            console2.log("  No signature provided");
-        }
-
-        // If signOnly is true, no signature should be provided
-        if (signOnly_ && _hasSignature()) {
-            revert("BatchScriptV2: Cannot provide signature when signOnly is true");
         }
 
         _ledgerDerivationPath = ledgerDerivationPath_;
@@ -238,14 +225,12 @@ abstract contract BatchScriptV2 is WithEnvironment {
     }
 
     function _proposeMultisigBatchTransactions() internal returns (bytes32 txHash) {
-        if (_signOnly) {
-            revert("BatchScriptV2: Cannot propose batch when signOnly is true");
-        }
-
         uint256 nonce = _getNonce();
 
         // Get tx data
         (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
+
+        _logSafeTxDetails(to, data, nonce);
 
         // Prepare the tx params
         Safe.ExecTransactionParams memory params = Safe.ExecTransactionParams({
@@ -254,28 +239,9 @@ abstract contract BatchScriptV2 is WithEnvironment {
             data: data,
             operation: Enum.Operation.DelegateCall,
             sender: msg.sender,
-            signature: _signature, // Empty signature, will be signed later
+            signature: _multiSig.sign(to, data, Enum.Operation.DelegateCall, msg.sender, nonce, _ledgerDerivationPath),
             nonce: nonce
         });
-
-        _logSafeTxDetails(to, data, nonce);
-
-        // If there is no signature, get the signature
-        if (!_hasSignature()) {
-            console2.log("  No signature provided, getting signature");
-            bytes memory signature = _multiSig.sign(
-                to,
-                data,
-                Enum.Operation.DelegateCall,
-                msg.sender,
-                nonce,
-                "" // No derivation path
-            );
-            params.signature = signature;
-        }
-        else {
-            console2.log("  Using provided signature");
-        }
 
         console2.log("  Submitting transaction");
         txHash = _multiSig.proposeTransaction(params);
@@ -296,30 +262,6 @@ abstract contract BatchScriptV2 is WithEnvironment {
 
         // Simulate and validate with snapshot/revert
         _validateWithSnapshot();
-
-        // If signOnly, get the signature and return
-        if (_signOnly) {
-            console2.log("signOnly is true, approve the request to sign the batch");
-
-            uint256 nonce = _getNonce();
-
-            (address to, bytes memory data) = _multiSig.getProposeTransactionsTargetAndData(_batchTargets, _batchData);
-
-            _logSafeTxDetails(to, data, nonce);
-
-            // This will revert if the user is using a Ledger and the derivation path is not provided
-            bytes memory signature = _multiSig.sign(
-                to,
-                data,
-                Enum.Operation.DelegateCall,
-                msg.sender,
-                nonce,
-                _ledgerDerivationPath
-            );
-            console2.log("Batch signed. Signature:");
-            console2.logBytes(signature);
-            return;
-        }
 
         {
             uint256 nonce = _getNonce();
