@@ -26,6 +26,7 @@ sequenceDiagram
     autonumber
     participant DAO as DAO Multisig
     participant OCG as OCG timelock
+    participant CH as Proposal checker
     participant K as Kernel
     participant RA as RolesAdmin
     participant C as Config
@@ -42,7 +43,8 @@ sequenceDiagram
     DAO->>P: transferOwnership(config)
     DAO->>REG: transferAdminRole(OHM, OCG timelock)
 
-    Note over DAO,REG: Phase C: OCG proposal, up to 12 actions, each only if the live state lacks it, one transaction
+    Note over DAO,REG: Phase C: OCG proposal, up to 14 actions in one transaction, the checker call first and each later action only if the live state lacks it
+    OCG->>CH: check(expectations)
     OCG->>REG: acceptAdminRole(OHM)
     OCG->>RA: grantRole(bridge_admin, DAO Multisig)
     OCG->>C: enable("")

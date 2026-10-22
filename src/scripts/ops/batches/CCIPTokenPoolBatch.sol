@@ -1032,6 +1032,8 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
     ///         - The Solana RPC request fails, answers with a status other than 200, without a
     ///           token supply, with decimals other than 9 or with an amount that is not a
     ///           decimal number.
+    ///         - The free liquidity is below the minimum backing and below the unclaimable
+    ///           balance, so the amount cannot bring it to the minimum backing.
     ///         - The free liquidity is below the minimum backing and the args file does not
     ///           carry `fundPool.amount`.
     ///         - The free liquidity is below the minimum backing and the amount is not the
@@ -1094,6 +1096,18 @@ contract CCIPTokenPoolBatch is BatchScriptV2 {
                 "The free liquidity of the pool already covers the minimum backing. Nothing to do."
             );
         } else {
+            // The amount brings the free liquidity to the minimum backing only from the
+            // unclaimable balance up; below it the post-batch check would fail.
+            require(
+                freeLiquidity >= unclaimable,
+                string.concat(
+                    "CCIPTokenPoolBatch: the free liquidity of the pool ",
+                    vm.toString(freeLiquidity),
+                    " is below the unclaimable balance ",
+                    vm.toString(unclaimable),
+                    ", so the funding amount cannot bring it to the minimum backing; check poolUnclaimableBalance against the pool with shell/calc_bridged_supply.sh"
+                )
+            );
             uint256 amount = _readBatchArgUint256("fundPool", "amount");
             uint256 expectedAmount = minimumBacking - unclaimable;
             require(

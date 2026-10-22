@@ -9,8 +9,8 @@ This document describes the intended state after the complete rollout.
 | Kernel executor | DAO MS | Local DAO MS |
 | `RolesAdmin.admin` | OCG timelock | Local DAO MS |
 | `admin` role | OCG timelock | Local DAO MS |
-| `bridge_admin` role | DAO MS | Local DAO MS |
-| `emergency` role | Emergency MS | Emergency MS |
+| `bridge_admin` role | DAO MS; OCG timelock | Local DAO MS |
+| `emergency` role | Emergency MS; OCG timelock | Emergency MS |
 | `bridge_rate_limiter` role | Unassigned | Unassigned |
 | OHM administrator in `TokenAdminRegistry` | OCG timelock | Local DAO MS |
 | Token pool owner | `CCIPTokenPoolConfig` | Local `CCIPTokenPoolConfig` |
@@ -18,6 +18,8 @@ This document describes the intended state after the complete rollout.
 | Native pool `rateLimitAdmin` | Zero address | Zero address |
 | Lock/release pool rebalancer | OCG timelock | Not applicable; burn/mint pool |
 | `CCIPCrossChainBridge` owner | DAO MS | Local DAO MS |
+
+On Ethereum, the OCG timelock holds `bridge_admin` and `emergency` in addition to `admin` (read from the ROLES module on 2026-10-21). The CCIP proposal grants `bridge_admin` to the DAO MS when it is missing and revokes no role, so both holders keep these roles after the rollout.
 
 | Holder | Address |
 | --- | --- |
@@ -28,7 +30,7 @@ This document describes the intended state after the complete rollout.
 | Base DAO MS | `0x18a390bD45bCc92652b9A91AD51Aed7f1c1358f5` |
 | Berachain DAO MS | `0x91494D1BC2286343D51c55E46AE80C9356D099b5` |
 | Robinhood Chain DAO MS | not deployed yet; a zero placeholder in `env.json` (`ROBINHOOD_PENDING.md`) |
-| Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` on Ethereum, Arbitrum, Optimism, Base and Berachain; no code on Robinhood Chain (read 2026-10-20), so its holder there is pending |
+| Emergency MS | `0xa8A6ff2606b24F61AFA986381D8991DFcCCd2D55` on Ethereum, Arbitrum, Optimism, Base, Berachain and Robinhood Chain; on Robinhood Chain a 2-of-8 Safe 1.3.0 (read 2026-10-21), still a zero placeholder in `env.json` (`ROBINHOOD_PENDING.md`) |
 | Zero address | `0x0000000000000000000000000000000000000000` |
 
 The non-Ethereum EVM chains are Arbitrum, Optimism, Base, Berachain and Robinhood Chain. Each carries its own `CCIPTokenPoolConfig`, `CCIPTokenPoolConfigTimelock`, `CCIPBurnMintTokenPool` and `CCIPCrossChainBridge`, and its own DAO MS. The Holder columns below name the Ethereum holders; on those chains the local DAO MS stands in for both the OCG timelock and the DAO MS.
@@ -69,7 +71,7 @@ Owns the local CCIP token pool.
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
 | `disableChain` | `emergency`, `admin`, `bridge_admin`, or `bridge_rate_limiter`; works while disabled | Emergency MS; OCG timelock; DAO MS; unassigned |
 | `disableAllChains` | `emergency`, `admin`, `bridge_admin`, or `bridge_rate_limiter`; works while disabled | Emergency MS; OCG timelock; DAO MS; unassigned |
-| `reEnable` | `bridge_admin`; within the grace period | DAO MS |
+| `reEnable` | `bridge_admin`; within the grace period | DAO MS; OCG timelock |
 | `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
@@ -89,24 +91,24 @@ The two functions below are present on every deployment of the config policy, bu
 | `enable` | `admin` | OCG timelock |
 | `setGracePeriod` | `admin` | OCG timelock |
 | `setTimelockDelay` | `admin` | OCG timelock |
-| `queueAddChain` | `bridge_admin` | DAO MS |
-| `queueRemoveChain` | `bridge_admin` | DAO MS |
-| `queueSetRemoteToken` | `bridge_admin` | DAO MS |
-| `queueAddRemotePool` | `bridge_admin` | DAO MS |
-| `queueRemoveRemotePool` | `bridge_admin` | DAO MS |
-| `queueApplyAllowListUpdates` | `bridge_admin` | DAO MS |
-| `queueSetChainRateLimits` | `bridge_admin` | DAO MS |
-| `queueBatch` | `bridge_admin` | DAO MS |
+| `queueAddChain` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueRemoveChain` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueSetRemoteToken` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueAddRemotePool` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueRemoveRemotePool` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueApplyAllowListUpdates` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueSetChainRateLimits` | `bridge_admin` | DAO MS; OCG timelock |
+| `queueBatch` | `bridge_admin` | DAO MS; OCG timelock |
 | `executeQueuedAction` | permissionless after the delay | any address |
 | `cancelQueuedAction` | `admin`, `emergency`, or the original proposer; any address once the action has expired; works while disabled | OCG timelock; Emergency MS; DAO MS; any address |
 | `disable` | `emergency` or `admin` | Emergency MS; OCG timelock |
-| `reEnable` | `bridge_admin`; within the grace period | DAO MS |
+| `reEnable` | `bridge_admin`; within the grace period | DAO MS; OCG timelock |
 | `changeKernel` | Kernel | Kernel |
 | `configureDependencies` | unrestricted, invoked by Kernel | - |
 
 All functions require the timelock to be enabled, except `enable` and `reEnable` (require disabled), `cancelQueuedAction`, and the Kernel-invoked ones. Queueing and execution both additionally require the config policy to be enabled and to still name this timelock as its config operator.
 
-The `admin` role is not a queue proposer: every queued action targets a function it can call directly on the config policy.
+The `admin` role is not a queue proposer: every queued action targets a function it can call directly on the config policy. On Ethereum, the OCG timelock can still queue, because it also holds `bridge_admin`.
 
 ### `CCIPBurnMintTokenPool` policy (non-Ethereum chains)
 

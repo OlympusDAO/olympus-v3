@@ -46,7 +46,8 @@ roles can immediately contain one or all routes.
 
 Branch: `feat/ccip-config-timelock-n-evm-chains`
 
-Code commit: `<to-be-added>`. See
+Audit commit: [`c2bc850a`](https://github.com/OlympusDAO/olympus-v3/commit/c2bc850a2664d1f5cca74ec439520c5cc868aa2c). The mitigation review covered the fixes up to
+[`06a87ce1`](https://github.com/OlympusDAO/olympus-v3/commit/06a87ce1de31025fa514091b162d6d4a4862119e). See
 [scopefile.txt](./scopefile.txt) for the machine-readable list.
 
 ### Core Contracts
@@ -107,7 +108,7 @@ role semantics the CCIP policies inherit are covered as one unit. The hooks the 
 
 The Solidity metrics extension accepts file paths, not line ranges. It will therefore count each
 file below in full. Audit scope is limited to these ranges at commit
-[`<to-be-added>`](https://github.com/#<to-be-added>):
+[`c2bc850a`](https://github.com/OlympusDAO/olympus-v3/commit/c2bc850a2664d1f5cca74ec439520c5cc868aa2c):
 
 | File                      | In-scope code                                                                                                                                                                                                 | Baseline                                                                                                                   |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
