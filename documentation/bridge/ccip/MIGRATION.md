@@ -10,7 +10,7 @@ flowchart TD
     START --> NONE["Nothing yet: the chain has<br/>no config policy and no timelock"]
     START --> CFGONLY["Config policy and timelock"]
     START --> WITHPOOL["Token pool"]
-    NONE --> S0["Scenario 0<br/>Bootstrap: stand the triad up and hand authority over<br/>Ethereum: DAO batch + OCG proposal<br/>Elsewhere: two DAO batches around the mainnet proposal,<br/>the Solana per-chain config before the second"]
+    NONE --> S0["Scenario 0<br/>Bootstrap: stand the triad up and hand authority over<br/>Ethereum: DAO batch + OCG proposal<br/>Elsewhere: two DAO batches around the mainnet proposal"]
     CFGONLY --> A["Scenario A<br/>Pool, registry, liquidity and routes untouched<br/>No Solana action"]
     WITHPOOL --> B["Scenario B<br/>Full triad, registry updated<br/>Solana pre-step required"]
     WITHPOOL --> NOTSUP["Pool alone is not supported:<br/>the config policy's pool address<br/>is fixed at construction"]
@@ -78,7 +78,7 @@ sequenceDiagram
     participant P as BurnMint pool
     participant REG as local TokenAdminRegistry
 
-    Note over EOA,REG: Prerequisites: Chainlink fee budgets set (the EVM lanes here, the lane from Solana on its fee quoter); registry handover
+    Note over EOA,REG: Prerequisites: Chainlink fee budgets set on the EVM lanes; registry handover
     EOA->>REG: transferAdminRole(OHM, DAO Multisig)
     DAO->>REG: acceptAdminRole(OHM)
 
@@ -86,6 +86,7 @@ sequenceDiagram
     Note over EOA: deploy pool, periphery, Config, Timelock in one sequence
     EOA->>P: transferOwnership(config)
     Note over EOA,DAO: periphery ownership transferred to the DAO Multisig
+    Note over EOA,P: stack from shell/L2/deploy.sh: the DAO Multisig accepts the pool<br/>in the L2 handoff, then calls transferOwnership(config)
 
     Note over EOA,REG: Batch 1: setup, during the mainnet voting window
     DAO->>K: executeAction(DeactivatePolicy, legacy LZ bridge)
@@ -96,20 +97,22 @@ sequenceDiagram
     C->>P: acceptOwnership()
     DAO->>C: setConfigOperator(timelock)
     DAO->>T: enable("")
-    DAO->>C: addChain per env.json route (mainnet, the other burn/mint chains, Solana)
+    DAO->>C: addChain per env.json EVM route (mainnet, the other burn/mint chains)
     C->>P: applyChainUpdates
     Note over P,REG: pool disabled and unregistered: the chain is inert
 
     Note over EOA,REG: mainnet proposal executes
-
-    Note over EOA,REG: on Solana (Squads): per-chain config for this chain on the Solana pool (remote token, remote pool, both limits)
 
     Note over EOA,REG: Batch 2: finalize
     DAO->>P: enable("")
     DAO->>REG: setPool(OHM, pool)
 ```
 
-`enable` on the pool precedes `setPool` so that a registered pool is never unable to mint, and the activation in batch 1 already granted its MINTR permissions. Unlike Scenario B on these chains, `setPool` is deferred to a separate batch: until `finalize`, no outbound send and no inbound delivery can touch the pool, so a failed mainnet vote leaves nothing to roll back. The Solana side of the chain's Solana route follows the same rule: its per-chain config on the Solana pool is applied after the proposal executes and before `finalize`, so both sides of that pair open at `finalize`, and a config applied during the vote would let a send from Solana strand on the unregistered pool for the whole voting window. A message sent toward the chain between the proposal execution and `finalize`, from mainnet, from an already finalized chain or from Solana once its config is in place, parks in FAILURE and is recovered permissionlessly with manual execution afterwards.
+`enable` on the pool precedes `setPool` so that a registered pool is never unable to mint, and the activation in batch 1 already granted its MINTR permissions. Unlike Scenario B on these chains, `setPool` is deferred to a separate batch: until `finalize`, no outbound send and no inbound delivery can touch the pool, so a failed mainnet vote leaves nothing to roll back. A message sent toward the chain between the proposal execution and `finalize`, from mainnet or from an already finalized chain, parks in FAILURE and is recovered permissionlessly with manual execution afterwards.
+
+The setup batch opens the EVM routes only. The route between the chain and Solana is added after `finalize`: the EVM side through the local config timelock, the Solana side by the owner of the Solana pool (`RUNBOOK.md`, "Adding the Solana routes of the burn/mint chains").
+
+Robinhood Chain was deployed with `shell/L2/deploy.sh`. On such a stack the pool goes to the DAO Multisig in the L2 handoff first, and the DAO Multisig then nominates the config policy (`CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig`; `RUNBOOK.md`, step 3 of "Non-Ethereum rollout").
 
 ## Scenario A on Ethereum
 
@@ -213,6 +216,7 @@ sequenceDiagram
     DAO->>K: executeAction(ActivatePolicy, newTimelock)
     DAO->>OT: cancelQueuedAction(id) for anything that must not survive
     Note over DAO: on Solana: AppendRemotePoolAddresses(new Ethereum pool)
+    Note over DAO: on every burn/mint chain: addRemotePool(mainnet selector, new Ethereum pool)<br/>through its config timelock
 
     Note over DAO,REG: Phase 2: OCG proposal, 4 actions, one transaction
     OCG->>RA: grantRole(admin, activator)
@@ -243,6 +247,8 @@ sequenceDiagram
 
 `setRebalancer` on the old pool must precede `transferLiquidity`, since `withdrawLiquidity` checks the rebalancer. Both must precede `disable` on the old config policy. `setPool` follows `activate()` so the registry points at the new pool only once it holds the liquidity; it is a separate action because the registry gates it on the OHM administrator, which is the OCG timelock rather than the activator. Removing the old pool from Solana's accepted list afterwards is unnecessary.
 
+A pool rejects an inbound message from a source pool that it does not accept (`InvalidSourcePoolAddress`). For this reason, every burn/mint chain with a mainnet route must accept the new Ethereum pool before `setPool`. Each local DAO Multisig queues `addRemotePool` on its config timelock in Phase 1, and the action must be executed before the proposal executes. Removing the old Ethereum pool from those chains afterwards is optional, as in Phase 3 of Scenario B on a non-Ethereum EVM chain.
+
 The old timelock is disabled inside `activate()` rather than left until Phase 3. Deactivating it in the Kernel is what finally retires it, but that happens in a separate batch some time later, and until then an action queued before the migration would still be executable against a config policy that no longer owns the pool. Cancelling in Phase 1 removes the actions that are known about; disabling closes the window for the rest.
 
 ## Scenario B on a non-Ethereum EVM chain
@@ -263,7 +269,7 @@ sequenceDiagram
     participant NT as new Timelock
     participant REG as local TokenAdminRegistry
 
-    Note over ETH,REG: Phase 1: on Ethereum, before the local batch
+    Note over ETH,REG: Phase 1: on Ethereum and on every other burn/mint chain with a route to this chain, before the local batch
     ETH->>ETH: addRemotePool(localSelector, newLocalPool)
 
     Note over ETH,REG: Phase 2: single batch, local DAO Multisig
@@ -295,4 +301,4 @@ sequenceDiagram
 
 Phase 3 is optional: once the old pool is no longer registered in its own chain's registry, no on-ramp will call it, so its stale entry on the Ethereum side cannot be exercised. Removing it is hygiene, and doing it too early rejects messages still in flight.
 
-`ActivatePolicy` on the new pool grants its MINTR permissions and must precede `setPool`, or a registered pool would be unable to mint. `enable` on the new pool must also precede `setPool`, since `_burn` and `_mint` are gated on it. `setPool` must precede disabling the old pool, for the same two reasons applied in reverse. The Ethereum steps go through the config timelock or directly under `admin`.
+`ActivatePolicy` on the new pool grants its MINTR permissions and must precede `setPool`, or a registered pool would be unable to mint. `enable` on the new pool must also precede `setPool`, since `_burn` and `_mint` are gated on it. `setPool` must precede disabling the old pool, for the same two reasons applied in reverse. The Ethereum steps go through the config timelock or directly under `admin`. The `ETH` participant also stands for every other burn/mint chain with a route to this chain: each of them accepts the new pool in Phase 1 through its own config timelock, and can remove the old pool in Phase 3.
