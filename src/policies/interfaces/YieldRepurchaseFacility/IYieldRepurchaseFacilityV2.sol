@@ -8,8 +8,11 @@ pragma solidity ^0.8.24;
 ///         markets that buy OHM, and burns the purchased OHM against a treasury
 ///         withdrawal priced by the backing oracle.
 /// @dev Amount conventions: reserve amounts are denominated in the reserve token's
-///      decimals, vault share amounts in the vault's decimals (equal to the reserve
-///      decimals for every registered vault), and OHM amounts in the OHM decimals.
+///      decimals, vault share amounts in the share token's decimals (equal to the
+///      reserve decimals for every registered vault), and OHM amounts in the OHM
+///      decimals. The share token of a vault is the ERC20 token representing its
+///      shares: the token returned by `share()` for a vault that advertises ERC-7575,
+///      and the vault itself otherwise.
 ///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price of
 ///      an asset is the OHM price denominated in its reserve token, resolved live
 ///      through the PRICE module per daily cycle; the oracle prices and the backing
@@ -55,7 +58,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when a vault is registered as a reserve asset.
     /// @param vault The registered vault.
     /// @param reserve The vault's underlying reserve token.
-    /// @param shareToken The ERC20 token representing the vault shares: the vault itself.
+    /// @param shareToken The ERC20 token representing the vault shares.
     /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` = 100%).
     /// @param sellShares Whether bond markets pay out the vault shares instead of the
     ///        reserve.
@@ -229,14 +232,16 @@ interface IYieldRepurchaseFacilityV2 {
     error IYieldRepurchaseFacilityV2_AssetNotRegistered(address vault);
 
     /// @notice Thrown when a token of the asset being registered already participates in
-    ///         another balance pool: the token is OHM, the vault equals its own reserve,
-    ///         or the vault or the reserve collides with the vault or the reserve of a
-    ///         registered asset.
+    ///         another balance pool: the vault, its share token, or its reserve is OHM,
+    ///         the vault or the share token equals the reserve, or any of the three
+    ///         collides with the vault, the share token, or the reserve of a registered
+    ///         asset.
     /// @param token The conflicting token.
     error IYieldRepurchaseFacilityV2_TokenPoolConflict(address token);
 
-    /// @notice Thrown when `rescue` targets the share or the reserve token of a
-    ///         registered asset, whose balances form the asset's buyback pool.
+    /// @notice Thrown when `rescue` targets the vault, the share token, or the reserve
+    ///         token of a registered asset; the share and reserve balances form the
+    ///         asset's buyback pool.
     /// @param token The non-rescuable token.
     error IYieldRepurchaseFacilityV2_TokenNotRescuable(address token);
 
@@ -263,7 +268,8 @@ interface IYieldRepurchaseFacilityV2 {
     ///         one is already designated.
     error IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
 
-    /// @notice Thrown when the vault's share decimals do not match its reserve decimals.
+    /// @notice Thrown when the share token decimals of the vault do not match its
+    ///         reserve decimals.
     error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
     /// @notice Thrown when the vault being registered advertises asynchronous deposits
@@ -429,11 +435,14 @@ interface IYieldRepurchaseFacilityV2 {
     // ============ STRUCTS ============ //
 
     /// @notice The configuration and accounting of a registered reserve asset. The
-    ///         facility's balances of the vault shares and of the reserve token are the
+    ///         facility's balances of the share token and of the reserve token are the
     ///         asset's buyback pool and are not mirrored by counters.
     /// @param vault The ERC4626 vault.
+    /// @param shareToken The ERC20 token representing the vault shares, fixed at
+    ///        registration: the token returned by `share()` for a vault that advertises
+    ///        ERC-7575, and the vault itself otherwise.
     /// @param reserve The vault's underlying reserve token.
-    /// @param reserveDecimals The reserve token decimals, equal to the vault share decimals.
+    /// @param reserveDecimals The reserve token decimals, equal to the share token decimals.
     /// @param sellShares Whether bond markets pay out the vault shares instead of the reserve.
     /// @param isAssetEnabled Whether the asset participates in the weekly and daily cycles.
     /// @param yieldBuybackShare The share of the projected yield routed to buybacks
@@ -448,6 +457,7 @@ interface IYieldRepurchaseFacilityV2 {
     ///        into the funding target of the next weekly reset, in reserve units.
     struct ReserveAsset {
         address vault;
+        address shareToken;
         address reserve;
         uint8 reserveDecimals;
         bool sellShares;

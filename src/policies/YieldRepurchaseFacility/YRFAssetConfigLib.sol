@@ -6,6 +6,7 @@ import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
 import {IERC7540Deposit} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
+import {IERC7575} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7575.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
@@ -28,6 +29,11 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 library YRFAssetConfigLib {
     /// @notice Byte length of the single word a vault probe must return.
     uint16 private constant _PROBE_RETURN_LENGTH = 32;
+
+    /// @notice The ERC-165 identifier of an ERC-7575 vault (`0x2f0a18c5`): the ERC-4626
+    ///         vault functions combined with `share()`.
+    bytes4 private constant _ERC7575_VAULT_INTERFACE_ID =
+        type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
 
     /// @notice The registration inputs of `addAsset`.
     /// @param vault The ERC4626 vault to register.
@@ -52,8 +58,10 @@ library YRFAssetConfigLib {
     /// @notice Validates and registers an ERC4626 vault as a reserve asset of the
     ///         calling facility.
     /// @dev The asset is registered in the enabled state and recorded in the
-    ///      reserve-to-vault lookup. Emits `AssetAdded` and `NextYieldSet` for the
-    ///      facility.
+    ///      reserve-to-vault lookup. The share token is the token returned by `share()`
+    ///      for a vault that advertises ERC-7575 through ERC-165, and the vault itself
+    ///      otherwise; it is stored with the asset and never re-read. Emits `AssetAdded`
+    ///      and `NextYieldSet` for the facility.
     ///
     ///      Reverts if:
     ///      - The vault address is the zero address.
@@ -63,10 +71,12 @@ library YRFAssetConfigLib {
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC-165.
-    ///      - The vault's share decimals do not match its reserve decimals.
-    ///      - The vault or its reserve token is OHM, the vault equals its own reserve,
-    ///        or the vault or the reserve collides with the vault or the reserve of a
-    ///        registered asset.
+    ///      - The vault advertises ERC-7575 through ERC-165 and reports the zero address
+    ///        as its `share()`.
+    ///      - The share token decimals do not match the reserve decimals.
+    ///      - The vault, its share token, or its reserve token is OHM, the vault or the
+    ///        share token equals the reserve, or any of the three collides with the
+    ///        vault, the share token, or the reserve of a registered asset.
     ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
     ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
     ///        one word, or returns zero.
@@ -110,35 +120,20 @@ library YRFAssetConfigLib {
                 vault_
             );
 
+        // An ERC-7575 vault names its share token through `share()`, and the token may
+        // live in a separate contract; any other vault is its own share token.
+        address shareToken_ = vault_;
+        if (ERC165Checker.supportsInterface(vault_, _ERC7575_VAULT_INTERFACE_ID)) {
+            shareToken_ = IERC7575(vault_).share();
+            if (shareToken_ == address(0)) revert Errors.BadInput("vault.share");
+        }
+
         // The conversion rate probe and the sell-shares market pricing both treat
         // `10 ** reserveDecimals` as one whole share.
-        if (IERC20Metadata(vault_).decimals() != reserveDecimals)
+        if (IERC20Metadata(shareToken_).decimals() != reserveDecimals)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-        // Every token balance held by the facility belongs to exactly one pool: the OHM
-        // balance backs the purchased-OHM counter, and each registered vault or reserve
-        // balance backs its own asset, so any collision between them is rejected.
-        if (vault_ == ohm_ || reserve_ == ohm_)
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(ohm_);
-        if (vault_ == reserve_)
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(vault_);
-
-        uint256 vaultsLength = vaults_.length;
-        // A pool collision with any registered asset must reject the registration
-        // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i = 0; i < vaultsLength; ++i) {
-            address registeredVault = vaults_[i];
-            address registeredReserve = assetConfigs_[registeredVault].reserve;
-            if (registeredReserve == reserve_ || registeredVault == reserve_)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
-                    reserve_
-                );
-            if (registeredReserve == vault_)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
-                    vault_
-                );
-        }
-        // forge-lint: disable-end(require-revert-in-loop)
+        _requireNoPoolConflict(assetConfigs_, vaults_, ohm_, vault_, shareToken_, reserve_);
 
         // The facility values the shares through `previewRedeem`, sizes the withdrawals
         // through `previewWithdraw`, and wraps the idle reserve through `previewDeposit`,
@@ -160,6 +155,7 @@ library YRFAssetConfigLib {
 
         assetConfigs_[vault_] = IYieldRepurchaseFacilityV2.ReserveAsset({
             vault: vault_,
+            shareToken: shareToken_,
             reserve: reserve_,
             reserveDecimals: reserveDecimals,
             sellShares: params_.sellShares,
@@ -176,7 +172,7 @@ library YRFAssetConfigLib {
         emit IYieldRepurchaseFacilityV2.AssetAdded(
             vault_,
             reserve_,
-            vault_,
+            shareToken_,
             params_.yieldBuybackShare,
             params_.sellShares
         );
@@ -256,30 +252,32 @@ library YRFAssetConfigLib {
     }
 
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
-    /// @dev Counts the treasury balance, and for the backing vault also the balances of
-    ///      the active Clearinghouses, valued through `previewRedeem` (floor).
-    /// @param vault_ The vault to value.
+    /// @dev Counts the treasury balance of the share token, and for the backing vault
+    ///      also the balances of the active Clearinghouses, valued through
+    ///      `previewRedeem` (floor).
+    /// @param config_ The configuration storage of the vault to value.
     /// @param chreg_ The Clearinghouse registry module.
     /// @param trsry_ The treasury address.
     /// @param backingVault_ The backing vault, or the zero address when none is
     ///        designated.
     /// @return balance The reserve value, in reserve units.
     function protocolReserveBalance(
-        address vault_,
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
         CHREGv1 chreg_,
         address trsry_,
         address backingVault_
     ) external view returns (uint256 balance) {
-        return _protocolReserveBalance(vault_, chreg_, trsry_, backingVault_);
+        return _protocolReserveBalance(config_, chreg_, trsry_, backingVault_);
     }
 
     /// @notice Returns the amount of `token_` the facility can rescue to the treasury.
     /// @dev Only the OHM excess above the purchased accumulator and the full balance of
     ///      unregistered tokens are rescuable; the share and reserve tokens of the
-    ///      registered assets are their buyback pools and are rejected.
+    ///      registered assets are their buyback pools and are rejected, together with
+    ///      the vault addresses.
     ///
-    ///      Reverts if `token_` is the share or the reserve token of a registered
-    ///      asset.
+    ///      Reverts if `token_` is the vault, the share token, or the reserve token of
+    ///      a registered asset.
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
     /// @param token_ The token to rescue.
@@ -300,17 +298,66 @@ library YRFAssetConfigLib {
         }
 
         uint256 vaultsLength = vaults_.length;
-        // A registered share or reserve token must reject the rescue
+        // A token of a registered asset must reject the rescue
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i = 0; i < vaultsLength; ++i) {
-            address vault = vaults_[i];
-            if (token_ == vault || token_ == assetConfigs_[vault].reserve)
+            if (_isPoolToken(assetConfigs_[vaults_[i]], token_))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenNotRescuable(
                     token_
                 );
         }
         // forge-lint: disable-end(require-revert-in-loop)
         return balance;
+    }
+
+    /// @notice Reverts when a token of the asset being registered already belongs to a
+    ///         balance pool.
+    /// @dev Every token balance held by the facility belongs to exactly one pool: the OHM
+    ///      balance backs the purchased-OHM counter, and the share token and reserve
+    ///      balances of each registered asset back that asset. The vault address is
+    ///      reserved together with them, so any collision between the three addresses of
+    ///      the asset, OHM, and the addresses of the registered assets is rejected. Vaults
+    ///      that share one share token therefore cannot be registered together.
+    ///
+    ///      Reverts with `IYieldRepurchaseFacilityV2_TokenPoolConflict` if:
+    ///      - The vault, the share token, or the reserve is OHM.
+    ///      - The vault or the share token equals the reserve.
+    ///      - The reserve, the share token, or the vault is the vault, the share token,
+    ///        or the reserve of a registered asset.
+    function _requireNoPoolConflict(
+        mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
+        address[] storage vaults_,
+        address ohm_,
+        address vault_,
+        address shareToken_,
+        address reserve_
+    ) private view {
+        if (vault_ == ohm_ || shareToken_ == ohm_ || reserve_ == ohm_)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(ohm_);
+        if (vault_ == reserve_ || shareToken_ == reserve_)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
+                reserve_
+            );
+
+        uint256 vaultsLength = vaults_.length;
+        // A pool collision with any registered asset must reject the registration
+        // forge-lint: disable-start(require-revert-in-loop)
+        for (uint256 i = 0; i < vaultsLength; ++i) {
+            IYieldRepurchaseFacilityV2.ReserveAsset storage registered = assetConfigs_[vaults_[i]];
+            if (_isPoolToken(registered, reserve_))
+                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
+                    reserve_
+                );
+            if (_isPoolToken(registered, shareToken_))
+                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
+                    shareToken_
+                );
+            if (_isPoolToken(registered, vault_))
+                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
+                    vault_
+                );
+        }
+        // forge-lint: disable-end(require-revert-in-loop)
     }
 
     /// @notice Probes a conversion function of a vault with a single amount argument.
@@ -352,30 +399,48 @@ library YRFAssetConfigLib {
         address trsry_,
         address backingVault_
     ) private {
-        address vault_ = config_.vault;
         // One whole share: `addAsset` requires the share decimals to equal the reserve
         // decimals
-        config_.lastConversionRate = IERC4626(vault_).previewRedeem(10 ** config_.reserveDecimals);
-        config_.lastReserveBalance = _protocolReserveBalance(vault_, chreg_, trsry_, backingVault_);
+        config_.lastConversionRate = IERC4626(config_.vault).previewRedeem(
+            10 ** config_.reserveDecimals
+        );
+        config_.lastReserveBalance = _protocolReserveBalance(
+            config_,
+            chreg_,
+            trsry_,
+            backingVault_
+        );
     }
 
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
     function _protocolReserveBalance(
-        address vault_,
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
         CHREGv1 chreg_,
         address trsry_,
         address backingVault_
     ) private view returns (uint256 balance) {
-        uint256 totalShares = IERC20(vault_).balanceOf(trsry_);
+        address vault_ = config_.vault;
+        IERC20 shareToken = IERC20(config_.shareToken);
+        uint256 totalShares = shareToken.balanceOf(trsry_);
 
         if (vault_ == backingVault_) {
             uint256 activeCount = chreg_.activeCount();
             for (uint256 i = 0; i < activeCount; ++i) {
-                totalShares += IERC20(vault_).balanceOf(chreg_.active(i));
+                totalShares += shareToken.balanceOf(chreg_.active(i));
             }
         }
 
         balance = IERC4626(vault_).previewRedeem(totalShares);
     }
+
     // forge-lint: disable-end(calls-loop)
+
+    /// @notice Returns whether `token_` is the vault, the share token, or the reserve
+    ///         token of a registered asset.
+    function _isPoolToken(
+        IYieldRepurchaseFacilityV2.ReserveAsset storage asset_,
+        address token_
+    ) private view returns (bool) {
+        return token_ == asset_.vault || token_ == asset_.shareToken || token_ == asset_.reserve;
+    }
 }
