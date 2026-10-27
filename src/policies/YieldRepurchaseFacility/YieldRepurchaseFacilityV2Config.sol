@@ -13,6 +13,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";
@@ -35,6 +36,13 @@ import {ADMIN_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      the admin role only. Every setter requires this policy to be enabled, and none requires
 ///      the facility to be enabled: the facility applies its configuration setters while
 ///      disabled, so a correction can be applied before the facility is re-enabled.
+///
+///      The validation functions apply the value rules of the operator setters
+///      (`YieldRepurchaseFacilityV2ValidationLib`, which the facility compiles as well) to the
+///      live state of the facility, read through its getters, so that the config timelock can
+///      reject an action when it is queued. They apply no authorization gate and no
+///      enabled-state gate. The facility setter applies the same rules again when the action
+///      executes, and stays the final check.
 ///
 ///      Lifecycle: `enable` (admin) and `reEnable` (yrf_admin, within the grace window) require
 ///      the bound facility to be an active policy of this policy's kernel, to report that kernel
@@ -333,6 +341,114 @@ contract YieldRepurchaseFacilityV2Config is
         _facility().disableAsset(vault_);
     }
 
+    // ========== VALIDATION ========== //
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The vault is not registered on the facility
+    ///        (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The share exceeds 100% (`1e18`)
+    ///        (`IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh`).
+    function validateSetYieldBuybackShare(
+        address vault_,
+        uint256 newShare_
+    ) external view override {
+        _requireRegistered(vault_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(newShare_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The discount is not less than 100% (`1e18`)
+    ///        (`IYieldRepurchaseFacilityV2_InitialDiscountTooHigh`).
+    function validateSetInitialDiscount(uint256 initialDiscount_) external pure override {
+        YieldRepurchaseFacilityV2ValidationLib.requireValidInitialDiscount(initialDiscount_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The premium is above 1,000% (`10e18`)
+    ///        (`IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh`).
+    function validateSetMaxPricePremium(uint256 maxPricePremium_) external pure override {
+        YieldRepurchaseFacilityV2ValidationLib.requireValidMaxPricePremium(maxPricePremium_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The vault is not registered on the facility
+    ///        (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is enabled (`IYieldRepurchaseFacilityV2_AssetEnabled`).
+    function validateEnableAsset(address vault_) external view override {
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(
+            _requireRegistered(vault_).isAssetEnabled
+        );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The vault is not registered on the facility
+    ///        (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is disabled (`IYieldRepurchaseFacilityV2_AssetDisabled`).
+    ///      - The vault is the backing vault (`IYieldRepurchaseFacilityV2_VaultIsBackingVault`).
+    function validateDisableAsset(address vault_) external view override {
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(
+            _requireRegistered(vault_).isAssetEnabled
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            _facilityView().backingVault()
+        );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The Clearinghouse is not included
+    ///        (`IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded`).
+    function validateExcludeClearinghouse(address clearinghouse_) external view override {
+        YieldRepurchaseFacilityV2ValidationLib.requireClearinghouseIncluded(
+            _facilityView().isClearinghouseIncluded(clearinghouse_)
+        );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev The resulting offset is the stored offset plus `additionalOffset_`; the addition
+    ///      reverts with an overflow panic before the Clearinghouse is checked.
+    ///
+    ///      Reverts if:
+    ///      - The Clearinghouse is the zero address (`Errors.BadInput`).
+    ///      - The resulting offset exceeds the current `principalReceivables`
+    ///        (`IYieldRepurchaseFacilityV2_OffsetExceedsReceivables`).
+    function validateIncreaseClearinghouseOffset(
+        address clearinghouse_,
+        uint256 additionalOffset_
+    ) external view override {
+        YieldRepurchaseFacilityV2ValidationLib.requireOffsetWithinReceivables(
+            clearinghouse_,
+            _facilityView().clearinghouseOffset(clearinghouse_) + additionalOffset_
+        );
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The vault is not registered on the facility
+    ///        (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The stored next yield does not equal `expectedNextYield_`
+    ///        (`IYieldRepurchaseFacilityV2_NextYieldMismatch`).
+    ///      - `newNextYield_` is not lower than the stored value
+    ///        (`IYieldRepurchaseFacilityV2_NextYieldNotDecreased`).
+    function validateDecreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external view override {
+        YieldRepurchaseFacilityV2ValidationLib.requireNextYieldDecrease(
+            vault_,
+            expectedNextYield_,
+            _requireRegistered(vault_).nextYield,
+            newNextYield_
+        );
+    }
+
     // ========== CONFIG OPERATOR HOOKS ========== //
 
     /// @inheritdoc ConfigOperatorSingleStep
@@ -407,6 +523,20 @@ contract YieldRepurchaseFacilityV2Config is
     /// @notice Returns the bound facility as its state-changing surface.
     function _facility() internal view returns (IYieldRepurchaseFacilityV2Write) {
         return IYieldRepurchaseFacilityV2Write(facility);
+    }
+
+    /// @notice Returns the bound facility as its read-only surface.
+    function _facilityView() internal view returns (IYieldRepurchaseFacilityV2View) {
+        return IYieldRepurchaseFacilityV2View(facility);
+    }
+
+    /// @notice Returns the configuration of a vault registered on the facility.
+    /// @dev The read is the registration check: the facility reverts with
+    ///      `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered vault.
+    function _requireRegistered(
+        address vault_
+    ) internal view returns (IYieldRepurchaseFacilityV2.ReserveAsset memory config) {
+        return _facilityView().getAssetConfig(vault_);
     }
 
     /// @notice Validates the facility binding before the policy is enabled or re-enabled.

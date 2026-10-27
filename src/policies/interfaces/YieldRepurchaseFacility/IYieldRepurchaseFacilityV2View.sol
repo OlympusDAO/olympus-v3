@@ -6,92 +6,17 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 
 /// @title IYieldRepurchaseFacilityV2View
 /// @notice The read-only surface of the multi-asset Yield Repurchase Facility (YRF)
-///         policy: the stored configuration and accounting, the dependencies, and the
-///         validation mirrors of the configuration setters.
+///         policy: the stored configuration and accounting, and the dependencies.
 /// @dev The views derived from this state and from the dependencies (the live yield
 ///      projection, the protocol reserve balance, the buyback pools, the vault markets,
 ///      the Clearinghouse breakdown, and the price gate) are provided by
-///      `IYieldRepurchaseFacilityV2Lens`. The facility also implements
-///      `IYieldRepurchaseRecipient`, the read-only surface through which a sender of
-///      protocol yield discovers the registered vaults: `getVaults` is shared with this
-///      interface, and `getVaultConfig` and `getAssetVault` are declared there.
+///      `IYieldRepurchaseFacilityV2Lens`, and the validation of the operator setters for
+///      the config timelock by `IYieldRepurchaseFacilityV2Config`, which reads this
+///      surface. The facility also implements `IYieldRepurchaseRecipient`, the read-only
+///      surface through which a sender of protocol yield discovers the registered vaults:
+///      `getVaults` is shared with this interface, and `getVaultConfig` and
+///      `getAssetVault` are declared there.
 interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
-    // ============ VALIDATION ============ //
-
-    /// @notice Validates the parameters of `setYieldBuybackShare` against the live
-    ///         facility state, reverting when the setter's value checks would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when a `setYieldBuybackShare` action is queued.
-    /// @param vault_ The registered vault.
-    /// @param newShare_ The proposed share (`1e18` = 100%).
-    function validateSetYieldBuybackShare(address vault_, uint256 newShare_) external view;
-
-    /// @notice Validates the parameter of `setInitialDiscount`, reverting when the
-    ///         setter's value check would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when a `setInitialDiscount` action is queued.
-    /// @param initialDiscount_ The proposed discount (`1e18` = 100%).
-    function validateSetInitialDiscount(uint256 initialDiscount_) external view;
-
-    /// @notice Validates the parameter of `setMaxPricePremium`, reverting when the
-    ///         setter's value check would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when a `setMaxPricePremium` action is queued.
-    /// @param maxPricePremium_ The proposed premium (`1e18` = 100%); must not exceed
-    ///        `10e18`.
-    function validateSetMaxPricePremium(uint256 maxPricePremium_) external view;
-
-    /// @notice Validates the parameter of `enableAsset` against the live facility state,
-    ///         reverting when the setter's value checks would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when an `enableAsset` action is queued.
-    /// @param vault_ The vault to enable.
-    function validateEnableAsset(address vault_) external view;
-
-    /// @notice Validates the parameter of `disableAsset` against the live facility state,
-    ///         reverting when the setter's value checks would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when a `disableAsset` action is queued.
-    /// @param vault_ The vault to disable.
-    function validateDisableAsset(address vault_) external view;
-
-    /// @notice Validates the parameter of `excludeClearinghouse` against the live
-    ///         facility state, reverting when the setter's value check would fail.
-    /// @dev The validation applies no authorization gate. Intended to be called by the
-    ///      config timelock when an `excludeClearinghouse` action is queued.
-    /// @param clearinghouse_ The Clearinghouse address.
-    function validateExcludeClearinghouse(address clearinghouse_) external view;
-
-    /// @notice Validates the parameters of `increaseClearinghouseOffset` against the live
-    ///         facility state, reverting when the setter's value checks would fail.
-    /// @dev The validation applies no authorization gate. The receivables are read live,
-    ///      so a validation that passes can be invalidated by repayments before the
-    ///      setter runs. Intended to be called by the config timelock when an
-    ///      `increaseClearinghouseOffset` action is queued.
-    /// @param clearinghouse_ The Clearinghouse address.
-    /// @param additionalOffset_ The amount added to the existing offset, in the
-    ///        receivables' units.
-    function validateIncreaseClearinghouseOffset(
-        address clearinghouse_,
-        uint256 additionalOffset_
-    ) external view;
-
-    /// @notice Validates the parameters of `decreaseNextYield` against the live facility
-    ///         state, reverting when the setter's value checks would fail.
-    /// @dev The validation applies no authorization gate. The stored next yield is read
-    ///      live, so a validation that passes can be invalidated by a weekly reset before
-    ///      the setter runs. Intended to be called by the config timelock when a
-    ///      `decreaseNextYield` action is queued.
-    /// @param vault_ The registered vault.
-    /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
-    ///        units.
-    /// @param newNextYield_ The corrected next yield, in reserve units.
-    function validateDecreaseNextYield(
-        address vault_,
-        uint256 expectedNextYield_,
-        uint256 newNextYield_
-    ) external view;
-
     // ============ VIEW FUNCTIONS ============ //
 
     /// @notice Returns the registered vaults.

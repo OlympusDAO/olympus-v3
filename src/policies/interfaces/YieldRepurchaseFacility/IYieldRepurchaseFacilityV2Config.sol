@@ -14,6 +14,13 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///      checks this interface when the policy is bound as its configurator, and the config
 ///      timelock checks all three at construction.
 ///
+///      The validation functions apply the value rules of the operator setters to the live
+///      state of the bound facility, read through its getters, and revert with the error the
+///      facility setter throws for the same values. They apply no authorization gate and no
+///      enabled-state gate, and are intended to be called by the config timelock when an
+///      action is queued; the facility setter applies the same rules again when the action
+///      executes.
+///
 ///      The setters form two groups. The operator setters are callable by the config operator
 ///      of `IConfigOperator`, meant to be the config timelock, or by the admin role; the admin
 ///      setters only by the admin role. Every setter requires this policy to be enabled and
@@ -62,6 +69,83 @@ interface IYieldRepurchaseFacilityV2Config {
     /// @return The bound, in seconds.
     // solhint-disable-next-line func-name-mixedcase
     function MAX_GRACE_PERIOD() external view returns (uint32);
+
+    // ============ VALIDATION ============ //
+
+    /// @notice Validates the parameters of `setYieldBuybackShare` against the live facility
+    ///         state, reverting when the facility setter's value checks would fail.
+    /// @dev Intended to be called by the config timelock when a `setYieldBuybackShare`
+    ///      action is queued.
+    /// @param vault_ The registered vault.
+    /// @param newShare_ The proposed share (`1e18` = 100%); must not exceed `1e18`.
+    function validateSetYieldBuybackShare(address vault_, uint256 newShare_) external view;
+
+    /// @notice Validates the parameter of `setInitialDiscount`, reverting when the facility
+    ///         setter's value check would fail.
+    /// @dev Intended to be called by the config timelock when a `setInitialDiscount` action
+    ///      is queued.
+    /// @param initialDiscount_ The proposed discount (`1e18` = 100%); must be less than
+    ///        `1e18`.
+    function validateSetInitialDiscount(uint256 initialDiscount_) external view;
+
+    /// @notice Validates the parameter of `setMaxPricePremium`, reverting when the facility
+    ///         setter's value check would fail.
+    /// @dev Intended to be called by the config timelock when a `setMaxPricePremium` action
+    ///      is queued.
+    /// @param maxPricePremium_ The proposed premium (`1e18` = 100%); must not exceed
+    ///        `10e18`.
+    function validateSetMaxPricePremium(uint256 maxPricePremium_) external view;
+
+    /// @notice Validates the parameter of `enableAsset` against the live facility state,
+    ///         reverting when the facility setter's value checks would fail.
+    /// @dev Intended to be called by the config timelock when an `enableAsset` action is
+    ///      queued.
+    /// @param vault_ The vault to enable; must be registered and disabled.
+    function validateEnableAsset(address vault_) external view;
+
+    /// @notice Validates the parameter of `disableAsset` against the live facility state,
+    ///         reverting when the facility setter's value checks would fail.
+    /// @dev Intended to be called by the config timelock when a `disableAsset` action is
+    ///      queued.
+    /// @param vault_ The vault to disable; must be registered, enabled, and not the backing
+    ///        vault.
+    function validateDisableAsset(address vault_) external view;
+
+    /// @notice Validates the parameter of `excludeClearinghouse` against the live facility
+    ///         state, reverting when the facility setter's value check would fail.
+    /// @dev Intended to be called by the config timelock when an `excludeClearinghouse`
+    ///      action is queued.
+    /// @param clearinghouse_ The Clearinghouse address; must be included.
+    function validateExcludeClearinghouse(address clearinghouse_) external view;
+
+    /// @notice Validates the parameters of `increaseClearinghouseOffset` against the live
+    ///         facility state, reverting when the facility setter's value checks would fail.
+    /// @dev The receivables are read live, so a validation that passes can be invalidated by
+    ///      repayments before the setter runs. Intended to be called by the config timelock
+    ///      when an `increaseClearinghouseOffset` action is queued.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param additionalOffset_ The amount added to the existing offset, in the receivables'
+    ///        units; the resulting offset must not exceed the current `principalReceivables`.
+    function validateIncreaseClearinghouseOffset(
+        address clearinghouse_,
+        uint256 additionalOffset_
+    ) external view;
+
+    /// @notice Validates the parameters of `decreaseNextYield` against the live facility
+    ///         state, reverting when the facility setter's value checks would fail.
+    /// @dev The stored next yield is read live, so a validation that passes can be invalidated
+    ///      by a weekly reset before the setter runs. Intended to be called by the config
+    ///      timelock when a `decreaseNextYield` action is queued.
+    /// @param vault_ The registered vault.
+    /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
+    ///        units.
+    /// @param newNextYield_ The corrected next yield, in reserve units; must be lower than the
+    ///        stored value.
+    function validateDecreaseNextYield(
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external view;
 
     // ============ ADMIN FUNCTIONS ============ //
 

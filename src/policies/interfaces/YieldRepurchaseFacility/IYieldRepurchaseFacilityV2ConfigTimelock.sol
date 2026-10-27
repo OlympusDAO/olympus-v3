@@ -9,10 +9,12 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 ///         operator setters of `IYieldRepurchaseFacilityV2Config`, for permissionless execution
 ///         after a delay.
 /// @dev Every queued sub-action targets one operator setter of the configuration policy and is
-///      validated at queue time with the facility's validation mirror of the forwarded
-///      function. Each sub-action reserves the configuration domains it reads or writes and
-///      records their state hashes, so that two unresolved changes of one domain cannot
-///      coexist and a change cannot execute after the state it was queued against has moved.
+///      validated at queue time with the validation function of the configuration policy for
+///      the forwarded setter, which applies the value rules of the facility setter to the
+///      facility's live state. Each sub-action reserves the configuration domains it reads or
+///      writes and records their state hashes, so that two unresolved changes of one domain
+///      cannot coexist and a change cannot execute after the state it was queued against has
+///      moved.
 ///      The state is read from the facility bound to the configuration policy, which holds no
 ///      configuration of its own.
 ///
