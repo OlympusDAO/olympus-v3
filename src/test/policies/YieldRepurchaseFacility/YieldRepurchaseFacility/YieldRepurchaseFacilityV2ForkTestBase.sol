@@ -739,7 +739,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         IPRICEv2.Asset memory assetData = priceV2.getAssetData(asset_);
         IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
 
-        for (uint256 i = 0; i < feeds.length; ++i) {
+        for (uint256 i; i < feeds.length; ++i) {
             assertEq(
                 feeds[i].selector,
                 ChainlinkPriceFeeds.getOneFeedPrice.selector,
@@ -773,7 +773,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         IPRICEv2.Component[] memory feeds = abi.decode(assetData.feeds, (IPRICEv2.Component[]));
         uint8 priceDecimals = priceV2.decimals();
 
-        for (uint256 i = 0; i < feeds.length; ++i) {
+        for (uint256 i; i < feeds.length; ++i) {
             address submodule = address(
                 ModuleWithSubmodules(address(price)).getSubmoduleForKeycode(feeds[i].target)
             );
@@ -881,7 +881,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         of the PRICE module enforces the feed update thresholds, and mocks are not
     ///         part of the state snapshots.
     function _updateOracles() internal {
-        for (uint256 i = 0; i < chainlinkFeedMocks.length; ++i) {
+        for (uint256 i; i < chainlinkFeedMocks.length; ++i) {
             ChainlinkFeedMock storage feedMock = chainlinkFeedMocks[i];
             uint256 updatedAt = vm.getBlockTimestamp();
             if (susdeReserveFeedStale && feedMock.aggregator == CHAINLINK_USDE_USD) {
@@ -894,7 +894,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             );
         }
 
-        for (uint256 i = 0; i < ohmFeedMocks.length; ++i) {
+        for (uint256 i; i < ohmFeedMocks.length; ++i) {
             vm.mockCall(
                 ohmFeedMocks[i].submodule,
                 ohmFeedMocks[i].callData,
@@ -982,7 +982,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // Projection for the next week: snapshot-based vault yield plus the clearinghouse
         // yield (backing vault only), scaled by the buyback share.
         uint256 currentRate = vault.previewRedeem(ONE_SHARE);
-        uint256 vaultYield = 0;
+        uint256 vaultYield;
         if (m.lastConversionRate != 0 && currentRate > m.lastConversionRate) {
             vaultYield = m.lastReserveBalance.mulDiv(
                 currentRate - m.lastConversionRate,
@@ -998,7 +998,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         // Funding withdrawal: shares worth the target, capped at the treasury balance;
         // the uncovered remainder is carried.
-        uint256 funded = 0;
+        uint256 funded;
         if (fundingTarget != 0) {
             uint256 shares = vault.previewWithdraw(fundingTarget);
             if (shares > m.trsryShares) shares = m.trsryShares;
@@ -1021,7 +1021,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     ///         applying the receivables offsets.
     function _modelClearinghouseYield() internal view returns (uint256 yield) {
         uint256 len = chreg.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
+        for (uint256 i; i < len; ++i) {
             address ch = chreg.registry(i);
             bool counted = yieldRepo.isClearinghouseIncluded(ch) || _readReserve(ch) == USDS;
             if (!counted) continue;
@@ -1202,7 +1202,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     function _mirrorPriceDecimals(uint256 price_) internal pure returns (int8) {
-        int8 decimals = 0;
+        int8 decimals;
         while (price_ >= YieldRepurchaseFacilityV2Constants.DECIMAL_BASE) {
             price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
             ++decimals;
@@ -1339,9 +1339,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         AssetModel storage m = model[vault_];
         uint256 targetPayout = (mkt.capacity * fractionBps_) / ONE_HUNDRED_PERCENT_BPS;
-        uint256 boughtPayout = 0;
+        uint256 boughtPayout;
 
-        for (uint256 i = 0; i < 16 && boughtPayout < targetPayout; ++i) {
+        for (uint256 i; i < 16 && boughtPayout < targetPayout; ++i) {
             uint256 amountIn = _purchaseAmountIn(mkt.id, targetPayout - boughtPayout);
             if (amountIn == 0) break;
 

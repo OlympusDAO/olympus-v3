@@ -145,7 +145,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
     ) internal returns (uint256 gas_) {
         // Below the requirement of any step, so the first probe fails at the first check
         gas_ = STEP_GAS_LIMIT;
-        for (uint256 i = 0; i <= stepIndex_; ++i) {
+        for (uint256 i; i <= stepIndex_; ++i) {
             (bool success, uint256 required, uint256 available) = _probe(
                 address(yieldRepo),
                 caller_,
@@ -164,7 +164,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         bytes32 topic0_,
         address vault_
     ) internal view returns (bool found, bytes memory data) {
-        for (uint256 i = 0; i < logs_.length; ++i) {
+        for (uint256 i; i < logs_.length; ++i) {
             if (
                 logs_[i].emitter == address(yieldRepo) &&
                 logs_[i].topics[0] == topic0_ &&
@@ -224,7 +224,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         // The other vaults are not skipped and open their markets, which requires both their
         // weekly funding and their daily cycle
         address[2] memory healthy = [SUSDS, SUSDE];
-        for (uint256 i = 0; i < healthy.length; ++i) {
+        for (uint256 i; i < healthy.length; ++i) {
             assertFalse(
                 _hasVaultEvent(
                     logs,
@@ -280,7 +280,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         yieldRepo.execute();
         Vm.Log[] memory logs = vm.getRecordedLogs();
 
-        for (uint256 i = 0; i < logs.length; ++i) {
+        for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter != address(yieldRepo)) continue;
             if (vault_ == address(0)) {
                 fingerprint = keccak256(abi.encode(fingerprint, logs[i].topics, logs[i].data));
@@ -307,7 +307,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         );
         assertTrue(_beatFingerprint(0, vault_) != expected, "a zero limit changes the events");
 
-        uint256 low = 0;
+        uint256 low;
         limit_ = YieldRepurchaseFacilityV2Constants.MAX_STEP_GAS_LIMIT;
         while (limit_ - low > 1_000) {
             uint256 middle = (low + limit_) / 2;
@@ -329,7 +329,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         Vm.Log[] memory logs_,
         address vault_
     ) internal view returns (uint256 marketId) {
-        for (uint256 i = 0; i < logs_.length; ++i) {
+        for (uint256 i; i < logs_.length; ++i) {
             if (
                 logs_[i].emitter == address(yieldRepo) &&
                 logs_[i].topics[0] == IYieldRepurchaseFacilityV2.RepoMarket.selector &&
@@ -364,9 +364,9 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
             IYieldRepurchaseFacilityV2.MarketCloseFailed.selector,
             IYieldRepurchaseFacilityV2.MarketCreationFailed.selector
         ];
-        for (uint256 i = 0; i < logs_.length; ++i) {
+        for (uint256 i; i < logs_.length; ++i) {
             if (logs_[i].emitter != address(yieldRepo)) continue;
-            for (uint256 j = 0; j < failures.length; ++j) {
+            for (uint256 j; j < failures.length; ++j) {
                 assertTrue(logs_[i].topics[0] != failures[j], "no skip or failure event");
             }
         }
@@ -480,7 +480,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         bytes memory callData = abi.encodeCall(heart.beat, ());
 
         // The smallest gas of the call with which the beat succeeds, to a resolution of 1_000
-        uint256 low = 0;
+        uint256 low;
         uint256 minimalGas = 30_000_000;
         while (minimalGas - low > 1_000) {
             uint256 middle = (low + minimalGas) / 2;
@@ -553,8 +553,8 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
 
         // The gas is raised in increments below the step requirement until the beat reaches the
         // facility: a smaller amount runs out in the tasks before it
-        bool reachedFacility = false;
-        uint256 required = 0;
+        bool reachedFacility;
+        uint256 required;
         for (uint256 gas_ = STEP_GAS_LIMIT; gas_ <= 10 * STEP_GAS_LIMIT; gas_ += 250_000) {
             vm.prank(keeper);
             (bool success, bytes memory returned) = address(heart).call{gas: gas_}(callData);
@@ -757,7 +757,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
 
         // Any other caller is rejected, the heart and the emergency role holder included
         address[3] memory others = [makeAddr("stranger"), HEART, EMERGENCY_MS];
-        for (uint256 i = 0; i < others.length; ++i) {
+        for (uint256 i; i < others.length; ++i) {
             vm.expectRevert(IPolicyAdmin.NotAuthorised.selector);
             vm.prank(others[i]);
             yieldRepo.setStepGasLimit(maxLimit);
@@ -892,8 +892,8 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
             address(burner),
             "fixture sweep"
         );
-        bool closingEvent = false;
-        for (uint256 i = 0; i < logs.length; ++i) {
+        bool closingEvent;
+        for (uint256 i; i < logs.length; ++i) {
             if (
                 logs[i].emitter == address(yieldRepo) &&
                 logs[i].topics[0] == IYieldRepurchaseFacilityV2.FundsReturnedToTreasury.selector
