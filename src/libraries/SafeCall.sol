@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
-// forge-lint: disable-start(inline-assembly, literal-instead-of-constant, internal-function-used-once)
-
 pragma solidity ^0.8.20;
+
+// Vendored code, kept as upstream wrote it: its assembly blocks, literal offsets and
+// function layout are not restyled.
+// forge-lint: disable-start(inline-assembly,literal-instead-of-constant,internal-function-used-once)
 
 /// @title  SafeCall
 /// @notice Performs a call or a static call that caps the returndata copied into memory, so that a
@@ -154,3 +156,5 @@ library SafeCall {
         return (_success, _returnData);
     }
 }
+
+// forge-lint: disable-end(inline-assembly,literal-instead-of-constant,internal-function-used-once)
