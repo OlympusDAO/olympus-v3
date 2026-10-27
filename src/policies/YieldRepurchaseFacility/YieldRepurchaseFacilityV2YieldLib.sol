@@ -8,6 +8,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 // Libraries
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Modules
@@ -16,7 +17,8 @@ import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 /// @title YieldRepurchaseFacilityV2YieldLib
 /// @notice An external library that owns the yield accounting of the registered assets of
 ///         the YieldRepurchaseFacilityV2: the yield projection, the conversion-rate and
-///         reserve-balance snapshots, the stored next yield, and the unfunded carry.
+///         reserve-balance snapshots, the stored next yield, and the unfunded carry; it
+///         also enables a disabled asset, since the enable resets that accounting.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameters reference the calling facility's storage and the emitted
 ///      events belong to the facility interface. The treasury withdrawal of the weekly
@@ -78,19 +80,71 @@ library YieldRepurchaseFacilityV2YieldLib {
         }
     }
 
-    /// @notice Resets the yield accounting of an asset: zeroes the unfunded carry,
-    ///         refreshes the yield snapshots, and zeroes the stored next yield.
-    /// @dev Emits `NextYieldSet` for the facility. Nothing here reads the facility's
-    ///      balances.
-    /// @param config_ The vault's configuration storage.
+    /// @notice Enables a disabled registered vault and resets its yield accounting:
+    ///         zeroes the unfunded carry, refreshes the yield snapshots, and zeroes the
+    ///         stored next yield.
+    /// @dev Emits `AssetEnabled` and then `NextYieldSet` for the facility. Nothing here
+    ///      reads the facility's balances.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is enabled (`IYieldRepurchaseFacilityV2_AssetEnabled`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The vault to enable.
     /// @param context_ The dependencies of the facility, read for the balance snapshot.
-    function resetAsset(
-        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
+    function enableAsset(
+        YieldRepurchaseFacilityV2AssetRegistryLib.Registry storage registry_,
+        address vault_,
         IYieldRepurchaseFacilityV2.Context memory context_
     ) external {
-        config_.unfundedYield = 0;
-        _refreshSnapshots(config_, context_);
-        _setNextYield(config_, 0);
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(config.isAssetEnabled);
+
+        config.isAssetEnabled = true;
+        emit IYieldRepurchaseFacilityV2.AssetEnabled(vault_);
+
+        config.unfundedYield = 0;
+        _refreshSnapshots(config, context_);
+        _setNextYield(config, 0);
+    }
+
+    /// @notice Lowers the stored next yield of a registered vault.
+    /// @dev The stored value must equal `expectedNextYield_` and `newNextYield_` must be
+    ///      lower than it (`YieldRepurchaseFacilityV2ValidationLib`). Emits `NextYieldSet`
+    ///      for the facility. The unfunded carry is not changed.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The stored next yield does not equal `expectedNextYield_`
+    ///        (`IYieldRepurchaseFacilityV2_NextYieldMismatch`).
+    ///      - `newNextYield_` is not lower than the stored value
+    ///        (`IYieldRepurchaseFacilityV2_NextYieldNotDecreased`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The registered vault.
+    /// @param expectedNextYield_ The stored next yield the correction targets, in reserve
+    ///        units.
+    /// @param newNextYield_ The corrected next yield, in reserve units.
+    function decreaseNextYield(
+        YieldRepurchaseFacilityV2AssetRegistryLib.Registry storage registry_,
+        address vault_,
+        uint256 expectedNextYield_,
+        uint256 newNextYield_
+    ) external {
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireNextYieldDecrease(
+            vault_,
+            expectedNextYield_,
+            config.nextYield,
+            newNextYield_
+        );
+
+        _setNextYield(config, newNextYield_);
     }
 
     /// @notice Begins the weekly reset of a vault: projects the yield of the coming week
@@ -252,6 +306,17 @@ library YieldRepurchaseFacilityV2YieldLib {
                 config_.asyncRedeem,
                 config_.reserveDecimals
             );
+    }
+
+    /// @notice Returns the config of a registered vault, reverting with
+    ///         `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered one.
+    function _requireRegistered(
+        YieldRepurchaseFacilityV2AssetRegistryLib.Registry storage registry_,
+        address vault_
+    ) private view returns (IYieldRepurchaseFacilityV2.ReserveAsset storage config_) {
+        config_ = registry_.configs[vault_];
+        if (config_.vault == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
     }
 
     /// @notice Stores the vault's next yield and emits `NextYieldSet`.
