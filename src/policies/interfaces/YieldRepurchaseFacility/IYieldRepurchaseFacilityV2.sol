@@ -151,7 +151,7 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The vault being funded.
     /// @param sharesRequested The share amount required to cover the funding target.
     /// @param sharesWithdrawn The share amount actually withdrawn.
-    event PrefundShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
+    event FundingShortfall(address indexed vault, uint256 sharesRequested, uint256 sharesWithdrawn);
 
     /// @notice Emitted when purchased OHM is burned against a backing withdrawal; the
     ///         withdrawn backing vault shares join the backing vault's buyback pool.
@@ -203,10 +203,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when the running week's buyback pool of a vault is seeded by
     ///         `seedCycle`.
     /// @param vault The seeded vault.
-    /// @param weeklyBudget The seeded amount, covered by a treasury withdrawal into the
+    /// @param amount The seeded amount, covered by a treasury withdrawal into the
     ///        vault's buyback pool, in reserve units.
     /// @param epoch The seeded epoch counter.
-    event WeeklyBudgetSeeded(address indexed vault, uint256 weeklyBudget, uint48 epoch);
+    event BuybackPoolSeeded(address indexed vault, uint256 amount, uint48 epoch);
 
     // ============ ERRORS ============ //
 
@@ -455,10 +455,10 @@ interface IYieldRepurchaseFacilityV2 {
     ///      treasury into the vault's buyback pool; when the array contains duplicates,
     ///      their amounts accumulate.
     /// @param vault The registered vault to seed; its asset must be enabled.
-    /// @param weeklyBudget The amount withdrawn into the running week's buyback pool, in
+    /// @param amount The amount withdrawn into the running week's buyback pool, in
     ///        reserve units; must be non-zero.
-    struct WeeklyBudgetSeed {
+    struct BuybackPoolSeed {
         address vault;
-        uint256 weeklyBudget;
+        uint256 amount;
     }
 }

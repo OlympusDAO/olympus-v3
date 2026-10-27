@@ -121,8 +121,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // ============ FORK CONFIGURATION ============ //
 
     /// @notice Pinned mainnet block (2026-08-04, after the in-place PRICE v1.2 upgrade).
-    ///         YRF v1.2 is at epoch 1 with a projected `nextYield` and an unspent weekly
-    ///         budget, which the setup migrates into the v2 seeds.
+    ///         YRF v1.2 is at epoch 1 with a projected `nextYield` and unspent funds of
+    ///         the running week, which the setup migrates into the v2 seeds.
     uint256 internal constant FORK_BLOCK = 25_680_000;
 
     // These addresses are hard-coded, as the values in env.json can change while this test
@@ -284,8 +284,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // ============ SEEDS (COMPUTED IN setUp) ============ //
 
     /// @notice The sUSDS next-yield seed: the v1.2 `nextYield` projected at its last weekly
-    ///         reset plus the value of the unspent weekly budget swept back to the
-    ///         treasury by the v1.2 shutdown.
+    ///         reset plus the value of the unspent funds swept back to the treasury by the
+    ///         v1.2 shutdown.
     uint256 internal susdsSeedYield;
     /// @notice The sUSDS yield snapshots carried over from v1.2, so that the first v2
     ///         weekly reset captures the yield accrued since the last v1.2 reset.
@@ -596,8 +596,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     function _computeSeeds() internal {
         // sUSDS: continue the v1.2 accounting.
         // - The next-yield seed is the yield already earmarked by v1.2: its projected
-        //   `nextYield` plus the value of the unspent weekly budget still held by v1.2
-        //   (swept back to the treasury by the shutdown below).
+        //   `nextYield` plus the value of the unspent funds still held by v1.2 (swept
+        //   back to the treasury by the shutdown below).
         // - The snapshots are carried over verbatim, so that the first v2 weekly reset
         //   projects the yield accrued since the last v1.2 weekly reset.
         uint256 v1Residual = usds.balanceOf(YIELD_REPO_V1) +

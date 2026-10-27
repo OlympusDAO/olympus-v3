@@ -343,10 +343,10 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     }
 
     /// @notice Day 7: the second weekly reset. The stored next yields projected at the
-    ///         first reset are injected into the week-2 budgets exactly once, and the
+    ///         first reset are withdrawn into the buyback pools exactly once, and the
     ///         fresh projections match the view mirror.
     function _assertWeekTwoStart() internal view {
-        // The mirror model asserted the exact budget transition inside _beat; here the
+        // The mirror model asserted the exact pool transition inside _beat; here the
         // view projection is cross-checked against the live formula mirror.
         assertEq(
             yieldRepo.getNextYield(SUSDS),

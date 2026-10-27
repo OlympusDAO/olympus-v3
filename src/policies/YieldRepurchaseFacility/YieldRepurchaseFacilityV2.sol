@@ -774,7 +774,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
     ///         treasury into the buyback pool.
     /// @dev The share amount is `previewWithdraw(amount_)` (rounded up by the vault),
-    ///      capped at the treasury balance with a `PrefundShortfall` event on the cap.
+    ///      capped at the treasury balance with a `FundingShortfall` event on the cap.
     ///      The funded value is the redeemable value of the withdrawn shares (floor).
     /// @return funded The funded value, in reserve units.
     function _fundFromTreasury(address vault_, uint256 amount_) private returns (uint256 funded) {
@@ -785,7 +785,7 @@ contract YieldRepurchaseFacilityV2 is
         if (shares > trsryBalance) {
             // The unfunded remainder is carried by the caller and retried at the next
             // reset.
-            emit PrefundShortfall(vault_, shares, trsryBalance);
+            emit FundingShortfall(vault_, shares, trsryBalance);
             shares = trsryBalance;
         }
         if (shares == 0) return 0;
@@ -1241,8 +1241,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      While the flag is armed the epoch counter holds the restart value of 20, so
     ///      no separate epoch check is needed.
     ///
-    ///      Per seed, `WeeklyBudgetSeeded` is emitted before the funding withdrawal
-    ///      runs, so the event precedes a `PrefundShortfall` it may cause. The remainder
+    ///      Per seed, `BuybackPoolSeeded` is emitted before the funding withdrawal
+    ///      runs, so the event precedes a `FundingShortfall` it may cause. The remainder
     ///      the treasury balance cannot cover is added to the vault's `unfundedYield`
     ///      and retried at the following weekly reset.
     ///
@@ -1257,7 +1257,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The treasury withdrawal or a preview of a seeded vault reverts.
     function seedCycle(
         uint48 epoch_,
-        WeeklyBudgetSeed[] calldata budgetSeeds_
+        BuybackPoolSeed[] calldata poolSeeds_
     ) external override nonReentrant givenEnabled onlyAdminRole {
         if (!_cycleSeedable) revert IYieldRepurchaseFacilityV2_CycleNotSeedable();
         _cycleSeedable = false;
@@ -1266,17 +1266,17 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_EpochSeedTooHigh();
         _epoch = epoch_;
 
-        uint256 seedsLength = budgetSeeds_.length;
+        uint256 seedsLength = poolSeeds_.length;
         for (uint256 i = 0; i < seedsLength; ++i) {
-            WeeklyBudgetSeed calldata seed = budgetSeeds_[i];
+            BuybackPoolSeed calldata seed = poolSeeds_[i];
             ReserveAsset storage config = _requireRegistered(seed.vault);
             _requireAssetEnabled(config);
-            _requireNonzeroAmount(seed.weeklyBudget);
+            _requireNonzeroAmount(seed.amount);
 
-            emit WeeklyBudgetSeeded(seed.vault, seed.weeklyBudget, epoch_);
+            emit BuybackPoolSeeded(seed.vault, seed.amount, epoch_);
 
-            uint256 funded = _fundFromTreasury(seed.vault, seed.weeklyBudget);
-            config.unfundedYield += Math.saturatingSub(seed.weeklyBudget, funded);
+            uint256 funded = _fundFromTreasury(seed.vault, seed.amount);
+            config.unfundedYield += Math.saturatingSub(seed.amount, funded);
         }
     }
 
