@@ -12,6 +12,7 @@ import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IYieldRepurchaseFacilityV2Steps} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Steps.sol";
 import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
@@ -24,6 +25,7 @@ import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
 import {YieldRepurchaseFacilityV2BondMarketLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2BondMarketLib.sol";
+import {YieldRepurchaseFacilityV2BuybackPoolLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2BuybackPoolLib.sol";
 import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
@@ -118,6 +120,7 @@ contract YieldRepurchaseFacilityV2 is
     IVersioned,
     IYieldRepurchaseFacilityV2Write,
     IYieldRepurchaseFacilityV2View,
+    IYieldRepurchaseFacilityV2Steps,
     IYieldRepurchaseRecipient
 {
     using SafeERC20 for IERC20;
@@ -491,12 +494,11 @@ contract YieldRepurchaseFacilityV2 is
         emit FundsReturnedToTreasury(purchasedOhm);
     }
 
-    /// @notice Returns a vault's share and reserve balances to the treasury.
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
     /// @dev External only for the self-call isolation in `returnFundsToTreasury`.
     ///
     ///      Reverts if the caller is not the facility itself.
-    /// @param vault_ The vault to sweep.
-    function selfReturnVaultFunds(address vault_) external {
+    function selfReturnVaultFunds(address vault_) external override {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
@@ -588,23 +590,29 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @notice Runs the daily cycle of a single vault, priced by the live OHM price
-    ///         denominated in the vault's reserve.
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
     /// @dev External only for the self-call isolation in `execute`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
-    ///      `execute`.
+    ///      `execute`. The price is read first; the bid is then sized from the facility's
+    ///      balances by the linked `YieldRepurchaseFacilityV2BuybackPoolLib`, which wraps
+    ///      the idle reserve of a sell-shares asset and redeems the shares covering the
+    ///      reserve shortfall of the bid through the checked self-calls, and the market
+    ///      is opened by the linked `YieldRepurchaseFacilityV2BondMarketLib`. A zero bid
+    ///      or capacity opens no market.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
     ///      - The `PRICE.getPriceIn` read of the vault's reserve reverts.
-    /// @param vault_ The vault to process.
-    /// @param daysRemaining_ The number of daily cycles remaining in the week, including
-    ///        this one.
-    function selfProcessVaultDaily(address vault_, uint256 daysRemaining_) external {
+    function selfProcessVaultDaily(address vault_, uint256 daysRemaining_) external override {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
-        _executeDailyCycle(vault_, config, daysRemaining_, _reservePrice(config.reserve));
+        uint256 oraclePrice = _reservePrice(config.reserve);
+
+        uint256 capacity = YieldRepurchaseFacilityV2BuybackPoolLib.dailyBid(config, daysRemaining_);
+        if (capacity == 0) return;
+
+        _markets.openMarket(_context(), config, capacity, oraclePrice);
     }
 
     /// @notice Performs the weekly reset: projects the yield of the coming week,
@@ -652,9 +660,7 @@ contract YieldRepurchaseFacilityV2 is
         }
     }
 
-    /// @notice Runs the weekly reset of a single vault: projects the yield of the coming
-    ///         week, refreshes the yield snapshots, and withdraws the previously stored
-    ///         projection from the treasury into the buyback pool.
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
     /// @dev External only for the self-call isolation in `_weeklyReset`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`.
@@ -667,10 +673,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      stored back into `unfundedYield` and retried at the following reset.
     ///
     ///      Reverts if the caller is not the facility itself.
-    /// @param vault_ The vault to reset.
-    /// @param clearinghouseYield_ The weekly Clearinghouse interest credited to the
-    ///        backing vault, in backing reserve units.
-    function selfProcessVaultReset(address vault_, uint256 clearinghouseYield_) external {
+    function selfProcessVaultReset(address vault_, uint256 clearinghouseYield_) external override {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
@@ -725,94 +728,17 @@ contract YieldRepurchaseFacilityV2 is
         funded = config_.sharesToAssets(shares);
     }
 
-    /// @notice Opens the daily bond market of a vault, sized from the facility's
-    ///         balances.
-    /// @dev The bid is the pool value divided by `daysRemaining_` (floor). For a
-    ///      sell-shares asset the idle reserve balance is wrapped into vault shares
-    ///      first, the pool value is the value of the held shares, and the market
-    ///      capacity is the smaller of the share amount covering the bid and the held
-    ///      shares, denominated in shares; both conversions follow the redemption class
-    ///      of the vault (`YieldRepurchaseFacilityV2VaultLib`). Otherwise the pool value is the
-    ///      held reserve
-    ///      plus the redeemable value of the held shares, the reserve shortfall of the
-    ///      bid is redeemed from the held shares, and the bid is clamped to the reserve
-    ///      actually held when the redeem falls short. A zero bid or capacity skips the
-    ///      market.
-    function _executeDailyCycle(
-        address vault_,
-        ReserveAsset storage config_,
-        uint256 daysRemaining_,
-        uint256 oraclePrice_
-    ) private {
-        address reserve_ = config_.reserve;
-        address shareToken = config_.shareToken;
-
-        if (config_.sellShares) {
-            _wrapIdleReserve(vault_, reserve_);
-
-            uint256 heldShares = _selfBalance(shareToken);
-            uint256 bidAmount = config_.sharesToAssets(heldShares) / daysRemaining_;
-            if (bidAmount == 0) return;
-
-            uint256 capacityShares = Math.min(config_.assetsToShares(bidAmount), heldShares);
-            if (capacityShares == 0) return;
-
-            _markets.openMarket(_context(), config_, capacityShares, oraclePrice_);
-        } else {
-            uint256 currentReserve = _selfBalance(reserve_);
-            uint256 heldShares = _selfBalance(shareToken);
-
-            uint256 bidAmount = (currentReserve + _previewRedeem(vault_, heldShares)) /
-                daysRemaining_;
-            if (bidAmount == 0) return;
-
-            if (currentReserve < bidAmount) {
-                uint256 deficit = bidAmount - currentReserve;
-                uint256 redeemed = _redeemForDeficit(vault_, deficit, heldShares);
-
-                if (redeemed < deficit) {
-                    bidAmount = currentReserve + redeemed;
-                }
-            }
-
-            if (bidAmount == 0) return;
-
-            _markets.openMarket(_context(), config_, bidAmount, oraclePrice_);
-        }
-    }
-
-    /// @notice Wraps the facility's idle reserve balance into vault shares through the
-    ///         checked self-call.
-    /// @dev On a failed wrap the reserve is kept, `ReserveWrapFailed` is emitted, and
-    ///      the wrap is retried at the following daily cycle. A dust balance that
-    ///      previews to zero shares is skipped without an event and stays on the
-    ///      facility until the balance grows past the vault's rounding threshold.
-    function _wrapIdleReserve(address vault_, address reserve_) private {
-        uint256 idleReserve = _selfBalance(reserve_);
-        if (idleReserve == 0) return;
-        if (IERC4626(vault_).previewDeposit(idleReserve) == 0) return;
-
-        (bool success, bytes memory reason) = _safeCall(
-            address(this),
-            abi.encodeCall(this.selfWrapReserve, (vault_, idleReserve))
-        );
-        // The failed self-call rolled back the deposit, so the reserve is still held
-        if (!success) emit ReserveWrapFailed(vault_, idleReserve, reason);
-    }
-
-    /// @notice Deposits the reserve into the vault and verifies the minted shares
-    ///         against the preview.
-    /// @dev External only for the self-call isolation in `_wrapIdleReserve`. The
-    ///      function is intentionally not `nonReentrant`: it executes within the guard
-    ///      held by `execute`. The received amount is measured as the balance delta of
-    ///      the share token.
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
+    /// @dev External only for the self-call isolation of the wrap performed by the
+    ///      linked `YieldRepurchaseFacilityV2BuybackPoolLib`. The function is
+    ///      intentionally not `nonReentrant`: it executes within the guard held by
+    ///      `execute`. The received amount is measured as the balance delta of the share
+    ///      token.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
     ///      - The received shares are below `previewDeposit(amount_)`.
-    /// @param vault_ The vault to deposit into.
-    /// @param amount_ The reserve amount to deposit.
-    function selfWrapReserve(address vault_, uint256 amount_) external {
+    function selfWrapReserve(address vault_, uint256 amount_) external override {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
@@ -830,30 +756,9 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_InsufficientDeposit(vault_, expected, received);
     }
 
-    /// @notice Redeems vault shares through the checked self-call.
-    /// @dev On a failed redeem the shares are kept, `RedeemFailed` is emitted, and zero
-    ///      is reported as the received amount.
-    /// @return received The reserve amount received.
-    function _redeemShares(address vault_, uint256 shares_) private returns (uint256 received) {
-        if (shares_ == 0) return 0;
-
-        (bool success, bytes memory data) = _safeCall(
-            address(this),
-            abi.encodeCall(this.selfRedeemChecked, (vault_, shares_))
-        );
-        if (!success) {
-            // The failed self-call rolled back the redeem, so all shares are still held
-            emit RedeemFailed(vault_, shares_, data);
-            return 0;
-        }
-        // The success returndata is the one-word return of `selfRedeemChecked`, well
-        // below the `MAX_RETURNDATA_LENGTH` cap
-        return abi.decode(data, (uint256));
-    }
-
-    /// @notice Redeems vault shares and verifies the received reserve against the
-    ///         preview.
-    /// @dev External only for the self-call isolation in `_redeemShares`. The function is
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
+    /// @dev External only for the self-call isolation of the redeem performed by the
+    ///      linked `YieldRepurchaseFacilityV2BuybackPoolLib`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by the
     ///      external entry point. The received amount is measured as the reserve balance
     ///      delta.
@@ -869,13 +774,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The caller is not the facility itself.
     ///      - The redeem reverts.
     ///      - The received reserve is below `previewRedeem(shares_)`.
-    /// @param vault_ The vault to redeem from.
-    /// @param shares_ The share amount to redeem.
-    /// @return received The reserve amount received.
     function selfRedeemChecked(
         address vault_,
         uint256 shares_
-    ) external returns (uint256 received) {
+    ) external override returns (uint256 received) {
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
@@ -896,22 +798,7 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_InsufficientRedeem(vault_, expected, received);
     }
 
-    /// @notice Redeems held shares to cover a reserve deficit of the daily bid.
-    /// @dev The share amount is `previewWithdraw(deficit_)` (rounded up by the vault),
-    ///      capped at the held shares.
-    function _redeemForDeficit(
-        address vault_,
-        uint256 deficit_,
-        uint256 heldShares_
-    ) private returns (uint256 redeemed) {
-        uint256 sharesNeeded = _previewWithdraw(vault_, deficit_);
-        uint256 sharesToRedeem = sharesNeeded > heldShares_ ? heldShares_ : sharesNeeded;
-
-        redeemed = _redeemShares(vault_, sharesToRedeem);
-    }
-
-    /// @notice Burns the purchased OHM against a backing withdrawal; the withdrawn
-    ///         backing vault shares join the backing vault's buyback pool.
+    /// @inheritdoc IYieldRepurchaseFacilityV2Steps
     /// @dev External only for the self-call isolation in `execute`. The function is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`. Without a backing vault, or when the scaled backing amount, the
@@ -923,7 +810,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      pro-rating rounding.
     ///
     ///      Reverts if the caller is not the facility itself.
-    function selfProcessOhmPurchases() external {
+    function selfProcessOhmPurchases() external override {
         _requireCaller(address(this));
 
         uint256 purchased = _ohmPurchased;
@@ -1854,26 +1741,6 @@ contract YieldRepurchaseFacilityV2 is
         if (msg.sender != configurator)
             revert IYieldRepurchaseFacilityV2_OnlyConfigurator(msg.sender);
         if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
-    }
-
-    /// @notice Performs an isolated call to `target_` that forwards the remaining gas and
-    ///         no value, and captures the returndata truncated to
-    ///         `MAX_RETURNDATA_LENGTH` bytes.
-    /// @dev A target that holds no code is reported as a failure with empty data.
-    /// @return success Whether the call succeeded.
-    /// @return data The captured returndata, truncated to `MAX_RETURNDATA_LENGTH` bytes.
-    function _safeCall(
-        address target_,
-        bytes memory callData_
-    ) private returns (bool success, bytes memory data) {
-        return
-            SafeCall.safeCall(
-                target_,
-                gasleft(),
-                0,
-                YieldRepurchaseFacilityV2Constants.MAX_RETURNDATA_LENGTH,
-                callData_
-            );
     }
 
     /// @notice Performs an isolated self-call that runs one step with exactly
