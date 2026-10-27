@@ -23,6 +23,7 @@ import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
@@ -2020,17 +2021,19 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `configurator_` is the zero address.
     ///      - `configurator_` is not an active policy of the facility's kernel.
     ///      - `configurator_` does not report the facility's kernel as its own.
-    ///      - `supportsInterface` returns `false` for `IYieldRepurchaseFacilityV2Config`.
+    ///      - `configurator_` does not advertise `IYieldRepurchaseFacilityV2Config` through
+    ///        ERC165, which includes a `supportsInterface` query that reverts.
     ///      - `facility()` does not return this facility.
     ///
-    ///      An active policy that does not implement `supportsInterface` or `facility()`
-    ///      reverts in the call itself.
+    ///      An active policy that does not implement `kernel()` or `facility()` reverts in
+    ///      the call itself.
     function _requireValidConfigurator(address configurator_) private view {
         if (
             configurator_ == address(0) ||
             !kernel.isPolicyActive(Policy(configurator_)) ||
             address(Policy(configurator_).kernel()) != address(kernel) ||
-            !IERC165(configurator_).supportsInterface(
+            !ERC165Checker.supportsInterface(
+                configurator_,
                 type(IYieldRepurchaseFacilityV2Config).interfaceId
             ) ||
             IYieldRepurchaseFacilityV2Config(configurator_).facility() != address(this)
