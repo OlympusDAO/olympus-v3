@@ -23,8 +23,8 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 /// @title YieldRepurchaseFacilityV2AssetRegistryLib
 /// @notice An external library that owns the asset registry of the
 ///         YieldRepurchaseFacilityV2 (the per-vault configurations, the vault list, the
-///         reserve lookup, and the backing vault designation) and validates the
-///         registrations and the per-asset mode changes.
+///         reserve lookup, and the backing vault designation) and validates and stores
+///         the registrations, the removals, and the per-asset mode and share changes.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameters reference the calling facility's storage, the facility is
 ///      `address(this)`, and the emitted events and the errors belong to the facility
@@ -195,6 +195,85 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         delete registry_.configs[vault_];
 
         emit IYieldRepurchaseFacilityV2.AssetRemoved(vault_);
+    }
+
+    /// @notice Validates the de-registration of a vault.
+    /// @dev Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is enabled (`IYieldRepurchaseFacilityV2_AssetEnabled`).
+    ///      - The vault is the backing vault (`IYieldRepurchaseFacilityV2_VaultIsBackingVault`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The vault to de-register.
+    function validateRemove(Registry storage registry_, address vault_) external view {
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(
+            _requireRegistered(registry_, vault_).isAssetEnabled
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            registry_.backingVault
+        );
+    }
+
+    /// @notice Disables an enabled registered vault.
+    /// @dev Only the enabled flag is written: the caller closes the vault's tracked bond
+    ///      market and emits `AssetDisabled` afterwards. The buyback pool and the
+    ///      accounting of the asset stay in place.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is disabled (`IYieldRepurchaseFacilityV2_AssetDisabled`).
+    ///      - The vault is the backing vault (`IYieldRepurchaseFacilityV2_VaultIsBackingVault`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The vault to disable.
+    function disable(Registry storage registry_, address vault_) external {
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(config.isAssetEnabled);
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            registry_.backingVault
+        );
+
+        config.isAssetEnabled = false;
+    }
+
+    /// @notice Stores the sell-shares mode of a vault.
+    /// @dev The change is validated by `validateSellShares` before the caller closes the
+    ///      vault's tracked bond market; no check is repeated here. Emits `SellSharesSet`
+    ///      for the facility.
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The registered vault.
+    /// @param sellShares_ The new mode.
+    function setSellShares(Registry storage registry_, address vault_, bool sellShares_) external {
+        registry_.configs[vault_].sellShares = sellShares_;
+        emit IYieldRepurchaseFacilityV2.SellSharesSet(vault_, sellShares_);
+    }
+
+    /// @notice Sets the yield buyback share of a registered vault.
+    /// @dev Emits `YieldBuybackShareSet` for the facility.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The share exceeds 100% (`1e18`)
+    ///        (`IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The registered vault.
+    /// @param newShare_ The new share (`1e18` = 100%).
+    function setYieldBuybackShare(
+        Registry storage registry_,
+        address vault_,
+        uint256 newShare_
+    ) external {
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(newShare_);
+
+        config.yieldBuybackShare = newShare_;
+        emit IYieldRepurchaseFacilityV2.YieldBuybackShareSet(vault_, newShare_);
     }
 
     /// @notice Validates a change of the sell-shares mode of a registered vault.

@@ -1044,11 +1044,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
-    ///      The vault's tracked live bond market, if any is left, is closed best-effort:
-    ///      a revert of the auctioneer is absorbed and the market is left to expire, its
-    ///      purchases reverting in `callback` for the de-registered asset. The balances
-    ///      are returned to the treasury here, and the de-registration is performed by
-    ///      the linked `YieldRepurchaseFacilityV2AssetRegistryLib`.
+    ///      The removal is validated and performed by the linked
+    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`. The vault's tracked live bond
+    ///      market, if any is left, is closed best-effort: a revert of the auctioneer is
+    ///      absorbed and the market is left to expire, its purchases reverting in
+    ///      `callback` for the de-registered asset. The balances are returned to the
+    ///      treasury here, before the de-registration.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1057,14 +1058,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is currently enabled.
     ///      - The vault is currently set as the `backingVault`.
     function removeAsset(address vault_) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(config.isAssetEnabled);
-        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
-            vault_,
-            _registry.backingVault
-        );
+        _registry.validateRemove(vault_);
 
         _markets.closeVaultMarket(_context(), vault_);
+        ReserveAsset storage config = _registry.configs[vault_];
         _returnBalancesToTrsry(config.shareToken, config.reserve);
 
         _registry.remove(vault_);
@@ -1109,8 +1106,8 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev Callable only by the configurator. The change is validated by the linked
-    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
+    /// @dev Callable only by the configurator. The change is validated and stored by the
+    ///      linked `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      The vault's tracked live bond market is closed before the change; the
     ///      close is not isolated, so a revert of the auctioneer reverts the change.
@@ -1134,13 +1131,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The close of the vault's tracked live bond market reverts.
     function setSellShares(address vault_, bool sellShares_) external override onlyConfigurator {
         _registry.validateSellShares(vault_, sellShares_);
-        // The change is validated above and gated to the configurator, and the auctioneer is
-        // admin-set
-        // forge-lint: disable-next-line(reentrancy-no-eth)
         _markets.closeVaultMarketStrict(_context(), vault_);
 
-        _registry.configs[vault_].sellShares = sellShares_;
-        emit SellSharesSet(vault_, sellShares_);
+        _registry.setSellShares(vault_, sellShares_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1294,7 +1287,10 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev Reverts if:
+    /// @dev The change is validated and stored by the linked
+    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
+    ///
+    ///      Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The vault is not registered.
@@ -1303,11 +1299,7 @@ contract YieldRepurchaseFacilityV2 is
         address vault_,
         uint256 newShare_
     ) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(newShare_);
-
-        config.yieldBuybackShare = newShare_;
-        emit YieldBuybackShareSet(vault_, newShare_);
+        _registry.setYieldBuybackShare(vault_, newShare_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1389,7 +1381,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      applied at any point of the running week. The compare-and-set guard makes a
     ///      correction that outlives its target harmless: once a weekly reset has
     ///      replaced the stored value with a fresh projection, the stale correction
-    ///      reverts instead of cutting the fresh value.
+    ///      reverts instead of cutting the fresh value. The correction is validated and
+    ///      stored by the linked `YieldRepurchaseFacilityV2YieldLib`.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1402,15 +1395,12 @@ contract YieldRepurchaseFacilityV2 is
         uint256 expectedNextYield_,
         uint256 newNextYield_
     ) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        YieldRepurchaseFacilityV2ValidationLib.requireNextYieldDecrease(
+        YieldRepurchaseFacilityV2YieldLib.decreaseNextYield(
+            _registry,
             vault_,
             expectedNextYield_,
-            config.nextYield,
             newNextYield_
         );
-
-        _setNextYield(config, newNextYield_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1455,11 +1445,12 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev The next yield and the unfunded carry are reset to zero and the yield
-    ///      snapshots are refreshed by the linked `YieldRepurchaseFacilityV2YieldLib`, so
-    ///      a value left over from before the asset was disabled does not enter the
-    ///      funding target of the weekly reset; the yield projection resumes at the
-    ///      following weekly reset.
+    /// @dev The change is validated and performed by the linked
+    ///      `YieldRepurchaseFacilityV2YieldLib`: the asset is enabled, and its next yield
+    ///      and unfunded carry are reset to zero and its yield snapshots refreshed, so a
+    ///      value left over from before the asset was disabled does not enter the funding
+    ///      target of the weekly reset; the yield projection resumes at the following
+    ///      weekly reset.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1467,22 +1458,18 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(config.isAssetEnabled);
-
-        config.isAssetEnabled = true;
-        emit AssetEnabled(vault_);
-
-        YieldRepurchaseFacilityV2YieldLib.resetAsset(config, _context());
+        YieldRepurchaseFacilityV2YieldLib.enableAsset(_registry, vault_, _context());
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev An immediate halt of the whole facility is available to the emergency role
     ///      through `disable`.
     ///
-    ///      The vault's tracked live bond market is closed, best-effort: a revert of the
-    ///      auctioneer is absorbed and the market is left to expire, its purchases
-    ///      reverting in `callback` for the disabled asset.
+    ///      The change is validated and stored by the linked
+    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`. The vault's tracked live bond
+    ///      market is then closed, best-effort: a revert of the auctioneer is absorbed and
+    ///      the market is left to expire, its purchases reverting in `callback` for the
+    ///      disabled asset.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1491,14 +1478,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is already disabled.
     ///      - The vault is the backing vault.
     function disableAsset(address vault_) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        _requireAssetEnabled(config);
-        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
-            vault_,
-            _registry.backingVault
-        );
-
-        config.isAssetEnabled = false;
+        _registry.disable(vault_);
         _markets.closeVaultMarket(_context(), vault_);
         emit AssetDisabled(vault_);
     }
@@ -1568,12 +1548,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Transfers the facility's full `token_` balance to the treasury.
     function _sweepToTrsry(address token_) private {
         _transferToTrsry(token_, _selfBalance(token_));
-    }
-
-    /// @notice Stores the vault's next yield and emits `NextYieldSet`.
-    function _setNextYield(ReserveAsset storage config_, uint256 nextYield_) private {
-        config_.nextYield = nextYield_;
-        emit NextYieldSet(config_.reserve, nextYield_);
     }
 
     /// @notice Reverts unless the asset is enabled.
