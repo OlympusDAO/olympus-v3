@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.0;
+pragma solidity ^0.8.0;
 
 /// @title IBurnableERC20
 /// @notice The minimal interface for an ERC20 token exposing a self-burn function.
