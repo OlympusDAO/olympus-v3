@@ -266,6 +266,23 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the vault's share decimals do not match its reserve decimals.
     error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
+    /// @notice Thrown when the vault being registered advertises asynchronous deposits
+    ///         (ERC-7540) through ERC-165, a capability the facility does not support.
+    /// @param vault The rejected vault.
+    error IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(address vault);
+
+    /// @notice Thrown when a probe call of the vault being registered fails: the call
+    ///         reverts, the address holds no code, or the returned data is shorter than
+    ///         one word.
+    /// @param vault The probed vault.
+    /// @param selector The selector of the probed function.
+    error IYieldRepurchaseFacilityV2_VaultProbeFailed(address vault, bytes4 selector);
+
+    /// @notice Thrown when a probe call of the vault being registered returns zero.
+    /// @param vault The probed vault.
+    /// @param selector The selector of the probed function.
+    error IYieldRepurchaseFacilityV2_VaultProbeZeroResult(address vault, bytes4 selector);
+
     /// @notice Thrown when the reserve of the asset being registered resolves to a zero
     ///         OHM price through the PRICE module.
     /// @param reserve The reserve token that could not be priced.

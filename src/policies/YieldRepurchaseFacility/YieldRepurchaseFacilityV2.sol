@@ -1205,8 +1205,13 @@ contract YieldRepurchaseFacilityV2 is
     ///        or the vault or the reserve collides with the vault or the reserve of a
     ///        registered asset.
     ///      - The vault's underlying asset decimals exceed 18.
+    ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
+    ///        ERC-165.
     ///      - The vault's share decimals do not match its reserve decimals (a vault with a
     ///        decimals offset is not supported).
+    ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
+    ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
+    ///        one word, or returns zero.
     ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts (for example when the
     ///        reserve is not registered in the PRICE module) or returns zero.
     ///      - The yield buyback share exceeds 100% (`1e18`).
