@@ -16,10 +16,8 @@ contract EmissionManagerCallbackAuthStatus is BatchScriptV2 {
 
     function setCallbackAuthStatus(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
+        string calldata ledgerDerivationPath_
     ) external {
         _validateArgsFileEmpty(argsFile_);
 
@@ -32,7 +30,7 @@ contract EmissionManagerCallbackAuthStatus is BatchScriptV2 {
         console2.log("Setting up batch script");
         _loadEnv(ChainUtils._getChainName(block.chainid));
         // No args
-        _setUpBatchScript(signOnly_, BOND_OWNER, ledgerDerivationPath_, signature_);
+        _setUpBatchScript(BOND_OWNER, ledgerDerivationPath_);
 
         // Get addresses
         address bondFixedTermAuctioneer = _envAddressNotZero(
