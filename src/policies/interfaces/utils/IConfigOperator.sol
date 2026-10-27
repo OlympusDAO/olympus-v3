@@ -10,8 +10,7 @@ interface IConfigOperator {
     /// @param caller_ Unauthorized account.
     error ConfigOperator_Unauthorized(address caller_);
 
-    /// @notice Thrown when the operator to set is the one already configured. The zero address
-    ///         is a value here too: revoking an operator that is already unset reverts.
+    /// @notice Thrown when the requested operator is already configured, including the zero address.
     error ConfigOperator_Unchanged();
 
     // ========== EVENTS ========== //
@@ -29,9 +28,8 @@ interface IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @notice Immediately replaces the delegated configuration operator.
-    /// @dev The implementation defines caller authorization. Setting zero revokes delegated
-    ///      access. Setting the operator already configured reverts with
-    ///      `ConfigOperator_Unchanged`, after the authorization check.
+    /// @dev The implementation defines caller authorization. Setting zero revokes delegated access.
+    ///      After authorization, setting the current operator reverts with `ConfigOperator_Unchanged`.
     /// @param configOperator_ New config operator address.
     function setConfigOperator(address configOperator_) external;
 }

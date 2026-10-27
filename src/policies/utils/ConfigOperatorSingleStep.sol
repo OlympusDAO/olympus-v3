@@ -8,10 +8,9 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 /// @notice Reusable single-step configuration-operator storage and rotation.
 /// @dev The operator starts unset. Implementations must explicitly override
 ///      `_authorizeSetConfigOperator` to permit rotation; the default implementation denies every
-///      caller. A rotation to the operator already configured, the zero address included, reverts
-///      with `ConfigOperator_Unchanged` once the caller is authorized, so a call that lands always
-///      changes the operator. Product setters remain responsible for composing operator authority
-///      with any other accepted authority.
+///      caller. An authorized rotation to the current operator, including an unset zero address,
+///      reverts with `ConfigOperator_Unchanged`. Product setters remain responsible for composing
+///      operator authority with any other accepted authority.
 abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE ========== //
 
@@ -21,13 +20,13 @@ abstract contract ConfigOperatorSingleStep is IConfigOperator {
     // ========== STATE-CHANGING FUNCTIONS ========== //
 
     /// @inheritdoc IConfigOperator
-    /// @dev The zero address is a valid value: it revokes delegated access.
+    /// @dev The zero address revokes delegated configuration access. Authorization is checked before
+    ///      rejecting an operator that is already configured.
     ///
     ///      Reverts if:
-    ///      - `_authorizeSetConfigOperator` denies the caller (`ConfigOperator_Unauthorized`).
-    ///      - `configOperator_` is the operator already configured (`ConfigOperator_Unchanged`),
-    ///        the zero address over an unset operator included.
-    // forge-lint: disable-next-line(missing-zero-check)
+    ///      - The authorization check of the implementation denies the caller or reverts.
+    ///      - The requested operator is the one already configured, which includes the zero
+    ///        address while no operator is set.
     function setConfigOperator(address configOperator_) public virtual override {
         if (!_authorizeSetConfigOperator()) {
             revert ConfigOperator_Unauthorized(msg.sender);
