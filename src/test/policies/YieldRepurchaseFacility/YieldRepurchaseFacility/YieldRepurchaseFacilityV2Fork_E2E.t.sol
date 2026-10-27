@@ -9,8 +9,8 @@ import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
@@ -191,6 +191,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(yieldRepo.bondTeller(), BOND_TELLER, "bondTeller");
         assertEq(yieldRepo.bondAuctioneer(), BOND_AUCTIONEER, "auctioneer");
         assertEq(yieldRepo.configurator(), address(yieldRepoConfig), "configurator");
+        assertEq(yieldRepoLens.facility(), address(yieldRepo), "lens facility");
         assertEq(yieldRepoConfig.facility(), address(yieldRepo), "config facility");
         assertEq(
             yieldRepoConfig.configOperator(),
@@ -380,12 +381,12 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // The mirror model asserted the exact pool transition inside _beat; here the
         // view projection is cross-checked against the live formula mirror.
         assertEq(
-            yieldRepo.getNextYield(SUSDS),
+            yieldRepoLens.getNextYield(SUSDS),
             _expectedProjectionView(SUSDS),
             "week 2: sUSDS projection view"
         );
         assertEq(
-            yieldRepo.getNextYield(SUSDE),
+            yieldRepoLens.getNextYield(SUSDE),
             _expectedProjectionView(SUSDE),
             "week 2: sUSDe projection view"
         );
@@ -442,7 +443,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     ///         projection immediately, and therefore in the next weekly reset, reducing it
     ///         by the interest on the offset delta.
     function _executeOffsetIncreaseAndAssert() internal {
-        uint256 projectionBefore = yieldRepo.getNextYield(SUSDS);
+        uint256 projectionBefore = yieldRepoLens.getNextYield(SUSDS);
 
         vm.prank(keeper);
         yieldRepoConfigTimelock.executeQueuedAction(offsetActionId);
@@ -463,17 +464,17 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // these values.
         uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_V1_1);
         uint256 interestBefore = ((receivables - CLEARINGHOUSE_V1_1_INITIAL_OFFSET) *
-            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
-            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
-            YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
+            YieldRepurchaseFacilityV2MathLib.CH_RATE_NUMERATOR) /
+            YieldRepurchaseFacilityV2MathLib.CH_RATE_DENOMINATOR /
+            YieldRepurchaseFacilityV2MathLib.WEEKS_PER_YEAR;
         uint256 interestAfter = ((receivables -
             CLEARINGHOUSE_V1_1_INITIAL_OFFSET -
             CLEARINGHOUSE_V1_1_OFFSET_INCREASE) *
-            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
-            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
-            YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
+            YieldRepurchaseFacilityV2MathLib.CH_RATE_NUMERATOR) /
+            YieldRepurchaseFacilityV2MathLib.CH_RATE_DENOMINATOR /
+            YieldRepurchaseFacilityV2MathLib.WEEKS_PER_YEAR;
 
-        uint256 projectionAfter = yieldRepo.getNextYield(SUSDS);
+        uint256 projectionAfter = yieldRepoLens.getNextYield(SUSDS);
         assertEq(projectionAfter, _expectedProjectionView(SUSDS), "offset: projection view");
         assertEq(
             projectionBefore - projectionAfter,

@@ -24,8 +24,6 @@ import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFac
 ///      functions, and the emitted events belong to the facility interface. The library
 ///      holds no state and never reads the treasury.
 library YieldRepurchaseFacilityV2BuybackPoolLib {
-    using YieldRepurchaseFacilityV2VaultLib for IYieldRepurchaseFacilityV2.ReserveAsset;
-
     /// @notice Sizes the daily bid of a vault from the facility's balances and prepares
     ///         the payout for it.
     /// @dev The bid is the pool value divided by `daysRemaining_` (floor). For a
@@ -55,11 +53,24 @@ library YieldRepurchaseFacilityV2BuybackPoolLib {
         if (config_.sellShares) {
             _wrapIdleReserve(vault_, reserve_);
 
+            bool asyncRedeem = config_.asyncRedeem;
             uint256 heldShares = _selfBalance(shareToken);
-            uint256 bidAmount = config_.sharesToAssets(heldShares) / daysRemaining_;
+            uint256 bidAmount = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
+                vault_,
+                asyncRedeem,
+                heldShares
+            ) / daysRemaining_;
             if (bidAmount == 0) return 0;
 
-            return Math.min(config_.assetsToShares(bidAmount), heldShares);
+            return
+                Math.min(
+                    YieldRepurchaseFacilityV2VaultLib.assetsToShares(
+                        vault_,
+                        asyncRedeem,
+                        bidAmount
+                    ),
+                    heldShares
+                );
         }
 
         uint256 currentReserve = _selfBalance(reserve_);

@@ -10,6 +10,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Contracts
@@ -24,10 +25,9 @@ import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 ///      facility: the facility is the market owner and the market callback, and the
 ///      auctioneer's callback authorization applies to the facility address. The bond
 ///      callback itself stays with the facility, which reads and writes the records
-///      directly.
+///      directly. The pricing is that of `YieldRepurchaseFacilityV2MathLib`.
 library YieldRepurchaseFacilityV2BondMarketLib {
     using FullMath for uint256;
-    using YieldRepurchaseFacilityV2VaultLib for IYieldRepurchaseFacilityV2.ReserveAsset;
 
     /// @notice Bond market debt buffer (`100_000` = 100%).
     uint32 internal constant BOND_DEBT_BUFFER = 100_000;
@@ -128,7 +128,11 @@ library YieldRepurchaseFacilityV2BondMarketLib {
             // decimals
             uint256 oneShare = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
                 config_.reserveDecimals;
-            uint256 conversionRate = config_.sharesToAssets(oneShare);
+            uint256 conversionRate = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
+                vault_,
+                config_.asyncRedeem,
+                oneShare
+            );
             if (conversionRate == 0) {
                 emit IYieldRepurchaseFacilityV2.MarketCreationFailed(vault_, capacity_, "");
                 return;
@@ -253,7 +257,16 @@ library YieldRepurchaseFacilityV2BondMarketLib {
             uint256 formattedInitialPrice,
             uint256 formattedMinimumPrice,
             int8 scaleAdjustment
-        ) = _computeMarketPricing(config_);
+        ) = YieldRepurchaseFacilityV2MathLib.marketPricing(
+                YieldRepurchaseFacilityV2MathLib.MarketPricing({
+                    oraclePrice: config_.oraclePrice,
+                    initialDiscount: config_.initialDiscount,
+                    maxPricePremium: config_.maxPricePremium,
+                    oracleDecimals: config_.oracleDecimals,
+                    quoteDecimals: config_.quoteDecimals,
+                    payoutDecimals: config_.payoutDecimals
+                })
+            );
 
         bytes memory callData = abi.encodeCall(
             IBondAuctioneer.createMarket,
@@ -295,104 +308,5 @@ library YieldRepurchaseFacilityV2BondMarketLib {
         if (!success) return (false, 0, returned);
         return (true, abi.decode(returned, (uint256)), "");
         // forge-lint: disable-end(boolean-cst)
-    }
-
-    /// @notice Computes the Bond SDA price parameters for a market quoted in OHM.
-    /// @dev The market quotes OHM per payout unit, so the prices are inverses of the
-    ///      oracle price: the initial price applies the discount to the oracle price,
-    ///      and the minimum price corresponds to the oracle price raised by the max
-    ///      price premium, capping the payout per OHM at
-    ///      `oraclePrice * (1 + maxPricePremium)`.
-    ///
-    ///      Both parameters are measured from the same oracle price, so they are
-    ///      independent: the discount sets where a market opens, and the premium sets
-    ///      the ceiling of what the facility pays for one OHM. A zero premium caps the
-    ///      payout at the oracle price itself.
-    ///
-    ///      The SDA decays the market price toward the minimum price, so the width of
-    ///      the decay band is `(1 + maxPricePremium) / (1 - initialDiscount)`: the room
-    ///      a market has to reach a clearing price. Only a zero premium combined with a
-    ///      zero discount pins the market at the oracle price.
-    ///
-    ///      The premium is non-negative and the discount is below 100%, so
-    ///      `maxPrice >= effectivePrice` and therefore
-    ///      `formattedMinimumPrice <= formattedInitialPrice` for every configuration.
-    ///      The Bond SDA rejects a market whose initial price is below its minimum
-    ///      price, so this ordering must hold.
-    ///
-    ///      The inversions floor, and the scale factors follow the Bond SDA
-    ///      `scaleAdjustment` convention.
-    function _computeMarketPricing(
-        MarketConfig memory config_
-    )
-        private
-        pure
-        returns (uint256 formattedInitialPrice, uint256 formattedMinimumPrice, int8 scaleAdjustment)
-    {
-        // discountFactor = 1e18 - initialDiscount (both 18 decimals);
-        // e.g. 1e18 - 3e16 = 0.97e18.
-        uint256 discountFactor = YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT -
-            config_.initialDiscount;
-        // effectivePrice = oraclePrice (oracleDecimals) * discountFactor (18 decimals)
-        // / 1e18 -> oracleDecimals (floor).
-        uint256 effectivePrice = config_.oraclePrice.mulDiv(
-            discountFactor,
-            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
-        );
-        // premiumFactor = 1e18 + maxPricePremium (18 decimals); e.g. 1e18 + 1e17 = 1.1e18.
-        // maxPrice = oraclePrice (oracleDecimals) * premiumFactor (18 decimals)
-        // / 1e18 -> oracleDecimals (floor). This is the highest payout the market can
-        // reach for one quote token; a zero premium leaves it at the oracle price.
-        uint256 maxPrice = config_.oraclePrice.mulDiv(
-            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT + config_.maxPricePremium,
-            YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
-        );
-        uint256 oracleSquare = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
-            (uint256(config_.oracleDecimals) * 2);
-
-        uint256 initialPrice = oracleSquare / effectivePrice;
-        uint256 minPrice = oracleSquare / maxPrice;
-
-        int8 priceDecimals = _getPriceDecimals(initialPrice, config_.oracleDecimals);
-        // The payout decimals are validated at most 18, OHM has 9 decimals, and the facility
-        // pins the oracle decimals at 18, so no int8 cast truncates; `priceDecimals` lies in
-        // [-18, 18] because `initialPrice` is at most 10 ** 36, so neither uint8 exponent is
-        // negative.
-        // forge-lint: disable-start(unsafe-typecast)
-        scaleAdjustment =
-            int8(config_.payoutDecimals) -
-            int8(config_.quoteDecimals) +
-            (priceDecimals / 2);
-
-        uint256 oracleScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
-            uint8(int8(config_.oracleDecimals) - priceDecimals);
-        uint256 bondScale = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
-            uint8(
-                36 +
-                    scaleAdjustment +
-                    int8(config_.quoteDecimals) -
-                    int8(config_.payoutDecimals) -
-                    priceDecimals
-            );
-        // forge-lint: disable-end(unsafe-typecast)
-
-        formattedInitialPrice = initialPrice.mulDiv(bondScale, oracleScale);
-        formattedMinimumPrice = minPrice.mulDiv(bondScale, oracleScale);
-    }
-
-    /// @notice Returns the order of magnitude of `price_` relative to the oracle
-    ///         decimals.
-    function _getPriceDecimals(
-        uint256 price_,
-        uint8 oracleDecimals_
-    ) private pure returns (int8 relativeDecimals) {
-        int8 decimals;
-        while (price_ >= YieldRepurchaseFacilityV2Constants.DECIMAL_BASE) {
-            price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
-            ++decimals;
-        }
-        // The facility pins the oracle decimals at 18, which fits in int8
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return decimals - int8(oracleDecimals_);
     }
 }

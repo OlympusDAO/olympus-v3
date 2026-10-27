@@ -47,7 +47,7 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      The vault class is recognized through ERC165, which an ordinary ERC4626
     ///      vault is not required to implement. A vault that advertises asynchronous
     ///      redemption (ERC7540) is registered with the `asyncRedeem` flag: it must
-    ///      also advertise ERC7575 and be registered with `sellShares_` set, and its
+    ///      also advertise ERC7575 and be registered with `sellShares` set, and its
     ///      shares are valued through `convertToAssets` and `convertToShares`, an
     ///      estimate of the redemption payout. A vault that advertises asynchronous
     ///      deposits (ERC7540) is rejected.
@@ -66,28 +66,11 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      earlier level is projected as yield.
     ///
     ///      The snapshot parameters are the baseline of the first yield projection, and
-    ///      `nextYield_` is withdrawn into the buyback pool at the first weekly reset.
-    ///      Emits `AssetAdded` and `NextYieldSet`, and `BackingVaultSet` when
-    ///      `setAsBackingVault_` is set.
-    /// @param vault_ The ERC4626 vault to register.
-    /// @param yieldBuybackShare_ The share of the yield routed to buybacks (`1e18` = 100%).
-    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve
-    ///        units.
-    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot: the
-    ///        reserve amount redeemable for one whole share.
-    /// @param nextYield_ The initial stored next yield, in reserve units.
-    /// @param sellShares_ Whether bond markets pay out the vault shares instead of the
-    ///        reserve.
-    /// @param setAsBackingVault_ Whether the vault becomes the backing vault.
-    function addAsset(
-        address vault_,
-        uint256 yieldBuybackShare_,
-        uint256 initialReserveBalance_,
-        uint256 initialConversionRate_,
-        uint256 nextYield_,
-        bool sellShares_,
-        bool setAsBackingVault_
-    ) external;
+    ///      the seeded next yield is withdrawn into the buyback pool at the first weekly
+    ///      reset. Emits `AssetAdded` and `NextYieldSet`, and `BackingVaultSet` when the
+    ///      vault is designated as the backing vault.
+    /// @param params_ The registration inputs (see `AddAssetParams`).
+    function addAsset(IYieldRepurchaseFacilityV2.AddAssetParams calldata params_) external;
 
     /// @notice Seeds the weekly cycle: sets the epoch counter to the supplied value and
     ///         withdraws each seeded amount from the treasury into its vault's buyback

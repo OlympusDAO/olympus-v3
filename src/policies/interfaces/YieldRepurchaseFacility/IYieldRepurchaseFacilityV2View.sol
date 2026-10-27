@@ -6,11 +6,15 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 
 /// @title IYieldRepurchaseFacilityV2View
 /// @notice The read-only surface of the multi-asset Yield Repurchase Facility (YRF)
-///         policy.
-/// @dev The facility also implements `IYieldRepurchaseRecipient`, the read-only surface
-///      through which a sender of protocol yield discovers the registered vaults:
-///      `getVaults` is shared with this interface, and `getVaultConfig` and
-///      `getAssetVault` are declared there.
+///         policy: the stored configuration and accounting, the dependencies, and the
+///         validation mirrors of the configuration setters.
+/// @dev The views derived from this state and from the dependencies (the live yield
+///      projection, the protocol reserve balance, the buyback pools, the vault markets,
+///      the Clearinghouse breakdown, and the price gate) are provided by
+///      `IYieldRepurchaseFacilityV2Lens`. The facility also implements
+///      `IYieldRepurchaseRecipient`, the read-only surface through which a sender of
+///      protocol yield discovers the registered vaults: `getVaults` is shared with this
+///      interface, and `getVaultConfig` and `getAssetVault` are declared there.
 interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     // ============ VALIDATION ============ //
 
@@ -102,35 +106,22 @@ interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     /// @return config The per-vault configuration and accounting.
     function getAssetConfig(address vault_) external view returns (ReserveAsset memory config);
 
-    /// @notice Returns the yield a weekly reset running now would project for the vault:
-    ///         the vault yield accrued since the snapshots, plus the weekly Clearinghouse
-    ///         interest for the backing vault, multiplied by the vault's buyback share.
-    /// @dev This is a live projection; the stored next yield is available through
-    ///      `getAssetConfig`. The projection applies the rate change since the last
-    ///      weekly reset to the balance snapshot taken at that reset: protocol balance
-    ///      changes made after the snapshot do not enter the projection until the
-    ///      following reset, and a stored projection overstated by an outflow can be
-    ///      lowered through `decreaseNextYield`. Reverts with
-    ///      `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered vault.
-    /// @param vault_ The registered vault.
-    /// @return yield The projected yield, in reserve units.
-    function getNextYield(address vault_) external view returns (uint256 yield);
-
-    /// @notice Returns the reserve value of the protocol-held shares of a vault: the
-    ///         treasury balance, and for the backing vault also the balances of the
-    ///         active Clearinghouses.
-    /// @dev Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an
-    ///      unregistered vault.
-    /// @param vault_ The registered vault.
-    /// @return balance The reserve value, in reserve units.
-    function getReserveBalance(address vault_) external view returns (uint256 balance);
-
-    /// @notice Returns the reserve token of the vault that funds a market created by the
-    ///         facility on the current bond auctioneer.
+    /// @notice Returns the vault that funds a market created by the facility on the
+    ///         current bond auctioneer.
     /// @param marketId_ The market ID.
-    /// @return reserve The reserve token, or the zero address when the market was not
-    ///         created by the facility on the current bond auctioneer.
-    function marketReserves(uint256 marketId_) external view returns (address reserve);
+    /// @return vault The vault, or the zero address when the market was not created by
+    ///         the facility on the current bond auctioneer.
+    function marketVault(uint256 marketId_) external view returns (address vault);
+
+    /// @notice Returns the tracked bond market of a vault: the only market of the vault
+    ///         whose purchases the bond callback serves.
+    /// @dev The tracked market is cleared whenever a close of it is attempted, and a
+    ///      bond-contract change closes every tracked market, so the market belongs to
+    ///      the current bond auctioneer.
+    /// @param vault_ The vault.
+    /// @return tracked Whether a market is tracked for the vault.
+    /// @return marketId The tracked market id; zero when none is tracked.
+    function trackedMarket(address vault_) external view returns (bool tracked, uint256 marketId);
 
     /// @notice Returns the cumulative receivables offset of a Clearinghouse.
     /// @param clearinghouse_ The Clearinghouse address.

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+// Interfaces
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+
 /// @title IYieldRepurchaseFacilityV2Config
 /// @notice The interface of the configuration policy of YieldRepurchaseFacilityV2: the only
 ///         caller the facility accepts for its configuration setters. The policy stores no
@@ -75,24 +78,8 @@ interface IYieldRepurchaseFacilityV2Config {
     ///         role while the policy is enabled.
     /// @dev See `IYieldRepurchaseFacilityV2Write.addAsset` for the semantics and the parameter
     ///      requirements.
-    /// @param vault_ The ERC4626 vault to register.
-    /// @param yieldBuybackShare_ The share of the yield routed to buybacks (`1e18` = 100%).
-    /// @param initialReserveBalance_ The initial `lastReserveBalance` snapshot, in reserve
-    ///        units.
-    /// @param initialConversionRate_ The initial `lastConversionRate` snapshot: the reserve
-    ///        amount redeemable for one whole share.
-    /// @param nextYield_ The initial stored next yield, in reserve units.
-    /// @param sellShares_ Whether bond markets pay out the vault shares instead of the reserve.
-    /// @param setAsBackingVault_ Whether the vault becomes the backing vault.
-    function addAsset(
-        address vault_,
-        uint256 yieldBuybackShare_,
-        uint256 initialReserveBalance_,
-        uint256 initialConversionRate_,
-        uint256 nextYield_,
-        bool sellShares_,
-        bool setAsBackingVault_
-    ) external;
+    /// @param params_ The registration inputs (see `IYieldRepurchaseFacilityV2.AddAssetParams`).
+    function addAsset(IYieldRepurchaseFacilityV2.AddAssetParams calldata params_) external;
 
     /// @notice Forwards `removeAsset` to the facility. Intended to be callable only by the admin
     ///         role while the policy is enabled.

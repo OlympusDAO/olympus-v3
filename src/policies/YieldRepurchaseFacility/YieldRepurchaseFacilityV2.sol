@@ -19,8 +19,6 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
-import {FullMath} from "src/libraries/FullMath.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
@@ -29,6 +27,7 @@ import {YieldRepurchaseFacilityV2BuybackPoolLib} from "src/policies/YieldRepurch
 import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 import {YieldRepurchaseFacilityV2YieldLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2YieldLib.sol";
 
@@ -124,8 +123,6 @@ contract YieldRepurchaseFacilityV2 is
     IYieldRepurchaseRecipient
 {
     using SafeERC20 for IERC20;
-    using FullMath for uint256;
-    using YieldRepurchaseFacilityV2VaultLib for ReserveAsset;
     using YieldRepurchaseFacilityV2AssetRegistryLib for YieldRepurchaseFacilityV2AssetRegistryLib.Registry;
     using YieldRepurchaseFacilityV2ClearinghouseLib for YieldRepurchaseFacilityV2ClearinghouseLib.Clearinghouses;
     using YieldRepurchaseFacilityV2BondMarketLib for YieldRepurchaseFacilityV2BondMarketLib.Markets;
@@ -714,7 +711,11 @@ contract YieldRepurchaseFacilityV2 is
         address vault_ = config_.vault;
         address shareToken = config_.shareToken;
 
-        uint256 shares = config_.assetsToShares(amount_);
+        uint256 shares = YieldRepurchaseFacilityV2VaultLib.assetsToShares(
+            vault_,
+            config_.asyncRedeem,
+            amount_
+        );
         uint256 trsryBalance = _trsryBalance(shareToken);
         if (shares > trsryBalance) {
             // The unfunded remainder is carried by the caller and retried at the next
@@ -725,7 +726,11 @@ contract YieldRepurchaseFacilityV2 is
         if (shares == 0) return 0;
 
         _withdrawShares(shareToken, shares);
-        funded = config_.sharesToAssets(shares);
+        funded = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
+            vault_,
+            config_.asyncRedeem,
+            shares
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Steps
@@ -823,12 +828,16 @@ contract YieldRepurchaseFacilityV2 is
 
         // backingAmount18 = purchased (9 dec) * backingPerOhm (18 dec) / 10^9
         // backingAmount   = scaleBackingAmount(backingAmount18, reserveDecimals).
-        uint256 backingAmount18 = purchased.mulDiv(
+        uint256 backingAmount18 = YieldRepurchaseFacilityV2MathLib.backingAmount(
+            purchased,
             backingPerOhm,
-            YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** _OHM_DECIMALS
+            _OHM_DECIMALS
         );
         ReserveAsset storage backingConfig = _registry.configs[backingVault_];
-        uint256 backingAmount = _scaleBackingAmount(backingAmount18, backingConfig.reserveDecimals);
+        uint256 backingAmount = YieldRepurchaseFacilityV2MathLib.scaleBackingAmount(
+            backingAmount18,
+            backingConfig.reserveDecimals
+        );
         if (backingAmount == 0) return;
 
         address backingShareToken = backingConfig.shareToken;
@@ -838,12 +847,13 @@ contract YieldRepurchaseFacilityV2 is
         if (shares == 0) return;
 
         // The burn amount is derived from the withdrawable value before the withdrawal,
-        // so nothing is withdrawn unless OHM is burned for it. The explicit full branch
-        // avoids the mulDiv rounding when the treasury covers the backing in full.
+        // so nothing is withdrawn unless OHM is burned for it.
         uint256 funded = _previewRedeem(backingVault_, shares);
-        uint256 ohmToBurn = funded >= backingAmount
-            ? purchased
-            : purchased.mulDiv(funded, backingAmount);
+        uint256 ohmToBurn = YieldRepurchaseFacilityV2MathLib.ohmToBurn(
+            purchased,
+            funded,
+            backingAmount
+        );
         if (ohmToBurn == 0) return;
 
         _ohmPurchased = purchased - ohmToBurn;
@@ -956,7 +966,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC165.
     ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) through
-    ///        ERC165 without advertising ERC7575, or while `sellShares_` is unset.
+    ///        ERC165 without advertising ERC7575, or while `sellShares` is unset.
     ///      - The vault advertises ERC7575 through ERC165 and reports the zero address
     ///        as its `share()`.
     ///      - The share token decimals do not match the reserve decimals (a vault with a
@@ -971,29 +981,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts (for example when the
     ///        reserve is not registered in the PRICE module) or returns zero.
     ///      - The yield buyback share exceeds 100% (`1e18`).
-    ///      - `setAsBackingVault_` is set together with `sellShares_`.
-    ///      - `setAsBackingVault_` is set while a backing vault is already designated.
-    function addAsset(
-        address vault_,
-        uint256 yieldBuybackShare_,
-        uint256 initialReserveBalance_,
-        uint256 initialConversionRate_,
-        uint256 nextYield_,
-        bool sellShares_,
-        bool setAsBackingVault_
-    ) external override onlyConfigurator {
-        _registry.addAsset(
-            _context(),
-            YieldRepurchaseFacilityV2AssetRegistryLib.AddAssetParams({
-                vault: vault_,
-                yieldBuybackShare: yieldBuybackShare_,
-                initialReserveBalance: initialReserveBalance_,
-                initialConversionRate: initialConversionRate_,
-                nextYield: nextYield_,
-                sellShares: sellShares_,
-                setAsBackingVault: setAsBackingVault_
-            })
-        );
+    ///      - `setAsBackingVault` is set together with `sellShares`.
+    ///      - `setAsBackingVault` is set while a backing vault is already designated.
+    function addAsset(AddAssetParams calldata params_) external override onlyConfigurator {
+        _registry.addAsset(_context(), params_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1042,7 +1033,10 @@ contract YieldRepurchaseFacilityV2 is
             emit BuybackPoolSeeded(seed.vault, seed.amount, epoch_);
 
             uint256 funded = _fundFromTreasury(config, seed.amount);
-            config.unfundedYield += Math.saturatingSub(seed.amount, funded);
+            config.unfundedYield += YieldRepurchaseFacilityV2MathLib.unfundedRemainder(
+                seed.amount,
+                funded
+            );
         }
     }
 
@@ -1617,20 +1611,6 @@ contract YieldRepurchaseFacilityV2 is
         return _registry.configs[backingVault_].reserve;
     }
 
-    /// @notice Scales a backing amount, in the backing decimals, down to the target
-    ///         decimals, flooring.
-    function _scaleBackingAmount(
-        uint256 backingAmount_,
-        uint8 targetDecimals_
-    ) private pure returns (uint256) {
-        if (targetDecimals_ == YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS)
-            return backingAmount_;
-        return
-            backingAmount_ /
-            (YieldRepurchaseFacilityV2Constants.DECIMAL_BASE **
-                (YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS - targetDecimals_));
-    }
-
     /// @notice Returns the config of a registered vault, reverting with
     ///         `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered one.
     // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
@@ -1888,32 +1868,18 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
-    function getNextYield(address vault_) external view override returns (uint256 yield) {
-        ReserveAsset storage config = _requireRegistered(vault_);
-
-        Context memory context_ = _context();
-        yield = YieldRepurchaseFacilityV2YieldLib.projectNextYield(
-            config,
-            context_,
-            _clearinghouses.clearinghouseYield(context_)
-        );
-    }
-
-    /// @inheritdoc IYieldRepurchaseFacilityV2View
-    function getReserveBalance(address vault_) external view override returns (uint256 balance) {
-        return
-            YieldRepurchaseFacilityV2YieldLib.protocolReserveBalance(
-                _requireRegistered(vault_),
-                _context()
-            );
-    }
-
-    /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev The lookup is scoped to the markets created on the current `bondAuctioneer`.
-    function marketReserves(uint256 marketId_) external view override returns (address reserve) {
-        address vault = _markets.marketVaults[bondAuctioneer][marketId_];
-        if (vault == address(0)) return address(0);
-        return _registry.configs[vault].reserve;
+    function marketVault(uint256 marketId_) external view override returns (address vault) {
+        return _markets.marketVaults[bondAuctioneer][marketId_];
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
+    function trackedMarket(
+        address vault_
+    ) external view override returns (bool tracked, uint256 marketId) {
+        uint256 marketIdPlusOne = _markets.liveMarketIds[vault_];
+        tracked = marketIdPlusOne != 0;
+        if (tracked) marketId = marketIdPlusOne - 1;
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View

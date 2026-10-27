@@ -4,6 +4,7 @@ pragma solidity ^0.8.24;
 // Interfaces
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
+import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
@@ -169,23 +170,9 @@ contract YieldRepurchaseFacilityV2Config is
     ///      - The facility rejects the call (see
     ///        `YieldRepurchaseFacilityV2.addAsset`).
     function addAsset(
-        address vault_,
-        uint256 yieldBuybackShare_,
-        uint256 initialReserveBalance_,
-        uint256 initialConversionRate_,
-        uint256 nextYield_,
-        bool sellShares_,
-        bool setAsBackingVault_
+        IYieldRepurchaseFacilityV2.AddAssetParams calldata params_
     ) external override givenEnabled onlyAdminRole {
-        _facility().addAsset(
-            vault_,
-            yieldBuybackShare_,
-            initialReserveBalance_,
-            initialConversionRate_,
-            nextYield_,
-            sellShares_,
-            setAsBackingVault_
-        );
+        _facility().addAsset(params_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Config
