@@ -21,6 +21,7 @@ import {IVersioned} from "src/interfaces/IVersioned.sol";
 import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
+import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
@@ -72,6 +73,11 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      for purchased-and-burned OHM tracked by the `ohmPurchased` counter, and the
 ///      admin-supplied seeds.
 ///
+///      The facility is a recipient of protocol yield: a sender delivers the reserve
+///      token or the vault shares of a registered asset with a plain transfer, and
+///      discovers the registered vaults through the `IYieldRepurchaseRecipient`
+///      surface.
+///
 ///      Lifecycle:
 ///      - `enable` (admin) performs a full restart: the yields and unfunded carries of
 ///        the enabled assets are zeroed, their yield snapshots are refreshed, and the
@@ -107,7 +113,8 @@ contract YieldRepurchaseFacilityV2 is
     IBasicRescueable,
     IVersioned,
     IYieldRepurchaseFacilityV2Write,
-    IYieldRepurchaseFacilityV2View
+    IYieldRepurchaseFacilityV2View,
+    IYieldRepurchaseRecipient
 {
     using SafeERC20 for IERC20;
     using FullMath for uint256;
@@ -202,6 +209,13 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Ordered list of registered vault addresses.
     address[] internal _vaults;
+
+    /// @notice The registered vault of each reserve token, or the zero address when the
+    ///         token is not the reserve of a registered asset.
+    /// @dev Written by `addAsset` and cleared by `removeAsset`. The lookup is
+    ///      single-valued because a reserve token belongs to at most one registered
+    ///      asset.
+    mapping(address reserve => address vault) internal _reserveVaults;
 
     /// @notice Cumulative offset applied to a Clearinghouse's `principalReceivables`.
     mapping(address clearinghouse => uint256 offset) internal _receivablesOffsets;
@@ -1210,6 +1224,7 @@ contract YieldRepurchaseFacilityV2 is
         YRFAssetConfigLib.addAsset(
             _assetConfigs,
             _vaults,
+            _reserveVaults,
             PRICE,
             address(_OHM),
             YRFAssetConfigLib.AddAssetParams({
@@ -1312,6 +1327,7 @@ contract YieldRepurchaseFacilityV2 is
             }
         }
 
+        delete _reserveVaults[config.reserve];
         delete _assetConfigs[vault_];
 
         emit AssetRemoved(vault_);
@@ -1861,6 +1877,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      protocol during the week, and a balance added during the week starts
     ///      accruing only from the following snapshot, which rebases the projection to
     ///      the actual balance.
+    ///
+    ///      The projection assumes a rate that does not decrease. Every weekly reset
+    ///      overwrites the rate snapshot with the current rate, so after a decrease of
+    ///      the rate its recovery up to the earlier level is credited as yield.
     function _computeVaultYield(ReserveAsset storage config_) private view returns (uint256 yield) {
         uint256 lastRate = config_.lastConversionRate;
         if (lastRate == 0) return 0;
@@ -2161,8 +2181,45 @@ contract YieldRepurchaseFacilityV2 is
     // ============ VIEW FUNCTIONS ============ //
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
-    function getVaults() external view override returns (address[] memory) {
+    /// @dev The function also implements `IYieldRepurchaseRecipient.getVaults`.
+    function getVaults()
+        external
+        view
+        override(IYieldRepurchaseFacilityV2View, IYieldRepurchaseRecipient)
+        returns (address[] memory)
+    {
         return _vaults;
+    }
+
+    /// @inheritdoc IYieldRepurchaseRecipient
+    /// @dev The share token is the vault itself. `enabled` reports the per-asset
+    ///      `isAssetEnabled` flag only; the enabled state of the facility is available
+    ///      through `isEnabled`.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered
+    ///        (`YieldRepurchaseRecipient_VaultNotRegistered`).
+    function getVaultConfig(
+        address vault_
+    ) external view override returns (VaultConfig memory config) {
+        ReserveAsset storage assetConfig = _assetConfigs[vault_];
+        if (assetConfig.vault == address(0))
+            revert YieldRepurchaseRecipient_VaultNotRegistered(vault_);
+
+        config = VaultConfig({
+            vault: vault_,
+            shareToken: vault_,
+            asset: assetConfig.reserve,
+            enabled: assetConfig.isAssetEnabled
+        });
+    }
+
+    /// @inheritdoc IYieldRepurchaseRecipient
+    /// @dev The underlying asset of the interface is the reserve token of a registered
+    ///      asset. The lookup is kept by `addAsset` and `removeAsset`, and does not
+    ///      depend on the enabled state of the asset or of the facility.
+    function getAssetVault(address asset_) external view override returns (address vault) {
+        return _reserveVaults[asset_];
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -2273,6 +2330,7 @@ contract YieldRepurchaseFacilityV2 is
             interfaceId_ == type(IERC165).interfaceId ||
             interfaceId_ == type(IYieldRepurchaseFacilityV2Write).interfaceId ||
             interfaceId_ == type(IYieldRepurchaseFacilityV2View).interfaceId ||
+            interfaceId_ == type(IYieldRepurchaseRecipient).interfaceId ||
             interfaceId_ == type(IBondCallback).interfaceId ||
             interfaceId_ == type(IPeriodicTask).interfaceId ||
             interfaceId_ == type(IBasicRescueable).interfaceId ||

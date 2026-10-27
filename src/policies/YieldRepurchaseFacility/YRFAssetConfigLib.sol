@@ -45,8 +45,9 @@ library YRFAssetConfigLib {
 
     /// @notice Validates and registers an ERC4626 vault as a reserve asset of the
     ///         calling facility.
-    /// @dev The asset is registered in the enabled state. Emits `AssetAdded` and
-    ///      `NextYieldSet` for the facility.
+    /// @dev The asset is registered in the enabled state and recorded in the
+    ///      reserve-to-vault lookup. Emits `AssetAdded` and `NextYieldSet` for the
+    ///      facility.
     ///
     ///      Reverts if:
     ///      - The vault address is the zero address.
@@ -61,6 +62,7 @@ library YRFAssetConfigLib {
     ///      - The `price_.getPriceIn(ohm_, reserve)` probe reverts or returns zero.
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
+    /// @param reserveVaults_ The facility's reserve-to-vault lookup storage.
     /// @param price_ The PRICE module used for the reserve price probe.
     /// @param ohm_ The OHM token address.
     /// @param params_ The registration inputs.
@@ -69,6 +71,7 @@ library YRFAssetConfigLib {
     function addAsset(
         mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
         address[] storage vaults_,
+        mapping(address => address) storage reserveVaults_,
         PRICEv2 price_,
         address ohm_,
         AddAssetParams memory params_
@@ -138,8 +141,15 @@ library YRFAssetConfigLib {
             unfundedYield: 0
         });
         vaults_.push(vault_);
+        reserveVaults_[reserve_] = vault_;
 
-        emit IYieldRepurchaseFacilityV2.AssetAdded(vault_, reserve_, params_.yieldBuybackShare);
+        emit IYieldRepurchaseFacilityV2.AssetAdded(
+            vault_,
+            reserve_,
+            vault_,
+            params_.yieldBuybackShare,
+            params_.sellShares
+        );
         emit IYieldRepurchaseFacilityV2.NextYieldSet(reserve_, params_.nextYield);
     }
 

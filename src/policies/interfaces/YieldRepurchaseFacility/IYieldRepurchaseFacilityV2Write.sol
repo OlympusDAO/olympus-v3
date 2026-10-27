@@ -32,6 +32,12 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      may be OHM, the vault may not equal its own reserve, and neither may equal
     ///      the vault or the reserve of a registered asset.
     ///
+    ///      The facility is designed for vaults whose conversion rate does not decrease.
+    ///      The yield projection credits the increase of the rate since the snapshot of
+    ///      the last weekly reset, and every weekly reset overwrites the snapshot with
+    ///      the current rate: after a decrease of the rate, its recovery up to the
+    ///      earlier level is projected as yield.
+    ///
     ///      The snapshot parameters are the baseline of the first yield projection, and
     ///      `nextYield_` is withdrawn into the buyback pool at the first weekly reset.
     ///      Emits `AssetAdded` and `NextYieldSet`, and `BackingVaultSet` when

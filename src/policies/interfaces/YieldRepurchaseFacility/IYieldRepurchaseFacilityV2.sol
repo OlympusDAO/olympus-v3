@@ -55,8 +55,17 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Emitted when a vault is registered as a reserve asset.
     /// @param vault The registered vault.
     /// @param reserve The vault's underlying reserve token.
+    /// @param shareToken The ERC20 token representing the vault shares: the vault itself.
     /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` = 100%).
-    event AssetAdded(address indexed vault, address indexed reserve, uint256 yieldBuybackShare);
+    /// @param sellShares Whether bond markets pay out the vault shares instead of the
+    ///        reserve.
+    event AssetAdded(
+        address indexed vault,
+        address indexed reserve,
+        address indexed shareToken,
+        uint256 yieldBuybackShare,
+        bool sellShares
+    );
 
     /// @notice Emitted when a vault is de-registered.
     /// @param vault The removed vault.

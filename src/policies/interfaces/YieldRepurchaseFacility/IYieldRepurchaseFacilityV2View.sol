@@ -7,6 +7,10 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 /// @title IYieldRepurchaseFacilityV2View
 /// @notice The read-only surface of the multi-asset Yield Repurchase Facility (YRF)
 ///         policy.
+/// @dev The facility also implements `IYieldRepurchaseRecipient`, the read-only surface
+///      through which a sender of protocol yield discovers the registered vaults:
+///      `getVaults` is shared with this interface, and `getVaultConfig` and
+///      `getAssetVault` are declared there.
 interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     // ============ VALIDATION ============ //
 
