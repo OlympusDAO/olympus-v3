@@ -206,6 +206,13 @@ interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     /// @return The configurator address, or the zero address while none is set.
     function configurator() external view returns (address);
 
+    /// @notice Returns the dependencies of the facility: the Kernel modules, the OHM token,
+    ///         the backing oracle and vault, the bond contracts, and the market parameters.
+    /// @dev The values are the ones the individual getters report at the time of the call,
+    ///      assembled into one structure.
+    /// @return The dependencies of the facility.
+    function context() external view returns (Context memory);
+
     /// @notice Returns the exclusive upper bound of the re-enable grace window, in
     ///         seconds: the window must be strictly shorter than one weekly cycle.
     /// @return The bound, in seconds.

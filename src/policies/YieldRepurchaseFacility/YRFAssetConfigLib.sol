@@ -85,19 +85,18 @@ library YRFAssetConfigLib {
     ///        (`previewRedeem`, `previewWithdraw`, and `previewDeposit`; for a vault with
     ///        asynchronous redemption `convertToAssets`, `convertToShares`, and
     ///        `previewDeposit`) reverts, returns less than one word, or returns zero.
-    ///      - The `price_.getPriceIn(ohm_, reserve)` probe reverts or returns zero.
+    ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts or returns zero.
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
     /// @param reserveVaults_ The facility's reserve-to-vault lookup storage.
-    /// @param price_ The PRICE module used for the reserve price probe.
-    /// @param ohm_ The OHM token address.
+    /// @param context_ The dependencies of the facility: the PRICE module is used for the
+    ///        reserve price probe and the OHM token for the pool conflict checks.
     /// @param params_ The registration inputs.
     function addAsset(
         mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
         address[] storage vaults_,
         mapping(address => address) storage reserveVaults_,
-        PRICEv2 price_,
-        address ohm_,
+        IYieldRepurchaseFacilityV2.Context memory context_,
         AddAssetParams memory params_
     ) external {
         address vault_ = params_.vault;
@@ -121,7 +120,7 @@ library YRFAssetConfigLib {
         if (IERC20Metadata(shareToken_).decimals() != reserveDecimals)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-        _requireNoPoolConflict(assetConfigs_, vaults_, ohm_, vault_, shareToken_, reserve_);
+        _requireNoPoolConflict(assetConfigs_, vaults_, context_.ohm, vault_, shareToken_, reserve_);
 
         // The share decimals equal the reserve decimals, so one unit is both one whole
         // share and one whole reserve token.
@@ -134,7 +133,7 @@ library YRFAssetConfigLib {
         // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
         // reserve must resolve against OHM at registration; a PRICE revert (for example
         // an unregistered reserve) bubbles up.
-        if (price_.getPriceIn(ohm_, reserve_) == 0)
+        if (PRICEv2(context_.price).getPriceIn(context_.ohm, reserve_) == 0)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ReserveNotPriceable(
                 reserve_
             );
@@ -179,17 +178,12 @@ library YRFAssetConfigLib {
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
     /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
-    /// @param chreg_ The Clearinghouse registry module, read for the balance snapshots.
-    /// @param trsry_ The treasury address, read for the balance snapshots.
-    /// @param backingVault_ The backing vault, or the zero address when none is
-    ///        designated.
+    /// @param context_ The dependencies of the facility, read for the balance snapshots.
     function resetCycle(
         mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
         address[] storage vaults_,
         IYieldRepurchaseFacilityV2.NextYieldSeed[] memory nextYieldSeeds_,
-        CHREGv1 chreg_,
-        address trsry_,
-        address backingVault_
+        IYieldRepurchaseFacilityV2.Context memory context_
     ) external {
         uint256 vaultsLength = vaults_.length;
         for (uint256 i; i < vaultsLength; ++i) {
@@ -198,7 +192,7 @@ library YRFAssetConfigLib {
 
             config.nextYield = 0;
             config.unfundedYield = 0;
-            _refreshSnapshots(config, chreg_, trsry_, backingVault_);
+            _refreshSnapshots(config, context_);
         }
 
         uint256 seedsLength = nextYieldSeeds_.length;
@@ -226,17 +220,12 @@ library YRFAssetConfigLib {
 
     /// @notice Refreshes the vault's conversion-rate and reserve-balance snapshots.
     /// @param config_ The vault's configuration storage.
-    /// @param chreg_ The Clearinghouse registry module.
-    /// @param trsry_ The treasury address.
-    /// @param backingVault_ The backing vault, or the zero address when none is
-    ///        designated.
+    /// @param context_ The dependencies of the facility, read for the balance snapshot.
     function refreshSnapshots(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        CHREGv1 chreg_,
-        address trsry_,
-        address backingVault_
+        IYieldRepurchaseFacilityV2.Context memory context_
     ) external {
-        _refreshSnapshots(config_, chreg_, trsry_, backingVault_);
+        _refreshSnapshots(config_, context_);
     }
 
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
@@ -244,18 +233,14 @@ library YRFAssetConfigLib {
     ///      also the balances of the active Clearinghouses, valued by the redemption
     ///      class of the vault (`YRFVaultLib.sharesToAssets`, floor).
     /// @param config_ The configuration storage of the vault to value.
-    /// @param chreg_ The Clearinghouse registry module.
-    /// @param trsry_ The treasury address.
-    /// @param backingVault_ The backing vault, or the zero address when none is
-    ///        designated.
+    /// @param context_ The dependencies of the facility: the treasury, the CHREG module,
+    ///        and the backing vault.
     /// @return balance The reserve value, in reserve units.
     function protocolReserveBalance(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        CHREGv1 chreg_,
-        address trsry_,
-        address backingVault_
+        IYieldRepurchaseFacilityV2.Context memory context_
     ) external view returns (uint256 balance) {
-        return _protocolReserveBalance(config_, chreg_, trsry_, backingVault_);
+        return _protocolReserveBalance(config_, context_);
     }
 
     /// @notice Returns the amount of `token_` the facility can rescue to the treasury.
@@ -457,9 +442,7 @@ library YRFAssetConfigLib {
     /// @notice Refreshes the snapshots of a vault configuration in place.
     function _refreshSnapshots(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        CHREGv1 chreg_,
-        address trsry_,
-        address backingVault_
+        IYieldRepurchaseFacilityV2.Context memory context_
     ) private {
         // One whole share: `addAsset` requires the share decimals to equal the reserve
         // decimals
@@ -467,29 +450,23 @@ library YRFAssetConfigLib {
             config_,
             10 ** config_.reserveDecimals
         );
-        config_.lastReserveBalance = _protocolReserveBalance(
-            config_,
-            chreg_,
-            trsry_,
-            backingVault_
-        );
+        config_.lastReserveBalance = _protocolReserveBalance(config_, context_);
     }
 
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
     function _protocolReserveBalance(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        CHREGv1 chreg_,
-        address trsry_,
-        address backingVault_
+        IYieldRepurchaseFacilityV2.Context memory context_
     ) private view returns (uint256 balance) {
         address vault_ = config_.vault;
         IERC20 shareToken = IERC20(config_.shareToken);
-        uint256 totalShares = shareToken.balanceOf(trsry_);
+        uint256 totalShares = shareToken.balanceOf(context_.trsry);
 
-        if (vault_ == backingVault_) {
-            uint256 activeCount = chreg_.activeCount();
+        if (vault_ == context_.backingVault) {
+            CHREGv1 chreg = CHREGv1(context_.chreg);
+            uint256 activeCount = chreg.activeCount();
             for (uint256 i; i < activeCount; ++i) {
-                totalShares += shareToken.balanceOf(chreg_.active(i));
+                totalShares += shareToken.balanceOf(chreg.active(i));
             }
         }
 

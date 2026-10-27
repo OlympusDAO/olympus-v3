@@ -471,6 +471,46 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ STRUCTS ============ //
 
+    /// @notice The dependencies of the facility: the Kernel modules, the OHM token, the
+    ///         backing oracle and vault, the bond contracts, and the market parameters,
+    ///         assembled from the facility's storage and immutable bindings.
+    /// @dev Returned by `context()` of the read-only surface. The addresses are the ones
+    ///      the facility uses at the time of the call: the modules are rebound by the
+    ///      Kernel through `configureDependencies`, the others through the facility's
+    ///      setters.
+    /// @param trsry The TRSRY module.
+    /// @param price The PRICE module.
+    /// @param chreg The CHREG module.
+    /// @param ohm The OHM token.
+    /// @param ohmDecimals The OHM token decimals.
+    /// @param oracleDecimals The decimals of the prices the PRICE module reports: 18, the
+    ///        decimals of the backing value.
+    /// @param backingOracle The backing oracle policy.
+    /// @param backingVault The backing vault, or the zero address when none is designated.
+    /// @param backingReserve The reserve token of the backing vault, or the zero address
+    ///        when no backing vault is designated.
+    /// @param bondAuctioneer The SDA auctioneer the bond markets are created on.
+    /// @param bondTeller The teller trusted to invoke the bond callback.
+    /// @param initialDiscount The discount applied to the oracle price when a bond market
+    ///        opens (`1e18` = 100%).
+    /// @param maxPricePremium The premium over the oracle price at which a bond market's
+    ///        minimum price is placed (`1e18` = 100%).
+    struct Context {
+        address trsry;
+        address price;
+        address chreg;
+        address ohm;
+        uint8 ohmDecimals;
+        uint8 oracleDecimals;
+        address backingOracle;
+        address backingVault;
+        address backingReserve;
+        address bondAuctioneer;
+        address bondTeller;
+        uint256 initialDiscount;
+        uint256 maxPricePremium;
+    }
+
     /// @notice The configuration and accounting of a registered reserve asset. The
     ///         facility's balances of the share token and of the reserve token are the
     ///         asset's buyback pool and are not mirrored by counters.

@@ -30,27 +30,28 @@ library YRFClearinghouseLib {
 
     /// @notice Sums the weekly interest of every registry Clearinghouse that counts
     ///         toward the backing yield.
-    /// @dev Zero when `backingReserve_` is the zero address. The reads are tolerant, so
-    ///      an incompatible registry entry contributes nothing.
-    /// @param chreg_ The Clearinghouse registry module.
-    /// @param backingReserve_ The reserve token of the backing vault, or the zero
-    ///        address when no backing vault is designated.
+    /// @dev Zero when no backing vault is designated (the backing reserve of the context
+    ///      is the zero address). The reads are tolerant, so an incompatible registry entry
+    ///      contributes nothing.
+    /// @param context_ The dependencies of the facility: the CHREG module and the backing
+    ///        reserve.
     /// @param receivablesOffsets_ The caller's per-Clearinghouse receivables offsets.
     /// @param includedClearinghouses_ The caller's per-Clearinghouse inclusion flags.
     /// @return yield The weekly interest, in backing reserve units.
     function clearinghouseYield(
-        CHREGv1 chreg_,
-        address backingReserve_,
+        IYieldRepurchaseFacilityV2.Context memory context_,
         mapping(address => uint256) storage receivablesOffsets_,
         mapping(address => bool) storage includedClearinghouses_
     ) external view returns (uint256 yield) {
+        address backingReserve_ = context_.backingReserve;
         if (backingReserve_ == address(0)) return 0;
 
-        uint256 len = chreg_.registryCount();
+        CHREGv1 chreg = CHREGv1(context_.chreg);
+        uint256 len = chreg.registryCount();
         for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
-            address ch = chreg_.registry(i);
+            address ch = chreg.registry(i);
             if (!_countsTowardBackingYield(ch, backingReserve_, includedClearinghouses_)) continue;
             yield += _clearinghouseInterest(readPrincipalReceivables(ch), receivablesOffsets_[ch]);
         }
@@ -58,24 +59,24 @@ library YRFClearinghouseLib {
 
     /// @notice Emits `ClearinghouseDebtTokenMismatch` for every registry Clearinghouse
     ///         that does not count toward the backing yield.
-    /// @dev A no-op when `backingReserve_` is the zero address. The event is emitted by
-    ///      the calling facility.
-    /// @param chreg_ The Clearinghouse registry module.
-    /// @param backingReserve_ The reserve token of the backing vault, or the zero
-    ///        address when no backing vault is designated.
+    /// @dev A no-op when no backing vault is designated (the backing reserve of the
+    ///      context is the zero address). The event is emitted by the calling facility.
+    /// @param context_ The dependencies of the facility: the CHREG module and the backing
+    ///        reserve.
     /// @param includedClearinghouses_ The caller's per-Clearinghouse inclusion flags.
     function emitClearinghouseMismatches(
-        CHREGv1 chreg_,
-        address backingReserve_,
+        IYieldRepurchaseFacilityV2.Context memory context_,
         mapping(address => bool) storage includedClearinghouses_
     ) external {
+        address backingReserve_ = context_.backingReserve;
         if (backingReserve_ == address(0)) return;
 
-        uint256 len = chreg_.registryCount();
+        CHREGv1 chreg = CHREGv1(context_.chreg);
+        uint256 len = chreg.registryCount();
         for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
-            address ch = chreg_.registry(i);
+            address ch = chreg.registry(i);
             if (!_countsTowardBackingYield(ch, backingReserve_, includedClearinghouses_))
                 emit IYieldRepurchaseFacilityV2.ClearinghouseDebtTokenMismatch(ch);
         }
@@ -91,15 +92,19 @@ library YRFClearinghouseLib {
     ///      Reverts if:
     ///      - `clearinghouse_` is not present in the CHREG registry.
     ///      - The `principalReceivables()` read reverts.
-    /// @param chreg_ The Clearinghouse registry module.
+    /// @param context_ The dependencies of the facility: the CHREG module.
     /// @param clearinghouse_ The Clearinghouse address to validate.
-    function validateIncludable(CHREGv1 chreg_, address clearinghouse_) external view {
+    function validateIncludable(
+        IYieldRepurchaseFacilityV2.Context memory context_,
+        address clearinghouse_
+    ) external view {
         bool registered;
-        uint256 len = chreg_.registryCount();
+        CHREGv1 chreg = CHREGv1(context_.chreg);
+        uint256 len = chreg.registryCount();
         for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
-            if (chreg_.registry(i) == clearinghouse_) {
+            if (chreg.registry(i) == clearinghouse_) {
                 registered = true;
                 break;
             }

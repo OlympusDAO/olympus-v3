@@ -14,13 +14,11 @@ import {IBackingOracle} from "src/policies/interfaces/IBackingOracle.sol";
 import {IPeriodicTask} from "src/interfaces/IPeriodicTask.sol";
 import {IBasicRescueable} from "src/interfaces/IBasicRescueable.sol";
 import {IVersioned} from "src/interfaces/IVersioned.sol";
-import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Config.sol";
 import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2View.sol";
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
-import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
@@ -31,6 +29,7 @@ import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMark
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 import {YRFVaultLib} from "src/policies/YieldRepurchaseFacility/YRFVaultLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -136,22 +135,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev Four 32-byte words: `initialDiscount`, `maxPricePremium`, the seed array
     ///      offset, and the seed array length.
     uint256 private constant _MIN_ENABLE_PARAMS_LENGTH = 128;
-
-    /// @notice Keycode for the TRSRY module dependency.
-    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("TRSRY")`.
-    Keycode internal constant _KEYCODE_TRSRY = Keycode.wrap(0x5452535259); // toKeycode("TRSRY")
-
-    /// @notice Keycode for the PRICE module dependency.
-    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("PRICE")`.
-    Keycode internal constant _KEYCODE_PRICE = Keycode.wrap(0x5052494345); // toKeycode("PRICE")
-
-    /// @notice Keycode for the CHREG module dependency.
-    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("CHREG")`.
-    Keycode internal constant _KEYCODE_CHREG = Keycode.wrap(0x4348524547); // toKeycode("CHREG")
-
-    /// @notice Keycode for the ROLES module dependency.
-    /// @dev Pre-computed to avoid the runtime cost of `toKeycode("ROLES")`.
-    Keycode internal constant _KEYCODE_ROLES = Keycode.wrap(0x524f4c4553); // toKeycode("ROLES")
 
     // ============ IMMUTABLES ============ //
 
@@ -296,7 +279,9 @@ contract YieldRepurchaseFacilityV2 is
         _OHM = IERC20(ohm_);
         _OHM_DECIMALS = IERC20Metadata(ohm_).decimals();
 
-        _setBackingOracle(backingOracle_);
+        // The deployment is not activated in the Kernel yet, so the registry activation of
+        // the oracle is not required here
+        _setBackingOracle(backingOracle_, false);
         _setBondContracts(bondAuctioneer_);
         _setStepGasLimit(stepGasLimit_);
 
@@ -304,7 +289,10 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc Policy
-    /// @dev Reverts if:
+    /// @dev The modules are resolved and their versions validated by the linked
+    ///      `YieldRepurchaseFacilityV2DependenciesLib`.
+    ///
+    ///      Reverts if:
     ///      - Any of the TRSRY, PRICE, CHREG, or ROLES modules does not report major
     ///        version 1.
     ///      - The PRICE module reports a minor version below 2. The facility prices the
@@ -312,40 +300,16 @@ contract YieldRepurchaseFacilityV2 is
     ///        version 1.2.
     ///      - `PRICE.decimals()` is not 18, the decimals of the backing value.
     function configureDependencies() external override returns (Keycode[] memory dependencies) {
-        dependencies = new Keycode[](4);
-        dependencies[0] = _KEYCODE_TRSRY;
-        dependencies[1] = _KEYCODE_PRICE;
-        dependencies[2] = _KEYCODE_CHREG;
-        dependencies[3] = _KEYCODE_ROLES;
+        YieldRepurchaseFacilityV2DependenciesLib.Modules memory modules;
+        (dependencies, modules) = YieldRepurchaseFacilityV2DependenciesLib.configureDependencies(
+            kernel
+        );
 
-        TRSRY = TRSRYv1(getModuleAddress(dependencies[0]));
-        PRICE = PRICEv2(getModuleAddress(dependencies[1]));
-        CHREG = CHREGv1(getModuleAddress(dependencies[2]));
-        ROLES = ROLESv1(getModuleAddress(dependencies[3]));
-
-        // TRSRY compatibility depends only on its major version
-        // forge-lint: disable-next-line(unused-return)
-        (uint8 trsryMajor, ) = TRSRY.VERSION();
-        (uint8 priceMajor, uint8 priceMinor) = PRICE.VERSION();
-        // CHREG compatibility depends only on its major version
-        // forge-lint: disable-next-line(unused-return)
-        (uint8 chregMajor, ) = CHREG.VERSION();
-        // ROLES compatibility depends only on its major version
-        // forge-lint: disable-next-line(unused-return)
-        (uint8 rolesMajor, ) = ROLES.VERSION();
-        if (trsryMajor != 1 || priceMajor != 1 || chregMajor != 1 || rolesMajor != 1)
-            revert Policy_WrongModuleVersion(abi.encode([1, 1, 1, 1]));
-
-        // The `getPriceIn` surface is provided by the PRICE module from version 1.2
-        if (priceMinor < 2) revert Policy_WrongModuleVersion(abi.encode([1, 2]));
-
-        // The oracle price is compared against the 18-decimal backing value, so the
-        // oracle must report 18 decimals.
-        _oracleDecimals = PRICE.decimals();
-        if (_oracleDecimals != YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS)
-            revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
-
-        return dependencies;
+        TRSRY = TRSRYv1(modules.trsry);
+        PRICE = PRICEv2(modules.price);
+        CHREG = CHREGv1(modules.chreg);
+        ROLES = ROLESv1(modules.roles);
+        _oracleDecimals = modules.oracleDecimals;
     }
 
     /// @inheritdoc Policy
@@ -357,16 +321,7 @@ contract YieldRepurchaseFacilityV2 is
         override
         returns (Permissions[] memory permissions)
     {
-        permissions = new Permissions[](2);
-        permissions[0] = Permissions({
-            keycode: _KEYCODE_TRSRY,
-            funcSelector: TRSRYv1.withdrawReserves.selector
-        });
-        permissions[1] = Permissions({
-            keycode: _KEYCODE_TRSRY,
-            funcSelector: TRSRYv1.increaseWithdrawApproval.selector
-        });
-        return permissions;
+        return YieldRepurchaseFacilityV2DependenciesLib.permissions();
     }
 
     /// @inheritdoc IVersioned
@@ -422,8 +377,8 @@ contract YieldRepurchaseFacilityV2 is
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
 
-        _requireValidConfigurator(configurator);
-        _requireCallbackAuthorized();
+        YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator);
+        YieldRepurchaseFacilityV2DependenciesLib.requireCallbackAuthorized(bondAuctioneer);
 
         (
             uint256 initialDiscount_,
@@ -450,14 +405,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if a seed references an unregistered or disabled vault.
     /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
     function _resetCycle(NextYieldSeed[] memory nextYieldSeeds_) private {
-        YRFAssetConfigLib.resetCycle(
-            _assetConfigs,
-            _vaults,
-            nextYieldSeeds_,
-            CHREG,
-            address(TRSRY),
-            backingVault
-        );
+        YRFAssetConfigLib.resetCycle(_assetConfigs, _vaults, nextYieldSeeds_, _context());
 
         _epoch = YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH - 1;
         // The restart opens the seeding window of `seedCycle`, closed by the first beat
@@ -536,7 +484,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        facility as its `facility()`.
     function _beforeReEnable() internal override(ReEnabler, ReEnablerGracePeriod) {
         super._beforeReEnable();
-        _requireValidConfigurator(configurator);
+        YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator);
     }
 
     /// @inheritdoc ReEnablerGracePeriod
@@ -751,18 +699,13 @@ contract YieldRepurchaseFacilityV2 is
         // counter to 20. The write shares the slot of the epoch counter.
         _cycleSeedable = false;
 
-        address backingReserve = _backingReserve();
+        Context memory context_ = _context();
         uint256 clearinghouseYield = YRFClearinghouseLib.clearinghouseYield(
-            CHREG,
-            backingReserve,
+            context_,
             _receivablesOffsets,
             _includedClearinghouses
         );
-        YRFClearinghouseLib.emitClearinghouseMismatches(
-            CHREG,
-            backingReserve,
-            _includedClearinghouses
-        );
+        YRFClearinghouseLib.emitClearinghouseMismatches(context_, _includedClearinghouses);
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
@@ -813,12 +756,7 @@ contract YieldRepurchaseFacilityV2 is
 
         // The balance snapshot is taken after the funding withdrawal, so it excludes the
         // shares moved to the facility.
-        config.lastReserveBalance = YRFAssetConfigLib.protocolReserveBalance(
-            config,
-            CHREG,
-            address(TRSRY),
-            backingVault
-        );
+        config.lastReserveBalance = YRFAssetConfigLib.protocolReserveBalance(config, _context());
     }
 
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
@@ -1280,6 +1218,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The yield buyback share exceeds 100% (`1e18`).
     ///      - `setAsBackingVault_` is set together with `sellShares_`.
     ///      - `setAsBackingVault_` is set while a backing vault is already designated.
+    // The registration is gated to the configurator, and the designation below writes only
+    // after the linked library has validated and registered the vault.
+    // forge-lint: disable-next-item(reentrancy-no-eth)
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
@@ -1293,8 +1234,7 @@ contract YieldRepurchaseFacilityV2 is
             _assetConfigs,
             _vaults,
             _reserveVaults,
-            PRICE,
-            address(_OHM),
+            _context(),
             YRFAssetConfigLib.AddAssetParams({
                 vault: vault_,
                 yieldBuybackShare: yieldBuybackShare_,
@@ -1416,11 +1356,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        facility's kernel as its own.
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
-        _requireNonzeroAddress(backingOracle_, "backingOracle");
-        if (!kernel.isPolicyActive(Policy(backingOracle_)))
-            revert IYieldRepurchaseFacilityV2_InvalidBackingOracle(backingOracle_);
-
-        _setBackingOracle(backingOracle_);
+        _setBackingOracle(backingOracle_, true);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1437,7 +1373,7 @@ contract YieldRepurchaseFacilityV2 is
     ///        facility as its `facility()`.
     // forge-lint: disable-next-item(missing-zero-check)
     function setConfigurator(address configurator_) external override givenDisabled onlyAdminRole {
-        _requireValidConfigurator(configurator_);
+        YieldRepurchaseFacilityV2DependenciesLib.validateConfigurator(kernel, configurator_);
 
         configurator = configurator_;
         emit ConfiguratorSet(configurator_);
@@ -1552,31 +1488,19 @@ contract YieldRepurchaseFacilityV2 is
         _setBondContracts(bondAuctioneer_);
     }
 
-    /// @notice Sets the backing oracle.
-    /// @dev The registry activation of the oracle is checked only by the admin setter:
-    ///      this shared path also runs in the constructor, before the deployment is
-    ///      activated in the kernel.
-    ///
-    ///      Reverts if:
+    /// @notice Sets the backing oracle after the validation of the linked
+    ///         `YieldRepurchaseFacilityV2DependenciesLib`.
+    /// @dev Reverts if:
     ///      - `backingOracle_` is the zero address.
+    ///      - `requireActive_` is set and the oracle is not an active policy of the kernel.
     ///      - The oracle does not report the facility's kernel as its own.
     ///      - The oracle does not report the 18 decimals of the backing value.
-    function _setBackingOracle(address backingOracle_) internal {
-        _requireNonzeroAddress(backingOracle_, "backingOracle");
-
-        // The oracle is a policy of the same installation: an oracle wired to a
-        // different kernel, or an address without a kernel (for example a token whose
-        // `decimals()` also reports 18), is rejected.
-        if (address(Policy(backingOracle_).kernel()) != address(kernel))
-            revert IYieldRepurchaseFacilityV2_InvalidBackingOracle(backingOracle_);
-
-        // The backing value is compared against the 18-decimal oracle prices and scaled
-        // by the 18-decimal convention in the burn pricing, so an oracle with any other
-        // scale is rejected.
-        if (
-            IBackingOracle(backingOracle_).decimals() !=
-            YieldRepurchaseFacilityV2Constants.BACKING_DECIMALS
-        ) revert IYieldRepurchaseFacilityV2_UnsupportedOracleDecimals();
+    function _setBackingOracle(address backingOracle_, bool requireActive_) private {
+        YieldRepurchaseFacilityV2DependenciesLib.validateBackingOracle(
+            kernel,
+            backingOracle_,
+            requireActive_
+        );
 
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
@@ -1607,15 +1531,14 @@ contract YieldRepurchaseFacilityV2 is
     ///        its teller.
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
-    function _setBondContracts(address bondAuctioneer_) internal {
-        _requireNonzeroAddress(bondAuctioneer_, "bondAuctioneer");
-        address bondTeller_ = address(IBondAuctioneer(bondAuctioneer_).getTeller());
-        _requireNonzeroAddress(bondTeller_, "bondTeller");
+    function _setBondContracts(address bondAuctioneer_) private {
+        address bondTeller_ = YieldRepurchaseFacilityV2DependenciesLib.resolveBondContracts(
+            bondAuctioneer_,
+            isEnabled
+        );
 
         bondAuctioneer = bondAuctioneer_;
         bondTeller = bondTeller_;
-
-        if (isEnabled) _requireCallbackAuthorized();
 
         emit BondContractsSet(bondAuctioneer_, bondTeller_);
     }
@@ -1810,7 +1733,7 @@ contract YieldRepurchaseFacilityV2 is
         if (_includedClearinghouses[clearinghouse_])
             revert IYieldRepurchaseFacilityV2_ClearinghouseIncluded();
 
-        YRFClearinghouseLib.validateIncludable(CHREG, clearinghouse_);
+        YRFClearinghouseLib.validateIncludable(_context(), clearinghouse_);
 
         _includedClearinghouses[clearinghouse_] = true;
         emit ClearinghouseIncluded(clearinghouse_);
@@ -1849,7 +1772,7 @@ contract YieldRepurchaseFacilityV2 is
 
         config.isAssetEnabled = true;
         config.unfundedYield = 0;
-        YRFAssetConfigLib.refreshSnapshots(config, CHREG, address(TRSRY), backingVault);
+        YRFAssetConfigLib.refreshSnapshots(config, _context());
 
         emit AssetEnabled(vault_);
         _setNextYield(config, 0);
@@ -2156,38 +2079,6 @@ contract YieldRepurchaseFacilityV2 is
         emit NextYieldSet(config_.reserve, nextYield_);
     }
 
-    /// @notice Reverts unless the facility is authorized as a market callback on the
-    ///         bond auctioneer.
-    function _requireCallbackAuthorized() private view {
-        if (!IBondAuctioneer(bondAuctioneer).callbackAuthorized(address(this)))
-            revert IYieldRepurchaseFacilityV2_CallbackNotAuthorized();
-    }
-
-    /// @notice Reverts unless `configurator_` is a configuration policy bound to this
-    ///         facility.
-    /// @dev Reverts with `IYieldRepurchaseFacilityV2_InvalidConfigurator` if:
-    ///      - `configurator_` is the zero address.
-    ///      - `configurator_` is not an active policy of the facility's kernel.
-    ///      - `configurator_` does not report the facility's kernel as its own.
-    ///      - `configurator_` does not advertise `IYieldRepurchaseFacilityV2Config` through
-    ///        ERC165, which includes a `supportsInterface` query that reverts.
-    ///      - `facility()` does not return this facility.
-    ///
-    ///      An active policy that does not implement `kernel()` or `facility()` reverts in
-    ///      the call itself.
-    function _requireValidConfigurator(address configurator_) private view {
-        if (
-            configurator_ == address(0) ||
-            !kernel.isPolicyActive(Policy(configurator_)) ||
-            address(Policy(configurator_).kernel()) != address(kernel) ||
-            !ERC165Checker.supportsInterface(
-                configurator_,
-                type(IYieldRepurchaseFacilityV2Config).interfaceId
-            ) ||
-            IYieldRepurchaseFacilityV2Config(configurator_).facility() != address(this)
-        ) revert IYieldRepurchaseFacilityV2_InvalidConfigurator(configurator_);
-    }
-
     /// @notice Reverts unless the asset is enabled.
     // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
     // forge-lint: disable-next-item(require-revert-in-loop)
@@ -2407,8 +2298,7 @@ contract YieldRepurchaseFacilityV2 is
         yield = _projectNextYield(
             config,
             YRFClearinghouseLib.clearinghouseYield(
-                CHREG,
-                _backingReserve(),
+                _context(),
                 _receivablesOffsets,
                 _includedClearinghouses
             )
@@ -2417,13 +2307,7 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
-        return
-            YRFAssetConfigLib.protocolReserveBalance(
-                _requireRegistered(vault_),
-                CHREG,
-                address(TRSRY),
-                backingVault
-            );
+        return YRFAssetConfigLib.protocolReserveBalance(_requireRegistered(vault_), _context());
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -2457,6 +2341,36 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     function isCycleSeedable() external view override returns (bool) {
         return _cycleSeedable;
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
+    function context() external view override returns (Context memory) {
+        return _context();
+    }
+
+    /// @notice Assembles the dependencies of the facility for the linked libraries.
+    /// @dev The structure is built once per entry point and passed to the libraries,
+    ///      which cannot read the immutable bindings of the facility through a
+    ///      `DELEGATECALL`.
+    function _context() private view returns (Context memory context_) {
+        address backingVault_ = backingVault;
+        context_ = Context({
+            trsry: address(TRSRY),
+            price: address(PRICE),
+            chreg: address(CHREG),
+            ohm: address(_OHM),
+            ohmDecimals: _OHM_DECIMALS,
+            oracleDecimals: _oracleDecimals,
+            backingOracle: backingOracle,
+            backingVault: backingVault_,
+            backingReserve: backingVault_ == address(0)
+                ? address(0)
+                : _assetConfigs[backingVault_].reserve,
+            bondAuctioneer: bondAuctioneer,
+            bondTeller: bondTeller,
+            initialDiscount: initialDiscount,
+            maxPricePremium: maxPricePremium
+        });
     }
 
     // ============ RESCUE ============ //
