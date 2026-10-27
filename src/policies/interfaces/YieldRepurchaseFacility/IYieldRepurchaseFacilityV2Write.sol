@@ -107,10 +107,10 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @notice Sets the configurator: the configuration policy that is the only caller of
     ///         the configurator-restricted functions.
     /// @dev Callable by the admin role, only while the facility is disabled. The
-    ///      configurator must be an active policy of the facility's kernel, advertise
-    ///      `IYieldRepurchaseFacilityV2Config` through ERC165, and report this facility as
-    ///      its `facility()`. `enable` and `reEnable` check the same conditions. Emits
-    ///      `ConfiguratorSet`.
+    ///      configurator must be an active policy of the facility's kernel, report that
+    ///      kernel as its own, advertise `IYieldRepurchaseFacilityV2Config` through ERC165,
+    ///      and report this facility as its `facility()`. `enable` and `reEnable` check the
+    ///      same conditions. Emits `ConfiguratorSet`.
     /// @param configurator_ The configuration policy.
     function setConfigurator(address configurator_) external;
 

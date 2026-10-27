@@ -388,8 +388,9 @@ interface IYieldRepurchaseFacilityV2 {
     error IYieldRepurchaseFacilityV2_OnlyConfigurator(address caller);
 
     /// @notice Thrown when the configurator is unset, is not an active policy of the
-    ///         facility's kernel, does not advertise `IYieldRepurchaseFacilityV2Config`, or
-    ///         is not bound to the facility.
+    ///         facility's kernel, does not report that kernel as its own, does not
+    ///         advertise `IYieldRepurchaseFacilityV2Config`, or is not bound to the
+    ///         facility.
     /// @param configurator The rejected configurator address.
     error IYieldRepurchaseFacilityV2_InvalidConfigurator(address configurator);
 

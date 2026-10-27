@@ -23,7 +23,8 @@ pragma solidity ^0.8.24;
 ///      the yrf_admin role within the grace window after a disable, and `setGracePeriod` for the
 ///      admin role while the policy is enabled. The grace window must be strictly shorter than
 ///      `MAX_GRACE_PERIOD`. Enabling and re-enabling require the bound facility to be an active
-///      policy of the same kernel and to name this policy as its configurator.
+///      policy of the same kernel, to report that kernel as its own, and to name this policy as
+///      its configurator.
 interface IYieldRepurchaseFacilityV2Config {
     // ============ EVENTS ============ //
 
