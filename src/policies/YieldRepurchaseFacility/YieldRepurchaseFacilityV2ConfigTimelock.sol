@@ -41,11 +41,13 @@ import {EMERGENCY_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions
 ///      to hold the yrf_admin role, and the configuration policy to name this policy as its
 ///      config operator. Every sub-action must target the configuration policy with a
 ///      supported operator setter and a payload whose canonical re-encoding equals the stored
-///      bytes, and must pass the facility's validation mirror of the forwarded function.
-///      Execution is permissionless once the delay elapses and requires the same enabled
-///      states and the config operator binding; the shared base then checks the reserved keys
-///      and the state hashes before each dispatch. The facility may be disabled at queue and
-///      execution time: its configuration setters apply while it is disabled.
+///      bytes, and must pass the validation function of the configuration policy for the
+///      forwarded setter, which applies the value rules of the facility setter to the
+///      facility's live state. Execution is permissionless once the delay elapses and
+///      requires the same enabled states and the config operator binding; the shared base
+///      then checks the reserved keys and the state hashes before each dispatch. The facility
+///      may be disabled at queue and execution time: its configuration setters apply while it
+///      is disabled.
 ///
 ///      The domains, keys, and hash preimages are those documented by
 ///      `IYieldRepurchaseFacilityV2ConfigTimelock`, scoped to the configuration policy. An
@@ -233,7 +235,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateSetYieldBuybackShare` of the facility rejects the arguments.
+    ///      - `validateSetYieldBuybackShare` of the configuration policy rejects the arguments.
     ///      - The share domain of `vault_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueSetYieldBuybackShare(
@@ -254,7 +256,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateSetInitialDiscount` of the facility rejects the argument.
+    ///      - `validateSetInitialDiscount` of the configuration policy rejects the argument.
     ///      - The initial discount domain is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueSetInitialDiscount(
@@ -274,7 +276,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateSetMaxPricePremium` of the facility rejects the argument.
+    ///      - `validateSetMaxPricePremium` of the configuration policy rejects the argument.
     ///      - The max price premium domain is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueSetMaxPricePremium(
@@ -294,7 +296,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateIncreaseClearinghouseOffset` of the facility rejects the arguments.
+    ///      - `validateIncreaseClearinghouseOffset` of the configuration policy rejects the
+    ///        arguments.
     ///      - The offset domain of `clearinghouse_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueIncreaseClearinghouseOffset(
@@ -315,7 +318,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateDecreaseNextYield` of the facility rejects the arguments.
+    ///      - `validateDecreaseNextYield` of the configuration policy rejects the arguments.
     ///      - The next yield domain of `vault_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueDecreaseNextYield(
@@ -337,7 +340,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateExcludeClearinghouse` of the facility rejects the argument.
+    ///      - `validateExcludeClearinghouse` of the configuration policy rejects the argument.
     ///      - The inclusion domain of `clearinghouse_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueExcludeClearinghouse(
@@ -357,7 +360,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateEnableAsset` of the facility rejects the argument.
+    ///      - `validateEnableAsset` of the configuration policy rejects the argument.
     ///      - The status domain or the next yield domain of `vault_` is reserved by an
     ///        unresolved action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueEnableAsset(address vault_) external override returns (uint64 actionId) {
@@ -375,7 +378,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      - The configuration policy is disabled.
     ///      - The caller does not hold the yrf_admin role.
     ///      - The configuration policy does not name this policy as its config operator.
-    ///      - `validateDisableAsset` of the facility rejects the argument.
+    ///      - `validateDisableAsset` of the configuration policy rejects the argument.
     ///      - The status domain of `vault_` is reserved by an unresolved action
     ///        (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     function queueDisableAsset(address vault_) external override returns (uint64 actionId) {
@@ -406,7 +409,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///        stored bytes (`ITimelockBatchQueue_ActionInvalid`).
     ///      - A payload cannot be decoded with the parameter types of its selector; the
     ///        decoding revert is propagated as is.
-    ///      - The facility's validation mirror rejects a sub-action.
+    ///      - The validation function of the configuration policy rejects a sub-action.
     ///      - Two sub-actions reserve the same domain, or a domain is reserved by an
     ///        unresolved action (`IConfigTimelockBatchQueue_ConfigKeyPending`).
     ///      - The batch reserves more than the maximum number of configuration keys
@@ -449,7 +452,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     /// @inheritdoc ConfigTimelockBatchQueue
     /// @dev The payload is decoded with the parameter types of the targeted setter and
     ///      re-encoded; the re-encoding must equal the stored payload. The decoded arguments
-    ///      are then passed to the facility's validation mirror of that setter.
+    ///      are then passed to the validation function of the configuration policy for that
+    ///      setter.
     ///
     ///      Reverts if:
     ///      - The target is not the configuration policy (`ITimelockBatchQueue_ActionInvalid`).
@@ -459,7 +463,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///        decoding revert is propagated as is.
     ///      - The canonical re-encoding of the decoded payload differs from the stored bytes
     ///        (`ITimelockBatchQueue_ActionInvalid`).
-    ///      - The validation mirror of the targeted setter rejects the decoded arguments.
+    ///      - The validation function of the configuration policy for the targeted setter
+    ///        rejects the decoded arguments.
     function _validateConfigSubAction(
         address,
         uint64,
@@ -470,20 +475,20 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         if (action_.target != address(_CONFIG))
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         bytes memory payload = action_.payload;
-        IYieldRepurchaseFacilityV2View facility = _facility();
+        IYieldRepurchaseFacilityV2Config configPolicy = _CONFIG;
 
         if (selector == IYieldRepurchaseFacilityV2Config.setYieldBuybackShare.selector) {
             (address vault, uint256 newShare) = abi.decode(payload, (address, uint256));
             _requireCanonicalPayload(payload, abi.encode(vault, newShare), selector);
-            facility.validateSetYieldBuybackShare(vault, newShare);
+            configPolicy.validateSetYieldBuybackShare(vault, newShare);
         } else if (selector == IYieldRepurchaseFacilityV2Config.setInitialDiscount.selector) {
             uint256 initialDiscount = abi.decode(payload, (uint256));
             _requireCanonicalPayload(payload, abi.encode(initialDiscount), selector);
-            facility.validateSetInitialDiscount(initialDiscount);
+            configPolicy.validateSetInitialDiscount(initialDiscount);
         } else if (selector == IYieldRepurchaseFacilityV2Config.setMaxPricePremium.selector) {
             uint256 maxPricePremium = abi.decode(payload, (uint256));
             _requireCanonicalPayload(payload, abi.encode(maxPricePremium), selector);
-            facility.validateSetMaxPricePremium(maxPricePremium);
+            configPolicy.validateSetMaxPricePremium(maxPricePremium);
         } else if (
             selector == IYieldRepurchaseFacilityV2Config.increaseClearinghouseOffset.selector
         ) {
@@ -496,7 +501,7 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                 abi.encode(clearinghouse, additionalOffset),
                 selector
             );
-            facility.validateIncreaseClearinghouseOffset(clearinghouse, additionalOffset);
+            configPolicy.validateIncreaseClearinghouseOffset(clearinghouse, additionalOffset);
         } else if (selector == IYieldRepurchaseFacilityV2Config.decreaseNextYield.selector) {
             (address vault, uint256 expectedNextYield, uint256 newNextYield) = abi.decode(
                 payload,
@@ -507,19 +512,19 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
                 abi.encode(vault, expectedNextYield, newNextYield),
                 selector
             );
-            facility.validateDecreaseNextYield(vault, expectedNextYield, newNextYield);
+            configPolicy.validateDecreaseNextYield(vault, expectedNextYield, newNextYield);
         } else if (selector == IYieldRepurchaseFacilityV2Config.excludeClearinghouse.selector) {
             address clearinghouse = abi.decode(payload, (address));
             _requireCanonicalPayload(payload, abi.encode(clearinghouse), selector);
-            facility.validateExcludeClearinghouse(clearinghouse);
+            configPolicy.validateExcludeClearinghouse(clearinghouse);
         } else if (selector == IYieldRepurchaseFacilityV2Config.enableAsset.selector) {
             address vault = abi.decode(payload, (address));
             _requireCanonicalPayload(payload, abi.encode(vault), selector);
-            facility.validateEnableAsset(vault);
+            configPolicy.validateEnableAsset(vault);
         } else if (selector == IYieldRepurchaseFacilityV2Config.disableAsset.selector) {
             address vault = abi.decode(payload, (address));
             _requireCanonicalPayload(payload, abi.encode(vault), selector);
-            facility.validateDisableAsset(vault);
+            configPolicy.validateDisableAsset(vault);
         } else {
             revert ITimelockBatchQueue_ActionInvalid(action_.target, selector);
         }
