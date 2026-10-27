@@ -712,8 +712,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     /// @dev The steered OHM/USD price starts at the live CURRENT resolution of the
     ///      pinned block. USDS is pinned to exactly $1 (every aggregator behind its
     ///      feeds answers exactly one unit), so `getPriceIn(OHM, USDS)` equals the
-    ///      steered OHM/USD price exactly and the v1 and v2 branches of the parity test
-    ///      price their markets identically. USDe keeps its live answer, so the sUSDe
+    ///      steered OHM/USD price exactly. USDe keeps its live answer, so the sUSDe
     ///      markets exercise a non-unit reserve price.
     function _initializeOracleState() internal {
         // The live CURRENT price of the pinned block seeds the steered price path (all
