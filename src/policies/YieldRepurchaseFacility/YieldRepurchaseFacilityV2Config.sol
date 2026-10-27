@@ -157,9 +157,6 @@ contract YieldRepurchaseFacilityV2Config is
             revert IYieldRepurchaseFacilityV2Config_InvalidFacility(facility_);
 
         facility = facility_;
-        // The calls above are static reads of the kernel and of the candidate facility, and
-        // the binding is admin-gated and one-shot
-        // forge-lint: disable-next-line(reentrancy-events)
         emit FacilitySet(facility_);
     }
 
