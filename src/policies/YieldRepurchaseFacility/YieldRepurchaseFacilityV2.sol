@@ -676,11 +676,17 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Performs the weekly reset: projects the yield of the coming week,
     ///         refreshes the yield snapshots, and withdraws the previously stored
     ///         projection from the treasury into the buyback pool.
-    /// @dev Every unit of yield enters the buyback pool exactly once: the yield on the
+    /// @dev The yield enters the buyback pool through two channels: the yield on the
     ///      treasury-held shares through the `nextYield` projection withdrawn here, and the
     ///      appreciation of the facility-held shares directly through the balance-based daily
     ///      bids. The projection reads only treasury-side snapshots, so the facility's balances
     ///      never influence the withdrawal.
+    ///
+    ///      The projection credits the rate change on the stored balance snapshot (see
+    ///      `_computeVaultYield`), so the channels overlap for the shares that move from the
+    ///      treasury to the facility after the snapshot, such as the backing withdrawn for the
+    ///      burned OHM: those shares stay in the basis of the following projection, and their
+    ///      appreciation on the facility's balance also enters the daily bids.
     ///
     ///      The processing of each vault is isolated through a self-call: a vault whose processing
     ///      reverts is skipped for the week with a `WeeklyResetSkipped` event and retried at the
