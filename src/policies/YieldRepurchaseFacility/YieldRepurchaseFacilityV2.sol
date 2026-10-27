@@ -2,9 +2,7 @@
 pragma solidity ^0.8.24;
 
 // Interfaces
-import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IBondCallback} from "src/interfaces/IBondCallback.sol";
-import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 import {IBurnableERC20} from "src/interfaces/IBurnableERC20.sol";
 import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
@@ -127,6 +125,7 @@ contract YieldRepurchaseFacilityV2 is
     using YieldRepurchaseFacilityV2VaultLib for ReserveAsset;
     using YieldRepurchaseFacilityV2AssetRegistryLib for YieldRepurchaseFacilityV2AssetRegistryLib.Registry;
     using YieldRepurchaseFacilityV2ClearinghouseLib for YieldRepurchaseFacilityV2ClearinghouseLib.Clearinghouses;
+    using YieldRepurchaseFacilityV2BondMarketLib for YieldRepurchaseFacilityV2BondMarketLib.Markets;
 
     // ============ CONSTANTS ============ //
 
@@ -388,38 +387,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      concern. The auctioneer is external, so a revert there is absorbed and never
     ///      blocks the disable.
     function _beforeDisable(bytes calldata) internal override {
-        _closeAllVaultMarkets();
-    }
-
-    /// @notice Closes the tracked live bond market of every registered vault,
-    ///         best-effort.
-    function _closeAllVaultMarkets() private {
-        address[] storage vaults = _registry.vaults;
-        uint256 vaultsLength = vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            _closeVaultMarket(vaults[i]);
-        }
-    }
-
-    /// @notice Closes the vault's tracked live bond market on the current auctioneer,
-    ///         best-effort.
-    /// @dev The tracked id is cleared unconditionally. The close call is external: a
-    ///      revert of the auctioneer is absorbed with a `MarketCloseFailed` event
-    ///      carrying the truncated revert reason, an auctioneer that holds no code is
-    ///      absorbed with the same event carrying an empty reason, and the market is
-    ///      left to expire on its own, unpurchasable: `callback` only serves the
-    ///      tracked market.
-    function _closeVaultMarket(address vault_) private {
-        uint256 marketIdPlusOne = _markets.liveMarketIds[vault_];
-        if (marketIdPlusOne == 0) return;
-        _markets.liveMarketIds[vault_] = 0;
-
-        uint256 marketId = marketIdPlusOne - 1;
-        (bool success, bytes memory reason) = _safeCall(
-            bondAuctioneer,
-            abi.encodeCall(IBondAuctioneer.closeMarket, (marketId))
-        );
-        if (!success) emit MarketCloseFailed(vault_, marketId, reason);
+        _markets.closeAllVaultMarkets(_context(), _registry.vaults);
     }
 
     /// @inheritdoc ReEnabler
@@ -789,7 +757,7 @@ contract YieldRepurchaseFacilityV2 is
             uint256 capacityShares = Math.min(config_.assetsToShares(bidAmount), heldShares);
             if (capacityShares == 0) return;
 
-            _createMarket(vault_, config_, capacityShares, oraclePrice_);
+            _markets.openMarket(_context(), config_, capacityShares, oraclePrice_);
         } else {
             uint256 currentReserve = _selfBalance(reserve_);
             uint256 heldShares = _selfBalance(shareToken);
@@ -809,7 +777,7 @@ contract YieldRepurchaseFacilityV2 is
 
             if (bidAmount == 0) return;
 
-            _createMarket(vault_, config_, bidAmount, oraclePrice_);
+            _markets.openMarket(_context(), config_, bidAmount, oraclePrice_);
         }
     }
 
@@ -997,80 +965,6 @@ contract YieldRepurchaseFacilityV2 is
         IBurnableERC20(address(_OHM)).burn(ohmToBurn);
 
         emit OhmPurchasesProcessed(ohmToBurn, funded);
-    }
-
-    /// @notice Creates a bond market that sells the vault's payout token for OHM.
-    /// @dev The pricing and the submission are performed by the linked
-    ///      `YieldRepurchaseFacilityV2BondMarketLib`
-    ///      through a delegatecall, so the facility is the market owner and callback.
-    ///      `oraclePrice_` is the OHM price denominated in the vault's reserve token. For
-    ///      a sell-shares asset the payout token is the share token and the reserve price
-    ///      is converted to a per-share price through the conversion rate (floor): one
-    ///      share is worth the conversion rate in reserve units.
-    ///      The vault's previous tracked market is closed first, best-effort, so at most
-    ///      one purchasable market per vault exists at a time even when missed beats
-    ///      stretch the daily schedule.
-    ///      Failures are absorbed: a zero conversion rate, a rejected market submission,
-    ///      or an auctioneer that holds no code emits `MarketCreationFailed` and keeps
-    ///      the funds with the facility. A created
-    ///      market is recorded in the market records under the creating auctioneer, which
-    ///      authorizes its callback, and its id is tracked for the later close.
-    function _createMarket(
-        address vault_,
-        ReserveAsset storage config_,
-        uint256 bidAmount_,
-        uint256 oraclePrice_
-    ) private {
-        uint256 marketOraclePrice = oraclePrice_;
-        address payoutToken = config_.reserve;
-
-        if (config_.sellShares) {
-            uint256 conversionRate = _conversionRate(config_);
-            if (conversionRate == 0) {
-                emit MarketCreationFailed(vault_, bidAmount_, "");
-                return;
-            }
-            marketOraclePrice = oraclePrice_.mulDiv(
-                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals,
-                conversionRate
-            );
-            payoutToken = config_.shareToken;
-        }
-
-        _closeVaultMarket(vault_);
-
-        address auctioneer = bondAuctioneer;
-        // The market is created under the guard held by `execute`, and the auctioneer is admin-set
-        // forge-lint: disable-next-item(reentrancy-no-eth)
-        (
-            bool success,
-            uint256 marketId,
-            bytes memory reason
-        ) = YieldRepurchaseFacilityV2BondMarketLib.createMarket(
-                YieldRepurchaseFacilityV2BondMarketLib.MarketConfig({
-                    auctioneer: IBondSDA(auctioneer),
-                    payoutToken: payoutToken,
-                    quoteToken: address(_OHM),
-                    capacity: bidAmount_,
-                    oraclePrice: marketOraclePrice,
-                    initialDiscount: initialDiscount,
-                    maxPricePremium: maxPricePremium,
-                    oracleDecimals: _oracleDecimals,
-                    quoteDecimals: _OHM_DECIMALS,
-                    payoutDecimals: config_.reserveDecimals
-                })
-            );
-
-        // The funds stay in the buyback pool, so the following cycle retries the market
-        if (!success) {
-            emit MarketCreationFailed(vault_, bidAmount_, reason);
-            return;
-        }
-
-        _markets.marketVaults[auctioneer][marketId] = vault_;
-        _markets.liveMarketIds[vault_] = marketId + 1;
-
-        emit RepoMarket(vault_, marketId, payoutToken, bidAmount_);
     }
 
     // ============ BOND CALLBACK ============ //
@@ -1285,7 +1179,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireAssetDisabled(config);
         _requireNotBackingVault(vault_);
 
-        _closeVaultMarket(vault_);
+        _markets.closeVaultMarket(_context(), vault_);
         _returnBalancesToTrsry(config.shareToken, config.reserve);
 
         _registry.remove(vault_);
@@ -1355,15 +1249,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The close of the vault's tracked live bond market reverts.
     function setSellShares(address vault_, bool sellShares_) external override onlyConfigurator {
         _registry.validateSellShares(vault_, sellShares_);
-
-        uint256 marketIdPlusOne = _markets.liveMarketIds[vault_];
-        if (marketIdPlusOne != 0) {
-            _markets.liveMarketIds[vault_] = 0;
-            // The change is validated above and gated to the configurator, and the auctioneer
-            // is admin-set
-            // forge-lint: disable-next-line(reentrancy-no-eth)
-            IBondAuctioneer(bondAuctioneer).closeMarket(marketIdPlusOne - 1);
-        }
+        // The change is validated above and gated to the configurator, and the auctioneer is
+        // admin-set
+        // forge-lint: disable-next-line(reentrancy-no-eth)
+        _markets.closeVaultMarketStrict(_context(), vault_);
 
         _registry.configs[vault_].sellShares = sellShares_;
         emit SellSharesSet(vault_, sellShares_);
@@ -1425,7 +1314,10 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
     function setBondContracts(address bondAuctioneer_) external override onlyAdminRole {
-        _closeAllVaultMarkets();
+        // The context carries the outgoing auctioneer, on which the markets were created; the
+        // function is gated to the admin role
+        // forge-lint: disable-next-line(reentrancy-no-eth)
+        _markets.closeAllVaultMarkets(_context(), _registry.vaults);
         _setBondContracts(bondAuctioneer_);
     }
 
@@ -1717,7 +1609,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireNotBackingVault(vault_);
 
         config.isAssetEnabled = false;
-        _closeVaultMarket(vault_);
+        _markets.closeVaultMarket(_context(), vault_);
         emit AssetDisabled(vault_);
     }
 
@@ -1829,19 +1721,6 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     // ============ HELPERS ============ //
-
-    /// @notice Returns the vault's conversion rate: the reserve value of one whole
-    ///         share.
-    /// @dev The probe amount `10 ** reserveDecimals` is one whole share because `addAsset`
-    ///      requires the share token decimals to equal the reserve decimals. The rate is
-    ///      `previewRedeem` of that amount, or `convertToAssets` for an asset with
-    ///      asynchronous redemption.
-    function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
-        return
-            config_.sharesToAssets(
-                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals
-            );
-    }
 
     /// @notice Returns the reserve token of the backing vault, or the zero address when
     ///         no backing vault is designated.
