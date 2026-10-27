@@ -9,7 +9,6 @@ import {IYieldRepurchaseFacilityV2Config} from "src/policies/interfaces/YieldRep
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -172,7 +171,8 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///      activated in the Kernel, the admin setter after.
     ///
     ///      Reverts if:
-    ///      - `backingOracle_` is the zero address (`Errors.BadInput`).
+    ///      - `backingOracle_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - `requireActive_` is set and the oracle is not an active policy of `kernel_`
     ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - The oracle does not report `kernel_` as its own
@@ -191,7 +191,10 @@ library YieldRepurchaseFacilityV2DependenciesLib {
         address backingOracle_,
         bool requireActive_
     ) external view {
-        if (backingOracle_ == address(0)) revert Errors.BadInput("backingOracle");
+        if (backingOracle_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
+                backingOracle_
+            );
 
         if (requireActive_ && !kernel_.isPolicyActive(Policy(backingOracle_)))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBackingOracle(
@@ -215,7 +218,7 @@ library YieldRepurchaseFacilityV2DependenciesLib {
     ///
     ///      Reverts if:
     ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
-    ///        its teller (`Errors.BadInput`).
+    ///        its teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - `requireCallbackAuthorized_` is set and the calling facility is not
     ///        authorized as a market callback on the auctioneer
     ///        (`IYieldRepurchaseFacilityV2_CallbackNotAuthorized`).
@@ -226,9 +229,15 @@ library YieldRepurchaseFacilityV2DependenciesLib {
         address bondAuctioneer_,
         bool requireCallbackAuthorized_
     ) external view returns (address bondTeller) {
-        if (bondAuctioneer_ == address(0)) revert Errors.BadInput("bondAuctioneer");
+        if (bondAuctioneer_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBondAuctioneer(
+                bondAuctioneer_
+            );
         bondTeller = address(IBondAuctioneer(bondAuctioneer_).getTeller());
-        if (bondTeller == address(0)) revert Errors.BadInput("bondTeller");
+        if (bondTeller == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidBondAuctioneer(
+                bondAuctioneer_
+            );
 
         if (requireCallbackAuthorized_) requireCallbackAuthorized(bondAuctioneer_);
     }

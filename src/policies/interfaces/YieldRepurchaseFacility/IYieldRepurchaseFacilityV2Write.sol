@@ -27,7 +27,8 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
     ///         yield and designating it as the backing vault.
     /// @dev Callable by the configurator. The asset is registered in the enabled state. The
-    ///      share token decimals must equal the reserve decimals, the reserve decimals
+    ///      vault must not be the zero address (`IYieldRepurchaseFacilityV2_ZeroAddress`).
+    ///      The share token decimals must equal the reserve decimals, the reserve decimals
     ///      must not exceed 18, the reserve must resolve to a non-zero OHM price through
     ///      the PRICE module, and a sell-shares vault cannot be designated as the backing
     ///      vault. The designation is only available while no backing vault is
@@ -35,7 +36,9 @@ interface IYieldRepurchaseFacilityV2Write {
     ///
     ///      The share token of the vault is fixed at registration: the token returned by
     ///      `share()` when the vault advertises ERC7575 through ERC165, which may be a
-    ///      contract separate from the vault, and the vault itself otherwise.
+    ///      contract separate from the vault, and the vault itself otherwise. A zero
+    ///      address returned by `asset()` or `share()` is rejected with
+    ///      `IYieldRepurchaseFacilityV2_VaultProbeZeroResult`.
     ///
     ///      Every token balance held by the facility belongs to exactly one pool, so the
     ///      registration rejects any token collision: none of the vault, its share
@@ -96,7 +99,7 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @param epoch_ The epoch counter to resume at, in the range `[0, 21)`.
     /// @param poolSeeds_ The per-vault pool seeds; every seeded vault must be
     ///        registered with an enabled asset, and every seeded amount must be
-    ///        non-zero.
+    ///        non-zero (`IYieldRepurchaseFacilityV2_ZeroAmount`).
     function seedCycle(
         uint48 epoch_,
         IYieldRepurchaseFacilityV2.BuybackPoolSeed[] calldata poolSeeds_
@@ -117,7 +120,8 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      facility's kernel and report the backing as an 18-decimal reserve-per-OHM
     ///      value: an oracle whose `decimals()` is not 18 is rejected. Emits
     ///      `BackingOracleSet`.
-    /// @param backingOracle_ The backing oracle policy; must not be the zero address.
+    /// @param backingOracle_ The backing oracle policy; must not be the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     function setBackingOracle(address backingOracle_) external;
 
     /// @notice Sets the configurator: the configuration policy that is the only caller of
@@ -179,14 +183,14 @@ interface IYieldRepurchaseFacilityV2Write {
     ///         invoke the bond callback is resolved from the auctioneer's `getTeller()`,
     ///         so the pair stays consistent.
     /// @dev Callable by the admin role. The auctioneer and its reported teller must be
-    ///      non-zero. The live bond markets are closed on the outgoing auctioneer before
-    ///      the change, on a best-effort basis: a revert of the auctioneer is absorbed
-    ///      and the affected market is left to expire, unpurchasable. The facility must
-    ///      be authorized as a market callback on the auctioneer: `enable` and a
-    ///      reconfiguration of the enabled facility revert without the authorization,
-    ///      while a revocation after the fact degrades to market submissions the
-    ///      auctioneer rejects, skipped with `MarketCreationFailed`. Emits
-    ///      `BondContractsSet`.
+    ///      non-zero (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`). The live bond
+    ///      markets are closed on the outgoing auctioneer before the change, on a
+    ///      best-effort basis: a revert of the auctioneer is absorbed and the affected
+    ///      market is left to expire, unpurchasable. The facility must be authorized as
+    ///      a market callback on the auctioneer: `enable` and a reconfiguration of the
+    ///      enabled facility revert without the authorization, while a revocation after
+    ///      the fact degrades to market submissions the auctioneer rejects, skipped with
+    ///      `MarketCreationFailed`. Emits `BondContractsSet`.
     /// @param bondAuctioneer_ The SDA auctioneer.
     function setBondContracts(address bondAuctioneer_) external;
 
@@ -209,7 +213,8 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @dev Callable by the configurator. The offset is validated against the current
     ///      `principalReceivables` and may be set in both directions. Emits
     ///      `ClearinghouseOffsetSet`.
-    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     /// @param offset_ The new cumulative offset, in the receivables' units.
     function setClearinghouseOffset(address clearinghouse_, uint256 offset_) external;
 
@@ -254,7 +259,8 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      reduces the projected yield; the offset is lowered through
     ///      `setClearinghouseOffset`. Emits
     ///      `ClearinghouseOffsetSet`.
-    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     /// @param additionalOffset_ The amount added to the existing offset, in the
     ///        receivables' units.
     function increaseClearinghouseOffset(

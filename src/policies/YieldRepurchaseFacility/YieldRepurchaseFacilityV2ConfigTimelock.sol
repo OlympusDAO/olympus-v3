@@ -13,7 +13,6 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Contracts
@@ -148,7 +147,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
     ///      it as config operator.
     ///
     ///      Reverts if:
-    ///      - `kernel_` is the zero address.
+    ///      - `kernel_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2ConfigTimelock_ZeroAddress`).
     ///      - `config_` is the zero address, or does not advertise
     ///        `IYieldRepurchaseFacilityV2Config`, `IConfigOperator`, and `IEnabler` through
     ///        ERC165.
@@ -169,7 +169,8 @@ contract YieldRepurchaseFacilityV2ConfigTimelock is
         ReEnablerGracePeriod(gracePeriod_)
         ConfigTimelockBatchQueue(initialTimelockDelay_)
     {
-        if (address(kernel_) == address(0)) revert Errors.BadInput("kernel");
+        if (address(kernel_) == address(0))
+            revert IYieldRepurchaseFacilityV2ConfigTimelock_ZeroAddress();
         _requireValidGracePeriod(gracePeriod_);
         if (config_ == address(0))
             revert IYieldRepurchaseFacilityV2ConfigTimelock_InvalidConfig(config_);

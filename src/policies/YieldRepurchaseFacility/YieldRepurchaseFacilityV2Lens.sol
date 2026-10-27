@@ -14,7 +14,6 @@ import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
@@ -39,10 +38,11 @@ contract YieldRepurchaseFacilityV2Lens is IYieldRepurchaseFacilityV2Lens {
     IYieldRepurchaseFacilityV2View internal immutable _FACILITY;
 
     /// @notice Binds the lens to one facility.
-    /// @dev Reverts if `facility_` is the zero address.
+    /// @dev Reverts with `IYieldRepurchaseFacilityV2Lens_ZeroAddress` if `facility_` is the
+    ///      zero address.
     /// @param facility_ The facility.
     constructor(address facility_) {
-        if (facility_ == address(0)) revert Errors.BadInput("facility");
+        if (facility_ == address(0)) revert IYieldRepurchaseFacilityV2Lens_ZeroAddress();
         _FACILITY = IYieldRepurchaseFacilityV2View(facility_);
     }
 

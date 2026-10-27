@@ -11,7 +11,6 @@ import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepu
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
 
@@ -87,7 +86,7 @@ contract YieldRepurchaseFacilityV2Config is
     ///      starts disabled.
     ///
     ///      Reverts if:
-    ///      - `kernel_` is the zero address.
+    ///      - `kernel_` is the zero address (`IYieldRepurchaseFacilityV2Config_ZeroAddress`).
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
     /// @param kernel_ The Olympus Kernel.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
@@ -95,7 +94,7 @@ contract YieldRepurchaseFacilityV2Config is
         Kernel kernel_,
         uint32 gracePeriod_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
-        if (address(kernel_) == address(0)) revert Errors.BadInput("kernel");
+        if (address(kernel_) == address(0)) revert IYieldRepurchaseFacilityV2Config_ZeroAddress();
         _requireValidGracePeriod(gracePeriod_);
 
         // Disabled by default by EnablerV2
@@ -415,7 +414,8 @@ contract YieldRepurchaseFacilityV2Config is
     ///      reverts with an overflow panic before the Clearinghouse is checked.
     ///
     ///      Reverts if:
-    ///      - The Clearinghouse is the zero address (`Errors.BadInput`).
+    ///      - The Clearinghouse is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The resulting offset exceeds the current `principalReceivables`
     ///        (`IYieldRepurchaseFacilityV2_OffsetExceedsReceivables`).
     function validateIncreaseClearinghouseOffset(

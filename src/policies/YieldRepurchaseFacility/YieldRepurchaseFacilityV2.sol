@@ -18,7 +18,6 @@ import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepu
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
@@ -218,11 +217,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      consistent by construction.
     ///
     ///      Reverts if:
-    ///      - `kernel_`, `ohm_`, `backingOracle_`, or `bondAuctioneer_` is the zero
-    ///        address.
-    ///      - The backing oracle does not report `kernel_` as its kernel.
+    ///      - `kernel_` or `ohm_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
+    ///      - `backingOracle_` is the zero address or does not report `kernel_` as its
+    ///        kernel (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - The backing oracle does not report the 18 decimals of the backing value.
-    ///      - The auctioneer reports the zero address as its teller.
+    ///      - `bondAuctioneer_` is the zero address or reports the zero address as its
+    ///        teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
     ///      - `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
     /// @param kernel_ The Olympus Kernel.
@@ -239,8 +240,8 @@ contract YieldRepurchaseFacilityV2 is
         uint32 gracePeriod_,
         uint32 stepGasLimit_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
-        _requireNonzeroAddress(address(kernel_), "kernel");
-        _requireNonzeroAddress(ohm_, "ohm");
+        _requireNonzeroAddress(address(kernel_));
+        _requireNonzeroAddress(ohm_);
         _requireValidGracePeriod(gracePeriod_);
 
         _OHM = IERC20(ohm_);
@@ -462,7 +463,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      transfer are not isolated: OHM is a protocol-owned token whose balance
     ///      always covers the tracked purchased amount.
     ///
-    ///      The function reverts if:
+    ///      Reverts if:
     ///      - The contract is enabled.
     ///      - The caller holds neither the emergency role nor the admin role.
     ///      - The gas remaining before the sweep of a vault is below the step
@@ -929,19 +930,21 @@ contract YieldRepurchaseFacilityV2 is
     ///      registration, and the backing vault designation are performed by the linked
     ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
-    ///      The function reverts if:
+    ///      Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
-    ///      - The vault address is the zero address.
+    ///      - The vault address is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The vault is already registered.
-    ///      - The vault reports the zero address as its underlying asset.
+    ///      - The vault reports the zero address as its underlying asset
+    ///        (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC165.
     ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) through
     ///        ERC165 without advertising ERC7575, or while `sellShares` is unset.
     ///      - The vault advertises ERC7575 through ERC165 and reports the zero address
-    ///        as its `share()`.
+    ///        as its `share()` (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
     ///      - The share token decimals do not match the reserve decimals (a vault with a
     ///        decimals offset is not supported).
     ///      - The vault, its share token, or its reserve token is OHM, the vault or the
@@ -976,14 +979,14 @@ contract YieldRepurchaseFacilityV2 is
     ///      the treasury balance cannot cover is added to the vault's `unfundedYield`
     ///      and retried at the following weekly reset.
     ///
-    ///      The function reverts if:
+    ///      Reverts if:
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
     ///      - The seeding window is closed: the restart has already been seeded, or a
     ///        beat has run since the `enable`.
     ///      - `epoch_` is not below the weekly epoch count of 21.
     ///      - A seed references an unregistered or disabled vault.
-    ///      - A seeded amount is zero.
+    ///      - A seeded amount is zero (`IYieldRepurchaseFacilityV2_ZeroAmount`).
     ///      - The treasury withdrawal or a share valuation of a seeded vault reverts.
     function seedCycle(
         uint48 epoch_,
@@ -1049,9 +1052,9 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
-    ///      - `backingOracle_` is the zero address.
-    ///      - The oracle is not an active policy of the kernel, or does not report the
-    ///        facility's kernel as its own.
+    ///      - `backingOracle_` is the zero address, is not an active policy of the
+    ///        kernel, or does not report the facility's kernel as its own
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - The oracle does not report the 18 decimals of the backing value.
     function setBackingOracle(address backingOracle_) external override onlyAdminRole {
         _setBackingOracle(backingOracle_, true);
@@ -1160,7 +1163,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The caller does not hold the admin role.
     ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
-    ///        its teller.
+    ///        its teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
     function setBondContracts(address bondAuctioneer_) external override onlyAdminRole {
@@ -1174,7 +1177,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Sets the backing oracle after the validation of the linked
     ///         `YieldRepurchaseFacilityV2DependenciesLib`.
     /// @dev Reverts if:
-    ///      - `backingOracle_` is the zero address.
+    ///      - `backingOracle_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_InvalidBackingOracle`).
     ///      - `requireActive_` is set and the oracle is not an active policy of the kernel.
     ///      - The oracle does not report the facility's kernel as its own.
     ///      - The oracle does not report the 18 decimals of the backing value.
@@ -1199,7 +1203,7 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Reverts if:
     ///      - `bondAuctioneer_` is the zero address, or it reports the zero address as
-    ///        its teller.
+    ///        its teller (`IYieldRepurchaseFacilityV2_InvalidBondAuctioneer`).
     ///      - The facility is enabled and is not authorized as a market callback on the
     ///        supplied auctioneer.
     function _setBondContracts(address bondAuctioneer_) private {
@@ -1249,7 +1253,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
-    ///      - The Clearinghouse is the zero address.
+    ///      - The Clearinghouse is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The offset exceeds the current `principalReceivables` of the Clearinghouse.
     function setClearinghouseOffset(
         address clearinghouse_,
@@ -1333,7 +1338,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
-    ///      - The Clearinghouse is the zero address.
+    ///      - The Clearinghouse is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The resulting offset exceeds the current `principalReceivables`.
     function increaseClearinghouseOffset(
         address clearinghouse_,
@@ -1393,7 +1399,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      later as zero, so a Clearinghouse that breaks after the inclusion degrades
     ///      to a zero contribution instead of blocking the reset.
     ///
-    ///      The function reverts if:
+    ///      Reverts if:
     ///      - The caller is not the configurator.
     ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
     ///      - The Clearinghouse is already included.
@@ -1477,16 +1483,17 @@ contract YieldRepurchaseFacilityV2 is
             revert IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
     }
 
-    /// @notice Reverts with `Errors.BadInput` when `value_` is the zero address.
-    function _requireNonzeroAddress(address value_, string memory parameter_) private pure {
-        if (value_ == address(0)) revert Errors.BadInput(parameter_);
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2_ZeroAddress` when `value_` is the
+    ///         zero address.
+    function _requireNonzeroAddress(address value_) private pure {
+        if (value_ == address(0)) revert IYieldRepurchaseFacilityV2_ZeroAddress();
     }
 
-    /// @notice Reverts with `Errors.BadInput` when the amount is zero.
+    /// @notice Reverts with `IYieldRepurchaseFacilityV2_ZeroAmount` when the amount is zero.
     // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
     // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireNonzeroAmount(uint256 amount_) private pure {
-        if (amount_ == 0) revert Errors.BadInput("amount");
+        if (amount_ == 0) revert IYieldRepurchaseFacilityV2_ZeroAmount();
     }
 
     /// @notice Returns the vault's share amount for an exact `assets_` withdrawal
