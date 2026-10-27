@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
-// Temporary tests. The literals are scenario amounts and the arguments of the registration calls.
+// The literals are scenario amounts and the arguments of the registration calls.
 // The loops run over recorded logs and over the gas probes of one call.
 // The probes call the facility with an explicit gas amount, capture the short error data of
 // protocol contracts, and read the error words in assembly.
@@ -32,7 +32,7 @@ import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacil
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_StepGasLimit
-/// @notice Temporary mainnet-fork tests of the gas limit of the isolated steps of the YRF v2.
+/// @notice Mainnet-fork tests of the gas limit of the isolated steps of the YRF v2.
 ///         A vault fixture that consumes all the gas it is handed wraps WETH, which the PRICE
 ///         module prices on the pinned block, and is registered next to the sUSDS and sUSDe
 ///         assets of the base setup.
