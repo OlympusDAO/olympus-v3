@@ -879,9 +879,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     function _updateOracles() internal {
         for (uint256 i = 0; i < chainlinkFeedMocks.length; ++i) {
             ChainlinkFeedMock storage feedMock = chainlinkFeedMocks[i];
-            uint256 updatedAt = block.timestamp;
+            uint256 updatedAt = vm.getBlockTimestamp();
             if (susdeReserveFeedStale && feedMock.aggregator == CHAINLINK_USDE_USD) {
-                updatedAt = block.timestamp - USDE_UPDATE_THRESHOLD - 1;
+                updatedAt = vm.getBlockTimestamp() - USDE_UPDATE_THRESHOLD - 1;
             }
             vm.mockCall(
                 feedMock.aggregator,
