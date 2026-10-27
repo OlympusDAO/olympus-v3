@@ -32,6 +32,13 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      may be OHM, the vault may not equal its own reserve, and neither may equal
     ///      the vault or the reserve of a registered asset.
     ///
+    ///      The registration probes the vault: `previewRedeem` of one whole share, and
+    ///      `previewWithdraw` and `previewDeposit` of one whole reserve unit, must each
+    ///      return a non-zero value. A vault that advertises asynchronous deposits
+    ///      (ERC-7540) through ERC-165 is rejected. The probes reject an address that
+    ///      does not behave as a vault; they do not establish that the vault is
+    ///      correct.
+    ///
     ///      The facility is designed for vaults whose conversion rate does not decrease.
     ///      The yield projection credits the increase of the rate since the snapshot of
     ///      the last weekly reset, and every weekly reset overwrites the snapshot with

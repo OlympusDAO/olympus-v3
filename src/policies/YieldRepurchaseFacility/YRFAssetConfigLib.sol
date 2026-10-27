@@ -5,10 +5,13 @@ pragma solidity ^0.8.24;
 import {IERC4626} from "@openzeppelin-5.3.0/interfaces/IERC4626.sol";
 import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin-5.3.0/token/ERC20/extensions/IERC20Metadata.sol";
+import {IERC7540Deposit} from "@openzeppelin-community-contracts-0.0.1/interfaces/IERC7540.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
+import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -23,6 +26,9 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 ///      `address(this)`, and the emitted events and the errors belong to the facility
 ///      interface.
 library YRFAssetConfigLib {
+    /// @notice Byte length of the single word a vault probe must return.
+    uint16 private constant _PROBE_RETURN_LENGTH = 32;
+
     /// @notice The registration inputs of `addAsset`.
     /// @param vault The ERC4626 vault to register.
     /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` =
@@ -55,10 +61,15 @@ library YRFAssetConfigLib {
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset.
     ///      - The vault's underlying asset decimals exceed 18.
+    ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
+    ///        ERC-165.
     ///      - The vault's share decimals do not match its reserve decimals.
     ///      - The vault or its reserve token is OHM, the vault equals its own reserve,
     ///        or the vault or the reserve collides with the vault or the reserve of a
     ///        registered asset.
+    ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
+    ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
+    ///        one word, or returns zero.
     ///      - The `price_.getPriceIn(ohm_, reserve)` probe reverts or returns zero.
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
@@ -90,6 +101,15 @@ library YRFAssetConfigLib {
         if (reserveDecimals > YieldRepurchaseFacilityV2Constants.MAX_RESERVE_DECIMALS)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
+        // The idle reserve of a sell-shares asset is wrapped through `previewDeposit` and
+        // `deposit`, which a vault with asynchronous deposits does not serve. ERC-165 is
+        // consulted only to recognize a vault class: an ERC-4626 vault is not required
+        // to implement it.
+        if (ERC165Checker.supportsInterface(vault_, type(IERC7540Deposit).interfaceId))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(
+                vault_
+            );
+
         // The conversion rate probe and the sell-shares market pricing both treat
         // `10 ** reserveDecimals` as one whole share.
         if (IERC20Metadata(vault_).decimals() != reserveDecimals)
@@ -119,6 +139,16 @@ library YRFAssetConfigLib {
                 );
         }
         // forge-lint: disable-end(require-revert-in-loop)
+
+        // The facility values the shares through `previewRedeem`, sizes the withdrawals
+        // through `previewWithdraw`, and wraps the idle reserve through `previewDeposit`,
+        // so an address that does not serve them is rejected at registration. The share
+        // decimals equal the reserve decimals, so one unit is both one whole share and
+        // one whole reserve token.
+        uint256 oneUnit = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** reserveDecimals;
+        _probeVault(vault_, IERC4626.previewRedeem.selector, oneUnit);
+        _probeVault(vault_, IERC4626.previewWithdraw.selector, oneUnit);
+        _probeVault(vault_, IERC4626.previewDeposit.selector, oneUnit);
 
         // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
         // reserve must resolve against OHM at registration; a PRICE revert (for example
@@ -281,6 +311,34 @@ library YRFAssetConfigLib {
         }
         // forge-lint: disable-end(require-revert-in-loop)
         return balance;
+    }
+
+    /// @notice Probes a conversion function of a vault with a single amount argument.
+    /// @dev The call is static and its returndata capture is capped at one word, so a
+    ///      probed address cannot inflate the memory cost of the registration.
+    ///
+    ///      Reverts if:
+    ///      - The call reverts, the address holds no code, or the returned data is
+    ///        shorter than one word (`IYieldRepurchaseFacilityV2_VaultProbeFailed`).
+    ///      - The returned value is zero
+    ///        (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
+    function _probeVault(address vault_, bytes4 selector_, uint256 amount_) private view {
+        (bool success, bytes memory data) = SafeCall.safeStaticCall(
+            vault_,
+            gasleft(),
+            _PROBE_RETURN_LENGTH,
+            abi.encodeWithSelector(selector_, amount_)
+        );
+        if (!success || data.length < _PROBE_RETURN_LENGTH)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultProbeFailed(
+                vault_,
+                selector_
+            );
+        if (abi.decode(data, (uint256)) == 0)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultProbeZeroResult(
+                vault_,
+                selector_
+            );
     }
 
     // The loops here and in `resetCycle` run over the registered vaults, added only by the
