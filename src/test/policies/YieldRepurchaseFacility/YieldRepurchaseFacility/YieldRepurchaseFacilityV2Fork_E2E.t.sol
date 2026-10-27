@@ -211,6 +211,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         IYieldRepurchaseFacilityV2.ReserveAsset memory susdsConfig = yieldRepo.getAssetConfig(
             SUSDS
         );
+        assertEq(susdsConfig.shareToken, SUSDS, "sUSDS share token");
         assertEq(susdsConfig.reserve, USDS, "sUSDS reserve");
         assertEq(susdsConfig.reserveDecimals, RESERVE_DECIMALS, "sUSDS reserve decimals");
         assertEq(susdsConfig.sellShares, false, "sUSDS sellShares");
@@ -220,6 +221,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         IYieldRepurchaseFacilityV2.ReserveAsset memory susdeConfig = yieldRepo.getAssetConfig(
             SUSDE
         );
+        assertEq(susdeConfig.shareToken, SUSDE, "sUSDe share token");
         assertEq(susdeConfig.reserve, USDE, "sUSDe reserve");
         assertEq(susdeConfig.sellShares, true, "sUSDe sellShares");
         assertEq(susdeConfig.yieldBuybackShare, SUSDE_BUYBACK_SHARE, "sUSDe share");

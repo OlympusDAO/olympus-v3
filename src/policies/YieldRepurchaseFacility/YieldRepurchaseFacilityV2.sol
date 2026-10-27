@@ -594,7 +594,8 @@ contract YieldRepurchaseFacilityV2 is
     function selfReturnVaultFunds(address vault_) external {
         _requireCaller(address(this));
 
-        _returnBalancesToTrsry(vault_, _assetConfigs[vault_].reserve);
+        ReserveAsset storage config = _assetConfigs[vault_];
+        _returnBalancesToTrsry(config.shareToken, config.reserve);
     }
 
     // ============ PERIODIC TASK ============ //
@@ -773,13 +774,13 @@ contract YieldRepurchaseFacilityV2 is
 
         config.lastConversionRate = _conversionRate(config);
 
-        uint256 funded = _fundFromTreasury(vault_, fundingTarget);
+        uint256 funded = _fundFromTreasury(config, fundingTarget);
         config.unfundedYield = Math.saturatingSub(fundingTarget, funded);
 
         // The balance snapshot is taken after the funding withdrawal, so it excludes the
         // shares moved to the facility.
         config.lastReserveBalance = YRFAssetConfigLib.protocolReserveBalance(
-            vault_,
+            config,
             CHREG,
             address(TRSRY),
             backingVault
@@ -789,14 +790,21 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
     ///         treasury into the buyback pool.
     /// @dev The share amount is `previewWithdraw(amount_)` (rounded up by the vault),
-    ///      capped at the treasury balance with a `FundingShortfall` event on the cap.
-    ///      The funded value is the redeemable value of the withdrawn shares (floor).
+    ///      capped at the treasury balance of the share token with a `FundingShortfall`
+    ///      event on the cap. The funded value is the redeemable value of the withdrawn
+    ///      shares (floor).
     /// @return funded The funded value, in reserve units.
-    function _fundFromTreasury(address vault_, uint256 amount_) private returns (uint256 funded) {
+    function _fundFromTreasury(
+        ReserveAsset storage config_,
+        uint256 amount_
+    ) private returns (uint256 funded) {
         if (amount_ == 0) return 0;
 
+        address vault_ = config_.vault;
+        address shareToken = config_.shareToken;
+
         uint256 shares = _previewWithdraw(vault_, amount_);
-        uint256 trsryBalance = _trsryBalance(vault_);
+        uint256 trsryBalance = _trsryBalance(shareToken);
         if (shares > trsryBalance) {
             // The unfunded remainder is carried by the caller and retried at the next
             // reset.
@@ -805,7 +813,7 @@ contract YieldRepurchaseFacilityV2 is
         }
         if (shares == 0) return 0;
 
-        _withdrawShares(vault_, shares);
+        _withdrawShares(shareToken, shares);
         funded = _previewRedeem(vault_, shares);
     }
 
@@ -827,11 +835,12 @@ contract YieldRepurchaseFacilityV2 is
         uint256 oraclePrice_
     ) private {
         address reserve_ = config_.reserve;
+        address shareToken = config_.shareToken;
 
         if (config_.sellShares) {
             _wrapIdleReserve(vault_, reserve_);
 
-            uint256 heldShares = _selfBalance(vault_);
+            uint256 heldShares = _selfBalance(shareToken);
             uint256 bidAmount = _previewRedeem(vault_, heldShares) / daysRemaining_;
             if (bidAmount == 0) return;
 
@@ -841,7 +850,7 @@ contract YieldRepurchaseFacilityV2 is
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
         } else {
             uint256 currentReserve = _selfBalance(reserve_);
-            uint256 heldShares = _selfBalance(vault_);
+            uint256 heldShares = _selfBalance(shareToken);
 
             uint256 bidAmount = (currentReserve + _previewRedeem(vault_, heldShares)) /
                 daysRemaining_;
@@ -849,7 +858,7 @@ contract YieldRepurchaseFacilityV2 is
 
             if (currentReserve < bidAmount) {
                 uint256 deficit = bidAmount - currentReserve;
-                uint256 redeemed = _redeemForDeficit(vault_, reserve_, deficit, heldShares);
+                uint256 redeemed = _redeemForDeficit(vault_, deficit, heldShares);
 
                 if (redeemed < deficit) {
                     bidAmount = currentReserve + redeemed;
@@ -875,7 +884,7 @@ contract YieldRepurchaseFacilityV2 is
 
         (bool success, bytes memory reason) = _safeCall(
             address(this),
-            abi.encodeCall(this.selfWrapReserve, (vault_, reserve_, idleReserve))
+            abi.encodeCall(this.selfWrapReserve, (vault_, idleReserve))
         );
         // The failed self-call rolled back the deposit, so the reserve is still held
         if (!success) emit ReserveWrapFailed(vault_, idleReserve, reason);
@@ -885,25 +894,27 @@ contract YieldRepurchaseFacilityV2 is
     ///         against the preview.
     /// @dev External only for the self-call isolation in `_wrapIdleReserve`. The
     ///      function is intentionally not `nonReentrant`: it executes within the guard
-    ///      held by `execute`. The received amount is measured as the share balance
-    ///      delta.
+    ///      held by `execute`. The received amount is measured as the balance delta of
+    ///      the share token.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
     ///      - The received shares are below `previewDeposit(amount_)`.
     /// @param vault_ The vault to deposit into.
-    /// @param reserve_ The vault's reserve token.
     /// @param amount_ The reserve amount to deposit.
-    function selfWrapReserve(address vault_, address reserve_, uint256 amount_) external {
+    function selfWrapReserve(address vault_, uint256 amount_) external {
         _requireCaller(address(this));
 
+        ReserveAsset storage config = _assetConfigs[vault_];
+        address shareToken = config.shareToken;
+
         uint256 expected = IERC4626(vault_).previewDeposit(amount_);
-        uint256 sharesBefore = _selfBalance(vault_);
-        IERC20(reserve_).forceApprove(vault_, amount_);
+        uint256 sharesBefore = _selfBalance(shareToken);
+        IERC20(config.reserve).forceApprove(vault_, amount_);
         // The received shares are measured as the share balance delta below
         // forge-lint: disable-next-line(unused-return)
         IERC4626(vault_).deposit(amount_, address(this));
-        uint256 received = _selfBalance(vault_) - sharesBefore;
+        uint256 received = _selfBalance(shareToken) - sharesBefore;
 
         if (received < expected)
             revert IYieldRepurchaseFacilityV2_InsufficientDeposit(vault_, expected, received);
@@ -913,16 +924,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev On a failed redeem the shares are kept, `RedeemFailed` is emitted, and zero
     ///      is reported as the received amount.
     /// @return received The reserve amount received.
-    function _redeemShares(
-        address vault_,
-        address reserve_,
-        uint256 shares_
-    ) private returns (uint256 received) {
+    function _redeemShares(address vault_, uint256 shares_) private returns (uint256 received) {
         if (shares_ == 0) return 0;
 
         (bool success, bytes memory data) = _safeCall(
             address(this),
-            abi.encodeCall(this.selfRedeemChecked, (vault_, reserve_, shares_))
+            abi.encodeCall(this.selfRedeemChecked, (vault_, shares_))
         );
         if (!success) {
             // The failed self-call rolled back the redeem, so all shares are still held
@@ -941,25 +948,38 @@ contract YieldRepurchaseFacilityV2 is
     ///      external entry point. The received amount is measured as the reserve balance
     ///      delta.
     ///
+    ///      A vault whose share token is a separate contract (ERC-7575) may take the
+    ///      redeemed shares through the share token allowance of the vault; the
+    ///      standard does not fix that mechanism. The exact share amount is therefore
+    ///      approved to such a vault for the call, and the allowance is reset to zero
+    ///      afterwards. A vault that is its own share token redeems the shares of the
+    ///      calling owner without an allowance.
+    ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
+    ///      - The redeem reverts.
     ///      - The received reserve is below `previewRedeem(shares_)`.
     /// @param vault_ The vault to redeem from.
-    /// @param reserve_ The vault's reserve token.
     /// @param shares_ The share amount to redeem.
     /// @return received The reserve amount received.
     function selfRedeemChecked(
         address vault_,
-        address reserve_,
         uint256 shares_
     ) external returns (uint256 received) {
         _requireCaller(address(this));
 
+        ReserveAsset storage config = _assetConfigs[vault_];
+        address reserve_ = config.reserve;
+        address shareToken = config.shareToken;
+        bool externalShareToken = shareToken != vault_;
+
         uint256 expected = _previewRedeem(vault_, shares_);
         uint256 reserveBefore = _selfBalance(reserve_);
+        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, shares_);
         // The received reserve is measured as the reserve balance delta below
         // forge-lint: disable-next-line(unused-return)
         IERC4626(vault_).redeem(shares_, address(this), address(this));
+        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, 0);
         received = _selfBalance(reserve_) - reserveBefore;
 
         if (received < expected)
@@ -971,14 +991,13 @@ contract YieldRepurchaseFacilityV2 is
     ///      capped at the held shares.
     function _redeemForDeficit(
         address vault_,
-        address reserve_,
         uint256 deficit_,
         uint256 heldShares_
     ) private returns (uint256 redeemed) {
         uint256 sharesNeeded = _previewWithdraw(vault_, deficit_);
         uint256 sharesToRedeem = sharesNeeded > heldShares_ ? heldShares_ : sharesNeeded;
 
-        redeemed = _redeemShares(vault_, reserve_, sharesToRedeem);
+        redeemed = _redeemShares(vault_, sharesToRedeem);
     }
 
     /// @notice Burns the purchased OHM against a backing withdrawal; the withdrawn
@@ -1011,14 +1030,13 @@ contract YieldRepurchaseFacilityV2 is
             backingPerOhm,
             YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** _OHM_DECIMALS
         );
-        uint256 backingAmount = _scaleBackingAmount(
-            backingAmount18,
-            _assetConfigs[backingVault_].reserveDecimals
-        );
+        ReserveAsset storage backingConfig = _assetConfigs[backingVault_];
+        uint256 backingAmount = _scaleBackingAmount(backingAmount18, backingConfig.reserveDecimals);
         if (backingAmount == 0) return;
 
+        address backingShareToken = backingConfig.shareToken;
         uint256 shares = _previewWithdraw(backingVault_, backingAmount);
-        uint256 trsryBalance = _trsryBalance(backingVault_);
+        uint256 trsryBalance = _trsryBalance(backingShareToken);
         if (shares > trsryBalance) shares = trsryBalance;
         if (shares == 0) return;
 
@@ -1033,7 +1051,7 @@ contract YieldRepurchaseFacilityV2 is
 
         _ohmPurchased = purchased - ohmToBurn;
 
-        _withdrawShares(backingVault_, shares);
+        _withdrawShares(backingShareToken, shares);
         IBurnableERC20(address(_OHM)).burn(ohmToBurn);
 
         emit OhmPurchasesProcessed(ohmToBurn, funded);
@@ -1043,7 +1061,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @dev The pricing and the submission are performed by the linked `YRFBondMarketLib`
     ///      through a delegatecall, so the facility is the market owner and callback.
     ///      `oraclePrice_` is the OHM price denominated in the vault's reserve token. For
-    ///      a sell-shares asset the payout token is the vault share and the reserve price
+    ///      a sell-shares asset the payout token is the share token and the reserve price
     ///      is converted to a per-share price through the conversion rate (floor): one
     ///      share is worth the conversion rate in reserve units.
     ///      The vault's previous tracked market is closed first, best-effort, so at most
@@ -1073,7 +1091,7 @@ contract YieldRepurchaseFacilityV2 is
                 YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals,
                 conversionRate
             );
-            payoutToken = vault_;
+            payoutToken = config_.shareToken;
         }
 
         _closeVaultMarket(vault_);
@@ -1160,7 +1178,10 @@ contract YieldRepurchaseFacilityV2 is
         marketAmounts[0] += inputAmount_;
         marketAmounts[1] += outputAmount_;
 
-        IERC20(config.sellShares ? vault : config.reserve).safeTransfer(msg.sender, outputAmount_);
+        IERC20(config.sellShares ? config.shareToken : config.reserve).safeTransfer(
+            msg.sender,
+            outputAmount_
+        );
     }
 
     /// @inheritdoc IBondCallback
@@ -1201,14 +1222,16 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault address is the zero address.
     ///      - The vault is already registered.
     ///      - The vault reports the zero address as its underlying asset.
-    ///      - The vault or its reserve token is OHM, the vault equals its own reserve,
-    ///        or the vault or the reserve collides with the vault or the reserve of a
-    ///        registered asset.
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC-165.
-    ///      - The vault's share decimals do not match its reserve decimals (a vault with a
+    ///      - The vault advertises ERC-7575 through ERC-165 and reports the zero address
+    ///        as its `share()`.
+    ///      - The share token decimals do not match the reserve decimals (a vault with a
     ///        decimals offset is not supported).
+    ///      - The vault, its share token, or its reserve token is OHM, the vault or the
+    ///        share token equals the reserve, or any of the three collides with the
+    ///        vault, the share token, or the reserve of a registered asset.
     ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
     ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
     ///        one word, or returns zero.
@@ -1296,7 +1319,7 @@ contract YieldRepurchaseFacilityV2 is
 
             emit BuybackPoolSeeded(seed.vault, seed.amount, epoch_);
 
-            uint256 funded = _fundFromTreasury(seed.vault, seed.amount);
+            uint256 funded = _fundFromTreasury(config, seed.amount);
             config.unfundedYield += Math.saturatingSub(seed.amount, funded);
         }
     }
@@ -1320,7 +1343,7 @@ contract YieldRepurchaseFacilityV2 is
         _requireNotBackingVault(vault_);
 
         _closeVaultMarket(vault_);
-        _returnBalancesToTrsry(vault_, config.reserve);
+        _returnBalancesToTrsry(config.shareToken, config.reserve);
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
@@ -2167,10 +2190,10 @@ contract YieldRepurchaseFacilityV2 is
         if (period_ >= MAX_GRACE_PERIOD) revert IYieldRepurchaseFacilityV2_GracePeriodTooLong();
     }
 
-    /// @notice Transfers the facility's balances of the vault shares and the reserve to
+    /// @notice Transfers the facility's balances of the share token and the reserve to
     ///         the treasury.
-    function _returnBalancesToTrsry(address vault_, address reserve_) private {
-        _sweepToTrsry(vault_);
+    function _returnBalancesToTrsry(address shareToken_, address reserve_) private {
+        _sweepToTrsry(shareToken_);
         _sweepToTrsry(reserve_);
     }
 
@@ -2178,9 +2201,9 @@ contract YieldRepurchaseFacilityV2 is
     // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
     // only through the isolating self-calls.
     // forge-lint: disable-next-item(calls-loop)
-    function _withdrawShares(address vault_, uint256 shares_) private {
-        TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(vault_), shares_);
-        TRSRY.withdrawReserves(address(this), SolmateERC20(vault_), shares_);
+    function _withdrawShares(address shareToken_, uint256 shares_) private {
+        TRSRY.increaseWithdrawApproval(address(this), SolmateERC20(shareToken_), shares_);
+        TRSRY.withdrawReserves(address(this), SolmateERC20(shareToken_), shares_);
     }
 
     // ============ VIEW FUNCTIONS ============ //
@@ -2197,9 +2220,8 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseRecipient
-    /// @dev The share token is the vault itself. `enabled` reports the per-asset
-    ///      `isAssetEnabled` flag only; the enabled state of the facility is available
-    ///      through `isEnabled`.
+    /// @dev `enabled` reports the per-asset `isAssetEnabled` flag only; the enabled state
+    ///      of the facility is available through `isEnabled`.
     ///
     ///      Reverts if:
     ///      - The vault is not registered
@@ -2213,7 +2235,7 @@ contract YieldRepurchaseFacilityV2 is
 
         config = VaultConfig({
             vault: vault_,
-            shareToken: vault_,
+            shareToken: assetConfig.shareToken,
             asset: assetConfig.reserve,
             enabled: assetConfig.isAssetEnabled
         });
@@ -2251,9 +2273,13 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
-        _requireRegistered(vault_);
         return
-            YRFAssetConfigLib.protocolReserveBalance(vault_, CHREG, address(TRSRY), backingVault);
+            YRFAssetConfigLib.protocolReserveBalance(
+                _requireRegistered(vault_),
+                CHREG,
+                address(TRSRY),
+                backingVault
+            );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -2296,13 +2322,14 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      Only the OHM excess and unregistered tokens are rescuable:
     ///      - OHM is capped at the balance above the purchased-OHM accumulator.
-    ///      - The share and reserve tokens of registered assets are their buyback pools
-    ///        and are rejected.
+    ///      - The vault, the share token, and the reserve token of a registered asset
+    ///        are rejected: the share and reserve balances are the asset's buyback pool.
     ///      - Any other token is swept in full.
     ///
     ///      Reverts if:
     ///      - The caller holds neither the yrf_admin role nor the admin role.
-    ///      - `token_` is the share or the reserve token of a registered asset.
+    ///      - `token_` is the vault, the share token, or the reserve token of a
+    ///        registered asset.
     function rescue(address token_) external override onlyYrfAdminOrAdminRole {
         _transferToTrsry(
             token_,

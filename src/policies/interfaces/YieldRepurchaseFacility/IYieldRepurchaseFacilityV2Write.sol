@@ -21,16 +21,22 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
     ///         yield and designating it as the backing vault.
     /// @dev Callable by the configurator. The asset is registered in the enabled state. The
-    ///      vault's share decimals must equal its reserve decimals, the reserve decimals
+    ///      share token decimals must equal the reserve decimals, the reserve decimals
     ///      must not exceed 18, the reserve must resolve to a non-zero OHM price through
     ///      the PRICE module, and a sell-shares vault cannot be designated as the backing
     ///      vault. The designation is only available while no backing vault is
     ///      designated; replacing an existing designation requires `setBackingVault`.
     ///
+    ///      The share token of the vault is fixed at registration: the token returned by
+    ///      `share()` when the vault advertises ERC-7575 through ERC-165, which may be a
+    ///      contract separate from the vault, and the vault itself otherwise.
+    ///
     ///      Every token balance held by the facility belongs to exactly one pool, so the
-    ///      registration rejects any token collision: neither the vault nor the reserve
-    ///      may be OHM, the vault may not equal its own reserve, and neither may equal
-    ///      the vault or the reserve of a registered asset.
+    ///      registration rejects any token collision: none of the vault, its share
+    ///      token, and its reserve may be OHM, neither the vault nor the share token may
+    ///      equal the reserve, and none of the three may equal the vault, the share
+    ///      token, or the reserve of a registered asset. Vaults that share one share
+    ///      token therefore cannot be registered together.
     ///
     ///      The registration probes the vault: `previewRedeem` of one whole share, and
     ///      `previewWithdraw` and `previewDeposit` of one whole reserve unit, must each
