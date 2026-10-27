@@ -67,7 +67,7 @@ contract MockConfigTarget {
         }
 
         uint256 len = keys_.length;
-        for (uint256 i = 0; i < len; ++i) {
+        for (uint256 i; i < len; ++i) {
             configState[keys_[i]] = values_[i];
         }
         executionOrder.push(marker_);
