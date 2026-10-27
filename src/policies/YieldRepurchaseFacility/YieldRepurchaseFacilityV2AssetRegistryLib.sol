@@ -13,8 +13,9 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Modules
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
@@ -27,7 +28,8 @@ import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameters reference the calling facility's storage, the facility is
 ///      `address(this)`, and the emitted events and the errors belong to the facility
-///      interface.
+///      interface. The value rules are those of `YieldRepurchaseFacilityV2ValidationLib`,
+///      which the facility and the configuration policy share.
 library YieldRepurchaseFacilityV2AssetRegistryLib {
     /// @notice Byte length of the single word a vault probe must return.
     uint16 private constant _PROBE_RETURN_LENGTH = 32;
@@ -98,8 +100,9 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     ) external {
         address vault_ = params_.vault;
         if (vault_ == address(0)) revert Errors.BadInput("vault");
-        if (params_.yieldBuybackShare > YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
+        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(
+            params_.yieldBuybackShare
+        );
         if (registry_.configs[vault_].vault != address(0))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
 
@@ -219,8 +222,10 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         if (config.sellShares == sellShares_)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_SellSharesUnchanged();
         if (sellShares_) {
-            if (vault_ == registry_.backingVault)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+            YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+                vault_,
+                registry_.backingVault
+            );
         } else if (config.asyncRedeem)
             revert IYieldRepurchaseFacilityV2
                 .IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
@@ -472,8 +477,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         address vault_,
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_
     ) private {
-        if (!config_.isAssetEnabled)
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetDisabled();
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(config_.isAssetEnabled);
         if (config_.sellShares)
             revert IYieldRepurchaseFacilityV2
                 .IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();

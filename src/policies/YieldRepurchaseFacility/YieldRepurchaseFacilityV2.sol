@@ -28,6 +28,7 @@ import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepur
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 import {YieldRepurchaseFacilityV2YieldLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2YieldLib.sol";
 
@@ -1057,8 +1058,11 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is currently set as the `backingVault`.
     function removeAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
-        _requireAssetDisabled(config);
-        _requireNotBackingVault(vault_);
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(config.isAssetEnabled);
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            _registry.backingVault
+        );
 
         _markets.closeVaultMarket(_context(), vault_);
         _returnBalancesToTrsry(config.shareToken, config.reserve);
@@ -1300,7 +1304,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 newShare_
     ) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
-        _requireValidYieldBuybackShare(newShare_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(newShare_);
 
         config.yieldBuybackShare = newShare_;
         emit YieldBuybackShareSet(vault_, newShare_);
@@ -1322,7 +1326,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Sets the initial discount.
     /// @dev Reverts if `initialDiscount_` is not less than 100% (`1e18`).
     function _setInitialDiscount(uint256 initialDiscount_) internal {
-        _requireValidInitialDiscount(initialDiscount_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidInitialDiscount(initialDiscount_);
 
         initialDiscount = initialDiscount_;
         emit InitialDiscountSet(initialDiscount_);
@@ -1344,7 +1348,7 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Sets the max price premium.
     /// @dev Reverts if `maxPricePremium_` is above 1,000% (`10e18`).
     function _setMaxPricePremium(uint256 maxPricePremium_) internal {
-        _requireValidMaxPricePremium(maxPricePremium_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidMaxPricePremium(maxPricePremium_);
 
         maxPricePremium = maxPricePremium_;
         emit MaxPricePremiumSet(maxPricePremium_);
@@ -1398,9 +1402,11 @@ contract YieldRepurchaseFacilityV2 is
         uint256 expectedNextYield_,
         uint256 newNextYield_
     ) external override onlyConfigurator {
-        ReserveAsset storage config = _validateDecreaseNextYield(
+        ReserveAsset storage config = _requireRegistered(vault_);
+        YieldRepurchaseFacilityV2ValidationLib.requireNextYieldDecrease(
             vault_,
             expectedNextYield_,
+            config.nextYield,
             newNextYield_
         );
 
@@ -1462,7 +1468,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is already enabled.
     function enableAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
-        _requireAssetDisabled(config);
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(config.isAssetEnabled);
 
         config.isAssetEnabled = true;
         emit AssetEnabled(vault_);
@@ -1487,7 +1493,10 @@ contract YieldRepurchaseFacilityV2 is
     function disableAsset(address vault_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         _requireAssetEnabled(config);
-        _requireNotBackingVault(vault_);
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            _registry.backingVault
+        );
 
         config.isAssetEnabled = false;
         _markets.closeVaultMarket(_context(), vault_);
@@ -1505,21 +1514,21 @@ contract YieldRepurchaseFacilityV2 is
         uint256 newShare_
     ) external view override {
         _requireRegistered(vault_);
-        _requireValidYieldBuybackShare(newShare_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(newShare_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The discount is not less than 100% (`1e18`).
     function validateSetInitialDiscount(uint256 initialDiscount_) external pure override {
-        _requireValidInitialDiscount(initialDiscount_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidInitialDiscount(initialDiscount_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The premium is above 1,000% (`10e18`).
     function validateSetMaxPricePremium(uint256 maxPricePremium_) external pure override {
-        _requireValidMaxPricePremium(maxPricePremium_);
+        YieldRepurchaseFacilityV2ValidationLib.requireValidMaxPricePremium(maxPricePremium_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -1527,7 +1536,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is not registered.
     ///      - The vault is already enabled.
     function validateEnableAsset(address vault_) external view override {
-        _requireAssetDisabled(_requireRegistered(vault_));
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetDisabled(
+            _requireRegistered(vault_).isAssetEnabled
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -1537,14 +1548,19 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is the backing vault.
     function validateDisableAsset(address vault_) external view override {
         _requireAssetEnabled(_requireRegistered(vault_));
-        _requireNotBackingVault(vault_);
+        YieldRepurchaseFacilityV2ValidationLib.requireNotBackingVault(
+            vault_,
+            _registry.backingVault
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     /// @dev Reverts if:
     ///      - The Clearinghouse is not included.
     function validateExcludeClearinghouse(address clearinghouse_) external view override {
-        _requireClearinghouseIncluded(clearinghouse_);
+        YieldRepurchaseFacilityV2ValidationLib.requireClearinghouseIncluded(
+            _clearinghouses.included[clearinghouse_]
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
@@ -1555,7 +1571,7 @@ contract YieldRepurchaseFacilityV2 is
         address clearinghouse_,
         uint256 additionalOffset_
     ) external view override {
-        YieldRepurchaseFacilityV2ClearinghouseLib.validateOffset(
+        YieldRepurchaseFacilityV2ValidationLib.requireOffsetWithinReceivables(
             clearinghouse_,
             _clearinghouses.offsets[clearinghouse_] + additionalOffset_
         );
@@ -1571,34 +1587,12 @@ contract YieldRepurchaseFacilityV2 is
         uint256 expectedNextYield_,
         uint256 newNextYield_
     ) external view override {
-        _validateDecreaseNextYield(vault_, expectedNextYield_, newNextYield_);
-    }
-
-    /// @notice Validates a next-yield correction against the stored value.
-    /// @dev Reverts if:
-    ///      - The vault is not registered.
-    ///      - The stored next yield does not equal `expectedNextYield_`.
-    ///      - `newNextYield_` is not lower than the stored value.
-    function _validateDecreaseNextYield(
-        address vault_,
-        uint256 expectedNextYield_,
-        uint256 newNextYield_
-    ) private view returns (ReserveAsset storage config_) {
-        config_ = _requireRegistered(vault_);
-
-        uint256 currentNextYield = config_.nextYield;
-        if (currentNextYield != expectedNextYield_)
-            revert IYieldRepurchaseFacilityV2_NextYieldMismatch(
-                vault_,
-                expectedNextYield_,
-                currentNextYield
-            );
-        if (newNextYield_ >= currentNextYield)
-            revert IYieldRepurchaseFacilityV2_NextYieldNotDecreased(
-                vault_,
-                newNextYield_,
-                currentNextYield
-            );
+        YieldRepurchaseFacilityV2ValidationLib.requireNextYieldDecrease(
+            vault_,
+            expectedNextYield_,
+            _requireRegistered(vault_).nextYield,
+            newNextYield_
+        );
     }
 
     // ============ HELPERS ============ //
@@ -1678,18 +1672,7 @@ contract YieldRepurchaseFacilityV2 is
     // Called from the `seedCycle` loop, where an invalid seed must reject the whole seeding
     // forge-lint: disable-next-item(require-revert-in-loop)
     function _requireAssetEnabled(ReserveAsset storage config_) private view {
-        if (!config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetDisabled();
-    }
-
-    /// @notice Reverts unless the asset is disabled.
-    function _requireAssetDisabled(ReserveAsset storage config_) private view {
-        if (config_.isAssetEnabled) revert IYieldRepurchaseFacilityV2_AssetEnabled();
-    }
-
-    /// @notice Reverts when the vault is the backing vault.
-    function _requireNotBackingVault(address vault_) private view {
-        if (vault_ == _registry.backingVault)
-            revert IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+        YieldRepurchaseFacilityV2ValidationLib.requireAssetEnabled(config_.isAssetEnabled);
     }
 
     /// @notice Reads the backing value from the backing oracle, in 18 decimals.
@@ -1770,30 +1753,6 @@ contract YieldRepurchaseFacilityV2 is
     /// @notice Reverts unless the caller is `caller_`.
     function _requireCaller(address caller_) private view {
         if (msg.sender != caller_) revert IYieldRepurchaseFacilityV2_InvalidCaller();
-    }
-
-    /// @notice Reverts unless the share is at most 100% (`1e18`).
-    function _requireValidYieldBuybackShare(uint256 share_) private pure {
-        if (share_ > YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
-    }
-
-    /// @notice Reverts unless the discount is less than 100% (`1e18`).
-    function _requireValidInitialDiscount(uint256 initialDiscount_) private pure {
-        if (initialDiscount_ >= YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
-            revert IYieldRepurchaseFacilityV2_InitialDiscountTooHigh();
-    }
-
-    /// @notice Reverts unless the premium is at or below 1,000% (`10e18`).
-    function _requireValidMaxPricePremium(uint256 maxPricePremium_) private pure {
-        if (maxPricePremium_ > YieldRepurchaseFacilityV2Constants.MAX_PRICE_PREMIUM_LIMIT)
-            revert IYieldRepurchaseFacilityV2_MaxPricePremiumTooHigh();
-    }
-
-    /// @notice Reverts unless the Clearinghouse is included in the backing yield.
-    function _requireClearinghouseIncluded(address clearinghouse_) private view {
-        if (!_clearinghouses.included[clearinghouse_])
-            revert IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
     }
 
     /// @notice Reverts unless the grace window is strictly shorter than `MAX_GRACE_PERIOD`.
