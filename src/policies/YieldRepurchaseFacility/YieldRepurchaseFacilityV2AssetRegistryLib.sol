@@ -17,14 +17,13 @@ import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFac
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
-import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
 /// @title YieldRepurchaseFacilityV2AssetRegistryLib
 /// @notice An external library that owns the asset registry of the
 ///         YieldRepurchaseFacilityV2 (the per-vault configurations, the vault list, the
-///         reserve lookup, and the backing vault designation), validates the
-///         registrations, and maintains the yield snapshots.
+///         reserve lookup, and the backing vault designation) and validates the
+///         registrations and the per-asset mode changes.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameters reference the calling facility's storage, the facility is
 ///      `address(this)`, and the emitted events and the errors belong to the facility
@@ -64,6 +63,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     /// @param nextYield The initial stored next yield, in reserve units.
     /// @param sellShares Whether bond markets pay out the vault shares instead of the
     ///        reserve.
+    /// @param setAsBackingVault Whether the vault becomes the backing vault.
     struct AddAssetParams {
         address vault;
         uint256 yieldBuybackShare;
@@ -71,16 +71,20 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         uint256 initialConversionRate;
         uint256 nextYield;
         bool sellShares;
+        bool setAsBackingVault;
     }
 
     /// @notice Validates and registers an ERC4626 vault as a reserve asset of the
-    ///         calling facility.
+    ///         calling facility, optionally designating it as the backing vault.
     /// @dev The asset is registered in the enabled state and recorded in the
     ///      reserve-to-vault lookup. The share token is the token returned by `share()`
     ///      for a vault that advertises ERC7575 through ERC165, and the vault itself
     ///      otherwise; it is stored with the asset and never re-read. The `asyncRedeem`
     ///      flag records whether the vault advertises asynchronous redemption (ERC7540).
-    ///      Emits `AssetAdded` and `NextYieldSet` for the facility.
+    ///      The registration path only designates the first backing vault; an existing
+    ///      designation is replaced only through `setBackingVault`. Emits `AssetAdded`
+    ///      and `NextYieldSet` for the facility, and `BackingVaultSet` when the vault is
+    ///      designated.
     ///
     ///      Reverts if:
     ///      - The vault address is the zero address.
@@ -103,6 +107,8 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     ///        asynchronous redemption `convertToAssets`, `convertToShares`, and
     ///        `previewDeposit`) reverts, returns less than one word, or returns zero.
     ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts or returns zero.
+    ///      - `setAsBackingVault` is set together with `sellShares`.
+    ///      - `setAsBackingVault` is set while a backing vault is already designated.
     /// @param registry_ The facility's asset registry storage.
     /// @param context_ The dependencies of the facility: the PRICE module is used for the
     ///        reserve price probe and the OHM token for the pool conflict checks.
@@ -177,82 +183,113 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
             asyncRedeem_
         );
         emit IYieldRepurchaseFacilityV2.NextYieldSet(reserve_, params_.nextYield);
+
+        if (params_.setAsBackingVault) {
+            if (registry_.backingVault != address(0))
+                revert IYieldRepurchaseFacilityV2
+                    .IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
+            _designateBackingVault(registry_, vault_, registry_.configs[vault_]);
+        }
     }
 
-    /// @notice Restarts the weekly cycle of the enabled assets: zeroes their yields and
-    ///         unfunded carries, applies the supplied next-yield seeds, and refreshes
-    ///         their yield snapshots.
-    /// @dev Disabled assets are not touched and are not seedable. A single
-    ///      `NextYieldSet` event with the resulting value is emitted per enabled vault;
-    ///      when the seed array contains duplicates, the last entry wins. The epoch
-    ///      counter and the seeding window of the facility are not written here.
-    ///
-    ///      Reverts if a seed references an unregistered or disabled vault.
+    /// @notice De-registers a vault: removes it from the vault list and deletes its
+    ///         reserve lookup and configuration.
+    /// @dev The caller validates the removal (a registered, disabled vault that is not
+    ///      the backing vault) and returns the vault's balances to the treasury before
+    ///      the configuration is deleted. Emits `AssetRemoved` for the facility.
     /// @param registry_ The facility's asset registry storage.
-    /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
-    /// @param context_ The dependencies of the facility, read for the balance snapshots.
-    function resetCycle(
-        Registry storage registry_,
-        IYieldRepurchaseFacilityV2.NextYieldSeed[] memory nextYieldSeeds_,
-        IYieldRepurchaseFacilityV2.Context memory context_
-    ) external {
+    /// @param vault_ The vault to de-register.
+    function remove(Registry storage registry_, address vault_) external {
         address[] storage vaults_ = registry_.vaults;
         uint256 vaultsLength = vaults_.length;
         for (uint256 i; i < vaultsLength; ++i) {
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[vaults_[i]];
-            if (!config.isAssetEnabled) continue;
-
-            config.nextYield = 0;
-            config.unfundedYield = 0;
-            _refreshSnapshots(config, context_);
+            if (vaults_[i] == vault_) {
+                vaults_[i] = vaults_[vaultsLength - 1];
+                vaults_.pop();
+                break;
+            }
         }
 
-        uint256 seedsLength = nextYieldSeeds_.length;
-        // An unregistered or disabled seed must reject the whole reset rather than be skipped
-        // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i; i < seedsLength; ++i) {
-            IYieldRepurchaseFacilityV2.NextYieldSeed memory seed = nextYieldSeeds_[i];
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[seed.vault];
-            if (config.vault == address(0))
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetNotRegistered(
-                    seed.vault
-                );
-            if (!config.isAssetEnabled)
-                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetDisabled();
-            config.nextYield = seed.nextYield;
-        }
-        // forge-lint: disable-end(require-revert-in-loop)
+        delete registry_.reserveVaults[registry_.configs[vault_].reserve];
+        delete registry_.configs[vault_];
 
-        for (uint256 i; i < vaultsLength; ++i) {
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[vaults_[i]];
-            if (!config.isAssetEnabled) continue;
-            emit IYieldRepurchaseFacilityV2.NextYieldSet(config.reserve, config.nextYield);
-        }
+        emit IYieldRepurchaseFacilityV2.AssetRemoved(vault_);
     }
 
-    /// @notice Refreshes the vault's conversion-rate and reserve-balance snapshots.
-    /// @param config_ The vault's configuration storage.
-    /// @param context_ The dependencies of the facility, read for the balance snapshot.
-    function refreshSnapshots(
-        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        IYieldRepurchaseFacilityV2.Context memory context_
-    ) external {
-        _refreshSnapshots(config_, context_);
+    /// @notice Validates a change of the sell-shares mode of a registered vault.
+    /// @dev Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The stored mode already equals `sellShares_`
+    ///        (`IYieldRepurchaseFacilityV2_SellSharesUnchanged`).
+    ///      - `sellShares_` is set while the vault is the backing vault
+    ///        (`IYieldRepurchaseFacilityV2_VaultIsBackingVault`).
+    ///      - `sellShares_` is unset while the asset is flagged `asyncRedeem`
+    ///        (`IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares`): the reserve
+    ///        mode redeems the held shares synchronously.
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The registered vault.
+    /// @param sellShares_ The proposed mode.
+    function validateSellShares(
+        Registry storage registry_,
+        address vault_,
+        bool sellShares_
+    ) external view {
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+        if (config.sellShares == sellShares_)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_SellSharesUnchanged();
+        if (sellShares_) {
+            if (vault_ == registry_.backingVault)
+                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultIsBackingVault();
+        } else if (config.asyncRedeem)
+            revert IYieldRepurchaseFacilityV2
+                .IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
     }
 
-    /// @notice Returns the reserve value of the protocol-held shares of a vault.
-    /// @dev Counts the treasury balance of the share token, and for the backing vault
-    ///      also the balances of the active Clearinghouses, valued by the redemption
-    ///      class of the vault (`YieldRepurchaseFacilityV2VaultLib.sharesToAssets`, floor).
-    /// @param config_ The configuration storage of the vault to value.
-    /// @param context_ The dependencies of the facility: the treasury, the CHREG module,
-    ///        and the backing vault.
-    /// @return balance The reserve value, in reserve units.
-    function protocolReserveBalance(
-        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        IYieldRepurchaseFacilityV2.Context memory context_
-    ) external view returns (uint256 balance) {
-        return _protocolReserveBalance(config_, context_);
+    /// @notice Re-reads the asynchronous-redemption flag of a registered vault from the
+    ///         vault's ERC165 advertisement of `IERC7540Redeem`.
+    /// @dev A vault that does not implement ERC165 reads as synchronous. The share
+    ///      token is not re-read. Emits `AsyncRedeemSet` for the facility.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The mode the vault advertises equals the stored flag
+    ///        (`IYieldRepurchaseFacilityV2_AsyncRedeemUnchanged`).
+    ///      - The vault advertises asynchronous redemption while the asset does not sell
+    ///        shares (`IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The registered vault.
+    function refreshAsyncRedeem(Registry storage registry_, address vault_) external {
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config = _requireRegistered(
+            registry_,
+            vault_
+        );
+
+        bool asyncRedeem = YieldRepurchaseFacilityV2VaultLib.isAsyncRedeem(vault_);
+        if (asyncRedeem == config.asyncRedeem)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AsyncRedeemUnchanged();
+        if (asyncRedeem && !config.sellShares)
+            revert IYieldRepurchaseFacilityV2
+                .IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
+
+        config.asyncRedeem = asyncRedeem;
+        emit IYieldRepurchaseFacilityV2.AsyncRedeemSet(vault_, asyncRedeem);
+    }
+
+    /// @notice Designates a registered vault as the backing vault.
+    /// @dev Emits `BackingVaultSet` for the facility.
+    ///
+    ///      Reverts if:
+    ///      - The vault is not registered (`IYieldRepurchaseFacilityV2_AssetNotRegistered`).
+    ///      - The asset is disabled (`IYieldRepurchaseFacilityV2_AssetDisabled`).
+    ///      - The asset sells vault shares
+    ///        (`IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares`).
+    /// @param registry_ The facility's asset registry storage.
+    /// @param vault_ The vault to designate.
+    function setBackingVault(Registry storage registry_, address vault_) external {
+        _designateBackingVault(registry_, vault_, _requireRegistered(registry_, vault_));
     }
 
     /// @notice Returns the amount of `token_` the facility can rescue to the treasury.
@@ -448,45 +485,35 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
             );
     }
 
-    // The loops here and in `resetCycle` run over the registered vaults, added only by the
-    // configurator, and the active Clearinghouses, activated only through the permissioned
-    // CHREG module.
-    // forge-lint: disable-start(calls-loop)
-    /// @notice Refreshes the snapshots of a vault configuration in place.
-    function _refreshSnapshots(
-        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        IYieldRepurchaseFacilityV2.Context memory context_
+    /// @notice Makes a registered vault the backing vault.
+    /// @dev Reverts if:
+    ///      - The asset is disabled.
+    ///      - The asset sells vault shares.
+    function _designateBackingVault(
+        Registry storage registry_,
+        address vault_,
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config_
     ) private {
-        // One whole share: `addAsset` requires the share decimals to equal the reserve
-        // decimals
-        config_.lastConversionRate = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
-            config_,
-            10 ** config_.reserveDecimals
-        );
-        config_.lastReserveBalance = _protocolReserveBalance(config_, context_);
+        if (!config_.isAssetEnabled)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetDisabled();
+        if (config_.sellShares)
+            revert IYieldRepurchaseFacilityV2
+                .IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
+
+        registry_.backingVault = vault_;
+        emit IYieldRepurchaseFacilityV2.BackingVaultSet(vault_);
     }
 
-    /// @notice Returns the reserve value of the protocol-held shares of a vault.
-    function _protocolReserveBalance(
-        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
-        IYieldRepurchaseFacilityV2.Context memory context_
-    ) private view returns (uint256 balance) {
-        address vault_ = config_.vault;
-        IERC20 shareToken = IERC20(config_.shareToken);
-        uint256 totalShares = shareToken.balanceOf(context_.trsry);
-
-        if (vault_ == context_.backingVault) {
-            CHREGv1 chreg = CHREGv1(context_.chreg);
-            uint256 activeCount = chreg.activeCount();
-            for (uint256 i; i < activeCount; ++i) {
-                totalShares += shareToken.balanceOf(chreg.active(i));
-            }
-        }
-
-        balance = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(config_, totalShares);
+    /// @notice Returns the config of a registered vault, reverting with
+    ///         `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered one.
+    function _requireRegistered(
+        Registry storage registry_,
+        address vault_
+    ) private view returns (IYieldRepurchaseFacilityV2.ReserveAsset storage config_) {
+        config_ = registry_.configs[vault_];
+        if (config_.vault == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetNotRegistered(vault_);
     }
-
-    // forge-lint: disable-end(calls-loop)
 
     /// @notice Returns whether `token_` is the vault, the share token, or the reserve
     ///         token of a registered asset.
