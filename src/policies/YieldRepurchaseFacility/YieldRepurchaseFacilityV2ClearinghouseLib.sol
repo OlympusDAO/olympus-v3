@@ -7,8 +7,8 @@ import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghou
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -19,8 +19,10 @@ import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 ///         measures the Clearinghouse component of the backing yield.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameter references the calling facility's storage, and the events and
-///      the errors belong to the facility interface. The interest arithmetic is that of
-///      `YieldRepurchaseFacilityV2MathLib`, which the lens shares.
+///      the errors belong to the facility interface. The offset bound is that of
+///      `YieldRepurchaseFacilityV2ValidationLib`, which the configuration policy shares,
+///      and the interest arithmetic that of `YieldRepurchaseFacilityV2MathLib`, which the
+///      lens shares.
 library YieldRepurchaseFacilityV2ClearinghouseLib {
     /// @notice The Clearinghouse configuration of the facility.
     /// @param offsets The cumulative offset applied to a Clearinghouse's
@@ -33,7 +35,9 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
     }
 
     /// @notice Sets the cumulative receivables offset of a Clearinghouse.
-    /// @dev Emits `ClearinghouseOffsetSet` for the facility.
+    /// @dev The offset is validated against the live `principalReceivables` of the
+    ///      Clearinghouse (`YieldRepurchaseFacilityV2ValidationLib`). Emits
+    ///      `ClearinghouseOffsetSet` for the facility.
     ///
     ///      Reverts if:
     ///      - `clearinghouse_` is the zero address (`Errors.BadInput`).
@@ -47,30 +51,13 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
         address clearinghouse_,
         uint256 offset_
     ) external {
-        validateOffset(clearinghouse_, offset_);
+        YieldRepurchaseFacilityV2ValidationLib.requireOffsetWithinReceivables(
+            clearinghouse_,
+            offset_
+        );
 
         state_.offsets[clearinghouse_] = offset_;
         emit IYieldRepurchaseFacilityV2.ClearinghouseOffsetSet(clearinghouse_, offset_);
-    }
-
-    /// @notice Validates a cumulative receivables offset against the Clearinghouse's live
-    ///         `principalReceivables`.
-    /// @dev Reverts if:
-    ///      - `clearinghouse_` is the zero address (`Errors.BadInput`).
-    ///      - `offset_` exceeds the current `principalReceivables`
-    ///        (`IYieldRepurchaseFacilityV2_OffsetExceedsReceivables`).
-    /// @param clearinghouse_ The Clearinghouse address.
-    /// @param offset_ The cumulative offset to validate, in the receivables' units.
-    function validateOffset(address clearinghouse_, uint256 offset_) public view {
-        if (clearinghouse_ == address(0)) revert Errors.BadInput("clearinghouse");
-
-        uint256 receivables = readPrincipalReceivables(clearinghouse_);
-        if (offset_ > receivables)
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_OffsetExceedsReceivables(
-                clearinghouse_,
-                offset_,
-                receivables
-            );
     }
 
     /// @notice Includes a Clearinghouse in the backing yield regardless of its reserve
@@ -111,8 +98,9 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
     /// @param state_ The facility's Clearinghouse configuration storage.
     /// @param clearinghouse_ The Clearinghouse address.
     function exclude(Clearinghouses storage state_, address clearinghouse_) external {
-        if (!state_.included[clearinghouse_])
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ClearinghouseNotIncluded();
+        YieldRepurchaseFacilityV2ValidationLib.requireClearinghouseIncluded(
+            state_.included[clearinghouse_]
+        );
 
         state_.included[clearinghouse_] = false;
         emit IYieldRepurchaseFacilityV2.ClearinghouseExcluded(clearinghouse_);
@@ -142,7 +130,7 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
             address ch = chreg.registry(i);
             if (!_countsTowardBackingYield(state_, ch, backingReserve_)) continue;
             yield += YieldRepurchaseFacilityV2MathLib.clearinghouseInterest(
-                readPrincipalReceivables(ch),
+                _readPrincipalReceivables(ch),
                 state_.offsets[ch]
             );
         }
@@ -170,22 +158,6 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
             address ch = chreg.registry(i);
             if (!_countsTowardBackingYield(state_, ch, backingReserve_))
                 emit IYieldRepurchaseFacilityV2.ClearinghouseDebtTokenMismatch(ch);
-        }
-    }
-
-    /// @notice Reads the Clearinghouse's `principalReceivables`, treating a revert as
-    ///         zero.
-    /// @param clearinghouse_ The Clearinghouse address.
-    /// @return The current `principalReceivables`, or zero when the read reverts.
-    function readPrincipalReceivables(address clearinghouse_) public view returns (uint256) {
-        // Called once per entry of the governance-bounded registry scan
-        // forge-lint: disable-next-line(calls-loop)
-        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
-            uint256 receivables
-        ) {
-            return receivables;
-        } catch {
-            return 0;
         }
     }
 
@@ -222,6 +194,20 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
         ) {} catch {
             revert IYieldRepurchaseFacilityV2
                 .IYieldRepurchaseFacilityV2_ClearinghouseReceivablesNotReadable(clearinghouse_);
+        }
+    }
+
+    /// @notice Reads the Clearinghouse's `principalReceivables`, treating a revert as
+    ///         zero.
+    function _readPrincipalReceivables(address clearinghouse_) private view returns (uint256) {
+        // Called once per entry of the governance-bounded registry scan
+        // forge-lint: disable-next-line(calls-loop)
+        try IGenericClearinghouse(clearinghouse_).principalReceivables() returns (
+            uint256 receivables
+        ) {
+            return receivables;
+        } catch {
+            return 0;
         }
     }
 
