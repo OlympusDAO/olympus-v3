@@ -11,7 +11,8 @@ import {SafeTransferLib} from "@solmate-6.2.0/utils/SafeTransferLib.sol";
 
 /// @notice An ERC-4626 vault that is its own ERC-20 share token, whose conversion rate is the
 ///         ratio of its asset balance to its share supply, and which can be switched to fail
-///         in its conversion functions or in the transfer of its shares.
+///         in its conversion functions, in `previewWithdraw` alone, or in the transfer of its
+///         shares.
 contract MockGasBurnerVault is ERC20 {
     using FullMath for uint256;
     using SafeTransferLib for ERC20;
@@ -22,9 +23,11 @@ contract MockGasBurnerVault is ERC20 {
     ///        calling frame keeps back one 64th of its gas, so a facility step that calls the
     ///        vault fails with that share of its gas limit unspent.
     ///      - `RevertLong`: a revert with `LONG_REVERT_LENGTH` bytes of data.
-    ///      - `RevertBomb`: a revert with `BOMB_REVERT_LENGTH` bytes of data. A facility step
-    ///        that calls the vault copies the data to bubble the revert and runs out of gas in
-    ///        its own frame, so the step consumes its whole gas limit.
+    ///      - `RevertBomb`: a revert with `BOMB_REVERT_LENGTH` bytes of data. The frame that
+    ///        calls the vault copies the data to bubble the revert and runs out of gas, so a
+    ///        facility step that calls the vault directly consumes its whole gas limit, while
+    ///        a step that reaches the vault through a linked library keeps the one 64th of
+    ///        its gas the library call retained.
     enum FailMode {
         None,
         BurnGas,
@@ -48,6 +51,8 @@ contract MockGasBurnerVault is ERC20 {
 
     /// @notice The behaviour of the conversion functions, `deposit`, and `redeem`.
     FailMode public convertMode;
+    /// @notice The behaviour of `previewWithdraw` alone, applied before `convertMode`.
+    FailMode public withdrawMode;
     /// @notice The behaviour of `transfer`.
     FailMode public transferMode;
 
@@ -62,6 +67,10 @@ contract MockGasBurnerVault is ERC20 {
 
     function setConvertMode(FailMode mode_) external {
         convertMode = mode_;
+    }
+
+    function setWithdrawMode(FailMode mode_) external {
+        withdrawMode = mode_;
     }
 
     function setTransferMode(FailMode mode_) external {
@@ -95,6 +104,7 @@ contract MockGasBurnerVault is ERC20 {
     }
 
     function previewWithdraw(uint256 assets_) external view returns (uint256) {
+        _fail(withdrawMode);
         return _toShares(assets_, true);
     }
 

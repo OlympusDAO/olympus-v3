@@ -69,17 +69,28 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
 
     // ============ HELPERS ============ //
 
-    /// @notice Registers the fixture through the config policy as the admin, with zero snapshots.
+    /// @notice Registers the fixture through the config policy as the admin, with zero snapshots
+    ///         and a zero next yield.
     /// @param beforeSusde_ When set, the sUSDe asset is removed and registered again after the
     ///        fixture, so the vault order becomes sUSDS, fixture, sUSDe; otherwise the fixture
     ///        is the last vault.
     function _registerBurner(bool beforeSusde_) internal {
+        _registerBurner(beforeSusde_, 0);
+    }
+
+    /// @notice Registers the fixture through the config policy as the admin, with zero snapshots.
+    /// @param beforeSusde_ When set, the sUSDe asset is removed and registered again after the
+    ///        fixture, so the vault order becomes sUSDS, fixture, sUSDe; otherwise the fixture
+    ///        is the last vault.
+    /// @param nextYield_ The stored next yield of the fixture: the funding target of its first
+    ///        weekly reset, in WETH units.
+    function _registerBurner(bool beforeSusde_, uint256 nextYield_) internal {
         vm.startPrank(TIMELOCK);
         if (beforeSusde_) {
             yieldRepoConfig.disableAsset(SUSDE);
             yieldRepoConfig.removeAsset(SUSDE);
         }
-        yieldRepoConfig.addAsset(address(burner), 1e18, 0, ONE, 0, false, false);
+        yieldRepoConfig.addAsset(address(burner), 1e18, 0, ONE, nextYield_, false, false);
         if (beforeSusde_) {
             yieldRepoConfig.addAsset(
                 SUSDE,
@@ -816,10 +827,14 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
     function test_margin_execute_reachesNextCheck_afterStepOutOfGas() public {
         // The vault order is sUSDS, fixture, sUSDe. The weekly reset of the fixture, the
         // second step of the beat, runs out of gas in the frame of the step, so it consumes
-        // its whole limit. The advance to the following check then reads the next vault and
-        // its enabled flag from storage slots the beat has not touched.
-        _registerBurner(true);
-        burner.setConvertMode(MockGasBurnerVault.FailMode.RevertBomb);
+        // its whole limit: the fixture carries a next yield, so the step sizes the treasury
+        // withdrawal with a `previewWithdraw` it calls directly, and the revert data of that
+        // call runs the step out of gas. (The projection before it reaches the vault through
+        // the yield library, whose frame would absorb a bomb instead.) The advance to the
+        // following check then reads the next vault and its enabled flag from storage slots
+        // the beat has not touched.
+        _registerBurner(true, 1);
+        burner.setWithdrawMode(MockGasBurnerVault.FailMode.RevertBomb);
         bytes memory callData = abi.encodeCall(IPeriodicTask.execute, ());
 
         uint256 gas_ = _gasForStep(HEART, callData, 1);
