@@ -6,10 +6,9 @@ pragma solidity ^0.8.24;
 // The probes call the facility with an explicit gas amount, capture the short error data of
 // protocol contracts, and read the error words in assembly.
 // The token calls target WETH and the fixture, whose transfers revert on failure.
-// The expected events are emitted after the setup calls, and the literal flags are the
-// `sellShares` and `setAsBackingVault` arguments of `addAsset`.
+// The literal flags are the `sellShares` and `setAsBackingVault` arguments of `addAsset`.
 // The setup steps assert their effects directly, so return values are unused.
-// forge-lint: disable-start(literal-instead-of-constant,calls-loop,low-level-calls,return-bomb,inline-assembly,erc20-unchecked-transfer,reentrancy-events,boolean-cst,unsafe-typecast,unused-return)
+// forge-lint: disable-start(literal-instead-of-constant,calls-loop,low-level-calls,return-bomb,inline-assembly,erc20-unchecked-transfer,boolean-cst,unsafe-typecast,unused-return)
 
 import {YieldRepurchaseFacilityV2ForkTestBase} from "./YieldRepurchaseFacilityV2ForkTestBase.sol";
 import {MockGasBurnerVault} from "./mocks/MockYRFGasBurnerVault.sol";
@@ -925,4 +924,4 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         console2.log("execute, long revert data: gas between the checks", required - available);
     }
 }
-// forge-lint: disable-end(literal-instead-of-constant,calls-loop,low-level-calls,return-bomb,inline-assembly,erc20-unchecked-transfer,reentrancy-events,boolean-cst,unsafe-typecast,unused-return)
+// forge-lint: disable-end(literal-instead-of-constant,calls-loop,low-level-calls,return-bomb,inline-assembly,erc20-unchecked-transfer,boolean-cst,unsafe-typecast,unused-return)
