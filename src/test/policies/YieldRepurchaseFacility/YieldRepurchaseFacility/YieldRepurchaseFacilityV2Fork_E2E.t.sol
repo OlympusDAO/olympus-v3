@@ -9,7 +9,7 @@ import {Vm} from "@forge-std-1.16.2/Vm.sol";
 
 import {IERC4626} from "src/interfaces/IERC4626.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
-import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
+import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
@@ -463,14 +463,15 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         // these values.
         uint256 receivables = _readPrincipalReceivables(CLEARINGHOUSE_V1_1);
         uint256 interestBefore = ((receivables - CLEARINGHOUSE_V1_1_INITIAL_OFFSET) *
-            YRFClearinghouseLib.CH_RATE_NUMERATOR) /
-            YRFClearinghouseLib.CH_RATE_DENOMINATOR /
-            YRFClearinghouseLib.WEEKS_PER_YEAR;
+            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
+            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
+            YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
         uint256 interestAfter = ((receivables -
             CLEARINGHOUSE_V1_1_INITIAL_OFFSET -
-            CLEARINGHOUSE_V1_1_OFFSET_INCREASE) * YRFClearinghouseLib.CH_RATE_NUMERATOR) /
-            YRFClearinghouseLib.CH_RATE_DENOMINATOR /
-            YRFClearinghouseLib.WEEKS_PER_YEAR;
+            CLEARINGHOUSE_V1_1_OFFSET_INCREASE) *
+            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
+            YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
+            YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
 
         uint256 projectionAfter = yieldRepo.getNextYield(SUSDS);
         assertEq(projectionAfter, _expectedProjectionView(SUSDS), "offset: projection view");

@@ -13,21 +13,23 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {YRFVaultLib} from "src/policies/YieldRepurchaseFacility/YRFVaultLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 import {PRICEv2} from "src/modules/PRICE/PRICE.v2.sol";
 
-/// @title YRFAssetConfigLib
-/// @notice An external library that validates and maintains the per-asset registry and
-///         the yield snapshots of the YieldRepurchaseFacilityV2.
+/// @title YieldRepurchaseFacilityV2AssetRegistryLib
+/// @notice An external library that owns the asset registry of the
+///         YieldRepurchaseFacilityV2 (the per-vault configurations, the vault list, the
+///         reserve lookup, and the backing vault designation), validates the
+///         registrations, and maintains the yield snapshots.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameters reference the calling facility's storage, the facility is
 ///      `address(this)`, and the emitted events and the errors belong to the facility
 ///      interface.
-library YRFAssetConfigLib {
+library YieldRepurchaseFacilityV2AssetRegistryLib {
     /// @notice Byte length of the single word a vault probe must return.
     uint16 private constant _PROBE_RETURN_LENGTH = 32;
 
@@ -35,6 +37,21 @@ library YRFAssetConfigLib {
     ///         vault functions combined with `share()`.
     bytes4 private constant _ERC7575_VAULT_INTERFACE_ID =
         type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
+
+    /// @notice The asset registry of the facility.
+    /// @param configs The configuration and accounting of each registered vault.
+    /// @param vaults The ordered list of the registered vault addresses.
+    /// @param reserveVaults The registered vault of each reserve token, or the zero
+    ///        address when the token is not the reserve of a registered asset. Written by
+    ///        `addAsset` and cleared by `removeAsset`; the lookup is single-valued because
+    ///        a reserve token belongs to at most one registered asset.
+    /// @param backingVault The backing vault, or the zero address when none is designated.
+    struct Registry {
+        mapping(address vault => IYieldRepurchaseFacilityV2.ReserveAsset config) configs;
+        address[] vaults;
+        mapping(address reserve => address vault) reserveVaults;
+        address backingVault;
+    }
 
     /// @notice The registration inputs of `addAsset`.
     /// @param vault The ERC4626 vault to register.
@@ -86,16 +103,12 @@ library YRFAssetConfigLib {
     ///        asynchronous redemption `convertToAssets`, `convertToShares`, and
     ///        `previewDeposit`) reverts, returns less than one word, or returns zero.
     ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts or returns zero.
-    /// @param assetConfigs_ The facility's per-vault configuration storage.
-    /// @param vaults_ The facility's registered vault list storage.
-    /// @param reserveVaults_ The facility's reserve-to-vault lookup storage.
+    /// @param registry_ The facility's asset registry storage.
     /// @param context_ The dependencies of the facility: the PRICE module is used for the
     ///        reserve price probe and the OHM token for the pool conflict checks.
     /// @param params_ The registration inputs.
     function addAsset(
-        mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
-        address[] storage vaults_,
-        mapping(address => address) storage reserveVaults_,
+        Registry storage registry_,
         IYieldRepurchaseFacilityV2.Context memory context_,
         AddAssetParams memory params_
     ) external {
@@ -103,7 +116,7 @@ library YRFAssetConfigLib {
         if (vault_ == address(0)) revert Errors.BadInput("vault");
         if (params_.yieldBuybackShare > YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_YieldBuybackShareTooHigh();
-        if (assetConfigs_[vault_].vault != address(0))
+        if (registry_.configs[vault_].vault != address(0))
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
 
         address reserve_ = IERC4626(vault_).asset();
@@ -120,7 +133,7 @@ library YRFAssetConfigLib {
         if (IERC20Metadata(shareToken_).decimals() != reserveDecimals)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-        _requireNoPoolConflict(assetConfigs_, vaults_, context_.ohm, vault_, shareToken_, reserve_);
+        _requireNoPoolConflict(registry_, context_.ohm, vault_, shareToken_, reserve_);
 
         // The share decimals equal the reserve decimals, so one unit is both one whole
         // share and one whole reserve token.
@@ -138,7 +151,7 @@ library YRFAssetConfigLib {
                 reserve_
             );
 
-        assetConfigs_[vault_] = IYieldRepurchaseFacilityV2.ReserveAsset({
+        registry_.configs[vault_] = IYieldRepurchaseFacilityV2.ReserveAsset({
             vault: vault_,
             shareToken: shareToken_,
             reserve: reserve_,
@@ -152,8 +165,8 @@ library YRFAssetConfigLib {
             nextYield: params_.nextYield,
             unfundedYield: 0
         });
-        vaults_.push(vault_);
-        reserveVaults_[reserve_] = vault_;
+        registry_.vaults.push(vault_);
+        registry_.reserveVaults[reserve_] = vault_;
 
         emit IYieldRepurchaseFacilityV2.AssetAdded(
             vault_,
@@ -175,19 +188,18 @@ library YRFAssetConfigLib {
     ///      counter and the seeding window of the facility are not written here.
     ///
     ///      Reverts if a seed references an unregistered or disabled vault.
-    /// @param assetConfigs_ The facility's per-vault configuration storage.
-    /// @param vaults_ The facility's registered vault list storage.
+    /// @param registry_ The facility's asset registry storage.
     /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
     /// @param context_ The dependencies of the facility, read for the balance snapshots.
     function resetCycle(
-        mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
-        address[] storage vaults_,
+        Registry storage registry_,
         IYieldRepurchaseFacilityV2.NextYieldSeed[] memory nextYieldSeeds_,
         IYieldRepurchaseFacilityV2.Context memory context_
     ) external {
+        address[] storage vaults_ = registry_.vaults;
         uint256 vaultsLength = vaults_.length;
         for (uint256 i; i < vaultsLength; ++i) {
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[vaults_[i]];
+            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[vaults_[i]];
             if (!config.isAssetEnabled) continue;
 
             config.nextYield = 0;
@@ -200,7 +212,7 @@ library YRFAssetConfigLib {
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < seedsLength; ++i) {
             IYieldRepurchaseFacilityV2.NextYieldSeed memory seed = nextYieldSeeds_[i];
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[seed.vault];
+            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[seed.vault];
             if (config.vault == address(0))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetNotRegistered(
                     seed.vault
@@ -212,7 +224,7 @@ library YRFAssetConfigLib {
         // forge-lint: disable-end(require-revert-in-loop)
 
         for (uint256 i; i < vaultsLength; ++i) {
-            IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[vaults_[i]];
+            IYieldRepurchaseFacilityV2.ReserveAsset storage config = registry_.configs[vaults_[i]];
             if (!config.isAssetEnabled) continue;
             emit IYieldRepurchaseFacilityV2.NextYieldSet(config.reserve, config.nextYield);
         }
@@ -231,7 +243,7 @@ library YRFAssetConfigLib {
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
     /// @dev Counts the treasury balance of the share token, and for the backing vault
     ///      also the balances of the active Clearinghouses, valued by the redemption
-    ///      class of the vault (`YRFVaultLib.sharesToAssets`, floor).
+    ///      class of the vault (`YieldRepurchaseFacilityV2VaultLib.sharesToAssets`, floor).
     /// @param config_ The configuration storage of the vault to value.
     /// @param context_ The dependencies of the facility: the treasury, the CHREG module,
     ///        and the backing vault.
@@ -251,15 +263,13 @@ library YRFAssetConfigLib {
     ///
     ///      Reverts if `token_` is the vault, the share token, or the reserve token of
     ///      a registered asset.
-    /// @param assetConfigs_ The facility's per-vault configuration storage.
-    /// @param vaults_ The facility's registered vault list storage.
+    /// @param registry_ The facility's asset registry storage.
     /// @param token_ The token to rescue.
     /// @param ohm_ The OHM token address.
     /// @param ohmPurchased_ The purchased-OHM accumulator backing the burn accounting.
     /// @return rescuable The rescuable amount.
     function rescuableAmount(
-        mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
-        address[] storage vaults_,
+        Registry storage registry_,
         address token_,
         address ohm_,
         uint256 ohmPurchased_
@@ -270,11 +280,12 @@ library YRFAssetConfigLib {
             return balance > ohmPurchased_ ? balance - ohmPurchased_ : 0;
         }
 
+        address[] storage vaults_ = registry_.vaults;
         uint256 vaultsLength = vaults_.length;
         // A token of a registered asset must reject the rescue
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < vaultsLength; ++i) {
-            if (_isPoolToken(assetConfigs_[vaults_[i]], token_))
+            if (_isPoolToken(registry_.configs[vaults_[i]], token_))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenNotRescuable(
                     token_
                 );
@@ -313,7 +324,7 @@ library YRFAssetConfigLib {
 
         bool supportsERC7575 = ERC165Checker.supportsInterface(vault_, _ERC7575_VAULT_INTERFACE_ID);
 
-        asyncRedeem_ = YRFVaultLib.isAsyncRedeem(vault_);
+        asyncRedeem_ = YieldRepurchaseFacilityV2VaultLib.isAsyncRedeem(vault_);
         if (asyncRedeem_) {
             if (!supportsERC7575)
                 revert IYieldRepurchaseFacilityV2
@@ -345,8 +356,7 @@ library YRFAssetConfigLib {
     ///      - The reserve, the share token, or the vault is the vault, the share token,
     ///        or the reserve of a registered asset.
     function _requireNoPoolConflict(
-        mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
-        address[] storage vaults_,
+        Registry storage registry_,
         address ohm_,
         address vault_,
         address shareToken_,
@@ -359,11 +369,14 @@ library YRFAssetConfigLib {
                 reserve_
             );
 
+        address[] storage vaults_ = registry_.vaults;
         uint256 vaultsLength = vaults_.length;
         // A pool collision with any registered asset must reject the registration
         // forge-lint: disable-start(require-revert-in-loop)
         for (uint256 i; i < vaultsLength; ++i) {
-            IYieldRepurchaseFacilityV2.ReserveAsset storage registered = assetConfigs_[vaults_[i]];
+            IYieldRepurchaseFacilityV2.ReserveAsset storage registered = registry_.configs[
+                vaults_[i]
+            ];
             if (_isPoolToken(registered, reserve_))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
                     reserve_
@@ -446,7 +459,7 @@ library YRFAssetConfigLib {
     ) private {
         // One whole share: `addAsset` requires the share decimals to equal the reserve
         // decimals
-        config_.lastConversionRate = YRFVaultLib.sharesToAssets(
+        config_.lastConversionRate = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
             config_,
             10 ** config_.reserveDecimals
         );
@@ -470,7 +483,7 @@ library YRFAssetConfigLib {
             }
         }
 
-        balance = YRFVaultLib.sharesToAssets(config_, totalShares);
+        balance = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(config_, totalShares);
     }
 
     // forge-lint: disable-end(calls-loop)

@@ -17,7 +17,7 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
-import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
+import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
@@ -1029,9 +1029,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             uint256 receivables = _readPrincipalReceivables(ch);
             uint256 effective = Math.saturatingSub(receivables, yieldRepo.clearinghouseOffset(ch));
             yield +=
-                (effective * YRFClearinghouseLib.CH_RATE_NUMERATOR) /
-                YRFClearinghouseLib.CH_RATE_DENOMINATOR /
-                YRFClearinghouseLib.WEEKS_PER_YEAR;
+                (effective * YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
+                YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
+                YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
         }
     }
 
@@ -1143,7 +1143,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // Mirrors the library casts: the decimals fit in int8, and with `priceDecimals` in
     // [-18, 18] both scale exponents are non-negative.
     // forge-lint: disable-start(unsafe-typecast)
-    /// @notice Mirrors the `YRFBondMarketLib` market pricing for 18-decimal payout tokens and the
+    /// @notice Mirrors the `YieldRepurchaseFacilityV2BondMarketLib` market pricing for 18-decimal payout tokens and the
     ///         18-decimal oracle.
     function _mirrorMarketPricing(
         uint256 oraclePrice_
@@ -1431,7 +1431,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         return abi.decode(data, (address));
     }
 
-    // A tolerant read, mirroring `YRFClearinghouseLib.readPrincipalReceivables`
+    // A tolerant read, mirroring `YieldRepurchaseFacilityV2ClearinghouseLib.readPrincipalReceivables`
     // forge-lint: disable-next-item(low-level-calls)
     function _readPrincipalReceivables(address clearinghouse_) internal view returns (uint256) {
         (bool success, bytes memory data) = clearinghouse_.staticcall(

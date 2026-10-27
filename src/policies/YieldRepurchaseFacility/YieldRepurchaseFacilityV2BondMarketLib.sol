@@ -13,15 +13,41 @@ import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFa
 // Contracts
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";
 
-/// @title YRFBondMarketLib
-/// @notice An external library that prices and submits the Bond Protocol SDA markets of
-///         the YieldRepurchaseFacilityV2.
+/// @title YieldRepurchaseFacilityV2BondMarketLib
+/// @notice An external library that owns the bond market records of the
+///         YieldRepurchaseFacilityV2 and prices and submits its Bond Protocol SDA
+///         markets.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
-///      market submission originates from the calling facility: the facility is the
-///      market owner and the market callback, and the auctioneer's callback authorization
-///      applies to the facility address.
-library YRFBondMarketLib {
+///      storage parameter references the calling facility's storage and the market
+///      submission originates from the facility: the facility is the market owner and
+///      the market callback, and the auctioneer's callback authorization applies to the
+///      facility address.
+library YieldRepurchaseFacilityV2BondMarketLib {
     using FullMath for uint256;
+
+    /// @notice The bond market records of the facility.
+    /// @param marketVaults The vault that funds each bond market created by the facility,
+    ///        keyed by the auctioneer the market was created on. Set on market creation;
+    ///        a non-zero entry implicitly validates that the market was created by the
+    ///        facility. Market ids are unique only within one bond Aggregator, so the
+    ///        records are scoped to the creating auctioneer: after a bond-contract change,
+    ///        a colliding id on the new contracts cannot reach a stale record.
+    /// @param amounts The cumulative input and output amounts per bond market, keyed by
+    ///        the auctioneer the market was created on: `[0]` is the OHM in (quote), `[1]`
+    ///        the payout token out.
+    /// @param liveMarketIds The market id of each vault's latest bond market plus one, or
+    ///        zero when none is tracked. The offset encodes "none" as zero while the
+    ///        market id zero stays a valid id. The entry refers to a market of the current
+    ///        auctioneer: it is cleared whenever a close of the market is attempted, and a
+    ///        bond-contract change closes every tracked market before the auctioneer
+    ///        changes. Only the tracked market of a vault is purchasable: the callback of
+    ///        the facility rejects every other market, so a market that outlives a failed
+    ///        best-effort close is unpurchasable.
+    struct Markets {
+        mapping(address auctioneer => mapping(uint256 marketId => address vault)) marketVaults;
+        mapping(address auctioneer => mapping(uint256 marketId => uint256[2] amounts)) amounts;
+        mapping(address vault => uint256 marketIdPlusOne) liveMarketIds;
+    }
 
     /// @notice Bond market debt buffer (`100_000` = 100%).
     uint32 internal constant BOND_DEBT_BUFFER = 100_000;

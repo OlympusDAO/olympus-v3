@@ -5,9 +5,10 @@ pragma solidity >=0.8.24;
 /// @notice Shared compile-time constants of the YieldRepurchaseFacilityV2, its linked
 ///         libraries, and its configuration policies.
 /// @dev The constants that only one contract uses, such as the bond market shape of
-///      `YRFBondMarketLib`, the Clearinghouse rate of `YRFClearinghouseLib`, or the
-///      module keycodes and the `enable` payload layout of the facility, stay with that
-///      contract.
+///      `YieldRepurchaseFacilityV2BondMarketLib`, the Clearinghouse rate of
+///      `YieldRepurchaseFacilityV2ClearinghouseLib`, the module keycodes of
+///      `YieldRepurchaseFacilityV2DependenciesLib`, or the `enable` payload layout of the
+///      facility, stay with that contract.
 library YieldRepurchaseFacilityV2Constants {
     // ============ SCALES ============ //
 
