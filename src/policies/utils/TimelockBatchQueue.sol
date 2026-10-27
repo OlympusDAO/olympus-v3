@@ -51,7 +51,8 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     uint64 public nextActionId;
 
     /// @notice Queued timelock actions.
-    mapping(uint64 => ITimelockBatchQueue.QueuedAction) internal _queuedActions;
+    mapping(uint64 actionId => ITimelockBatchQueue.QueuedAction queuedAction)
+        internal _queuedActions;
 
     // ========== CONSTRUCTOR ========== //
 
@@ -118,8 +119,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     ///             - The action does not exist
     ///             - The action has already been executed
     ///             - The action has been cancelled
-    ///             - The action is still timelocked
-    ///             - The action has expired
+    ///             - The action is still timelocked (the block timestamp is before `executableAt`)
+    ///             - The action has expired (the block timestamp is past `expiresAt`, the last
+    ///               executable timestamp)
     ///             - `_validateExecution` reverts
     ///             - `_executeSubAction` reverts for any sub-action
     ///             - `_onActionExecuted` reverts
@@ -223,9 +225,6 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
         stored.expiresAt = expiresAt;
         for (uint256 i = 0; i < len; ++i) {
             stored.actions.push(actions_[i]);
-            // The queue hook of the subclass has already run; the events describe the stored
-            // action.
-            // forge-lint: disable-next-item(reentrancy-events)
             emit TimelockSubActionQueued(
                 actionId,
                 actions_[i].target,
@@ -235,7 +234,6 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
             );
         }
 
-        // forge-lint: disable-next-item(reentrancy-events)
         emit TimelockActionQueued(
             actionId,
             msg.sender,
@@ -282,7 +280,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     }
 
     /// @notice Validate standard executable state for a queued action.
-    /// @dev    Reverts on failure.
+    /// @dev    Reverts on failure. The action is executable at any block timestamp in the closed
+    ///         window `[executableAt, expiresAt]`: `expiresAt` is the last executable timestamp,
+    ///         inclusive, and the action is expired only once the block timestamp is past it.
     ///
     /// @param  actionId_ The queued action ID.
     /// @param  action_   The queued action storage reference.
@@ -294,10 +294,12 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
 
         // Timelock readiness and expiry intentionally follow wall-clock timestamps.
         // forge-lint: disable-start(block-timestamp)
-        if (block.timestamp < action_.executableAt)
-            revert ITimelockBatchQueue_ActionNotReady(actionId_, action_.executableAt);
-        if (block.timestamp > action_.expiresAt)
-            revert ITimelockBatchQueue_ActionExpired(actionId_, action_.expiresAt);
+        uint48 executableAt = action_.executableAt;
+        if (block.timestamp < executableAt)
+            revert ITimelockBatchQueue_ActionNotReady(actionId_, executableAt);
+        uint48 expiresAt = action_.expiresAt;
+        if (block.timestamp > expiresAt)
+            revert ITimelockBatchQueue_ActionExpired(actionId_, expiresAt);
         // forge-lint: disable-end(block-timestamp)
     }
 
@@ -431,6 +433,9 @@ abstract contract TimelockBatchQueue is ITimelockBatchQueue, ERC165 {
     function _validateTimelockDelay(uint48 delay_) internal view virtual;
 
     /// @notice Return the execution window for queued actions.
+    /// @dev    An action queued at `queuedAt` stores `executableAt = queuedAt + timelockDelay`
+    ///         and `expiresAt = executableAt + executionWindow`, the last executable timestamp,
+    ///         inclusive.
     ///
     /// @return executionWindow The execution window in seconds.
     function _executionWindow() internal view virtual returns (uint48 executionWindow);
