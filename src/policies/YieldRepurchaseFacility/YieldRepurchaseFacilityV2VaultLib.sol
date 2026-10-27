@@ -9,11 +9,12 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 
-/// @title YRFVaultLib
+/// @title YieldRepurchaseFacilityV2VaultLib
 /// @notice An internal library that values the shares of a registered vault of the
 ///         YieldRepurchaseFacilityV2 by the redemption class of the vault.
 /// @dev The functions are internal: they are compiled into the facility and into
-///      `YRFAssetConfigLib`, and read the configuration storage of the facility.
+///      `YieldRepurchaseFacilityV2AssetRegistryLib`, and read the configuration storage of
+///      the facility.
 ///
 ///      A vault with synchronous redemption is valued through its previews, which report
 ///      the executable amounts. A vault with asynchronous redemption (ERC7540) reverts
@@ -21,7 +22,7 @@ import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Check
 ///      valued through `convertToAssets` and `convertToShares`. The redemption payout of
 ///      such a vault is not bound to `convertToAssets`, so the valuation of such an
 ///      asset is an estimate.
-library YRFVaultLib {
+library YieldRepurchaseFacilityV2VaultLib {
     /// @notice Returns whether the vault advertises asynchronous redemption
     ///         (`IERC7540Redeem`) through ERC165.
     /// @dev A vault that does not implement ERC165 is reported as synchronous.
