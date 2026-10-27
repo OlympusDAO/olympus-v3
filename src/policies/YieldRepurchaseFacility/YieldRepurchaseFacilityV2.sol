@@ -30,6 +30,7 @@ import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepur
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2YieldLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2YieldLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -362,7 +363,7 @@ contract YieldRepurchaseFacilityV2 is
     ///         yield snapshots, rewinds the epoch counter so that the next `execute`
     ///         performs a weekly reset, and opens the seeding window of `seedCycle`.
     /// @dev The restart of the per-asset accounting is performed by the linked
-    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`. Disabled assets are not touched and are
+    ///      `YieldRepurchaseFacilityV2YieldLib`. Disabled assets are not touched and are
     ///      not seedable: a
     ///      seed for a disabled vault would be erased by the reset `enableAsset`
     ///      performs, so it is rejected instead. A single `NextYieldSet` event with the
@@ -372,7 +373,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      Reverts if a seed references an unregistered or disabled vault.
     /// @param nextYieldSeeds_ The per-vault `nextYield` values to apply after the reset.
     function _resetCycle(NextYieldSeed[] memory nextYieldSeeds_) private {
-        _registry.resetCycle(nextYieldSeeds_, _context());
+        YieldRepurchaseFacilityV2YieldLib.restart(_registry, nextYieldSeeds_, _context());
 
         _epoch = YieldRepurchaseFacilityV2Constants.EPOCH_LENGTH - 1;
         // The restart opens the seeding window of `seedCycle`, closed by the first beat
@@ -690,10 +691,12 @@ contract YieldRepurchaseFacilityV2 is
     ///      intentionally not `nonReentrant`: it executes within the guard held by
     ///      `execute`.
     ///
-    ///      The funding target is the stored `nextYield` plus the `unfundedYield` carried
-    ///      from earlier shortfalls; it does not depend on the facility's balances. The
-    ///      remainder the treasury balance cannot cover is stored back into
-    ///      `unfundedYield` and retried at the following reset.
+    ///      The projection and the snapshots are performed by the linked
+    ///      `YieldRepurchaseFacilityV2YieldLib` around the treasury withdrawal, which
+    ///      stays here. The funding target is the stored `nextYield` plus the
+    ///      `unfundedYield` carried from earlier shortfalls; it does not depend on the
+    ///      facility's balances. The remainder the treasury balance cannot cover is
+    ///      stored back into `unfundedYield` and retried at the following reset.
     ///
     ///      Reverts if the caller is not the facility itself.
     /// @param vault_ The vault to reset.
@@ -703,24 +706,22 @@ contract YieldRepurchaseFacilityV2 is
         _requireCaller(address(this));
 
         ReserveAsset storage config = _registry.configs[vault_];
+        Context memory context_ = _context();
 
-        uint256 fundingTarget = config.nextYield + config.unfundedYield;
-
-        // The projection reads the stored snapshots against the current rate, so it must
-        // run before the snapshots are refreshed below.
-        uint256 newNextYield = _projectNextYield(config, clearinghouseYield_);
-
-        _setNextYield(config, newNextYield);
-
-        config.lastConversionRate = _conversionRate(config);
+        uint256 fundingTarget = YieldRepurchaseFacilityV2YieldLib.beginWeeklyReset(
+            config,
+            context_,
+            clearinghouseYield_
+        );
 
         uint256 funded = _fundFromTreasury(config, fundingTarget);
-        config.unfundedYield = Math.saturatingSub(fundingTarget, funded);
 
-        // The balance snapshot is taken after the funding withdrawal, so it excludes the
-        // shares moved to the facility.
-        config.lastReserveBalance = YieldRepurchaseFacilityV2AssetRegistryLib
-            .protocolReserveBalance(config, _context());
+        YieldRepurchaseFacilityV2YieldLib.finishWeeklyReset(
+            config,
+            context_,
+            fundingTarget,
+            funded
+        );
     }
 
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
@@ -1160,8 +1161,8 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
-    ///      The asset is registered in the enabled state. The validation and the
-    ///      registration are performed by the linked
+    ///      The asset is registered in the enabled state. The validation, the
+    ///      registration, and the backing vault designation are performed by the linked
     ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      The function reverts if:
@@ -1191,9 +1192,6 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The yield buyback share exceeds 100% (`1e18`).
     ///      - `setAsBackingVault_` is set together with `sellShares_`.
     ///      - `setAsBackingVault_` is set while a backing vault is already designated.
-    // The registration is gated to the configurator, and the designation below writes only
-    // after the linked library has validated and registered the vault.
-    // forge-lint: disable-next-item(reentrancy-no-eth)
     function addAsset(
         address vault_,
         uint256 yieldBuybackShare_,
@@ -1211,17 +1209,10 @@ contract YieldRepurchaseFacilityV2 is
                 initialReserveBalance: initialReserveBalance_,
                 initialConversionRate: initialConversionRate_,
                 nextYield: nextYield_,
-                sellShares: sellShares_
+                sellShares: sellShares_,
+                setAsBackingVault: setAsBackingVault_
             })
         );
-
-        if (setAsBackingVault_) {
-            // The registration path only designates the first backing vault; an existing
-            // designation is replaced only through the explicit `setBackingVault`.
-            if (_registry.backingVault != address(0))
-                revert IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
-            _setBackingVault(vault_, _registry.configs[vault_]);
-        }
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1279,7 +1270,9 @@ contract YieldRepurchaseFacilityV2 is
     ///
     ///      The vault's tracked live bond market, if any is left, is closed best-effort:
     ///      a revert of the auctioneer is absorbed and the market is left to expire, its
-    ///      purchases reverting in `callback` for the de-registered asset.
+    ///      purchases reverting in `callback` for the de-registered asset. The balances
+    ///      are returned to the treasury here, and the de-registration is performed by
+    ///      the linked `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1295,20 +1288,7 @@ contract YieldRepurchaseFacilityV2 is
         _closeVaultMarket(vault_);
         _returnBalancesToTrsry(config.shareToken, config.reserve);
 
-        address[] storage vaults = _registry.vaults;
-        uint256 vaultsLength = vaults.length;
-        for (uint256 i; i < vaultsLength; ++i) {
-            if (vaults[i] == vault_) {
-                vaults[i] = vaults[vaultsLength - 1];
-                vaults.pop();
-                break;
-            }
-        }
-
-        delete _registry.reserveVaults[config.reserve];
-        delete _registry.configs[vault_];
-
-        emit AssetRemoved(vault_);
+        _registry.remove(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1350,7 +1330,8 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev Callable only by the configurator.
+    /// @dev Callable only by the configurator. The change is validated by the linked
+    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      The vault's tracked live bond market is closed before the change; the
     ///      close is not isolated, so a revert of the auctioneer reverts the change.
@@ -1373,25 +1354,24 @@ contract YieldRepurchaseFacilityV2 is
     ///        mode redeems the held shares synchronously.
     ///      - The close of the vault's tracked live bond market reverts.
     function setSellShares(address vault_, bool sellShares_) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-        if (config.sellShares == sellShares_)
-            revert IYieldRepurchaseFacilityV2_SellSharesUnchanged();
-        if (sellShares_) _requireNotBackingVault(vault_);
-        else if (config.asyncRedeem)
-            revert IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
+        _registry.validateSellShares(vault_, sellShares_);
 
         uint256 marketIdPlusOne = _markets.liveMarketIds[vault_];
         if (marketIdPlusOne != 0) {
             _markets.liveMarketIds[vault_] = 0;
+            // The change is validated above and gated to the configurator, and the auctioneer
+            // is admin-set
+            // forge-lint: disable-next-line(reentrancy-no-eth)
             IBondAuctioneer(bondAuctioneer).closeMarket(marketIdPlusOne - 1);
         }
 
-        config.sellShares = sellShares_;
+        _registry.configs[vault_].sellShares = sellShares_;
         emit SellSharesSet(vault_, sellShares_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
-    /// @dev Callable only by the configurator.
+    /// @dev Callable only by the configurator. The refresh is performed by the linked
+    ///      `YieldRepurchaseFacilityV2AssetRegistryLib`.
     ///
     ///      The flag is re-read from the vault's ERC165 advertisement of
     ///      `IERC7540Redeem`; a vault that does not implement ERC165 reads as
@@ -1415,16 +1395,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault advertises asynchronous redemption while the asset does not sell
     ///        shares.
     function refreshAsyncRedeem(address vault_) external override onlyConfigurator {
-        ReserveAsset storage config = _requireRegistered(vault_);
-
-        bool asyncRedeem = YieldRepurchaseFacilityV2VaultLib.isAsyncRedeem(vault_);
-        if (asyncRedeem == config.asyncRedeem)
-            revert IYieldRepurchaseFacilityV2_AsyncRedeemUnchanged();
-        if (asyncRedeem && !config.sellShares)
-            revert IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
-
-        config.asyncRedeem = asyncRedeem;
-        emit AsyncRedeemSet(vault_, asyncRedeem);
+        _registry.refreshAsyncRedeem(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1435,7 +1406,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The asset is disabled.
     ///      - The asset sells vault shares.
     function setBackingVault(address vault_) external override onlyConfigurator {
-        _setBackingVault(vault_, _requireRegistered(vault_));
+        _registry.setBackingVault(vault_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1474,18 +1445,6 @@ contract YieldRepurchaseFacilityV2 is
 
         backingOracle = backingOracle_;
         emit BackingOracleSet(backingOracle_);
-    }
-
-    /// @notice Makes a registered vault the backing vault.
-    /// @dev Reverts if:
-    ///      - The asset is disabled.
-    ///      - The asset sells vault shares.
-    function _setBackingVault(address vault_, ReserveAsset storage config_) private {
-        _requireAssetEnabled(config_);
-        if (config_.sellShares) revert IYieldRepurchaseFacilityV2_BackingVaultCannotSellShares();
-
-        _registry.backingVault = vault_;
-        emit BackingVaultSet(vault_);
     }
 
     /// @notice Sets the bond auctioneer and caches the teller it reports.
@@ -1718,9 +1677,10 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev The next yield and the unfunded carry are reset to zero and the yield
-    ///      snapshots are refreshed, so a value left over from before the asset was
-    ///      disabled does not enter the funding target of the weekly reset; the yield
-    ///      projection resumes at the following weekly reset.
+    ///      snapshots are refreshed by the linked `YieldRepurchaseFacilityV2YieldLib`, so
+    ///      a value left over from before the asset was disabled does not enter the
+    ///      funding target of the weekly reset; the yield projection resumes at the
+    ///      following weekly reset.
     ///
     ///      Reverts if:
     ///      - The caller is not the configurator.
@@ -1732,11 +1692,9 @@ contract YieldRepurchaseFacilityV2 is
         _requireAssetDisabled(config);
 
         config.isAssetEnabled = true;
-        config.unfundedYield = 0;
-        YieldRepurchaseFacilityV2AssetRegistryLib.refreshSnapshots(config, _context());
-
         emit AssetEnabled(vault_);
-        _setNextYield(config, 0);
+
+        YieldRepurchaseFacilityV2YieldLib.resetAsset(config, _context());
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1882,48 +1840,6 @@ contract YieldRepurchaseFacilityV2 is
         return
             config_.sharesToAssets(
                 YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals
-            );
-    }
-
-    /// @notice Returns the vault yield accrued since the snapshots, in reserve units.
-    /// @dev `lastReserveBalance * (currentRate - lastRate) / lastRate`, floored. Zero
-    ///      when the rate has not increased or the rate snapshot is unset.
-    ///
-    ///      The basis is the balance snapshot of the last weekly reset, so balance
-    ///      changes between the snapshots do not enter the yield: the rate delta is
-    ///      credited on the full snapshot balance even when a part of it has left the
-    ///      protocol during the week, and a balance added during the week starts
-    ///      accruing only from the following snapshot, which rebases the projection to
-    ///      the actual balance.
-    ///
-    ///      The projection assumes a rate that does not decrease. Every weekly reset
-    ///      overwrites the rate snapshot with the current rate, so after a decrease of
-    ///      the rate its recovery up to the earlier level is credited as yield.
-    function _computeVaultYield(ReserveAsset storage config_) private view returns (uint256 yield) {
-        uint256 lastRate = config_.lastConversionRate;
-        if (lastRate == 0) return 0;
-
-        uint256 currentRate = _conversionRate(config_);
-        if (currentRate <= lastRate) return 0;
-
-        yield = config_.lastReserveBalance.mulDiv(currentRate - lastRate, lastRate);
-    }
-
-    /// @notice Projects the next yield of a vault, in reserve units.
-    /// @dev The Clearinghouse interest is credited only to the backing vault. The total
-    ///      is multiplied by the vault's buyback share (floor).
-    function _projectNextYield(
-        ReserveAsset storage config_,
-        uint256 clearinghouseYield_
-    ) private view returns (uint256) {
-        uint256 vaultYield = _computeVaultYield(config_);
-        uint256 totalYield = config_.vault == _registry.backingVault
-            ? vaultYield + clearinghouseYield_
-            : vaultYield;
-        return
-            totalYield.mulDiv(
-                config_.yieldBuybackShare,
-                YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
             );
     }
 
@@ -2229,13 +2145,18 @@ contract YieldRepurchaseFacilityV2 is
     function getNextYield(address vault_) external view override returns (uint256 yield) {
         ReserveAsset storage config = _requireRegistered(vault_);
 
-        yield = _projectNextYield(config, _clearinghouses.clearinghouseYield(_context()));
+        Context memory context_ = _context();
+        yield = YieldRepurchaseFacilityV2YieldLib.projectNextYield(
+            config,
+            context_,
+            _clearinghouses.clearinghouseYield(context_)
+        );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     function getReserveBalance(address vault_) external view override returns (uint256 balance) {
         return
-            YieldRepurchaseFacilityV2AssetRegistryLib.protocolReserveBalance(
+            YieldRepurchaseFacilityV2YieldLib.protocolReserveBalance(
                 _requireRegistered(vault_),
                 _context()
             );
