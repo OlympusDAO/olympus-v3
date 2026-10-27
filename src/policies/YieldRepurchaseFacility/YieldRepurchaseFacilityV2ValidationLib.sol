@@ -17,9 +17,11 @@ import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFa
 ///         of a Clearinghouse.
 /// @dev The functions are internal and take values, so they are compiled into the
 ///      facility, into its linked libraries, and into the configuration policy: each
-///      rule is defined once, and the setters of the facility and the validation
+///      value rule is defined once, and the setters of the facility and the validation
 ///      functions of the configuration policy reject the same values with the same
-///      errors, which belong to the facility interface.
+///      errors, which belong to the facility interface. The tolerant read of the
+///      Clearinghouse receivables is a private helper of this library; the
+///      Clearinghouse library and the lens read the receivables the same way.
 library YieldRepurchaseFacilityV2ValidationLib {
     /// @notice Reverts unless the share is at most 100% (`1e18`).
     /// @param share_ The yield buyback share (`1e18` = 100%).

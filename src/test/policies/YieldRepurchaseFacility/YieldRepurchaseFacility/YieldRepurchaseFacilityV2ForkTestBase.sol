@@ -1521,8 +1521,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         return abi.decode(data, (address));
     }
 
-    // A tolerant read, mirroring `YieldRepurchaseFacilityV2ClearinghouseLib.readPrincipalReceivables`
-    // and the lens
+    // A tolerant read, mirroring the private helpers of
+    // `YieldRepurchaseFacilityV2ValidationLib`, `YieldRepurchaseFacilityV2ClearinghouseLib` and the
+    // lens
     // forge-lint: disable-next-item(low-level-calls)
     function _readPrincipalReceivables(address clearinghouse_) internal view returns (uint256) {
         (bool success, bytes memory data) = clearinghouse_.staticcall(
