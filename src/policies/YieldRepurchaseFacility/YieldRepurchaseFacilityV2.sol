@@ -735,11 +735,12 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Steps
-    /// @dev External only for the self-call isolation of the wrap performed by the
-    ///      linked `YieldRepurchaseFacilityV2BuybackPoolLib`. The function is
-    ///      intentionally not `nonReentrant`: it executes within the guard held by
-    ///      `execute`. The received amount is measured as the balance delta of the share
-    ///      token.
+    /// @dev External only for the self-call isolation of the wrap of the daily cycle:
+    ///      the daily cycle of the linked `YieldRepurchaseFacilityV2BuybackPoolLib`
+    ///      reaches this function through a call to the facility, and the wrap itself
+    ///      (`wrapReserve`) runs in that library. The function is intentionally not
+    ///      `nonReentrant`: it executes within the guard held by `execute`. The received
+    ///      amount is measured as the balance delta of the share token.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
@@ -747,34 +748,16 @@ contract YieldRepurchaseFacilityV2 is
     function selfWrapReserve(address vault_, uint256 amount_) external override {
         _requireCaller(address(this));
 
-        ReserveAsset storage config = _registry.configs[vault_];
-        address shareToken = config.shareToken;
-
-        uint256 expected = IERC4626(vault_).previewDeposit(amount_);
-        uint256 sharesBefore = _selfBalance(shareToken);
-        IERC20(config.reserve).forceApprove(vault_, amount_);
-        // The received shares are measured as the share balance delta below
-        // forge-lint: disable-next-line(unused-return)
-        IERC4626(vault_).deposit(amount_, address(this));
-        uint256 received = _selfBalance(shareToken) - sharesBefore;
-
-        if (received < expected)
-            revert IYieldRepurchaseFacilityV2_InsufficientDeposit(vault_, expected, received);
+        YieldRepurchaseFacilityV2BuybackPoolLib.wrapReserve(_registry.configs[vault_], amount_);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Steps
-    /// @dev External only for the self-call isolation of the redeem performed by the
-    ///      linked `YieldRepurchaseFacilityV2BuybackPoolLib`. The function is
-    ///      intentionally not `nonReentrant`: it executes within the guard held by the
-    ///      external entry point. The received amount is measured as the reserve balance
-    ///      delta.
-    ///
-    ///      A vault whose share token is a separate contract (ERC7575) may take the
-    ///      redeemed shares through the share token allowance of the vault; the
-    ///      standard does not fix that mechanism. The exact share amount is therefore
-    ///      approved to such a vault for the call, and the allowance is reset to zero
-    ///      afterwards. A vault that is its own share token redeems the shares of the
-    ///      calling owner without an allowance.
+    /// @dev External only for the self-call isolation of the redeem of the daily cycle:
+    ///      the daily cycle of the linked `YieldRepurchaseFacilityV2BuybackPoolLib`
+    ///      reaches this function through a call to the facility, and the redeem itself
+    ///      (`redeemChecked`) runs in that library. The function is intentionally not
+    ///      `nonReentrant`: it executes within the guard held by the external entry
+    ///      point. The received amount is measured as the reserve balance delta.
     ///
     ///      Reverts if:
     ///      - The caller is not the facility itself.
@@ -786,22 +769,11 @@ contract YieldRepurchaseFacilityV2 is
     ) external override returns (uint256 received) {
         _requireCaller(address(this));
 
-        ReserveAsset storage config = _registry.configs[vault_];
-        address reserve_ = config.reserve;
-        address shareToken = config.shareToken;
-        bool externalShareToken = shareToken != vault_;
-
-        uint256 expected = _previewRedeem(vault_, shares_);
-        uint256 reserveBefore = _selfBalance(reserve_);
-        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, shares_);
-        // The received reserve is measured as the reserve balance delta below
-        // forge-lint: disable-next-line(unused-return)
-        IERC4626(vault_).redeem(shares_, address(this), address(this));
-        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, 0);
-        received = _selfBalance(reserve_) - reserveBefore;
-
-        if (received < expected)
-            revert IYieldRepurchaseFacilityV2_InsufficientRedeem(vault_, expected, received);
+        return
+            YieldRepurchaseFacilityV2BuybackPoolLib.redeemChecked(
+                _registry.configs[vault_],
+                shares_
+            );
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Steps

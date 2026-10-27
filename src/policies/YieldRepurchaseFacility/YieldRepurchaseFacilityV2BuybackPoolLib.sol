@@ -10,20 +10,26 @@ import {IYieldRepurchaseFacilityV2Steps} from "src/policies/interfaces/YieldRepu
 // Libraries
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
+import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 
 /// @title YieldRepurchaseFacilityV2BuybackPoolLib
 /// @notice An external library that sizes the daily bid of a vault of the
-///         YieldRepurchaseFacilityV2 from its buyback pool: the facility's balances of
-///         the vault's shares and of its reserve token.
+///         YieldRepurchaseFacilityV2 from its buyback pool (the facility's balances of
+///         the vault's shares and of its reserve token) and performs the checked vault
+///         interactions of the daily cycle: the wrap of the idle reserve and the redeem
+///         for a deficit.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      facility is `address(this)`: the balances read here are the facility's, the
-///      checked vault interactions (the wrap of the idle reserve and the redeem for a
-///      deficit) run as calls to the facility's own `IYieldRepurchaseFacilityV2Steps`
-///      functions, and the emitted events belong to the facility interface. The library
-///      holds no state and never reads the treasury.
+///      vault is called by the facility, and the emitted events and the errors belong to
+///      the facility interface. The daily cycle reaches the checked interactions through
+///      calls to the facility's own `IYieldRepurchaseFacilityV2Steps` functions, which
+///      isolate them: a failure is reported with an event and the cycle continues. The
+///      library holds no state and never reads the treasury.
 library YieldRepurchaseFacilityV2BuybackPoolLib {
+    using SafeERC20 for IERC20;
+
     /// @notice Sizes the daily bid of a vault from the facility's balances and prepares
     ///         the payout for it.
     /// @dev The bid is the pool value divided by `daysRemaining_` (floor). For a
@@ -90,6 +96,81 @@ library YieldRepurchaseFacilityV2BuybackPoolLib {
         }
 
         return bid;
+    }
+
+    /// @notice Deposits the facility's reserve into the vault and verifies the minted
+    ///         shares against the preview.
+    /// @dev The received amount is measured as the balance delta of the share token.
+    ///
+    ///      Reverts if the received shares are below `previewDeposit(amount_)`
+    ///      (`IYieldRepurchaseFacilityV2_InsufficientDeposit`).
+    /// @param config_ The configuration storage of the vault.
+    /// @param amount_ The reserve amount to deposit.
+    function wrapReserve(
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
+        uint256 amount_
+    ) external {
+        address vault_ = config_.vault;
+        address shareToken = config_.shareToken;
+
+        uint256 expected = IERC4626(vault_).previewDeposit(amount_);
+        uint256 sharesBefore = _selfBalance(shareToken);
+        IERC20(config_.reserve).forceApprove(vault_, amount_);
+        // The received shares are measured as the share balance delta below
+        // forge-lint: disable-next-line(unused-return)
+        IERC4626(vault_).deposit(amount_, address(this));
+        uint256 received = _selfBalance(shareToken) - sharesBefore;
+
+        if (received < expected)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InsufficientDeposit(
+                vault_,
+                expected,
+                received
+            );
+    }
+
+    /// @notice Redeems vault shares held by the facility and verifies the received
+    ///         reserve against the preview.
+    /// @dev The received amount is measured as the reserve balance delta.
+    ///
+    ///      A vault whose share token is a separate contract (ERC7575) may take the
+    ///      redeemed shares through the share token allowance of the vault; the standard
+    ///      does not fix that mechanism. The exact share amount is therefore approved to
+    ///      such a vault for the call, and the allowance is reset to zero afterwards. A
+    ///      vault that is its own share token redeems the shares of the calling owner
+    ///      without an allowance.
+    ///
+    ///      Reverts if:
+    ///      - The redeem reverts.
+    ///      - The received reserve is below `previewRedeem(shares_)`
+    ///        (`IYieldRepurchaseFacilityV2_InsufficientRedeem`).
+    /// @param config_ The configuration storage of the vault.
+    /// @param shares_ The share amount to redeem.
+    /// @return received The reserve amount received.
+    function redeemChecked(
+        IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
+        uint256 shares_
+    ) external returns (uint256 received) {
+        address vault_ = config_.vault;
+        address reserve_ = config_.reserve;
+        address shareToken = config_.shareToken;
+        bool externalShareToken = shareToken != vault_;
+
+        uint256 expected = IERC4626(vault_).previewRedeem(shares_);
+        uint256 reserveBefore = _selfBalance(reserve_);
+        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, shares_);
+        // The received reserve is measured as the reserve balance delta below
+        // forge-lint: disable-next-line(unused-return)
+        IERC4626(vault_).redeem(shares_, address(this), address(this));
+        if (externalShareToken) IERC20(shareToken).forceApprove(vault_, 0);
+        received = _selfBalance(reserve_) - reserveBefore;
+
+        if (received < expected)
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InsufficientRedeem(
+                vault_,
+                expected,
+                received
+            );
     }
 
     /// @notice Wraps the facility's idle reserve balance into vault shares through the
