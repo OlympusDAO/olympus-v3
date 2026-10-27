@@ -287,7 +287,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
 
     // forge-lint: disable-next-item(cyclomatic-complexity)
     function test_e2e_twoWeeks() public {
-        for (uint256 day = 0; day < 14; ++day) {
+        for (uint256 day; day < 14; ++day) {
             // The daily reward stream and the daily price move land before the daily beat
             _accrueSusdeRewards();
             _applyPriceDeltaBps(PRICE_DELTA_BPS[day]);
@@ -546,8 +546,8 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     function _assertSusdeCycleSkipped() internal {
         bytes32 skippedTopic = keccak256("DailyCycleSkipped(address,bytes)");
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        bool found = false;
-        for (uint256 i = 0; i < logs.length; i++) {
+        bool found;
+        for (uint256 i; i < logs.length; i++) {
             if (
                 logs[i].emitter == address(yieldRepo) &&
                 logs[i].topics[0] == skippedTopic &&
@@ -569,7 +569,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
     function _assertNoMismatchEvents() internal {
         bytes32 mismatchTopic = keccak256("ClearinghouseDebtTokenMismatch(address)");
         Vm.Log[] memory logs = vm.getRecordedLogs();
-        for (uint256 i = 0; i < logs.length; i++) {
+        for (uint256 i; i < logs.length; i++) {
             assertTrue(logs[i].topics[0] != mismatchTopic, "unexpected mismatch event");
         }
     }
@@ -583,7 +583,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         IYieldRepurchaseFacilityV2.ReserveAsset memory config = yieldRepo.getAssetConfig(vault_);
 
         uint256 currentRate = IERC4626(vault_).previewRedeem(ONE_SHARE);
-        uint256 vaultYield = 0;
+        uint256 vaultYield;
         if (config.lastConversionRate != 0 && currentRate > config.lastConversionRate) {
             vaultYield = config.lastReserveBalance.mulDiv(
                 currentRate - config.lastConversionRate,

@@ -47,7 +47,7 @@ library YRFClearinghouseLib {
         if (backingReserve_ == address(0)) return 0;
 
         uint256 len = chreg_.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
+        for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
             address ch = chreg_.registry(i);
@@ -72,7 +72,7 @@ library YRFClearinghouseLib {
         if (backingReserve_ == address(0)) return;
 
         uint256 len = chreg_.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
+        for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
             address ch = chreg_.registry(i);
@@ -94,9 +94,9 @@ library YRFClearinghouseLib {
     /// @param chreg_ The Clearinghouse registry module.
     /// @param clearinghouse_ The Clearinghouse address to validate.
     function validateIncludable(CHREGv1 chreg_, address clearinghouse_) external view {
-        bool registered = false;
+        bool registered;
         uint256 len = chreg_.registryCount();
-        for (uint256 i = 0; i < len; ++i) {
+        for (uint256 i; i < len; ++i) {
             // The CHREG registry is append-only and grows only through permissioned activations
             // forge-lint: disable-next-line(calls-loop)
             if (chreg_.registry(i) == clearinghouse_) {

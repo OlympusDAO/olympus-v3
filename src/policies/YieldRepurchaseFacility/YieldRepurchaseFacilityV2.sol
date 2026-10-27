@@ -480,7 +480,7 @@ contract YieldRepurchaseFacilityV2 is
     function _closeAllVaultMarkets() private {
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             _closeVaultMarket(vaults[i]);
         }
     }
@@ -596,7 +596,7 @@ contract YieldRepurchaseFacilityV2 is
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             address vault = vaults[i];
             (bool success, bytes memory reason) = _callStep(
                 abi.encodeCall(this.selfReturnVaultFunds, (vault))
@@ -693,7 +693,7 @@ contract YieldRepurchaseFacilityV2 is
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
@@ -766,7 +766,7 @@ contract YieldRepurchaseFacilityV2 is
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
@@ -1351,7 +1351,7 @@ contract YieldRepurchaseFacilityV2 is
         _epoch = epoch_;
 
         uint256 seedsLength = poolSeeds_.length;
-        for (uint256 i = 0; i < seedsLength; ++i) {
+        for (uint256 i; i < seedsLength; ++i) {
             BuybackPoolSeed calldata seed = poolSeeds_[i];
             ReserveAsset storage config = _requireRegistered(seed.vault);
             _requireAssetEnabled(config);
@@ -1387,7 +1387,7 @@ contract YieldRepurchaseFacilityV2 is
 
         address[] storage vaults = _vaults;
         uint256 vaultsLength = vaults.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             if (vaults[i] == vault_) {
                 vaults[i] = vaults[vaultsLength - 1];
                 vaults.pop();

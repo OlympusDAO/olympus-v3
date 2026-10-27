@@ -192,7 +192,7 @@ library YRFAssetConfigLib {
         address backingVault_
     ) external {
         uint256 vaultsLength = vaults_.length;
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[vaults_[i]];
             if (!config.isAssetEnabled) continue;
 
@@ -204,7 +204,7 @@ library YRFAssetConfigLib {
         uint256 seedsLength = nextYieldSeeds_.length;
         // An unregistered or disabled seed must reject the whole reset rather than be skipped
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i = 0; i < seedsLength; ++i) {
+        for (uint256 i; i < seedsLength; ++i) {
             IYieldRepurchaseFacilityV2.NextYieldSeed memory seed = nextYieldSeeds_[i];
             IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[seed.vault];
             if (config.vault == address(0))
@@ -217,7 +217,7 @@ library YRFAssetConfigLib {
         }
         // forge-lint: disable-end(require-revert-in-loop)
 
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             IYieldRepurchaseFacilityV2.ReserveAsset storage config = assetConfigs_[vaults_[i]];
             if (!config.isAssetEnabled) continue;
             emit IYieldRepurchaseFacilityV2.NextYieldSet(config.reserve, config.nextYield);
@@ -288,7 +288,7 @@ library YRFAssetConfigLib {
         uint256 vaultsLength = vaults_.length;
         // A token of a registered asset must reject the rescue
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             if (_isPoolToken(assetConfigs_[vaults_[i]], token_))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenNotRescuable(
                     token_
@@ -377,7 +377,7 @@ library YRFAssetConfigLib {
         uint256 vaultsLength = vaults_.length;
         // A pool collision with any registered asset must reject the registration
         // forge-lint: disable-start(require-revert-in-loop)
-        for (uint256 i = 0; i < vaultsLength; ++i) {
+        for (uint256 i; i < vaultsLength; ++i) {
             IYieldRepurchaseFacilityV2.ReserveAsset storage registered = assetConfigs_[vaults_[i]];
             if (_isPoolToken(registered, reserve_))
                 revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_TokenPoolConflict(
@@ -488,7 +488,7 @@ library YRFAssetConfigLib {
 
         if (vault_ == backingVault_) {
             uint256 activeCount = chreg_.activeCount();
-            for (uint256 i = 0; i < activeCount; ++i) {
+            for (uint256 i; i < activeCount; ++i) {
                 totalShares += shareToken.balanceOf(chreg_.active(i));
             }
         }

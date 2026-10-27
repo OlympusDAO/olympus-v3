@@ -213,7 +213,7 @@ library YRFBondMarketLib {
         uint256 price_,
         uint8 oracleDecimals_
     ) private pure returns (int8 relativeDecimals) {
-        int8 decimals = 0;
+        int8 decimals;
         while (price_ >= YieldRepurchaseFacilityV2Constants.DECIMAL_BASE) {
             price_ = price_ / YieldRepurchaseFacilityV2Constants.DECIMAL_BASE;
             ++decimals;
