@@ -39,7 +39,10 @@ gas_snapshot_emit = false
 # generating their ABI encoding/decoding assembly.
 additional_compiler_profiles = [{ name = "optimized", optimizer = true, optimizer_runs = 400 }]
 compilation_restrictions = [
-    { paths = "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol", optimizer_runs = 400 },
+    # The YRF v2 fork tests exhaust the stack unoptimized (the E2E integer model). The facility
+    # itself must compile without the optimizer, so the restriction is on its tests, not on
+    # `YieldRepurchaseFacilityV2.sol`.
+    { paths = "src/test/policies/YieldRepurchaseFacility/YieldRepurchaseFacility/**", optimizer_runs = 400 },
     { paths = "src/external/governance/GovernorBravoDelegate.sol", optimizer_runs = 400 },
     { paths = "src/policies/BondCallback.sol", optimizer_runs = 400 },
     { paths = "src/policies/BoostedLiquidity/BLVaultLido.sol", optimizer_runs = 400 },
