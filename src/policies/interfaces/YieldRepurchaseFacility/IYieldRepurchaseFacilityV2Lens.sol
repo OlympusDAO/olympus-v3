@@ -16,12 +16,15 @@ interface IYieldRepurchaseFacilityV2Lens {
     // ============ STRUCTS ============ //
 
     /// @notice The buyback pool of a vault: the facility's balances of the vault's
-    ///         shares and of its reserve token, and their value.
+    ///         shares and of its reserve token, and an estimate of their value.
     /// @param heldShares The facility's balance of the share token, in share units.
     /// @param heldReserve The facility's balance of the reserve token, in reserve units.
-    /// @param value The reserve value of the pool: the held reserve plus the value of
-    ///        the held shares by the redemption class of the vault (floor), in reserve
-    ///        units.
+    /// @param value An estimate of the reserve value of the pool: the held reserve at
+    ///        face value plus the value of the held shares by the redemption class of
+    ///        the vault (floor), in reserve units. It is not the input of the daily
+    ///        cycle: for a sell-shares asset the cycle wraps the reserve first, and the
+    ///        value after the wrap can differ by the rounding of `previewDeposit`. The
+    ///        expected bid is given by `previewDailyBid`.
     struct BuybackPool {
         uint256 heldShares;
         uint256 heldReserve;
@@ -95,7 +98,7 @@ interface IYieldRepurchaseFacilityV2Lens {
         returns (ClearinghouseYield[] memory breakdown);
 
     /// @notice Returns the buyback pool of a vault: the facility's balances of the
-    ///         vault's shares and reserve token, and their reserve value.
+    ///         vault's shares and reserve token, and an estimate of their reserve value.
     /// @dev Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an
     ///      unregistered vault.
     /// @param vault_ The registered vault.
@@ -109,13 +112,18 @@ interface IYieldRepurchaseFacilityV2Lens {
     ///      the remaining daily cycles (floor), with the idle reserve of a sell-shares
     ///      asset counted as the shares its deposit would mint, and the reserve shortfall
     ///      of a reserve-paying asset counted as covered by the redeem of the held shares.
-    ///      It assumes the wrap and the redeem succeed and reads the balances held now:
-    ///      a weekly reset or an OHM burn running on the same beat before the daily cycle
-    ///      changes the pool first. The remaining daily cycles are derived from the
-    ///      epoch counter: the next epoch that is a multiple of three, with the weekly
-    ///      reset wrapping the counter to zero. A zero capacity means the cycle would
-    ///      open no market. Reverts with `IYieldRepurchaseFacilityV2_AssetNotRegistered`
-    ///      for an unregistered vault.
+    ///      The remaining daily cycles are derived from the epoch counter: the next epoch
+    ///      that is a multiple of three, with the weekly reset wrapping the counter to
+    ///      zero. A zero capacity means the cycle would open no market. Reverts with
+    ///      `IYieldRepurchaseFacilityV2_AssetNotRegistered` for an unregistered vault.
+    ///
+    ///      The preview reads the pool held now and differs from the bid the beat sizes
+    ///      when:
+    ///      - the wrap or the redeem fails in the cycle: the bid is then lower;
+    ///      - the beat performs the weekly reset: the funding withdrawn from the treasury
+    ///        before the daily cycle is not counted;
+    ///      - purchased OHM is waiting to be burned: for the backing vault, the shares the
+    ///        burn adds to the pool before the daily cycle are not counted.
     /// @param vault_ The registered vault.
     /// @return capacity The previewed market capacity, in payout token units: the share
     ///         amount for a sell-shares asset, the reserve amount otherwise.
@@ -148,9 +156,11 @@ interface IYieldRepurchaseFacilityV2Lens {
     ///         denominated in the backing reserve is at or above the backing value, and
     ///         the two values compared.
     /// @dev Mirrors the gate of `IPeriodicTask.execute`, and reverts where it reverts:
-    ///      when the `PRICE.getPriceIn` read of the backing reserve reverts, including
-    ///      when no backing vault is designated, or when the backing oracle read
-    ///      reverts.
+    ///      when the `PRICE.getPriceIn` read of the backing reserve reverts (no backing
+    ///      vault designated, or a stale feed of the backing reserve), or when the
+    ///      backing oracle read reverts. A revert here means the next `execute` reverts
+    ///      for the same reason: a configuration error to resolve, not a defect of the
+    ///      view.
     /// @return open Whether the daily cycles open markets.
     /// @return gatePrice The OHM price denominated in the backing reserve, in oracle
     ///         decimals.
