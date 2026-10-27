@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @title IBasicRescueable
 /// @notice Interface for contracts that allow a privileged rescue of accidentally-sent assets.

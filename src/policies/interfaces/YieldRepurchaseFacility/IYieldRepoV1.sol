@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity >=0.8.24;
+pragma solidity ^0.8.24;
 
 /// @title IYieldRepoV1
 /// @notice The subset of the deployed YieldRepurchaseFacility v1.2 surface used by the
