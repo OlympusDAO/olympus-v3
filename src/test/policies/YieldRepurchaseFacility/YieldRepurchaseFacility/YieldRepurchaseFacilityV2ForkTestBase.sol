@@ -192,7 +192,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     uint32 internal constant GRACE_PERIOD = 5 days;
     /// @notice The gas limit of one isolated step of the facility.
     /// @dev About twice the limit the costliest step measured on the pinned block needs:
-    ///      about 1_025_000 gas for a daily cycle when the OHM price feeds are not mocked.
+    ///      about 1_040_000 gas for a daily cycle when the OHM price feeds are not mocked.
     uint32 internal constant STEP_GAS_LIMIT = 2_000_000;
     /// @notice The delay of the config timelock: the minimum accepted, so that an action
     ///         queued after a daily beat is executable after the following day's beat.
