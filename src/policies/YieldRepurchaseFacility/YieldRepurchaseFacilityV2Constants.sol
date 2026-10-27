@@ -54,4 +54,13 @@ library YieldRepurchaseFacilityV2Constants {
     ///      ceiling. The premium only lowers the market's minimum price, so no premium
     ///      magnitude can overflow the market pricing.
     uint256 internal constant MAX_PRICE_PREMIUM_LIMIT = 10e18;
+
+    // ============ ISOLATED CALLS ============ //
+
+    /// @notice Maximum bytes of returndata captured from an isolated call.
+    /// @dev The cap bounds the memory expansion of the capture, so a callee returning or
+    ///      reverting with oversized returndata cannot inflate the gas cost of the
+    ///      caller. A success return is decoded only when its expected length fits under
+    ///      the cap.
+    uint16 internal constant MAX_RETURNDATA_LENGTH = 256;
 }
