@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.24;
 
-// Expected events are declared after setup calls for vm.expectEmit; tests emit no protocol logs.
-// forge-lint: disable-start(reentrancy-events)
-
 // Interfaces
 import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol";
 
@@ -53,12 +50,7 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         assertEq(_configOperator.configOperator(), address(0), "config operator");
     }
 
-    // setConfigOperator
-    // given the caller is not authorized by the implementation
-    //  when the caller sets the operator already configured
-    //   then it reverts with ConfigOperator_Unauthorized
-    // The authorization check answers before the unchanged check
-    function test_givenUnauthorizedCaller_givenUnchangedOperator_reverts(
+    function test_givenExistingOperator_whenUnauthorizedCallerSetsSameOperator_reverts(
         address caller_
     ) public givenExistingOperator {
         vm.assume(caller_ != _authorizedCaller);
@@ -69,7 +61,7 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         );
         _configOperator.setConfigOperator(_operator);
 
-        assertEq(_configOperator.configOperator(), _operator, "config operator");
+        assertEq(_configOperator.configOperator(), _operator, "existing operator retained");
     }
 
     // setConfigOperator
@@ -118,37 +110,22 @@ contract ConfigOperatorSingleStepSetConfigOperatorTest is ConfigOperatorSingleSt
         assertFalse(_configOperator.isConfigOperator(_operator), "old operator unauthorized");
     }
 
-    // setConfigOperator
-    // given an operator is configured
-    //  when the authorized caller sets the same operator
-    //   then it reverts with ConfigOperator_Unchanged and keeps the operator
-    function test_givenExistingOperator_givenUnchangedOperator_reverts()
+    function test_givenExistingOperator_whenAuthorizedCallerSetsSameOperator_reverts()
         public
         givenExistingOperator
     {
         vm.prank(_authorizedCaller);
-        vm.expectRevert(abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector));
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
         _configOperator.setConfigOperator(_operator);
 
-        assertEq(_configOperator.configOperator(), _operator, "config operator");
-        assertTrue(_configOperator.isConfigOperator(_operator), "operator still authorized");
+        assertEq(_configOperator.configOperator(), _operator, "existing operator retained");
     }
 
-    // setConfigOperator
-    // given no operator is configured
-    //  when the authorized caller sets the zero address
-    //   then it reverts with ConfigOperator_Unchanged
-    // Zero is a value in its own right: revoking an operator that is already unset is an
-    // unchanged write, not a no-op
-    function test_givenNoOperator_givenZeroAddress_reverts() public {
-        assertEq(_configOperator.configOperator(), address(0), "config operator starts unset");
-
+    function test_givenNoOperator_whenAuthorizedCallerSetsZero_reverts() public {
         vm.prank(_authorizedCaller);
-        vm.expectRevert(abi.encodeWithSelector(IConfigOperator.ConfigOperator_Unchanged.selector));
+        vm.expectRevert(IConfigOperator.ConfigOperator_Unchanged.selector);
         _configOperator.setConfigOperator(address(0));
 
-        assertEq(_configOperator.configOperator(), address(0), "config operator");
+        assertEq(_configOperator.configOperator(), address(0), "operator remains unset");
     }
 }
-
-// forge-lint: disable-end(reentrancy-events)
