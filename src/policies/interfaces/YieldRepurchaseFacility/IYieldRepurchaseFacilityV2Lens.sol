@@ -13,6 +13,11 @@ pragma solidity ^0.8.24;
 ///      reverts, for example `getNextYield` for an unregistered vault. Amount
 ///      conventions are those of `IYieldRepurchaseFacilityV2`.
 interface IYieldRepurchaseFacilityV2Lens {
+    // ============ ERRORS ============ //
+
+    /// @notice Thrown when the facility supplied at construction is the zero address.
+    error IYieldRepurchaseFacilityV2Lens_ZeroAddress();
+
     // ============ STRUCTS ============ //
 
     /// @notice The buyback pool of a vault: the facility's balances of the vault's

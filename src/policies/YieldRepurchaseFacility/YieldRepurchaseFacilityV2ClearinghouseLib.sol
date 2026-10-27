@@ -40,7 +40,8 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
     ///      `ClearinghouseOffsetSet` for the facility.
     ///
     ///      Reverts if:
-    ///      - `clearinghouse_` is the zero address (`Errors.BadInput`).
+    ///      - `clearinghouse_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - `offset_` exceeds the current `principalReceivables`
     ///        (`IYieldRepurchaseFacilityV2_OffsetExceedsReceivables`).
     /// @param state_ The facility's Clearinghouse configuration storage.

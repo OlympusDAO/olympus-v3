@@ -6,7 +6,6 @@ import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghou
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {Errors} from "src/libraries/Errors.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2ValidationLib
@@ -50,13 +49,15 @@ library YieldRepurchaseFacilityV2ValidationLib {
     ///      such a Clearinghouse accepts only a zero offset.
     ///
     ///      Reverts if:
-    ///      - `clearinghouse_` is the zero address (`Errors.BadInput`).
+    ///      - `clearinghouse_` is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - `offset_` exceeds the current `principalReceivables`
     ///        (`IYieldRepurchaseFacilityV2_OffsetExceedsReceivables`).
     /// @param clearinghouse_ The Clearinghouse address.
     /// @param offset_ The cumulative offset to validate, in the receivables' units.
     function requireOffsetWithinReceivables(address clearinghouse_, uint256 offset_) internal view {
-        if (clearinghouse_ == address(0)) revert Errors.BadInput("clearinghouse");
+        if (clearinghouse_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ZeroAddress();
 
         uint256 receivables = _readPrincipalReceivables(clearinghouse_);
         if (offset_ > receivables)

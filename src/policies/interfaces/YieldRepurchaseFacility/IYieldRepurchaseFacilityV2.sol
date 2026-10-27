@@ -237,6 +237,14 @@ interface IYieldRepurchaseFacilityV2 {
 
     // ============ ERRORS ============ //
 
+    /// @notice Thrown when a required address is the zero address: the kernel or the OHM
+    ///         token at construction, the vault of a registration, or the Clearinghouse of
+    ///         a receivables offset change.
+    error IYieldRepurchaseFacilityV2_ZeroAddress();
+
+    /// @notice Thrown when a `seedCycle` seed carries a zero amount.
+    error IYieldRepurchaseFacilityV2_ZeroAmount();
+
     /// @notice Thrown when the `enable` payload is shorter than the minimum
     ///         `abi.encode(uint256 initialDiscount, uint256 maxPricePremium,
     ///         NextYieldSeed[] seeds)` encoding.
@@ -309,9 +317,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param selector The selector of the probed function.
     error IYieldRepurchaseFacilityV2_VaultProbeFailed(address vault, bytes4 selector);
 
-    /// @notice Thrown when a probe call of the vault being registered returns zero.
+    /// @notice Thrown when a read of the vault being registered returns zero: `asset()`,
+    ///         `share()` of a vault that advertises ERC7575, or a conversion probe.
     /// @param vault The probed vault.
-    /// @param selector The selector of the probed function.
+    /// @param selector The selector of the read function.
     error IYieldRepurchaseFacilityV2_VaultProbeZeroResult(address vault, bytes4 selector);
 
     /// @notice Thrown when the reserve of the asset being registered resolves to a zero
@@ -463,11 +472,16 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param configurator The rejected configurator address.
     error IYieldRepurchaseFacilityV2_InvalidConfigurator(address configurator);
 
-    /// @notice Thrown when a proposed backing oracle does not report the facility's
-    ///         kernel as its own or, on the admin setter path, is not an active policy
-    ///         of the kernel.
+    /// @notice Thrown when a proposed backing oracle is the zero address, does not report
+    ///         the facility's kernel as its own, or, on the admin setter path, is not an
+    ///         active policy of the kernel.
     /// @param backingOracle The rejected backing oracle address.
     error IYieldRepurchaseFacilityV2_InvalidBackingOracle(address backingOracle);
+
+    /// @notice Thrown when a proposed bond auctioneer is the zero address or reports the
+    ///         zero address as its teller.
+    /// @param bondAuctioneer The rejected bond auctioneer address.
+    error IYieldRepurchaseFacilityV2_InvalidBondAuctioneer(address bondAuctioneer);
 
     // ============ STRUCTS ============ //
 

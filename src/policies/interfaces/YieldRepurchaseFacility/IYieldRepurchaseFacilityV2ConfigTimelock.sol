@@ -80,6 +80,9 @@ import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQ
 interface IYieldRepurchaseFacilityV2ConfigTimelock {
     // ============ ERRORS ============ //
 
+    /// @notice Thrown when the kernel supplied at construction is the zero address.
+    error IYieldRepurchaseFacilityV2ConfigTimelock_ZeroAddress();
+
     /// @notice Thrown when the configuration policy supplied at construction is the zero
     ///         address or does not advertise `IYieldRepurchaseFacilityV2Config`,
     ///         `IConfigOperator`, and `IEnabler` through ERC165.

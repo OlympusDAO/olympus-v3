@@ -44,6 +44,9 @@ interface IYieldRepurchaseFacilityV2Config {
 
     // ============ ERRORS ============ //
 
+    /// @notice Thrown when the kernel supplied at construction is the zero address.
+    error IYieldRepurchaseFacilityV2Config_ZeroAddress();
+
     /// @notice Thrown when `setFacility` is called while a facility is already bound.
     error IYieldRepurchaseFacilityV2Config_FacilityAlreadySet();
 
@@ -123,7 +126,8 @@ interface IYieldRepurchaseFacilityV2Config {
     /// @dev The receivables are read live, so a validation that passes can be invalidated by
     ///      repayments before the setter runs. Intended to be called by the config timelock
     ///      when an `increaseClearinghouseOffset` action is queued.
-    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address.
+    /// @param clearinghouse_ The Clearinghouse address; must not be the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     /// @param additionalOffset_ The amount added to the existing offset, in the receivables'
     ///        units; the resulting offset must not exceed the current `principalReceivables`.
     function validateIncreaseClearinghouseOffset(

@@ -11,7 +11,6 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
-import {Errors} from "src/libraries/Errors.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
@@ -67,17 +66,19 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     ///      designated.
     ///
     ///      Reverts if:
-    ///      - The vault address is the zero address.
+    ///      - The vault address is the zero address
+    ///        (`IYieldRepurchaseFacilityV2_ZeroAddress`).
     ///      - The yield buyback share exceeds 100% (`1e18`).
     ///      - The vault is already registered.
-    ///      - The vault reports the zero address as its underlying asset.
+    ///      - The vault reports the zero address as its underlying asset
+    ///        (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
     ///        ERC165.
     ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) through
     ///        ERC165 without advertising ERC7575, or while `sellShares` is unset.
     ///      - The vault advertises ERC7575 through ERC165 and reports the zero address
-    ///        as its `share()`.
+    ///        as its `share()` (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
     ///      - The share token decimals do not match the reserve decimals.
     ///      - The vault, its share token, or its reserve token is OHM, the vault or the
     ///        share token equals the reserve, or any of the three collides with the
@@ -99,7 +100,8 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         IYieldRepurchaseFacilityV2.AddAssetParams calldata params_
     ) external {
         address vault_ = params_.vault;
-        if (vault_ == address(0)) revert Errors.BadInput("vault");
+        if (vault_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_ZeroAddress();
         YieldRepurchaseFacilityV2ValidationLib.requireValidYieldBuybackShare(
             params_.yieldBuybackShare
         );
@@ -107,7 +109,11 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_AssetAlreadyRegistered();
 
         address reserve_ = IERC4626(vault_).asset();
-        if (reserve_ == address(0)) revert Errors.BadInput("vault.asset");
+        if (reserve_ == address(0))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultProbeZeroResult(
+                vault_,
+                IERC4626.asset.selector
+            );
 
         uint8 reserveDecimals = IERC20Metadata(reserve_).decimals();
         if (reserveDecimals > YieldRepurchaseFacilityV2Constants.MAX_RESERVE_DECIMALS)
@@ -409,7 +415,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     ///      - The vault advertises asynchronous redemption while `sellShares_` is unset:
     ///        the reserve mode redeems the held shares synchronously.
     ///      - The vault advertises ERC7575 and reports the zero address as its
-    ///        `share()`.
+    ///        `share()` (`IYieldRepurchaseFacilityV2_VaultProbeZeroResult`).
     /// @return shareToken_ The ERC20 token representing the vault shares.
     /// @return asyncRedeem_ Whether the vault advertises asynchronous redemption.
     function _resolveVaultClass(
@@ -436,7 +442,11 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         shareToken_ = vault_;
         if (supportsERC7575) {
             shareToken_ = IERC7575(vault_).share();
-            if (shareToken_ == address(0)) revert Errors.BadInput("vault.share");
+            if (shareToken_ == address(0))
+                revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_VaultProbeZeroResult(
+                    vault_,
+                    IERC7575.share.selector
+                );
         }
     }
 
