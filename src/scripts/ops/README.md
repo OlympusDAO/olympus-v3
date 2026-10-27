@@ -12,50 +12,35 @@ For example:
 ./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --broadcast true --fork true --env .env.testnet
 ```
 
-## Ledger Device Support
+## Signing and proposing Safe batches
 
-When using `--multisig true` with a Ledger device (specified via `--ledger`), the batch script workflow requires a two-step process to avoid conflicts with Ledger signature generation.
+Use `--multisig true` and choose one signer: `--ledger` or `--account`.
+The script simulates and validates the batch before signing it.
+Add `--broadcast true` to sign and submit the proposal to the Safe transaction service.
+Other Safe owners then approve and execute the transaction in Safe.
 
-### Issue with Previous Approach
-
-The previous approach would fail because:
-
-- The `safeBatchV2.sh` script would configure forge to use the Ledger device for signing
-- This would prevent internal FFI calls in `Safe.sol` from generating signatures from the Ledger device
-- The script would hang when trying to collect signatures internally
-
-### New Two-Step Workflow
-
-#### Step 1: Generate Signature Only
-
-First, run the script with `--signonly true` to generate the signature data:
+With Ledger mnemonic index 5:
 
 ```bash
-./shell/safeBatchV2.sh --contract YourContract --function function_name --signonly true --multisig true --ledger mnemonic_index
+./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --chain mainnet --multisig true --ledger 5 --broadcast true
 ```
 
-This will:
-
-- Execute the batch script to generate the transaction data
-- Use the Ledger device to sign the transaction
-- Output the signature data to the console
-- Not broadcast the transaction
-
-#### Step 2: Submit with Generated Signature
-
-Take the generated signature from Step 1 and submit it using the `--signature` flag:
+With an imported Cast wallet account:
 
 ```bash
-./shell/safeBatchV2.sh --contract YourContract --function function_name --signature generated_signature --multisig true --ledger mnemonic_index
+./shell/safeBatchV2.sh --contract ContractRegistryInstall --function function_name --chain mainnet --multisig true --account dao-signer --broadcast true
 ```
 
-This will:
+Omit `--broadcast true` to simulate without signing or submitting a proposal.
+Use `--nonce N` to select a Safe nonce; otherwise the script uses the on-chain Safe nonce.
+Pending proposals do not advance the on-chain nonce, so choose an unused nonce when queueing multiple batches.
 
-- Use the pre-generated signature to create the Safe transaction
-- Submit the transaction through the Safe API
-- Allow the multisig to execute the batch without requiring Ledger interaction during the API call
+For Ledger Safe proposals, the wrapper reads the signer address, then starts Forge without its Ledger flags.
+The batch signs through the existing `safe-utils` FFI call to `cast wallet sign --ledger --data`.
+The signature passes directly to the Safe API call in the same run.
+For Cast accounts, Forge unlocks the account and the batch signs through `vm.sign`.
 
-### Notes
-
-- The `--signonly` flag should only be used when generating signatures for multisig transactions
-- This workflow ensures that Ledger signing happens only once, during the signature generation step
+Batch entry points take `(bool useDaoMS, string argsFile, string ledgerDerivationPath)`.
+The wrapper supplies these arguments; operators do not need to provide a signature.
+The former `--signonly` and `--signature` options have been removed.
+Without `--multisig true`, EOA transactions continue to use Forge's selected wallet for signing.

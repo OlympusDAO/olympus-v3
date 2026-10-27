@@ -25,11 +25,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
 
     function install(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Get addresses from environment
@@ -97,11 +95,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ///         This must be executed first, then after timelock period, permissions are effective
     function queueEnable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Get addresses from environment
@@ -195,11 +191,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ///         This must be executed after timelock period, permissions are effective
     function toggleEnable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Get addresses from environment
@@ -278,11 +272,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     /// @dev    To be run after the OCG proposal has been executed
     function disable(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Get addresses from environment
@@ -364,11 +356,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ///         Reads OHMv1ToMigrate from MigrationProposalHelper to determine amount
     function mintTempOHM(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         _validateArgsFileEmpty(argsFile_);
 
         // Get addresses from environment
@@ -450,11 +440,9 @@ contract MigrationProposalSetup is BatchScriptV2 {
     ///         Args file format: {"functions": [{"name": "setOHMv1ToMigrate", "args": {"OHMv1ToMigrate": "197735188979073"}}]}
     function setOHMv1ToMigrate(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFile_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFile_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFile_, ledgerDerivationPath_) {
         // Get addresses from environment
         address migrationProposalHelper = _envAddressNotZero(
             "olympus.periphery.MigrationProposalHelper"
