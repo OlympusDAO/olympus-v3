@@ -22,7 +22,7 @@
 # addresses, otherwise the bytecode does not match. The entries are recorded in the
 # broadcast file of the deployment (the ".libraries" field, e.g.
 # broadcast/DeployV3.s.sol/1/deploy-latest.json) and are passed comma-separated:
-# ./verify_etherscan.sh --address 0x123... --metadata out/YieldRepurchaseFacilityV2.sol/YieldRepurchaseFacilityV2.json --optimizer_runs 400 --libraries src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol:YRFBondMarketLib:0x456...,src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol:YRFClearinghouseLib:0x789... --chain mainnet
+# ./verify_etherscan.sh --address 0x123... --metadata out/YieldRepurchaseFacilityV2.sol/YieldRepurchaseFacilityV2.json --optimizer_runs 400 --libraries src/path/LibraryA.sol:LibraryA:0x456...,src/path/LibraryB.sol:LibraryB:0x789... --chain mainnet
 
 # Exit if any error occurs
 set -e
