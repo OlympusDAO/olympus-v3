@@ -74,16 +74,16 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      snapshots are not affected. An empty seed array seeds only the epoch and
     ///      emits no event; the seeding stays observable through `isCycleSeedable` and
     ///      `epoch`. A treasury balance that does not cover a seeded amount is reported
-    ///      with `PrefundShortfall`, and the unfunded remainder is carried (see
+    ///      with `FundingShortfall`, and the unfunded remainder is carried (see
     ///      `ReserveAsset.unfundedYield`) and retried at the next weekly reset. Emits
-    ///      `WeeklyBudgetSeeded` per seed.
+    ///      `BuybackPoolSeeded` per seed.
     /// @param epoch_ The epoch counter to resume at, in the range `[0, 21)`.
-    /// @param budgetSeeds_ The per-vault pool seeds; every seeded vault must be
+    /// @param poolSeeds_ The per-vault pool seeds; every seeded vault must be
     ///        registered with an enabled asset, and every seeded amount must be
     ///        non-zero.
     function seedCycle(
         uint48 epoch_,
-        IYieldRepurchaseFacilityV2.WeeklyBudgetSeed[] calldata budgetSeeds_
+        IYieldRepurchaseFacilityV2.BuybackPoolSeed[] calldata poolSeeds_
     ) external;
 
     /// @notice De-registers a disabled vault, closing its live bond market on a
