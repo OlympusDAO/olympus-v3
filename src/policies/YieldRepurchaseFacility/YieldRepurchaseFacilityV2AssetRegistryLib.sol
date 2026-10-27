@@ -52,28 +52,6 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
         address backingVault;
     }
 
-    /// @notice The registration inputs of `addAsset`.
-    /// @param vault The ERC4626 vault to register.
-    /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` =
-    ///        100%).
-    /// @param initialReserveBalance The initial `lastReserveBalance` snapshot, in
-    ///        reserve units.
-    /// @param initialConversionRate The initial `lastConversionRate` snapshot: the
-    ///        reserve amount redeemable for one whole share.
-    /// @param nextYield The initial stored next yield, in reserve units.
-    /// @param sellShares Whether bond markets pay out the vault shares instead of the
-    ///        reserve.
-    /// @param setAsBackingVault Whether the vault becomes the backing vault.
-    struct AddAssetParams {
-        address vault;
-        uint256 yieldBuybackShare;
-        uint256 initialReserveBalance;
-        uint256 initialConversionRate;
-        uint256 nextYield;
-        bool sellShares;
-        bool setAsBackingVault;
-    }
-
     /// @notice Validates and registers an ERC4626 vault as a reserve asset of the
     ///         calling facility, optionally designating it as the backing vault.
     /// @dev The asset is registered in the enabled state and recorded in the
@@ -116,7 +94,7 @@ library YieldRepurchaseFacilityV2AssetRegistryLib {
     function addAsset(
         Registry storage registry_,
         IYieldRepurchaseFacilityV2.Context memory context_,
-        AddAssetParams memory params_
+        IYieldRepurchaseFacilityV2.AddAssetParams calldata params_
     ) external {
         address vault_ = params_.vault;
         if (vault_ == address(0)) revert Errors.BadInput("vault");

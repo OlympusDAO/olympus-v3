@@ -17,8 +17,8 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
-import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";
@@ -36,6 +36,7 @@ import {BackingOracle} from "src/policies/BackingOracle.sol";
 import {YieldRepurchaseFacilityV2} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2.sol";
 import {YieldRepurchaseFacilityV2Config} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Config.sol";
 import {YieldRepurchaseFacilityV2ConfigTimelock} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ConfigTimelock.sol";
+import {YieldRepurchaseFacilityV2Lens} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Lens.sol";
 import {IYieldRepoV1} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepoV1.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
@@ -276,6 +277,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     YieldRepurchaseFacilityV2Config internal yieldRepoConfig;
     YieldRepurchaseFacilityV2ConfigTimelock internal yieldRepoConfigTimelock;
     YieldRepurchaseFacilityV2 internal yieldRepo;
+    /// @notice The lens of the facility: the derived views the tests cross-check against the
+    ///         mirror model.
+    YieldRepurchaseFacilityV2Lens internal yieldRepoLens;
 
     // ============ TEST ACCOUNTS ============ //
 
@@ -547,6 +551,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             STEP_GAS_LIMIT
         );
         vm.label(address(yieldRepo), "YieldRepoV2");
+
+        yieldRepoLens = new YieldRepurchaseFacilityV2Lens(address(yieldRepo));
+        vm.label(address(yieldRepoLens), "YieldRepoV2Lens");
     }
 
     function _installV2Stack() internal {
@@ -654,22 +661,27 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         // The literal flags are the `sellShares` and `setAsBackingVault` arguments of `addAsset`
         // forge-lint: disable-start(boolean-cst)
         yieldRepoConfig.addAsset(
-            SUSDS,
-            SUSDS_BUYBACK_SHARE,
-            susdsSeedBalance,
-            susdsSeedRate,
-            susdsSeedYield,
-            false, // sellShares
-            true // setAsBackingVault
+            IYieldRepurchaseFacilityV2.AddAssetParams({
+                vault: SUSDS,
+                yieldBuybackShare: SUSDS_BUYBACK_SHARE,
+                initialReserveBalance: susdsSeedBalance,
+                initialConversionRate: susdsSeedRate,
+                nextYield: susdsSeedYield,
+                sellShares: false,
+                setAsBackingVault: true
+            })
         );
         yieldRepoConfig.addAsset(
-            SUSDE,
-            SUSDE_BUYBACK_SHARE,
-            susdeSeedBalance,
-            susdeSeedRate,
-            susdeSeedYield,
-            true, // sellShares: sUSDe redeem reverts while the cooldown is active
-            false
+            IYieldRepurchaseFacilityV2.AddAssetParams({
+                vault: SUSDE,
+                yieldBuybackShare: SUSDE_BUYBACK_SHARE,
+                initialReserveBalance: susdeSeedBalance,
+                initialConversionRate: susdeSeedRate,
+                nextYield: susdeSeedYield,
+                // sUSDe redeem reverts while the cooldown is active
+                sellShares: true,
+                setAsBackingVault: false
+            })
         );
         // forge-lint: disable-end(boolean-cst)
         vm.stopPrank();
@@ -835,6 +847,12 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         _updateOracles();
         _measureExternalPipelineEffects();
 
+        // The lens previews of the pending daily cycle, read from the pools held before
+        // the beat; asserted after the beat where the beat changes nothing else first.
+        uint256 ohmPurchasedBefore = modelOhmPurchased;
+        (uint256 susdsPreview, uint256 susdsPreviewDays) = yieldRepoLens.previewDailyBid(SUSDS);
+        (uint256 susdePreview, uint256 susdePreviewDays) = yieldRepoLens.previewDailyBid(SUSDE);
+
         uint256 marketCountBefore = aggregator.marketCounter();
         _applyModelBeat(marketCountBefore);
 
@@ -842,6 +860,44 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
         heart.beat();
 
         _assertBeat(marketCountBefore);
+        _assertBidPreviews(
+            ohmPurchasedBefore,
+            susdsPreview,
+            susdsPreviewDays,
+            susdePreview,
+            susdePreviewDays
+        );
+    }
+
+    /// @notice Asserts the lens previews of the daily bid against the markets the beat
+    ///         created. The previews are read before the beat from the pools held then,
+    ///         so they match only a daily cycle that found the pool unchanged: not on a
+    ///         weekly reset beat (the funding withdrawal lands first), and for the
+    ///         backing vault not while purchased OHM is burned first (the backing shares
+    ///         join its pool).
+    function _assertBidPreviews(
+        uint256 ohmPurchasedBefore_,
+        uint256 susdsPreview_,
+        uint256 susdsPreviewDays_,
+        uint256 susdePreview_,
+        uint256 susdePreviewDays_
+    ) internal view {
+        bool dailyBeat = modelEpoch % YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY == 0;
+        bool resetBeat = modelEpoch == 0;
+        if (!dailyBeat || resetBeat) return;
+
+        // daysRemaining = 7 - modelEpoch / 3, the value the daily cycle ran with
+        uint256 daysRemaining = YieldRepurchaseFacilityV2Constants.DAYS_PER_WEEK -
+            uint256(modelEpoch / YieldRepurchaseFacilityV2Constants.EPOCHS_PER_DAY);
+        assertEq(susdsPreviewDays_, daysRemaining, "preview: sUSDS days remaining");
+        assertEq(susdePreviewDays_, daysRemaining, "preview: sUSDe days remaining");
+
+        if (market[SUSDS].live && ohmPurchasedBefore_ == 0) {
+            assertEq(market[SUSDS].capacity, susdsPreview_, "preview: sUSDS capacity");
+        }
+        if (market[SUSDE].live) {
+            assertEq(market[SUSDE].capacity, susdePreview_, "preview: sUSDe capacity");
+        }
     }
 
     /// @notice Measures the exact treasury effects of the non-facility pipeline tasks for
@@ -1029,9 +1085,9 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             uint256 receivables = _readPrincipalReceivables(ch);
             uint256 effective = Math.saturatingSub(receivables, yieldRepo.clearinghouseOffset(ch));
             yield +=
-                (effective * YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_NUMERATOR) /
-                YieldRepurchaseFacilityV2ClearinghouseLib.CH_RATE_DENOMINATOR /
-                YieldRepurchaseFacilityV2ClearinghouseLib.WEEKS_PER_YEAR;
+                (effective * YieldRepurchaseFacilityV2MathLib.CH_RATE_NUMERATOR) /
+                YieldRepurchaseFacilityV2MathLib.CH_RATE_DENOMINATOR /
+                YieldRepurchaseFacilityV2MathLib.WEEKS_PER_YEAR;
         }
     }
 
@@ -1143,8 +1199,8 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     // Mirrors the library casts: the decimals fit in int8, and with `priceDecimals` in
     // [-18, 18] both scale exponents are non-negative.
     // forge-lint: disable-start(unsafe-typecast)
-    /// @notice Mirrors the `YieldRepurchaseFacilityV2BondMarketLib` market pricing for 18-decimal payout tokens and the
-    ///         18-decimal oracle.
+    /// @notice Mirrors the `YieldRepurchaseFacilityV2MathLib` market pricing for 18-decimal
+    ///         payout tokens and the 18-decimal oracle.
     function _mirrorMarketPricing(
         uint256 oraclePrice_
     )
@@ -1231,6 +1287,17 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
 
         if (market[SUSDS].live) _assertMarket(SUSDS, "sUSDS");
         if (market[SUSDE].live) _assertMarket(SUSDE, "sUSDe");
+
+        // The lens views of the gate and of the Clearinghouse interest, against the model
+        (bool gateOpen, uint256 gatePrice, uint256 gateBacking) = yieldRepoLens.priceGate();
+        assertEq(gatePrice, _expectedOraclePrice(), "lens: gate price");
+        assertEq(gateBacking, BACKING, "lens: gate backing");
+        assertEq(gateOpen, gatePrice >= BACKING, "lens: gate open");
+        assertEq(
+            yieldRepoLens.getClearinghouseYield(),
+            _modelClearinghouseYield(),
+            "lens: clearinghouse yield"
+        );
     }
 
     function _assertAsset(address vault_, string memory label_) internal view {
@@ -1248,6 +1315,14 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             config.lastReserveBalance,
             m.lastReserveBalance,
             string.concat(label_, ": lastReserveBalance")
+        );
+
+        // The lens values the protocol-held shares live: no Clearinghouse is active on the
+        // pinned block, so the protocol balance is the TRSRY share balance.
+        assertEq(
+            yieldRepoLens.getReserveBalance(vault_),
+            IERC4626(vault_).previewRedeem(m.trsryShares),
+            string.concat(label_, ": reserve balance view")
         );
     }
 
@@ -1321,11 +1396,26 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
             expected.initialPrice,
             string.concat(label_, " market: initial price")
         );
+        _assertMarketViews(vault_, expected.id, label_);
+    }
+
+    /// @notice Asserts the market record of the facility and the market views of the lens
+    ///         for the market created for the vault.
+    function _assertMarketViews(
+        address vault_,
+        uint256 marketId_,
+        string memory label_
+    ) internal view {
         assertEq(
-            yieldRepo.marketReserves(expected.id),
+            yieldRepoLens.marketReserve(marketId_),
             vault_ == SUSDS ? USDS : USDE,
-            string.concat(label_, " market: marketReserves")
+            string.concat(label_, " market: marketReserve")
         );
+        assertEq(yieldRepo.marketVault(marketId_), vault_, string.concat(label_, " market: vault"));
+        (bool tracked, uint256 trackedId, bool live) = yieldRepoLens.getVaultMarket(vault_);
+        assertTrue(tracked, string.concat(label_, " market: tracked"));
+        assertEq(trackedId, marketId_, string.concat(label_, " market: tracked id"));
+        assertTrue(live, string.concat(label_, " market: live"));
     }
 
     // ============ BOND PURCHASES ============ //
@@ -1432,6 +1522,7 @@ abstract contract YieldRepurchaseFacilityV2ForkTestBase is Test {
     }
 
     // A tolerant read, mirroring `YieldRepurchaseFacilityV2ClearinghouseLib.readPrincipalReceivables`
+    // and the lens
     // forge-lint: disable-next-item(low-level-calls)
     function _readPrincipalReceivables(address clearinghouse_) internal view returns (uint256) {
         (bool success, bytes memory data) = clearinghouse_.staticcall(

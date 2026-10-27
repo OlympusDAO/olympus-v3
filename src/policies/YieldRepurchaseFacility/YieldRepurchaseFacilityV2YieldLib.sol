@@ -6,10 +6,8 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {FullMath} from "src/libraries/FullMath.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Modules
@@ -25,11 +23,10 @@ import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 ///      reset stays with the facility: the reset of a vault is split into
 ///      `beginWeeklyReset`, which projects and returns the funding target, and
 ///      `finishWeeklyReset`, which records the funded value and the balance snapshot.
-///      Nothing here reads the facility's balances.
+///      Nothing here reads the facility's balances. The arithmetic is that of
+///      `YieldRepurchaseFacilityV2MathLib`, and the share valuation that of
+///      `YieldRepurchaseFacilityV2VaultLib`, which the lens shares.
 library YieldRepurchaseFacilityV2YieldLib {
-    using FullMath for uint256;
-    using YieldRepurchaseFacilityV2VaultLib for IYieldRepurchaseFacilityV2.ReserveAsset;
-
     /// @notice Restarts the weekly cycle of the enabled assets: zeroes their yields and
     ///         unfunded carries, applies the supplied next-yield seeds, and refreshes
     ///         their yield snapshots.
@@ -120,7 +117,7 @@ library YieldRepurchaseFacilityV2YieldLib {
 
         // The projection reads the stored snapshots against the current rate, so it must
         // run before the snapshots are refreshed below.
-        uint256 newNextYield = projectNextYield(config_, context_, clearinghouseYield_);
+        uint256 newNextYield = _projectNextYield(config_, context_, clearinghouseYield_);
 
         _setNextYield(config_, newNextYield);
 
@@ -144,31 +141,29 @@ library YieldRepurchaseFacilityV2YieldLib {
         uint256 fundingTarget_,
         uint256 funded_
     ) external {
-        config_.unfundedYield = Math.saturatingSub(fundingTarget_, funded_);
-        config_.lastReserveBalance = protocolReserveBalance(config_, context_);
+        config_.unfundedYield = YieldRepurchaseFacilityV2MathLib.unfundedRemainder(
+            fundingTarget_,
+            funded_
+        );
+        config_.lastReserveBalance = _protocolReserveBalance(config_, context_);
     }
 
     /// @notice Projects the next yield of a vault, in reserve units: the vault yield
     ///         accrued since the snapshots, plus the weekly Clearinghouse interest for
     ///         the backing vault, multiplied by the vault's buyback share (floor).
-    /// @param config_ The vault's configuration storage.
-    /// @param context_ The dependencies of the facility: the backing vault.
-    /// @param clearinghouseYield_ The weekly Clearinghouse interest, in backing reserve
-    ///        units; credited only to the backing vault.
-    /// @return The projected yield, in reserve units.
-    function projectNextYield(
+    /// @dev The Clearinghouse interest is credited only to the backing vault; the other
+    ///      vaults pass zero to the projection.
+    function _projectNextYield(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
         IYieldRepurchaseFacilityV2.Context memory context_,
         uint256 clearinghouseYield_
-    ) public view returns (uint256) {
+    ) private view returns (uint256) {
         uint256 vaultYield = _computeVaultYield(config_);
-        uint256 totalYield = config_.vault == context_.backingVault
-            ? vaultYield + clearinghouseYield_
-            : vaultYield;
         return
-            totalYield.mulDiv(
-                config_.yieldBuybackShare,
-                YieldRepurchaseFacilityV2Constants.ONE_HUNDRED_PERCENT
+            YieldRepurchaseFacilityV2MathLib.projectNextYield(
+                vaultYield,
+                config_.vault == context_.backingVault ? clearinghouseYield_ : 0,
+                config_.yieldBuybackShare
             );
     }
 
@@ -177,17 +172,13 @@ library YieldRepurchaseFacilityV2YieldLib {
     ///      also the balances of the active Clearinghouses, valued by the redemption
     ///      class of the vault (`YieldRepurchaseFacilityV2VaultLib.sharesToAssets`,
     ///      floor).
-    /// @param config_ The configuration storage of the vault to value.
-    /// @param context_ The dependencies of the facility: the treasury, the CHREG module,
-    ///        and the backing vault.
-    /// @return balance The reserve value, in reserve units.
     // The loop runs over the active Clearinghouses, activated only through the permissioned
     // CHREG module.
     // forge-lint: disable-next-item(calls-loop)
-    function protocolReserveBalance(
+    function _protocolReserveBalance(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_,
         IYieldRepurchaseFacilityV2.Context memory context_
-    ) public view returns (uint256 balance) {
+    ) private view returns (uint256 balance) {
         address vault_ = config_.vault;
         IERC20 shareToken = IERC20(config_.shareToken);
         uint256 totalShares = shareToken.balanceOf(context_.trsry);
@@ -200,7 +191,11 @@ library YieldRepurchaseFacilityV2YieldLib {
             }
         }
 
-        balance = config_.sharesToAssets(totalShares);
+        balance = YieldRepurchaseFacilityV2VaultLib.sharesToAssets(
+            vault_,
+            config_.asyncRedeem,
+            totalShares
+        );
     }
 
     /// @notice Refreshes the conversion-rate and reserve-balance snapshots of a vault
@@ -213,12 +208,14 @@ library YieldRepurchaseFacilityV2YieldLib {
         IYieldRepurchaseFacilityV2.Context memory context_
     ) private {
         config_.lastConversionRate = _conversionRate(config_);
-        config_.lastReserveBalance = protocolReserveBalance(config_, context_);
+        config_.lastReserveBalance = _protocolReserveBalance(config_, context_);
     }
 
     /// @notice Returns the vault yield accrued since the snapshots, in reserve units.
-    /// @dev `lastReserveBalance * (currentRate - lastRate) / lastRate`, floored. Zero
-    ///      when the rate has not increased or the rate snapshot is unset.
+    /// @dev `lastReserveBalance * (currentRate - lastRate) / lastRate`, floored
+    ///      (`YieldRepurchaseFacilityV2MathLib.vaultYield`). Zero when the rate has not
+    ///      increased or the rate snapshot is unset; with the snapshot unset the vault
+    ///      is not read.
     ///
     ///      The basis is the balance snapshot of the last weekly reset, so balance
     ///      changes between the snapshots do not enter the yield: the rate delta is
@@ -237,23 +234,23 @@ library YieldRepurchaseFacilityV2YieldLib {
         if (lastRate == 0) return 0;
 
         uint256 currentRate = _conversionRate(config_);
-        if (currentRate <= lastRate) return 0;
-
-        yield = config_.lastReserveBalance.mulDiv(currentRate - lastRate, lastRate);
+        yield = YieldRepurchaseFacilityV2MathLib.vaultYield(
+            config_.lastReserveBalance,
+            lastRate,
+            currentRate
+        );
     }
 
     /// @notice Returns the vault's conversion rate: the reserve value of one whole
-    ///         share.
-    /// @dev The probe amount `10 ** reserveDecimals` is one whole share because `addAsset`
-    ///      requires the share token decimals to equal the reserve decimals. The rate is
-    ///      `previewRedeem` of that amount, or `convertToAssets` for an asset with
-    ///      asynchronous redemption.
+    ///         share (`YieldRepurchaseFacilityV2VaultLib.conversionRate`).
     function _conversionRate(
         IYieldRepurchaseFacilityV2.ReserveAsset storage config_
     ) private view returns (uint256) {
         return
-            config_.sharesToAssets(
-                YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals
+            YieldRepurchaseFacilityV2VaultLib.conversionRate(
+                config_.vault,
+                config_.asyncRedeem,
+                config_.reserveDecimals
             );
     }
 

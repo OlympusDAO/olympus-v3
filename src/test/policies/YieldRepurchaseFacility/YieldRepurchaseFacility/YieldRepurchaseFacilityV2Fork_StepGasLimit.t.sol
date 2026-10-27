@@ -90,19 +90,38 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
             yieldRepoConfig.disableAsset(SUSDE);
             yieldRepoConfig.removeAsset(SUSDE);
         }
-        yieldRepoConfig.addAsset(address(burner), 1e18, 0, ONE, nextYield_, false, false);
+        yieldRepoConfig.addAsset(_burnerParams(nextYield_));
         if (beforeSusde_) {
             yieldRepoConfig.addAsset(
-                SUSDE,
-                SUSDE_BUYBACK_SHARE,
-                susdeSeedBalance,
-                susdeSeedRate,
-                susdeSeedYield,
-                true,
-                false
+                IYieldRepurchaseFacilityV2.AddAssetParams({
+                    vault: SUSDE,
+                    yieldBuybackShare: SUSDE_BUYBACK_SHARE,
+                    initialReserveBalance: susdeSeedBalance,
+                    initialConversionRate: susdeSeedRate,
+                    nextYield: susdeSeedYield,
+                    sellShares: true,
+                    setAsBackingVault: false
+                })
             );
         }
         vm.stopPrank();
+    }
+
+    /// @notice The registration inputs of the fixture: a full buyback share, zero snapshots
+    ///         except a one-to-one conversion rate, the reserve mode, and no designation.
+    function _burnerParams(
+        uint256 nextYield_
+    ) internal view returns (IYieldRepurchaseFacilityV2.AddAssetParams memory params) {
+        return
+            IYieldRepurchaseFacilityV2.AddAssetParams({
+                vault: address(burner),
+                yieldBuybackShare: 1e18,
+                initialReserveBalance: 0,
+                initialConversionRate: ONE,
+                nextYield: nextYield_,
+                sellShares: false,
+                setAsBackingVault: false
+            });
     }
 
     /// @notice Deposits WETH into the fixture for `receiver_`.
@@ -678,7 +697,7 @@ contract YieldRepurchaseFacilityV2ForkTests_StepGasLimit is YieldRepurchaseFacil
         config.setFacility(address(facility));
         facility.setConfigurator(address(config));
         config.enable("");
-        config.addAsset(address(burner), 1e18, 0, ONE, 0, false, false);
+        config.addAsset(_burnerParams(0));
         vm.stopPrank();
 
         assertFalse(facility.isEnabled(), "never enabled");

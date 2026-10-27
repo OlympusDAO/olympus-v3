@@ -8,7 +8,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 
 // Libraries
 import {Errors} from "src/libraries/Errors.sol";
-import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
@@ -19,17 +19,9 @@ import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
 ///         measures the Clearinghouse component of the backing yield.
 /// @dev The library is deployed separately and reached through `DELEGATECALL`, so the
 ///      storage parameter references the calling facility's storage, and the events and
-///      the errors belong to the facility interface.
+///      the errors belong to the facility interface. The interest arithmetic is that of
+///      `YieldRepurchaseFacilityV2MathLib`, which the lens shares.
 library YieldRepurchaseFacilityV2ClearinghouseLib {
-    /// @notice Numerator of the Clearinghouse annual interest rate (0.5%).
-    uint256 internal constant CH_RATE_NUMERATOR = 5;
-
-    /// @notice Denominator of the Clearinghouse annual interest rate (`5 / 1000` = 0.5%).
-    uint256 internal constant CH_RATE_DENOMINATOR = 1000;
-
-    /// @notice Number of weeks per year used for the Clearinghouse annual rate.
-    uint256 internal constant WEEKS_PER_YEAR = 52;
-
     /// @notice The Clearinghouse configuration of the facility.
     /// @param offsets The cumulative offset applied to a Clearinghouse's
     ///        `principalReceivables`.
@@ -149,7 +141,10 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
             // forge-lint: disable-next-line(calls-loop)
             address ch = chreg.registry(i);
             if (!_countsTowardBackingYield(state_, ch, backingReserve_)) continue;
-            yield += _clearinghouseInterest(readPrincipalReceivables(ch), state_.offsets[ch]);
+            yield += YieldRepurchaseFacilityV2MathLib.clearinghouseInterest(
+                readPrincipalReceivables(ch),
+                state_.offsets[ch]
+            );
         }
     }
 
@@ -241,17 +236,6 @@ library YieldRepurchaseFacilityV2ClearinghouseLib {
         return
             state_.included[clearinghouse_] ||
             _readClearinghouseReserve(clearinghouse_) == backingReserve_;
-    }
-
-    /// @notice Returns one week of interest on the effective receivables.
-    /// @dev The offset is subtracted with saturation; the rate is 0.5% per year divided
-    ///      over 52 weeks, floored at each division.
-    function _clearinghouseInterest(
-        uint256 receivables_,
-        uint256 offset_
-    ) private pure returns (uint256) {
-        uint256 effective = Math.saturatingSub(receivables_, offset_);
-        return (effective * CH_RATE_NUMERATOR) / CH_RATE_DENOMINATOR / WEEKS_PER_YEAR;
     }
 
     /// @notice Reads the Clearinghouse's reserve token, treating a revert as the zero
