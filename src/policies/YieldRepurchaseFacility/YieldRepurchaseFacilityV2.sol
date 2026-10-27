@@ -23,10 +23,10 @@ import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseFacilityV2Write} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2Write.sol";
 
 // Libraries
-import {CappedCall} from "src/libraries/CappedCall.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YRFAssetConfigLib} from "src/policies/YieldRepurchaseFacility/YRFAssetConfigLib.sol";
 import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol";
@@ -457,15 +457,17 @@ contract YieldRepurchaseFacilityV2 is
     ///         best-effort.
     /// @dev The tracked id is cleared unconditionally. The close call is external: a
     ///      revert of the auctioneer is absorbed with a `MarketCloseFailed` event
-    ///      carrying the truncated revert reason, and the market is left to expire on
-    ///      its own, unpurchasable: `callback` only serves the tracked market.
+    ///      carrying the truncated revert reason, an auctioneer that holds no code is
+    ///      absorbed with the same event carrying an empty reason, and the market is
+    ///      left to expire on its own, unpurchasable: `callback` only serves the
+    ///      tracked market.
     function _closeVaultMarket(address vault_) private {
         uint256 marketIdPlusOne = _liveMarketIds[vault_];
         if (marketIdPlusOne == 0) return;
         _liveMarketIds[vault_] = 0;
 
         uint256 marketId = marketIdPlusOne - 1;
-        (bool success, bytes memory reason) = CappedCall.tryCall(
+        (bool success, bytes memory reason) = _safeCall(
             bondAuctioneer,
             abi.encodeCall(IBondAuctioneer.closeMarket, (marketId))
         );
@@ -559,7 +561,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
-            (bool success, bytes memory reason) = CappedCall.tryCall(
+            (bool success, bytes memory reason) = _safeCall(
                 address(this),
                 abi.encodeCall(this.selfReturnVaultFunds, (vault))
             );
@@ -617,7 +619,7 @@ contract YieldRepurchaseFacilityV2 is
         // The purchased OHM is processed before the price gate, so the burn continues
         // while markets are skipped.
         {
-            (bool success, bytes memory reason) = CappedCall.tryCall(
+            (bool success, bytes memory reason) = _safeCall(
                 address(this),
                 abi.encodeCall(this.selfProcessOhmPurchases, ())
             );
@@ -644,7 +646,7 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            (bool success, bytes memory reason) = CappedCall.tryCall(
+            (bool success, bytes memory reason) = _safeCall(
                 address(this),
                 abi.encodeCall(this.selfProcessVaultDaily, (vault, daysRemaining))
             );
@@ -712,7 +714,7 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            (bool success, bytes memory reason) = CappedCall.tryCall(
+            (bool success, bytes memory reason) = _safeCall(
                 address(this),
                 abi.encodeCall(this.selfProcessVaultReset, (vault, clearinghouseYield))
             );
@@ -851,7 +853,7 @@ contract YieldRepurchaseFacilityV2 is
         if (idleReserve == 0) return;
         if (IERC4626(vault_).previewDeposit(idleReserve) == 0) return;
 
-        (bool success, bytes memory reason) = CappedCall.tryCall(
+        (bool success, bytes memory reason) = _safeCall(
             address(this),
             abi.encodeCall(this.selfWrapReserve, (vault_, reserve_, idleReserve))
         );
@@ -898,7 +900,7 @@ contract YieldRepurchaseFacilityV2 is
     ) private returns (uint256 received) {
         if (shares_ == 0) return 0;
 
-        (bool success, bytes memory data) = CappedCall.tryCall(
+        (bool success, bytes memory data) = _safeCall(
             address(this),
             abi.encodeCall(this.selfRedeemChecked, (vault_, reserve_, shares_))
         );
@@ -908,7 +910,7 @@ contract YieldRepurchaseFacilityV2 is
             return 0;
         }
         // The success returndata is the one-word return of `selfRedeemChecked`, well
-        // below the `CappedCall` truncation
+        // below the `MAX_RETURNDATA_LENGTH` cap
         return abi.decode(data, (uint256));
     }
 
@@ -1027,8 +1029,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      The vault's previous tracked market is closed first, best-effort, so at most
     ///      one purchasable market per vault exists at a time even when missed beats
     ///      stretch the daily schedule.
-    ///      Failures are absorbed: a zero conversion rate or a rejected market submission
-    ///      emits `MarketCreationFailed` and keeps the funds with the facility. A created
+    ///      Failures are absorbed: a zero conversion rate, a rejected market submission,
+    ///      or an auctioneer that holds no code emits `MarketCreationFailed` and keeps
+    ///      the funds with the facility. A created
     ///      market is recorded in `_marketVaults` under the creating auctioneer, which
     ///      authorizes its callback, and its id is tracked for the later close.
     function _createMarket(
@@ -2075,6 +2078,26 @@ contract YieldRepurchaseFacilityV2 is
         if (msg.sender != configurator)
             revert IYieldRepurchaseFacilityV2_OnlyConfigurator(msg.sender);
         if (_reentrancyGuardEntered()) revert ReentrancyGuardReentrantCall();
+    }
+
+    /// @notice Performs an isolated call to `target_` that forwards the remaining gas and
+    ///         no value, and captures the returndata truncated to
+    ///         `MAX_RETURNDATA_LENGTH` bytes.
+    /// @dev A target that holds no code is reported as a failure with empty data.
+    /// @return success Whether the call succeeded.
+    /// @return data The captured returndata, truncated to `MAX_RETURNDATA_LENGTH` bytes.
+    function _safeCall(
+        address target_,
+        bytes memory callData_
+    ) private returns (bool success, bytes memory data) {
+        return
+            SafeCall.safeCall(
+                target_,
+                gasleft(),
+                0,
+                YieldRepurchaseFacilityV2Constants.MAX_RETURNDATA_LENGTH,
+                callData_
+            );
     }
 
     /// @notice Reverts unless the caller is `caller_`.

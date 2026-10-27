@@ -6,8 +6,8 @@ import {IBondAuctioneer} from "src/interfaces/IBondAuctioneer.sol";
 import {IBondSDA} from "src/interfaces/IBondSDA.sol";
 
 // Libraries
-import {CappedCall} from "src/libraries/CappedCall.sol";
 import {FullMath} from "src/libraries/FullMath.sol";
+import {SafeCall} from "src/libraries/SafeCall.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Contracts
@@ -65,13 +65,14 @@ library YRFBondMarketLib {
     ///      `BOND_DEPOSIT_INTERVAL` deposit interval, a `BOND_DEBT_BUFFER` debt buffer,
     ///      and the capacity denominated in the payout token; the caller is the market
     ///      callback. A revert of the auctioneer is reported as a failure with the
-    ///      captured revert data instead of bubbling; a revert of the pricing (a checked
-    ///      cast on an extreme price) bubbles to the caller.
+    ///      captured revert data instead of bubbling, and an auctioneer that holds no
+    ///      code is reported as a failure with empty data; a revert of the pricing (a
+    ///      checked cast on an extreme price) bubbles to the caller.
     /// @param config_ The market submission inputs.
     /// @return success Whether the auctioneer accepted the market.
     /// @return marketId The market ID assigned by the auctioneer, or zero on a failure.
-    /// @return reason The raw revert data of a rejected submission, truncated by
-    ///         `CappedCall`; empty on a success.
+    /// @return reason The raw revert data of a rejected submission, truncated to
+    ///         `MAX_RETURNDATA_LENGTH` bytes; empty on a success.
     function createMarket(
         MarketConfig memory config_
     ) external returns (bool success, uint256 marketId, bytes memory reason) {
@@ -108,7 +109,13 @@ library YRFBondMarketLib {
         // The capped capture keeps a reverting auctioneer from inflating the memory
         // cost of the calling facility; the success returndata is one word (the id)
         bytes memory returned;
-        (success, returned) = CappedCall.tryCall(address(config_.auctioneer), callData);
+        (success, returned) = SafeCall.safeCall(
+            address(config_.auctioneer),
+            gasleft(),
+            0,
+            YieldRepurchaseFacilityV2Constants.MAX_RETURNDATA_LENGTH,
+            callData
+        );
 
         // The literals make the failure and the success return shapes explicit
         // forge-lint: disable-start(boolean-cst)

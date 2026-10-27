@@ -132,16 +132,17 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The vault whose market was not created.
     /// @param bidAmount The intended market capacity, in payout token units.
     /// @param reason The raw revert data of the rejected submission, truncated to at
-    ///        most 256 bytes; empty when the pricing was skipped before the submission
-    ///        (a zero conversion rate).
+    ///        most 256 bytes; empty when the auctioneer reverts without data or holds
+    ///        no code, and when the pricing was skipped before the submission (a zero
+    ///        conversion rate).
     event MarketCreationFailed(address indexed vault, uint256 bidAmount, bytes reason);
 
     /// @notice Emitted when the best-effort close of a vault's tracked bond market
-    ///         reverts; the market is left to expire on its own.
+    ///         fails; the market is left to expire on its own.
     /// @param vault The vault whose market close failed.
     /// @param marketId The market that was to be closed.
     /// @param reason The raw revert data of the failed close, truncated to at most 256
-    ///        bytes.
+    ///        bytes; empty when the auctioneer reverts without data or holds no code.
     event MarketCloseFailed(address indexed vault, uint256 marketId, bytes reason);
 
     /// @notice Emitted when the treasury balance does not cover a sanctioned funding
