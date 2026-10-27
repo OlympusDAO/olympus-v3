@@ -14,9 +14,9 @@ import {IYieldRepurchaseFacilityV2View} from "src/policies/interfaces/YieldRepur
 import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";

@@ -6,10 +6,10 @@ import {IERC20} from "@openzeppelin-5.3.0/token/ERC20/IERC20.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
-import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2ValidationLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";

@@ -7,7 +7,7 @@ import {IERC7540Redeem} from "@openzeppelin-community-contracts-0.0.1/interfaces
 
 // Libraries
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2VaultLib
 /// @notice An internal library that values the shares of a registered vault of the

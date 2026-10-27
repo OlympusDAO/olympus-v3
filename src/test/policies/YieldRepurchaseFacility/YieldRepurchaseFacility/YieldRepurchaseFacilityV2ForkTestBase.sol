@@ -17,8 +17,8 @@ import {IPriceConfigv2} from "src/policies/interfaces/IPriceConfigv2.sol";
 
 import {FullMath} from "src/libraries/FullMath.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
 
 import {Kernel, Actions, toKeycode} from "src/Kernel.sol";
 import {ModuleWithSubmodules, toSubKeycode} from "src/Submodules.sol";

@@ -9,9 +9,9 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 // Libraries
 import {FullMath} from "src/libraries/FullMath.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
 
 // Contracts
 import {ERC20 as SolmateERC20} from "@solmate-6.2.0/tokens/ERC20.sol";

@@ -7,8 +7,8 @@ import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghou
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
-import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2ValidationLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
