@@ -12,6 +12,8 @@ import {FullMath} from "src/libraries/FullMath.sol";
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
+import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchaseRecipient.sol";
+import {IEnabler} from "src/periphery/interfaces/IEnabler.sol";
 
 /// @title YieldRepurchaseFacilityV2ForkTests_E2E
 /// @notice End-to-end mainnet-fork test of the YRF v2: migrates from the deployed
@@ -222,6 +224,31 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(susdeConfig.sellShares, true, "sUSDe sellShares");
         assertEq(susdeConfig.yieldBuybackShare, SUSDE_BUYBACK_SHARE, "sUSDe share");
         assertEq(susdeConfig.nextYield, susdeSeedYield, "sUSDe nextYield");
+
+        // The yield recipient surface: the interfaces a sender checks, the route of each
+        // vault, and the vault lookup by the underlying asset
+        assertTrue(
+            yieldRepo.supportsInterface(type(IYieldRepurchaseRecipient).interfaceId),
+            "recipient interface"
+        );
+        assertTrue(yieldRepo.supportsInterface(type(IEnabler).interfaceId), "enabler interface");
+
+        IYieldRepurchaseRecipient.VaultConfig memory susdsRoute = yieldRepo.getVaultConfig(SUSDS);
+        assertEq(susdsRoute.vault, SUSDS, "sUSDS route vault");
+        assertEq(susdsRoute.shareToken, SUSDS, "sUSDS route share token");
+        assertEq(susdsRoute.asset, USDS, "sUSDS route asset");
+        assertTrue(susdsRoute.enabled, "sUSDS route enabled");
+
+        IYieldRepurchaseRecipient.VaultConfig memory susdeRoute = yieldRepo.getVaultConfig(SUSDE);
+        assertEq(susdeRoute.vault, SUSDE, "sUSDe route vault");
+        assertEq(susdeRoute.shareToken, SUSDE, "sUSDe route share token");
+        assertEq(susdeRoute.asset, USDE, "sUSDe route asset");
+        assertTrue(susdeRoute.enabled, "sUSDe route enabled");
+
+        assertEq(yieldRepo.getAssetVault(USDS), SUSDS, "USDS vault");
+        assertEq(yieldRepo.getAssetVault(USDE), SUSDE, "USDe vault");
+        assertEq(yieldRepo.getAssetVault(SUSDS), address(0), "no vault for a share token");
+        assertEq(yieldRepo.getAssetVault(OHM), address(0), "no vault for an unknown token");
 
         // The market authorization and the oracle price
         assertTrue(auctioneer.callbackAuthorized(address(yieldRepo)), "callback authorized");
