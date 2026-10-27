@@ -170,6 +170,17 @@ interface IYieldRepurchaseFacilityV2View is IYieldRepurchaseFacilityV2 {
     /// @return The premium (`1e18` = 100%).
     function maxPricePremium() external view returns (uint256);
 
+    /// @notice Returns the gas limit of an isolated step: the weekly reset of a vault,
+    ///         the processing of the purchased OHM, the daily cycle of a vault, and the
+    ///         sweep of a vault by `returnFundsToTreasury` each run with this amount of
+    ///         gas.
+    /// @dev `IPeriodicTask.execute` and `returnFundsToTreasury` revert with
+    ///      `IYieldRepurchaseFacilityV2_InsufficientStepGas` when the gas remaining
+    ///      before a step does not cover the limit, the one 64th of the gas that the
+    ///      calling frame keeps back from a call (EIP-150), and a fixed margin.
+    /// @return The gas limit of one isolated step, in gas units.
+    function stepGasLimit() external view returns (uint32);
+
     /// @notice Returns the OHM purchased through the facility's bond markets and not yet
     ///         burned.
     /// @dev The facility's OHM balance always covers this amount.

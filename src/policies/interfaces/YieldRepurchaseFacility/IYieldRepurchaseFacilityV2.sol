@@ -121,6 +121,10 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param maxPricePremium The new premium (`1e18` = 100%).
     event MaxPricePremiumSet(uint256 maxPricePremium);
 
+    /// @notice Emitted when the gas limit of an isolated step is set.
+    /// @param stepGasLimit The gas limit of one isolated step, in gas units.
+    event StepGasLimitSet(uint32 stepGasLimit);
+
     /// @notice Emitted when the receivables offset of a Clearinghouse is set.
     /// @param clearinghouse The Clearinghouse address.
     /// @param offset The cumulative offset, in the receivables' units.
@@ -184,31 +188,34 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param ohmBurned The amount of purchased OHM that was burned.
     event FundsReturnedToTreasury(uint256 ohmBurned);
 
-    /// @notice Emitted when the sweep of a vault by `returnFundsToTreasury` reverts and
-    ///         is skipped; the vault's balances and accounting stay in place and are
-    ///         retried by the next call.
+    /// @notice Emitted when the sweep of a vault by `returnFundsToTreasury` reverts or
+    ///         runs out of the step gas limit and is skipped; the vault's balances and
+    ///         accounting stay in place and are retried by the next call.
     /// @param vault The vault whose sweep was skipped.
     /// @param reason The raw revert data of the failed sweep, truncated to at most 256
-    ///        bytes.
+    ///        bytes; empty when the sweep ran out of gas.
     event FundsReturnSkipped(address indexed vault, bytes reason);
 
-    /// @notice Emitted when the weekly reset of a vault reverts and is skipped; the vault
-    ///         is retried at the following weekly reset.
+    /// @notice Emitted when the weekly reset of a vault reverts or runs out of the step
+    ///         gas limit and is skipped; the vault is retried at the following weekly
+    ///         reset.
     /// @param vault The vault whose reset was skipped.
     /// @param reason The raw revert data of the failed reset, truncated to at most 256
-    ///        bytes.
+    ///        bytes; empty when the reset ran out of gas.
     event WeeklyResetSkipped(address indexed vault, bytes reason);
 
-    /// @notice Emitted when the daily cycle of a vault reverts and is skipped.
+    /// @notice Emitted when the daily cycle of a vault reverts or runs out of the step
+    ///         gas limit and is skipped.
     /// @param vault The vault whose daily cycle was skipped.
     /// @param reason The raw revert data of the failed cycle, truncated to at most 256
-    ///        bytes.
+    ///        bytes; empty when the cycle ran out of gas.
     event DailyCycleSkipped(address indexed vault, bytes reason);
 
-    /// @notice Emitted when the processing of the purchased OHM reverts and is skipped;
-    ///         the accumulated OHM is retried on the following beats.
+    /// @notice Emitted when the processing of the purchased OHM reverts or runs out of
+    ///         the step gas limit and is skipped; the accumulated OHM is retried on the
+    ///         following beats.
     /// @param reason The raw revert data of the failed processing, truncated to at most
-    ///        256 bytes.
+    ///        256 bytes; empty when the processing ran out of gas.
     event OhmPurchasesProcessingSkipped(bytes reason);
 
     /// @notice Emitted when the wrap of a sell-shares vault's idle reserve balance into
@@ -324,6 +331,18 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when the re-enable grace window is configured with a length at or
     ///         above `MAX_GRACE_PERIOD`.
     error IYieldRepurchaseFacilityV2_GracePeriodTooLong();
+
+    /// @notice Thrown when the step gas limit is below `1_100_000` or above `5_000_000`.
+    error IYieldRepurchaseFacilityV2_StepGasLimitOutOfBounds();
+
+    /// @notice Thrown when the gas remaining before an isolated step does not cover the
+    ///         step: its gas limit, the one 64th of the gas that the calling frame
+    ///         keeps back from a call (EIP-150), and a fixed margin. The whole call
+    ///         reverts, no step is skipped, and the call succeeds when repeated with
+    ///         more gas.
+    /// @param required The gas required before the step, in gas units.
+    /// @param available The gas remaining before the step, in gas units.
+    error IYieldRepurchaseFacilityV2_InsufficientStepGas(uint256 required, uint256 available);
 
     /// @notice Thrown when a receivables offset exceeds the Clearinghouse's current
     ///         `principalReceivables`.
