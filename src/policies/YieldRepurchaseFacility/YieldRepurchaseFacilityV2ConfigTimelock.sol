@@ -13,7 +13,7 @@ import {IConfigOperator} from "src/policies/interfaces/utils/IConfigOperator.sol
 import {ITimelockBatchQueue} from "src/policies/interfaces/utils/ITimelockBatchQueue.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 // Contracts
 import {EnablerV2} from "src/bases/EnablerV2.sol";

@@ -11,8 +11,8 @@ import {IYieldRepurchaseFacilityV2Steps} from "src/policies/interfaces/YieldRepu
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {Math} from "@openzeppelin-5.3.0/utils/math/Math.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
 
 /// @title YieldRepurchaseFacilityV2BuybackPoolLib
 /// @notice An external library that sizes the daily bid of a vault of the

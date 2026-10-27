@@ -6,7 +6,7 @@ import {IGenericClearinghouse} from "src/policies/interfaces/IGenericClearinghou
 import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchaseFacility/IYieldRepurchaseFacilityV2.sol";
 
 // Libraries
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
 
 /// @title YieldRepurchaseFacilityV2ValidationLib
 /// @notice An internal library of the value rules of the YieldRepurchaseFacilityV2

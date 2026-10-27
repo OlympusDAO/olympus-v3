@@ -20,16 +20,16 @@ import {IYieldRepurchaseRecipient} from "src/policies/interfaces/IYieldRepurchas
 // Libraries
 import {SafeCall} from "src/libraries/SafeCall.sol";
 import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
-import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
-import {YieldRepurchaseFacilityV2BondMarketLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2BondMarketLib.sol";
-import {YieldRepurchaseFacilityV2BuybackPoolLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2BuybackPoolLib.sol";
-import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
-import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
-import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2DependenciesLib.sol";
-import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2MathLib.sol";
-import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2ValidationLib.sol";
-import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2VaultLib.sol";
-import {YieldRepurchaseFacilityV2YieldLib} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2YieldLib.sol";
+import {YieldRepurchaseFacilityV2AssetRegistryLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2AssetRegistryLib.sol";
+import {YieldRepurchaseFacilityV2BondMarketLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2BondMarketLib.sol";
+import {YieldRepurchaseFacilityV2BuybackPoolLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2BuybackPoolLib.sol";
+import {YieldRepurchaseFacilityV2ClearinghouseLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2ClearinghouseLib.sol";
+import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2Constants.sol";
+import {YieldRepurchaseFacilityV2DependenciesLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2DependenciesLib.sol";
+import {YieldRepurchaseFacilityV2MathLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2MathLib.sol";
+import {YieldRepurchaseFacilityV2ValidationLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2ValidationLib.sol";
+import {YieldRepurchaseFacilityV2VaultLib} from "src/policies/YieldRepurchaseFacility/libraries/internal/YieldRepurchaseFacilityV2VaultLib.sol";
+import {YieldRepurchaseFacilityV2YieldLib} from "src/policies/YieldRepurchaseFacility/libraries/linked/YieldRepurchaseFacilityV2YieldLib.sol";
 
 // Modules
 import {CHREGv1} from "src/modules/CHREG/CHREG.v1.sol";
