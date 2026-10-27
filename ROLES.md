@@ -24,7 +24,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, queue timelock delay changes, install submodules, store observations, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
 | admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, return funds to the treasury while disabled, rescue tokens, disable the facility |
-| admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate the config operator, set the grace period, enable/disable the policy |
+| admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, refresh the asynchronous-redemption flag of a vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate the config operator, set the grace period, enable/disable the policy |
 | admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, enable/disable the policy |
 | backing_admin | BackingOracle | Queue timelocked backing updates |
 | bondmanager_admin | BondManager | Create/close bond markets, set parameters |

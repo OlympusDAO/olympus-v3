@@ -33,6 +33,7 @@ import {SafeERC20} from "@openzeppelin-5.3.0/token/ERC20/utils/SafeERC20.sol";
 import {YRFAssetConfigLib} from "src/policies/YieldRepurchaseFacility/YRFAssetConfigLib.sol";
 import {YRFBondMarketLib} from "src/policies/YieldRepurchaseFacility/YRFBondMarketLib.sol";
 import {YRFClearinghouseLib} from "src/policies/YieldRepurchaseFacility/YRFClearinghouseLib.sol";
+import {YRFVaultLib} from "src/policies/YieldRepurchaseFacility/YRFVaultLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -78,6 +79,13 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///      discovers the registered vaults through the `IYieldRepurchaseRecipient`
 ///      surface.
 ///
+///      A registered vault is called through its ERC4626 functions, and its shares are
+///      held and transferred as its share token: the vault itself, or the token an
+///      ERC7575 vault names through `share()`. The shares are valued through the
+///      vault's previews; an asset whose vault redeems asynchronously (ERC7540) is
+///      flagged `asyncRedeem`, sells shares, and is valued through `convertToAssets`
+///      and `convertToShares` (see `YRFVaultLib`).
+///
 ///      Lifecycle:
 ///      - `enable` (admin) performs a full restart: the yields and unfunded carries of
 ///        the enabled assets are zeroed, their yield snapshots are refreshed, and the
@@ -118,6 +126,7 @@ contract YieldRepurchaseFacilityV2 is
 {
     using SafeERC20 for IERC20;
     using FullMath for uint256;
+    using YRFVaultLib for ReserveAsset;
 
     // ============ CONSTANTS ============ //
 
@@ -400,7 +409,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The initial discount is not less than 100% (`1e18`).
     ///      - The max price premium is above 1,000% (`10e18`).
     ///      - A seed references an unregistered or disabled vault.
-    ///      - An enabled vault reverts on `previewRedeem` or `balanceOf`.
+    ///      - The share valuation of an enabled vault (`previewRedeem`, or
+    ///        `convertToAssets` for an asset with asynchronous redemption) or a
+    ///        `balanceOf` read of its share token reverts.
     function _beforeEnable(bytes calldata data_) internal override {
         if (data_.length < _MIN_ENABLE_PARAMS_LENGTH)
             revert IYieldRepurchaseFacilityV2_InvalidEnableDataLength();
@@ -789,10 +800,12 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Withdraws vault shares worth `amount_` (in reserve units) from the
     ///         treasury into the buyback pool.
-    /// @dev The share amount is `previewWithdraw(amount_)` (rounded up by the vault),
-    ///      capped at the treasury balance of the share token with a `FundingShortfall`
-    ///      event on the cap. The funded value is the redeemable value of the withdrawn
-    ///      shares (floor).
+    /// @dev The share amount covers `amount_` rounded up (`previewWithdraw`, or the
+    ///      raised `convertToShares` of an asset with asynchronous redemption, see
+    ///      `YRFVaultLib.assetsToShares`), capped at the treasury balance of the share
+    ///      token with a `FundingShortfall` event on the cap. The funded value is the
+    ///      value of the withdrawn shares (floor; `previewRedeem`, or `convertToAssets`
+    ///      for asynchronous redemption).
     /// @return funded The funded value, in reserve units.
     function _fundFromTreasury(
         ReserveAsset storage config_,
@@ -803,7 +816,7 @@ contract YieldRepurchaseFacilityV2 is
         address vault_ = config_.vault;
         address shareToken = config_.shareToken;
 
-        uint256 shares = _previewWithdraw(vault_, amount_);
+        uint256 shares = config_.assetsToShares(amount_);
         uint256 trsryBalance = _trsryBalance(shareToken);
         if (shares > trsryBalance) {
             // The unfunded remainder is carried by the caller and retried at the next
@@ -814,16 +827,17 @@ contract YieldRepurchaseFacilityV2 is
         if (shares == 0) return 0;
 
         _withdrawShares(shareToken, shares);
-        funded = _previewRedeem(vault_, shares);
+        funded = config_.sharesToAssets(shares);
     }
 
     /// @notice Opens the daily bond market of a vault, sized from the facility's
     ///         balances.
     /// @dev The bid is the pool value divided by `daysRemaining_` (floor). For a
     ///      sell-shares asset the idle reserve balance is wrapped into vault shares
-    ///      first, the pool value is the redeemable value of the held shares, and the
-    ///      market capacity is the smaller of `previewWithdraw(bid)` and the held
-    ///      shares, denominated in shares. Otherwise the pool value is the held reserve
+    ///      first, the pool value is the value of the held shares, and the market
+    ///      capacity is the smaller of the share amount covering the bid and the held
+    ///      shares, denominated in shares; both conversions follow the redemption class
+    ///      of the vault (`YRFVaultLib`). Otherwise the pool value is the held reserve
     ///      plus the redeemable value of the held shares, the reserve shortfall of the
     ///      bid is redeemed from the held shares, and the bid is clamped to the reserve
     ///      actually held when the redeem falls short. A zero bid or capacity skips the
@@ -841,10 +855,10 @@ contract YieldRepurchaseFacilityV2 is
             _wrapIdleReserve(vault_, reserve_);
 
             uint256 heldShares = _selfBalance(shareToken);
-            uint256 bidAmount = _previewRedeem(vault_, heldShares) / daysRemaining_;
+            uint256 bidAmount = config_.sharesToAssets(heldShares) / daysRemaining_;
             if (bidAmount == 0) return;
 
-            uint256 capacityShares = Math.min(_previewWithdraw(vault_, bidAmount), heldShares);
+            uint256 capacityShares = Math.min(config_.assetsToShares(bidAmount), heldShares);
             if (capacityShares == 0) return;
 
             _createMarket(vault_, config_, capacityShares, oraclePrice_);
@@ -948,7 +962,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      external entry point. The received amount is measured as the reserve balance
     ///      delta.
     ///
-    ///      A vault whose share token is a separate contract (ERC-7575) may take the
+    ///      A vault whose share token is a separate contract (ERC7575) may take the
     ///      redeemed shares through the share token allowance of the vault; the
     ///      standard does not fix that mechanism. The exact share amount is therefore
     ///      approved to such a vault for the call, and the allowance is reset to zero
@@ -1224,17 +1238,20 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault reports the zero address as its underlying asset.
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
-    ///        ERC-165.
-    ///      - The vault advertises ERC-7575 through ERC-165 and reports the zero address
+    ///        ERC165.
+    ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) through
+    ///        ERC165 without advertising ERC7575, or while `sellShares_` is unset.
+    ///      - The vault advertises ERC7575 through ERC165 and reports the zero address
     ///        as its `share()`.
     ///      - The share token decimals do not match the reserve decimals (a vault with a
     ///        decimals offset is not supported).
     ///      - The vault, its share token, or its reserve token is OHM, the vault or the
     ///        share token equals the reserve, or any of the three collides with the
     ///        vault, the share token, or the reserve of a registered asset.
-    ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
-    ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
-    ///        one word, or returns zero.
+    ///      - A probe of the vault with one whole share or one whole reserve unit
+    ///        (`previewRedeem`, `previewWithdraw`, and `previewDeposit`; for a vault with
+    ///        asynchronous redemption `convertToAssets`, `convertToShares`, and
+    ///        `previewDeposit`) reverts, returns less than one word, or returns zero.
     ///      - The `PRICE.getPriceIn(OHM, reserve)` probe reverts (for example when the
     ///        reserve is not registered in the PRICE module) or returns zero.
     ///      - The yield buyback share exceeds 100% (`1e18`).
@@ -1298,7 +1315,7 @@ contract YieldRepurchaseFacilityV2 is
     ///      - `epoch_` is not below the weekly epoch count of 21.
     ///      - A seed references an unregistered or disabled vault.
     ///      - A seeded amount is zero.
-    ///      - The treasury withdrawal or a preview of a seeded vault reverts.
+    ///      - The treasury withdrawal or a share valuation of a seeded vault reverts.
     function seedCycle(
         uint48 epoch_,
         BuybackPoolSeed[] calldata poolSeeds_
@@ -1423,12 +1440,16 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The vault is not registered.
     ///      - The stored mode already equals `sellShares_`.
     ///      - `sellShares_` is set while the vault is the backing vault.
+    ///      - `sellShares_` is unset while the asset is flagged `asyncRedeem`: the reserve
+    ///        mode redeems the held shares synchronously.
     ///      - The close of the vault's tracked live bond market reverts.
     function setSellShares(address vault_, bool sellShares_) external override onlyConfigurator {
         ReserveAsset storage config = _requireRegistered(vault_);
         if (config.sellShares == sellShares_)
             revert IYieldRepurchaseFacilityV2_SellSharesUnchanged();
         if (sellShares_) _requireNotBackingVault(vault_);
+        else if (config.asyncRedeem)
+            revert IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
 
         uint256 marketIdPlusOne = _liveMarketIds[vault_];
         if (marketIdPlusOne != 0) {
@@ -1438,6 +1459,43 @@ contract YieldRepurchaseFacilityV2 is
 
         config.sellShares = sellShares_;
         emit SellSharesSet(vault_, sellShares_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
+    /// @dev Callable only by the configurator.
+    ///
+    ///      The flag is re-read from the vault's ERC165 advertisement of
+    ///      `IERC7540Redeem`; a vault that does not implement ERC165 reads as
+    ///      synchronous. The share token, the yield snapshots, and the tracked live bond
+    ///      market are left untouched. Raising the flag for an asset that does not sell
+    ///      shares requires `setSellShares` first, which the backing vault cannot
+    ///      satisfy.
+    ///
+    ///      While the stored flag is unset for a vault that has switched to asynchronous
+    ///      redemption, the valuation calls `previewRedeem` and `previewWithdraw`, which
+    ///      such a vault reverts: the weekly reset and the daily cycle of the asset are
+    ///      skipped with `WeeklyResetSkipped` and `DailyCycleSkipped`, and `enable`
+    ///      (while the asset is enabled), `enableAsset`, and a `seedCycle` seed of the
+    ///      asset revert.
+    ///
+    ///      Reverts if:
+    ///      - The caller is not the configurator.
+    ///      - The reentrancy guard is held by `execute`, `callback`, or `seedCycle`.
+    ///      - The vault is not registered.
+    ///      - The mode the vault advertises equals the stored flag.
+    ///      - The vault advertises asynchronous redemption while the asset does not sell
+    ///        shares.
+    function refreshAsyncRedeem(address vault_) external override onlyConfigurator {
+        ReserveAsset storage config = _requireRegistered(vault_);
+
+        bool asyncRedeem = YRFVaultLib.isAsyncRedeem(vault_);
+        if (asyncRedeem == config.asyncRedeem)
+            revert IYieldRepurchaseFacilityV2_AsyncRedeemUnchanged();
+        if (asyncRedeem && !config.sellShares)
+            revert IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
+
+        config.asyncRedeem = asyncRedeem;
+        emit AsyncRedeemSet(vault_, asyncRedeem);
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
@@ -1883,14 +1941,15 @@ contract YieldRepurchaseFacilityV2 is
 
     // ============ HELPERS ============ //
 
-    /// @notice Returns the vault's conversion rate: the reserve amount redeemable for one
-    ///         whole share.
+    /// @notice Returns the vault's conversion rate: the reserve value of one whole
+    ///         share.
     /// @dev The probe amount `10 ** reserveDecimals` is one whole share because `addAsset`
-    ///      requires the vault's share decimals to equal its reserve decimals.
+    ///      requires the share token decimals to equal the reserve decimals. The rate is
+    ///      `previewRedeem` of that amount, or `convertToAssets` for an asset with
+    ///      asynchronous redemption.
     function _conversionRate(ReserveAsset storage config_) private view returns (uint256) {
         return
-            _previewRedeem(
-                config_.vault,
+            config_.sharesToAssets(
                 YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** config_.reserveDecimals
             );
     }
@@ -2013,18 +2072,12 @@ contract YieldRepurchaseFacilityV2 is
 
     /// @notice Returns the vault's share amount for an exact `assets_` withdrawal
     ///         (rounded up by the vault).
-    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
-    // only through the isolating self-calls.
-    // forge-lint: disable-next-item(calls-loop)
     function _previewWithdraw(address vault_, uint256 assets_) private view returns (uint256) {
         return IERC4626(vault_).previewWithdraw(assets_);
     }
 
     /// @notice Returns the vault's reserve amount for a `shares_` redemption (rounded
     ///         down by the vault).
-    // Reached from the `seedCycle` loop over the admin-supplied seeds; the other loops reach it
-    // only through the isolating self-calls.
-    // forge-lint: disable-next-item(calls-loop)
     function _previewRedeem(address vault_, uint256 shares_) private view returns (uint256) {
         return IERC4626(vault_).previewRedeem(shares_);
     }

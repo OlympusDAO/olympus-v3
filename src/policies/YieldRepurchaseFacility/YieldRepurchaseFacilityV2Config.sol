@@ -216,6 +216,16 @@ contract YieldRepurchaseFacilityV2Config is
     /// @dev Reverts if:
     ///      - The contract is disabled.
     ///      - The caller does not hold the admin role.
+    ///      - The facility rejects the call (see
+    ///        `YieldRepurchaseFacilityV2.refreshAsyncRedeem`).
+    function refreshAsyncRedeem(address vault_) external override givenEnabled onlyAdminRole {
+        _facility().refreshAsyncRedeem(vault_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Config
+    /// @dev Reverts if:
+    ///      - The contract is disabled.
+    ///      - The caller does not hold the admin role.
     ///      - The facility rejects the call (see `YieldRepurchaseFacilityV2.setBackingVault`).
     function setBackingVault(address vault_) external override givenEnabled onlyAdminRole {
         _facility().setBackingVault(vault_);

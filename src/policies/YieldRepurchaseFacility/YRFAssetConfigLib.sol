@@ -13,6 +13,7 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 import {ERC165Checker} from "@openzeppelin-5.3.0/utils/introspection/ERC165Checker.sol";
 import {Errors} from "src/libraries/Errors.sol";
 import {SafeCall} from "src/libraries/SafeCall.sol";
+import {YRFVaultLib} from "src/policies/YieldRepurchaseFacility/YRFVaultLib.sol";
 import {YieldRepurchaseFacilityV2Constants} from "src/policies/YieldRepurchaseFacility/YieldRepurchaseFacilityV2Constants.sol";
 
 // Modules
@@ -30,7 +31,7 @@ library YRFAssetConfigLib {
     /// @notice Byte length of the single word a vault probe must return.
     uint16 private constant _PROBE_RETURN_LENGTH = 32;
 
-    /// @notice The ERC-165 identifier of an ERC-7575 vault (`0x2f0a18c5`): the ERC-4626
+    /// @notice The ERC165 identifier of an ERC7575 vault (`0x2f0a18c5`): the ERC4626
     ///         vault functions combined with `share()`.
     bytes4 private constant _ERC7575_VAULT_INTERFACE_ID =
         type(IERC4626).interfaceId ^ type(IERC7575).interfaceId;
@@ -59,9 +60,10 @@ library YRFAssetConfigLib {
     ///         calling facility.
     /// @dev The asset is registered in the enabled state and recorded in the
     ///      reserve-to-vault lookup. The share token is the token returned by `share()`
-    ///      for a vault that advertises ERC-7575 through ERC-165, and the vault itself
-    ///      otherwise; it is stored with the asset and never re-read. Emits `AssetAdded`
-    ///      and `NextYieldSet` for the facility.
+    ///      for a vault that advertises ERC7575 through ERC165, and the vault itself
+    ///      otherwise; it is stored with the asset and never re-read. The `asyncRedeem`
+    ///      flag records whether the vault advertises asynchronous redemption (ERC7540).
+    ///      Emits `AssetAdded` and `NextYieldSet` for the facility.
     ///
     ///      Reverts if:
     ///      - The vault address is the zero address.
@@ -70,16 +72,19 @@ library YRFAssetConfigLib {
     ///      - The vault reports the zero address as its underlying asset.
     ///      - The vault's underlying asset decimals exceed 18.
     ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`) through
-    ///        ERC-165.
-    ///      - The vault advertises ERC-7575 through ERC-165 and reports the zero address
+    ///        ERC165.
+    ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) through
+    ///        ERC165 without advertising ERC7575, or while `sellShares` is unset.
+    ///      - The vault advertises ERC7575 through ERC165 and reports the zero address
     ///        as its `share()`.
     ///      - The share token decimals do not match the reserve decimals.
     ///      - The vault, its share token, or its reserve token is OHM, the vault or the
     ///        share token equals the reserve, or any of the three collides with the
     ///        vault, the share token, or the reserve of a registered asset.
-    ///      - A probe of the vault (`previewRedeem` of one whole share, `previewWithdraw`
-    ///        or `previewDeposit` of one whole reserve unit) reverts, returns less than
-    ///        one word, or returns zero.
+    ///      - A probe of the vault with one whole share or one whole reserve unit
+    ///        (`previewRedeem`, `previewWithdraw`, and `previewDeposit`; for a vault with
+    ///        asynchronous redemption `convertToAssets`, `convertToShares`, and
+    ///        `previewDeposit`) reverts, returns less than one word, or returns zero.
     ///      - The `price_.getPriceIn(ohm_, reserve)` probe reverts or returns zero.
     /// @param assetConfigs_ The facility's per-vault configuration storage.
     /// @param vaults_ The facility's registered vault list storage.
@@ -87,8 +92,6 @@ library YRFAssetConfigLib {
     /// @param price_ The PRICE module used for the reserve price probe.
     /// @param ohm_ The OHM token address.
     /// @param params_ The registration inputs.
-    // The registration checks stay in one sequence, in the order of the documented revert list
-    // forge-lint: disable-next-item(cyclomatic-complexity)
     function addAsset(
         mapping(address => IYieldRepurchaseFacilityV2.ReserveAsset) storage assetConfigs_,
         address[] storage vaults_,
@@ -111,22 +114,7 @@ library YRFAssetConfigLib {
         if (reserveDecimals > YieldRepurchaseFacilityV2Constants.MAX_RESERVE_DECIMALS)
             revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_UnsupportedDecimals();
 
-        // The idle reserve of a sell-shares asset is wrapped through `previewDeposit` and
-        // `deposit`, which a vault with asynchronous deposits does not serve. ERC-165 is
-        // consulted only to recognize a vault class: an ERC-4626 vault is not required
-        // to implement it.
-        if (ERC165Checker.supportsInterface(vault_, type(IERC7540Deposit).interfaceId))
-            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(
-                vault_
-            );
-
-        // An ERC-7575 vault names its share token through `share()`, and the token may
-        // live in a separate contract; any other vault is its own share token.
-        address shareToken_ = vault_;
-        if (ERC165Checker.supportsInterface(vault_, _ERC7575_VAULT_INTERFACE_ID)) {
-            shareToken_ = IERC7575(vault_).share();
-            if (shareToken_ == address(0)) revert Errors.BadInput("vault.share");
-        }
+        (address shareToken_, bool asyncRedeem_) = _resolveVaultClass(vault_, params_.sellShares);
 
         // The conversion rate probe and the sell-shares market pricing both treat
         // `10 ** reserveDecimals` as one whole share.
@@ -135,15 +123,13 @@ library YRFAssetConfigLib {
 
         _requireNoPoolConflict(assetConfigs_, vaults_, ohm_, vault_, shareToken_, reserve_);
 
-        // The facility values the shares through `previewRedeem`, sizes the withdrawals
-        // through `previewWithdraw`, and wraps the idle reserve through `previewDeposit`,
-        // so an address that does not serve them is rejected at registration. The share
-        // decimals equal the reserve decimals, so one unit is both one whole share and
-        // one whole reserve token.
-        uint256 oneUnit = YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** reserveDecimals;
-        _probeVault(vault_, IERC4626.previewRedeem.selector, oneUnit);
-        _probeVault(vault_, IERC4626.previewWithdraw.selector, oneUnit);
-        _probeVault(vault_, IERC4626.previewDeposit.selector, oneUnit);
+        // The share decimals equal the reserve decimals, so one unit is both one whole
+        // share and one whole reserve token.
+        _probeVaultConversions(
+            vault_,
+            YieldRepurchaseFacilityV2Constants.DECIMAL_BASE ** reserveDecimals,
+            asyncRedeem_
+        );
 
         // The daily cycles price the vault's markets through `PRICE.getPriceIn`, so the
         // reserve must resolve against OHM at registration; a PRICE revert (for example
@@ -160,6 +146,7 @@ library YRFAssetConfigLib {
             reserveDecimals: reserveDecimals,
             sellShares: params_.sellShares,
             isAssetEnabled: true,
+            asyncRedeem: asyncRedeem_,
             yieldBuybackShare: params_.yieldBuybackShare,
             lastReserveBalance: params_.initialReserveBalance,
             lastConversionRate: params_.initialConversionRate,
@@ -174,7 +161,8 @@ library YRFAssetConfigLib {
             reserve_,
             shareToken_,
             params_.yieldBuybackShare,
-            params_.sellShares
+            params_.sellShares,
+            asyncRedeem_
         );
         emit IYieldRepurchaseFacilityV2.NextYieldSet(reserve_, params_.nextYield);
     }
@@ -253,8 +241,8 @@ library YRFAssetConfigLib {
 
     /// @notice Returns the reserve value of the protocol-held shares of a vault.
     /// @dev Counts the treasury balance of the share token, and for the backing vault
-    ///      also the balances of the active Clearinghouses, valued through
-    ///      `previewRedeem` (floor).
+    ///      also the balances of the active Clearinghouses, valued by the redemption
+    ///      class of the vault (`YRFVaultLib.sharesToAssets`, floor).
     /// @param config_ The configuration storage of the vault to value.
     /// @param chreg_ The Clearinghouse registry module.
     /// @param trsry_ The treasury address.
@@ -310,6 +298,53 @@ library YRFAssetConfigLib {
         return balance;
     }
 
+    /// @notice Recognizes the class of a vault through ERC165 and resolves its share
+    ///         token.
+    /// @dev ERC165 is consulted only to recognize a vault class: an ERC4626 vault is
+    ///      not required to implement it, and a vault that does not is its own share
+    ///      token with synchronous redemption. An ERC7575 vault names its share token
+    ///      through `share()`, and the token may live in a separate contract.
+    ///
+    ///      Reverts if:
+    ///      - The vault advertises asynchronous deposits (`IERC7540Deposit`): the idle
+    ///        reserve of a sell-shares asset is wrapped through `previewDeposit` and
+    ///        `deposit`, which such a vault does not serve.
+    ///      - The vault advertises asynchronous redemption (`IERC7540Redeem`) without
+    ///        ERC7575, which ERC7540 requires for the discovery of the share token.
+    ///      - The vault advertises asynchronous redemption while `sellShares_` is unset:
+    ///        the reserve mode redeems the held shares synchronously.
+    ///      - The vault advertises ERC7575 and reports the zero address as its
+    ///        `share()`.
+    /// @return shareToken_ The ERC20 token representing the vault shares.
+    /// @return asyncRedeem_ Whether the vault advertises asynchronous redemption.
+    function _resolveVaultClass(
+        address vault_,
+        bool sellShares_
+    ) private view returns (address shareToken_, bool asyncRedeem_) {
+        if (ERC165Checker.supportsInterface(vault_, type(IERC7540Deposit).interfaceId))
+            revert IYieldRepurchaseFacilityV2.IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(
+                vault_
+            );
+
+        bool supportsERC7575 = ERC165Checker.supportsInterface(vault_, _ERC7575_VAULT_INTERFACE_ID);
+
+        asyncRedeem_ = YRFVaultLib.isAsyncRedeem(vault_);
+        if (asyncRedeem_) {
+            if (!supportsERC7575)
+                revert IYieldRepurchaseFacilityV2
+                    .IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(vault_);
+            if (!sellShares_)
+                revert IYieldRepurchaseFacilityV2
+                    .IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
+        }
+
+        shareToken_ = vault_;
+        if (supportsERC7575) {
+            shareToken_ = IERC7575(vault_).share();
+            if (shareToken_ == address(0)) revert Errors.BadInput("vault.share");
+        }
+    }
+
     /// @notice Reverts when a token of the asset being registered already belongs to a
     ///         balance pool.
     /// @dev Every token balance held by the facility belongs to exactly one pool: the OHM
@@ -360,6 +395,33 @@ library YRFAssetConfigLib {
         // forge-lint: disable-end(require-revert-in-loop)
     }
 
+    /// @notice Probes the conversion functions the facility calls on a vault of the given
+    ///         redemption class, so an address that does not serve them is rejected at
+    ///         registration.
+    /// @dev A synchronous vault is valued through `previewRedeem` and its withdrawals are
+    ///      sized through `previewWithdraw`; a vault with asynchronous redemption reverts
+    ///      on both, and is valued through `convertToAssets` and `convertToShares`. The
+    ///      idle reserve is wrapped through `previewDeposit` for either class.
+    ///
+    ///      Reverts if a probe fails or returns zero (see `_probeVault`).
+    /// @param vault_ The vault to probe.
+    /// @param oneUnit_ One whole share, which is also one whole reserve unit.
+    /// @param asyncRedeem_ Whether the vault advertises asynchronous redemption.
+    function _probeVaultConversions(
+        address vault_,
+        uint256 oneUnit_,
+        bool asyncRedeem_
+    ) private view {
+        if (asyncRedeem_) {
+            _probeVault(vault_, IERC4626.convertToAssets.selector, oneUnit_);
+            _probeVault(vault_, IERC4626.convertToShares.selector, oneUnit_);
+        } else {
+            _probeVault(vault_, IERC4626.previewRedeem.selector, oneUnit_);
+            _probeVault(vault_, IERC4626.previewWithdraw.selector, oneUnit_);
+        }
+        _probeVault(vault_, IERC4626.previewDeposit.selector, oneUnit_);
+    }
+
     /// @notice Probes a conversion function of a vault with a single amount argument.
     /// @dev The call is static and its returndata capture is capped at one word, so a
     ///      probed address cannot inflate the memory cost of the registration.
@@ -401,7 +463,8 @@ library YRFAssetConfigLib {
     ) private {
         // One whole share: `addAsset` requires the share decimals to equal the reserve
         // decimals
-        config_.lastConversionRate = IERC4626(config_.vault).previewRedeem(
+        config_.lastConversionRate = YRFVaultLib.sharesToAssets(
+            config_,
             10 ** config_.reserveDecimals
         );
         config_.lastReserveBalance = _protocolReserveBalance(
@@ -430,7 +493,7 @@ library YRFAssetConfigLib {
             }
         }
 
-        balance = IERC4626(vault_).previewRedeem(totalShares);
+        balance = YRFVaultLib.sharesToAssets(config_, totalShares);
     }
 
     // forge-lint: disable-end(calls-loop)

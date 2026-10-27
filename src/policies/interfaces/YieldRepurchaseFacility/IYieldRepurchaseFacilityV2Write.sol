@@ -28,7 +28,7 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      designated; replacing an existing designation requires `setBackingVault`.
     ///
     ///      The share token of the vault is fixed at registration: the token returned by
-    ///      `share()` when the vault advertises ERC-7575 through ERC-165, which may be a
+    ///      `share()` when the vault advertises ERC7575 through ERC165, which may be a
     ///      contract separate from the vault, and the vault itself otherwise.
     ///
     ///      Every token balance held by the facility belongs to exactly one pool, so the
@@ -38,12 +38,20 @@ interface IYieldRepurchaseFacilityV2Write {
     ///      token, or the reserve of a registered asset. Vaults that share one share
     ///      token therefore cannot be registered together.
     ///
-    ///      The registration probes the vault: `previewRedeem` of one whole share, and
-    ///      `previewWithdraw` and `previewDeposit` of one whole reserve unit, must each
-    ///      return a non-zero value. A vault that advertises asynchronous deposits
-    ///      (ERC-7540) through ERC-165 is rejected. The probes reject an address that
-    ///      does not behave as a vault; they do not establish that the vault is
-    ///      correct.
+    ///      The vault class is recognized through ERC165, which an ordinary ERC4626
+    ///      vault is not required to implement. A vault that advertises asynchronous
+    ///      redemption (ERC7540) is registered with the `asyncRedeem` flag: it must
+    ///      also advertise ERC7575 and be registered with `sellShares_` set, and its
+    ///      shares are valued through `convertToAssets` and `convertToShares`, an
+    ///      estimate of the redemption payout. A vault that advertises asynchronous
+    ///      deposits (ERC7540) is rejected.
+    ///
+    ///      The registration probes the vault with one whole share and one whole
+    ///      reserve unit: `previewRedeem`, `previewWithdraw`, and `previewDeposit`, or
+    ///      `convertToAssets`, `convertToShares`, and `previewDeposit` for a vault with
+    ///      asynchronous redemption, must each return a non-zero value. The probes
+    ///      reject an address that does not behave as a vault; they do not establish
+    ///      that the vault is correct.
     ///
     ///      The facility is designed for vaults whose conversion rate does not decrease.
     ///      The yield projection credits the increase of the rate since the snapshot of
@@ -135,7 +143,8 @@ interface IYieldRepurchaseFacilityV2Write {
 
     /// @notice Sets whether the vault's bond markets pay out the vault shares instead of
     ///         the reserve.
-    /// @dev Callable by the configurator. The backing vault cannot sell shares. The
+    /// @dev Callable by the configurator. The backing vault cannot sell shares, and the
+    ///      mode cannot be unset for an asset flagged `asyncRedeem`. The
     ///      vault's tracked live bond market is closed before the change, and a failing
     ///      close reverts the change. The per-vault accounting is denominated in
     ///      reserve units in both modes and is not affected; the held balances are
@@ -148,6 +157,23 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @param sellShares_ Whether bond markets pay out the vault shares; must differ
     ///        from the stored mode.
     function setSellShares(address vault_, bool sellShares_) external;
+
+    /// @notice Re-reads the asynchronous-redemption flag of a registered vault from the
+    ///         vault's ERC165 advertisement of ERC7540 redemption.
+    /// @dev Callable by the configurator. A vault can change its redemption mode after
+    ///      the registration, and the stored flag selects how its shares are valued:
+    ///      through the previews, or through `convertToAssets` and `convertToShares`
+    ///      for asynchronous redemption. The flag cannot be raised while the asset does
+    ///      not sell shares; the share token is not re-read. Emits `AsyncRedeemSet`.
+    ///
+    ///      Between a vault's switch to asynchronous redemption and the refresh, the
+    ///      valuation keeps calling the previews, which such a vault reverts: the
+    ///      weekly reset and the daily cycle of the asset are skipped with
+    ///      `WeeklyResetSkipped` and `DailyCycleSkipped`, and `enable` (while the asset
+    ///      is enabled), `enableAsset`, and a `seedCycle` seed of the asset revert.
+    /// @param vault_ The registered vault; its advertised mode must differ from the
+    ///        stored flag.
+    function refreshAsyncRedeem(address vault_) external;
 
     /// @notice Designates a registered vault as the backing vault: its yield projection
     ///         includes the Clearinghouse interest, its protocol balance includes the

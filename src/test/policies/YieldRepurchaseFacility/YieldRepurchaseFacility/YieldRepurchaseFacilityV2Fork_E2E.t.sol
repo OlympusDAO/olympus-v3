@@ -215,6 +215,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(susdsConfig.reserve, USDS, "sUSDS reserve");
         assertEq(susdsConfig.reserveDecimals, RESERVE_DECIMALS, "sUSDS reserve decimals");
         assertEq(susdsConfig.sellShares, false, "sUSDS sellShares");
+        assertEq(susdsConfig.asyncRedeem, false, "sUSDS asyncRedeem");
         assertEq(susdsConfig.yieldBuybackShare, SUSDS_BUYBACK_SHARE, "sUSDS share");
         assertEq(susdsConfig.nextYield, susdsSeedYield, "sUSDS nextYield");
 
@@ -224,6 +225,7 @@ contract YieldRepurchaseFacilityV2ForkTests_E2E is YieldRepurchaseFacilityV2Fork
         assertEq(susdeConfig.shareToken, SUSDE, "sUSDe share token");
         assertEq(susdeConfig.reserve, USDE, "sUSDe reserve");
         assertEq(susdeConfig.sellShares, true, "sUSDe sellShares");
+        assertEq(susdeConfig.asyncRedeem, false, "sUSDe asyncRedeem");
         assertEq(susdeConfig.yieldBuybackShare, SUSDE_BUYBACK_SHARE, "sUSDe share");
         assertEq(susdeConfig.nextYield, susdeSeedYield, "sUSDe nextYield");
 
