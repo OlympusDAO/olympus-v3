@@ -17,6 +17,12 @@ import {IYieldRepurchaseFacilityV2} from "src/policies/interfaces/YieldRepurchas
 ///      `IReEnabler.reEnable`, restricted to the yrf_admin role within the grace window
 ///      after a disable; and `IBasicRescueable.rescue`, restricted to the yrf_admin and
 ///      admin roles.
+///
+///      `IPeriodicTask.execute` runs the per-vault work and the processing of the
+///      purchased OHM as isolated steps, each with the gas limit returned by
+///      `stepGasLimit`: a step that fails is skipped with its skip event, and the call
+///      reverts with `IYieldRepurchaseFacilityV2_InsufficientStepGas` when the remaining
+///      gas does not cover a step.
 interface IYieldRepurchaseFacilityV2Write {
     /// @notice Registers an ERC4626 vault as a reserve asset, optionally seeding its next
     ///         yield and designating it as the backing vault.
@@ -201,6 +207,18 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @param bondAuctioneer_ The SDA auctioneer.
     function setBondContracts(address bondAuctioneer_) external;
 
+    /// @notice Sets the gas limit of an isolated step: the weekly reset of a vault, the
+    ///         processing of the purchased OHM, the daily cycle of a vault, and the sweep
+    ///         of a vault by `returnFundsToTreasury` each run with this amount of gas.
+    /// @dev Callable by the admin and yrf_admin roles, while the facility is enabled or
+    ///      disabled. The limit must lie between `1_100_000` and `5_000_000`, inclusive.
+    ///      The bounds guard against a mis-entered value and do not guarantee that a
+    ///      step fits into the limit: a step that needs more gas than the limit fails and
+    ///      is skipped with its skip event, and a nested call of a daily cycle that is
+    ///      short of gas fails with its own event. Emits `StepGasLimitSet`.
+    /// @param stepGasLimit_ The gas limit of one isolated step, in gas units.
+    function setStepGasLimit(uint32 stepGasLimit_) external;
+
     /// @notice Sets the cumulative receivables offset of a Clearinghouse. The offset is
     ///         subtracted from the Clearinghouse's `principalReceivables` when the weekly
     ///         reset projects the yield, neutralizing receivables that do not accrue
@@ -326,8 +344,11 @@ interface IYieldRepurchaseFacilityV2Write {
     /// @dev Callable by the emergency and admin roles, and only while the facility is
     ///      disabled. The per-vault stored next yields and unfunded carries are
     ///      preserved, so a later `reEnable` or `enable` refunds the facility from the
-    ///      treasury at the next weekly reset. Each vault is swept independently: a vault
-    ///      whose sweep fails is skipped with `FundsReturnSkipped`, keeping its balances,
-    ///      and is retried by the next call. Emits `FundsReturnedToTreasury`.
+    ///      treasury at the next weekly reset. Each vault is swept independently, with
+    ///      the gas limit returned by `stepGasLimit`: a vault whose sweep fails is
+    ///      skipped with `FundsReturnSkipped`, keeping its balances, and is retried by
+    ///      the next call. The call reverts with
+    ///      `IYieldRepurchaseFacilityV2_InsufficientStepGas` when the remaining gas does
+    ///      not cover the sweep of a vault. Emits `FundsReturnedToTreasury`.
     function returnFundsToTreasury() external;
 }

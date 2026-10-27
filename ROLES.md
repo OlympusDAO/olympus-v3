@@ -23,7 +23,7 @@ This document describes the roles that are used in the Olympus protocol.
 | admin | MorphoOracleFactory | Allows create/enable/disable of oracles, enable/disable of new oracle creation, enable/disable contract |
 | admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, queue timelock delay changes, install submodules, store observations, enable/disable contract |
 | admin | ReserveWrapper | Enable/disable contract |
-| admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, return funds to the treasury while disabled, rescue tokens, disable the facility |
+| admin | YieldRepurchaseFacilityV2 | Enable the facility (a full restart with the seeded yields) and seed the cycle, set the configurator while disabled, set the backing oracle and the bond contracts, set the grace period, set the step gas limit, return funds to the treasury while disabled, rescue tokens, disable the facility |
 | admin | YieldRepurchaseFacilityV2Config | Bind the facility while disabled, add/remove assets, set the sell-shares mode and the backing vault, refresh the asynchronous-redemption flag of a vault, set Clearinghouse offsets and inclusions, call the operator setters directly, rotate the config operator, set the grace period, enable/disable the policy |
 | admin | YieldRepurchaseFacilityV2ConfigTimelock | Set the timelock delay and the grace period, enable/disable the policy |
 | backing_admin | BackingOracle | Queue timelocked backing updates |
@@ -91,7 +91,7 @@ This document describes the roles that are used in the Olympus protocol.
 | price_admin | PriceConfig v2 | Add asset configuration, queue asset removal, queue asset price feed/strategy/moving average configuration updates, queue submodule upgrades, queue submodule calls, install submodules, store observations |
 | reserve_migrator_admin | ReserveMigrator | Activate/deactivate the functionality |
 | treasuryborrower_cooler | CoolerTreasuryBorrower | Assigned to the MonoCooler contract to allow borrowing of funds from TRSRY |
-| yrf_admin | YieldRepurchaseFacilityV2 | Re-enable the facility within the grace window after a disable, rescue tokens |
+| yrf_admin | YieldRepurchaseFacilityV2 | Re-enable the facility within the grace window after a disable, set the step gas limit, rescue tokens |
 | yrf_admin | YieldRepurchaseFacilityV2Config | Re-enable the policy within the grace window after a disable |
 | yrf_admin | YieldRepurchaseFacilityV2ConfigTimelock | Queue timelocked operator setters of the config policy (yield buyback share, initial discount, max price premium, Clearinghouse offset increases and exclusions, next yield decreases, asset enable/disable), re-enable the policy within the grace window after a disable |
 

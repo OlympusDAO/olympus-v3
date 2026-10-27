@@ -106,7 +106,9 @@ import {HEART_ROLE, YRF_ADMIN_ROLE} from "src/policies/utils/RoleDefinitions.sol
 ///        withdrawals.
 ///
 ///      The configuration setters are callable only by the configurator, the
-///      configuration policy bound through `setConfigurator`.
+///      configuration policy bound through `setConfigurator`. The gas limit of the
+///      isolated steps is set on the facility itself, through `setStepGasLimit`
+///      (yrf_admin or admin).
 ///
 ///      The admin role is expected to be held only by the OCG timelock, so every
 ///      admin-gated function of this contract is de-facto timelocked.
@@ -195,6 +197,12 @@ contract YieldRepurchaseFacilityV2 is
     /// @inheritdoc IYieldRepurchaseFacilityV2View
     uint256 public override maxPricePremium;
 
+    /// @inheritdoc IYieldRepurchaseFacilityV2View
+    /// @dev Initialized by the constructor and changed through `setStepGasLimit`; the
+    ///      value does not depend on `enable`. It shares the storage slot of the epoch
+    ///      counter.
+    uint32 public override stepGasLimit;
+
     /// @notice Running epoch counter, in the range `[0, 21)`.
     uint48 internal _epoch;
 
@@ -270,17 +278,20 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The backing oracle does not report the 18 decimals of the backing value.
     ///      - The auctioneer reports the zero address as its teller.
     ///      - `gracePeriod_` is zero or not less than `MAX_GRACE_PERIOD`.
+    ///      - `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
     /// @param kernel_ The Olympus Kernel.
     /// @param ohm_ The OHM token address.
     /// @param backingOracle_ The OHM backing oracle policy address.
     /// @param bondAuctioneer_ The Bond Protocol SDA auctioneer.
     /// @param gracePeriod_ The initial re-enable grace window, in seconds.
+    /// @param stepGasLimit_ The initial gas limit of one isolated step, in gas units.
     constructor(
         Kernel kernel_,
         address ohm_,
         address backingOracle_,
         address bondAuctioneer_,
-        uint32 gracePeriod_
+        uint32 gracePeriod_,
+        uint32 stepGasLimit_
     ) Policy(kernel_) ReEnablerGracePeriod(gracePeriod_) {
         _requireNonzeroAddress(address(kernel_), "kernel");
         _requireNonzeroAddress(ohm_, "ohm");
@@ -291,6 +302,7 @@ contract YieldRepurchaseFacilityV2 is
 
         _setBackingOracle(backingOracle_);
         _setBondContracts(bondAuctioneer_);
+        _setStepGasLimit(stepGasLimit_);
 
         // Disabled by default by EnablerV2
     }
@@ -369,8 +381,6 @@ contract YieldRepurchaseFacilityV2 is
     // ============ ROLE GATES ============ //
 
     /// @notice Reverts unless the caller holds the yrf_admin role or the admin role.
-    // The gate is kept as a named modifier
-    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier onlyYrfAdminOrAdminRole() {
         _requireAuthorized(!_hasRole(msg.sender, YRF_ADMIN_ROLE) && !_isAdmin(msg.sender));
         _;
@@ -564,15 +574,20 @@ contract YieldRepurchaseFacilityV2 is
     ///      later `reEnable` or `enable` refunds the facility from the treasury at the
     ///      next weekly reset.
     ///
-    ///      The sweep of each vault is isolated through a self-call: a vault whose sweep
-    ///      reverts is skipped with a `FundsReturnSkipped` event, keeping its balances in
-    ///      place, and is retried by the next call. The OHM burn and transfer are not
-    ///      isolated: OHM is a protocol-owned token whose balance always covers the
-    ///      tracked purchased amount.
+    ///      The sweep of each vault is isolated through a self-call that runs with
+    ///      `stepGasLimit` gas (see `_callStep`): a vault whose sweep reverts or runs out
+    ///      of that gas is skipped with a `FundsReturnSkipped` event, keeping its
+    ///      balances in place, and is retried by the next call. The OHM burn and
+    ///      transfer are not isolated: OHM is a protocol-owned token whose balance
+    ///      always covers the tracked purchased amount.
     ///
     ///      The function reverts if:
     ///      - The contract is enabled.
     ///      - The caller holds neither the emergency role nor the admin role.
+    ///      - The gas remaining before the sweep of a vault is below the step
+    ///        requirement (`IYieldRepurchaseFacilityV2_InsufficientStepGas`). No vault is
+    ///        skipped for a shortage of gas of the caller: the whole call reverts and
+    ///        succeeds when repeated with more gas.
     function returnFundsToTreasury() external override givenDisabled onlyEmergencyOrAdminRole {
         uint256 purchasedOhm = _ohmPurchased;
         if (purchasedOhm != 0) {
@@ -587,8 +602,7 @@ contract YieldRepurchaseFacilityV2 is
         uint256 vaultsLength = vaults.length;
         for (uint256 i = 0; i < vaultsLength; ++i) {
             address vault = vaults[i];
-            (bool success, bytes memory reason) = _safeCall(
-                address(this),
+            (bool success, bytes memory reason) = _callStep(
                 abi.encodeCall(this.selfReturnVaultFunds, (vault))
             );
             if (!success) emit FundsReturnSkipped(vault, reason);
@@ -617,6 +631,19 @@ contract YieldRepurchaseFacilityV2 is
     ///      skips the affected step with an event and the remaining steps and the heartbeat
     ///      continue. Skipped work is retried on the following beats.
     ///
+    ///      Each isolated step (the weekly reset of a vault, the processing of the
+    ///      purchased OHM, and the daily cycle of a vault) runs with `stepGasLimit` gas
+    ///      (see `_callStep`), so a step that consumes its whole limit is skipped like
+    ///      a reverting one, and a beat consumes at most about
+    ///      `(2 * N + 1) * stepGasLimit` gas in the steps of `N` enabled vaults. The
+    ///      calls nested in a daily cycle (the reserve wrap, the redeem, and the close
+    ///      and the creation of a market) run on the gas remaining in that step.
+    ///
+    ///      `IPeriodicTask` asks an implementation to avoid reverting. A shortage of gas
+    ///      of the caller is the exception: a step that cannot be handed its full
+    ///      `stepGasLimit` is not skipped, the whole call reverts, and the beat succeeds
+    ///      when repeated with more gas.
+    ///
     ///      Market pricing is per asset: each vault's daily cycle reads
     ///      `PRICE.getPriceIn(OHM, reserve)`, a live resolution through which the PRICE
     ///      module enforces the freshness thresholds of the configured feeds, reverting
@@ -635,6 +662,8 @@ contract YieldRepurchaseFacilityV2 is
     ///      - The `PRICE.getPriceIn` read of the backing reserve reverts, including when
     ///        no backing vault is designated (the PRICE module rejects the zero address).
     ///      - The backing oracle `backing()` read reverts.
+    ///      - The gas remaining before an isolated step is below the step requirement
+    ///        (`IYieldRepurchaseFacilityV2_InsufficientStepGas`).
     function execute() external override nonReentrant onlyRole(HEART_ROLE) {
         if (!isEnabled) return;
         _epoch += 1;
@@ -646,8 +675,7 @@ contract YieldRepurchaseFacilityV2 is
         // The purchased OHM is processed before the price gate, so the burn continues
         // while markets are skipped.
         {
-            (bool success, bytes memory reason) = _safeCall(
-                address(this),
+            (bool success, bytes memory reason) = _callStep(
                 abi.encodeCall(this.selfProcessOhmPurchases, ())
             );
             if (!success) emit OhmPurchasesProcessingSkipped(reason);
@@ -673,8 +701,7 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            (bool success, bytes memory reason) = _safeCall(
-                address(this),
+            (bool success, bytes memory reason) = _callStep(
                 abi.encodeCall(this.selfProcessVaultDaily, (vault, daysRemaining))
             );
             if (!success) emit DailyCycleSkipped(vault, reason);
@@ -714,8 +741,9 @@ contract YieldRepurchaseFacilityV2 is
     ///      burned OHM: those shares stay in the basis of the following projection, and their
     ///      appreciation also enters the daily bids while the facility holds them.
     ///
-    ///      The processing of each vault is isolated through a self-call: a vault whose processing
-    ///      reverts is skipped for the week with a `WeeklyResetSkipped` event and retried at the
+    ///      The processing of each vault is isolated through a self-call that runs with
+    ///      `stepGasLimit` gas (see `_callStep`): a vault whose processing reverts or runs out of
+    ///      that gas is skipped for the week with a `WeeklyResetSkipped` event and retried at the
     ///      following reset. The stored `nextYield` of a skipped vault stays in place and is
     ///      withdrawn once, at the first reset that succeeds. A skipped reset of the backing vault
     ///      forfeits that week's Clearinghouse interest: the following reset projects the interest
@@ -746,8 +774,7 @@ contract YieldRepurchaseFacilityV2 is
             address vault = vaults[i];
             if (!_assetConfigs[vault].isAssetEnabled) continue;
 
-            (bool success, bytes memory reason) = _safeCall(
-                address(this),
+            (bool success, bytes memory reason) = _callStep(
                 abi.encodeCall(this.selfProcessVaultReset, (vault, clearinghouseYield))
             );
             if (!success) emit WeeklyResetSkipped(vault, reason);
@@ -1598,6 +1625,30 @@ contract YieldRepurchaseFacilityV2 is
     }
 
     /// @inheritdoc IYieldRepurchaseFacilityV2Write
+    /// @dev The setter does not depend on the enabled state: the limit also applies to
+    ///      the sweep of `returnFundsToTreasury`, which runs only while the facility is
+    ///      disabled.
+    ///
+    ///      Reverts if:
+    ///      - The caller holds neither the yrf_admin role nor the admin role.
+    ///      - `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
+    function setStepGasLimit(uint32 stepGasLimit_) external override onlyYrfAdminOrAdminRole {
+        _setStepGasLimit(stepGasLimit_);
+    }
+
+    /// @notice Sets the gas limit of an isolated step.
+    /// @dev Reverts if `stepGasLimit_` is below `1_100_000` or above `5_000_000`.
+    function _setStepGasLimit(uint32 stepGasLimit_) private {
+        if (
+            stepGasLimit_ < YieldRepurchaseFacilityV2Constants.MIN_STEP_GAS_LIMIT ||
+            stepGasLimit_ > YieldRepurchaseFacilityV2Constants.MAX_STEP_GAS_LIMIT
+        ) revert IYieldRepurchaseFacilityV2_StepGasLimitOutOfBounds();
+
+        stepGasLimit = stepGasLimit_;
+        emit StepGasLimitSet(stepGasLimit_);
+    }
+
+    /// @inheritdoc IYieldRepurchaseFacilityV2Write
     /// @dev Callable only by the configurator.
     ///
     ///      The offset is subtracted from the Clearinghouse's principal receivables when
@@ -2203,6 +2254,50 @@ contract YieldRepurchaseFacilityV2 is
             SafeCall.safeCall(
                 target_,
                 gasleft(),
+                0,
+                YieldRepurchaseFacilityV2Constants.MAX_RETURNDATA_LENGTH,
+                callData_
+            );
+    }
+
+    /// @notice Performs an isolated self-call that runs one step with exactly
+    ///         `stepGasLimit` gas and no value, and captures the returndata truncated to
+    ///         `MAX_RETURNDATA_LENGTH` bytes.
+    /// @dev A call forwards at most 63/64 of the gas available to the calling frame
+    ///      (EIP-150), so the step is handed its full limit only when the frame holds
+    ///      `stepGasLimit + stepGasLimit / 63` gas at the call. The check runs
+    ///      immediately before the call and adds `STEP_GAS_MARGIN`, which covers the gas
+    ///      spent between the check and the call and the work that follows a step that
+    ///      consumed its whole limit: the skip event and the advance to the next check.
+    ///
+    ///      A step therefore fails only on its own account, by reverting or by
+    ///      consuming its limit, and never because the caller supplied too little gas.
+    ///
+    ///      Reverts if the remaining gas is below
+    ///      `stepGasLimit + stepGasLimit / 63 + STEP_GAS_MARGIN`.
+    /// @param callData_ The calldata of the self-call.
+    /// @return success Whether the step succeeded.
+    /// @return data The captured returndata, truncated to `MAX_RETURNDATA_LENGTH` bytes;
+    ///         empty when the step ran out of gas.
+    // Called from the per-vault loops, where a shortage of gas of the caller must revert the
+    // whole call instead of skipping a step.
+    // forge-lint: disable-next-item(require-revert-in-loop)
+    function _callStep(bytes memory callData_) private returns (bool success, bytes memory data) {
+        uint256 gasLimit = stepGasLimit;
+
+        // required = gasLimit + gasLimit / 63 (floor) + margin, all in gas units
+        uint256 required = gasLimit +
+            gasLimit /
+            YieldRepurchaseFacilityV2Constants.STEP_GAS_RETENTION_DIVISOR +
+            YieldRepurchaseFacilityV2Constants.STEP_GAS_MARGIN;
+        uint256 available = gasleft();
+        if (available < required)
+            revert IYieldRepurchaseFacilityV2_InsufficientStepGas(required, available);
+
+        return
+            SafeCall.safeCall(
+                address(this),
+                gasLimit,
                 0,
                 YieldRepurchaseFacilityV2Constants.MAX_RETURNDATA_LENGTH,
                 callData_
