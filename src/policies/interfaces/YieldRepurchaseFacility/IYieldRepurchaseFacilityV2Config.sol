@@ -108,6 +108,12 @@ interface IYieldRepurchaseFacilityV2Config {
     ///        stored mode.
     function setSellShares(address vault_, bool sellShares_) external;
 
+    /// @notice Forwards `refreshAsyncRedeem` to the facility. Intended to be callable only by
+    ///         the admin role while the policy is enabled.
+    /// @dev See `IYieldRepurchaseFacilityV2Write.refreshAsyncRedeem` for the semantics.
+    /// @param vault_ The registered vault.
+    function refreshAsyncRedeem(address vault_) external;
+
     /// @notice Forwards `setBackingVault` to the facility. Intended to be callable only by the
     ///         admin role while the policy is enabled.
     /// @dev See `IYieldRepurchaseFacilityV2Write.setBackingVault` for the semantics.

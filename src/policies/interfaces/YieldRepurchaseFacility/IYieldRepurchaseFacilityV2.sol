@@ -11,7 +11,7 @@ pragma solidity ^0.8.24;
 ///      decimals, vault share amounts in the share token's decimals (equal to the
 ///      reserve decimals for every registered vault), and OHM amounts in the OHM
 ///      decimals. The share token of a vault is the ERC20 token representing its
-///      shares: the token returned by `share()` for a vault that advertises ERC-7575,
+///      shares: the token returned by `share()` for a vault that advertises ERC7575,
 ///      and the vault itself otherwise.
 ///      Percentage parameters are scaled by `1e18` (`1e18` = 100%). The oracle price of
 ///      an asset is the OHM price denominated in its reserve token, resolved live
@@ -62,12 +62,14 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param yieldBuybackShare The share of the yield routed to buybacks (`1e18` = 100%).
     /// @param sellShares Whether bond markets pay out the vault shares instead of the
     ///        reserve.
+    /// @param asyncRedeem Whether the vault advertises asynchronous redemption (ERC7540).
     event AssetAdded(
         address indexed vault,
         address indexed reserve,
         address indexed shareToken,
         uint256 yieldBuybackShare,
-        bool sellShares
+        bool sellShares,
+        bool asyncRedeem
     );
 
     /// @notice Emitted when a vault is de-registered.
@@ -99,6 +101,12 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param sellShares Whether bond markets pay out the vault shares instead of the
     ///        reserve.
     event SellSharesSet(address indexed vault, bool sellShares);
+
+    /// @notice Emitted when the asynchronous-redemption flag of a vault is re-read from
+    ///         the vault.
+    /// @param vault The vault whose flag is set.
+    /// @param asyncRedeem Whether the vault advertises asynchronous redemption (ERC7540).
+    event AsyncRedeemSet(address indexed vault, bool asyncRedeem);
 
     /// @notice Emitted when the bond auctioneer and the teller are set.
     /// @param bondAuctioneer The SDA auctioneer used to create markets.
@@ -264,6 +272,15 @@ interface IYieldRepurchaseFacilityV2 {
     /// @notice Thrown when `setSellShares` supplies the mode the vault already has.
     error IYieldRepurchaseFacilityV2_SellSharesUnchanged();
 
+    /// @notice Thrown when an asset whose vault redeems asynchronously would not sell
+    ///         shares: at registration, when the sell-shares mode is unset, and when the
+    ///         asynchronous-redemption flag is raised.
+    error IYieldRepurchaseFacilityV2_AsyncRedeemRequiresSellShares();
+
+    /// @notice Thrown when `refreshAsyncRedeem` finds the vault advertising the
+    ///         redemption mode the asset already stores.
+    error IYieldRepurchaseFacilityV2_AsyncRedeemUnchanged();
+
     /// @notice Thrown when a registration attempts to designate the backing vault while
     ///         one is already designated.
     error IYieldRepurchaseFacilityV2_BackingVaultAlreadySet();
@@ -272,8 +289,9 @@ interface IYieldRepurchaseFacilityV2 {
     ///         reserve decimals.
     error IYieldRepurchaseFacilityV2_VaultDecimalsMismatch();
 
-    /// @notice Thrown when the vault being registered advertises asynchronous deposits
-    ///         (ERC-7540) through ERC-165, a capability the facility does not support.
+    /// @notice Thrown when the vault being registered advertises, through ERC165, a
+    ///         capability set the facility does not support: asynchronous deposits
+    ///         (ERC7540), or asynchronous redemption (ERC7540) without ERC7575.
     /// @param vault The rejected vault.
     error IYieldRepurchaseFacilityV2_InvalidVaultCapabilities(address vault);
 
@@ -440,17 +458,22 @@ interface IYieldRepurchaseFacilityV2 {
     /// @param vault The ERC4626 vault.
     /// @param shareToken The ERC20 token representing the vault shares, fixed at
     ///        registration: the token returned by `share()` for a vault that advertises
-    ///        ERC-7575, and the vault itself otherwise.
+    ///        ERC7575, and the vault itself otherwise.
     /// @param reserve The vault's underlying reserve token.
     /// @param reserveDecimals The reserve token decimals, equal to the share token decimals.
     /// @param sellShares Whether bond markets pay out the vault shares instead of the reserve.
     /// @param isAssetEnabled Whether the asset participates in the weekly and daily cycles.
+    /// @param asyncRedeem Whether the vault advertised asynchronous redemption (ERC7540)
+    ///        when the flag was last read: at registration or by `refreshAsyncRedeem`.
+    ///        The shares of such an asset are valued through `convertToAssets` and
+    ///        `convertToShares` instead of the previews, and the asset sells shares.
     /// @param yieldBuybackShare The share of the projected yield routed to buybacks
     ///        (`1e18` = 100%).
     /// @param lastReserveBalance The protocol reserve balance snapshot of the last weekly reset,
     ///        in reserve units.
-    /// @param lastConversionRate The reserve amount redeemable for one whole share at the last
-    ///        weekly reset.
+    /// @param lastConversionRate The reserve value of one whole share at the last weekly
+    ///        reset: its `previewRedeem`, or its `convertToAssets` for an asset flagged
+    ///        `asyncRedeem`.
     /// @param nextYield The yield withdrawn from the treasury into the buyback pool at the next
     ///        weekly reset, in reserve units.
     /// @param unfundedYield The sanctioned yield the treasury balance could not cover, carried
@@ -462,6 +485,7 @@ interface IYieldRepurchaseFacilityV2 {
         uint8 reserveDecimals;
         bool sellShares;
         bool isAssetEnabled;
+        bool asyncRedeem;
         uint256 yieldBuybackShare;
         uint256 lastReserveBalance;
         uint256 lastConversionRate;
