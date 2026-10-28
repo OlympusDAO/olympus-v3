@@ -605,11 +605,9 @@ contract CCIPTokenPool is BatchScriptV2 {
     ///         }
     function setRateLimits(
         bool useDaoMS_,
-        bool signOnly_,
         string calldata argsFilePath_,
-        string calldata ledgerDerivationPath_,
-        bytes calldata signature_
-    ) external setUp(useDaoMS_, signOnly_, argsFilePath_, ledgerDerivationPath_, signature_) {
+        string calldata ledgerDerivationPath_
+    ) external setUp(useDaoMS_, argsFilePath_, ledgerDerivationPath_) {
         string memory localChain = _readBatchArgString("setRateLimits", "localChain");
         if (keccak256(abi.encodePacked(localChain)) != keccak256(abi.encodePacked(chain))) {
             // solhint-disable-next-line gas-custom-errors

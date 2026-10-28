@@ -9,12 +9,11 @@
 # --account <cast wallet> OR --ledger <mnemonic-index>
 # --chain <chain-name>
 # [--multisig <true|false>]
-# [--signonly <true|false>]
-# [--signature <signature>]
 # [--nonce <nonce>]
 # [--broadcast <true|false>]
 # [--tenderly <true|false>]
 # [--fork <true|false>]
+# [--owner <dao|emergency>] (fork mode only: the multisig to impersonate; defaults to dao)
 # [--verbose <true|false>]
 # [--args <args-file>]
 # [--env <env-file>]
@@ -28,6 +27,14 @@ source $SCRIPT_DIR/lib/arguments.sh
 source $SCRIPT_DIR/lib/forge.sh
 source $SCRIPT_DIR/lib/error.sh
 source $SCRIPT_DIR/lib/addresses.sh
+for arg in "$@"; do
+    case "$arg" in
+        --signonly | --signature)
+            display_error "$arg has been removed. Use --broadcast true to sign and propose a Safe batch in one run."
+            exit 1
+            ;;
+    esac
+done
 load_named_args "$@"
 
 # Load environment variables
@@ -38,9 +45,8 @@ broadcast=${broadcast:-false}
 tenderly=${tenderly:-false}
 fork=${fork:-false}
 multisig=${multisig:-false}
-signonly=${signonly:-false}
 verbose=${verbose:-false}
-signature=${signature:-"0x"}
+owner=${owner:-dao}
 ARGS_FILE=${args:-}
 
 # Validate named arguments
@@ -53,31 +59,19 @@ validate_boolean "$tenderly" "Invalid value for --tenderly. Must be true or fals
 validate_boolean "$fork" "Invalid value for --fork. Must be true or false."
 validate_boolean "$broadcast" "Invalid value for --broadcast. Must be true or false."
 validate_boolean "$multisig" "Invalid value for --multisig. Must be true or false."
-validate_boolean "$signonly" "Invalid value for --signonly. Must be true or false."
 validate_boolean "$verbose" "Invalid value for --verbose. Must be true or false."
+if [ "$owner" != "dao" ] && [ "$owner" != "emergency" ]; then
+    display_error "Invalid value for --owner. Must be dao or emergency."
+    exit 1
+fi
 
-# Validate and set account flags (consistent with deployV3.sh)
-if [ "$signonly" == "true" ]; then
-    # Validate that multisig is also true
-    if [ "$multisig" != "true" ]; then
-        display_error "When --signonly is true, --multisig must also be true."
-        exit 1
-    fi
-
-    # Validate that a signature is not provided
-    if [ "$signature" != "0x" ]; then
-        display_error "When --signonly is true, --signature must not be provided."
-        exit 1
-    fi
-
-    validate_text "$ledger" "No ledger index provided. Provide the mnemonic index after the --ledger flag."
-
+# Safe proposals sign through cast via FFI. Forge must not open the same Ledger.
+if [ "$multisig" == "true" ] && [ -n "$ledger" ] && [ -z "$account" ]; then
+    validate_number "$ledger" "Invalid Ledger mnemonic index. Must be a non-negative integer."
     set_account_address_ledger "$ledger"
-
-    # Calculate the derivation path
+    ACCOUNT_FLAG=""
+    LEDGER_FLAGS=""
     LEDGER_DERIVATION_PATH="m/44'/60'/${ledger}'/0/0"
-    # validate_and_set_account is not used, as it would set the LEDGER_FLAGS variable to use the Ledger. This would block ffi calls within the script from using the Ledger.
-    echo "  The script will result in your Ledger device prompting for approval of a signature."
 else
     validate_and_set_account "$account" "$ledger"
     LEDGER_DERIVATION_PATH=""
@@ -91,8 +85,11 @@ if [ "$fork" == "true" ]; then
         exit 1
     fi
 
-    # Set the unlocked address
-    ACCOUNT_ADDRESS="$(get_address_not_zero "$chain" "olympus.multisig.dao")"
+    # Set the unlocked address: the multisig whose batch functions are being run
+    ACCOUNT_ADDRESS="$(get_address_not_zero "$chain" "olympus.multisig.$owner")"
+    ACCOUNT_FLAG=""
+    LEDGER_FLAGS=""
+    LEDGER_DERIVATION_PATH=""
     UNLOCKED_FLAG="--unlocked"
 
     # Override RPC and set env var for Anvil mode
@@ -111,9 +108,9 @@ echo "  Function name: $function"
 echo "  Chain: $chain"
 echo "  Account address: $ACCOUNT_ADDRESS"
 echo "  Executing as multisig: $multisig"
-echo "  Sign only: $signonly"
 echo "  Tenderly mode: $tenderly"
 echo "  Fork mode: $fork"
+echo "  Fork owner: $owner"
 echo "  Broadcasting: $broadcast"
 echo "  Verbose: $verbose"
 if [ -n "$ARGS_FILE" ]; then
@@ -137,8 +134,8 @@ else
     VERBOSITY="-vvv"
 fi
 
-# Build forge command
-FORGE_CMD="FOUNDRY_PROFILE=multisig forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,bool,string,string,bytes)()\" $multisig $signonly \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" $signature --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS $UNLOCKED_FLAG --slow $VERBOSITY"
+# Use deployment compiler settings while simulating the batch calls in one transaction.
+FORGE_CMD="FOUNDRY_PROFILE=deploy forge script ./src/scripts/ops/batches/$contract.sol:$contract --sig \"$function(bool,string,string)()\" $multisig \"$ARGS_FILE\" \"$LEDGER_DERIVATION_PATH\" --rpc-url $chain $ACCOUNT_FLAG $LEDGER_FLAGS --sender $ACCOUNT_ADDRESS $UNLOCKED_FLAG --no-isolate --slow $VERBOSITY"
 
 # Add broadcast flag
 if [ "$broadcast" == "true" ]; then
