@@ -431,7 +431,6 @@ The shared base owns the parent queue, execution, completion, and cancellation h
 cannot override those shared bookkeeping paths. Product customization uses only the hooks in this
 section and the remaining `TimelockBatchQueue` lifecycle hooks.
 
-
 ## Observability
 
 `IConfigTimelockBatchQueue` exposes the shared guard state:
