@@ -126,7 +126,10 @@ verify_deployment() {
         fi
         echo ""
         echo "Verifying saved deployment with $provider"
-        if ETHERSCAN_API_KEY="$api_key" forge script "$@" "${verifier_args[@]}"; then
+        # Forge reads VERIFIER_URL and VERIFIER_API_KEY as defaults for --verifier-url and
+        # --verifier-api-key; clear inherited values so they cannot override the selected provider.
+        if env -u VERIFIER_URL -u VERIFIER_API_KEY ETHERSCAN_API_KEY="$api_key" \
+            forge script "$@" "${verifier_args[@]}"; then
             echo "[PASS] $provider verification"
         else
             echo "[FAIL] $provider verification; retry with --resume true --verify true --verifier $provider"
