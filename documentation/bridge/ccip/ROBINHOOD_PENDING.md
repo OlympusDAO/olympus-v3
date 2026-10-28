@@ -1,0 +1,54 @@
+# Robinhood Chain: pending items
+
+Robinhood Chain (chain ID 4663, CCIP selector `6180753054346818345`) is the fifth burn/mint chain of the CCIP rollout (`RUNBOOK.md`, "Non-Ethereum rollout"), routed to mainnet, Arbitrum and Base. Its desired state is declared in `src/scripts/env.json`, but its Olympus stack is not deployed yet. This file lists what is still open and is removed once everything in it is done.
+
+## Placeholders in `current.robinhood` of `env.json`
+
+| Key | Filled by |
+| --- | --- |
+| `olympus.Kernel`, `olympus.legacy.OHM`, `olympus.modules.OlympusMinter`, `olympus.modules.OlympusRoles`, `olympus.policies.RolesAdmin` | the Olympus stack deployment on Robinhood Chain (the contracts of the other burn/mint chains: a 9-decimal `OlympusERC20Token`, MINTR, ROLES, RolesAdmin), recorded automatically by `shell/L2/deploy.sh` |
+| `olympus.policies.CCIPBurnMintTokenPool`, `olympus.policies.CCIPTokenPoolConfig`, `olympus.policies.CCIPTokenPoolConfigTimelock`, `olympus.periphery.CCIPCrossChainBridge` | deployed together with the core by `./shell/L2/deploy.sh --chain robinhood --ledger 5 --ohm true --broadcast true --verify true`, recorded automatically by `shell/L2/deploy.sh` |
+
+The other values of the block are real: `external.ccip` (`Router 1.2.0` `0x06fC836c...`, `ARMProxy 1.0.0` `0xe8464c35...`, `TokenAdminRegistry 1.5.0` `0x1912C3cF...`, read from the chain on 2026-10-19 and again on 2026-10-20 and matching the Chainlink CCIP Directory), the three routes with their limits and `periphery` blocks, and the config parameters.
+
+## Fail-closed state, by design
+
+With the `robinhood` routes declared on mainnet, Arbitrum and Base, every run that resolves them fails closed on the zero Robinhood OHM, pool or periphery, on those three chains as well as on Robinhood Chain: the readiness report, `CCIPNonEthereumSetupBatch.setup` and `finalize`, `CCIPRouteReconcileBatch.reconcileRoutes`, `CCIPBridgeBatch.reconcileTrustedRemotes` and the build of proposal 19. No check is softened to make a run pass; the three addresses are recorded first.
+
+Once the Robinhood Chain pool and OHM are recorded, the harness patch of `src/test/proposals/CCIPTokenPoolConfigProposal.t.sol` and its two "unrecorded" tests go, and the proposal suite reads the tracked file unchanged.
+
+## Requests to Chainlink
+
+1. **OHM administrator.** Propose the local DAO MS as the OHM administrator in the Robinhood `TokenAdminRegistry` (`0x1912C3cF...`, owned by a Chainlink timelock with a 3-hour delay). The Robinhood OHM has neither `owner()` nor `getCCIPAdmin()`, so no self-service path of `RegistryModuleOwnerCustom` applies and only the registry owner proposes. Sent once the OHM and the DAO MS exist. The registry step of the rollout then reduces to `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS.
+2. **Fee budget entries** (`destGasOverhead >= 175000`, `RUNBOOK.md` step 0), five in all. Mainnet to Robinhood (mainnet OHM), Arbitrum to Robinhood (Arbitrum OHM) and Base to Robinhood (Base OHM) can be requested now. Robinhood to Arbitrum and Robinhood to Base name the Robinhood OHM and follow its deployment. Robinhood to mainnet needs none.
+
+The DAO Safe and Emergency Safe addresses are now configured in `env.json`.
+The setup batch grants the configured Emergency Safe its `emergency` role.
+
+## Rollout steps for Robinhood Chain (`RUNBOOK.md`, "Non-Ethereum rollout")
+
+Every DAO MS batch below is built on `BatchScriptV2` with `safe-utils` 0.0.23, which maps chain ID 4663 to the Safe transaction service `api.safe.global/tx-service/robinhood` and to `MultiSendCallOnly` 1.4.1 `0x9641d764fc13c8B624c04430C7356C1C7C8102e2`, so the batches propose on Robinhood Chain as on the other chains.
+
+0. Deploy the core and all four CCIP contracts with `shell/L2/deploy.sh`; it records all thirteen confirmed addresses in `env.json` and formats the timestamped broadcast artifact and registry. Do not also run `ccip_full_not_mainnet.json`.
+1. Run `shell/L2/grantRoles.sh` and `shell/L2/handoff.sh` with `--chain robinhood --ledger 5 --broadcast true`. Handoff nominates the DAO Safe as pool owner and transfers the periphery bridge to the DAO Safe. Then create the acceptance proposal with `./shell/safeBatchV2.sh --contract L2HandoffBatch --function acceptHandoff --chain robinhood --multisig true --ledger 3 --broadcast true`.
+2. Confirm and execute the acceptance proposal in the DAO Safe. It calls both `RolesAdmin.pullNewAdmin()` and `CCIPBurnMintTokenPool.acceptOwnership()`. Run `./shell/L2/verify.sh --chain robinhood`. Do not treat the handoff as complete until the report passes. Commit the timestamped deployment artifacts and `env.json`.
+3. Complete the Chainlink requests above. Execute `CCIPTokenPoolBatch.acceptAdminRole` from the DAO MS once Chainlink has proposed it. Then execute `CCIPTokenPoolBatch.transferTokenPoolOwnershipToConfig` from the DAO MS before the readiness gate. The DAO remains pool owner until setup accepts the configuration policy as owner. The deployer has no role in either step.
+4. Funding on mainnet, unchanged by Robinhood Chain: its supply is not part of `minimumPoolBacking` and stays out of `shell/calc_bridged_supply.sh`. Check first that the Robinhood OHM holds no supply: `cast call <OHM> 'totalSupply()(uint256)' --rpc-url robinhood` must print `0`.
+5. Readiness gate green on mainnet and the five burn/mint chains, then the proposal.
+6. `setup` during the voting window (Robinhood Chain records no legacy bridge; the batch skips that step).
+7. Vote, queue, execute.
+8. `finalize`.
+9. `CCIPBridgeBatch.reconcileTrustedRemotes`, then `CCIPBridgeBatch.enable`. Re-run the ownership verifier after setup and activation.
+
+## Checks that wait for the stack
+
+| Check | Command |
+| --- | --- |
+| The readiness report on Robinhood Chain, and the re-run on mainnet, Arbitrum and Base (red today on the Robinhood routes) | `./shell/ccip/check_rollout_readiness.sh` |
+| The cold OHM delivery sequence on Robinhood Chain, the first mint at zero supply (about 160,140 gas expected, the Optimism figure with the same contracts, under the 175,000 budget) | a `robinhood` suite in `src/test/policies/bridge/CCIPBurnMintTokenPoolDeliveryGasFork.t.sol`, then `forge test --mp src/test/policies/bridge/CCIPBurnMintTokenPoolDeliveryGasFork.t.sol -vv` |
+| The fee budget reads with Robinhood Chain as the source (its lanes toward Arbitrum and Base) | the Robinhood lines of the readiness report above (`checkReadiness` prints one line per outgoing lane) |
+| A no-broadcast `setup` on a Robinhood fork (an Anvil fork of the `robinhood` alias on `localhost:8545`) | `./shell/safeBatchV2.sh --contract CCIPNonEthereumSetupBatch --function setup --multisig true --account <cast account> --chain robinhood --broadcast false --fork true` |
+| The Anvil rehearsal of Robinhood Chain and of the chains whose routes it joins | `./shell/ccip/anvil-deployment/run-l2.sh --chain robinhood`, `./shell/ccip/anvil-deployment/run-ethereum.sh`, `./shell/ccip/anvil-deployment/run-l2.sh --chain arbitrum`, `./shell/ccip/anvil-deployment/run-l2.sh --chain base` |
+| The proposal build against the real `env.json` | `./src/scripts/proposals/printInputs.sh --file src/proposals/CCIPTokenPoolConfigProposal.sol --contract CCIPTokenPoolConfigProposalScript --chain mainnet` |
+
+Sources: the chain reads named above (`cast call` against the `robinhood` alias of `foundry.toml`); the Chainlink CCIP Directory, Robinhood Chain mainnet (<https://docs.chain.link/ccip/directory/mainnet/chain/robinhood-mainnet>); the Robinhood docs (<https://docs.robinhood.com/chain/>); the Safe config service (<https://safe-config.safe.global/api/v1/chains/4663/>).

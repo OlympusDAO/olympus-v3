@@ -4,7 +4,7 @@
 #
 # Usage: src/scripts/proposals/executeOnAnvilFork.sh --file <proposal-path> --contract <contract-name> --env <env-file>
 #
-# Requires: Anvil running on http://localhost:8545
+# Requires: Anvil running on RPC_URL (default http://localhost:8545)
 #
 # Environment variables:
 # RPC_URL (optional, defaults to http://localhost:8545)
@@ -50,15 +50,15 @@ if [ -z "$contract" ]; then
     exit 1
 fi
 
+# Set default RPC URL if not provided
+export RPC_URL=${RPC_URL:-"http://localhost:8545"}
+
 # Verify Anvil is running
-if ! curl -sSf -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' http://localhost:8545 > /dev/null 2>&1; then
-    echo "Error: Anvil is not running on http://localhost:8545"
+if ! curl -sSf -X POST -H "Content-Type: application/json" --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' "$RPC_URL" > /dev/null 2>&1; then
+    echo "Error: Anvil is not running on $RPC_URL"
     echo "Start it with: pnpm run anvil:fork"
     exit 1
 fi
-
-# Set default RPC URL if not provided
-export RPC_URL=${RPC_URL:-"http://localhost:8545"}
 
 echo "Funding timelock with ETH for gas..."
 cast rpc --rpc-url $RPC_URL anvil_setBalance "0x953EA3223d2dd3c1A91E9D6cca1bf7Af162C9c39" "0xDE0B6B3A7640000" --silent

@@ -1,0 +1,201 @@
+// SPDX-License-Identifier: Unlicense
+pragma solidity ^0.8.24;
+
+// Shared values are constants of the rig; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
+// Interfaces
+import {ICCIPTokenPoolAdmin} from "src/external/bridge/ICCIPTokenPoolAdmin.sol";
+import {ICCIPTokenPoolConfig} from "src/policies/interfaces/bridge/ICCIPTokenPoolConfig.sol";
+
+import {CCIPTokenPoolConfigTest} from "./CCIPTokenPoolConfigTest.sol";
+
+contract CCIPTokenPoolConfigTests_isChainDisabled is CCIPTokenPoolConfigTest {
+    // when the route does not exist
+    //   [X] it reverts with NonExistentChain carrying the selector
+    // Deliberate revert instead of false: "no such route" must not read as "route is open".
+    // The pool getters would return empty structs for the unknown selector.
+    function test_whenRouteDoesNotExist_reverts() public givenEnabled givenPoolOwnershipAccepted {
+        vm.expectRevert(
+            abi.encodeWithSelector(ICCIPTokenPoolAdmin.NonExistentChain.selector, CHAIN_SELECTOR_A)
+        );
+        // The view is expected to revert, so there is no return value to read
+        // forge-lint: disable-next-line(unused-return)
+        config.isChainDisabled(CHAIN_SELECTOR_A);
+    }
+
+    // given the route is contained
+    //   [X] it returns true
+    function test_givenRouteContained()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+        givenRouteContained
+    {
+        assertTrue(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the contained route should read as disabled"
+        );
+    }
+
+    // given the route carries normal limits
+    //   [X] it returns false
+    function test_givenRouteNormal()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the route with normal limits should read as not disabled"
+        );
+    }
+
+    // given only the outbound bucket is contained
+    //   [X] it returns false
+    // The shape is written directly on the pool by its owner, since the policy's setter
+    // rejects the containment shape; a half-contained route is reported as not disabled.
+    function test_givenOnlyOutboundContained()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _defaultInboundConfig());
+
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the half-contained route should read as not disabled"
+        );
+    }
+
+    // given only the inbound bucket is contained
+    //   [X] it returns false
+    function test_givenOnlyInboundContained()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _defaultOutboundConfig(), _containmentConfig());
+
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the half-contained route should read as not disabled"
+        );
+    }
+
+    // given the contained route was drained
+    //   [X] it returns true
+    // The fill level does not matter: only isEnabled, capacity and rate are compared
+    function test_givenContainedRouteDrained()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+        givenRouteContained
+    {
+        // The contained buckets hold two base units each; real transfers consume the
+        // outbound fill down to zero and the inbound fill down to one
+        _consumeOutbound(CHAIN_SELECTOR_A, 2);
+        _consumeInbound(CHAIN_SELECTOR_A, 1);
+
+        assertTrue(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the drained contained route should still read as disabled"
+        );
+    }
+
+    // given a normal route was drained to zero
+    //   [X] it returns false
+    // A drained bucket at a normal config is not contained; the fill is irrelevant on the
+    // false side too. Needs the drain helper.
+    function test_givenNormalRouteDrained()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        _setBucketFills(CHAIN_SELECTOR_A, 0, 0);
+
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the drained route with normal limits should read as not disabled"
+        );
+    }
+
+    // given the limits were set to the containment shape directly on the pool
+    //   [X] it returns true
+    // The policy's setter rejects {true, 2, 1}, so the shape reaches a route only through the
+    // containment functions or through a direct pool write by the owner, such as a route
+    // seeded before the handover; at that capacity no transfer passes, so the answer stays
+    // operationally correct.
+    function test_givenLimitsSetManuallyToContainmentShape()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ICCIPTokenPoolConfig.CCIPTokenPoolConfig_RateLimiterReserved.selector
+            )
+        );
+        vm.prank(admin);
+        config.setChainRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
+
+        _setPoolRateLimits(CHAIN_SELECTOR_A, _containmentConfig(), _containmentConfig());
+
+        assertTrue(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the directly written containment shape should read as disabled"
+        );
+    }
+
+    // given a bucket capacity is three with rate one
+    //   [X] it returns false
+    // The capacity boundary one unit above the containment constant
+    function test_givenCapacityIsThree()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+    {
+        // {true, 3, 1} differs from the containment constant {true, 2, 1} only in the
+        // capacity, so the comparison fails on the capacity term alone
+        vm.prank(admin);
+        config.setChainRateLimits(
+            CHAIN_SELECTOR_A,
+            _rateLimiterConfig(true, 3, 1),
+            _rateLimiterConfig(true, 3, 1)
+        );
+
+        assertFalse(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the capacity of three should read as not disabled"
+        );
+    }
+
+    // given the policy is disabled
+    //   [X] it answers for a contained route
+    // The view carries no lifecycle gate and serves monitors during a freeze
+    function test_givenPolicyDisabled()
+        public
+        givenEnabled
+        givenPoolOwnershipAccepted
+        givenChainAdded
+        givenRouteContained
+        givenDisabled
+    {
+        assertFalse(config.isEnabled(), "the policy should be disabled");
+
+        assertTrue(
+            config.isChainDisabled(CHAIN_SELECTOR_A),
+            "the view should answer while the policy is disabled"
+        );
+    }
+}
+
+// forge-lint: disable-end(literal-instead-of-constant)

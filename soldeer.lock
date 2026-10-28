@@ -52,10 +52,16 @@ git = "https://github.com/smartcontractkit/chainlink.git"
 rev = "5dd09706665ee0073f8db7d5ec6e5c97eb44fb69"
 
 [[dependencies]]
+name = "chainlink-contracts-ccip"
+version = "2.0.0"
+git = "https://github.com/smartcontractkit/chainlink-ccip.git"
+rev = "c2c125c27f056db2e98d21501922b6eff5750f36"
+
+[[dependencies]]
 name = "chainlink-local"
-version = "0.2.5"
+version = "0.3.1"
 git = "https://github.com/smartcontractkit/chainlink-local.git"
-rev = "b429481536095867f9cd2c6480066c472b9594de"
+rev = "af2b3da7e84e141695389739bb137680d0942d1c"
 
 [[dependencies]]
 name = "clones-with-immutable-args"
@@ -102,9 +108,9 @@ rev = "bf943f80fec5ac647159d26161446ac5d716a294"
 
 [[dependencies]]
 name = "safe-utils"
-version = "0.0.17"
+version = "0.0.23"
 git = "https://github.com/Recon-Fuzz/safe-utils.git"
-rev = "c057d167139dc4878f10ab7133a8c069fa6b1601"
+rev = "8884959c4416d5f22c9057c51875e20d81555081"
 
 [[dependencies]]
 name = "solidity-http"

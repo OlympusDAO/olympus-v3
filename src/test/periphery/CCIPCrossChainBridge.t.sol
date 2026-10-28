@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.24;
 
+// Shared values are constants of the suite; scenario-specific literals stay inline for auditability
+// forge-lint: disable-start(literal-instead-of-constant)
+
 import {Test} from "forge-std/Test.sol";
 import {stdError} from "forge-std/StdError.sol";
 
@@ -17,6 +20,13 @@ import {ICCIPClient} from "src/external/bridge/ICCIPClient.sol";
 
 import {MockERC20} from "solmate/test/utils/mocks/MockERC20.sol";
 import {MockCCIPRouter} from "src/test/policies/bridge/mocks/MockCCIPRouter.sol";
+
+// Calls are made for their effect or their expected revert; a test reads only the returned
+// values it asserts.
+// forge-lint: disable-start(unused-return)
+
+// Every send forwards the CCIP fee to the bridge under test, which this suite deploys
+// forge-lint: disable-start(arbitrary-send-eth)
 
 contract CCIPCrossChainBridgeTest is Test {
     event Bridged(
@@ -64,18 +74,15 @@ contract CCIPCrossChainBridgeTest is Test {
     address public EVM_RECIPIENT;
     address public TRSRY;
 
-    bytes32 public constant MESSAGE_ID =
-        bytes32(0x0000000000000000000000000000000000000000000000000000000000000222);
+    bytes32 public constant MESSAGE_ID = bytes32(uint256(0x222));
     uint64 public constant DESTINATION_CHAIN_SELECTOR = 111111;
     uint64 public constant SOURCE_CHAIN_SELECTOR = 222222;
-    bytes32 public constant SVM_RECIPIENT =
-        bytes32(0x0000000000000000000000000000000000000000000000000000000000000022);
+    bytes32 public constant SVM_RECIPIENT = bytes32(uint256(0x22));
 
     // The default SVM receiver address is the zero address
     // Source: https://docs.chain.link/ccip/tutorials/svm/destination/build-messages#receiver
     // base58 "11111111111111111111111111111111" decoded = 0x0000000000000000000000000000000000000000000000000000000000000000
-    bytes32 public constant SVM_TRUSTED_REMOTE =
-        0x0000000000000000000000000000000000000000000000000000000000000000;
+    bytes32 public constant SVM_TRUSTED_REMOTE = bytes32(0);
     address public constant EVM_TRUSTED_REMOTE = 0x1234567890123456789012345678901234567890;
     uint256 public constant AMOUNT = 1e9;
     uint256 public constant ETH_AMOUNT = 1e18;
@@ -145,6 +152,8 @@ contract CCIPCrossChainBridgeTest is Test {
         _;
     }
 
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenSourceEVMChainHasTrustedRemoteUnset() {
         vm.prank(OWNER);
         bridge.unsetTrustedRemoteEVM(SOURCE_CHAIN_SELECTOR);
@@ -161,6 +170,8 @@ contract CCIPCrossChainBridgeTest is Test {
         _;
     }
 
+    // Kept as a modifier so that the precondition reads as a `given*` step of the test signature
+    // forge-lint: disable-next-item(modifier-used-only-once)
     modifier givenDestinationSVMChainHasTrustedRemoteUnset() {
         vm.prank(OWNER);
         bridge.unsetTrustedRemoteSVM(DESTINATION_CHAIN_SELECTOR);
@@ -1819,3 +1830,9 @@ contract CCIPCrossChainBridgeTest is Test {
         assertEq(bridge.getGasLimit(DESTINATION_CHAIN_SELECTOR), 200_000, "gasLimit");
     }
 }
+
+// forge-lint: disable-end(arbitrary-send-eth)
+
+// forge-lint: disable-end(unused-return)
+
+// forge-lint: disable-end(literal-instead-of-constant)
