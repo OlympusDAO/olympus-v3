@@ -7,11 +7,11 @@ from pathlib import Path
 
 
 REFERENCE = re.compile(
-    r"^\[(test_[A-Za-z0-9_]+)\]:[ \t]+(\S+\.t\.sol)#L([0-9]+)[ \t]*$",
+    r"^\[((?:test|invariant)_[A-Za-z0-9_]+)\]:[ \t]+(\S+\.t\.sol)#L([0-9]+)[ \t]*$",
     re.MULTILINE,
 )
-FUNCTION = re.compile(r"^[ \t]*function[ \t]+(test_[A-Za-z0-9_]+)[ \t]*\(", re.MULTILINE)
-USE = re.compile(r"\[[^\]\n]*\]\[(test_[A-Za-z0-9_]+)\]")
+FUNCTION = re.compile(r"^[ \t]*function[ \t]+((?:test|invariant)_[A-Za-z0-9_]+)[ \t]*\(", re.MULTILINE)
+USE = re.compile(r"\[[^\]\n]*\]\[((?:test|invariant)_[A-Za-z0-9_]+)\]")
 ROW = re.compile(r"^\|[ \t]*([A-Z][A-Z0-9]*-[A-Z0-9-]+)[ \t]*\|")
 
 
@@ -96,8 +96,15 @@ def check(document, update=False):
         for name in mapped:
             if name in definitions and scenario not in definitions[name]:
                 errors.append(f"{scenario}: missing reciprocal Scenarios comment on {name}")
+    # Shared tests can name scenarios from other functions in the same suite.
+    known_ids = {
+        match[1]
+        for path in document.parent.glob("*.md")
+        for line in path.read_text().splitlines()
+        if (match := ROW.match(line))
+    }
     for name, ids in definitions.items():
-        for scenario in sorted(ids - row_ids):
+        for scenario in sorted(ids - known_ids):
             errors.append(f"{name}: unknown scenario ID in Scenarios comment: {scenario}")
         for scenario in sorted(ids & row_ids):
             if name not in row_tests[scenario]:

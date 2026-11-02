@@ -25,13 +25,12 @@ that a fee-on-transfer token cannot create deposit accounting.
 
 ## Multi-Contract Deposits
 
-`src/policies/libraries/BurnerLoansCustody.sol::deposit()` first pulls collateral into Burner Loans.
-DepositManager then pulls the requested amount into final custody.
+`src/policies/burnerloans/BurnerLoansCore.sol::settleDeposit()` first pulls collateral into Core
+with an exact receipt check. DepositManager then pulls the requested amount into final custody.
 
-DepositManager performs the exact incoming balance check. Burner Loans also rejects a new residual
-balance because it must not retain collateral between calls.
+DepositManager performs its own exact incoming balance check before crediting custody accounting.
 
-`src/test/policies/BurnerLoans/depositCollateral.t.sol` contains examples for:
+`src/test/policies/BurnerLoansCollateral/depositCollateral.t.sol` contains examples for:
 
 - A safe-transfer error with no collateral credit.
 - A fee-on-transfer token rejected at the custody boundary.
@@ -40,8 +39,8 @@ balance because it must not retain collateral between calls.
 
 ## Exact Repayment
 
-`src/policies/libraries/BurnerLoansCustody.sol::repay()` transfers OHM directly from the payer to
-Burner Loans Inventory. It reads the Inventory balance before and after the transfer.
+`src/policies/burnerloans/BurnerLoansCore.sol::settleRepay()` transfers OHM directly from the payer
+to Inventory using the shared exact receipt helper.
 
 The function settles debt only after Inventory receives the exact repayment amount. This prevents
 nominal repayment from reducing more debt than Inventory received.
@@ -56,17 +55,16 @@ transfer behavior.
 
 ## Callback Tests
 
-`src/test/policies/BurnerLoans/fixtures/ReentrantFeeToken.sol` can call a target during `transfer` or
-`transferFrom`.
+The modular callback fixtures can call a target during token transfers, vault deposits and receipt
+approvals.
 
 The Burner Loans tests authorize the callback token before the nested call. This makes the nested
 call reach the shared reentrancy guard instead of failing an unrelated authorization check.
 
 Useful examples include:
 
-- `src/test/policies/BurnerLoans/depositCollateral.t.sol::test_givenCallbackToken_cannotReenterDeposit()`
-- `src/test/policies/BurnerLoans/withdrawCollateral.t.sol::test_givenCallbackToken_cannotReenterWithdrawal()`
-- `src/test/policies/BurnerLoans/borrow.t.sol::test_givenReentrantFeeToken_borrowCannotMintOrIndexTwice()`
-- `src/test/periphery/BurnerLoansComposites/depositAndBorrow.t.sol::test_givenReentrantCollateralToken_cannotEnterTwice()`
+- `src/test/policies/BurnerLoansCollateral/depositCollateralCallbacks.t.sol::test_givenPayerPullCallback_whenActionReentryCaught()`
+- `src/test/policies/BurnerLoansDebt/borrowCallbacks.t.sol::test_givenCaughtFeeTokenCallback_whenBorrowed_thenOnlyOuterOperationSucceeds()`
+- `src/test/policies/BurnerLoansDebt/repayCallbacks.t.sol::test_givenCaughtOhmCallback_whenRepaid_thenOnlyOuterOperationSucceeds()`
 
 The tests assert that the callback fails and the outer action applies once.

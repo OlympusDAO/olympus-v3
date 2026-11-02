@@ -236,6 +236,9 @@ Invoke a skill by name, e.g., `/test-write` for test writing guidance.
 For function-level scenario planning, test implementation, and coverage mapping, use
 [`solidity-test-scenarios`](.agents/skills/solidity-test-scenarios/SKILL.md).
 
+For Default Framework policy lifecycle scenarios and tests, also apply
+[`policy-lifecycle`](.agents/skills/policy-lifecycle/SKILL.md).
+
 ### MCP Servers
 
 The project includes Model Context Protocol (MCP) servers for enhanced AI capabilities:

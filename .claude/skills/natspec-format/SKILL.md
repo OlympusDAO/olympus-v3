@@ -1,5 +1,6 @@
 ---
-description: Guide for writing and formatting NatSpec documentation in the Olympus V3 codebase
+name: natspec-format
+description: Write and review NatSpec documentation, interface declaration ordering, and definition spacing in the Olympus V3 codebase.
 ---
 
 # NatSpec Formatting Guide
@@ -15,6 +16,39 @@ NatSpec (Ethereum Natural Language Specification) is the format for documenting 
 - Writing new functions, structs, events, errors, or modifiers
 - Reviewing code for documentation completeness
 - Formatting existing NatSpec comments to match project standards
+- Organizing Solidity interface declarations and the spacing between definitions
+
+## Interface Declaration Order
+
+Group declarations in this order, following existing interfaces such as `IOperator` and
+`IDepositManager`:
+
+1. Events
+2. Errors
+3. Enums, when present
+4. Structs
+5. Functions, with related functions grouped together
+
+Use the existing `// ========== EVENTS ========== //` heading style and omit empty sections.
+Move each declaration together with its NatSpec. Preserve parameter order, struct field order,
+enum member order, signatures and inheritance when reorganizing declarations.
+
+Keep deployed interfaces that must remain immutable unchanged, including formatting. Apply additions
+and layout improvements to the appropriate versioned extension instead.
+
+## Spacing Between Definitions
+
+Leave one actual empty source line between definitions, including errors, events, enums, structs and
+functions. NatSpec does not replace that separator: put the empty line before the next declaration's
+NatSpec block, and keep that block directly attached to its declaration.
+
+```solidity
+/// @notice Emitted when the first action completes.
+event EventA();
+
+/// @notice Emitted when the second action completes.
+event EventB();
+```
 
 ## NatSpec Format Standards
 
@@ -72,10 +106,12 @@ function exampleFunction(uint256 paramOne_, address paramTwo_) external returns 
 
 - **`@notice`**: User-facing description. Keep it clear and concise. Describe what, not how.
 - **`@dev`**: Implementation details, caveats, or technical notes. Use as many lines as needed.
+- **Revert conditions**: In concrete implementations, use `@dev Reverts if:` followed by a bulleted list. Put each independent failure condition in its own item. Keep combined conditions together when the failure requires both, such as a position being healthy and unexpired. Keep normal behavior and recovery notes outside the failure list. Interface NatSpec describes API purpose and observable behavior. Specify revert conditions on an interface only when implementations must adhere to them as part of the API contract; list those mandatory conditions explicitly. Keep implementation-specific guard details on the concrete contract.
 - **`@inheritdoc`**: Use when implementing functions from interfaces or parent contracts. Place as the first tag. This references the parent documentation and reduces duplication.
 - **`@param`**: Required for every parameter. Describe what the parameter represents.
 - **`@return`**: Required for non-void functions. Format: `@return<TAB>name-or-type<TAB>description`. Use the named return variable when present; otherwise use the return type.
 - **Interface returns**: Interface functions should name return values and NatSpec should use those names. Implementation contracts may omit return names; if an implementation function has its own NatSpec and an unnamed return, document the return by type.
+- **Removing implementation return names**: Update each explicit `@return` tag in the same change. Replace the removed name with the declared Solidity type, preserving the description and return order. Include qualified struct names and array dimensions; omit data locations such as `memory`. For example, `@return healthFactor Health ratio...` becomes `@return uint256 Health ratio...`. An `@inheritdoc`-only implementation needs no duplicate return tags.
 
 ### Interface Return Values
 
@@ -385,6 +421,8 @@ struct DeviationConfig {
 
 When writing NatSpec documentation:
 
+- [ ] Interface sections follow events, errors, enums, structs, functions; empty sections are omitted
+- [ ] An empty source line separates definitions, before the next attached NatSpec block
 - [ ] `@notice` tag present with clear user-facing description
 - [ ] `@dev` tags for implementation details (if needed)
 - [ ] Blank `///` line before `@param`/`@return` tags

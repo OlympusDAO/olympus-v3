@@ -17,6 +17,30 @@ when it predicts or exposes the state established by that action and coverage is
 standalone file when a read function has independent behavior that is not naturally established by
 one action.
 
+Keep an action's boundary and recovery cases in its test file when they share its fixture. Use one
+contract per file. When callbacks or integration cases require a different fixture, use an
+action-qualified filename and matching contract, such as `burnSurplusCallback.t.sol` and
+`BurnerLoansInventoryBurnSurplusCallbackTest`. Put reusable setup and helper contracts in separate
+named files under `fixtures/` or the suite's base contract. Avoid a catch-all callback suite spanning
+unrelated actions.
+
+### Test Body Shape and Helper Boundaries
+
+Use one expected outcome per test. Split functions whose flags or `if/else` chains select success,
+different errors, caught versus propagated callbacks, or distinct recovery paths. Fuzz equivalent
+callers, numeric ranges and independent setup states together when the expected outcome stays the
+same. Keep deterministic boundary drivers explicit; do not make them choose unrelated outcomes.
+
+Extract repeated setup and assertions into small, semantic helpers: enabling or disabling a policy,
+changing Kernel membership, funding and approving a payer, configuring a dependency-view failure,
+and matching a frequently repeated exact error. Reuse existing helpers first. Helpers should share
+mechanics and common assertions, while the test makes its action and expected result clear. Moving
+an outcome-selecting branch into a generic runner does not simplify the test.
+
+Before moving or splitting tests, identify the retained states, fuzz domains, deterministic seeds
+and assertions. Update scenario references and reciprocal IDs, then run the affected suites. Keep
+the file and contract names consistent with the action they test.
+
 **Examples:**
 
 - `src/test/modules/DEPOS/mint.t.sol` - Tests for the `mint()` function
@@ -314,6 +338,11 @@ function test_givenActionIsReady(address caller_) public {
 ```
 
 ### Contract State
+
+For Default Framework policy enable/disable/reEnable tests, apply the shared
+[policy-lifecycle](../../../.agents/skills/policy-lifecycle/SKILL.md) guide. Its transition matrix,
+dependency direction, binding rules and enable/reEnable parity also govern the scenario plans.
+Record missing implementation checks explicitly and write failing tests before closing those gaps.
 
 Classify the function separately for both lifecycle axes:
 
